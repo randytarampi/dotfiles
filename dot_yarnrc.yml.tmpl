@@ -1,0 +1,13 @@
+# ~/.yarnrc.yml — managed by chezmoi
+# Yarn Berry (modern) configuration
+# Token references resolve from ~/.env at shell startup
+
+npmRegistries:
+  "https://registry.yarnpkg.com":
+    {{- if env "NPM_TOKEN" }}
+    npmAuthToken: {{ env "NPM_TOKEN" }}
+    {{- end }}
+  "https://npm.pkg.github.com":
+    {{- if env "GITHUB_TOKEN" }}
+    npmAuthToken: {{ env "GITHUB_TOKEN" }}
+    {{- end }}

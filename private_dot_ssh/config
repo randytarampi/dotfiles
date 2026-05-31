@@ -1,0 +1,5 @@
+Host *
+	UseKeychain Yes
+	AddKeysToAgent Yes
+Host *.randytarampi.ca *.randytarampi.com
+	ForwardAgent Yes

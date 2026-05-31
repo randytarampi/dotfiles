@@ -1,0 +1,65 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+info "Installing opencode plugins..."
+
+if ! command -v opencode >/dev/null 2>&1; then
+  warn "opencode not found; skipping plugin installation."
+  exit 0
+fi
+
+# Plugin definitions matching ~/.config/opencode/opencode.json
+# opencode plugin <module> --global — installs the plugin and updates global config
+PLUGINS=(
+  "@tarquinen/opencode-dcp@latest"
+  "@plannotator/opencode@latest"
+  "oh-my-opencode-slim"
+  "opencode-plugin-openspec"
+)
+
+for plugin in "${PLUGINS[@]}"; do
+  if opencode plugin "${plugin}" --global 2>/dev/null; then
+    ok "opencode plugin: ${plugin}"
+  else
+    warn "opencode plugin ${plugin} failed (may already be installed)"
+  fi
+done
+
+# The meridian plugin is installed globally via npm and referenced by local path.
+# No opencode plugin install needed — it's already at its nvm global path.
+# Dynamically resolve meridian path from nvm default node version
+NVM_DIR="$HOME/.nvm"
+MERIDIAN_PATH=""
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh" --no-use
+  DEFAULT_VERSION=$(nvm version default 2>/dev/null || echo "")
+  if [ -n "$DEFAULT_VERSION" ]; then
+    MERIDIAN_PATH="$NVM_DIR/versions/node/$DEFAULT_VERSION/lib/node_modules/@rynfar/meridian/plugin/meridian.ts"
+  fi
+fi
+if [[ -f "${MERIDIAN_PATH}" ]]; then
+  ok "opencode plugin: meridian (already installed globally via npm)"
+else
+  warn "opencode plugin: meridian not found at ${MERIDIAN_PATH} — install @rynfar/meridian globally with npm"
+fi
+
+ok "opencode plugins: done."
+
+# Install OpenSpec CLI globally (spec-driven development for AI coding)
+if command -v npm >/dev/null 2>&1; then
+  if npm list -g @fission-ai/openspec >/dev/null 2>&1; then
+    ok "openspec CLI already installed globally"
+  else
+    info "Installing @fission-ai/openspec globally..."
+    if npm install -g @fission-ai/openspec@latest 2>/dev/null; then
+      ok "openspec CLI installed globally"
+    else
+      warn "openspec CLI install failed"
+    fi
+  fi
+else
+  warn "npm not found; skipping openspec CLI install"
+fi

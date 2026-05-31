@@ -1,0 +1,34 @@
+# wingetfile — Windows packages
+# Format: one PackageIdentifier per line
+# Comments start with #
+# Categories mirror Brewfile categories where applicable
+
+# --- Languages & build ---
+# Cross-ref: brew 'python@3.12'
+Python.Python.3.12
+
+# --- Dev tools ---
+# Cross-ref: brew 'docker-cli'
+Docker.DockerCLI
+# Cross-ref: brew 'github-copilot'
+GitHub.Copilot
+# Cross-ref: brew 'codex'
+OpenAI.Codex
+# Cross-ref: brew 'opencode'
+SST.opencode
+# Cross-ref: brew 'OpenCodeDesktop'
+SST.OpenCodeDesktop
+# Cross-ref: brew 'dotPeek'
+JetBrains.dotPeek
+# Cross-ref: brew 'dotTrace'
+JetBrains.dotTrace
+# Cross-ref: brew 'ollama'
+Ollama.Ollama
+# Cross-ref: brew 'visual-studio-code'
+Microsoft.VisualStudioCode
+# Cross-ref: brew 'black'
+psf.black
+# Cross-ref: brew 'shellcheck'
+koalaman.shellcheck
+# Cross-ref: brew 'shfmt'
+mvdan.shfmt

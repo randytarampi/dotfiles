@@ -1,0 +1,28 @@
+case $- in
+  *i*) ;;
+  *) return ;;
+esac;
+
+# Configure bash-specific settings (skip in zsh/other shells)
+if [[ -n "$BASH_VERSION" ]]; then
+  shopt -s histappend
+  shopt -s checkwinsize
+  shopt -s globstar 2>/dev/null || true
+  command -v lesspipe >/dev/null 2>&1 && eval "$(SHELL=/bin/sh lesspipe)"
+fi
+
+# iterm2_shell_integration.bash uses bash-specific shopt — only source in bash
+if [[ -n "$BASH_VERSION" ]]; then
+  [ -e "$HOME/.iterm2_shell_integration.bash" ] && source "$HOME/.iterm2_shell_integration.bash"
+fi
+
+# Source shell config — paths.sh FIRST so brew/bin dirs are on PATH before aliases
+DOTFILES_SHELL_DIR="$HOME/.dotfiles/shell"
+[ -f "$DOTFILES_SHELL_DIR/paths.sh" ] && source "$DOTFILES_SHELL_DIR/paths.sh"
+[ -f "$DOTFILES_SHELL_DIR/variables.sh" ] && source "$DOTFILES_SHELL_DIR/variables.sh"
+[ -f "$DOTFILES_SHELL_DIR/aliases.sh" ] && source "$DOTFILES_SHELL_DIR/aliases.sh"
+[ -f "$DOTFILES_SHELL_DIR/completions.bash" ] && source "$DOTFILES_SHELL_DIR/completions.bash"
+[ -f "$DOTFILES_SHELL_DIR/prompt.sh" ] && source "$DOTFILES_SHELL_DIR/prompt.sh"
+
+[ -f "$DOTFILES_SHELL_DIR/acme.sh" ] && source "$DOTFILES_SHELL_DIR/acme.sh"
+[ -f "$DOTFILES_SHELL_DIR/bun.sh" ] && source "$DOTFILES_SHELL_DIR/bun.sh"

@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+
+# Project files
+.ai
+.aiassistant
+.air
+.claude
+.codex
+.cursor
+.junie
+.idea
+.mcp.json
+.opencode
+opencode.json
+*.iml
+
+# Serverless
+.serverless-secrets.json

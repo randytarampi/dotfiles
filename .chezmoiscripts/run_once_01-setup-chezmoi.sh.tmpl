@@ -1,0 +1,65 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+info "Setting up chezmoi environment..."
+
+# Env var aliasing
+load_env || warn "\$HOME/.env not found, skipping env load"
+alias_github_token
+ok "Environment variables aliased."
+
+# Directory creation
+dirs=(
+  "$HOME/.config/bat"
+  "$HOME/.config/ripgrep"
+  "$HOME/.config/git"
+  "$HOME/.config/opencode/mcp"
+)
+
+for dir in "${dirs[@]}"; do
+  mkdir -p "$dir"
+  info "Created directory: $dir"
+done
+ok "Configuration directories created."
+
+# Create scripts symlink for easy PATH access
+DOTFILES_SCRIPTS="$HOME/.dotfiles/scripts"
+SOURCE_SCRIPTS="{{ .chezmoi.sourceDir }}/scripts"
+if [[ ! -L "$DOTFILES_SCRIPTS" && ! -d "$DOTFILES_SCRIPTS" ]]; then
+  ln -s "$SOURCE_SCRIPTS" "$DOTFILES_SCRIPTS"
+  info "Created symlink: $DOTFILES_SCRIPTS → $SOURCE_SCRIPTS"
+elif [[ -L "$DOTFILES_SCRIPTS" ]]; then
+  info "Symlink already exists: $DOTFILES_SCRIPTS"
+fi
+
+# Create bin directory and _dot--* command symlinks from scripts/*.py
+DOTFILES_BIN="$HOME/.dotfiles/bin"
+SOURCE_SCRIPTS="{{ .chezmoi.sourceDir }}/scripts"
+mkdir -p "$DOTFILES_BIN"
+for script in "$SOURCE_SCRIPTS"/*.py; do
+  base="$(basename "$script" .py)"
+  link_name="_dot--${base}"
+  target_link="$DOTFILES_BIN/$link_name"
+  if [[ ! -L "$target_link" ]]; then
+    ln -s "$script" "$target_link"
+    info "Created symlink: $target_link → $script"
+  else
+    info "Symlink already exists: $target_link"
+  fi
+done
+ok "Bin symlinks created."
+
+# Fix permissions on sensitive files
+# chezmoi's private_ prefix sets 600, but existing files may have looser perms
+for secret_file in "$HOME/.gnupg/gpg.conf" "$HOME/.gnupg/gpg-agent.conf"; do
+  if [[ -f "$secret_file" ]]; then
+    chmod 600 "$secret_file"
+    info "Set permissions: $secret_file → 600"
+  fi
+done
+chmod 700 "$HOME/.gnupg" 2>/dev/null || true
+ok "Sensitive file permissions fixed."

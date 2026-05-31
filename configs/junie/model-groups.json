@@ -1,0 +1,113 @@
+{
+  "providers": {
+    "ollama-cloud": {
+      "baseUrl": "https://ollama.com/v1/responses",
+      "apiType": "OpenAIResponses",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    },
+    "anthropic-meridian": {
+      "baseUrl": "http://127.0.0.1:3456/v1/responses",
+      "apiType": "OpenAIResponses",
+      "apiKeyEnv": "MERIDIAN_API_KEY",
+      "hostEnv": "MERIDIAN_HOST",
+      "portEnv": "MERIDIAN_PORT"
+    },
+    "ollama-local": {
+      "baseUrl": "http://localhost:11434/v1/responses",
+      "apiType": "OpenAIResponses"
+    }
+  },
+  "temperatures": {
+    "deepseek": 0,
+    "gemini": 1,
+    "kimi": 1,
+    "glm": 0.7,
+    "qwen": 0.6,
+    "mimo": 0.3,
+    "mistral": 0.7,
+    "devstral": 0.7,
+    "nemotron": 0.7,
+    "gpt-oss": 0.7,
+    "anthropic-meridian": 1
+  },
+  "groups": {
+    "qwen3-coder": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "qwen3.6:27b-coding",
+      "fasterModel": "qwen3.5:9b"
+    },
+    "qwen3": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "qwen3.6:27b-mlx",
+      "fasterModel": "qwen3.5:9b"
+    },
+    "gemma4": {
+      "provider": "ollama-local",
+      "temperature": 0.7,
+      "primaryModel": "gemma4:26b-mlx",
+      "fasterModel": "gemma4:e4b-mlx"
+    },
+    "deepseek": {
+      "provider": "ollama-cloud",
+      "temperature": 0,
+      "primaryModel": "deepseek-v4-pro",
+      "fasterModel": "deepseek-v4-flash"
+    },
+    "glm": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "glm-5.1"
+    },
+    "kimi": {
+      "provider": "ollama-cloud",
+      "temperature": 1,
+      "primaryModel": "kimi-k2.6"
+    },
+    "mistral": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "mistral-large-3:675b",
+      "fasterModel": "ministral-3:14b"
+    },
+    "nemotron": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "nemotron-3-super",
+      "fasterModel": "nemotron-3-nano:30b"
+    },
+    "qwen": {
+      "provider": "ollama-cloud",
+      "temperature": 0.6,
+      "primaryModel": "qwen3.5:397b"
+    },
+    "gpt-oss": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "gpt-oss:120b",
+      "fasterModel": "gpt-oss:20b"
+    },
+    "devstral": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "devstral-2:123b",
+      "fasterModel": "devstral-small-2:24b"
+    },
+    "anthropic-opus": {
+      "provider": "anthropic-meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-opus-4-8"
+    },
+    "anthropic-sonnet": {
+      "provider": "anthropic-meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-sonnet-4-6"
+    },
+    "anthropic-haiku": {
+      "provider": "anthropic-meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-haiku-4-5-20251001"
+    }
+  }
+}

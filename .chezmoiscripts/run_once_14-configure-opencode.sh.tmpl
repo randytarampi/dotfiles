@@ -1,0 +1,74 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load environment for API keys (must happen before gate)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_OPENCODE_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OPENCODE_SETUP='${DOTFILES_RUN_OPENCODE_SETUP:-0}' — skipping opencode tier configuration"
+  exit 0
+fi
+
+info "Configuring opencode..."
+
+# Determine tier based on available keys AND CLI authentication.
+# Default to pro-plus if any OpenAI-compatible CLI is logged in,
+# upgrade to pro-plus-anthropic if Anthropic CLI is also available.
+# Use 'anthropic' if only Anthropic is available (no OpenAI).
+# Use 'local' if no API keys but Ollama is available.
+TIER="pro"
+
+_has_openai=false
+_has_anthropic=false
+_has_ollama=false
+
+# Check env vars first (explicit API keys take precedence)
+if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  _has_openai=true
+fi
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  _has_anthropic=true
+fi
+
+# Check CLI authentication — codex requires OpenAI, claude requires Anthropic
+if command -v codex >/dev/null 2>&1; then
+  _has_openai=true
+fi
+if command -v claude >/dev/null 2>&1; then
+  _has_anthropic=true
+fi
+
+# Check for local Ollama. The opt-in toggle controls whether discovered local
+# models are included, but it should not pretend Ollama exists when the binary
+# is unavailable.
+if command -v ollama >/dev/null 2>&1; then
+  _has_ollama=true
+fi
+
+if [[ "${DOTFILES_OPENCODE_TIER:-}" != "" ]]; then
+  TIER="$DOTFILES_OPENCODE_TIER"
+  info "Tier override from DOTFILES_OPENCODE_TIER: $TIER"
+elif [[ "$_has_anthropic" == true ]] && [[ "$_has_openai" == true ]]; then
+  TIER="pro-plus-anthropic"
+elif [[ "$_has_anthropic" == true ]]; then
+  TIER="anthropic"
+elif [[ "$_has_openai" == true ]]; then
+  TIER="plus"
+elif [[ "$_has_ollama" == true ]]; then
+  TIER="local"
+fi
+info "Detected tier: $TIER (openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
+
+# Run opencode configuration script FIRST (creates oh-my-opencode-slim.json)
+CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-opencode.py"
+if [[ -f "$CONFIGURE_SCRIPT" ]]; then
+  info "Running opencode configuration..."
+  "$CONFIGURE_SCRIPT" --preset "$TIER"
+fi
+
+ok "opencode configured (tier: $TIER)."

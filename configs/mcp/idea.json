@@ -1,0 +1,6 @@
+{
+  "name": "idea",
+  "type": "url",
+  "url": "http://127.0.0.1:64342/stream",
+  "note": "Streamable HTTP transport — IntelliJ MCP server must be running (enabled in IDE settings). Replaces the stdio/java+classpath variant. Compatible with all 6 AI tools."
+}

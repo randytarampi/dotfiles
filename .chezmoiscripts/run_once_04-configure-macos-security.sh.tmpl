@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+# Gate on DOTFILES_RUN_MACOS_SECURITY env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MACOS_SECURITY:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MACOS_SECURITY='${DOTFILES_RUN_MACOS_SECURITY:-0}' — skipping macOS security defaults"
+  exit 0
+fi
+
+info "Configuring macOS security defaults..."
+
+if command -v sudo >/dev/null 2>&1; then
+  info "Enabling firewall..."
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on && ok "Firewall enabled." || warn "Failed to enable firewall."
+
+  info "Disabling firewall block all..."
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setblockall off && ok "Firewall block all disabled." || warn "Failed to disable firewall block all."
+
+  info "Enabling firewall stealth mode..."
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on && ok "Firewall stealth mode enabled." || warn "Failed to enable firewall stealth mode."
+
+  info "Enabling Gatekeeper..."
+  sudo spctl --global-enable && ok "Gatekeeper enabled." || warn "Failed to enable Gatekeeper."
+
+  info "Disabling remote login..."
+  sudo systemsetup -setremotelogin off 2>/dev/null && ok "Remote login disabled." || warn "Failed to disable remote login."
+
+  info "Disabling automatic login..."
+  sudo defaults write /Library/Preferences/.GlobalPreferences AutoLoginWindowDisabled -bool true && ok "Automatic login disabled." || warn "Failed to disable automatic login."
+else
+  warn "sudo is not available; skipping sudo-required security settings."
+fi
+
+info "Checking FileVault status..."
+fdesetup status || true
+ok "FileVault status reported."
+
+info "Enabling Safari fraud warnings..."
+defaults write com.apple.Safari WarnAboutFraudulentWebsites -bool true && ok "Safari fraud warnings enabled." || warn "Failed to enable Safari fraud warnings."
+
+ok "macOS security defaults configured."
+{{- else }}
+info "Skipping macOS security defaults on {{ .chezmoi.os }}"
+{{- end }}

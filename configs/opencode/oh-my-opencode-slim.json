@@ -1,0 +1,847 @@
+{
+  "preset": "pro-plus",
+  "presets": {
+    "pro": {
+      "orchestrator": {
+        "model": "ollama-cloud/glm-5.1",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "ollama-cloud/deepseek-v4-pro",
+        "variant": "max",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "ollama-cloud/gemma4:31b",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "ollama-cloud/gemma4:31b",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "ollama-cloud/kimi-k2.6",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "ollama-cloud/deepseek-v4-flash",
+        "variant": "high",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "ollama-cloud/gemma4:31b"
+      }
+    },
+    "pro-plus": {
+      "orchestrator": {
+        "model": "ollama-cloud/glm-5.1",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "ollama-cloud/deepseek-v4-pro",
+        "variant": "max",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "openai/gpt-5.4-mini",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "openai/gpt-5.4-mini",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "openai/gpt-5.4-mini",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "openai/gpt-5.3-codex-spark",
+        "variant": "high",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "openai/gpt-5.4-mini",
+        "variant": "low"
+      }
+    },
+    "pro-plus-anthropic": {
+      "orchestrator": {
+        "model": "anthropic/claude-opus-4-8",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "anthropic/claude-opus-4-8",
+        "variant": "xhigh",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "anthropic/claude-sonnet-4-6",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "openai/gpt-5.3-codex-spark",
+        "variant": "high",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low"
+      }
+    },
+    "anthropic": {
+      "orchestrator": {
+        "model": "anthropic/claude-opus-4-8",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "anthropic/claude-opus-4-8",
+        "variant": "xhigh",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "anthropic/claude-sonnet-4-6",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "anthropic/claude-sonnet-4-6",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low"
+      }
+    },
+    "plus": {
+      "orchestrator": {
+        "model": "openai/gpt-5.5",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "openai/gpt-5.5",
+        "variant": "high",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "openai/gpt-5.4-nano",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "openai/gpt-5.4-nano",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "openai/gpt-5.5",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "openai/gpt-5.3-codex-spark",
+        "variant": "high",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "openai/gpt-5.4-nano",
+        "variant": "low"
+      }
+    },
+    "plus-anthropic": {
+      "orchestrator": {
+        "model": "openai/gpt-5.5",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "anthropic/claude-opus-4-8",
+        "variant": "xhigh",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "openai/gpt-5.4-nano",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "anthropic/claude-sonnet-4-6",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "openai/gpt-5.3-codex-spark",
+        "variant": "high",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "low"
+      }
+    },
+    "local": {
+      "orchestrator": {
+        "model": "_local:code-gen",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "_local:reasoning",
+        "variant": "high",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "websearch",
+          "context7",
+          "grep_app"
+        ]
+      },
+      "explorer": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "_local:code-gen",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "_local:lightweight",
+        "variant": "low"
+      }
+    }
+  },
+  "multiplexer": {
+    "type": "auto",
+    "layout": "main-vertical",
+    "main_pane_size": 60
+  },
+  "disabled_agents": [],
+  "council": {
+    "master": {
+      "model": "openai/gpt-5.5",
+      "variant": "high"
+    },
+    "timeout": 360000,
+    "councillor_retries": 1,
+    "default_preset": "pro-plus",
+    "presets": {
+      "pro": {
+        "alpha": {
+          "model": "ollama-cloud/deepseek-v4-pro"
+        },
+        "beta": {
+          "model": "ollama-cloud/kimi-k2.6"
+        },
+        "gamma": {
+          "model": "ollama-cloud/glm-5.1"
+        }
+      },
+      "pro-plus": {
+        "alpha": {
+          "model": "ollama-cloud/deepseek-v4-pro"
+        },
+        "beta": {
+          "model": "ollama-cloud/kimi-k2.6"
+        },
+        "gamma": {
+          "model": "ollama-cloud/glm-5.1"
+        }
+      },
+      "pro-plus-anthropic": {
+        "alpha": {
+          "model": "anthropic/claude-opus-4-8"
+        },
+        "beta": {
+          "model": "ollama-cloud/deepseek-v4-pro"
+        },
+        "gamma": {
+          "model": "openai/gpt-5.5"
+        }
+      },
+      "plus": {
+        "alpha": {
+          "model": "openai/gpt-5.5"
+        },
+        "beta": {
+          "model": "openai/gpt-5.4"
+        },
+        "gamma": {
+          "model": "openai/gpt-5.3-codex"
+        }
+      },
+      "anthropic": {
+        "alpha": {
+          "model": "anthropic/claude-opus-4-8"
+        },
+        "beta": {
+          "model": "anthropic/claude-sonnet-4-6"
+        },
+        "gamma": {
+          "model": "anthropic/claude-haiku-4-5"
+        }
+      },
+      "local": {
+        "alpha": {
+          "model": "_local:reasoning"
+        },
+        "beta": {
+          "model": "_local:code-gen"
+        },
+        "gamma": {
+          "model": "_local:lightweight"
+        }
+      }
+    }
+  },
+  "fallback": {
+    "enabled": true,
+    "timeoutMs": 60000,
+    "retryDelayMs": 1000,
+    "chains": {}
+  },
+  "_tiers": {
+    "pro": {
+      "council": {
+        "master": {
+          "model": "ollama-cloud/deepseek-v4-pro",
+          "variant": "max"
+        },
+        "default_preset": "pro",
+        "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6",
+          "ollama-cloud/glm-5"
+        ],
+        "oracle": [
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/kimi-k2.5",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "librarian": [
+          "ollama-cloud/gemma4:31b",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/kimi-k2.6",
+          "ollama-cloud/glm-5"
+        ],
+        "explorer": [
+          "ollama-cloud/gemma4:31b",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/kimi-k2.6",
+          "ollama-cloud/glm-5"
+        ],
+        "fixer": [
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/qwen3-coder:480b",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "designer": [
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/kimi-k2.6",
+          "ollama-cloud/glm-5"
+        ],
+        "observer": [
+          "ollama-cloud/gemma4:31b",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/kimi-k2.6",
+          "ollama-cloud/glm-5"
+        ]
+      }
+    },
+    "pro-plus": {
+      "council": {
+        "master": {
+          "model": "openai/gpt-5.5",
+          "variant": "high"
+        },
+        "default_preset": "pro-plus",
+        "presets": {
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "ollama-cloud/deepseek-v4-pro",
+          "openai/gpt-5.5",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "oracle": [
+          "ollama-cloud/deepseek-v4-pro",
+          "openai/gpt-5.5",
+          "ollama-cloud/kimi-k2.5",
+          "ollama-cloud/glm-5.1"
+        ],
+        "librarian": [
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "explorer": [
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "fixer": [
+          "openai/gpt-5.3-codex-spark",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/qwen3-coder:480b",
+          "ollama-cloud/glm-5.1"
+        ],
+        "designer": [
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/kimi-k2.6"
+        ],
+        "observer": [
+          "openai/gpt-5.4-nano",
+          "ollama-cloud/gemma4:31b",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/kimi-k2.6"
+        ]
+      }
+    },
+    "pro-plus-anthropic": {
+      "council": {
+        "master": {
+          "model": "openai/gpt-5.5",
+          "variant": "high"
+        },
+        "default_preset": "pro-plus-anthropic",
+        "presets": {
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-8"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "anthropic/claude-opus-4-8",
+          "openai/gpt-5.5",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/glm-5.1"
+        ],
+        "oracle": [
+          "anthropic/claude-opus-4-8",
+          "openai/gpt-5.5",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/kimi-k2.5"
+        ],
+        "librarian": [
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/glm-5.1"
+        ],
+        "explorer": [
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/gemma4:31b"
+        ],
+        "fixer": [
+          "openai/gpt-5.3-codex-spark",
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/qwen3-coder:480b"
+        ],
+        "designer": [
+          "anthropic/claude-sonnet-4-6",
+          "openai/gpt-5.4-mini",
+          "ollama-cloud/glm-5.1",
+          "ollama-cloud/deepseek-v4-pro"
+        ],
+        "observer": [
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-nano",
+          "ollama-cloud/gemma4:31b",
+          "ollama-cloud/deepseek-v4-flash"
+        ]
+      }
+    },
+    "anthropic": {
+      "council": {
+        "master": {
+          "model": "anthropic/claude-opus-4-8",
+          "variant": "xhigh"
+        },
+        "default_preset": "anthropic",
+        "presets": {
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-8"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "plus": {
+      "council": {
+        "master": {
+          "model": "openai/gpt-5.5",
+          "variant": "high"
+        },
+        "default_preset": "plus",
+        "presets": {
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "openai/gpt-5.5",
+          "openai/gpt-5.4",
+          "openai/gpt-5.3-codex"
+        ],
+        "oracle": [
+          "openai/gpt-5.5",
+          "openai/gpt-5.4",
+          "openai/gpt-5.3-codex"
+        ],
+        "librarian": [
+          "openai/gpt-5.4-nano",
+          "openai/gpt-5.4-mini",
+          "openai/gpt-5.4"
+        ],
+        "explorer": [
+          "openai/gpt-5.4-nano",
+          "openai/gpt-5.4-mini",
+          "openai/gpt-5.4"
+        ],
+        "fixer": [
+          "openai/gpt-5.3-codex-spark",
+          "openai/gpt-5.4-mini",
+          "openai/gpt-5.3-codex"
+        ],
+        "designer": [
+          "openai/gpt-5.4-mini",
+          "openai/gpt-5.4",
+          "openai/gpt-5.3-codex"
+        ],
+        "observer": [
+          "openai/gpt-5.4-nano",
+          "openai/gpt-5.4-mini"
+        ]
+      }
+    },
+    "plus-anthropic": {
+      "council": {
+        "master": {
+          "model": "anthropic/claude-opus-4-8",
+          "variant": "xhigh"
+        },
+        "default_preset": "plus-anthropic",
+        "presets": {
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-8"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "openai/gpt-5.5",
+          "anthropic/claude-opus-4-8",
+          "anthropic/claude-sonnet-4-6"
+        ],
+        "oracle": [
+          "anthropic/claude-opus-4-8",
+          "openai/gpt-5.5",
+          "anthropic/claude-sonnet-4-6"
+        ],
+        "librarian": [
+          "openai/gpt-5.4-nano",
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-mini"
+        ],
+        "explorer": [
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-nano",
+          "openai/gpt-5.4-mini"
+        ],
+        "fixer": [
+          "openai/gpt-5.3-codex-spark",
+          "anthropic/claude-sonnet-4-6",
+          "openai/gpt-5.4-mini"
+        ],
+        "designer": [
+          "anthropic/claude-sonnet-4-6",
+          "openai/gpt-5.5",
+          "openai/gpt-5.4-mini"
+        ],
+        "observer": [
+          "anthropic/claude-haiku-4-5",
+          "openai/gpt-5.4-nano"
+        ]
+      }
+    },
+    "local": {
+      "council": {
+        "master": {
+          "model": "_local:reasoning",
+          "variant": "high"
+        },
+        "default_preset": "local",
+        "presets": {
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:lightweight"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    }
+  }
+}

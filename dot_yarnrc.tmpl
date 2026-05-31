@@ -1,0 +1,11 @@
+# ~/.yarnrc — managed by chezmoi
+# Yarn Classic configuration
+# Token references resolve from ~/.env at shell startup
+
+registry=https://registry.npmjs.org/
+{{- if env "NPM_TOKEN" }}
+//registry.npmjs.org/:_authToken={{ env "NPM_TOKEN" }}
+{{- end }}
+{{- if env "GITHUB_TOKEN" }}
+//npm.pkg.github.com/:_authToken={{ env "GITHUB_TOKEN" }}
+{{- end }}

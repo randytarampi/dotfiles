@@ -1,0 +1,22 @@
+# scripts/ are referenced by templates but not managed by chezmoi apply.
+scripts/
+
+# configs/ are referenced by run_once scripts, not applied to home directory.
+configs/
+
+# Full iTerm2 preferences can include command history, hostnames, and secrets.
+dot_com.googlecode.iterm2.plist
+
+{{- if ne .chezmoi.os "darwin" }}
+private_dot_sheepshaver_prefs
+private_dot_basilisk_ii_prefs
+Brewfile.desktop.browsers
+Brewfile.desktop.comms
+Brewfile.desktop.security
+Brewfile.desktop.media
+Brewfile.desktop.utilities
+Brewfile.desktop.fonts
+Brewfile.desktop.gaming
+Brewfile.desktop.cloud
+Brewfile.desktop.productivity
+{{- end }}

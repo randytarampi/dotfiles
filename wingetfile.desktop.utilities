@@ -1,0 +1,26 @@
+# wingetfile — Windows packages
+# Format: one PackageIdentifier per line
+# Comments start with #
+# Categories mirror Brewfile categories where applicable
+
+# --- Utilities ---
+# Cross-ref: brew 'p7zip'
+7zip.7zip
+CPUID.CPU-Z
+CrystalDewWorld.CrystalDiskMark
+Logitech.CameraSettings
+Logitech.OptionsPlus
+Logitech.SetPoint
+Guru3D.Afterburner
+Guru3D.RTSS
+PrimateLabs.Geekbench.5
+PrimateLabs.Geekbench.6
+SanDisk.Dashboard
+TechPowerUp.GPU-Z
+Nefarius.HidHide
+ViGEm.ViGEmBus
+Unigine.HeavenBenchmark
+Unigine.ValleyBenchmark
+CertifyTheWeb.CertifySSLManager
+# Cross-ref: brew 'appinstaller'
+Microsoft.AppInstaller

@@ -1,0 +1,26 @@
+# OS files
+.DS_Store
+
+# Editor/IDE directories
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI assistant directories
+.ai/
+.claude/
+.cursor/
+.codex/
+.opencode/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build artifacts
+dist/
+build/
+*.pyc
+__pycache__/

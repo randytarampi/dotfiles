@@ -1,0 +1,10 @@
+# wingetfile — Windows packages
+# Format: one PackageIdentifier per line
+# Comments start with #
+# Categories mirror Brewfile categories where applicable
+
+# --- Browsers ---
+# Cross-ref: brew 'firefox'
+Mozilla.Firefox.en-CA
+# Cross-ref: brew 'microsoft-edge'
+Microsoft.Edge

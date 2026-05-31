@@ -1,0 +1,6 @@
+source $HOME/.bashrc;
+
+# configure shell
+test -e "$HOME/.iterm2_shell_integration.zsh" && source "$HOME/.iterm2_shell_integration.zsh";
+
+[[ -f $HOME/.completions.zsh ]] && source $HOME/.completions.zsh;

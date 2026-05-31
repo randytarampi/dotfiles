@@ -1,0 +1,34 @@
+# Smart case search
+--smart-case
+
+# Show line numbers
+--line-number
+
+# Show column numbers
+--column
+
+# Search hidden files/directories
+--hidden
+
+# But don't search .git directories
+--glob=!.git/*
+
+# Ignore common binary/media extensions
+--glob=!*.png
+--glob=!*.jpg
+--glob=!*.jpeg
+--glob=!*.gif
+--glob=!*.ico
+--glob=!*.svg
+--glob=!*.woff
+--glob=!*.woff2
+--glob=!*.ttf
+--glob=!*.eot
+--glob=!*.mp4
+--glob=!*.mp3
+--glob=!*.avi
+--glob=!*.mov
+--glob=!*.pdf
+--glob=!*.zip
+--glob=!*.tar
+--glob=!*.gz

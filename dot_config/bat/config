@@ -1,0 +1,8 @@
+# Show line numbers, Git modifications and file header
+--style="full"
+
+# Use italic text on the terminal
+--italic-text=always
+
+# Show non-printable characters
+--show-all

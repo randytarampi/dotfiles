@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+SSH_DIR="$HOME/.ssh"
+
+if [[ ! -d "$SSH_DIR" ]]; then
+  warn "SSH directory not found, skipping SSH configuration"
+  exit 0
+fi
+
+info "Configuring SSH key permissions..."
+
+# Set SSH directory permissions
+chmod 700 "$SSH_DIR"
+
+# Set config file permissions
+if [[ -f "$SSH_DIR/config" ]]; then
+  chmod 600 "$SSH_DIR/config"
+  ok "SSH config permissions set"
+fi
+
+# Set private key permissions
+for key in "$SSH_DIR"/id_*; do
+  if [[ -f "$key" ]] && [[ "$key" != *.pub ]]; then
+    chmod 600 "$key"
+    info "Set permissions: $key"
+  fi
+done
+
+# Set public key permissions
+for pub in "$SSH_DIR"/id_*.pub; do
+  if [[ -f "$pub" ]]; then
+    chmod 644 "$pub"
+    info "Set permissions: $pub"
+  fi
+done
+
+ok "SSH key permissions configured."

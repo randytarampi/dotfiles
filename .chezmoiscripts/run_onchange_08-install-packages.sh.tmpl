@@ -1,0 +1,158 @@
+#!/bin/bash
+# run_onchange_01-install-packages.sh.tmpl
+# Brewfile hashes (triggers re-run when any Brewfile changes):
+# base: {{ include "Brewfile" | sha256sum }}
+# dev: {{ include "Brewfile.dev" | sha256sum }}
+{{- if eq .chezmoi.os "darwin" }}
+# desktop.browsers: {{ include "Brewfile.desktop.browsers" | sha256sum }}
+# desktop.comms: {{ include "Brewfile.desktop.comms" | sha256sum }}
+# desktop.security: {{ include "Brewfile.desktop.security" | sha256sum }}
+# desktop.media: {{ include "Brewfile.desktop.media" | sha256sum }}
+# desktop.utilities: {{ include "Brewfile.desktop.utilities" | sha256sum }}
+# desktop.fonts: {{ include "Brewfile.desktop.fonts" | sha256sum }}
+# desktop.gaming: {{ include "Brewfile.desktop.gaming" | sha256sum }}
+# desktop.cloud: {{ include "Brewfile.desktop.cloud" | sha256sum }}
+# desktop.productivity: {{ include "Brewfile.desktop.productivity" | sha256sum }}
+{{- end }}
+# dev.ops: {{ include "Brewfile.dev.ops" | sha256sum }}
+# legacy: {{ include "Brewfile.legacy" | sha256sum }}
+{{- if eq .chezmoi.os "windows" }}
+# wingetfile hashes (triggers re-run when any wingetfile changes):
+# base: {{ include "wingetfile" | sha256sum }}
+# dev: {{ include "wingetfile.dev" | sha256sum }}
+# desktop.browsers: {{ include "wingetfile.desktop.browsers" | sha256sum }}
+# desktop.comms: {{ include "wingetfile.desktop.comms" | sha256sum }}
+# desktop.security: {{ include "wingetfile.desktop.security" | sha256sum }}
+# desktop.media: {{ include "wingetfile.desktop.media" | sha256sum }}
+# desktop.utilities: {{ include "wingetfile.desktop.utilities" | sha256sum }}
+# desktop.cloud: {{ include "wingetfile.desktop.cloud" | sha256sum }}
+# desktop.productivity: {{ include "wingetfile.desktop.productivity" | sha256sum }}
+# dev.ops: {{ include "wingetfile.dev.ops" | sha256sum }}
+{{- end }}
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+# Gate on DOTFILES_RUN_INSTALL_PACKAGES env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_INSTALL_PACKAGES:-0}" != "1" ]]; then
+    info "DOTFILES_RUN_INSTALL_PACKAGES='${DOTFILES_RUN_INSTALL_PACKAGES:-0}' — skipping package installs"
+    exit 0
+fi
+
+# --- Brew (macOS / Linux) ---
+if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+    BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+    BREW_BIN="${BREW_PREFIX}/bin/brew"
+
+    if ! command -v brew &>/dev/null; then
+        if [[ -x "${BREW_BIN}" ]]; then
+            eval "$("${BREW_BIN}" shellenv)"
+        else
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            eval "$("${BREW_BIN}" shellenv)"
+        fi
+    fi
+
+    # dev.cli — always installed
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile
+
+    {{- if .categories.dev }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev
+    {{- end }}
+
+    # Desktop Brewfiles include cask entries and are skipped on Linux.
+    {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers
+    {{- end }}
+
+    {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.comms
+    {{- end }}
+
+    {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.security
+    {{- end }}
+
+    {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.media
+    {{- end }}
+
+    {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities
+    {{- end }}
+
+    {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts
+    {{- end }}
+
+    {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming
+    {{- end }}
+
+    {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud
+    {{- end }}
+
+    {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity
+    {{- end }}
+
+    {{- if .categories.dev_ops }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev.ops
+    {{- end }}
+
+    {{- if .categories.legacy }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy
+    {{- end }}
+fi
+
+# --- Winget (Windows) ---
+{{- if eq .chezmoi.os "windows" }}
+WINGET_BUNDLE="{{ .chezmoi.sourceDir }}/wingetfile"
+
+if ! command -v winget &>/dev/null; then
+    warn "winget not found; skipping Windows package installs"
+else
+    info "Installing winget packages..."
+
+    # base — always installed
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile"
+
+    {{- if .categories.dev }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.dev"
+    {{- end }}
+
+    {{- if .categories.desktop_browsers }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
+    {{- end }}
+
+    {{- if .categories.desktop_comms }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.comms"
+    {{- end }}
+
+    {{- if .categories.desktop_security }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.security"
+    {{- end }}
+
+    {{- if .categories.desktop_media }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.media"
+    {{- end }}
+
+    {{- if .categories.desktop_utilities }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
+    {{- end }}
+
+    {{- if .categories.desktop_cloud }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
+    {{- end }}
+
+    {{- if .categories.desktop_productivity }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity"
+    {{- end }}
+
+    {{- if .categories.dev_ops }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
+    {{- end }}
+fi
+{{- end }}

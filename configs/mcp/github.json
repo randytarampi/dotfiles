@@ -1,0 +1,9 @@
+{
+  "name": "github",
+  "type": "command",
+  "command": "github-mcp-server",
+  "args": ["stdio"],
+  "env": {
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GH_TOKEN}"
+  }
+}

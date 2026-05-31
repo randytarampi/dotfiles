@@ -1,0 +1,37 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+if ! command -v git &>/dev/null; then
+  warn "git not found, skipping git configuration"
+  exit 0
+fi
+
+info "Configuring git..."
+
+git config --global core.editor "${EDITOR:-emacs}"
+git config --global init.defaultBranch "main"
+git config --global pull.rebase true
+git config --global core.autocrlf input
+
+# Configure GPG signing if available
+# Note: signingkey is managed by dot_gitconfig.tmpl via GPG_SIGNING_KEY env var.
+# This script only handles gpg.program path detection and commit.gpgsign.
+if command -v gpg &>/dev/null; then
+  info "GPG found, configuring signing..."
+
+  # Detect and set gpg.program based on architecture
+  GPG_PATH=$(command -v gpg)
+  git config --global gpg.program "$GPG_PATH"
+  info "GPG program set to: $GPG_PATH"
+
+  git config --global commit.gpgsign true
+  ok "GPG signing enabled (signingkey from template)"
+else
+  warn "gpg not found, skipping GPG signing configuration"
+fi
+
+# Global gitignore is managed by chezmoi (dot_config/git/ignore)
+ok "git configured."

@@ -1,0 +1,23 @@
+# --- Brews ---
+brew "arping"
+brew "caddy", restart_service: :changed
+brew "certbot"
+brew "cloudflare-speed-cli"
+brew "duckdb"
+brew "glances"
+brew "fping"
+brew "hey"
+brew "hf"
+brew "inetutils"
+brew "iperf3"
+brew "iproute2mac"
+brew "k6"
+brew "libgphoto2"
+brew "mongosh"
+brew "postgresql@16"
+brew "ssh-audit"
+
+# --- Casks ---
+cask "gcloud-cli"
+cask "mongodb-compass"
+cask "session-manager-plugin"

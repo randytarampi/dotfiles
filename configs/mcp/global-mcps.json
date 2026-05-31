@@ -1,0 +1,128 @@
+{
+  "project_mcp_templates": ["shortcut", "notion", "mongodb", "betterstack"],
+  "tools": {
+    "ai": {
+      "mcp_path": "~/.ai/mcp/mcp.json",
+      "project_mcp_path": ".ai/mcp/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "air": {
+      "mcp_path": "~/.ai/mcp/mcp.json",
+      "project_mcp_path": ".ai/mcp/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "cursor": {
+      "mcp_path": "~/.cursor/mcp.json",
+      "project_mcp_path": ".cursor/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "codex": {
+      "mcp_path": "~/.codex/config.toml",
+      "project_mcp_path": ".codex/config.toml",
+      "format": "toml-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "opencode": {
+      "mcp_path": "~/.config/opencode/opencode.json",
+      "project_mcp_path": "opencode.json",
+      "format": "opencode-internal",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "gemini": {
+      "mcp_path": "~/.gemini/settings.json",
+      "project_mcp_path": ".gemini/settings.json",
+      "format": "json-settings-merge",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    },
+    "junie": {
+      "mcp_path": "~/.ai/mcp/mcp.json",
+      "project_mcp_path": ".ai/mcp/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        }
+      ]
+    }
+  }
+}

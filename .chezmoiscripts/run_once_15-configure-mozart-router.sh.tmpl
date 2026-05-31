@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MCP_SETUP='${DOTFILES_RUN_MCP_SETUP:-0}' — skipping mozart-router configuration"
+  exit 0
+fi
+
+"{{ .chezmoi.sourceDir }}/scripts/configure-mozart-router.py"

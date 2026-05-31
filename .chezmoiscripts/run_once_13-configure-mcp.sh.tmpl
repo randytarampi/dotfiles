@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_MCP_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_MCP_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MCP_SETUP='${DOTFILES_RUN_MCP_SETUP:-0}' — skipping MCP configuration"
+  exit 0
+fi
+
+SOURCE_DIR="{{ .chezmoi.sourceDir }}"
+MCP_SOURCE="${SOURCE_DIR}/configs/mcp"
+MCP_TARGET="$HOME/.config/opencode/mcp"
+
+info "Configuring MCP tools..."
+
+mkdir -p "$MCP_TARGET"
+
+# Remove MCP configs that no longer exist in source (e.g. deleted servers).
+for target_config in "$MCP_TARGET"/*.json; do
+  [[ -f "$target_config" ]] || continue
+  basename=$(basename "$target_config")
+  if [[ ! -f "$MCP_SOURCE/$basename" ]]; then
+    rm -f "$target_config"
+    info "Removed stale MCP: $basename"
+  fi
+done
+
+for config_file in "$MCP_SOURCE"/*.json; do
+  [[ -f "$config_file" ]] || continue
+  basename=$(basename "$config_file")
+
+  # Validate JSON syntax
+  if command -v jq &>/dev/null; then
+    if ! jq empty "$config_file" 2>/dev/null; then
+      warn "Invalid JSON in $basename, skipping"
+      continue
+    fi
+  elif command -v python3 &>/dev/null; then
+    if ! python3 -m json.tool "$config_file" >/dev/null 2>&1; then
+      warn "Invalid JSON in $basename, skipping"
+      continue
+    fi
+  fi
+
+  # Copy to target
+  cp "$config_file" "$MCP_TARGET/$basename"
+  chmod 644 "$MCP_TARGET/$basename"
+  info "Configured MCP: $basename"
+done
+
+# Also run configure-mcp-all for Codex, Claude, Cursor, etc.
+MCP_ALL="${SOURCE_DIR}/scripts/configure-mcp-all.py"
+MCP_REGISTRY="${SOURCE_DIR}/configs/mcp/global-mcps.json"
+if [[ -x "$MCP_ALL" && -f "$MCP_REGISTRY" ]]; then
+  info "Running configure-mcp-all for all AI tools..."
+  "$MCP_ALL" --mode global --no-backup || warn "configure-mcp-all exited with errors"
+else
+  warn "configure-mcp-all.py or global-mcps.json not found, skipping AI tool MCP setup"
+fi
+
+ok "MCP tools configured."

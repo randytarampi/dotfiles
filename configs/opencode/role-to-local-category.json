@@ -1,0 +1,9 @@
+{
+  "orchestrator": "code-gen",
+  "oracle": "reasoning",
+  "librarian": "lightweight",
+  "explorer": "lightweight",
+  "fixer": "code-gen",
+  "designer": "code-gen",
+  "observer": "lightweight"
+}

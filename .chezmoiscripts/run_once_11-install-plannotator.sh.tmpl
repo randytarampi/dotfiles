@@ -1,0 +1,42 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_PLANNOTATOR_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_PLANNOTATOR_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_PLANNOTATOR_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_PLANNOTATOR_SETUP='${DOTFILES_RUN_PLANNOTATOR_SETUP:-0}' — skipping plannotator install"
+  exit 0
+fi
+
+info "Installing/updating plannotator..."
+
+# Cross-platform install per https://plannotator.ai/docs/getting-started/installation
+# If plannotator is already installed, running the script again updates it (idempotent)
+# Network failures are caught — warn and continue rather than blocking chezmoi apply
+if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+  if ! curl -fsSL https://plannotator.ai/install.sh | bash 2>&1; then
+    warn "plannotator install fetch failed (network error?) — try again with: curl -fsSL https://plannotator.ai/install.sh | bash"
+  fi
+elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+  if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://plannotator.ai/install.ps1')" 2>&1; then
+    warn "plannotator install fetch failed (network error?) — try again manually"
+  fi
+else
+  warn "Unsupported OS for plannotator: $(uname -s)"
+fi
+
+# Verify installation
+if command -v plannotator >/dev/null 2>&1; then
+  PLANNOTATOR_VERSION=$(plannotator --version 2>&1 || echo "unknown")
+  ok "plannotator installed/updated: $PLANNOTATOR_VERSION at $(command -v plannotator)"
+else
+  warn "plannotator install may have failed — not found on PATH after install"
+fi
+
+ok "plannotator setup complete."

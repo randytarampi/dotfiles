@@ -1,0 +1,20 @@
+# wingetfile — Windows packages
+# Format: one PackageIdentifier per line
+# Comments start with #
+# Categories mirror Brewfile categories where applicable
+
+# --- Office / productivity ---
+Microsoft.Office
+Microsoft.OneDrive
+SublimeHQ.SublimeText.4
+Apple.BonjourPrintServices
+Apple.Bonjour
+Apple.ProResRAWforWindows
+Apple.WindowsMigrationAssistant
+Apple.DVDorCDSharing
+Apple.AirPort
+Apple.AppleSoftwareUpdate
+Apple.AppleApplicationSupport.x86
+Apple.AppleMobileDeviceSupport
+Apple.iTunes
+Apple.QuickTime

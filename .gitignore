@@ -1,0 +1,34 @@
+# Secrets
+.env
+*.env
+!.chezmoi.toml.tmpl
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor artifacts
+*~
+.#*
+\#*#
+*.swp
+*.swo
+*.tmp
+
+# Generated caches/config dumps
+__pycache__/
+*.pyc
+/config.json
+
+# iTerm2's full preferences plist can include command history and secrets.
+/dot_com.googlecode.iterm2.plist
+
+# IDE
+.idea/
+.vscode/
+.junie/
+
+# chezmoi runtime
+.chezmoi-cache/

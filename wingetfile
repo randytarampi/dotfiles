@@ -1,0 +1,26 @@
+# wingetfile — Windows packages
+# Format: one PackageIdentifier per line
+# Comments start with #
+# Categories mirror Brewfile categories where applicable
+
+# --- CLI essentials ---
+# Cross-ref: brew 'git'
+Git.Git
+# Cross-ref: brew 'starship'
+Starship.Starship
+# Cross-ref: brew 'ripgrep'
+BurntSushi.ripgrep.MSVC
+# Cross-ref: brew 'fastfetch'
+Fastfetch-cli.Fastfetch
+# Cross-ref: brew 'awscli'
+Amazon.AWSCLI
+# Cross-ref: brew 'session-manager-plugin'
+Amazon.SessionManagerPlugin
+# Cross-ref: brew 'windows-terminal'
+Microsoft.WindowsTerminal
+# Cross-ref: brew 'dotnet-runtime'
+Microsoft.DotNet.DesktopRuntime.8
+# Cross-ref: brew 'make'
+GnuWin32.Make
+# Cross-ref: brew 'node'
+OpenJS.NodeJS

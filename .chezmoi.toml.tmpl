@@ -1,0 +1,8 @@
+minimumVersion = "2.70.2"
+sourceDir = "{{ .chezmoi.homeDir }}/Development/dotfiles"
+
+[diff]
+    editor = "{{ env "EDITOR" | default "emacs" }}"
+
+[data]
+    dotfilesDir = "{{ .chezmoi.homeDir }}/.dotfiles"

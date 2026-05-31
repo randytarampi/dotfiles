@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_JUNIE_CLI_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_JUNIE_CLI_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_JUNIE_CLI_SETUP='${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}' — skipping Junie CLI install"
+  exit 0
+fi
+
+info "Installing/updating Junie CLI EAP..."
+
+# Cross-platform install per https://junie.jetbrains.com/docs/junie-cli-eap.html#install-eap
+# Network failures are caught — warn and continue rather than blocking chezmoi apply
+if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+  if ! curl -fsSL https://junie.jetbrains.com/install-eap.sh | bash 2>&1; then
+    warn "Junie CLI install fetch failed (network error?) — try again with: curl -fsSL https://junie.jetbrains.com/install-eap.sh | bash"
+  fi
+elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+  if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://junie.jetbrains.com/install-eap.ps1')" 2>&1; then
+    warn "Junie CLI install fetch failed (network error?) — try again manually"
+  fi
+else
+  warn "Unsupported OS for Junie CLI: $(uname -s)"
+fi
+
+# Verify installation
+if command -v junie >/dev/null 2>&1; then
+  ok "Junie CLI installed/updated at $(command -v junie)"
+else
+  warn "Junie CLI install may have failed — not found on PATH after install"
+fi
+
+# Configure Junie model profiles from current ollama models + Ollama Cloud
+CONFIGURE_MODELS="{{ .chezmoi.sourceDir }}/scripts/configure-jetbrains-ai.py"
+if [[ -f "$CONFIGURE_MODELS" ]]; then
+  info "Configuring Junie model profiles..."
+  "$CONFIGURE_MODELS"
+fi
+
+ok "Junie CLI setup complete."

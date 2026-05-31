@@ -1,0 +1,9 @@
+# GitHub CLI configuration
+git_protocol: ssh
+editor: {{ env "EDITOR" | default "emacs" }}
+prompt: enabled
+prefer_editor_prompt: disabled
+{{- if env "GH_TOKEN" }}
+http_unix_socket:
+{{- end }}
+version: "1"

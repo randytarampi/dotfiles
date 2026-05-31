@@ -1,0 +1,38 @@
+[user]
+	name = {{ env "GIT_AUTHOR_NAME" }}
+	email = {{ env "GIT_AUTHOR_EMAIL" }}
+	signingkey = {{ env "GPG_SIGNING_KEY" }}
+[github]
+	user = {{ env "GITHUB_USER" }}
+	token = {{ env "GH_TOKEN" }}
+[branch]
+	autosetuprebase = always
+[init]
+	defaultBranch = main
+[color]
+	ui = auto
+[diff]
+	renames = copies
+[merge]
+	stat = true
+[core]
+	editor = {{ env "EDITOR" | default "emacs" }}
+	autocrlf = input
+	excludesfile = ~/.gitignore
+[push]
+	default = simple
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[commit]
+	gpgsign = true
+[pull]
+	rebase = true
+[safe]
+	directory = *
+{{- if lookPath "gpg" }}
+[gpg]
+	program = {{ lookPath "gpg" }}
+{{- end }}

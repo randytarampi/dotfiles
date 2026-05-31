@@ -1,0 +1,62 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_MERIDIAN_LAUNCHD:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MERIDIAN_LAUNCHD='${DOTFILES_RUN_MERIDIAN_LAUNCHD:-0}' — skipping Meridian launchd setup"
+  exit 0
+fi
+
+LAUNCH_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/meridian-launch.sh"
+PLIST_DIR="$HOME/Library/LaunchAgents"
+PLIST_PATH="$PLIST_DIR/com.meridian.proxy.plist"
+
+info "Installing Meridian launchd plist..."
+mkdir -p "$PLIST_DIR"
+
+cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.meridian.proxy</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${LAUNCH_SCRIPT}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/com.meridian.proxy.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/com.meridian.proxy.stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/tmp</string>
+</dict>
+</plist>
+EOF
+ok "Meridian launchd plist written to ${PLIST_PATH}."
+
+if launchctl list | grep -q "com.meridian.proxy"; then
+  ok "com.meridian.proxy is already loaded."
+else
+  info "Loading com.meridian.proxy..."
+  launchctl load -w "$PLIST_PATH" && ok "com.meridian.proxy loaded." || warn "Failed to load com.meridian.proxy."
+fi
+
+ok "Meridian launchd setup complete."
+{{- else }}
+info "Skipping Meridian launchd setup on {{ .chezmoi.os }}"
+{{- end }}

@@ -1,0 +1,14 @@
+categories:
+  dev_cli: true           # Always installed (core CLI tools)
+  dev: true               # Development tools + dev desktop apps
+  desktop_browsers: true  # Web browsers (macOS-only)
+  desktop_comms: true     # Communication apps (macOS-only)
+  desktop_security: true  # VPN/security tools (macOS-only)
+  desktop_media: true     # Media apps (macOS-only)
+  desktop_utilities: true # Desktop utilities (macOS-only)
+  desktop_fonts: true     # Fonts (macOS-only for now)
+  desktop_gaming: false   # Gaming clients (opt-in, macOS-only)
+  desktop_cloud: true     # Cloud/sync apps (macOS-only)
+  desktop_productivity: true # Office/productivity apps (macOS-only)
+  dev_ops: true            # Ops/infrastructure tools
+  legacy: false            # Legacy/specialty tools (opt-in)
