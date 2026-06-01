@@ -71,6 +71,7 @@ Key directories and files that agents interact with:
 │   ├── get-tools.py               # Get MCP tool registry keys
 │   ├── install-opencode.sh        # Install OpenCode plugins and tools
 │   ├── install-nvm-lts.sh         # Reinstall all LTS node versions
+│   ├── update-nvm-globals.sh     # Update npm globals across all nvm versions
 │   └── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
 └── private_dot_ssh/config        # SSH config
 ```
@@ -509,6 +510,7 @@ Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks nee
 | Configure JetBrains workspace dirs | `scripts/configure-jetbrains-workspace.py` |
 | Setup AI env files | `scripts/configure-ai.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
+| Update npm globals across nvm | `scripts/update-nvm-globals.sh` |
 | Verify Brewfile completeness | `scripts/verify-brewfile-completeness.py` |
 | Check env template drift | `make env-check` |
 | Append missing env keys as comments | `make env-sync` |
