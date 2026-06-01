@@ -3,7 +3,7 @@ set -euo pipefail
 # meridian-launch.sh — Launch wrapper for meridian that ensures proper Keychain access
 #
 # This script is called by launchd (com.meridian.proxy.plist) to start meridian.
-# Cross-arch: tries brew --prefix, then HOMEBREW_PREFIX, then PATH, then uname fallback.
+# Cross-arch: tries brew prefix, HOMEBREW_PREFIX, nvm, PATH, then uname fallback.
 #
 # Meridian authenticates via the Claude Code SDK's own OAuth flow — it does NOT
 # use ANTHROPIC_API_KEY. Those env vars are only for OpenCode's provider config.
@@ -13,14 +13,26 @@ set -euo pipefail
 unset ANTHROPIC_API_KEY
 unset ANTHROPIC_BASE_URL
 
-# Resolve meridian binary: brew prefix → HOMEBREW_PREFIX → PATH → uname fallback
+# Resolve meridian binary: brew prefix → HOMEBREW_PREFIX → nvm → PATH → uname fallback
 _MERIDIAN=""
 if command -v brew >/dev/null 2>&1; then
-  _MERIDIAN="$(brew --prefix meridian 2>/dev/null)/bin/meridian"
+  _MERIDIAN="$(brew --prefix 2>/dev/null)/bin/meridian"
   [[ ! -x "$_MERIDIAN" ]] && _MERIDIAN=""
 fi
 if [[ -z "$_MERIDIAN" && -n "${HOMEBREW_PREFIX:-}" && -x "${HOMEBREW_PREFIX}/bin/meridian" ]]; then
   _MERIDIAN="${HOMEBREW_PREFIX}/bin/meridian"
+fi
+if [[ -z "$_MERIDIAN" ]]; then
+  # Try nvm: scan installed versions for meridian (newest first)
+  _nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [[ -d "$_nvm_dir/versions/node" ]]; then
+    for _node_dir in $(ls -1d "$_nvm_dir/versions/node/"v[0-9]* 2>/dev/null | sort -rV); do
+      if [[ -x "$_node_dir/bin/meridian" ]]; then
+        _MERIDIAN="$_node_dir/bin/meridian"
+        break
+      fi
+    done
+  fi
 fi
 if [[ -z "$_MERIDIAN" ]]; then
   _MERIDIAN="$(command -v meridian 2>/dev/null || true)"
