@@ -36,12 +36,15 @@ elif [[ -L "$DOTFILES_SCRIPTS" ]]; then
   info "Symlink already exists: $DOTFILES_SCRIPTS"
 fi
 
-# Create bin directory and _dot--* command symlinks from scripts/*.py
+# Create bin directory and _dot--* command symlinks from scripts/*.py and scripts/*.sh
 DOTFILES_BIN="$HOME/.dotfiles/bin"
 SOURCE_SCRIPTS="{{ .chezmoi.sourceDir }}/scripts"
 mkdir -p "$DOTFILES_BIN"
-for script in "$SOURCE_SCRIPTS"/*.py; do
-  base="$(basename "$script" .py)"
+for script in "$SOURCE_SCRIPTS"/*.py "$SOURCE_SCRIPTS"/*.sh; do
+  base="$(basename "$script")"
+  # Strip extension: .py → name, .sh → name
+  base="${base%.py}"
+  base="${base%.sh}"
   link_name="_dot--${base}"
   target_link="$DOTFILES_BIN/$link_name"
   if [[ ! -L "$target_link" ]]; then
