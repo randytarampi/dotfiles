@@ -398,12 +398,12 @@ Six presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
-| **anthropic** | Anthropic only (`opus-4-8`, `sonnet-4-6`, `haiku-4-5`) | Anthropic-first workflow |
+| **anthropic** | Anthropic only (`opus-4-7`, `sonnet-4-6`, `haiku-4-5`) | Anthropic-first workflow |
 | **local** | Local Ollama only | Fully offline/air-gapped |
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local` preset uses `_local:<category>` placeholders resolved at runtime by `configure-opencode-tier.py`.
 
-**Variant policy:** oracle/council-master roles use `max` or `xhigh` (for models whose default is already high, like opus-4-8). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
+**Variant policy:** oracle/council-master roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
 Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, anthropic, local)
 
