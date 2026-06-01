@@ -1,4 +1,3 @@
-cask "kext-utility"
 cask "lego-mindstorms-ev3"
 cask "mactracker"
 cask "ti-connect-ce"
