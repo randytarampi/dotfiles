@@ -11,7 +11,7 @@ $line_break\
 $character"""
 
 [username]
-style_user = "bold yellow"
+style_user = "{{ env "DOTFILES_PROMPT_USER_COLOUR" | default "bold yellow" }}"
 style_root = "bold red"
 format = "[$user]($style)"
 show_always = true
