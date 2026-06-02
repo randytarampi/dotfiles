@@ -58,6 +58,83 @@ def extract_param_count(model_name: str) -> int:
         return int(size)
 
 
+def parse_size_gb(size_str: str) -> float:
+    """Parse '4.0 GB', '512 MB', '21 GB' etc. to float GB."""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([KMG]B)", size_str, re.IGNORECASE)
+    if not match:
+        return 0.0
+    size = float(match.group(1))
+    unit = match.group(2).upper()
+    if unit == "GB":
+        return size
+    if unit == "MB":
+        return size / 1024.0
+    if unit == "KB":
+        return size / 1048576.0
+    return 0.0
+
+
+def get_model_details(model_name: str) -> dict:
+    """Run ollama show <model> and parse parameters/capabilities.
+
+    Returns {"param_count": int, "capabilities": [str]}.
+    Returns {"param_count": None, "capabilities": []} if ollama show fails or
+    no parameters found.
+    """
+    ollama_bin = find_ollama()
+    if not ollama_bin:
+        return {"param_count": None, "capabilities": []}
+
+    try:
+        result = subprocess.run(
+            [ollama_bin, "show", model_name],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {"param_count": None, "capabilities": []}
+
+        param_count = None
+        capabilities = []
+        in_capabilities = False
+
+        for line in result.stdout.splitlines():
+            if not line.strip():
+                in_capabilities = False
+                continue
+
+            if in_capabilities:
+                if line[:1].isspace():
+                    capability = line.strip()
+                    if capability:
+                        capabilities.append(capability)
+                    continue
+                in_capabilities = False
+
+            if "parameters" in line:
+                match = re.search(
+                    r"parameters\s+([\d.]+)\s*([BMK])", line, re.IGNORECASE
+                )
+                if match:
+                    value = float(match.group(1))
+                    unit = match.group(2).upper()
+                    if unit == "B":
+                        param_count = int(value)
+                    elif unit == "M":
+                        param_count = int(value / 1000.0)
+                    elif unit == "K":
+                        param_count = int(value / 1000000.0)
+                continue
+
+            if line.strip().lower() == "capabilities":
+                in_capabilities = True
+
+        return {"param_count": param_count, "capabilities": capabilities}
+    except Exception:
+        return {"param_count": None, "capabilities": []}
+
+
 def list_local_ollama_models() -> list:
     ollama_bin = find_ollama()
     if not ollama_bin:
@@ -70,18 +147,44 @@ def list_local_ollama_models() -> list:
         models = []
         for line in lines[1:]:
             parts = line.split()
-            if parts:
-                models.append(parts[0])
+            if len(parts) >= 3:
+                models.append(
+                    {"name": parts[0], "size_gb": parse_size_gb(" ".join(parts[2:4]))}
+                )
+            elif parts:
+                models.append({"name": parts[0], "size_gb": 0.0})
         return models
     except Exception:
         return []
 
 
 def resolve_roles_from_list(models: list) -> dict:
-    classified = {"reasoning": [], "code-gen": [], "lightweight": [], "all": []}
+    classified = {
+        "reasoning": [],
+        "code-gen": [],
+        "lightweight": [],
+        "vision": [],
+        "all": [],
+    }
+    model_details_cache = {}
+
+    def get_cached_model_details(model_name: str) -> dict:
+        if model_name not in model_details_cache:
+            model_details_cache[model_name] = get_model_details(model_name)
+        return model_details_cache[model_name]
 
     for model in models:
-        name_lower = model.lower()
+        if isinstance(model, dict):
+            model_name = model.get("name", "")
+            size_gb = float(model.get("size_gb", 0.0) or 0.0)
+        else:
+            model_name = str(model)
+            size_gb = 0.0
+
+        if not model_name:
+            continue
+
+        name_lower = model_name.lower()
         if any(
             p in name_lower
             for p in ["r1", "reasoning", "deep-think", "think", "qwq", "reflection"]
@@ -95,60 +198,136 @@ def resolve_roles_from_list(models: list) -> dict:
                 "coding",
                 "devstral",
                 "codestral",
-                "deepseek-coder",
-                "qwen2.5-coder",
-                "qwen3-coder",
-                "codeqwen",
+                "laguna",
             ]
         ):
             category = "code-gen"
-        elif any(
-            p in name_lower
-            for p in ["mini", "small", "tiny", "phi", "gemma:2", "gemma3", "smol"]
-        ):
+        elif any(p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]):
+            category = "lightweight"
+        elif size_gb < 12:
             category = "lightweight"
         else:
             category = "all"
 
-        classified[category].append(model)
+        classified[category].append({"name": model_name, "size_gb": size_gb})
 
     remaining = classified["all"]
-    if remaining and len(remaining) >= 3:
-        sorted_models = sorted(
-            remaining, key=lambda m: extract_param_count(m), reverse=True
+    if remaining:
+        remaining_sorted = sorted(
+            remaining,
+            key=lambda m: extract_param_count(m["name"]),
+            reverse=True,
         )
-        third = max(1, len(sorted_models) // 3)
-        for m in sorted_models[:third]:
-            classified["reasoning"].append(m)
-        for m in sorted_models[third : 2 * third]:
-            classified["code-gen"].append(m)
-        for m in sorted_models[2 * third :]:
-            classified["lightweight"].append(m)
-    elif remaining:
-        classified["code-gen"].extend(remaining)
+        large_models = []
+        for model in remaining_sorted:
+            details = get_cached_model_details(model["name"])
+            param_count = details.get("param_count")
+            if param_count is None:
+                large_models.append(model)
+                continue
+            if param_count >= 7:
+                classified["reasoning"].append(model)
+            else:
+                classified["code-gen"].append(model)
 
-    all_available = (
-        classified["reasoning"] + classified["code-gen"] + classified["lightweight"]
-    )
-    if all_available:
-        for cat in ["reasoning", "code-gen", "lightweight"]:
-            if not classified[cat] and all_available:
-                classified[cat] = [all_available[0]]
+        if large_models:
+            if len(large_models) >= 2:
+                half = max(1, len(large_models) // 2)
+                for m in large_models[:half]:
+                    classified["reasoning"].append(m)
+                for m in large_models[half:]:
+                    classified["code-gen"].append(m)
+            else:
+                classified["reasoning"].extend(large_models)
 
-    def pick(category, fallback_category=None):
-        if classified[category]:
-            return classified[category][0]
-        if fallback_category and classified[fallback_category]:
-            return classified[fallback_category][0]
-        for c in ["reasoning", "code-gen", "lightweight"]:
-            if classified[c]:
-                return classified[c][0]
+    # Sort each category by descending size to prefer the most capable model
+    def _effective_param_count(model):
+        """Best-effort parameter count for sorting: name tag > ollama show > size heuristic."""
+        name_count = extract_param_count(model.get("name", ""))
+        if name_count > 0:
+            return name_count
+        return model.get("size_gb", 0.0)
+
+    for cat in ["reasoning", "code-gen", "lightweight", "vision"]:
+        # Enrich models without name-tag param counts via ollama show
+        for model in classified[cat]:
+            details = get_cached_model_details(model["name"])
+            param_count = details.get("param_count")
+            if param_count is not None:
+                model["param_count"] = param_count
+            model["capabilities"] = details.get("capabilities", [])
+
+        def _sort_key(m):
+            name_count = extract_param_count(m.get("name", ""))
+            if name_count > 0:
+                return name_count
+            show_count = m.get("param_count")
+            if show_count is not None and show_count > 0:
+                return float(show_count)
+            return m.get("size_gb", 0.0)
+
+        classified[cat].sort(key=_sort_key, reverse=True)
+
+    def _has_required_capabilities(model, required_caps):
+        capabilities = model.get("capabilities", [])
+        if not capabilities:
+            return True
+        return all(cap in capabilities for cap in required_caps)
+
+    classified["reasoning"] = [
+        m
+        for m in classified["reasoning"]
+        if _has_required_capabilities(m, ["thinking", "tools"])
+    ]
+    classified["code-gen"] = [
+        m
+        for m in classified["code-gen"]
+        if _has_required_capabilities(m, ["thinking", "completion"])
+    ]
+    classified["lightweight"] = [
+        m for m in classified["lightweight"] if _has_required_capabilities(m, ["tools"])
+    ]
+    classified["vision"] = [
+        m
+        for m in classified["lightweight"]
+        if _has_required_capabilities(m, ["vision"])
+    ]
+    classified["vision"].sort(key=lambda m: _effective_param_count(m), reverse=True)
+
+    if not classified["vision"] and classified["lightweight"]:
+        logger.warning(
+            "No vision-capable local models found; falling back to lightweight"
+        )
+        classified["vision"] = classified["lightweight"][:]
+
+    if not classified["code-gen"] and classified["reasoning"]:
+        classified["code-gen"] = classified["reasoning"][:]
+
+    def pick(category, fallback_category=None, index=0):
+        """Pick the Nth model (0-based) from a category, with fallback."""
+        src = classified.get(category, [])
+        if index < len(src):
+            return src[index]["name"]
+        if fallback_category:
+            src_fb = classified.get(fallback_category, [])
+            if index < len(src_fb):
+                return src_fb[index]["name"]
+        # Final fallback: scan all categories for the Nth available model
+        all_models = []
+        for c in ["reasoning", "code-gen", "lightweight", "vision"]:
+            all_models.extend(classified.get(c, []))
+        if index < len(all_models):
+            return all_models[index]["name"]
         return None
 
     role_map = {
         "reasoning": pick("reasoning", "code-gen"),
+        "reasoning_2": pick("reasoning", "code-gen", index=1),
         "code-gen": pick("code-gen", "reasoning"),
+        "code-gen_2": pick("code-gen", "reasoning", index=1),
         "lightweight": pick("lightweight", "code-gen"),
+        "lightweight_2": pick("lightweight", "code-gen", index=1),
+        "vision": pick("vision", "lightweight"),
     }
 
     resolved = {}
@@ -170,17 +349,23 @@ def resolve_placeholders(config_path: str, local_roles_json: str):
         logger.critical(f"Config path does not exist: {config_path}")
         sys.exit(1)
 
-    placeholder_map = {
-        "_local:reasoning": resolved.get("reasoning"),
-        "_local:code-gen": resolved.get("code-gen"),
-        "_local:lightweight": resolved.get("lightweight"),
-    }
+    # Process _2 (longer) placeholders first to prevent partial replacement
+    # e.g. _local:code-gen_2 must be replaced before _local:code-gen
+    placeholder_order = [
+        ("_local:reasoning_2", resolved.get("reasoning_2")),
+        ("_local:code-gen_2", resolved.get("code-gen_2")),
+        ("_local:lightweight_2", resolved.get("lightweight_2")),
+        ("_local:reasoning", resolved.get("reasoning")),
+        ("_local:code-gen", resolved.get("code-gen")),
+        ("_local:lightweight", resolved.get("lightweight")),
+        ("_local:vision", resolved.get("vision")),
+    ]
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        for placeholder, model in placeholder_map.items():
+        for placeholder, model in placeholder_order:
             if model:
                 content = content.replace(placeholder, model)
 
@@ -193,7 +378,9 @@ def resolve_placeholders(config_path: str, local_roles_json: str):
         sys.exit(1)
 
 
-def orchestrate_tier_switch(tier: str, with_local_fallbacks: bool):
+def orchestrate_tier_switch(
+    tier: str, no_local_fallbacks: bool, local_fallback_roles: list
+):
     opencode_dir = os.environ.get("OPENCODE_DIR")
     if opencode_dir:
         config_dir = os.path.abspath(os.path.expanduser(opencode_dir))
@@ -255,21 +442,24 @@ def orchestrate_tier_switch(tier: str, with_local_fallbacks: bool):
             "explorer": "lightweight",
             "fixer": "code-gen",
             "designer": "code-gen",
-            "observer": "lightweight",
+            "observer": "vision",
         }
 
     local_role_models = {}
-    if with_local_fallbacks or tier == "local":
+    if not no_local_fallbacks or tier == "local":
         models_list = list_local_ollama_models()
         if models_list:
             local_role_models = resolve_roles_from_list(models_list)
 
-        if not local_role_models:
-            logger.warning(
-                "No local Ollama models discovered; skipping local fallbacks"
-            )
-        else:
-            logger.info(f"Classified local models: {json.dumps(local_role_models)}")
+    for override in local_fallback_roles:
+        if "=" in override:
+            role, model = override.split("=", 1)
+            local_role_models[role] = model
+
+    if not local_role_models:
+        logger.warning("No local Ollama models discovered; skipping local fallbacks")
+    else:
+        logger.info(f"Classified local models: {json.dumps(local_role_models)}")
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -283,9 +473,18 @@ def orchestrate_tier_switch(tier: str, with_local_fallbacks: bool):
     source_council = tier_config.get("council", {})
     if "council" not in target_config:
         target_config["council"] = {}
-    target_config["council"]["master"] = source_council.get("master")
     target_config["council"]["default_preset"] = source_council.get("default_preset")
-    target_config["council"]["presets"] = source_council.get("presets")
+    source_presets = json.loads(json.dumps(source_council.get("presets", {}) or {}))
+
+    for other_tier_name, other_tier_config in tiers_dict.items():
+        other_council = other_tier_config.get("council", {})
+        other_presets = other_council.get("presets", {})
+        if other_tier_name in other_presets:
+            other_preset = other_presets[other_tier_name]
+            if "council" in other_preset and other_tier_name in source_presets:
+                source_presets[other_tier_name]["council"] = other_preset["council"]
+
+    target_config["council"]["presets"] = source_presets
 
     source_fallback = tier_config.get("fallback", {})
     if "fallback" not in target_config:
@@ -314,14 +513,13 @@ def orchestrate_tier_switch(tier: str, with_local_fallbacks: bool):
         logger.critical(f"Failed to write configuration to {config_path}: {e}")
         sys.exit(1)
 
-    if tier == "local":
-        if not local_role_models:
-            logger.warning(
-                "No local Ollama models found — _local: placeholders will not be resolved"
-            )
-        else:
-            logger.info("Resolving _local: model placeholders for local tier...")
-            resolve_placeholders(config_path, json.dumps(local_role_models))
+    if local_role_models:
+        logger.info("Resolving _local: model placeholders...")
+        resolve_placeholders(config_path, json.dumps(local_role_models))
+    else:
+        logger.warning(
+            "No local Ollama models found — _local: placeholders will not be resolved"
+        )
 
 
 def main():
@@ -354,7 +552,24 @@ def main():
         args = parser.parse_args()
 
         if args.command == "resolve-roles":
-            stdin_models = [line.strip() for line in sys.stdin if line.strip()]
+            stdin_models = []
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    parsed = json.loads(line)
+                    if isinstance(parsed, dict) and "name" in parsed:
+                        stdin_models.append(
+                            {
+                                "name": parsed.get("name", ""),
+                                "size_gb": float(parsed.get("size_gb", 0.0) or 0.0),
+                            }
+                        )
+                        continue
+                except Exception:
+                    pass
+                stdin_models.append({"name": line, "size_gb": 0.0})
             resolved = resolve_roles_from_list(stdin_models)
             print(json.dumps(resolved))
         elif args.command == "resolve-placeholders":
@@ -364,9 +579,15 @@ def main():
             description="Switches the active OpenCode tier and updates configuration."
         )
         parser.add_argument(
-            "--with-local-fallbacks",
+            "--no-local-fallbacks",
             action="store_true",
-            help="Optionally appends local Ollama models to fallback chains",
+            help="Omit local Ollama models from fallback chains",
+        )
+        parser.add_argument(
+            "--local-fallback-role",
+            action="append",
+            default=[],
+            help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
         )
         parser.add_argument(
             "tier",
@@ -383,7 +604,9 @@ def main():
         )
         args = parser.parse_args()
 
-        orchestrate_tier_switch(args.tier, args.with_local_fallbacks)
+        orchestrate_tier_switch(
+            args.tier, args.no_local_fallbacks, args.local_fallback_role
+        )
 
 
 if __name__ == "__main__":

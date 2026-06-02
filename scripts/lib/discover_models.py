@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Discover Models Helper.
-Lists local Ollama models and prints them as a JSON array of non-empty strings.
+Lists local Ollama models and prints them as a JSON array with name and size_gb.
 """
 
 import sys
@@ -10,6 +10,7 @@ import argparse
 import os
 import subprocess
 import shutil
+import re
 
 
 def find_ollama() -> str:
@@ -30,6 +31,22 @@ def find_ollama() -> str:
     return ""
 
 
+def parse_size_gb(size_str: str) -> float:
+    """Parse '4.0 GB', '512 MB', '21 GB' etc. to float GB."""
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([KMG]B)", size_str, re.IGNORECASE)
+    if not match:
+        return 0.0
+    size = float(match.group(1))
+    unit = match.group(2).upper()
+    if unit == "GB":
+        return size
+    if unit == "MB":
+        return size / 1024.0
+    if unit == "KB":
+        return size / 1048576.0
+    return 0.0
+
+
 def list_local_ollama_models() -> list:
     ollama_bin = find_ollama()
     if not ollama_bin:
@@ -42,8 +59,12 @@ def list_local_ollama_models() -> list:
         models = []
         for line in lines[1:]:
             parts = line.split()
-            if parts:
-                models.append(parts[0])
+            if len(parts) >= 3:
+                models.append(
+                    {"name": parts[0], "size_gb": parse_size_gb(" ".join(parts[2:4]))}
+                )
+            elif parts:
+                models.append({"name": parts[0], "size_gb": 0.0})
         return models
     except Exception:
         return []
@@ -51,7 +72,7 @@ def list_local_ollama_models() -> list:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Prints a JSON array of local Ollama models."
+        description="Prints a JSON array of local Ollama models with name and size_gb."
     )
     parser.parse_args()
 
@@ -60,8 +81,21 @@ def main():
         models = []
         for line in sys.stdin:
             stripped = line.strip()
-            if stripped:
-                models.append(stripped)
+            if not stripped:
+                continue
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, dict) and "name" in parsed:
+                    models.append(
+                        {
+                            "name": parsed.get("name", ""),
+                            "size_gb": float(parsed.get("size_gb", 0.0) or 0.0),
+                        }
+                    )
+                    continue
+            except Exception:
+                pass
+            models.append({"name": stripped, "size_gb": 0.0})
         print(json.dumps(models))
     else:
         # Otherwise, discover directly by running ollama

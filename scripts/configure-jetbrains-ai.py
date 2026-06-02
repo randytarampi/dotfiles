@@ -136,7 +136,10 @@ def main():
     if do_models:
         os.makedirs(target_dir, exist_ok=True)
         local_models = list_local_ollama_models()
-        local_models_str = " ".join(local_models)
+        local_model_names = [
+            m["name"] if isinstance(m, dict) else str(m) for m in local_models
+        ]
+        local_models_str = " ".join(local_model_names)
 
         generate_profiles_py = os.path.join(
             SCRIPT_DIR, "generate-jetbrains-profiles.py"

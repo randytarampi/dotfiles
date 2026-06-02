@@ -24,7 +24,9 @@
         "model": "ollama-cloud/gemma4:31b",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "ollama-cloud/gemma4:31b",
@@ -50,6 +52,10 @@
       },
       "observer": {
         "model": "ollama-cloud/gemma4:31b"
+      },
+      "council": {
+        "model": "ollama-cloud/deepseek-v4-pro",
+        "variant": "max"
       }
     },
     "pro-plus": {
@@ -75,7 +81,9 @@
         "model": "openai/gpt-5.4-mini",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "openai/gpt-5.4-mini",
@@ -102,6 +110,10 @@
       "observer": {
         "model": "openai/gpt-5.4-mini",
         "variant": "low"
+      },
+      "council": {
+        "model": "openai/gpt-5.5",
+        "variant": "high"
       }
     },
     "pro-plus-anthropic": {
@@ -127,7 +139,9 @@
         "model": "anthropic/claude-haiku-4-5",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -154,6 +168,10 @@
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
         "variant": "low"
+      },
+      "council": {
+        "model": "openai/gpt-5.5",
+        "variant": "high"
       }
     },
     "anthropic": {
@@ -179,7 +197,9 @@
         "model": "anthropic/claude-haiku-4-5",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -206,6 +226,10 @@
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
         "variant": "low"
+      },
+      "council": {
+        "model": "anthropic/claude-opus-4-7",
+        "variant": "xhigh"
       }
     },
     "plus": {
@@ -231,7 +255,9 @@
         "model": "openai/gpt-5.4-nano",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "openai/gpt-5.4-nano",
@@ -258,6 +284,10 @@
       "observer": {
         "model": "openai/gpt-5.4-nano",
         "variant": "low"
+      },
+      "council": {
+        "model": "openai/gpt-5.5",
+        "variant": "high"
       }
     },
     "plus-anthropic": {
@@ -283,7 +313,9 @@
         "model": "openai/gpt-5.4-nano",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -310,6 +342,10 @@
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
         "variant": "low"
+      },
+      "council": {
+        "model": "anthropic/claude-opus-4-7",
+        "variant": "xhigh"
       }
     },
     "local": {
@@ -335,7 +371,9 @@
         "model": "_local:lightweight",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "_local:lightweight",
@@ -360,8 +398,12 @@
         "mcps": []
       },
       "observer": {
-        "model": "_local:lightweight",
+        "model": "_local:vision",
         "variant": "low"
+      },
+      "council": {
+        "model": "_local:reasoning",
+        "variant": "high"
       }
     }
   },
@@ -372,10 +414,6 @@
   },
   "disabled_agents": [],
   "council": {
-    "master": {
-      "model": "openai/gpt-5.5",
-      "variant": "high"
-    },
     "timeout": 360000,
     "councillor_retries": 1,
     "default_preset": "pro-plus",
@@ -443,7 +481,7 @@
           "model": "_local:code-gen"
         },
         "gamma": {
-          "model": "_local:lightweight"
+          "model": "_local:code-gen_2"
         }
       }
     }
@@ -457,10 +495,6 @@
   "_tiers": {
     "pro": {
       "council": {
-        "master": {
-          "model": "ollama-cloud/deepseek-v4-pro",
-          "variant": "max"
-        },
         "default_preset": "pro",
         "presets": {
           "pro": {
@@ -472,6 +506,100 @@
             },
             "gamma": {
               "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "ollama-cloud/deepseek-v4-pro",
+              "variant": "max"
             }
           }
         }
@@ -523,12 +651,23 @@
     },
     "pro-plus": {
       "council": {
-        "master": {
-          "model": "openai/gpt-5.5",
-          "variant": "high"
-        },
         "default_preset": "pro-plus",
         "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
           "pro-plus": {
             "alpha": {
               "model": "ollama-cloud/deepseek-v4-pro"
@@ -538,6 +677,85 @@
             },
             "gamma": {
               "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
             }
           }
         }
@@ -589,12 +807,38 @@
     },
     "pro-plus-anthropic": {
       "council": {
-        "master": {
-          "model": "openai/gpt-5.5",
-          "variant": "high"
-        },
         "default_preset": "pro-plus-anthropic",
         "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
           "pro-plus-anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
@@ -604,6 +848,70 @@
             },
             "gamma": {
               "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
             }
           }
         }
@@ -655,35 +963,53 @@
     },
     "anthropic": {
       "council": {
-        "master": {
-          "model": "anthropic/claude-opus-4-7",
-          "variant": "xhigh"
-        },
         "default_preset": "anthropic",
         "presets": {
-          "anthropic": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "pro-plus-anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
             },
             "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
+              "model": "ollama-cloud/deepseek-v4-pro"
             },
             "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
             }
-          }
-        }
-      },
-      "fallback": {}
-    },
-    "plus": {
-      "council": {
-        "master": {
-          "model": "openai/gpt-5.5",
-          "variant": "high"
-        },
-        "default_preset": "plus",
-        "presets": {
+          },
           "plus": {
             "alpha": {
               "model": "openai/gpt-5.5"
@@ -693,6 +1019,168 @@
             },
             "gamma": {
               "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "plus": {
+      "council": {
+        "default_preset": "plus",
+        "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "openai/gpt-5.5",
+              "variant": "high"
             }
           }
         }
@@ -736,12 +1224,68 @@
     },
     "plus-anthropic": {
       "council": {
-        "master": {
-          "model": "anthropic/claude-opus-4-7",
-          "variant": "xhigh"
-        },
         "default_preset": "plus-anthropic",
         "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
           "plus-anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
@@ -751,6 +1295,40 @@
             },
             "gamma": {
               "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
+            }
+          },
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "anthropic/claude-opus-4-7",
+              "variant": "xhigh"
             }
           }
         }
@@ -794,12 +1372,98 @@
     },
     "local": {
       "council": {
-        "master": {
-          "model": "_local:reasoning",
-          "variant": "high"
-        },
         "default_preset": "local",
         "presets": {
+          "pro": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
+          "pro-plus": {
+            "alpha": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "beta": {
+              "model": "ollama-cloud/kimi-k2.6"
+            },
+            "gamma": {
+              "model": "ollama-cloud/glm-5.1"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
+          "pro-plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.5"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
+          "plus": {
+            "alpha": {
+              "model": "openai/gpt-5.5"
+            },
+            "beta": {
+              "model": "openai/gpt-5.4"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
+          "plus-anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "openai/gpt-5.5"
+            },
+            "gamma": {
+              "model": "openai/gpt-5.3-codex-spark"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
+          "anthropic": {
+            "alpha": {
+              "model": "anthropic/claude-opus-4-7"
+            },
+            "beta": {
+              "model": "anthropic/claude-sonnet-4-6"
+            },
+            "gamma": {
+              "model": "anthropic/claude-haiku-4-5"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          },
           "local": {
             "alpha": {
               "model": "_local:reasoning"
@@ -808,7 +1472,11 @@
               "model": "_local:code-gen"
             },
             "gamma": {
-              "model": "_local:lightweight"
+              "model": "_local:code-gen_2"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
             }
           }
         }

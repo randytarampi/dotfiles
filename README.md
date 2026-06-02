@@ -390,7 +390,7 @@ Packages available on both platforms by category:
 
 ### Model Tiers
 
-Six presets for AI agents, defined in `scripts/configure-opencode-tier.py` (source of truth) and documented in `AGENTS.md`:
+Seven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (source of truth) and documented in `AGENTS.md`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -403,13 +403,13 @@ Six presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local` preset uses `_local:<category>` placeholders resolved at runtime by `configure-opencode-tier.py`.
 
-**Variant policy:** oracle/council-master roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
+**Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
 Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, anthropic, local)
 
 Default preset: tier auto-detected from available API keys during `run_once_14-configure-opencode`. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro.
 
-Local Ollama fallbacks (`--with-local-fallbacks`) append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer/observer. Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-based distribution for unclassified models.
+Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules: models < 12 GB → lightweight, `ollama show` parameter-based classification for unclassified models (≥ 7B → reasoning, < 7B → code-gen), capability filtering (reasoning requires thinking+tools, code-gen requires thinking+completion, lightweight requires tools, vision requires tools+vision), and reasoning model reuse when no code-gen name-heuristic match is found. Override per-role: `--local-fallback-role observer=ollama/qwen3.5:9b-mlx`.
 
 ### DCP Context Compaction
 

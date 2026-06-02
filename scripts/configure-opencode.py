@@ -167,7 +167,10 @@ def main():
     # Decode local ollama
     local_ollama = {}
     if local_ollama_models:
-        models_obj = {name: {"name": name} for name in sorted(local_ollama_models)}
+        model_names = sorted(
+            m["name"] if isinstance(m, dict) else str(m) for m in local_ollama_models
+        )
+        models_obj = {name: {"name": name} for name in model_names}
         local_ollama = {
             "models": models_obj,
             "name": "Ollama",
@@ -339,8 +342,8 @@ def main():
             sys.executable,
             os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
         ]
-        if with_local_ollama:
-            tier_args.append("--with-local-fallbacks")
+        if not with_local_ollama:
+            tier_args.append("--no-local-fallbacks")
         tier_args.append(args.preset)
         subprocess.run(tier_args, check=True)
         logger.info(f"Active tier set to {args.preset}")
@@ -364,8 +367,8 @@ def main():
         "     configure-opencode-tier.py anthropic",
         "     configure-opencode-tier.py local",
         "",
-        "To regenerate with local ollama:",
-        "     set DOTFILES_USE_LOCAL_OLLAMA=1 and re-run configure-opencode.py",
+        "To regenerate without local ollama:",
+        "     set DOTFILES_USE_LOCAL_OLLAMA=0 and re-run configure-opencode.py",
         "",
         "To add/update Meridian proxy plugin:",
         "     configure-meridian.py",

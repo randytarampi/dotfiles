@@ -93,8 +93,8 @@ def main():
 
     tier_args = [sys.executable, opencode_tier_py, args.preset]
     # Optionally append local fallbacks if DOTFILES_USE_LOCAL_OLLAMA is 1
-    if os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "1") == "1":
-        tier_args.insert(2, "--with-local-fallbacks")
+    if os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "1") != "1":
+        tier_args.insert(2, "--no-local-fallbacks")
 
     env = os.environ.copy()
     env["OPENCODE_DIR"] = dotopencode_dir
