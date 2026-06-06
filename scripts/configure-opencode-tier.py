@@ -17,6 +17,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from opencode_config import get_available_tiers, get_slim_config_path
 
 
 def find_ollama() -> str:
@@ -323,6 +324,7 @@ def resolve_roles_from_list(models: list) -> dict:
     role_map = {
         "reasoning": pick("reasoning", "code-gen"),
         "reasoning_2": pick("reasoning", "code-gen", index=1),
+        "reasoning_3": pick("reasoning", "code-gen", index=2),
         "code-gen": pick("code-gen", "reasoning"),
         "code-gen_2": pick("code-gen", "reasoning", index=1),
         "lightweight": pick("lightweight", "code-gen"),
@@ -349,9 +351,10 @@ def resolve_placeholders(config_path: str, local_roles_json: str):
         logger.critical(f"Config path does not exist: {config_path}")
         sys.exit(1)
 
-    # Process _2 (longer) placeholders first to prevent partial replacement
-    # e.g. _local:code-gen_2 must be replaced before _local:code-gen
+    # Process _3, _2 (longer) placeholders first to prevent partial replacement
+    # e.g. _local:code-gen_3 must be replaced before _local:code-gen_2, then _local:code-gen
     placeholder_order = [
+        ("_local:reasoning_3", resolved.get("reasoning_3")),
         ("_local:reasoning_2", resolved.get("reasoning_2")),
         ("_local:code-gen_2", resolved.get("code-gen_2")),
         ("_local:lightweight_2", resolved.get("lightweight_2")),
@@ -469,6 +472,19 @@ def orchestrate_tier_switch(
         sys.exit(1)
 
     target_config["preset"] = tier
+
+    # Update preset role assignments from source presets
+    source_presets_data = tiers_data.get("presets", {})
+    if tier in source_presets_data:
+        source_preset = source_presets_data[tier]
+        if "presets" not in target_config:
+            target_config["presets"] = {}
+        target_config["presets"][tier] = json.loads(json.dumps(source_preset))
+        logger.info(f"Updated preset role assignments for '{tier}' from source")
+    else:
+        logger.warning(
+            f"No preset '{tier}' found in source presets; role assignments not updated"
+        )
 
     source_council = tier_config.get("council", {})
     if "council" not in target_config:
@@ -589,23 +605,28 @@ def main():
             default=[],
             help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
         )
+        available_tiers = get_available_tiers()
+        parser.add_argument(
+            "--preset",
+            dest="preset",
+            choices=available_tiers,
+            help="Active OpenCode tier to set (alias for positional TIER)",
+        )
         parser.add_argument(
             "tier",
-            choices=[
-                "pro",
-                "pro-plus",
-                "pro-plus-anthropic",
-                "plus",
-                "plus-anthropic",
-                "anthropic",
-                "local",
-            ],
+            nargs="?",
+            choices=available_tiers,
             help="Active OpenCode tier to set",
         )
         args = parser.parse_args()
 
+        # Merge --preset and positional tier; --preset takes priority
+        resolved_tier = args.preset or args.tier
+        if not resolved_tier:
+            parser.error("the following arguments are required: tier (or --preset)")
+
         orchestrate_tier_switch(
-            args.tier, args.no_local_fallbacks, args.local_fallback_role
+            resolved_tier, args.no_local_fallbacks, args.local_fallback_role
         )
 
 

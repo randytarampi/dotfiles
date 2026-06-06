@@ -490,10 +490,10 @@
           "model": "_local:reasoning"
         },
         "beta": {
-          "model": "_local:code-gen"
+          "model": "_local:reasoning_2"
         },
         "gamma": {
-          "model": "_local:code-gen_2"
+          "model": "_local:reasoning_3"
         }
       }
     }
@@ -814,10 +814,10 @@
               "model": "_local:reasoning"
             },
             "beta": {
-              "model": "_local:code-gen"
+              "model": "_local:reasoning_2"
             },
             "gamma": {
-              "model": "_local:code-gen_2"
+              "model": "_local:reasoning_3"
             },
             "council": {
               "model": "_local:reasoning",

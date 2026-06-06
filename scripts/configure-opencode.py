@@ -20,6 +20,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from opencode_config import get_available_tiers
 
 
 def load_env_file(env_path: str) -> bool:
@@ -51,18 +52,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure OpenCode json generator and orchestration."
     )
+    available_tiers = get_available_tiers()
     parser.add_argument(
         "--preset",
         default="pro-plus",
-        choices=[
-            "pro",
-            "pro-plus",
-            "pro-plus-anthropic",
-            "plus",
-            "plus-anthropic",
-            "anthropic",
-            "local",
-        ],
+        choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     args = parser.parse_args()
