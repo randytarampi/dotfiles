@@ -74,8 +74,14 @@
     "nemotron": {
       "provider": "ollama-cloud",
       "temperature": 0.7,
-      "primaryModel": "nemotron-3-super",
+      "primaryModel": "nemotron-3-ultra",
       "fasterModel": "nemotron-3-nano:30b"
+    },
+    "minimax": {
+      "provider": "ollama-cloud",
+      "temperature": 0.3,
+      "primaryModel": "minimax-m3",
+      "fasterModel": "minimax-m2.7"
     },
     "qwen": {
       "provider": "ollama-cloud",

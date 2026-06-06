@@ -81,11 +81,17 @@ ok "plannotator CLI installed"
 # ---------------------------------------------------------------------------
 # 5. Pull Ollama Cloud model metadata locally
 #   (Required by OpenCode to recognize cloud models)
+#   Reads model names from configs/opencode/ollama-cloud-models.json
 # ---------------------------------------------------------------------------
 info "Pulling Ollama Cloud model metadata..."
-for model in kimi-k2.6:cloud glm-5.1:cloud deepseek-v4-pro:cloud; do
-  ollama pull "$model" 2>/dev/null || warn "Could not pull '$model' — you may need 'ollama login' first"
-done
+CONFIG_FILE="$SCRIPT_DIR/../configs/opencode/ollama-cloud-models.json"
+if [ -f "$CONFIG_FILE" ]; then
+  while IFS= read -r model; do
+    ollama pull "${model}:cloud" 2>/dev/null || warn "Could not pull '${model}:cloud' — you may need 'ollama login' first"
+  done < <(python3 -c "import json; data=json.load(open('$CONFIG_FILE')); [print(m) for m in data['models']]" 2>/dev/null)
+else
+  warn "ollama-cloud-models.json not found at $CONFIG_FILE — skipping cloud model pull"
+fi
 ok "Ollama Cloud model metadata pulled"
 
 # ---------------------------------------------------------------------------

@@ -51,10 +51,11 @@
         "mcps": []
       },
       "observer": {
-        "model": "ollama-cloud/gemma4:31b"
+        "model": "ollama-cloud/gemma4:31b",
+        "variant": "low"
       },
       "council": {
-        "model": "ollama-cloud/deepseek-v4-pro",
+        "model": "ollama-cloud/nemotron-3-ultra",
         "variant": "max"
       }
     },
@@ -102,7 +103,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.3-codex-spark",
+        "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -160,7 +161,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.3-codex-spark",
+        "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -276,7 +277,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.3-codex-spark",
+        "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -334,7 +335,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.3-codex-spark",
+        "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -420,24 +421,24 @@
     "presets": {
       "pro": {
         "alpha": {
-          "model": "ollama-cloud/deepseek-v4-pro"
+          "model": "ollama-cloud/nemotron-3-ultra"
         },
         "beta": {
-          "model": "ollama-cloud/kimi-k2.6"
+          "model": "ollama-cloud/deepseek-v4-pro"
         },
         "gamma": {
-          "model": "ollama-cloud/glm-5.1"
+          "model": "ollama-cloud/kimi-k2.6"
         }
       },
       "pro-plus": {
         "alpha": {
-          "model": "ollama-cloud/deepseek-v4-pro"
+          "model": "ollama-cloud/nemotron-3-ultra"
         },
         "beta": {
-          "model": "ollama-cloud/kimi-k2.6"
+          "model": "ollama-cloud/deepseek-v4-pro"
         },
         "gamma": {
-          "model": "ollama-cloud/glm-5.1"
+          "model": "ollama-cloud/kimi-k2.6"
         }
       },
       "pro-plus-anthropic": {
@@ -460,6 +461,17 @@
         },
         "gamma": {
           "model": "openai/gpt-5.3-codex"
+        }
+      },
+      "plus-anthropic": {
+        "alpha": {
+          "model": "anthropic/claude-opus-4-7"
+        },
+        "beta": {
+          "model": "openai/gpt-5.5"
+        },
+        "gamma": {
+          "model": "openai/gpt-5.4"
         }
       },
       "anthropic": {
@@ -499,106 +511,16 @@
         "presets": {
           "pro": {
             "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
+              "model": "ollama-cloud/nemotron-3-ultra"
             },
             "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
               "model": "ollama-cloud/kimi-k2.6"
             },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
             "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
-              "variant": "max"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
-            },
-            "council": {
-              "model": "ollama-cloud/deepseek-v4-pro",
+              "model": "ollama-cloud/nemotron-3-ultra",
               "variant": "max"
             }
           }
@@ -607,45 +529,38 @@
       "fallback": {
         "orchestrator": [
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/glm-5.1",
-          "ollama-cloud/kimi-k2.6",
-          "ollama-cloud/glm-5"
+          "ollama-cloud/nemotron-3-ultra",
+          "ollama-cloud/kimi-k2.6"
         ],
         "oracle": [
-          "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/kimi-k2.5",
+          "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/kimi-k2.6"
         ],
         "librarian": [
-          "ollama-cloud/gemma4:31b",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/kimi-k2.6",
-          "ollama-cloud/glm-5"
+          "ollama-cloud/glm-5.1"
         ],
         "explorer": [
-          "ollama-cloud/gemma4:31b",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/kimi-k2.6",
-          "ollama-cloud/glm-5"
+          "ollama-cloud/glm-5.1"
         ],
         "fixer": [
-          "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/qwen3-coder:480b",
-          "ollama-cloud/glm-5.1",
+          "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/kimi-k2.6"
         ],
         "designer": [
           "ollama-cloud/glm-5.1",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/kimi-k2.6",
-          "ollama-cloud/glm-5"
+          "ollama-cloud/nemotron-3-ultra"
         ],
         "observer": [
-          "ollama-cloud/gemma4:31b",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/kimi-k2.6",
-          "ollama-cloud/glm-5"
+          "ollama-cloud/minimax-m3"
         ]
       }
     },
@@ -653,105 +568,15 @@
       "council": {
         "default_preset": "pro-plus",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
           "pro-plus": {
             "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
+              "model": "ollama-cloud/nemotron-3-ultra"
             },
             "beta": {
+              "model": "ollama-cloud/deepseek-v4-pro"
+            },
+            "gamma": {
               "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
             },
             "council": {
               "model": "openai/gpt-5.5",
@@ -762,46 +587,39 @@
       },
       "fallback": {
         "orchestrator": [
-          "ollama-cloud/deepseek-v4-pro",
           "openai/gpt-5.5",
-          "ollama-cloud/glm-5.1",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/nemotron-3-ultra"
         ],
         "oracle": [
-          "ollama-cloud/deepseek-v4-pro",
           "openai/gpt-5.5",
-          "ollama-cloud/kimi-k2.5",
+          "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/glm-5.1"
         ],
         "librarian": [
-          "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/kimi-k2.6"
         ],
         "explorer": [
-          "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/kimi-k2.6"
         ],
         "fixer": [
-          "openai/gpt-5.3-codex-spark",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/qwen3-coder:480b",
           "ollama-cloud/glm-5.1"
         ],
         "designer": [
-          "openai/gpt-5.4-mini",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/kimi-k2.6"
         ],
         "observer": [
-          "openai/gpt-5.4-nano",
           "ollama-cloud/gemma4:31b",
-          "ollama-cloud/deepseek-v4-flash",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/minimax-m3",
+          "ollama-cloud/deepseek-v4-flash"
         ]
       }
     },
@@ -809,36 +627,6 @@
       "council": {
         "default_preset": "pro-plus-anthropic",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
           "pro-plus-anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
@@ -848,66 +636,6 @@
             },
             "gamma": {
               "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
             },
             "council": {
               "model": "openai/gpt-5.5",
@@ -918,46 +646,38 @@
       },
       "fallback": {
         "orchestrator": [
-          "anthropic/claude-opus-4-7",
           "openai/gpt-5.5",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/glm-5.1"
+          "ollama-cloud/nemotron-3-ultra"
         ],
         "oracle": [
-          "anthropic/claude-opus-4-7",
           "openai/gpt-5.5",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/kimi-k2.5"
+          "ollama-cloud/nemotron-3-ultra"
         ],
         "librarian": [
-          "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/glm-5.1"
         ],
         "explorer": [
-          "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/gemma4:31b"
         ],
         "fixer": [
-          "openai/gpt-5.3-codex-spark",
-          "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/qwen3-coder:480b"
         ],
         "designer": [
-          "anthropic/claude-sonnet-4-6",
           "openai/gpt-5.4-mini",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/deepseek-v4-pro"
         ],
         "observer": [
-          "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-nano",
           "ollama-cloud/gemma4:31b",
-          "ollama-cloud/deepseek-v4-flash"
+          "ollama-cloud/minimax-m3"
         ]
       }
     },
@@ -965,81 +685,6 @@
       "council": {
         "default_preset": "anthropic",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
           "anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
@@ -1049,21 +694,6 @@
             },
             "gamma": {
               "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
             },
             "council": {
               "model": "anthropic/claude-opus-4-7",
@@ -1078,51 +708,6 @@
       "council": {
         "default_preset": "plus",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
           "plus": {
             "alpha": {
               "model": "openai/gpt-5.5"
@@ -1137,78 +722,27 @@
               "model": "openai/gpt-5.5",
               "variant": "high"
             }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
-            },
-            "council": {
-              "model": "openai/gpt-5.5",
-              "variant": "high"
-            }
           }
         }
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-5.5",
           "openai/gpt-5.4",
           "openai/gpt-5.3-codex"
         ],
         "oracle": [
-          "openai/gpt-5.5",
           "openai/gpt-5.4",
           "openai/gpt-5.3-codex"
         ],
         "librarian": [
-          "openai/gpt-5.4-nano",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.4"
         ],
         "explorer": [
-          "openai/gpt-5.4-nano",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.4"
         ],
         "fixer": [
-          "openai/gpt-5.3-codex-spark",
-          "openai/gpt-5.4-mini",
           "openai/gpt-5.3-codex"
         ],
         "designer": [
@@ -1217,7 +751,6 @@
           "openai/gpt-5.3-codex"
         ],
         "observer": [
-          "openai/gpt-5.4-nano",
           "openai/gpt-5.4-mini"
         ]
       }
@@ -1226,66 +759,6 @@
       "council": {
         "default_preset": "plus-anthropic",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
           "plus-anthropic": {
             "alpha": {
               "model": "anthropic/claude-opus-4-7"
@@ -1294,37 +767,7 @@
               "model": "openai/gpt-5.5"
             },
             "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "anthropic/claude-opus-4-7",
-              "variant": "xhigh"
-            }
-          },
-          "local": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:code-gen"
-            },
-            "gamma": {
-              "model": "_local:code-gen_2"
+              "model": "openai/gpt-5.4"
             },
             "council": {
               "model": "anthropic/claude-opus-4-7",
@@ -1335,37 +778,29 @@
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-5.5",
           "anthropic/claude-opus-4-7",
           "anthropic/claude-sonnet-4-6"
         ],
         "oracle": [
-          "anthropic/claude-opus-4-7",
           "openai/gpt-5.5",
           "anthropic/claude-sonnet-4-6"
         ],
         "librarian": [
-          "openai/gpt-5.4-nano",
           "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-mini"
         ],
         "explorer": [
-          "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-nano",
           "openai/gpt-5.4-mini"
         ],
         "fixer": [
-          "openai/gpt-5.3-codex-spark",
-          "anthropic/claude-sonnet-4-6",
-          "openai/gpt-5.4-mini"
+          "anthropic/claude-sonnet-4-6"
         ],
         "designer": [
-          "anthropic/claude-sonnet-4-6",
           "openai/gpt-5.5",
           "openai/gpt-5.4-mini"
         ],
         "observer": [
-          "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-nano"
         ]
       }
@@ -1374,96 +809,6 @@
       "council": {
         "default_preset": "local",
         "presets": {
-          "pro": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
-          "pro-plus": {
-            "alpha": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "beta": {
-              "model": "ollama-cloud/kimi-k2.6"
-            },
-            "gamma": {
-              "model": "ollama-cloud/glm-5.1"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
-          "pro-plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "ollama-cloud/deepseek-v4-pro"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.5"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
-          "plus": {
-            "alpha": {
-              "model": "openai/gpt-5.5"
-            },
-            "beta": {
-              "model": "openai/gpt-5.4"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
-          "plus-anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "openai/gpt-5.5"
-            },
-            "gamma": {
-              "model": "openai/gpt-5.3-codex-spark"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
-          "anthropic": {
-            "alpha": {
-              "model": "anthropic/claude-opus-4-7"
-            },
-            "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
-            },
-            "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "high"
-            }
-          },
           "local": {
             "alpha": {
               "model": "_local:reasoning"

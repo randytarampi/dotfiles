@@ -259,7 +259,7 @@ Seven tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
-| **pro** | Ollama Cloud | Daily coding, budget mode |
+| **pro** | Ollama Cloud (glm-5.1 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
@@ -267,7 +267,7 @@ Seven tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **local** | Local Ollama only | Fully offline/air-gapped |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses `_local:<category>` placeholders resolved at runtime.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses `_local:<category>` placeholders resolved at runtime.
 
 #### Anthropic Tier (`anthropic`)
 
@@ -296,10 +296,10 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | librarian | `openai/gpt-5.4-nano` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
 | designer | `anthropic/claude-sonnet-4-6` | medium |
-| fixer | `openai/gpt-5.3-codex-spark` | high |
+| fixer | `openai/gpt-5.4-mini` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `gpt-5.5`, gamma `gpt-5.3-codex-spark`. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `gpt-5.5`, gamma `gpt-5.4`. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 #### Local Tier (`local`)
 
@@ -393,13 +393,15 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 
 | Model | Default behavior | Oracle variant | Notes |
 |-------|-----------------|----------------|-------|
+| `nemotron-3-ultra` | standard | `max` | MoE frontier reasoning; oracle/council use max variant |
+| `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
 | `claude-opus-4-7` | `high` | `xhigh` | Opus defaults to high reasoning; oracle needs xhigh to push deeper |
 | `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
 | `gpt-5.5` | standard | `high` | Upstream openai preset uses high for oracle |
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
 | `glm-5.1` | standard | none | Upstream uses no variant for orchestrator |
 | `kimi-k2.6` | standard | none | Upstream uses no variant for observer, `medium` for designer |
-| `gpt-5.3-codex-spark` | standard | `high` | Upstream uses high for fixer (code execution) |
+| `gpt-5.4-mini` | standard | `high` | Upstream uses high for fixer (code execution) |
 
 ---
 
