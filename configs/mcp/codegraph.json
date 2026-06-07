@@ -1,0 +1,6 @@
+{
+  "name": "codegraph",
+  "type": "command",
+  "command": "codegraph",
+  "args": ["serve", "--mcp"]
+}

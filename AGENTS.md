@@ -23,6 +23,7 @@ Key directories and files that agents interact with:
 │   ├── junie/model-groups.json   # Junie model profile definitions
 │   ├── mcp/                      # MCP server configs
 │   │   ├── betterstack.json
+│   │   ├── codegraph.json         # CodeGraph — local-first semantic code index (stdio MCP)
 │   │   ├── github.json
 │   │   ├── global-mcps.json       # Tool→template registry
 │   │   ├── idea.json              # JetBrains MCP — SSE transport (stdio via IJ_MCP_TRANSPORT=stdio)
@@ -435,6 +436,76 @@ Notes:
 
 ---
 
+## CodeGraph Integration
+
+[CodeGraph](https://github.com/colbymchenry/codegraph) is a local-first semantic code index + MCP server. It builds a SQLite-backed knowledge graph (symbols, edges, files, FTS search) so AI agents can answer structural questions without grepping through files.
+
+### Key Properties
+
+- **Zero-config**: No config file, no API keys, fully local
+- **MCP server**: `codegraph serve --mcp` (stdio transport)
+- **Per-project setup**: `codegraph init -i` creates `.codegraph/` with a SQLite index
+- **Install**: `npm i -g @colbymchenry/codegraph`
+- **Agent auto-config**: `codegraph install -y --target auto --location global` (idempotent, skips already-configured agents)
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `configs/mcp/codegraph.json` | MCP template (command + args) |
+| `configs/mcp/global-mcps.json` | Registry entry for all tools + project template |
+| `scripts/install-opencode.sh` | Step 6: npm install codegraph + `codegraph install -y` agent auto-config |
+| `.chezmoiscripts/run_once_10-install-opencode-plugins.sh.tmpl` | chezmoi-installed codegraph CLI + agent auto-config |
+| `scripts/configure-opencode-project.py` | Step 3: `codegraph init -i` per project |
+
+### MCP Config
+
+```json
+{
+  "name": "codegraph",
+  "type": "command",
+  "command": "codegraph",
+  "args": ["serve", "--mcp"]
+}
+```
+
+### Agent Auto-Config
+
+`codegraph install -y --target auto --location global` auto-configures CodeGraph MCP for all detected agents (Claude Code, Cursor, Codex CLI, opencode, Hermes Agent, Gemini CLI, Antigravity IDE). It is idempotent — shows "Unchanged" for already-configured agents.
+
+This runs automatically in:
+- `scripts/install-opencode.sh` (step 6, after npm install)
+- `.chezmoiscripts/run_once_10-install-opencode-plugins.sh.tmpl`
+
+Agents managed by our `configure-mcp-all.py` (opencode, cursor, codex, gemini, ai/air/junie) get codegraph via template. Agents NOT in our registry (Claude Code, Hermes, Antigravity) get codegraph via the `codegraph install` auto-config.
+
+### Project Setup
+
+`configure-opencode-project.py` runs `codegraph init -i` as step 3 by default. Skip it with `--steps`:
+
+```bash
+# Default: opencode.json + tier + codegraph
+scripts/configure-opencode-project.py --preset pro-plus
+
+# Add MCP configs for other AI platforms
+scripts/configure-opencode-project.py --preset pro-plus --all-mcps
+
+# Skip codegraph init
+scripts/configure-opencode-project.py --preset pro-plus --steps opencode,tier
+
+# Only opencode.json (fresh project, minimal)
+scripts/configure-opencode-project.py --preset pro-plus --steps opencode
+
+# Just codegraph init (re-run only step 3)
+scripts/configure-opencode-project.py --preset pro-plus --steps opencode,codegraph
+```
+
+Available steps: `opencode` (always included), `tier`, `codegraph`, `mcps`.
+
+The `.codegraph/` directory is gitignored (local index, not versioned).
+
+---
+
 ## Secrets Management
 
 `~/.env` is the single source of truth for all secrets. Format: `KEY='VALUE'`. Templates use `{{ env "VAR" }}` syntax.
@@ -528,6 +599,10 @@ Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks nee
 | Regenerate single MCP config | `scripts/configure-mcp-tool.py <tool> <server>` |
 | Regenerate OpenCode config | `scripts/configure-opencode.py` |
 | Regenerate project OpenCode config | `scripts/configure-opencode-project.py` |
+| Regenerate project config (specific steps) | `scripts/configure-opencode-project.py --steps opencode,tier` |
+| Regenerate project config (skip codegraph) | `scripts/configure-opencode-project.py --steps opencode,tier,mcps` |
+| Regenerate project config (with MCPs for other tools) | `scripts/configure-opencode-project.py --all-mcps` |
+| Initialize CodeGraph for project | `codegraph init -i` |
 | Configure VibeGuard redaction | Edit `configs/opencode/vibeguard.config.json`, then `scripts/configure-opencode.py` |
 | Configure Mozart router | `scripts/configure-mozart-router.py` |
 | Add Meridian to OpenCode | `scripts/configure-meridian.py` |

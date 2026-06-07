@@ -39,7 +39,12 @@ def resolve_env_vars(obj):
 
         def sub(m):
             var = m.group(1)
-            return os.environ.get(var, "")
+            val = os.environ.get(var)
+            if val is not None:
+                return val
+            # Preserve unknown variable references like ${workspaceFolder}
+            # (tool-specific runtime variables, not env vars)
+            return m.group(0)
 
         return re.sub(r"\$\{(\w+)\}", sub, obj)
     elif isinstance(obj, dict):

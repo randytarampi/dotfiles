@@ -1,5 +1,5 @@
 {
-  "project_mcp_templates": ["shortcut", "notion", "mongodb", "betterstack"],
+  "project_mcp_templates": ["shortcut", "notion", "mongodb", "betterstack", "codegraph"],
   "tools": {
     "ai": {
       "mcp_path": "~/.ai/mcp/mcp.json",
@@ -16,6 +16,9 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     },
@@ -34,6 +37,9 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     },
@@ -52,6 +58,12 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph",
+          "extra_fields": {
+            "args": ["serve", "--mcp", "--path", "${workspaceFolder}"]
+          }
         }
       ]
     },
@@ -70,6 +82,9 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     },
@@ -88,6 +103,12 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph",
+          "extra_fields": {
+            "enabled": true
+          }
         }
       ]
     },
@@ -101,8 +122,14 @@
           "name_override": "github"
         },
         {
+          "template": "idea"
+        },
+        {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     },
@@ -121,6 +148,9 @@
         {
           "template": "sentry",
           "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     }

@@ -95,6 +95,39 @@ fi
 ok "Ollama Cloud model metadata pulled"
 
 # ---------------------------------------------------------------------------
+# 6. Install CodeGraph CLI (local semantic code index + MCP server)
+# ---------------------------------------------------------------------------
+info "Installing @colbymchenry/codegraph globally..."
+if command -v npm &>/dev/null; then
+  if npm list -g @colbymchenry/codegraph &>/dev/null 2>&1; then
+    ok "codegraph CLI already installed globally"
+  else
+    if npm install -g @colbymchenry/codegraph@latest 2>/dev/null; then
+      ok "codegraph CLI installed globally"
+    else
+      warn "codegraph CLI install failed — you can install manually with: npm i -g @colbymchenry/codegraph"
+    fi
+  fi
+else
+  warn "npm not found; skipping codegraph CLI install"
+fi
+
+# Configure CodeGraph MCP for all detected agents (non-interactive, idempotent)
+# This covers tools we don't manage in global-mcps.json (Claude Code, Hermes, Antigravity)
+# plus confirms our managed tools are configured. Safe to re-run — shows "Unchanged" if
+# codegraph is already in the agent's config.
+if command -v codegraph &>/dev/null; then
+  info "Configuring CodeGraph MCP for detected agents..."
+  if codegraph install -y --target auto --location global 2>/dev/null; then
+    ok "CodeGraph MCP configured for detected agents"
+  else
+    warn "codegraph install failed — you can run 'codegraph install' manually"
+  fi
+else
+  warn "codegraph CLI not found; skipping agent MCP config"
+fi
+
+# ---------------------------------------------------------------------------
 # Done!
 # ---------------------------------------------------------------------------
 info "OpenCode tools installed!
@@ -102,8 +135,8 @@ info "OpenCode tools installed!
 Next steps:
   1. Write config:       configure-opencode.py
   2. Authenticate:       opencode auth login
-     → Select 'OpenAI' (ChatGPT Plus/Pro)
-     → Select 'Ollama Cloud' (API key from https://ollama.com/settings/keys)
+      → Select 'OpenAI' (ChatGPT Plus/Pro)
+      → Select 'Ollama Cloud' (API key from https://ollama.com/settings/keys)
   3. Refresh models:     opencode models --refresh
 
 Install script complete!"
