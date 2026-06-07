@@ -447,6 +447,7 @@ Notes:
 - **Per-project setup**: `codegraph init -i` creates `.codegraph/` with a SQLite index
 - **Install**: `npm i -g @colbymchenry/codegraph`
 - **Agent auto-config**: `codegraph install -y --target auto --location global` (idempotent, skips already-configured agents)
+- **⚠️ Bare `codegraph` triggers the interactive installer** — use `codegraph status`, `codegraph init`, `codegraph install`, etc. instead of running `codegraph` with no arguments
 
 ### Files
 
