@@ -128,6 +128,148 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 7. Install opencode-voice plugin (voice input/output for TUI)
+# ---------------------------------------------------------------------------
+info "Installing @renjfk/opencode-voice..."
+opencode plugin @renjfk/opencode-voice@latest --global
+ok "opencode-voice plugin installed"
+
+# ---------------------------------------------------------------------------
+# 8. Install voice dependencies (whisper-cpp, sox, piper-tts) + models
+#      Controlled by DOTFILES_RUN_VOICE_SETUP (default: 0 — skip)
+#      Models: DOTFILES_WHISPER_MODEL (default: ggml-large-v3-turbo.bin)
+#              DOTFILES_PIPER_VOICE (default: en_US-lessac-high)
+# ---------------------------------------------------------------------------
+VOICE_SETUP="${DOTFILES_RUN_VOICE_SETUP:-0}"
+if [[ "$VOICE_SETUP" != "1" ]]; then
+  info "DOTFILES_RUN_VOICE_SETUP='${VOICE_SETUP}' — skipping voice deps & models"
+  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to install whisper-cpp, sox, piper-tts, and models"
+else
+  info "Installing voice dependencies..."
+
+  # ── whisper-cpp + sox (STT) ──────────────────────────────────────
+  if command -v brew &>/dev/null; then
+    for pkg in whisper-cpp sox; do
+      if brew list "$pkg" &>/dev/null 2>&1; then
+        ok "$pkg already installed"
+      else
+        if brew install "$pkg" 2>/dev/null; then
+          ok "$pkg installed"
+        else
+          warn "$pkg install failed — install manually: brew install $pkg"
+        fi
+      fi
+    done
+  else
+    warn "brew not found; skipping whisper-cpp/sox install"
+  fi
+
+  # ── Piper TTS ─────────────────────────────────────────────────────
+  if command -v uv &>/dev/null; then
+    if uv tool list 2>/dev/null | grep -q "piper-tts"; then
+      ok "piper-tts already installed via uv"
+    else
+      if uv tool install piper-tts 2>/dev/null; then
+        ok "piper-tts installed via uv"
+      else
+        warn "piper-tts install failed — install manually: uv tool install piper-tts"
+      fi
+    fi
+  elif command -v pip &>/dev/null; then
+    if pip show piper-tts &>/dev/null 2>&1; then
+      ok "piper-tts already installed via pip"
+    else
+      if pip install piper-tts 2>/dev/null; then
+        ok "piper-tts installed via pip"
+      else
+        warn "piper-tts install failed — install manually: pip install piper-tts"
+      fi
+    fi
+  else
+    warn "Neither uv nor pip found; skipping piper-tts install"
+  fi
+
+  # ── Download Whisper model ─────────────────────────────────────────
+  WHISPER_MODEL="${DOTFILES_WHISPER_MODEL:-ggml-large-v3-turbo.bin}"
+  WHISPER_DIR="$HOME/.local/share/whisper-cpp"
+  WHISPER_PATH="$WHISPER_DIR/$WHISPER_MODEL"
+
+  if [[ -f "$WHISPER_PATH" ]]; then
+    ok "Whisper model already exists: $WHISPER_MODEL"
+  else
+    info "Downloading Whisper model: $WHISPER_MODEL..."
+    mkdir -p "$WHISPER_DIR"
+    WHISPER_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$WHISPER_MODEL"
+    if curl -L --fail --progress-bar -o "$WHISPER_PATH" "$WHISPER_URL" 2>/dev/null; then
+      ok "Whisper model downloaded: $WHISPER_MODEL"
+    else
+      rm -f "$WHISPER_PATH"
+      warn "Whisper model download failed — download manually from:"
+      warn "  $WHISPER_URL"
+      warn "  Save to: $WHISPER_PATH"
+    fi
+  fi
+
+  # ── Download Piper voice ───────────────────────────────────────────
+  PIPER_VOICE="${DOTFILES_PIPER_VOICE:-en_US-lessac-high}"
+  PIPER_DIR="$HOME/.local/share/piper-voices"
+  # Parse voice name: en_US-lessac-high → en/en_US/lessac/high/en_US-lessac-high
+  VOICE_LANG="$(echo "$PIPER_VOICE" | cut -d- -f1)"
+  VOICE_NAME="$(echo "$PIPER_VOICE" | cut -d- -f2)"
+  VOICE_QUALITY="$(echo "$PIPER_VOICE" | cut -d- -f3)"
+  VOICE_URL_PATH="${VOICE_LANG}/${PIPER_VOICE%%-*}/${VOICE_NAME}/${VOICE_QUALITY}"
+  PIPER_ONNX="$PIPER_DIR/$PIPER_VOICE.onnx"
+  PIPER_JSON="$PIPER_DIR/$PIPER_VOICE.onnx.json"
+  PIPER_BASE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+
+  PIPER_DOWNLOAD_NEEDED=0
+  if [[ ! -f "$PIPER_ONNX" ]]; then
+    PIPER_DOWNLOAD_NEEDED=1
+  fi
+  if [[ ! -f "$PIPER_JSON" ]]; then
+    PIPER_DOWNLOAD_NEEDED=1
+  fi
+
+  if [[ "$PIPER_DOWNLOAD_NEEDED" -eq 0 ]]; then
+    ok "Piper voice already exists: $PIPER_VOICE"
+  else
+    info "Downloading Piper voice: $PIPER_VOICE..."
+    mkdir -p "$PIPER_DIR"
+    DL_FAILED=0
+
+    if [[ ! -f "$PIPER_ONNX" ]]; then
+      ONNX_URL="$PIPER_BASE_URL/$VOICE_URL_PATH/$PIPER_VOICE.onnx"
+      if curl -L --fail --progress-bar -o "$PIPER_ONNX" "$ONNX_URL" 2>/dev/null; then
+        ok "Piper voice .onnx downloaded"
+      else
+        rm -f "$PIPER_ONNX"
+        warn "Piper voice .onnx download failed — download manually from:"
+        warn "  $ONNX_URL"
+        warn "  Save to: $PIPER_ONNX"
+        DL_FAILED=1
+      fi
+    fi
+
+    if [[ ! -f "$PIPER_JSON" ]]; then
+      JSON_URL="$PIPER_BASE_URL/$VOICE_URL_PATH/$PIPER_VOICE.onnx.json"
+      if curl -L --fail --progress-bar -o "$PIPER_JSON" "$JSON_URL" 2>/dev/null; then
+        ok "Piper voice .onnx.json downloaded"
+      else
+        rm -f "$PIPER_JSON"
+        warn "Piper voice .onnx.json download failed — download manually from:"
+        warn "  $JSON_URL"
+        warn "  Save to: $PIPER_JSON"
+        DL_FAILED=1
+      fi
+    fi
+
+    if [[ "$DL_FAILED" -eq 0 ]]; then
+      ok "Piper voice setup complete: $PIPER_VOICE"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Done!
 # ---------------------------------------------------------------------------
 info "OpenCode tools installed!
@@ -138,5 +280,8 @@ Next steps:
       → Select 'OpenAI' (ChatGPT Plus/Pro)
       → Select 'Ollama Cloud' (API key from https://ollama.com/settings/keys)
   3. Refresh models:     opencode models --refresh
+  4. Voice setup:        configure-opencode-voice.py --preset <tier>
+  5. Voice deps:         DOTFILES_RUN_VOICE_SETUP=1 install-opencode.sh
+      → Installs whisper-cpp, sox, piper-tts, and downloads models
 
 Install script complete!"

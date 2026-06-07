@@ -125,6 +125,7 @@ make env-check          # Report ~/.env drift from dot_dotfiles/shell/.env.examp
 make env-sync           # Append missing template keys to ~/.env as comments
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
+scripts/configure-opencode-voice.py pro-plus    # Configure voice plugin (tui.json)
 scripts/configure-mcp-all.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 ```
@@ -153,6 +154,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_MACOS_DEFAULTS` | macOS system preferences | 0 |
 | `DOTFILES_RUN_MACOS_SECURITY` | macOS security defaults (firewall, FileVault, etc.) | 0 |
 | `DOTFILES_RUN_MERIDIAN_LAUNCHD` | Meridian launchd plist | 0 |
+| `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 1 |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 1 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
@@ -269,9 +271,10 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
     ├── configure-opencode.py      # Write OpenCode config (local ollama default)
     ├── configure-opencode-tier.py # Switch active preset tier (source of truth)
+    ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
     ├── generate-jetbrains-profiles.py # Generate model profiles JSON files
     ├── get-tools.py               # Get MCP tool registry keys
-    ├── install-opencode.sh        # Install OpenCode plugins and tools
+    ├── install-opencode.sh        # Install OpenCode plugins and tools (incl. voice)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
     └── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
 ```
@@ -418,6 +421,38 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 - Leave at least **20%** filled
 
 No per-model config needed — the plugin reads context windows from provider configs.
+
+### Voice Plugin (opencode-voice)
+
+OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
+
+**Configuration:** `~/.config/opencode/tui.json` (written by `configure-opencode-voice.py`, tier-aware)
+
+| Tier | Voice LLM | STT Backend |
+|------|-----------|-------------|
+| **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **plus** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **plus-anthropic** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
+
+**Meridian detection:** If `ANTHROPIC_BASE_URL` is set, the Anthropic tier uses Meridian as the voice LLM endpoint.
+
+**Local STT/TTS dependencies** (installed by `scripts/install-opencode.sh` step 8, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
+
+| Component | Install | Purpose |
+|-----------|---------|---------|
+| `whisper-cpp` | `brew install whisper-cpp` | Local speech-to-text |
+| `sox` | `brew install sox` | Audio format conversion |
+| `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
+| Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model (default: `ggml-large-v3-turbo.bin`) |
+| Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice (default: `en_US-lessac-high`) |
+
+Model defaults are configurable: `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VOICE`.
+
+Configure voice: `scripts/configure-opencode-voice.py --preset <tier>`
 
 ### Mozart Router
 

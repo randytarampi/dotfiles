@@ -2,6 +2,7 @@
 """
 Configure OpenCode Helper.
 Constructs the opencode.json configuration based on presets, mode, local Ollama, and templates.
+Also generates tui.json for the voice plugin via configure-opencode-voice.py.
 """
 
 import sys
@@ -345,6 +346,21 @@ def main():
         logger.critical(f"Failed to set active tier: {e}")
         sys.exit(1)
 
+    # 5. Configure voice plugin (tui.json)
+    logger.info("Configuring voice plugin...")
+    try:
+        voice_args = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),
+            "--preset",
+            args.preset,
+            "--no-backup",
+        ]
+        subprocess.run(voice_args, check=True)
+        logger.info("Voice plugin configured")
+    except Exception as e:
+        logger.warning(f"Failed to configure voice plugin: {e}")
+
     summary_lines = [
         "OpenCode configured!",
         "",
@@ -352,6 +368,7 @@ def main():
         "  • opencode.json (providers, MCP servers, plugins)",
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
         "  • vibeguard.config.json (sensitive-string redaction)",
+        "  • tui.json (voice plugin config)",
         "",
         "To switch tiers:",
         "     configure-opencode-tier.py pro",
@@ -366,6 +383,9 @@ def main():
         "",
         "To add/update Meridian proxy plugin:",
         "     configure-meridian.py",
+        "",
+        "To configure voice plugin separately:",
+        "     configure-opencode-voice.py --preset <tier>",
         "",
         "Configure script complete!",
     ]
