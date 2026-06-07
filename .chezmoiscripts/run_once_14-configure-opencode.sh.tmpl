@@ -16,15 +16,16 @@ fi
 
 info "Configuring opencode..."
 
-# Determine tier based on available keys AND CLI authentication.
-# Default to pro-plus if any OpenAI-compatible CLI is logged in,
-# upgrade to pro-plus-anthropic if Anthropic CLI is also available.
-# Use 'anthropic' if only Anthropic is available (no OpenAI).
-# Use 'local' if no API keys but Ollama is available.
+# Determine tier based on available API keys and CLI authentication.
+# All 7 tiers are auto-detected based on the combination of:
+#   Ollama Cloud (OLLAMA_API_KEY), OpenAI (OPENAI_API_KEY/codex),
+#   Anthropic (ANTHROPIC_API_KEY/claude), and local Ollama.
+# Default: 'pro' (Ollama Cloud baseline, no keys required).
 TIER="pro"
 
 _has_openai=false
 _has_anthropic=false
+_has_ollama_cloud=false
 _has_ollama=false
 
 # Check env vars first (explicit API keys take precedence)
@@ -33,6 +34,9 @@ if [[ -n "${OPENAI_API_KEY:-}" ]]; then
 fi
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   _has_anthropic=true
+fi
+if [[ -n "${OLLAMA_API_KEY:-}" ]]; then
+  _has_ollama_cloud=true
 fi
 
 # Check CLI authentication — codex requires OpenAI, claude requires Anthropic
@@ -50,19 +54,26 @@ if command -v ollama >/dev/null 2>&1; then
   _has_ollama=true
 fi
 
+# Tier auto-detection — covers all 7 tiers
 if [[ "${DOTFILES_OPENCODE_TIER:-}" != "" ]]; then
   TIER="$DOTFILES_OPENCODE_TIER"
   info "Tier override from DOTFILES_OPENCODE_TIER: $TIER"
-elif [[ "$_has_anthropic" == true ]] && [[ "$_has_openai" == true ]]; then
+elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_openai" == true ]] && [[ "$_has_anthropic" == true ]]; then
   TIER="pro-plus-anthropic"
-elif [[ "$_has_anthropic" == true ]]; then
-  TIER="anthropic"
+elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_openai" == true ]]; then
+  TIER="pro-plus"
+elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_anthropic" == true ]]; then
+  TIER="pro-plus-anthropic"
+elif [[ "$_has_openai" == true ]] && [[ "$_has_anthropic" == true ]]; then
+  TIER="plus-anthropic"
 elif [[ "$_has_openai" == true ]]; then
   TIER="plus"
+elif [[ "$_has_anthropic" == true ]]; then
+  TIER="anthropic"
 elif [[ "$_has_ollama" == true ]]; then
   TIER="local"
 fi
-info "Detected tier: $TIER (openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
+info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
 
 # Run opencode configuration script FIRST (creates oh-my-opencode-slim.json)
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-opencode.py"
