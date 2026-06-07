@@ -1,4 +1,4 @@
-.PHONY: lint fix env env-check env-sync diff dry-run deploy test
+.PHONY: lint fix env env-check env-sync diff dry-run deploy symlinks test
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -104,6 +104,9 @@ dry-run:
 
 deploy:
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply
+
+symlinks:
+	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
 
 test: lint env-check dry-run
 	@echo "All checks passed."

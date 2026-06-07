@@ -27,34 +27,9 @@ done
 ok "Configuration directories created."
 
 # Create scripts symlink for easy PATH access
-DOTFILES_SCRIPTS="$HOME/.dotfiles/scripts"
-SOURCE_SCRIPTS="{{ .chezmoi.sourceDir }}/scripts"
-if [[ ! -L "$DOTFILES_SCRIPTS" && ! -d "$DOTFILES_SCRIPTS" ]]; then
-  ln -s "$SOURCE_SCRIPTS" "$DOTFILES_SCRIPTS"
-  info "Created symlink: $DOTFILES_SCRIPTS → $SOURCE_SCRIPTS"
-elif [[ -L "$DOTFILES_SCRIPTS" ]]; then
-  info "Symlink already exists: $DOTFILES_SCRIPTS"
-fi
-
-# Create bin directory and _dot--* command symlinks from scripts/*.py and scripts/*.sh
-DOTFILES_BIN="$HOME/.dotfiles/bin"
-SOURCE_SCRIPTS="{{ .chezmoi.sourceDir }}/scripts"
-mkdir -p "$DOTFILES_BIN"
-for script in "$SOURCE_SCRIPTS"/*.py "$SOURCE_SCRIPTS"/*.sh; do
-  base="$(basename "$script")"
-  # Strip extension: .py → name, .sh → name
-  base="${base%.py}"
-  base="${base%.sh}"
-  link_name="_dot--${base}"
-  target_link="$DOTFILES_BIN/$link_name"
-  if [[ ! -L "$target_link" ]]; then
-    ln -s "$script" "$target_link"
-    info "Created symlink: $target_link → $script"
-  else
-    info "Symlink already exists: $target_link"
-  fi
-done
-ok "Bin symlinks created."
+# Note: bin symlinks (_dot--*) are now created by run_onchange_02-setup-bin-symlinks.sh.tmpl
+# which calls scripts/setup-bin-symlinks.sh (shared with the Makefile symlinks target)
+"{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"
 
 # Fix permissions on sensitive files
 # chezmoi's private_ prefix sets 600, but existing files may have looser perms

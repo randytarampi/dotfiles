@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+
+# run_onchange_02-setup-bin-symlinks.sh.tmpl
+# Creates _dot--* command symlinks in ~/.dotfiles/bin/ for all scripts.
+# Re-runs when script content changes (add/remove/modify triggers hash change).
+#
+# Script hash triggers (re-run when any script changes):
+# scripts/configure-ai.py: {{ include "scripts/configure-ai.py" | sha256sum }}
+# scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
+# scripts/configure-jetbrains-workspace.py: {{ include "scripts/configure-jetbrains-workspace.py" | sha256sum }}
+# scripts/configure-mcp-all.py: {{ include "scripts/configure-mcp-all.py" | sha256sum }}
+# scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
+# scripts/configure-meridian.py: {{ include "scripts/configure-meridian.py" | sha256sum }}
+# scripts/configure-mozart-router.py: {{ include "scripts/configure-mozart-router.py" | sha256sum }}
+# scripts/configure-opencode-project.py: {{ include "scripts/configure-opencode-project.py" | sha256sum }}
+# scripts/configure-opencode-tier.py: {{ include "scripts/configure-opencode-tier.py" | sha256sum }}
+# scripts/configure-opencode-voice.py: {{ include "scripts/configure-opencode-voice.py" | sha256sum }}
+# scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
+# scripts/detect-ij-mcp.py: {{ include "scripts/detect-ij-mcp.py" | sha256sum }}
+# scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
+# scripts/get-tools.py: {{ include "scripts/get-tools.py" | sha256sum }}
+# scripts/sync-env.py: {{ include "scripts/sync-env.py" | sha256sum }}
+# scripts/verify-brewfile-completeness.py: {{ include "scripts/verify-brewfile-completeness.py" | sha256sum }}
+# scripts/install-nvm-lts.sh: {{ include "scripts/install-nvm-lts.sh" | sha256sum }}
+# scripts/install-opencode.sh: {{ include "scripts/install-opencode.sh" | sha256sum }}
+# scripts/meridian-launch.sh: {{ include "scripts/meridian-launch.sh" | sha256sum }}
+# scripts/setup-bin-symlinks.sh: {{ include "scripts/setup-bin-symlinks.sh" | sha256sum }}
+# scripts/update-nvm-globals.sh: {{ include "scripts/update-nvm-globals.sh" | sha256sum }}
+
+"{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"
