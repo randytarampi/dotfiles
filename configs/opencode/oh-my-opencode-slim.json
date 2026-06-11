@@ -177,7 +177,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-sonnet-4-6",
         "skills": [
           "*"
         ],

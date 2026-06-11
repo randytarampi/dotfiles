@@ -277,7 +277,7 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `claude-opus-4-7` | — |
+| orchestrator | `claude-sonnet-4-6` | — |
 | oracle | `claude-opus-4-7` | xhigh |
 | librarian | `claude-haiku-4-5` | low |
 | explorer | `claude-haiku-4-5` | low |
@@ -398,6 +398,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `nemotron-3-ultra` | standard | `max` | MoE frontier reasoning; oracle/council use max variant |
 | `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
 | `claude-opus-4-7` | `high` | `xhigh` | Opus defaults to high reasoning; oracle needs xhigh to push deeper |
+| `claude-sonnet-4-6` | standard | `high` | Sonnet used for orchestrator (no variant) and fixer (`low`); designer/fixer fallback |
 | `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
 | `gpt-5.5` | standard | `high` | Upstream openai preset uses high for oracle |
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
