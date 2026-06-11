@@ -114,6 +114,11 @@
       "provider": "anthropic-meridian",
       "temperature": 1,
       "primaryModel": "anthropic/claude-haiku-4-5-20251001"
+    },
+    "anthropic-fable": {
+      "provider": "anthropic-meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-fable-5"
     }
   }
 }
