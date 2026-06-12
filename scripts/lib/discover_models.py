@@ -60,11 +60,17 @@ def list_local_ollama_models() -> list:
         for line in lines[1:]:
             parts = line.split()
             if len(parts) >= 3:
+                name = parts[0]
+                if name.endswith(":cloud") or name.endswith("-cloud"):
+                    continue
                 models.append(
-                    {"name": parts[0], "size_gb": parse_size_gb(" ".join(parts[2:4]))}
+                    {"name": name, "size_gb": parse_size_gb(" ".join(parts[2:4]))}
                 )
             elif parts:
-                models.append({"name": parts[0], "size_gb": 0.0})
+                name = parts[0]
+                if name.endswith(":cloud") or name.endswith("-cloud"):
+                    continue
+                models.append({"name": name, "size_gb": 0.0})
         return models
     except Exception:
         return []
