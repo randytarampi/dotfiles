@@ -23,6 +23,33 @@
     },
     "minimax-m3": {
       "name": "minimax-m3"
+    },
+    "mistral-large-3:675b": {
+      "name": "mistral-large-3:675b"
+    },
+    "ministral-3:14b": {
+      "name": "ministral-3:14b"
+    },
+    "nemotron-3-nano:30b": {
+      "name": "nemotron-3-nano:30b"
+    },
+    "minimax-m2.7": {
+      "name": "minimax-m2.7"
+    },
+    "qwen3.5:397b": {
+      "name": "qwen3.5:397b"
+    },
+    "gpt-oss:120b": {
+      "name": "gpt-oss:120b"
+    },
+    "gpt-oss:20b": {
+      "name": "gpt-oss:20b"
+    },
+    "devstral-2:123b": {
+      "name": "devstral-2:123b"
+    },
+    "devstral-small-2:24b": {
+      "name": "devstral-small-2:24b"
     }
   }
 }
