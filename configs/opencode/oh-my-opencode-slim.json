@@ -119,7 +119,7 @@
     },
     "pro-plus-anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-6",
         "skills": [
           "*"
         ],
@@ -129,7 +129,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -187,7 +187,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -229,7 +229,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh"
       }
     },
@@ -303,7 +303,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -345,7 +345,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-7",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh"
       }
     },
@@ -443,7 +443,7 @@
       },
       "pro-plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-7"
+          "model": "anthropic/claude-opus-4-8"
         },
         "beta": {
           "model": "ollama-cloud/deepseek-v4-pro"
@@ -465,7 +465,7 @@
       },
       "plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-7"
+          "model": "anthropic/claude-opus-4-8"
         },
         "beta": {
           "model": "openai/gpt-5.5"
@@ -476,7 +476,7 @@
       },
       "anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-7"
+          "model": "anthropic/claude-opus-4-8"
         },
         "beta": {
           "model": "anthropic/claude-sonnet-4-6"
@@ -629,7 +629,7 @@
         "presets": {
           "pro-plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-7"
+              "model": "anthropic/claude-opus-4-8"
             },
             "beta": {
               "model": "ollama-cloud/deepseek-v4-pro"
@@ -646,6 +646,7 @@
       },
       "fallback": {
         "orchestrator": [
+          "anthropic/claude-opus-4-8",
           "openai/gpt-5.5",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/nemotron-3-ultra"
@@ -687,7 +688,7 @@
         "presets": {
           "anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-7"
+              "model": "anthropic/claude-opus-4-8"
             },
             "beta": {
               "model": "anthropic/claude-sonnet-4-6"
@@ -696,7 +697,7 @@
               "model": "anthropic/claude-opus-4-6"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-7",
+              "model": "anthropic/claude-opus-4-8",
               "variant": "xhigh"
             }
           }
@@ -761,7 +762,7 @@
         "presets": {
           "plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-7"
+              "model": "anthropic/claude-opus-4-8"
             },
             "beta": {
               "model": "openai/gpt-5.5"
@@ -770,7 +771,7 @@
               "model": "openai/gpt-5.4"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-7",
+              "model": "anthropic/claude-opus-4-8",
               "variant": "xhigh"
             }
           }
@@ -778,7 +779,8 @@
       },
       "fallback": {
         "orchestrator": [
-          "anthropic/claude-opus-4-7",
+          "anthropic/claude-opus-4-8",
+          "anthropic/claude-opus-4-6",
           "anthropic/claude-sonnet-4-6"
         ],
         "oracle": [

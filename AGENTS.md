@@ -278,14 +278,14 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `claude-opus-4-6` | — |
-| oracle | `claude-opus-4-7` | xhigh |
+| oracle | `claude-opus-4-8` | xhigh |
 | librarian | `claude-haiku-4-5` | low |
 | explorer | `claude-haiku-4-5` | low |
 | designer | `claude-sonnet-4-6` | medium |
 | fixer | `claude-sonnet-4-6` | low |
 | observer | `claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `claude-sonnet-4-6`, gamma `claude-opus-4-6`. Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-opus-4-8`, beta `claude-sonnet-4-6`, gamma `claude-opus-4-6`. Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 #### Plus-Anthropic Tier (`plus-anthropic`)
 
@@ -294,14 +294,14 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `openai/gpt-5.5` | — |
-| oracle | `anthropic/claude-opus-4-7` | xhigh |
+| oracle | `anthropic/claude-opus-4-8` | xhigh |
 | librarian | `openai/gpt-5.4-nano` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
 | designer | `anthropic/claude-sonnet-4-6` | medium |
 | fixer | `openai/gpt-5.4-mini` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `gpt-5.5`, gamma `gpt-5.4`. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-opus-4-8`, beta `gpt-5.5`, gamma `gpt-5.4`. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 #### Local Tier (`local`)
 
@@ -397,8 +397,8 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 |-------|-----------------|----------------|-------|
 | `nemotron-3-ultra` | standard | `max` | MoE frontier reasoning; oracle/council use max variant |
 | `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
-| `claude-opus-4-7` | `high` | `xhigh` | Opus defaults to high reasoning; oracle needs xhigh to push deeper |
-| `claude-opus-4-6` | standard | — | Used for orchestrator (anthropic) and council gamma; no variant needed |
+| `claude-opus-4-8` | `high` | `xhigh` | Opus defaults to high reasoning; oracle needs xhigh to push deeper |
+| `claude-opus-4-6` | standard | — | Used for orchestrator (anthropic, pro-plus-anthropic) and council gamma (anthropic); no variant needed |
 | `claude-sonnet-4-6` | standard | `high` | Sonnet for designer/fixer roles; variant `low` for fixer, `medium` for designer |
 | `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
 | `gpt-5.5` | standard | `high` | Upstream openai preset uses high for oracle |
