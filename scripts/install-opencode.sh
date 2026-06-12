@@ -215,11 +215,16 @@ else
   # ── Download Piper voice ───────────────────────────────────────────
   PIPER_VOICE="${DOTFILES_PIPER_VOICE:-en_US-lessac-high}"
   PIPER_DIR="$HOME/.local/share/piper-voices"
-  # Parse voice name: en_US-lessac-high → en/en_US/lessac/high/en_US-lessac-high
-  VOICE_LANG="$(echo "$PIPER_VOICE" | cut -d- -f1)"
+  # Parse voice name: en_US-lessac-high → en/en_US/lessac/high
+  # Format: {locale}-{name}-{quality}
+  #   locale = en_US, name = lessac, quality = high
+  # URL path = {lang}/{locale}/{name}/{quality}
+  #   lang is the language prefix before _ in locale (en_US → en)
+  VOICE_LOCALE="$(echo "$PIPER_VOICE" | cut -d- -f1)"
   VOICE_NAME="$(echo "$PIPER_VOICE" | cut -d- -f2)"
   VOICE_QUALITY="$(echo "$PIPER_VOICE" | cut -d- -f3)"
-  VOICE_URL_PATH="${VOICE_LANG}/${PIPER_VOICE%%-*}/${VOICE_NAME}/${VOICE_QUALITY}"
+  VOICE_LANG="$(echo "$VOICE_LOCALE" | cut -d_ -f1)"
+  VOICE_URL_PATH="${VOICE_LANG}/${VOICE_LOCALE}/${VOICE_NAME}/${VOICE_QUALITY}"
   PIPER_ONNX="$PIPER_DIR/$PIPER_VOICE.onnx"
   PIPER_JSON="$PIPER_DIR/$PIPER_VOICE.onnx.json"
   PIPER_BASE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main"
