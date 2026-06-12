@@ -45,10 +45,12 @@ fi
 # 1. Install oh-my-opencode-slim
 # ---------------------------------------------------------------------------
 info "Installing oh-my-opencode-slim..."
+# Pipe 'n' to skip the "Star the repo on GitHub?" prompt
+# --background-subagents=yes enables background subagents during install
 if command -v bun &>/dev/null; then
-  bunx oh-my-opencode-slim@latest install
+  echo n | bunx oh-my-opencode-slim@latest install --background-subagents=yes
 else
-  npx oh-my-opencode-slim@latest install
+  echo n | npx oh-my-opencode-slim@latest install --background-subagents=yes
 fi
 ok "oh-my-opencode-slim installed"
 
