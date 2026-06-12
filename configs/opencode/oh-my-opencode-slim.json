@@ -177,7 +177,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": "anthropic/claude-opus-4-6",
         "skills": [
           "*"
         ],
@@ -482,7 +482,7 @@
           "model": "anthropic/claude-sonnet-4-6"
         },
         "gamma": {
-          "model": "anthropic/claude-haiku-4-5"
+          "model": "anthropic/claude-opus-4-6"
         }
       },
       "local": {
@@ -693,7 +693,7 @@
               "model": "anthropic/claude-sonnet-4-6"
             },
             "gamma": {
-              "model": "anthropic/claude-haiku-4-5"
+              "model": "anthropic/claude-opus-4-6"
             },
             "council": {
               "model": "anthropic/claude-opus-4-7",

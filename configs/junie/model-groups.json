@@ -103,7 +103,7 @@
     "anthropic-opus": {
       "provider": "anthropic-meridian",
       "temperature": 1,
-      "primaryModel": "anthropic/claude-opus-4-7"
+      "primaryModel": "anthropic/claude-opus-4-6"
     },
     "anthropic-sonnet": {
       "provider": "anthropic-meridian",

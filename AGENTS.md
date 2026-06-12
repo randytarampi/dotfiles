@@ -277,7 +277,7 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `claude-sonnet-4-6` | — |
+| orchestrator | `claude-opus-4-6` | — |
 | oracle | `claude-opus-4-7` | xhigh |
 | librarian | `claude-haiku-4-5` | low |
 | explorer | `claude-haiku-4-5` | low |
@@ -285,7 +285,7 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 | fixer | `claude-sonnet-4-6` | low |
 | observer | `claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `claude-sonnet-4-6`, gamma `claude-haiku-4-5`. Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-opus-4-7`, beta `claude-sonnet-4-6`, gamma `claude-opus-4-6`. Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 #### Plus-Anthropic Tier (`plus-anthropic`)
 
@@ -398,7 +398,8 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `nemotron-3-ultra` | standard | `max` | MoE frontier reasoning; oracle/council use max variant |
 | `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
 | `claude-opus-4-7` | `high` | `xhigh` | Opus defaults to high reasoning; oracle needs xhigh to push deeper |
-| `claude-sonnet-4-6` | standard | `high` | Sonnet used for orchestrator (no variant) and fixer (`low`); designer/fixer fallback |
+| `claude-opus-4-6` | standard | — | Used for orchestrator (anthropic) and council gamma; no variant needed |
+| `claude-sonnet-4-6` | standard | `high` | Sonnet for designer/fixer roles; variant `low` for fixer, `medium` for designer |
 | `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
 | `gpt-5.5` | standard | `high` | Upstream openai preset uses high for oracle |
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
