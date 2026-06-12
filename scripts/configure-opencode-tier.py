@@ -8,6 +8,7 @@ import sys
 import json
 import argparse
 import subprocess
+import shutil
 import os
 import re
 
@@ -343,8 +344,15 @@ def orchestrate_tier_switch(
     )
 
     if not os.path.exists(config_path):
-        logger.critical(f"Config path does not exist: {config_path}")
-        sys.exit(1)
+        # Project mode: config_path may not exist yet. Copy from source.
+        if os.path.exists(source_path):
+            config_dir_path = os.path.dirname(config_path)
+            os.makedirs(config_dir_path, exist_ok=True)
+            shutil.copy2(source_path, config_path)
+            logger.info(f"Copied {source_path} → {config_path}")
+        else:
+            logger.critical(f"Config path does not exist: {config_path}")
+            sys.exit(1)
 
     tiers_source = source_path if os.path.exists(source_path) else config_path
     if not os.path.exists(tiers_source):
