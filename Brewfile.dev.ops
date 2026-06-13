@@ -1,5 +1,6 @@
 # --- Brews ---
 brew "arping"
+brew "awscli"
 brew "caddy", restart_service: :changed
 brew "certbot"
 brew "cloudflare-speed-cli"
@@ -12,7 +13,9 @@ brew "inetutils"
 brew "iperf3"
 brew "iproute2mac"
 brew "k6"
+brew "kubernetes-cli"
 brew "libgphoto2"
+brew "mailutils"
 brew "mongosh"
 brew "postgresql@16"
 brew "ssh-audit"
@@ -21,3 +24,6 @@ brew "ssh-audit"
 cask "gcloud-cli"
 cask "mongodb-compass"
 cask "session-manager-plugin"
+
+# --- npm ---
+npm "speed-cloudflare-cli"

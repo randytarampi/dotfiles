@@ -1,4 +1,4 @@
-.PHONY: lint fix env env-check env-sync diff dry-run deploy symlinks test
+.PHONY: lint fix env env-check env-sync brewfile-sync brewfile-diff diff dry-run deploy symlinks test
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -95,6 +95,12 @@ env-check:
 
 env-sync:
 	@python3 scripts/sync-env.py --example "$(ENV_EXAMPLE)" --env "$(ENV_FILE)" --sync
+
+brewfile-sync:
+	@python3 scripts/sync-brewfiles.py
+
+brewfile-diff:
+	@python3 scripts/sync-brewfiles.py --diff
 
 diff:
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" diff

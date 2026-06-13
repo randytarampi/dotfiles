@@ -24,6 +24,8 @@ JetBrains.dotPeek
 JetBrains.dotTrace
 # Cross-ref: brew 'ollama'
 Ollama.Ollama
+# Cross-ref: brew 'fastfetch'
+Fastfetch-cli.Fastfetch
 # Cross-ref: brew 'visual-studio-code'
 Microsoft.VisualStudioCode
 # Cross-ref: brew 'black'

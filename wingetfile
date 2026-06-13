@@ -10,12 +10,6 @@ Git.Git
 Starship.Starship
 # Cross-ref: brew 'ripgrep'
 BurntSushi.ripgrep.MSVC
-# Cross-ref: brew 'fastfetch'
-Fastfetch-cli.Fastfetch
-# Cross-ref: brew 'awscli'
-Amazon.AWSCLI
-# Cross-ref: brew 'session-manager-plugin'
-Amazon.SessionManagerPlugin
 # Cross-ref: brew 'windows-terminal'
 Microsoft.WindowsTerminal
 # Cross-ref: brew 'dotnet-runtime'

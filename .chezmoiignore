@@ -10,13 +10,9 @@ dot_com.googlecode.iterm2.plist
 {{- if ne .chezmoi.os "darwin" }}
 private_dot_sheepshaver_prefs
 private_dot_basilisk_ii_prefs
-Brewfile.desktop.browsers
-Brewfile.desktop.comms
-Brewfile.desktop.security
-Brewfile.desktop.media
-Brewfile.desktop.utilities
-Brewfile.desktop.fonts
-Brewfile.desktop.gaming
-Brewfile.desktop.cloud
-Brewfile.desktop.productivity
 {{- end }}
+
+# Brewfile/wingetfile are consumed by run_onchange_08-install-packages.sh.tmpl
+# from the chezmoi source directory — they should NOT be applied to ~/.
+Brewfile*
+wingetfile*
