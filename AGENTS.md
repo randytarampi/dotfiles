@@ -272,7 +272,7 @@ Ten tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council.
 
 #### Anthropic Tier (`anthropic`)
 
@@ -486,7 +486,7 @@ Additional classification rules (applied after name heuristics):
 
 ### Ollama Cloud Models
 
-Ollama Cloud presets use models like `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
+Ollama Cloud presets use models like `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
 ### Variant Policy
 
@@ -519,6 +519,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
 | `glm-5.1` | standard | none | Upstream uses no variant for orchestrator |
 | `kimi-k2.6` | standard | none | Upstream uses no variant for observer, `medium` for designer |
+| `kimi-k2.7-code` | standard | none | Code-focused; mandatory thinking (cannot disable); ~30% lower thinking tokens vs kimi-k2.6 |
 | `gpt-5.4-mini` | standard | `high` | Upstream uses high for fixer (code execution) |
 
 ---

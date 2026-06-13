@@ -62,8 +62,8 @@
     },
     "kimi": {
       "provider": "ollama-cloud",
-      "temperature": 1,
-      "primaryModel": "kimi-k2.6"
+      "temperature": 0.7,
+      "primaryModel": "kimi-k2.7-code"
     },
     "mistral": {
       "provider": "ollama-cloud",

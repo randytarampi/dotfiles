@@ -37,7 +37,7 @@
         "mcps": []
       },
       "designer": {
-        "model": "ollama-cloud/kimi-k2.6",
+        "model": "ollama-cloud/kimi-k2.7-code",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -601,7 +601,7 @@
           "model": "ollama-cloud/deepseek-v4-pro"
         },
         "gamma": {
-          "model": "ollama-cloud/kimi-k2.6"
+          "model": "ollama-cloud/kimi-k2.7-code"
         }
       },
       "pro-plus": {
@@ -612,7 +612,7 @@
           "model": "ollama-cloud/deepseek-v4-pro"
         },
         "gamma": {
-          "model": "ollama-cloud/kimi-k2.6"
+          "model": "ollama-cloud/kimi-k2.7-code"
         }
       },
       "pro-plus-anthropic": {
@@ -724,7 +724,7 @@
               "model": "ollama-cloud/deepseek-v4-pro"
             },
             "gamma": {
-              "model": "ollama-cloud/kimi-k2.6"
+              "model": "ollama-cloud/kimi-k2.7-code"
             },
             "council": {
               "model": "ollama-cloud/nemotron-3-ultra",
@@ -737,12 +737,12 @@
         "orchestrator": [
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/nemotron-3-ultra",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/kimi-k2.7-code"
         ],
         "oracle": [
           "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/glm-5.1",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/kimi-k2.7-code"
         ],
         "librarian": [
           "ollama-cloud/deepseek-v4-flash",
@@ -757,7 +757,7 @@
         "fixer": [
           "ollama-cloud/qwen3-coder:480b",
           "ollama-cloud/nemotron-3-ultra",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/kimi-k2.7-code"
         ],
         "designer": [
           "ollama-cloud/glm-5.1",
@@ -783,7 +783,7 @@
               "model": "ollama-cloud/deepseek-v4-pro"
             },
             "gamma": {
-              "model": "ollama-cloud/kimi-k2.6"
+              "model": "ollama-cloud/kimi-k2.7-code"
             },
             "council": {
               "model": "openai/gpt-5.5",
@@ -821,7 +821,7 @@
         "designer": [
           "ollama-cloud/glm-5.1",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/kimi-k2.6"
+          "ollama-cloud/kimi-k2.7-code"
         ],
         "observer": [
           "ollama-cloud/gemma4:31b",

@@ -407,7 +407,7 @@ Ten presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision).
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision).
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
@@ -499,6 +499,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | `deepseek` | cloud | `deepseek-v4-pro` | `deepseek-v4-flash` | 0 |
 | `glm` | cloud | `glm-5.1` | — | 0.7 |
 | `kimi` | cloud | `kimi-k2.6` | — | 1 |
+| `kimi-code` | cloud | `kimi-k2.7-code` | — | 0.7 |
 | `mistral` | cloud | `mistral-large-3:675b` | `ministral-3:14b` | 0.7 |
 | `nemotron` | cloud | `nemotron-3-ultra` | `nemotron-3-nano:30b` | 0.7 |
 | `minimax` | cloud | `minimax-m3` | `minimax-m2.7` | 0.3 |
