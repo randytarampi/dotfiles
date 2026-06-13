@@ -406,14 +406,15 @@ Ten presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
+| **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision).
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
-Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, anthropic, local-pro, local, local-mini, local-nano)
+Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
-Default preset: tier auto-detected from available API keys during `run_once_14-configure-opencode`. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, and local-nano are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: tier auto-detected from available API keys during `run_once_14-configure-opencode`. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
 Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. All indexed models matching a role's category are included (not just the best model). Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules, `ollama show` parameter-based classification, and capability filtering. Override per-role: `--local-fallback-role observer=ollama/qwen3.5:9b-mlx`. Override fallback preset: `--local-fallback-preset local-pro`. Override placeholder categories: `--local-fallback-placeholder reasoning=code-gen`. Environment variables: `DOTFILES_LOCAL_FALLBACK_PRESET`, `DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS` (comma-separated), `DOTFILES_LOCAL_FALLBACK_ROLES` (comma-separated).
 
@@ -437,6 +438,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 | **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local-mini** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local-nano** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |

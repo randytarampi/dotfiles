@@ -256,6 +256,28 @@ def resolve_roles_from_list(models: list) -> dict:
     if not classified["code-gen"] and classified["reasoning"]:
         classified["code-gen"] = classified["reasoning"][:]
 
+    # Build solo category: models with ALL 4 capabilities (completion + thinking + tools + vision).
+    # Purely capability-based — no name heuristics. Sort by param count descending (prefer larger).
+    required_solo_caps = {"completion", "thinking", "tools", "vision"}
+    solo_candidates = []
+    seen_names = set()
+    for cat in ["reasoning", "code-gen", "lightweight", "vision"]:
+        for model in classified[cat]:
+            if model["name"] not in seen_names:
+                seen_names.add(model["name"])
+                caps = set(model.get("capabilities", []))
+                if required_solo_caps.issubset(caps):
+                    solo_candidates.append(model)
+    classified["solo"] = sorted(
+        solo_candidates, key=lambda m: _effective_param_count(m), reverse=True
+    )
+
+    if not classified["solo"]:
+        logger.warning(
+            "No solo models found (need completion+thinking+tools+vision); "
+            "local-solo tier will fall back to code-gen+vision pattern"
+        )
+
     def pick(category, fallback_category=None, index=0):
         """Pick the Nth model (0-based) from a category, with fallback."""
         src = classified.get(category, [])
@@ -282,6 +304,8 @@ def resolve_roles_from_list(models: list) -> dict:
         "lightweight": pick("lightweight", "code-gen"),
         "lightweight_2": pick("lightweight", "code-gen", index=1),
         "vision": pick("vision", "lightweight"),
+        "solo": pick("solo", "code-gen"),
+        "solo_2": pick("solo", "code-gen", index=1),
     }
 
     resolved = {}
@@ -459,6 +483,19 @@ def orchestrate_tier_switch(
             "fixer": "code-gen",
             "designer": "code-gen",
             "observer": "vision",
+        }
+
+    # local-solo: all roles use the same omnicapable model
+    if tier == "local-solo":
+        solo_category = "solo"
+        role_to_category = {
+            "orchestrator": solo_category,
+            "oracle": solo_category,
+            "librarian": solo_category,
+            "explorer": solo_category,
+            "fixer": solo_category,
+            "designer": solo_category,
+            "observer": solo_category,
         }
 
     local_role_models = {}

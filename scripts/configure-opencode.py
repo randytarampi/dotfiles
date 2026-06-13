@@ -401,6 +401,7 @@ def main():
         "     configure-opencode-tier.py local",
         "     configure-opencode-tier.py local-mini",
         "     configure-opencode-tier.py local-nano",
+        "     configure-opencode-tier.py local-solo",
         "",
         "To regenerate without local ollama:",
         "     set DOTFILES_USE_LOCAL_OLLAMA=0 and re-run configure-opencode.py",

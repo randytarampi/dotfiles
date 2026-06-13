@@ -580,6 +580,64 @@
         "model": "_local:code-gen",
         "variant": "high"
       }
+    },
+    "local-solo": {
+      "orchestrator": {
+        "model": "_local:solo",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "_local:solo",
+        "variant": "max",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "_local:solo",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "*"
+        ]
+      },
+      "explorer": {
+        "model": "_local:solo",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "_local:solo",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "_local:solo",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "_local:solo",
+        "variant": "low"
+      },
+      "council": {
+        "model": "_local:solo",
+        "variant": "high"
+      }
     }
   },
   "multiplexer": {
@@ -701,6 +759,17 @@
         },
         "gamma": {
           "model": "_local:vision"
+        }
+      },
+      "local-solo": {
+        "alpha": {
+          "model": "_local:solo"
+        },
+        "beta": {
+          "model": "_local:solo"
+        },
+        "gamma": {
+          "model": "_local:solo"
         }
       }
     }
@@ -1099,6 +1168,29 @@
             },
             "council": {
               "model": "_local:code-gen",
+              "variant": "high"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "local-solo": {
+      "council": {
+        "default_preset": "local-solo",
+        "presets": {
+          "local-solo": {
+            "alpha": {
+              "model": "_local:solo"
+            },
+            "beta": {
+              "model": "_local:solo"
+            },
+            "gamma": {
+              "model": "_local:solo"
+            },
+            "council": {
+              "model": "_local:solo",
               "variant": "high"
             }
           }

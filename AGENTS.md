@@ -257,7 +257,7 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ### Tier Definitions
 
-Ten tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
+Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -271,8 +271,9 @@ Ten tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
+| **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
 #### Anthropic Tier (`anthropic`)
 
@@ -370,6 +371,25 @@ Single-model preset using one code-gen model for all roles (except vision):
 
 Council: α `_local:code-gen` high, β `_local:lightweight` high, γ `_local:vision` high. Best for single-model systems — council uses the code-gen model plus lightweight and vision for diversity.
 
+#### Local-Solo Tier (`local-solo`)
+
+Single-model preset using one omnicapable model for all roles:
+
+| Role | Placeholder | Resolves to |
+|------|------------|-------------|
+| orchestrator | `_local:solo` | Best local solo model |
+| oracle | `_local:solo` | Best local solo model |
+| librarian | `_local:solo` | Best local solo model |
+| explorer | `_local:solo` | Best local solo model |
+| designer | `_local:solo` | Best local solo model |
+| fixer | `_local:solo` | Best local solo model |
+| observer | `_local:solo` | Best local solo model |
+
+Council: α `_local:solo` max, β `_local:solo` high, γ `_local:solo` high. Diversity comes from variants, not different models. If no solo model exists, falls back to code-gen + vision (local-nano behavior).
+
+> [!NOTE]
+> Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use local-mini or local-nano.
+
 #### Local Model Classification
 
 Placeholders are resolved by `configure-opencode-tier.py` using model name heuristics, size rules, `ollama show` parameter counts, and capability-aware classification:
@@ -377,6 +397,7 @@ Placeholders are resolved by `configure-opencode-tier.py` using model name heuri
 - **code-gen**: models containing `coder`, `code`, `coding`, `devstral`, `codestral`, `deepseek-coder`, `qwen2.5-coder`, `qwen3-coder`, `codeqwen`
 - **lightweight**: models containing `mini`, `small`, `tiny`, `phi`, `gemma:2`, `gemma3`, `smol`
 - **vision**: subset of `lightweight` models that also have the `vision` capability (from `ollama show`)
+- **solo**: models with all four capabilities (`completion` + `thinking` + `tools` + `vision`), purely capability-based (no name heuristics), sorted by parameter count descending
 
 Indexed placeholders (`_local:<category>_2`) resolve to the second-best model in a category, ensuring council diversity. For example, `_local:code-gen_2` gives a different model from `_local:code-gen` when multiple code-gen models are available, or falls back to the second-best reasoning model if code-gen only has one entry.
 
@@ -388,17 +409,18 @@ Additional classification rules (applied after name heuristics):
   - `code-gen`: name-heuristic-qualified models bypass capability checks; models classified via size/fallback rules require `thinking` + `completion`
   - `lightweight` requires `tools`
   - `vision` requires `tools` + `vision` (subset of lightweight)
+  - `solo` requires `completion` + `thinking` + `tools` + `vision` (no name heuristics)
 - **Code-gen reuse**: if no code-gen model is found via name heuristic, the reasoning model is reused for code-gen roles
 - **Vision fallback**: if no vision-capable model exists, the best lightweight model is used with a warning
 - **Indexed placeholders**: `_local:<category>_2` resolves to the second-best model in a category (e.g., `_local:code-gen_2` for council gamma diversity)
 
 **Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories.
 
-Switch tier: `scripts/configure-opencode-tier.py` <tier> (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano)
+Switch tier: `scripts/configure-opencode-tier.py` <tier> (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
 Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
 
-Default preset: auto-detected from available API keys during `run_once_14-configure-opencode.sh.tmpl`. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, and local-nano are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: auto-detected from available API keys during `run_once_14-configure-opencode.sh.tmpl`. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
 ### Fallback Chains
 
@@ -660,6 +682,7 @@ Local groups use `_local:<category>` placeholders (not hardcoded model names). T
 | `_local:code-gen` | Best local code-gen model | `local`/`local-mini`/`local-nano` primaryModel |
 | `_local:lightweight` | Best local lightweight model | `local-pro`/`local` fasterModel |
 | `_local:vision` | Best vision-capable lightweight model | `local-mini` fasterModel |
+| `_local:solo` | Best local solo model (all 4 caps) | `local-solo` primaryModel and fasterModel |
 
 If a placeholder cannot be resolved (no local models in that category), the profile generator skips the group with a warning.
 
@@ -696,6 +719,7 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 | **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local-mini** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local-nano** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
@@ -833,7 +857,7 @@ Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks nee
 
 | Task | Command |
 |------|---------|
-| Switch AI tier | `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano) |
+| Switch AI tier | `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo) |
 | Switch tier without local Ollama | `scripts/configure-opencode-tier.py --no-local-fallbacks <tier>` |
 | Switch tier with local fallback role override | `scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx <tier>` |
 | Switch tier with local fallback preset | `scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus` |

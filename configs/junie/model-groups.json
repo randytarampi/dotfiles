@@ -91,6 +91,12 @@
       "temperature": 0.6,
       "primaryModel": "_local:code-gen"
     },
+    "local-solo": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "_local:solo",
+      "fasterModel": "_local:solo"
+    },
     "meridian-opus": {
       "provider": "meridian",
       "temperature": 1,
