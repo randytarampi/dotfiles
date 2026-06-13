@@ -26,6 +26,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 from env import load_env
+from opencode_config import build_tier_args
 
 ALL_STEPS = ["opencode", "tier", "codegraph", "mcps"]
 DEFAULT_STEPS = ["opencode", "tier", "codegraph"]
@@ -70,6 +71,23 @@ def main():
         "--project-mcps",
         default="",
         help="Comma-separated project MCP template names (passed to configure-mcp-all.py)",
+    )
+    parser.add_argument(
+        "--local-fallback-preset",
+        default=None,
+        help="Which local tier's placeholder pattern to use for local fallbacks (default: local)",
+    )
+    parser.add_argument(
+        "--local-fallback-placeholder",
+        action="append",
+        default=[],
+        help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
+    )
+    parser.add_argument(
+        "--local-fallback-role",
+        action="append",
+        default=[],
+        help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
     )
 
     args = parser.parse_args()
@@ -145,10 +163,16 @@ def main():
         os.makedirs(dotopencode_dir, exist_ok=True)
         opencode_tier_py = os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")
 
-        tier_args = [sys.executable, opencode_tier_py, args.preset]
-        # Optionally append local fallbacks if DOTFILES_USE_LOCAL_OLLAMA is 1
-        if os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "1") != "1":
-            tier_args.insert(2, "--no-local-fallbacks")
+        tier_args_list = build_tier_args(
+            tier=args.preset,
+            no_local_fallbacks=(
+                os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "1") != "1"
+            ),
+            local_fallback_preset=args.local_fallback_preset,
+            local_fallback_placeholders=args.local_fallback_placeholder or None,
+            local_fallback_roles=args.local_fallback_role or None,
+        )
+        tier_args = [sys.executable, opencode_tier_py] + tier_args_list
 
         env = os.environ.copy()
         env["OPENCODE_DIR"] = dotopencode_dir

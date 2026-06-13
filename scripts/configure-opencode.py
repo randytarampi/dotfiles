@@ -21,7 +21,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
-from opencode_config import get_available_tiers
+from opencode_config import get_available_tiers, build_tier_args
 
 
 def load_env_file(env_path: str) -> bool:
@@ -60,6 +60,23 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
+    parser.add_argument(
+        "--local-fallback-preset",
+        default=None,
+        help="Which local tier's placeholder pattern to use for local fallbacks (default: local)",
+    )
+    parser.add_argument(
+        "--local-fallback-placeholder",
+        action="append",
+        default=[],
+        help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
+    )
+    parser.add_argument(
+        "--local-fallback-role",
+        action="append",
+        default=[],
+        help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
+    )
     args = parser.parse_args()
 
     configs_dir_path = os.path.abspath(
@@ -333,13 +350,17 @@ def main():
     # 4. Set active tier
     logger.info(f"Setting active tier to {args.preset}...")
     try:
+        tier_args_list = build_tier_args(
+            tier=args.preset,
+            no_local_fallbacks=not with_local_ollama,
+            local_fallback_preset=args.local_fallback_preset,
+            local_fallback_placeholders=args.local_fallback_placeholder or None,
+            local_fallback_roles=args.local_fallback_role or None,
+        )
         tier_args = [
             sys.executable,
             os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
-        ]
-        if not with_local_ollama:
-            tier_args.append("--no-local-fallbacks")
-        tier_args.append(args.preset)
+        ] + tier_args_list
         subprocess.run(tier_args, check=True)
         logger.info(f"Active tier set to {args.preset}")
     except Exception as e:

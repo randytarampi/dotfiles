@@ -77,11 +77,29 @@ fi
 info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
 info "Local tiers (local-pro, local-mini, local-nano) are available via DOTFILES_OPENCODE_TIER"
 
+# Forward local fallback configuration from environment variables
+TIER_EXTRA_ARGS=()
+if [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then
+  TIER_EXTRA_ARGS+=("--local-fallback-preset" "$DOTFILES_LOCAL_FALLBACK_PRESET")
+fi
+if [[ -n "${DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS:-}" ]]; then
+  IFS=',' read -ra PHOLDER_OVERRIDES <<< "$DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS"
+  for override in "${PHOLDER_OVERRIDES[@]}"; do
+    [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-placeholder" "$override")
+  done
+fi
+if [[ -n "${DOTFILES_LOCAL_FALLBACK_ROLES:-}" ]]; then
+  IFS=',' read -ra ROLE_OVERRIDES <<< "$DOTFILES_LOCAL_FALLBACK_ROLES"
+  for override in "${ROLE_OVERRIDES[@]}"; do
+    [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-role" "$override")
+  done
+fi
+
 # Run opencode configuration script FIRST (creates oh-my-opencode-slim.json)
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-opencode.py"
 if [[ -f "$CONFIGURE_SCRIPT" ]]; then
   info "Running opencode configuration..."
-  "$CONFIGURE_SCRIPT" --preset "$TIER"
+  "$CONFIGURE_SCRIPT" --preset "$TIER" "${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"}"
 fi
 
 ok "opencode configured (tier: $TIER)."

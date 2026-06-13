@@ -38,3 +38,36 @@ def get_available_tiers() -> list:
     if not tiers:
         raise ValueError("No tiers found in oh-my-opencode-slim.json _tiers")
     return tiers
+
+
+def build_tier_args(
+    tier: str,
+    no_local_fallbacks: bool = False,
+    local_fallback_preset: str = None,
+    local_fallback_placeholders: list = None,
+    local_fallback_roles: list = None,
+) -> list:
+    """Build argument list for configure-opencode-tier.py invocation.
+
+    Args:
+        tier: The tier name to switch to.
+        no_local_fallbacks: If True, add --no-local-fallbacks flag.
+        local_fallback_preset: If set, add --local-fallback-preset with this value.
+        local_fallback_placeholders: List of category=model overrides
+            (e.g. ["vision=ollama/gemma4:e4b"]).
+        local_fallback_roles: List of role=model overrides
+            (e.g. ["observer=ollama/qwen3.5:9b-mlx"]).
+
+    Returns:
+        List of CLI argument strings for configure-opencode-tier.py.
+    """
+    args = [tier]
+    if no_local_fallbacks:
+        args.insert(0, "--no-local-fallbacks")
+    if local_fallback_preset:
+        args.extend(["--local-fallback-preset", local_fallback_preset])
+    for p in local_fallback_placeholders or []:
+        args.extend(["--local-fallback-placeholder", p])
+    for r in local_fallback_roles or []:
+        args.extend(["--local-fallback-role", r])
+    return args

@@ -11,6 +11,7 @@ import subprocess
 import shutil
 import os
 import re
+from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
@@ -291,7 +292,56 @@ def resolve_roles_from_list(models: list) -> dict:
     return resolved
 
 
-def resolve_placeholders(config_path: str, local_roles_json: str):
+def get_placeholder_keys_for_preset(tier_config: dict) -> list:
+    """Extract _local:* placeholder category keys used by a tier's config.
+
+    Scans the tier's presets, council presets, and fallback chains for
+    _local:* patterns and returns deduplicated sorted keys
+    (e.g. ["code-gen", "code-gen_2", "lightweight", "reasoning", "vision"]).
+
+    Args:
+        tier_config: A single tier entry from _tiers.
+
+    Returns:
+        Sorted list of placeholder category keys (without _local: prefix).
+    """
+    placeholders = set()
+
+    def _scan_value(value):
+        """Recursively scan a value for _local:* patterns."""
+        if isinstance(value, str):
+            if value.startswith("_local:"):
+                placeholders.add(value[len("_local:") :])
+        elif isinstance(value, dict):
+            for v in value.values():
+                _scan_value(v)
+        elif isinstance(value, list):
+            for v in value:
+                _scan_value(v)
+
+    # Scan presets
+    for preset_config in tier_config.get("presets", {}).values():
+        _scan_value(preset_config)
+
+    # Scan council presets
+    council = tier_config.get("council", {})
+    for council_preset in council.get("presets", {}).values():
+        _scan_value(council_preset)
+
+    # Scan fallback chains
+    for chain in tier_config.get("fallback", {}).values():
+        if isinstance(chain, list):
+            for item in chain:
+                _scan_value(item)
+
+    return sorted(placeholders)
+
+
+def resolve_placeholders(
+    config_path: str,
+    local_roles_json: str,
+    placeholder_keys: Optional[list] = None,
+):
     try:
         resolved = json.loads(local_roles_json)
     except Exception as e:
@@ -302,18 +352,17 @@ def resolve_placeholders(config_path: str, local_roles_json: str):
         logger.critical(f"Config path does not exist: {config_path}")
         sys.exit(1)
 
-    # Process _3, _2 (longer) placeholders first to prevent partial replacement
-    # e.g. _local:code-gen_3 must be replaced before _local:code-gen_2, then _local:code-gen
-    placeholder_order = [
-        ("_local:reasoning_3", resolved.get("reasoning_3")),
-        ("_local:reasoning_2", resolved.get("reasoning_2")),
-        ("_local:code-gen_2", resolved.get("code-gen_2")),
-        ("_local:lightweight_2", resolved.get("lightweight_2")),
-        ("_local:reasoning", resolved.get("reasoning")),
-        ("_local:code-gen", resolved.get("code-gen")),
-        ("_local:lightweight", resolved.get("lightweight")),
-        ("_local:vision", resolved.get("vision")),
-    ]
+    # Process longer placeholders first to prevent partial replacement
+    if placeholder_keys:
+        # Use caller-specified keys: longest-first to avoid partial replacement
+        placeholder_order = []
+        for key in sorted(placeholder_keys, key=lambda k: (-len(k), k)):
+            placeholder_order.append((f"_local:{key}", resolved.get(key)))
+    else:
+        # Default: longest-first from the resolved dict itself
+        placeholder_order = []
+        for key in sorted(resolved.keys(), key=lambda k: (-len(k), k)):
+            placeholder_order.append((f"_local:{key}", resolved.get(key)))
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -326,14 +375,20 @@ def resolve_placeholders(config_path: str, local_roles_json: str):
         with open(config_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logger.info("Local model placeholders resolved")
+        resolved_map = json.loads(local_roles_json)
+        resolved_lines = [f"  {k} → {v}" for k, v in sorted(resolved_map.items())]
+        logger.info("Local model placeholders resolved:\n" + "\n".join(resolved_lines))
     except Exception as e:
         logger.critical(f"Failed to resolve placeholders: {e}")
         sys.exit(1)
 
 
 def orchestrate_tier_switch(
-    tier: str, no_local_fallbacks: bool, local_fallback_roles: list
+    tier: str,
+    no_local_fallbacks: bool,
+    local_fallback_roles: list,
+    local_fallback_preset: Optional[str] = None,
+    local_fallback_placeholders: Optional[list] = None,
 ):
     opencode_dir = os.environ.get("OPENCODE_DIR")
     if opencode_dir:
@@ -412,15 +467,38 @@ def orchestrate_tier_switch(
         if models_list:
             local_role_models = resolve_roles_from_list(models_list)
 
+    # Apply --local-fallback-placeholder overrides (category-level)
+    for override in local_fallback_placeholders or []:
+        if "=" in override:
+            category, model = override.split("=", 1)
+            local_role_models[category] = model
+
     for override in local_fallback_roles:
         if "=" in override:
             role, model = override.split("=", 1)
             local_role_models[role] = model
 
+    # Determine which local preset's placeholder pattern to use for fallbacks
+    fallback_preset_name = local_fallback_preset or (
+        "local" if not tier.startswith("local") else tier
+    )
+    fallback_preset_config = tiers_dict.get(fallback_preset_name, tier_config)
+    placeholder_keys = get_placeholder_keys_for_preset(fallback_preset_config)
+
     if not local_role_models:
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
     else:
-        logger.info(f"Classified local models: {json.dumps(local_role_models)}")
+        logger.info(
+            f"Classified local models: {json.dumps(local_role_models, indent=2)}"
+        )
+        # Show role→model assignments derived from local categories
+        role_assignments = []
+        for role, category in sorted(role_to_category.items()):
+            model = local_role_models.get(category)
+            if model:
+                role_assignments.append(f"  {role} → {model} ({category})")
+        if role_assignments:
+            logger.info("Local role assignments:\n" + "\n".join(role_assignments))
         if tier.startswith("local"):
             tier_council = tier_config.get("council", {})
             council_presets = tier_council.get("presets", {})
@@ -462,6 +540,16 @@ def orchestrate_tier_switch(
                 f"Local tier '{tier}': {len(unique_models)} distinct model(s) across "
                 f"{len(local_role_models)} role categories"
             )
+            # Show full role→model assignments for local tiers
+            local_role_lines = []
+            for role, category in sorted(role_to_category.items()):
+                model = local_role_models.get(category)
+                if model:
+                    local_role_lines.append(f"  {role} → {model} ({category})")
+            if local_role_lines:
+                logger.info(
+                    "Local tier role assignments:\n" + "\n".join(local_role_lines)
+                )
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -510,12 +598,28 @@ def orchestrate_tier_switch(
         updated_chains = {}
         for role, chain in source_fallback.items():
             category = role_to_category.get(role, "code-gen")
-            local_model = local_role_models.get(category)
-            if local_model and local_model not in chain:
-                updated_chains[role] = chain + [local_model]
-            else:
-                updated_chains[role] = chain
+            # Collect all indexed models from the fallback preset's placeholder pattern
+            local_models_for_category = []
+            for key in placeholder_keys:
+                if key == category or key.startswith(f"{category}_"):
+                    model = local_role_models.get(key)
+                    if (
+                        model
+                        and model not in chain
+                        and model not in local_models_for_category
+                    ):
+                        local_models_for_category.append(model)
+            updated_chains[role] = chain + local_models_for_category
         target_config["fallback"]["chains"] = updated_chains
+        # Log local fallback role assignments
+        fallback_lines = []
+        for role, chain in updated_chains.items():
+            local_in_chain = [m for m in chain if m.startswith("ollama/")]
+            if local_in_chain:
+                category = role_to_category.get(role, "code-gen")
+                fallback_lines.append(f"  {role} ({category}): +{local_in_chain}")
+        if fallback_lines:
+            logger.info("Local fallback models appended:\n" + "\n".join(fallback_lines))
 
     if "_tiers" in target_config:
         del target_config["_tiers"]
@@ -530,7 +634,11 @@ def orchestrate_tier_switch(
 
     if local_role_models:
         logger.info("Resolving _local: model placeholders...")
-        resolve_placeholders(config_path, json.dumps(local_role_models))
+        resolve_placeholders(
+            config_path,
+            json.dumps(local_role_models),
+            placeholder_keys=placeholder_keys,
+        )
     else:
         logger.warning(
             "No local Ollama models found — _local: placeholders will not be resolved"
@@ -606,6 +714,18 @@ def main():
         )
         available_tiers = get_available_tiers()
         parser.add_argument(
+            "--local-fallback-preset",
+            default=None,
+            choices=available_tiers,
+            help="Which local tier's placeholder pattern to use for local fallbacks (default: local)",
+        )
+        parser.add_argument(
+            "--local-fallback-placeholder",
+            action="append",
+            default=[],
+            help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
+        )
+        parser.add_argument(
             "--preset",
             dest="preset",
             choices=available_tiers,
@@ -625,7 +745,11 @@ def main():
             parser.error("the following arguments are required: tier (or --preset)")
 
         orchestrate_tier_switch(
-            resolved_tier, args.no_local_fallbacks, args.local_fallback_role
+            resolved_tier,
+            args.no_local_fallbacks,
+            args.local_fallback_role,
+            local_fallback_preset=args.local_fallback_preset,
+            local_fallback_placeholders=args.local_fallback_placeholder,
         )
 
 

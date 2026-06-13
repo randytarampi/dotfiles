@@ -404,13 +404,70 @@ Default preset: auto-detected from available API keys during `run_once_14-config
 
 Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` and all `local-*` tiers have **empty fallback chains by default** — they rely on their single-provider model hierarchy instead. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains.
 
-Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models.
+Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models. All indexed models matching a role's category are appended (not just the single best model).
 
 ### Local Ollama Fallback Policy
 
 Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
 
-Models are classified into four categories using name heuristics, size rules, and `ollama show` parameter counts and capabilities:
+#### Fallback Preset Selection (`--local-fallback-preset`)
+
+By default, non-local tiers use the `local` tier's placeholder definitions to determine which local model categories to append to fallback chains. Use `--local-fallback-preset` to specify a different tier whose placeholders drive fallback selection:
+
+```bash
+# Use local-pro placeholders for richer fallback diversity
+scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus
+
+# Use local-mini placeholders (fewer categories) for lighter fallbacks
+scripts/configure-opencode-tier.py --local-fallback-preset local-mini pro
+```
+
+For local tiers, `--local-fallback-preset` defaults to the current tier (so `local-pro` uses its own placeholders). For non-local tiers, it defaults to `local`.
+
+#### Placeholder Overrides (`--local-fallback-placeholder`)
+
+Use `--local-fallback-placeholder` to override which local model category fills a specific placeholder slot, without changing the entire preset. This is a category-level override applied before role-level overrides:
+
+```bash
+# Use a different local category for the reasoning placeholder
+scripts/configure-opencode-tier.py --local-fallback-placeholder reasoning=code-gen pro-plus
+
+# Multiple overrides
+scripts/configure-opencode-tier.py --local-fallback-placeholder reasoning=code-gen --local-fallback-placeholder vision=lightweight pro-plus
+```
+
+Format: `--local-fallback-placeholder <category>=<replacement-category>` where both sides are one of `reasoning`, `code-gen`, `lightweight`, `vision`.
+
+#### Role Overrides (`--local-fallback-role`)
+
+Use `--local-fallback-role` to override which specific model fills a specific agent role. This is a role-level override applied after placeholder overrides:
+
+```bash
+scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx pro-plus
+```
+
+Format: `--local-fallback-role <role>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`.
+
+#### Override Order
+
+Overrides are applied in this order:
+1. **Discovery**: local Ollama models are discovered and classified
+2. **Placeholder overrides** (`--local-fallback-placeholder`): remap which category fills each placeholder slot
+3. **Role overrides** (`--local-fallback-role`): remap which model fills each role
+4. **Fallback chain append**: all indexed models matching the (possibly overridden) placeholder keys are appended per role
+
+#### Multi-Model Fallback Appending
+
+When local models are appended to fallback chains, all indexed variants matching the role's category are included — not just the single best model. For example, if both `reasoning` and `reasoning_2` placeholders are populated, both models appear in the oracle fallback chain.
+
+#### Environment Variable Forwarding
+
+The chezmoi bootstrap script (`run_once_14-configure-opencode.sh.tmpl`) forwards these env vars to `configure-opencode.py`:
+- `DOTFILES_LOCAL_FALLBACK_PRESET` → `--local-fallback-preset`
+- `DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS` → comma-separated `--local-fallback-placeholder` args (e.g. `reasoning=code-gen,vision=lightweight`)
+- `DOTFILES_LOCAL_FALLBACK_ROLES` → comma-separated `--local-fallback-role` args (e.g. `observer=ollama/qwen3.5:9b-mlx`)
+
+#### Model Classification
 
 | Role Category | Name Patterns                                                 | Required Capabilities | Fallback Priority |
 |---------------|---------------------------------------------------------------|----------------------|-------------------|
@@ -728,6 +785,9 @@ Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks nee
 | Switch AI tier | `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano) |
 | Switch tier without local Ollama | `scripts/configure-opencode-tier.py --no-local-fallbacks <tier>` |
 | Switch tier with local fallback role override | `scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx <tier>` |
+| Switch tier with local fallback preset | `scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus` |
+| Switch tier with local fallback placeholder override | `scripts/configure-opencode-tier.py --local-fallback-placeholder reasoning=code-gen <tier>` |
+| Switch tier with multiple overrides | `scripts/configure-opencode-tier.py --local-fallback-preset local-pro --local-fallback-placeholder reasoning=code-gen --local-fallback-role observer=ollama/qwen3.5:9b-mlx pro-plus` |
 | Regenerate all MCP configs | `scripts/configure-mcp-all.py` |
 | Regenerate single MCP config | `scripts/configure-mcp-tool.py <tool> <server>` |
 | Regenerate OpenCode config | `scripts/configure-opencode.py` |
