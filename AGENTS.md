@@ -625,6 +625,56 @@ The `.codegraph/` directory is gitignored (local index, not versioned).
 
 ---
 
+## Junie Model Groups ↔ Oh My OpenCode Sync
+
+`configs/junie/model-groups.json` defines Junie model profiles that should stay aligned with `configs/opencode/oh-my-opencode-slim.json` presets. When changing one, update the other.
+
+### Mapping Rule
+
+| Junie field | oh-my-opencode-slim source | Notes |
+|-------------|---------------------------|-------|
+| `primaryModel` | `orchestrator` model | Strip provider prefix (e.g., `ollama-cloud/glm-5.1` → `glm-5.1`) |
+| `fasterModel` | `librarian` model | Strip provider prefix; add `fasterProvider` if different from `provider` |
+| `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama-local`: 0.6 |
+
+### Cross-Provider fasterModel
+
+When the librarian model uses a different provider than the orchestrator, add a `fasterProvider` field to the group. The profile generator emits role-level `baseUrl`/`apiType`/`apiKey` overrides for the fasterModel:
+
+```json
+"pro-plus": {
+  "provider": "ollama-cloud",
+  "primaryModel": "glm-5.1",
+  "fasterModel": "gpt-5.4-mini",
+  "fasterProvider": "openai"
+}
+```
+
+### Local Tier Placeholders
+
+Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py`, which imports `resolve_roles_from_list()` from `scripts/configure-opencode-tier.py`:
+
+| Placeholder | Resolves to | Junie usage |
+|-------------|-------------|-------------|
+| `_local:reasoning` | Best local reasoning model | `local-pro` primaryModel |
+| `_local:code-gen` | Best local code-gen model | `local`/`local-mini`/`local-nano` primaryModel |
+| `_local:lightweight` | Best local lightweight model | `local-pro`/`local` fasterModel |
+| `_local:vision` | Best vision-capable lightweight model | `local-mini` fasterModel |
+
+If a placeholder cannot be resolved (no local models in that category), the profile generator skips the group with a warning.
+
+### Deployment
+
+After changing `model-groups.json`:
+
+```bash
+python3 scripts/configure-jetbrains-ai.py --models
+```
+
+This generates profiles in `~/.junie/models/` and cleans up stale files.
+
+---
+
 ## Voice Plugin (opencode-voice)
 
 OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin that adds voice input (STT) and output (TTS) to the OpenCode terminal interface.

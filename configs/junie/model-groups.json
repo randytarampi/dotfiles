@@ -1,17 +1,96 @@
 {
   "providers": {
+    "ollama-cloud": {
+      "baseUrl": "https://ollama.com/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "OLLAMA_API_KEY"
+    },
+    "openai": {
+      "baseUrl": "https://api.openai.com/v1",
+      "apiType": "OpenAIResponses",
+      "apiKeyEnv": "OPENAI_API_KEY"
+    },
     "meridian": {
       "baseUrl": "http://127.0.0.1:3456/v1/responses",
       "apiType": "OpenAIResponses",
       "apiKeyEnv": "MERIDIAN_API_KEY",
       "hostEnv": "MERIDIAN_HOST",
       "portEnv": "MERIDIAN_PORT"
+    },
+    "ollama-local": {
+      "baseUrl": "http://localhost:11434/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": ""
     }
   },
   "temperatures": {
-    "meridian": 1
+    "ollama-cloud": 0.7,
+    "openai": 1,
+    "meridian": 1,
+    "ollama-local": 0.6
   },
   "groups": {
+    "pro": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "glm-5.1",
+      "fasterModel": "gemma4:31b"
+    },
+    "pro-plus": {
+      "provider": "ollama-cloud",
+      "temperature": 0.7,
+      "primaryModel": "glm-5.1",
+      "fasterModel": "gpt-5.4-mini",
+      "fasterProvider": "openai"
+    },
+    "pro-plus-anthropic": {
+      "provider": "meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-opus-4-6",
+      "fasterModel": "anthropic/claude-haiku-4-5"
+    },
+    "anthropic": {
+      "provider": "meridian",
+      "temperature": 1,
+      "primaryModel": "anthropic/claude-opus-4-6",
+      "fasterModel": "anthropic/claude-haiku-4-5"
+    },
+    "plus": {
+      "provider": "openai",
+      "temperature": 1,
+      "primaryModel": "gpt-5.5",
+      "fasterModel": "gpt-5.4-nano"
+    },
+    "plus-anthropic": {
+      "provider": "openai",
+      "temperature": 1,
+      "primaryModel": "gpt-5.5",
+      "fasterModel": "anthropic/claude-haiku-4-5",
+      "fasterProvider": "meridian"
+    },
+    "local-pro": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "_local:reasoning",
+      "fasterModel": "_local:lightweight"
+    },
+    "local": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "_local:code-gen",
+      "fasterModel": "_local:lightweight"
+    },
+    "local-mini": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "_local:code-gen",
+      "fasterModel": "_local:vision"
+    },
+    "local-nano": {
+      "provider": "ollama-local",
+      "temperature": 0.6,
+      "primaryModel": "_local:code-gen"
+    },
     "meridian-opus": {
       "provider": "meridian",
       "temperature": 1,

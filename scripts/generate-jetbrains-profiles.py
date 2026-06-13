@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
-"""
-Generate JetBrains AI Profiles Helper.
-Generates, updates, and synchronizes JetBrains model profiles from model-groups.json.
-"""
+"""Generate and synchronize JetBrains model profiles from model-groups.json."""
 
-import sys
-import json
 import argparse
+import importlib.util
+import json
 import os
-import difflib
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
-
 import logger
+from discover_models import list_local_ollama_models
 
 
 def resolve_model(pattern: str, available_models: list) -> str:
-    # Exact match
     for m in available_models:
         if m == pattern:
             return m
-
-    # Prefix match (longest name match)
     best = ""
     for m in available_models:
         if m.startswith(pattern):
@@ -32,8 +26,81 @@ def resolve_model(pattern: str, available_models: list) -> str:
                 best = m
     if best:
         return best
+    return pattern
 
-    # Fallback to pattern itself
+
+def load_resolve_roles_from_list():
+    tier_script_path = os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")
+    if not os.path.exists(tier_script_path):
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "configure_opencode_tier", tier_script_path
+        )
+        if not spec or not spec.loader:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return getattr(module, "resolve_roles_from_list", None)
+    except Exception as e:
+        logger.warning(f"Failed to load local model resolver: {e}")
+        return None
+
+
+RESOLVE_ROLES_FROM_LIST = load_resolve_roles_from_list()
+
+
+def build_provider_configs(cfg: dict) -> dict:
+    provider_configs = {}
+
+    for provider_name, provider_def in cfg.get("providers", {}).items():
+        api_key_env = provider_def.get("apiKeyEnv", "")
+        api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+        if api_key_env and not api_key:
+            logger.warning(
+                f"{api_key_env} not set — {provider_name} JetBrains AI profiles will have an empty apiKey"
+            )
+
+        host_env = provider_def.get("hostEnv", "")
+        port_env = provider_def.get("portEnv", "")
+        if host_env or port_env:
+            host = (
+                (os.environ.get(host_env) or "127.0.0.1") if host_env else "127.0.0.1"
+            )
+            port = (os.environ.get(port_env) or "3456") if port_env else "3456"
+            base_url = f"http://{host}:{port}/v1/responses"
+        else:
+            base_url = provider_def.get("baseUrl", "")
+
+        provider_configs[provider_name] = {
+            "baseUrl": base_url,
+            "apiType": provider_def.get("apiType", ""),
+            "apiKey": api_key,
+        }
+
+    return provider_configs
+
+
+def resolve_local_placeholder(pattern: str, local_role_models: dict | None) -> str:
+    if not pattern.startswith("_local:"):
+        return pattern
+    category = pattern[len("_local:") :]
+    resolved = (local_role_models or {}).get(category, "")
+    if resolved.startswith("ollama/"):
+        return resolved[len("ollama/") :]
+    return resolved or pattern
+
+
+def resolve_group_model(
+    provider_name: str,
+    pattern: str,
+    local_models: list,
+    local_role_models: dict | None = None,
+) -> str:
+    if pattern.startswith("_local:"):
+        return resolve_local_placeholder(pattern, local_role_models)
+    if provider_name == "ollama-local":
+        return resolve_model(pattern, local_models)
     return pattern
 
 
@@ -50,7 +117,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Expand user paths
     groups_json_path = os.path.abspath(os.path.expanduser(args.groups_json))
     target_dir_path = os.path.abspath(os.path.expanduser(args.target_dir))
 
@@ -68,29 +134,24 @@ def main():
     os.makedirs(target_dir_path, exist_ok=True)
     generated_files = set()
 
-    # Base provider structures
-    ollama_cloud_cfg = cfg.get("providers", {}).get("ollama-cloud", {}).copy()
-    ollama_cloud_cfg.pop("apiKeyEnv", None)
-
-    ollama_local_cfg = cfg.get("providers", {}).get("ollama-local", {})
-
-    # Environment parameters
-    ollama_api_key = os.environ.get("OLLAMA_API_KEY", "")
-    if not ollama_api_key:
-        logger.warning(
-            "OLLAMA_API_KEY not set — Ollama Cloud JetBrains AI models will have empty apiKey"
-        )
-
-    meridian_host = os.environ.get("MERIDIAN_HOST", "127.0.0.1")
-    meridian_port = os.environ.get("MERIDIAN_PORT", "3456")
-    meridian_api_key = os.environ.get("MERIDIAN_API_KEY", "")
-    meridian_cfg = {
-        "baseUrl": f"http://{meridian_host}:{meridian_port}/v1/responses",
-        "apiType": "OpenAIResponses",
-        "apiKey": meridian_api_key,
-    }
+    provider_configs = build_provider_configs(cfg)
 
     local_models_list = args.local_models.split()
+    local_role_models = {}
+    has_local_groups = any(
+        g.get("provider") == "ollama-local" for g in cfg.get("groups", {}).values()
+    )
+    if has_local_groups and RESOLVE_ROLES_FROM_LIST:
+        discovered_local_models = list_local_ollama_models()
+        if discovered_local_models:
+            local_role_models = RESOLVE_ROLES_FROM_LIST(discovered_local_models) or {}
+            resolved_lines = [
+                f"  {k} -> {v[len('ollama/') :] if v.startswith('ollama/') else v}"
+                for k, v in sorted(local_role_models.items())
+            ]
+            logger.info(
+                "Local model categories resolved:\n" + "\n".join(resolved_lines)
+            )
 
     logger.info("Generating JetBrains AI model profiles...")
 
@@ -99,58 +160,90 @@ def main():
 
     for group_name, group_def in groups.items():
         provider = group_def.get("provider")
+        if not provider:
+            logger.warning(f"No provider configured for {group_name} — skipping")
+            continue
+
+        provider_cfg = provider_configs.get(provider)
+        if not provider_cfg:
+            logger.warning(f"Unknown provider '{provider}' for {group_name} — skipping")
+            continue
+
         primary_pattern = group_def.get("primaryModel", "")
         faster_pattern = group_def.get("fasterModel", "")
+        faster_provider = group_def.get("fasterProvider") or provider
 
-        # Read temperature
-        temp = group_def.get("temperature") or temperatures.get(group_name, 0.7)
+        temp = group_def.get("temperature")
+        if temp is None:
+            temp = temperatures.get(provider, 0.7)
 
-        # Resolve provider and model IDs
-        if provider == "ollama-local":
-            provider_cfg = ollama_local_cfg.copy()
-            if not local_models_list:
-                logger.info(f"No local Ollama models available — skipping {group_name}")
-                continue
-            primary_id = resolve_model(primary_pattern, local_models_list)
-            faster_id = (
-                resolve_model(faster_pattern, local_models_list)
-                if faster_pattern
-                else ""
+        if (
+            provider == "ollama-local"
+            and not local_models_list
+            and not primary_pattern.startswith("_local:")
+        ):
+            logger.info(f"No local Ollama models available — skipping {group_name}")
+            continue
+
+        if (
+            faster_pattern
+            and faster_provider == "ollama-local"
+            and not local_models_list
+            and not faster_pattern.startswith("_local:")
+        ):
+            logger.info(f"No local Ollama models available — skipping {group_name}")
+            continue
+
+        if faster_provider not in provider_configs:
+            logger.warning(
+                f"Unknown faster provider '{faster_provider}' for {group_name} — skipping"
             )
-        elif provider == "anthropic-meridian":
-            provider_cfg = meridian_cfg.copy()
-            primary_id = primary_pattern
-            faster_id = faster_pattern
-        else:
-            provider_cfg = ollama_cloud_cfg.copy()
-            provider_cfg["apiKey"] = ollama_api_key
-            primary_id = primary_pattern
-            faster_id = faster_pattern
+            continue
 
-        prefix = (
-            "local"
-            if provider == "ollama-local"
-            else (
-                "cloud-anthropic-meridian"
-                if provider == "anthropic-meridian"
-                else "cloud"
-            )
+        primary_id = resolve_group_model(
+            provider, primary_pattern, local_models_list, local_role_models
         )
+        if primary_pattern.startswith("_local:") and primary_id == primary_pattern:
+            logger.warning(
+                f"Could not resolve {primary_pattern} for {group_name} — skipping"
+            )
+            continue
 
-        # Construct Junie profile JSON
+        faster_id = (
+            resolve_group_model(
+                faster_provider, faster_pattern, local_models_list, local_role_models
+            )
+            if faster_pattern
+            else ""
+        )
+        if faster_pattern.startswith("_local:") and faster_id == faster_pattern:
+            logger.warning(
+                f"Could not resolve {faster_pattern} for {group_name} — using primary as faster"
+            )
+            faster_id = primary_id
+
+        faster_provider_cfg = provider_configs[faster_provider]
+
         profile_data = provider_cfg.copy()
         profile_data["id"] = primary_id
         profile_data["primaryModel"] = {"id": primary_id}
         if faster_id:
-            profile_data["fasterModel"] = {"id": faster_id}
+            if faster_provider != provider:
+                profile_data["fasterModel"] = {
+                    "id": faster_id,
+                    "baseUrl": faster_provider_cfg["baseUrl"],
+                    "apiType": faster_provider_cfg["apiType"],
+                    "apiKey": faster_provider_cfg["apiKey"],
+                }
+            else:
+                profile_data["fasterModel"] = {"id": faster_id}
         if temp is not None:
             profile_data["temperature"] = float(temp)
 
         profile_json = json.dumps(profile_data, indent=2) + "\n"
-        profile_file = os.path.join(target_dir_path, f"{prefix}-{group_name}.json")
+        profile_file = os.path.join(target_dir_path, f"{group_name}.json")
         fname = os.path.basename(profile_file)
 
-        # Compare with existing
         is_changed = True
         if os.path.exists(profile_file):
             with open(profile_file, "r", encoding="utf-8") as pf:
@@ -169,7 +262,6 @@ def main():
 
         generated_files.add(fname)
 
-    # Stale files cleanup
     for existing_file in os.listdir(target_dir_path):
         if existing_file.endswith(".json") and existing_file not in generated_files:
             full_stale_path = os.path.join(target_dir_path, existing_file)
