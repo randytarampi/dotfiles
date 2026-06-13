@@ -54,7 +54,8 @@ if command -v ollama >/dev/null 2>&1; then
   _has_ollama=true
 fi
 
-# Tier auto-detection — covers all 7 tiers
+# Tier auto-detection — covers all 10 tiers (7 cloud + 4 local)
+# local-pro, local-mini, local-nano are manual-only (set via DOTFILES_OPENCODE_TIER)
 if [[ "${DOTFILES_OPENCODE_TIER:-}" != "" ]]; then
   TIER="$DOTFILES_OPENCODE_TIER"
   info "Tier override from DOTFILES_OPENCODE_TIER: $TIER"
@@ -74,6 +75,7 @@ elif [[ "$_has_ollama" == true ]]; then
   TIER="local"
 fi
 info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
+info "Local tiers (local-pro, local-mini, local-nano) are available via DOTFILES_OPENCODE_TIER"
 
 # Run opencode configuration script FIRST (creates oh-my-opencode-slim.json)
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-opencode.py"

@@ -349,6 +349,64 @@
         "variant": "xhigh"
       }
     },
+    "local-pro": {
+      "orchestrator": {
+        "model": "_local:code-gen",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "_local:reasoning",
+        "variant": "high",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "*"
+        ]
+      },
+      "explorer": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "_local:code-gen",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "_local:vision",
+        "variant": "low"
+      },
+      "council": {
+        "model": "_local:reasoning",
+        "variant": "high"
+      }
+    },
     "local": {
       "orchestrator": {
         "model": "_local:code-gen",
@@ -404,6 +462,122 @@
       },
       "council": {
         "model": "_local:reasoning",
+        "variant": "high"
+      }
+    },
+    "local-mini": {
+      "orchestrator": {
+        "model": "_local:code-gen",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "_local:code-gen",
+        "variant": "high",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "*"
+        ]
+      },
+      "explorer": {
+        "model": "_local:lightweight",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "_local:code-gen",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "_local:vision",
+        "variant": "low"
+      },
+      "council": {
+        "model": "_local:code-gen",
+        "variant": "high"
+      }
+    },
+    "local-nano": {
+      "orchestrator": {
+        "model": "_local:code-gen",
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
+      },
+      "oracle": {
+        "model": "_local:code-gen",
+        "variant": "high",
+        "skills": [
+          "simplify"
+        ],
+        "mcps": []
+      },
+      "librarian": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [],
+        "mcps": [
+          "*"
+        ]
+      },
+      "explorer": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [
+          "codemap"
+        ],
+        "mcps": []
+      },
+      "designer": {
+        "model": "_local:code-gen",
+        "variant": "medium",
+        "skills": [
+          "agent-browser"
+        ],
+        "mcps": []
+      },
+      "fixer": {
+        "model": "_local:code-gen",
+        "variant": "low",
+        "skills": [],
+        "mcps": []
+      },
+      "observer": {
+        "model": "_local:vision",
+        "variant": "low"
+      },
+      "council": {
+        "model": "_local:code-gen",
         "variant": "high"
       }
     }
@@ -485,7 +659,7 @@
           "model": "anthropic/claude-opus-4-6"
         }
       },
-      "local": {
+      "local-pro": {
         "alpha": {
           "model": "_local:reasoning"
         },
@@ -494,6 +668,39 @@
         },
         "gamma": {
           "model": "_local:reasoning_3"
+        }
+      },
+      "local": {
+        "alpha": {
+          "model": "_local:reasoning"
+        },
+        "beta": {
+          "model": "_local:code-gen"
+        },
+        "gamma": {
+          "model": "_local:lightweight"
+        }
+      },
+      "local-mini": {
+        "alpha": {
+          "model": "_local:code-gen"
+        },
+        "beta": {
+          "model": "_local:lightweight"
+        },
+        "gamma": {
+          "model": "_local:vision"
+        }
+      },
+      "local-nano": {
+        "alpha": {
+          "model": "_local:code-gen"
+        },
+        "beta": {
+          "model": "_local:lightweight"
+        },
+        "gamma": {
+          "model": "_local:vision"
         }
       }
     }
@@ -807,11 +1014,11 @@
         ]
       }
     },
-    "local": {
+    "local-pro": {
       "council": {
-        "default_preset": "local",
+        "default_preset": "local-pro",
         "presets": {
-          "local": {
+          "local-pro": {
             "alpha": {
               "model": "_local:reasoning"
             },
@@ -823,6 +1030,75 @@
             },
             "council": {
               "model": "_local:reasoning",
+              "variant": "high"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "local": {
+      "council": {
+        "default_preset": "local",
+        "presets": {
+          "local": {
+            "alpha": {
+              "model": "_local:reasoning"
+            },
+            "beta": {
+              "model": "_local:code-gen"
+            },
+            "gamma": {
+              "model": "_local:lightweight"
+            },
+            "council": {
+              "model": "_local:reasoning",
+              "variant": "high"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "local-mini": {
+      "council": {
+        "default_preset": "local-mini",
+        "presets": {
+          "local-mini": {
+            "alpha": {
+              "model": "_local:code-gen"
+            },
+            "beta": {
+              "model": "_local:lightweight"
+            },
+            "gamma": {
+              "model": "_local:vision"
+            },
+            "council": {
+              "model": "_local:code-gen",
+              "variant": "high"
+            }
+          }
+        }
+      },
+      "fallback": {}
+    },
+    "local-nano": {
+      "council": {
+        "default_preset": "local-nano",
+        "presets": {
+          "local-nano": {
+            "alpha": {
+              "model": "_local:code-gen"
+            },
+            "beta": {
+              "model": "_local:lightweight"
+            },
+            "gamma": {
+              "model": "_local:vision"
+            },
+            "council": {
+              "model": "_local:code-gen",
               "variant": "high"
             }
           }

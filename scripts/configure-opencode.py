@@ -236,7 +236,7 @@ def main():
             ],
         }
 
-        if args.preset == "local":
+        if args.preset.startswith("local"):
             if local_ollama:
                 config["provider"]["ollama"] = local_ollama
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
@@ -376,7 +376,10 @@ def main():
         "     configure-opencode-tier.py pro-plus-anthropic",
         "     configure-opencode-tier.py plus",
         "     configure-opencode-tier.py anthropic",
+        "     configure-opencode-tier.py local-pro",
         "     configure-opencode-tier.py local",
+        "     configure-opencode-tier.py local-mini",
+        "     configure-opencode-tier.py local-nano",
         "",
         "To regenerate without local ollama:",
         "     set DOTFILES_USE_LOCAL_OLLAMA=0 and re-run configure-opencode.py",

@@ -106,6 +106,7 @@ def resolve_roles_from_list(models: list) -> dict:
     classified = {
         "reasoning": [],
         "code-gen": [],
+        "_name_qualified_code_gen": [],
         "lightweight": [],
         "vision": [],
         "all": [],
@@ -146,6 +147,9 @@ def resolve_roles_from_list(models: list) -> dict:
             ]
         ):
             category = "code-gen"
+            classified["_name_qualified_code_gen"].append(
+                {"name": model_name, "size_gb": size_gb}
+            )
         elif any(p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]):
             category = "lightweight"
         elif size_gb < 12:
@@ -223,10 +227,14 @@ def resolve_roles_from_list(models: list) -> dict:
         for m in classified["reasoning"]
         if _has_required_capabilities(m, ["thinking", "tools"])
     ]
+    _code_gen_name_qualified = set()
+    for m in classified.get("_name_qualified_code_gen", []):
+        _code_gen_name_qualified.add(m["name"])
     classified["code-gen"] = [
         m
         for m in classified["code-gen"]
-        if _has_required_capabilities(m, ["thinking", "completion"])
+        if m["name"] in _code_gen_name_qualified
+        or _has_required_capabilities(m, ["thinking", "completion"])
     ]
     classified["lightweight"] = [
         m for m in classified["lightweight"] if _has_required_capabilities(m, ["tools"])
@@ -399,7 +407,7 @@ def orchestrate_tier_switch(
         }
 
     local_role_models = {}
-    if not no_local_fallbacks or tier == "local":
+    if not no_local_fallbacks or tier.startswith("local"):
         models_list = list_local_ollama_models()
         if models_list:
             local_role_models = resolve_roles_from_list(models_list)
@@ -413,6 +421,47 @@ def orchestrate_tier_switch(
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
     else:
         logger.info(f"Classified local models: {json.dumps(local_role_models)}")
+        if tier.startswith("local"):
+            tier_council = tier_config.get("council", {})
+            council_presets = tier_council.get("presets", {})
+            if tier in council_presets:
+                cp = council_presets[tier]
+                councillor_models = []
+                for role_key in ["alpha", "beta", "gamma"]:
+                    placeholder = cp.get(role_key, {}).get("model", "")
+                    category_key = placeholder.replace("_local:", "")
+                    resolved = local_role_models.get(category_key, placeholder)
+                    councillor_models.append(resolved)
+                unique_councillors = set(councillor_models)
+                if len(unique_councillors) < 3:
+                    logger.warning(
+                        f"Council has {len(unique_councillors)} distinct model(s) of 3 councillors — "
+                        f"consider adding more diverse local models"
+                    )
+
+            needed_categories = sorted(set(role_to_category.values()))
+            sparse_categories = [
+                category
+                for category in needed_categories
+                if len(
+                    [
+                        model
+                        for role, model in local_role_models.items()
+                        if role == category or role.startswith(f"{category}_")
+                    ]
+                )
+                <= 1
+            ]
+            if sparse_categories:
+                logger.warning(
+                    f"Sparse local model categories for tier '{tier}': {', '.join(sparse_categories)}"
+                )
+
+            unique_models = set(local_role_models.values())
+            logger.info(
+                f"Local tier '{tier}': {len(unique_models)} distinct model(s) across "
+                f"{len(local_role_models)} role categories"
+            )
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -457,7 +506,7 @@ def orchestrate_tier_switch(
         target_config["fallback"] = {}
     target_config["fallback"]["chains"] = source_fallback
 
-    if local_role_models and tier != "local":
+    if local_role_models and not tier.startswith("local"):
         updated_chains = {}
         for role, chain in source_fallback.items():
             category = role_to_category.get(role, "code-gen")

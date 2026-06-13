@@ -79,7 +79,7 @@ def get_voice_config(tier: str) -> dict:
     """
     is_anthropic_tier = tier in ("anthropic", "pro-plus-anthropic")
     is_plus_tier = tier in ("plus", "plus-anthropic")
-    is_local_tier = tier == "local"
+    is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
 
     # Determine Meridian proxy usage for Anthropic tiers
