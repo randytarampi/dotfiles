@@ -104,6 +104,19 @@ def resolve_group_model(
     return pattern
 
 
+def lookup_model_temperature(model_name: str, overrides: dict) -> float | None:
+    """Look up model-family temperature override by longest prefix match."""
+    if not overrides:
+        return None
+    best_prefix = ""
+    for prefix, temp in overrides.items():
+        if model_name.lower().startswith(prefix.lower()) and len(prefix) > len(
+            best_prefix
+        ):
+            best_prefix = prefix
+    return overrides[best_prefix] if best_prefix else None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generates and manages JetBrains AI model profiles."
@@ -156,7 +169,7 @@ def main():
     logger.info("Generating JetBrains AI model profiles...")
 
     groups = cfg.get("groups", {})
-    temperatures = cfg.get("temperatures", {})
+    model_temperatures = cfg.get("modelTemperatures", {})
 
     for group_name, group_def in groups.items():
         provider = group_def.get("provider")
@@ -172,10 +185,6 @@ def main():
         primary_pattern = group_def.get("primaryModel", "")
         faster_pattern = group_def.get("fasterModel", "")
         faster_provider = group_def.get("fasterProvider") or provider
-
-        temp = group_def.get("temperature")
-        if temp is None:
-            temp = temperatures.get(provider, 0.7)
 
         if (
             provider == "ollama-local"
@@ -224,21 +233,39 @@ def main():
 
         faster_provider_cfg = provider_configs[faster_provider]
 
+        primary_effective_temp = lookup_model_temperature(
+            primary_id, model_temperatures
+        )
+        if primary_effective_temp is None:
+            primary_effective_temp = 0.7
+
         profile_data = provider_cfg.copy()
         profile_data["id"] = primary_id
-        profile_data["primaryModel"] = {"id": primary_id}
+        profile_data["primaryModel"] = {
+            "id": primary_id,
+            "temperature": float(primary_effective_temp),
+        }
+
         if faster_id:
+            faster_effective_temp = lookup_model_temperature(
+                faster_id, model_temperatures
+            )
+            if faster_effective_temp is None:
+                faster_effective_temp = 0.7
+
             if faster_provider != provider:
                 profile_data["fasterModel"] = {
                     "id": faster_id,
                     "baseUrl": faster_provider_cfg["baseUrl"],
                     "apiType": faster_provider_cfg["apiType"],
                     "apiKey": faster_provider_cfg["apiKey"],
+                    "temperature": float(faster_effective_temp),
                 }
             else:
-                profile_data["fasterModel"] = {"id": faster_id}
-        if temp is not None:
-            profile_data["temperature"] = float(temp)
+                profile_data["fasterModel"] = {
+                    "id": faster_id,
+                    "temperature": float(faster_effective_temp),
+                }
 
         profile_json = json.dumps(profile_data, indent=2) + "\n"
         profile_file = os.path.join(target_dir_path, f"{group_name}.json")

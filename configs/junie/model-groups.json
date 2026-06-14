@@ -23,98 +23,89 @@
       "apiKeyEnv": ""
     }
   },
-  "temperatures": {
-    "ollama-cloud": 0.7,
-    "openai": 1,
-    "meridian": 1,
-    "ollama-local": 0.6
+  "modelTemperatures": {
+    "anthropic": 1,
+    "claude": 1,
+    "deepseek": 0,
+    "gemini": 1,
+    "gemma": 1,
+    "glm": 0.7,
+    "gpt": 1,
+    "kimi": 0.8,
+    "mimo": 0.3,
+    "qwen": 0.6
   },
   "groups": {
     "pro": {
       "provider": "ollama-cloud",
-      "temperature": 0.7,
       "primaryModel": "glm-5.1",
       "fasterModel": "gemma4:31b"
     },
     "pro-plus": {
       "provider": "ollama-cloud",
-      "temperature": 0.7,
       "primaryModel": "glm-5.1",
       "fasterModel": "gpt-5.4-mini",
       "fasterProvider": "openai"
     },
     "pro-plus-anthropic": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-opus-4-6",
       "fasterModel": "anthropic/claude-haiku-4-5"
     },
     "anthropic": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-opus-4-6",
       "fasterModel": "anthropic/claude-haiku-4-5"
     },
     "plus": {
       "provider": "openai",
-      "temperature": 1,
       "primaryModel": "gpt-5.5",
       "fasterModel": "gpt-5.4-nano"
     },
     "plus-anthropic": {
       "provider": "openai",
-      "temperature": 1,
       "primaryModel": "gpt-5.5",
       "fasterModel": "anthropic/claude-haiku-4-5",
       "fasterProvider": "meridian"
     },
     "local-pro": {
       "provider": "ollama-local",
-      "temperature": 0.6,
       "primaryModel": "_local:reasoning",
       "fasterModel": "_local:lightweight"
     },
     "local": {
       "provider": "ollama-local",
-      "temperature": 0.6,
       "primaryModel": "_local:code-gen",
       "fasterModel": "_local:lightweight"
     },
     "local-mini": {
       "provider": "ollama-local",
-      "temperature": 0.6,
       "primaryModel": "_local:code-gen",
       "fasterModel": "_local:vision"
     },
     "local-nano": {
       "provider": "ollama-local",
-      "temperature": 0.6,
       "primaryModel": "_local:code-gen"
     },
     "local-solo": {
       "provider": "ollama-local",
-      "temperature": 0.6,
       "primaryModel": "_local:solo",
       "fasterModel": "_local:solo"
     },
     "meridian-opus": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-opus-4-6"
     },
     "meridian-sonnet": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-sonnet-4-6"
     },
     "meridian-haiku": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-haiku-4-5-20251001"
     },
     "meridian-fable": {
       "provider": "meridian",
-      "temperature": 1,
       "primaryModel": "anthropic/claude-fable-5"
     }
   }
