@@ -777,8 +777,7 @@
   "fallback": {
     "enabled": true,
     "timeoutMs": 60000,
-    "retryDelayMs": 1000,
-    "chains": {}
+    "retryDelayMs": 1000
   },
   "_tiers": {
     "pro": {
