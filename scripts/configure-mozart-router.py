@@ -5,6 +5,7 @@ configure-mozart-router.py — Configure Mozart AI router.
 
 import sys
 import os
+import json
 import shutil
 import subprocess
 
@@ -53,11 +54,25 @@ def main():
         sys.exit(1)
 
     try:
-        shutil.copy(config_src, config_dst)
+        with open(config_src, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+        # Resolve baseUrlEnv overrides and strip them from output
+        gateways = config.get("gateways", {})
+        for gw_name, gw_def in gateways.items():
+            baseUrlEnv = gw_def.pop("baseUrlEnv", "")
+            if baseUrlEnv:
+                override = os.environ.get(baseUrlEnv, "").strip()
+                if override:
+                    gw_def["baseUrl"] = override.rstrip("/")
+
+        with open(config_dst, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
         os.chmod(config_dst, 0o644)
         logger.info(f"Configured mozart-router at {config_dst}")
     except Exception as e:
-        logger.critical(f"Failed to copy config: {e}")
+        logger.critical(f"Failed to write config: {e}")
         sys.exit(1)
 
     # Run doctor check

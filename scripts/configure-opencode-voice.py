@@ -30,7 +30,6 @@ import sys
 import json
 import argparse
 import os
-import shutil
 import importlib.util
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -41,33 +40,16 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from constants import (
+    get_meridian_base_url,
+    get_ollama_local_base_url,
+    get_provider_base_url,
+    is_meridian_configured,
+)
+from file_utils import backup_file, write_text_file
+from env import load_env
+from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
-
-
-def load_env_file(env_path: str) -> bool:
-    """Load key=value pairs from a .env file into os.environ."""
-    if not os.path.exists(env_path):
-        return False
-    try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    parts = line.split("=", 1)
-                    key = parts[0].strip()
-                    if key.startswith("export "):
-                        key = key.split(None, 1)[1].strip()
-                    val = parts[1].strip()
-                    if (val.startswith('"') and val.endswith('"')) or (
-                        val.startswith("'") and val.endswith("'")
-                    ):
-                        val = val[1:-1]
-                    os.environ[key] = val
-        return True
-    except Exception:
-        return False
 
 
 def get_voice_config(tier: str) -> dict:
@@ -83,19 +65,13 @@ def get_voice_config(tier: str) -> dict:
     is_pro_tier = tier == "pro"
 
     # Determine Meridian proxy usage for Anthropic tiers
-    meridian_host = os.environ.get("MERIDIAN_HOST", "127.0.0.1")
-    meridian_port = os.environ.get("MERIDIAN_PORT", "3456")
-    anthropic_base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
-    use_meridian = bool(
-        os.environ.get("MERIDIAN_API_KEY", "")
-        or (is_anthropic_tier and anthropic_base_url)
-    )
+    use_meridian = is_meridian_configured()
 
     # ── LLM endpoint ──────────────────────────────────────────────────
     if is_local_tier:
         # Local Ollama — no API key needed
         voice_config = {
-            "endpoint": "http://localhost:11434/v1",
+            "endpoint": get_ollama_local_base_url(),
         }
         # Pick the best local model for voice
         use_local_ollama = os.environ.get(
@@ -127,9 +103,7 @@ def get_voice_config(tier: str) -> dict:
                         )
                         if voice_model:
                             # Strip ollama/ prefix if present
-                            voice_config["model"] = voice_model.replace(
-                                "ollama/", "", 1
-                            )
+                            voice_config["model"] = strip_provider_prefix(voice_model)
             except Exception:
                 pass
         if "model" not in voice_config:
@@ -138,7 +112,7 @@ def get_voice_config(tier: str) -> dict:
     elif is_pro_tier:
         # Ollama Cloud — gemma4:31b, key via OLLAMA_API_KEY
         voice_config = {
-            "endpoint": "https://ollama.com/v1",
+            "endpoint": get_provider_base_url("ollama-cloud"),
             "model": "gemma4:31b",
             "apiKeyEnv": "OLLAMA_API_KEY",
         }
@@ -147,13 +121,13 @@ def get_voice_config(tier: str) -> dict:
         # Anthropic — via Meridian proxy or direct
         if use_meridian:
             voice_config = {
-                "endpoint": f"http://{meridian_host}:{meridian_port}/v1",
+                "endpoint": get_meridian_base_url(),
                 "model": "claude-sonnet-4-6",
                 "apiKeyEnv": "MERIDIAN_API_KEY",
             }
         else:
             voice_config = {
-                "endpoint": "https://api.anthropic.com/v1",
+                "endpoint": get_provider_base_url("anthropic"),
                 "model": "claude-sonnet-4-6",
                 "apiKeyEnv": "ANTHROPIC_API_KEY",
             }
@@ -161,7 +135,7 @@ def get_voice_config(tier: str) -> dict:
     elif is_plus_tier or tier == "pro-plus":
         # OpenAI or Ollama Cloud + OpenAI STT
         voice_config = {
-            "endpoint": "https://api.openai.com/v1",
+            "endpoint": get_provider_base_url("openai"),
             "model": "gpt-5.4-mini",
             "apiKeyEnv": "OPENAI_API_KEY",
         }
@@ -169,7 +143,7 @@ def get_voice_config(tier: str) -> dict:
     elif tier == "pro-plus-anthropic":
         # pro-plus-anthropic: Ollama Cloud for LLM, OpenAI for STT
         voice_config = {
-            "endpoint": "https://ollama.com/v1",
+            "endpoint": get_provider_base_url("ollama-cloud"),
             "model": "gemma4:31b",
             "apiKeyEnv": "OLLAMA_API_KEY",
         }
@@ -177,7 +151,7 @@ def get_voice_config(tier: str) -> dict:
     else:
         # Fallback: Ollama Cloud
         voice_config = {
-            "endpoint": "https://ollama.com/v1",
+            "endpoint": get_provider_base_url("ollama-cloud"),
             "model": "gemma4:31b",
             "apiKeyEnv": "OLLAMA_API_KEY",
         }
@@ -191,22 +165,22 @@ def get_voice_config(tier: str) -> dict:
 
     if is_plus_tier:
         # OpenAI tiers — use OpenAI for STT too
-        voice_config["sttEndpoint"] = "https://api.openai.com/v1"
+        voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
     elif is_anthropic_tier and has_openai_key:
         # Anthropic tiers — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = "https://api.openai.com/v1"
+        voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
     elif tier == "pro-plus" and has_openai_key:
         # pro-plus — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = "https://api.openai.com/v1"
+        voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
     elif tier == "pro-plus-anthropic" and has_openai_key:
         # pro-plus-anthropic — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = "https://api.openai.com/v1"
+        voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
     # else: local/pro use whisper-cli (no stt config needed — plugin auto-detects)
@@ -271,10 +245,10 @@ def main():
 
     # Load .env for API keys
     env_path = os.path.join(config_dir_path, ".env")
-    if not load_env_file(env_path):
+    if not load_env(env_path):
         # Try home .env
         home_env = os.path.expanduser("~/.env")
-        load_env_file(home_env)
+        load_env(home_env)
 
     # Build voice config
     voice_config = get_voice_config(args.preset)
@@ -313,12 +287,9 @@ def main():
 
     # Backup existing config
     if os.path.exists(output_path) and not args.no_backup:
-        backup_path = output_path + ".bak"
-        try:
-            shutil.copy2(output_path, backup_path)
+        backup_path = backup_file(output_path, enabled=True)
+        if backup_path:
             logger.info(f"Backed up existing tui.json to {backup_path}")
-        except Exception as e:
-            logger.warning(f"Failed to backup tui.json: {e}")
 
     # Merge with existing config if it has other plugins
     existing_plugins = []
@@ -343,9 +314,11 @@ def main():
     tui_config["plugin"] = filtered_plugins
 
     try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(tui_config, f, indent=2)
-            f.write("\n")
+        write_text_file(
+            output_path,
+            json.dumps(tui_config, indent=2) + "\n",
+            backup=False,
+        )
         logger.info(f"tui.json written to {output_path}")
     except Exception as e:
         logger.critical(f"Failed to write tui.json: {e}")

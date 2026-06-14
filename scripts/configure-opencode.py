@@ -21,32 +21,9 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from constants import get_ollama_local_base_url, get_provider_base_url
 from opencode_config import get_available_tiers, build_tier_args
-
-
-def load_env_file(env_path: str) -> bool:
-    if not os.path.exists(env_path):
-        return False
-    try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    parts = line.split("=", 1)
-                    key = parts[0].strip()
-                    if key.startswith("export "):
-                        key = key.split(None, 1)[1].strip()
-                    val = parts[1].strip()
-                    if (val.startswith('"') and val.endswith('"')) or (
-                        val.startswith("'") and val.endswith("'")
-                    ):
-                        val = val[1:-1]
-                    os.environ[key] = val
-        return True
-    except Exception:
-        return False
+from env import load_env
 
 
 def main():
@@ -93,12 +70,17 @@ def main():
 
     # Load .env
     env_path = os.path.join(config_dir_path, ".env")
-    if load_env_file(env_path):
+    env_loaded = load_env(env_path)
+    if env_loaded:
         logger.info(f"Sourced {env_path}")
     else:
-        logger.warning(
-            f"{env_path} not found — run configure-ai.py first for MCP server configs"
-        )
+        fallback_path = os.path.join(os.path.expanduser("~"), ".env")
+        if load_env(fallback_path):
+            logger.info(f"Sourced {fallback_path} (fallback)")
+        else:
+            logger.warning(
+                f"{env_path} not found — run configure-ai.py first for MCP server configs"
+            )
 
     use_local_env = os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "true").lower()
     with_local_ollama = use_local_env in ["true", "1"]
@@ -187,7 +169,7 @@ def main():
             "models": models_obj,
             "name": "Ollama",
             "npm": "@ai-sdk/openai-compatible",
-            "options": {"baseURL": "http://localhost:11434/v1"},
+            "options": {"baseURL": get_ollama_local_base_url()},
         }
 
     meridian_plugin_path = os.environ.get("MERIDIAN_PLUGIN_PATH", "")

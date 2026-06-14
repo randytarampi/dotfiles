@@ -1,5 +1,5 @@
 {
-  "project_mcp_templates": ["shortcut", "notion", "mongodb", "betterstack", "codegraph"],
+  "project_mcp_templates": ["betterstack", "codegraph", "mongodb", "notion", "shortcut", "smallcode"],
   "tools": {
     "ai": {
       "mcp_path": "~/.ai/mcp/mcp.json",
@@ -19,6 +19,9 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "smallcode"
         }
       ]
     },
@@ -40,6 +43,9 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "smallcode"
         }
       ]
     },
@@ -64,6 +70,9 @@
           "extra_fields": {
             "args": ["serve", "--mcp", "--path", "${workspaceFolder}"]
           }
+        },
+        {
+          "template": "smallcode"
         }
       ]
     },
@@ -85,6 +94,9 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "smallcode"
         }
       ]
     },
@@ -109,6 +121,12 @@
           "extra_fields": {
             "enabled": true
           }
+        },
+        {
+          "template": "smallcode",
+          "extra_fields": {
+            "enabled": true
+          }
         }
       ]
     },
@@ -130,6 +148,9 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "smallcode"
         }
       ]
     },
@@ -151,6 +172,9 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "smallcode"
         }
       ]
     }

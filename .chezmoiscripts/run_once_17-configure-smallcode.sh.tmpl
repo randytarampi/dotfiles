@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+source "${LIB_DIR}/tier_detect.sh"
+source "${LIB_DIR}/tier_args.sh"
+
+# Load environment for API keys (must happen before gate)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_SMALLCODE_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_SMALLCODE_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_SMALLCODE_SETUP='${DOTFILES_RUN_SMALLCODE_SETUP:-0}' — skipping smallcode configuration"
+  exit 0
+fi
+
+if ! command -v smallcode >/dev/null 2>&1; then
+  warn "smallcode CLI not found; skipping smallcode configuration"
+  exit 0
+fi
+
+info "Configuring smallcode..."
+
+# Determine tier based on available API keys and CLI authentication
+detect_tier DOTFILES_SMALLCODE_TIER
+
+# Forward local fallback configuration from environment variables
+build_tier_extra_args
+
+CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-smallcode.py"
+if [[ -f "$CONFIGURE_SCRIPT" ]]; then
+  info "Running smallcode configuration..."
+  "$CONFIGURE_SCRIPT" --preset "$TIER" "${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"}"
+  ok "smallcode configured (tier: $TIER)"
+else
+  warn "configure-smallcode.py not found; skipping smallcode configuration"
+fi

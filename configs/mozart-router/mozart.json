@@ -4,18 +4,21 @@
       "adapter": "generic-openai",
       "baseUrl": "https://ollama.com/v1",
       "apiKeyEnv": "OLLAMA_API_KEY",
+      "baseUrlEnv": "OLLAMA_CLOUD_BASE_URL",
       "enabled": true
     },
     "openai": {
       "adapter": "generic-openai",
       "baseUrl": "https://api.openai.com/v1",
       "apiKeyEnv": "OPENAI_API_KEY",
+      "baseUrlEnv": "OPENAI_BASE_URL",
       "enabled": true
     },
     "anthropic-meridian": {
       "adapter": "generic-openai",
       "baseUrl": "http://127.0.0.1:3456/v1",
       "apiKeyEnv": "MERIDIAN_API_KEY",
+      "baseUrlEnv": "ANTHROPIC_BASE_URL",
       "enabled": true
     }
   },

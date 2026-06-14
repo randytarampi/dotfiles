@@ -33,5 +33,10 @@ __pycache__/
 # CodeGraph local index
 .codegraph/
 
+# SmallCode session/cache
+.smallcode/
+.memory/
+.code-graph/
+
 # chezmoi runtime
 .chezmoi-cache/

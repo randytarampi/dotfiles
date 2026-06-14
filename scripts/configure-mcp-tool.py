@@ -9,7 +9,6 @@ import json
 import argparse
 import os
 import re
-import shutil
 import fnmatch
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -18,6 +17,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from env import load_env
 
 
 def get_tool_config(registry_file: str, tool: str) -> dict:
@@ -52,31 +52,6 @@ def resolve_env_vars(obj):
     elif isinstance(obj, list):
         return [resolve_env_vars(i) for i in obj]
     return obj
-
-
-def load_env_file(env_path: str) -> bool:
-    if not os.path.exists(env_path):
-        return False
-    try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    parts = line.split("=", 1)
-                    key = parts[0].strip()
-                    if key.startswith("export "):
-                        key = key.split(None, 1)[1].strip()
-                    val = parts[1].strip()
-                    if (val.startswith('"') and val.endswith('"')) or (
-                        val.startswith("'") and val.endswith("'")
-                    ):
-                        val = val[1:-1]
-                    os.environ[key] = val
-        return True
-    except Exception:
-        return False
 
 
 def resolve_env_files(env_file, mode, project_dir):
@@ -431,7 +406,7 @@ def orchestrate_mcp_config(args):
 
     env_files = resolve_env_files(args.env_file, args.mode, project_dir)
     for f in env_files:
-        load_env_file(f)
+        load_env(f)
 
     tool_config = get_tool_config(registry_file, args.tool)
 
@@ -490,7 +465,9 @@ def orchestrate_mcp_config(args):
         os.makedirs(parent_dir, exist_ok=True)
 
     if args.backup and os.path.exists(resolved_mcp_path):
-        shutil.copy(resolved_mcp_path, resolved_mcp_path + ".bak")
+        from file_utils import backup_file
+
+        backup_file(resolved_mcp_path, enabled=True)
 
     merge_configs_to_file(format_type, resolved_mcp_path, output_content)
 

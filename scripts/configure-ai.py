@@ -174,8 +174,9 @@ export BETTERSTACK_API_TOKEN="{betterstack_token}"
 """
 
         try:
-            with open(env_file, "w", encoding="utf-8") as f:
-                f.write(env_content)
+            from file_utils import write_text_file
+
+            write_text_file(env_file, env_content, backup=False)
             logger.info(f".env written to {env_file}")
         except Exception as e:
             logger.critical(f"Failed to write .env file {env_file}: {e}")

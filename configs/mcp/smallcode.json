@@ -1,0 +1,6 @@
+{
+  "name": "smallcode",
+  "type": "command",
+  "command": "smallcode",
+  "args": ["--mcp"]
+}

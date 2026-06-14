@@ -128,6 +128,9 @@ scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
 scripts/configure-opencode-voice.py pro-plus    # Configure voice plugin (tui.json)
 scripts/configure-mcp-all.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
+scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
+scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
+scripts/install-smallcode.sh                     # Install SmallCode CLI
 ```
 
 ## Conventions
@@ -157,6 +160,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 1 |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 1 |
+| `DOTFILES_RUN_SMALLCODE_SETUP` | SmallCode CLI install + config | 1 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
 | `DO_NOT_TRACK` | Global telemetry opt-out | 1 |
@@ -169,7 +173,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── .chezmoiignore                # ignore patterns (scripts/, configs/, macOS-only)
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .chezmoiscripts/              # Run scripts (16 total, ordered: defaults → packages → config)
+├── .chezmoiscripts/              # Run scripts (17 total, ordered: defaults → packages → config)
 │   ├── # Phase 1: System defaults
 │   ├── run_once_01-setup-chezmoi.sh.tmpl            # env aliasing, directories, symlinks
 │   ├── run_once_02-configure-macos-defaults.sh.tmpl   # macOS system prefs
@@ -188,7 +192,8 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   ├── run_once_13-configure-mcp.sh.tmpl             # MCP configs (one-time setup, gated by DOTFILES_RUN_MCP_SETUP)
 │   ├── run_once_14-configure-opencode.sh.tmpl        # Tier config (every apply)
 │   ├── run_once_15-configure-mozart-router.sh.tmpl  # Mozart router setup
-│   └── run_once_16-install-meridian-launchd.sh.tmpl # Meridian launchd plist
+│   ├── run_once_16-install-meridian-launchd.sh.tmpl # Meridian launchd plist
+│   └── run_once_17-configure-smallcode.sh.tmpl # SmallCode config (gated by DOTFILES_RUN_SMALLCODE_SETUP)
 ├── AGENTS.md                  # AI agent guidance (authoritative — scripts, tiers, MCP, symlinks)
 ├── dot_bashrc                     # Bash config
 ├── dot_zshrc                      # Zsh config
@@ -216,7 +221,6 @@ Set in `~/.env` (0 = skip, 1 = run):
 │       ├── paths.sh               # PATH setup (brew --prefix first, Intel/ARM fallback)
 │       ├── prompt.sh              # Shell prompt (starship with fallback)
 │       └── variables.sh           # Non-secret env vars
-├── dot_mozart/mozart.json.tmpl    # Mozart router config (Ollama Cloud + Meridian gateways, env-var-driven)
 ├── private_dot_aws/credentials.tmpl        # AWS credentials (2 profiles)
 ├── private_dot_gnupg/
 │   ├── gpg.conf.tmpl              # GPG config (default-key from env)
@@ -238,6 +242,8 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   │   ├── notion.json
 │   │   ├── sentry.json            # Passes SENTRY_ACCESS_TOKEN via env, not CLI args
 │   │   ├── shortcut.json
+│   │   ├── smallcode.json          # SmallCode — MCP server (stdio)
+│   │   ├── codegraph.json          # CodeGraph — local-first semantic code index (stdio MCP)
 │   │   └── templates/            # Symlinks → ../ for configure-mcp-tool.sh
 │   ├── iterm2/Default.json        # iTerm2 Dynamic Profile (clean, no secrets)
 │   ├── mozart-router/mozart.json # Mozart AI router gateway config
@@ -258,7 +264,12 @@ Set in `~/.env` (0 = skip, 1 = run):
     │   ├── ai_dirs.py             # Python-ported platform-independent directory setups
     │   ├── ai_models.py           # Python-ported model prefix mappings & temperatures
     │   ├── idea.py                # Resolve IntelliJ app paths, java, and MCP classpaths in Python
-    │   └── discover_models.py     # Local Ollama discovery to JSON in Python
+    │   ├── discover_models.py     # Local Ollama discovery to JSON in Python
+    │   ├── constants.py           # BASE_URLS, provider URLs, Meridian/Ollama helpers
+    │   ├── file_utils.py          # backup_file(), write_text_file()
+    │   ├── opencode_config.py     # get_available_tiers(), build_tier_args()
+    │   ├── tier_detect.sh         # Shared tier auto-detection (detect_tier)
+    │   └── tier_args.sh           # Shared local fallback arg forwarding
     ├── configure-mcp-all.py       # Generate MCP configs for all AI tools
     ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
     ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
@@ -272,11 +283,13 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── configure-opencode.py      # Write OpenCode config (local ollama default)
     ├── configure-opencode-tier.py # Switch active preset tier (source of truth)
     ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
-    ├── generate-jetbrains-profiles.py # Generate model profiles JSON files
     ├── get-tools.py               # Get MCP tool registry keys
     ├── install-opencode.sh        # Install OpenCode plugins and tools (incl. voice)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
-    └── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
+    ├── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
+    ├── configure-smallcode.py      # Configure SmallCode (env + TOML + MCP, tier-aware)
+    ├── install-smallcode.sh        # Install SmallCode CLI + plugins
+    └── generate-jetbrains-profiles.py # Generate model profiles JSON files
 ```
 
 ## Secrets Management
@@ -309,6 +322,27 @@ Old sourced credentials files used shell exports such as `export GH_TOKEN=...`. 
 - `private_dot_aws/credentials.tmpl` — `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - `private_dot_vuescanrc.tmpl` — `VUESCAN_USER_ID`, `VUESCAN_LICENSE`, `VUESCAN_CUSTOMER`, `VUESCAN_EMAIL`
 - `private_dot_gnupg/gpg.conf.tmpl` — `GPG_SIGNING_KEY`
+
+### Provider Base-URL Overrides
+
+Official SDK environment variables override hardcoded provider URLs across all scripts. When set, these take priority over `BASE_URLS` defaults in `constants.py`:
+
+| Env Var | Provider | Default | Notes |
+|---------|----------|---------|-------|
+| `ANTHROPIC_BASE_URL` | Anthropic | `https://api.anthropic.com/v1` | Also signals Meridian usage when set |
+| `OPENAI_BASE_URL` | OpenAI | `https://api.openai.com/v1` | OpenAI SDK standard |
+| `OLLAMA_HOST` | Ollama (local) | `http://localhost:11434` | Scheme+host[:port]; overrides `OLLAMA_LOCAL_HOST`/`PORT` |
+| `OLLAMA_CLOUD_BASE_URL` | Ollama Cloud | `https://ollama.com/v1` | Non-standard (our env var, not official SDK) |
+
+### Local Service Host/Port Overrides
+
+Local services (Ollama, Meridian) support host/port env var overrides:
+
+| Service | Host Env Var | Port Env Var | Default |
+|---------|-------------|-------------|---------|
+| Local Ollama | `OLLAMA_LOCAL_HOST` | `OLLAMA_LOCAL_PORT` | `localhost:11434` |
+| Official Ollama | `OLLAMA_HOST` | — | `http://localhost:11434` | Scheme+host[:port]; overrides `OLLAMA_LOCAL_HOST`/`PORT` |
+| Meridian proxy | `MERIDIAN_HOST` | `MERIDIAN_PORT` | `127.0.0.1:3456` |
 
 ---
 
@@ -393,7 +427,7 @@ Packages available on both platforms by category:
 
 ### Model Tiers
 
-Ten presets for AI agents, defined in `scripts/configure-opencode-tier.py` (source of truth) and documented in `AGENTS.md`:
+Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (source of truth) and documented in `AGENTS.md`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -401,6 +435,7 @@ Ten presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
+| **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only (`opus-4-7`, `sonnet-4-6`, `haiku-4-5`) | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
@@ -408,11 +443,11 @@ Ten presets for AI agents, defined in `scripts/configure-opencode-tier.py` (sour
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
-Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, anthropic, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
 Default preset: tier auto-detected from available API keys during `run_once_14-configure-opencode`. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
@@ -446,7 +481,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 | **plus-anthropic** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
 | **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
 
-**Meridian detection:** If `ANTHROPIC_BASE_URL` is set, the Anthropic tier uses Meridian as the voice LLM endpoint.
+**Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
 
 **Local STT/TTS dependencies** (installed by `scripts/install-opencode.sh` step 8, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
 
@@ -462,13 +497,36 @@ Model defaults are configurable: `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VO
 
 Configure voice: `scripts/configure-opencode-voice.py --preset <tier>`
 
+### SmallCode
+
+[SmallCode](https://github.com/Doorman11991/smallcode) is a terminal-native coding agent for small local models (8B–35B). It provides budgeted context, forgiving tool-call parsing, search/replace patching, persistent memory, and adaptive cloud escalation.
+
+**Configuration:** `~/.config/smallcode/` (env + TOML + MCP, written by `configure-smallcode.py`, tier-aware)
+
+| SmallCode Slot | OpenCode Role |
+|---------------|-------------|
+| DEFAULT | orchestrator |
+| FAST | librarian |
+| MEDIUM | fixer |
+| STRONG | oracle |
+
+Escalation uses the STRONG/oracle model and its provider. After 3+ calls, if failure rate >0.3 → MEDIUM, >0.6 → STRONG.
+
+- **Install:** `scripts/install-smallcode.sh` (gated on `DOTFILES_RUN_SMALLCODE_SETUP=1`)
+- **Configure:** `scripts/configure-smallcode.py --preset <tier>` writes `.env`, `smallcode.toml`, and `mcp.json`
+- **Context budget:** `SMALLCODE_CONTEXT_BUDGET=67` (aligned with OpenCode's DCP threshold)
+- **Meridian routing:** Anthropic models route through Meridian when `is_meridian_configured()` returns true
+- **MCP:** `smallcode --mcp` (stdio integration)
+- **Shell:** `smallcode` passthrough wrapper in `aliases.sh`
+
 ### Mozart Router
 
-Local AI gateway router installed via `run_once_15-configure-mozart-router.sh.tmpl`.
+Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer of `~/.mozart/mozart.json` (the template was removed to avoid dual-source conflicts).
 
 - **Install:** `npm install -g mozart-router`
 - **Configure:** `scripts/configure-mozart-router.py` writes `~/.mozart/mozart.json`
 - **Gateways:** Ollama Cloud, OpenAI, and Anthropic Meridian — all via GenericOpenAI adapter
+- **Provider URL overrides:** Gateways support `baseUrlEnv` keys — if the named env var is set, it overrides the hardcoded `baseUrl` (resolved and stripped before writing). Supported overrides: `OLLAMA_CLOUD_BASE_URL`, `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`.
 - **Meridian proxy:** Uses `MERIDIAN_HOST` and `MERIDIAN_PORT` env vars (defaults: `127.0.0.1` and `3456`) for the local Meridian endpoint
 - **Usage:** `mozart-router doctor`, `mozart-router route "task description"`, `mozart-router proxy --port=4445`
 - **MCP:** `mozart-router mcp` (stdio integration)
@@ -520,7 +578,7 @@ Select via: `junie --model custom:<profile>`
 
 ### MCP Configuration
 
-Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templates. `configure-mcp-all.py` generates per-tool config files.
+Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcp-all.py` generates per-tool config files.
 
 | Tool | Config Path | Format |
 |------|------------|--------|
@@ -532,7 +590,7 @@ Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templat
 | Codex | `~/.codex/config.toml` | TOML (global: github, idea, sentry) |
 | Gemini | `~/.gemini/settings.json` | JSON merge (global: github, sentry) |
 
-Global MCP servers: github, idea, sentry. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
+Global MCP servers: github, idea, sentry, smallcode, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
 
 `idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. `run_once_13-configure-mcp.sh.tmpl` sources its output before the gate check.
 

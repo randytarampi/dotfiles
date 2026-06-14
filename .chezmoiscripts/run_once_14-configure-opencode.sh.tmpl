@@ -4,6 +4,8 @@ set -euo pipefail
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
+source "${LIB_DIR}/tier_detect.sh"
+source "${LIB_DIR}/tier_args.sh"
 
 # Load environment for API keys (must happen before gate)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -16,84 +18,12 @@ fi
 
 info "Configuring opencode..."
 
-# Determine tier based on available API keys and CLI authentication.
-# All 7 tiers are auto-detected based on the combination of:
-#   Ollama Cloud (OLLAMA_API_KEY), OpenAI (OPENAI_API_KEY/codex),
-#   Anthropic (ANTHROPIC_API_KEY/claude), and local Ollama.
-# Default: 'pro' (Ollama Cloud baseline, no keys required).
-TIER="pro"
-
-_has_openai=false
-_has_anthropic=false
-_has_ollama_cloud=false
-_has_ollama=false
-
-# Check env vars first (explicit API keys take precedence)
-if [[ -n "${OPENAI_API_KEY:-}" ]]; then
-  _has_openai=true
-fi
-if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-  _has_anthropic=true
-fi
-if [[ -n "${OLLAMA_API_KEY:-}" ]]; then
-  _has_ollama_cloud=true
-fi
-
-# Check CLI authentication — codex requires OpenAI, claude requires Anthropic
-if command -v codex >/dev/null 2>&1; then
-  _has_openai=true
-fi
-if command -v claude >/dev/null 2>&1; then
-  _has_anthropic=true
-fi
-
-# Check for local Ollama. The opt-in toggle controls whether discovered local
-# models are included, but it should not pretend Ollama exists when the binary
-# is unavailable.
-if command -v ollama >/dev/null 2>&1; then
-  _has_ollama=true
-fi
-
-# Tier auto-detection — covers all 11 tiers (6 cloud + 5 local)
-# local-pro, local-mini, local-nano, local-solo are manual-only (set via DOTFILES_OPENCODE_TIER)
-if [[ "${DOTFILES_OPENCODE_TIER:-}" != "" ]]; then
-  TIER="$DOTFILES_OPENCODE_TIER"
-  info "Tier override from DOTFILES_OPENCODE_TIER: $TIER"
-elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_openai" == true ]] && [[ "$_has_anthropic" == true ]]; then
-  TIER="pro-plus-anthropic"
-elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_openai" == true ]]; then
-  TIER="pro-plus"
-elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_anthropic" == true ]]; then
-  TIER="pro-plus-anthropic"
-elif [[ "$_has_openai" == true ]] && [[ "$_has_anthropic" == true ]]; then
-  TIER="plus-anthropic"
-elif [[ "$_has_openai" == true ]]; then
-  TIER="plus"
-elif [[ "$_has_anthropic" == true ]]; then
-  TIER="anthropic"
-elif [[ "$_has_ollama" == true ]]; then
-  TIER="local"
-fi
-info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
+# Determine tier based on available API keys and CLI authentication
+detect_tier DOTFILES_OPENCODE_TIER
 info "Local tiers (local-pro, local-mini, local-nano, local-solo) are available via DOTFILES_OPENCODE_TIER"
 
 # Forward local fallback configuration from environment variables
-TIER_EXTRA_ARGS=()
-if [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then
-  TIER_EXTRA_ARGS+=("--local-fallback-preset" "$DOTFILES_LOCAL_FALLBACK_PRESET")
-fi
-if [[ -n "${DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS:-}" ]]; then
-  IFS=',' read -ra PHOLDER_OVERRIDES <<< "$DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS"
-  for override in "${PHOLDER_OVERRIDES[@]}"; do
-    [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-placeholder" "$override")
-  done
-fi
-if [[ -n "${DOTFILES_LOCAL_FALLBACK_ROLES:-}" ]]; then
-  IFS=',' read -ra ROLE_OVERRIDES <<< "$DOTFILES_LOCAL_FALLBACK_ROLES"
-  for override in "${ROLE_OVERRIDES[@]}"; do
-    [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-role" "$override")
-  done
-fi
+build_tier_extra_args
 
 # Run opencode configuration script FIRST (creates oh-my-opencode-slim.json)
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-opencode.py"

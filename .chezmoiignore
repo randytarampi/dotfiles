@@ -4,6 +4,9 @@ scripts/
 # configs/ are referenced by run_once scripts, not applied to home directory.
 configs/
 
+# dot_mozart/ is a legacy template source; mozart.json is written by the script.
+dot_mozart/
+
 # Full iTerm2 preferences can include command history, hostnames, and secrets.
 dot_com.googlecode.iterm2.plist
 

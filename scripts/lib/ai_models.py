@@ -21,3 +21,10 @@ def resolve_model(pattern, available_models):
 
     # Fallback: return the pattern as-is
     return pattern
+
+
+def strip_provider_prefix(model_name):
+    """Strip provider prefixes like 'ollama/' from model names."""
+    if "/" in model_name:
+        return model_name.split("/", 1)[1]
+    return model_name

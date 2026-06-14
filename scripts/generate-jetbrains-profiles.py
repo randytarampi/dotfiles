@@ -12,21 +12,9 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 import logger
+from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from discover_models import list_local_ollama_models
-
-
-def resolve_model(pattern: str, available_models: list) -> str:
-    for m in available_models:
-        if m == pattern:
-            return m
-    best = ""
-    for m in available_models:
-        if m.startswith(pattern):
-            if not best or len(m) > len(best):
-                best = m
-    if best:
-        return best
-    return pattern
+from ai_models import resolve_model
 
 
 def load_resolve_roles_from_list():
@@ -51,6 +39,11 @@ RESOLVE_ROLES_FROM_LIST = load_resolve_roles_from_list()
 
 
 def build_provider_configs(cfg: dict) -> dict:
+    """Build provider config dicts from model-groups.json provider entries.
+
+    Override precedence: baseUrlEnv > hostEnvAlt > hostEnv/portEnv > baseUrl
+    baseUrlEnv and hostEnvAlt keys are stripped from output (not understood by Junie).
+    """
     provider_configs = {}
 
     for provider_name, provider_def in cfg.get("providers", {}).items():
@@ -61,16 +54,43 @@ def build_provider_configs(cfg: dict) -> dict:
                 f"{api_key_env} not set — {provider_name} JetBrains AI profiles will have an empty apiKey"
             )
 
-        host_env = provider_def.get("hostEnv", "")
-        port_env = provider_def.get("portEnv", "")
-        if host_env or port_env:
-            host = (
-                (os.environ.get(host_env) or "127.0.0.1") if host_env else "127.0.0.1"
-            )
-            port = (os.environ.get(port_env) or "3456") if port_env else "3456"
-            base_url = f"http://{host}:{port}/v1/responses"
+        hostEnvAlt = provider_def.get("hostEnvAlt", "")
+        if hostEnvAlt:
+            alt_value = os.environ.get(hostEnvAlt, "").strip()
+            if alt_value:
+                # hostEnvAlt includes scheme+host[:port] (e.g. http://__VG_IPV4_62de5b598c15__:11434)
+                base_url = alt_value.rstrip("/")
+                if not base_url.endswith("/v1"):
+                    base_url = base_url + "/v1"
+                # For meridian-style /responses suffix, check apiType
+                if provider_def.get("apiType") == "OpenAIResponses":
+                    base_url = base_url.replace("/v1", "/v1/responses")
+            else:
+                base_url = ""
         else:
-            base_url = provider_def.get("baseUrl", "")
+            base_url = ""
+
+        if not base_url:
+            host_env = provider_def.get("hostEnv", "")
+            port_env = provider_def.get("portEnv", "")
+            if host_env or port_env:
+                host = (
+                    (os.environ.get(host_env) or MERIDIAN_DEFAULT_HOST)
+                    if host_env
+                    else MERIDIAN_DEFAULT_HOST
+                )
+                port = (
+                    (os.environ.get(port_env) or MERIDIAN_DEFAULT_PORT)
+                    if port_env
+                    else MERIDIAN_DEFAULT_PORT
+                )
+                base_url = f"http://{host}:{port}/v1/responses"
+            else:
+                base_url = provider_def.get("baseUrl", "")
+
+        baseUrlEnv = provider_def.get("baseUrlEnv", "")
+        if baseUrlEnv and os.environ.get(baseUrlEnv, "").strip():
+            base_url = os.environ.get(baseUrlEnv, "").strip().rstrip("/")
 
         provider_configs[provider_name] = {
             "baseUrl": base_url,

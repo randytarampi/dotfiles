@@ -18,6 +18,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 
 
 def main():
@@ -33,8 +34,8 @@ def main():
         config_dir = os.path.join(os.path.expanduser("~"), ".config", "opencode")
 
     config_path = os.path.join(config_dir, "opencode.json")
-    meridian_host = os.environ.get("MERIDIAN_HOST", "127.0.0.1")
-    meridian_port = os.environ.get("MERIDIAN_PORT", "3456")
+    meridian_host = os.environ.get("MERIDIAN_HOST", MERIDIAN_DEFAULT_HOST)
+    meridian_port = os.environ.get("MERIDIAN_PORT", MERIDIAN_DEFAULT_PORT)
 
     logger.info("Checking prerequisites...")
 

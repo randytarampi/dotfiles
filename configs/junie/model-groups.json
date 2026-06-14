@@ -3,24 +3,30 @@
     "ollama-cloud": {
       "baseUrl": "https://ollama.com/v1",
       "apiType": "OpenAICompletion",
-      "apiKeyEnv": "OLLAMA_API_KEY"
+      "apiKeyEnv": "OLLAMA_API_KEY",
+      "baseUrlEnv": "OLLAMA_CLOUD_BASE_URL"
     },
     "openai": {
       "baseUrl": "https://api.openai.com/v1",
       "apiType": "OpenAIResponses",
-      "apiKeyEnv": "OPENAI_API_KEY"
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "baseUrlEnv": "OPENAI_BASE_URL"
     },
     "meridian": {
       "baseUrl": "http://127.0.0.1:3456/v1/responses",
       "apiType": "OpenAIResponses",
       "apiKeyEnv": "MERIDIAN_API_KEY",
       "hostEnv": "MERIDIAN_HOST",
-      "portEnv": "MERIDIAN_PORT"
+      "portEnv": "MERIDIAN_PORT",
+      "baseUrlEnv": "ANTHROPIC_BASE_URL"
     },
     "ollama-local": {
       "baseUrl": "http://localhost:11434/v1",
       "apiType": "OpenAICompletion",
-      "apiKeyEnv": ""
+      "apiKeyEnv": "",
+      "hostEnv": "OLLAMA_LOCAL_HOST",
+      "portEnv": "OLLAMA_LOCAL_PORT",
+      "hostEnvAlt": "OLLAMA_HOST"
     }
   },
   "modelTemperatures": {
