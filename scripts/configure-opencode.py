@@ -21,7 +21,11 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
-from constants import get_ollama_local_base_url, get_provider_base_url
+from constants import (
+    get_ollama_local_base_url,
+    get_provider_base_url,
+    check_ollama_daemon,
+)
 from opencode_config import get_available_tiers, build_tier_args
 from env import load_env
 
@@ -98,6 +102,9 @@ def main():
                 local_ollama_models = tier_module.list_local_ollama_models()
         except Exception:
             pass
+
+    # Check if local Ollama daemon can proxy cloud models
+    _, can_proxy_cloud = check_ollama_daemon()
 
     # Generate MCP Config
     mcp_args = [
@@ -252,16 +259,49 @@ def main():
         else:
             if openai_models:
                 config["provider"]["openai"] = {"models": openai_models}
-            if ollama_cloud_models and args.preset != "plus":
+            if can_proxy_cloud and ollama_cloud_models and args.preset != "plus":
+                # Unified: merge local + cloud Ollama under single provider
+                combined_models = {}
+                if local_ollama and args.preset not in ["plus", "pro"]:
+                    combined_models.update(local_ollama.get("models", {}))
+                # Add cloud models with :cloud suffix
+                for model_name in ollama_cloud_models:
+                    cloud_name = (
+                        f"{model_name}:cloud"
+                        if not model_name.endswith(":cloud")
+                        else model_name
+                    )
+                    combined_models[cloud_name] = {"name": cloud_name}
+                if combined_models:
+                    config["provider"]["ollama"] = {
+                        "models": combined_models,
+                        "name": "Ollama",
+                        "npm": "@ai-sdk/openai-compatible",
+                        "options": {"baseURL": get_ollama_local_base_url()},
+                    }
+                    config["disabled_providers"].append("ollama-cloud")
+                elif local_ollama and args.preset not in ["plus", "pro"]:
+                    # Cloud-capable but no cloud models pulled; keep local-only provider
+                    config["provider"]["ollama"] = local_ollama
+            elif ollama_cloud_models and args.preset != "plus":
+                # Not cloud-capable: use direct ollama-cloud provider
                 config["provider"]["ollama-cloud"] = {"models": ollama_cloud_models}
-            if local_ollama and args.preset not in ["plus", "pro"]:
+                if local_ollama and args.preset not in ["plus", "pro"]:
+                    config["provider"]["ollama"] = local_ollama
+            elif local_ollama and args.preset not in ["plus", "pro"]:
+                # No cloud models at all; local-only provider
                 config["provider"]["ollama"] = local_ollama
             if include_anthropic and anthropic_models:
                 config["provider"]["anthropic"] = {"models": anthropic_models}
             if args.preset == "pro":
                 config["provider"].pop("openai", None)
                 config["provider"].pop("anthropic", None)
-                config["disabled_providers"].extend(["openai", "anthropic", "ollama"])
+                if can_proxy_cloud:
+                    config["disabled_providers"].extend(["openai", "anthropic"])
+                else:
+                    config["disabled_providers"].extend(
+                        ["openai", "anthropic", "ollama"]
+                    )
             elif args.preset == "plus":
                 config["provider"].pop("anthropic", None)
                 config["disabled_providers"].extend(

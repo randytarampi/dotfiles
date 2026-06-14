@@ -16,6 +16,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 from env import load_env
+from constants import check_ollama_daemon, get_ollama_local_base_url
 
 
 def main():
@@ -65,6 +66,29 @@ def main():
                 override = os.environ.get(baseUrlEnv, "").strip()
                 if override:
                     gw_def["baseUrl"] = override.rstrip("/")
+
+        # Resolve cloud proxy override: when local daemon is cloud-capable,
+        # route ollama-cloud through the local daemon instead of direct cloud
+        for gw_name, gw_def in gateways.items():
+            cloud_proxy_env = gw_def.pop("cloudProxyEnv", "")
+            if cloud_proxy_env:
+                # Check if cloud proxy is enabled via env var (default: true)
+                proxy_enabled = os.environ.get(cloud_proxy_env, "").strip().lower()
+                if proxy_enabled not in ("0", "false"):
+                    is_running, can_proxy_cloud = check_ollama_daemon()
+                    if is_running and can_proxy_cloud:
+                        logger.info(
+                            f"Ollama daemon is cloud-capable; routing '{gw_name}' "
+                            f"through local daemon at {get_ollama_local_base_url()}"
+                        )
+                        gw_def["baseUrl"] = get_ollama_local_base_url()
+                        # Remove apiKeyEnv — local daemon handles auth transparently
+                        gw_def.pop("apiKeyEnv", None)
+                    else:
+                        logger.info(
+                            f"Ollama daemon not cloud-capable; '{gw_name}' "
+                            f"uses direct cloud URL"
+                        )
 
         with open(config_dst, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)

@@ -21,6 +21,33 @@ if LIB_DIR not in sys.path:
 import logger
 from opencode_config import get_available_tiers, get_slim_config_path
 from discover_models import find_ollama, parse_size_gb, list_local_ollama_models
+from constants import check_ollama_daemon
+
+
+def proxied_ollama_cloud_model(model_name: str) -> str:
+    """Rewrite ollama-cloud/<model> to ollama/<model>:cloud for local proxying."""
+    prefix = "ollama-cloud/"
+    if not isinstance(model_name, str) or not model_name.startswith(prefix):
+        return model_name
+
+    stripped = model_name[len(prefix) :]
+    if not stripped.endswith(":cloud"):
+        stripped = f"{stripped}:cloud"
+    return f"ollama/{stripped}"
+
+
+def rewrite_ollama_cloud_models_for_proxy(value):
+    """Recursively rewrite model refs when Ollama Cloud is proxied locally."""
+    if isinstance(value, str):
+        return proxied_ollama_cloud_model(value)
+    if isinstance(value, list):
+        return [rewrite_ollama_cloud_models_for_proxy(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: rewrite_ollama_cloud_models_for_proxy(item)
+            for key, item in value.items()
+        }
+    return value
 
 
 def extract_param_count(model_name: str) -> int:
@@ -319,8 +346,8 @@ def resolve_roles_from_list(models: list) -> dict:
 def get_placeholder_keys_for_preset(tier_config: dict) -> list:
     """Extract _local:* placeholder category keys used by a tier's config.
 
-    Scans the tier's presets, council presets, and fallback chains for
-    _local:* patterns and returns deduplicated sorted keys
+    Scans the tier's presets and council presets for _local:* patterns and
+    returns deduplicated sorted keys
     (e.g. ["code-gen", "code-gen_2", "lightweight", "reasoning", "vision"]).
 
     Args:
@@ -351,12 +378,6 @@ def get_placeholder_keys_for_preset(tier_config: dict) -> list:
     council = tier_config.get("council", {})
     for council_preset in council.get("presets", {}).values():
         _scan_value(council_preset)
-
-    # Scan fallback chains
-    for chain in tier_config.get("fallback", {}).values():
-        if isinstance(chain, list):
-            for item in chain:
-                _scan_value(item)
 
     return sorted(placeholders)
 
@@ -504,6 +525,21 @@ def orchestrate_tier_switch(
         if models_list:
             local_role_models = resolve_roles_from_list(models_list)
 
+    cloud_role_models = {}
+    _, can_proxy_cloud = check_ollama_daemon()
+    if can_proxy_cloud:
+        try:
+            from discover_models import list_cloud_ollama_models
+
+            cloud_models_list = list_cloud_ollama_models()
+            if cloud_models_list:
+                cloud_role_models = resolve_roles_from_list(cloud_models_list)
+                logger.info(
+                    f"Cloud models available via local proxy: {len(cloud_models_list)} models"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to discover cloud models via local proxy: {e}")
+
     # Apply --local-fallback-placeholder overrides (category-level)
     for override in local_fallback_placeholders or []:
         if "=" in override:
@@ -513,7 +549,8 @@ def orchestrate_tier_switch(
     for override in local_fallback_roles:
         if "=" in override:
             role, model = override.split("=", 1)
-            local_role_models[role] = model
+            category = role_to_category.get(role, role)
+            local_role_models[category] = model
 
     # Determine which local preset's placeholder pattern to use for fallbacks
     fallback_preset_name = local_fallback_preset or (
@@ -522,16 +559,22 @@ def orchestrate_tier_switch(
     fallback_preset_config = tiers_dict.get(fallback_preset_name, tier_config)
     placeholder_keys = get_placeholder_keys_for_preset(fallback_preset_config)
 
-    if not local_role_models:
+    fallback_role_models = local_role_models or cloud_role_models
+
+    if not fallback_role_models:
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
     else:
         logger.info(
             f"Classified local models: {json.dumps(local_role_models, indent=2)}"
         )
+        if cloud_role_models:
+            logger.info(
+                f"Classified cloud models: {json.dumps(cloud_role_models, indent=2)}"
+            )
         # Show role→model assignments derived from local categories
         role_assignments = []
         for role, category in sorted(role_to_category.items()):
-            model = local_role_models.get(category)
+            model = fallback_role_models.get(category)
             if model:
                 role_assignments.append(f"  {role} → {model} ({category})")
         if role_assignments:
@@ -572,15 +615,15 @@ def orchestrate_tier_switch(
                     f"Sparse local model categories for tier '{tier}': {', '.join(sparse_categories)}"
                 )
 
-            unique_models = set(local_role_models.values())
+            unique_models = set(fallback_role_models.values())
             logger.info(
                 f"Local tier '{tier}': {len(unique_models)} distinct model(s) across "
-                f"{len(local_role_models)} role categories"
+                f"{len(fallback_role_models)} role categories"
             )
             # Show full role→model assignments for local tiers
             local_role_lines = []
             for role, category in sorted(role_to_category.items()):
-                model = local_role_models.get(category)
+                model = fallback_role_models.get(category)
                 if model:
                     local_role_lines.append(f"  {role} → {model} ({category})")
             if local_role_lines:
@@ -601,6 +644,8 @@ def orchestrate_tier_switch(
     source_presets_data = tiers_data.get("presets", {})
     if tier in source_presets_data:
         source_preset = source_presets_data[tier]
+        if can_proxy_cloud:
+            source_preset = rewrite_ollama_cloud_models_for_proxy(source_preset)
         if "presets" not in target_config:
             target_config["presets"] = {}
         target_config["presets"][tier] = json.loads(json.dumps(source_preset))
@@ -615,6 +660,8 @@ def orchestrate_tier_switch(
         target_config["council"] = {}
     target_config["council"]["default_preset"] = source_council.get("default_preset")
     source_presets = json.loads(json.dumps(source_council.get("presets", {}) or {}))
+    if can_proxy_cloud:
+        source_presets = rewrite_ollama_cloud_models_for_proxy(source_presets)
 
     for other_tier_name, other_tier_config in tiers_dict.items():
         other_council = other_tier_config.get("council", {})
@@ -622,41 +669,14 @@ def orchestrate_tier_switch(
         if other_tier_name in other_presets:
             other_preset = other_presets[other_tier_name]
             if "council" in other_preset and other_tier_name in source_presets:
-                source_presets[other_tier_name]["council"] = other_preset["council"]
+                council_preset = other_preset["council"]
+                if can_proxy_cloud:
+                    council_preset = rewrite_ollama_cloud_models_for_proxy(
+                        council_preset
+                    )
+                source_presets[other_tier_name]["council"] = council_preset
 
     target_config["council"]["presets"] = source_presets
-
-    source_fallback = tier_config.get("fallback", {})
-    if "fallback" not in target_config:
-        target_config["fallback"] = {}
-    target_config["fallback"]["chains"] = source_fallback
-
-    if local_role_models and not tier.startswith("local"):
-        updated_chains = {}
-        for role, chain in source_fallback.items():
-            category = role_to_category.get(role, "code-gen")
-            # Collect all indexed models from the fallback preset's placeholder pattern
-            local_models_for_category = []
-            for key in placeholder_keys:
-                if key == category or key.startswith(f"{category}_"):
-                    model = local_role_models.get(key)
-                    if (
-                        model
-                        and model not in chain
-                        and model not in local_models_for_category
-                    ):
-                        local_models_for_category.append(model)
-            updated_chains[role] = chain + local_models_for_category
-        target_config["fallback"]["chains"] = updated_chains
-        # Log local fallback role assignments
-        fallback_lines = []
-        for role, chain in updated_chains.items():
-            local_in_chain = [m for m in chain if m.startswith("ollama/")]
-            if local_in_chain:
-                category = role_to_category.get(role, "code-gen")
-                fallback_lines.append(f"  {role} ({category}): +{local_in_chain}")
-        if fallback_lines:
-            logger.info("Local fallback models appended:\n" + "\n".join(fallback_lines))
 
     if "_tiers" in target_config:
         del target_config["_tiers"]
@@ -669,11 +689,11 @@ def orchestrate_tier_switch(
         logger.critical(f"Failed to write configuration to {config_path}: {e}")
         sys.exit(1)
 
-    if local_role_models:
+    if fallback_role_models:
         logger.info("Resolving _local: model placeholders...")
         resolve_placeholders(
             config_path,
-            json.dumps(local_role_models),
+            json.dumps(fallback_role_models),
             placeholder_keys=placeholder_keys,
         )
     else:

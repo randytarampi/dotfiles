@@ -47,7 +47,12 @@ def parse_size_gb(size_str: str) -> float:
     return 0.0
 
 
-def list_local_ollama_models() -> list:
+def is_ollama_cloud_model(name: str) -> bool:
+    """Check if a model name is an Ollama cloud model (ends with :cloud or -cloud)."""
+    return name.endswith(":cloud") or name.endswith("-cloud")
+
+
+def list_local_ollama_models(include_cloud=False) -> list:
     ollama_bin = find_ollama()
     if not ollama_bin:
         return []
@@ -61,15 +66,48 @@ def list_local_ollama_models() -> list:
             parts = line.split()
             if len(parts) >= 3:
                 name = parts[0]
-                if name.endswith(":cloud") or name.endswith("-cloud"):
+                if not include_cloud and is_ollama_cloud_model(name):
                     continue
                 models.append(
                     {"name": name, "size_gb": parse_size_gb(" ".join(parts[2:4]))}
                 )
             elif parts:
                 name = parts[0]
-                if name.endswith(":cloud") or name.endswith("-cloud"):
+                if not include_cloud and is_ollama_cloud_model(name):
                     continue
+                models.append({"name": name, "size_gb": 0.0})
+        return models
+    except Exception:
+        return []
+
+
+def list_cloud_ollama_models() -> list:
+    """List only Ollama cloud models (those with :cloud or -cloud suffix).
+
+    These models are pulled as stubs via `ollama pull model:cloud` and
+    are served through the local daemon's cloud proxy when signed in.
+    """
+    ollama_bin = find_ollama()
+    if not ollama_bin:
+        return []
+    try:
+        result = subprocess.run(
+            [ollama_bin, "list"], capture_output=True, text=True, timeout=5
+        )
+        lines = result.stdout.splitlines()
+        models = []
+        for line in lines[1:]:
+            parts = line.split()
+            if not parts:
+                continue
+            name = parts[0]
+            if not is_ollama_cloud_model(name):
+                continue
+            if len(parts) >= 3:
+                models.append(
+                    {"name": name, "size_gb": parse_size_gb(" ".join(parts[2:4]))}
+                )
+            else:
                 models.append({"name": name, "size_gb": 0.0})
         return models
     except Exception:

@@ -5,6 +5,7 @@
       "baseUrl": "https://ollama.com/v1",
       "apiKeyEnv": "OLLAMA_API_KEY",
       "baseUrlEnv": "OLLAMA_CLOUD_BASE_URL",
+      "cloudProxyEnv": "DOTFILES_USE_OLLAMA_CLOUD_PROXY",
       "enabled": true
     },
     "openai": {

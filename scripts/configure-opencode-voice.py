@@ -43,6 +43,7 @@ import logger
 from constants import (
     get_meridian_base_url,
     get_ollama_local_base_url,
+    check_ollama_daemon,
     get_provider_base_url,
     is_meridian_configured,
 )
@@ -66,6 +67,8 @@ def get_voice_config(tier: str) -> dict:
 
     # Determine Meridian proxy usage for Anthropic tiers
     use_meridian = is_meridian_configured()
+    # Check if local Ollama daemon can proxy cloud models
+    _, can_proxy_cloud = check_ollama_daemon()
 
     # ── LLM endpoint ──────────────────────────────────────────────────
     if is_local_tier:
@@ -110,12 +113,18 @@ def get_voice_config(tier: str) -> dict:
             voice_config["model"] = "gemma4:e4b"
 
     elif is_pro_tier:
-        # Ollama Cloud — gemma4:31b, key via OLLAMA_API_KEY
-        voice_config = {
-            "endpoint": get_provider_base_url("ollama-cloud"),
-            "model": "gemma4:31b",
-            "apiKeyEnv": "OLLAMA_API_KEY",
-        }
+        # Ollama Cloud — route through local daemon if cloud-capable
+        if can_proxy_cloud:
+            voice_config = {
+                "endpoint": get_ollama_local_base_url(),
+                "model": "gemma4:31b:cloud",
+            }
+        else:
+            voice_config = {
+                "endpoint": get_provider_base_url("ollama-cloud"),
+                "model": "gemma4:31b",
+                "apiKeyEnv": "OLLAMA_API_KEY",
+            }
 
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
@@ -142,19 +151,31 @@ def get_voice_config(tier: str) -> dict:
 
     elif tier == "pro-plus-anthropic":
         # pro-plus-anthropic: Ollama Cloud for LLM, OpenAI for STT
-        voice_config = {
-            "endpoint": get_provider_base_url("ollama-cloud"),
-            "model": "gemma4:31b",
-            "apiKeyEnv": "OLLAMA_API_KEY",
-        }
+        if can_proxy_cloud:
+            voice_config = {
+                "endpoint": get_ollama_local_base_url(),
+                "model": "gemma4:31b:cloud",
+            }
+        else:
+            voice_config = {
+                "endpoint": get_provider_base_url("ollama-cloud"),
+                "model": "gemma4:31b",
+                "apiKeyEnv": "OLLAMA_API_KEY",
+            }
 
     else:
         # Fallback: Ollama Cloud
-        voice_config = {
-            "endpoint": get_provider_base_url("ollama-cloud"),
-            "model": "gemma4:31b",
-            "apiKeyEnv": "OLLAMA_API_KEY",
-        }
+        if can_proxy_cloud:
+            voice_config = {
+                "endpoint": get_ollama_local_base_url(),
+                "model": "gemma4:31b:cloud",
+            }
+        else:
+            voice_config = {
+                "endpoint": get_provider_base_url("ollama-cloud"),
+                "model": "gemma4:31b",
+                "apiKeyEnv": "OLLAMA_API_KEY",
+            }
 
     # ── STT config ──────────────────────────────────────────────────
     # Cloud tiers use OpenAI Whisper for STT when OPENAI_API_KEY is available.

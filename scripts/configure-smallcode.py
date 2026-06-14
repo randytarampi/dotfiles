@@ -21,6 +21,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 from constants import (
+    check_ollama_daemon,
     get_meridian_base_url,
     get_ollama_local_base_url,
     get_provider_base_url,
@@ -38,6 +39,7 @@ from ai_models import strip_provider_prefix
 AVAILABLE_PRESETS = get_available_tiers()
 LOCAL_PRESETS = {t for t in AVAILABLE_PRESETS if t.startswith("local")}
 _SLIM_CONFIG_CACHE = None
+_OLLAMA_DAEMON_CACHE = None
 
 
 def is_truthy(value):
@@ -76,8 +78,19 @@ def load_slim_config():
     return _SLIM_CONFIG_CACHE
 
 
+def get_ollama_cloud_capable():
+    """Cached check for whether local Ollama can proxy cloud models."""
+    global _OLLAMA_DAEMON_CACHE
+    if _OLLAMA_DAEMON_CACHE is None:
+        _OLLAMA_DAEMON_CACHE = check_ollama_daemon()
+    return _OLLAMA_DAEMON_CACHE
+
+
 def get_model_provider(model_name):
+    _, can_proxy_cloud = get_ollama_cloud_capable()
     if model_name.startswith("ollama-cloud/"):
+        if can_proxy_cloud:
+            return "ollama"
         return "ollama-cloud"
     if model_name.startswith("anthropic/"):
         if is_meridian_configured():
@@ -95,9 +108,23 @@ def get_model_base_url(model_name):
     if "/" not in model_name:
         return get_ollama_local_base_url()
     provider = get_model_provider(model_name)
+    if model_name.startswith("ollama-cloud/"):
+        _, can_proxy_cloud = get_ollama_cloud_capable()
+        if can_proxy_cloud:
+            return get_ollama_local_base_url()
     if provider == "meridian":
         return get_meridian_base_url()
     return get_provider_base_url(provider)
+
+
+def get_effective_model_name(model_name):
+    """Get the effective model name for API calls."""
+    stripped = strip_provider_prefix(model_name)
+    _, can_proxy_cloud = get_ollama_cloud_capable()
+    if model_name.startswith("ollama-cloud/") and can_proxy_cloud:
+        if not stripped.endswith(":cloud"):
+            stripped = f"{stripped}:cloud"
+    return stripped
 
 
 def get_cloud_spec(preset):
@@ -131,6 +158,7 @@ def get_cloud_spec(preset):
     escalation_provider = get_model_provider(role_models["strong_model"])
     escalation_keys = {
         "ollama-cloud": "OLLAMA_API_KEY",
+        "ollama": "OLLAMA_API_KEY",
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
         "meridian": "MERIDIAN_API_KEY",
@@ -143,16 +171,16 @@ def get_cloud_spec(preset):
 
     return {
         "provider": provider,
-        "default_model": strip_provider_prefix(role_models["default_model"]),
+        "default_model": get_effective_model_name(role_models["default_model"]),
         "default_base_url": get_model_base_url(role_models["default_model"]),
-        "fast_model": strip_provider_prefix(role_models["fast_model"]),
+        "fast_model": get_effective_model_name(role_models["fast_model"]),
         "fast_base_url": get_model_base_url(role_models["fast_model"]),
-        "medium_model": strip_provider_prefix(role_models["medium_model"]),
+        "medium_model": get_effective_model_name(role_models["medium_model"]),
         "medium_base_url": get_model_base_url(role_models["medium_model"]),
-        "strong_model": strip_provider_prefix(role_models["strong_model"]),
+        "strong_model": get_effective_model_name(role_models["strong_model"]),
         "strong_base_url": get_model_base_url(role_models["strong_model"]),
         "escalation_provider": escalation_provider,
-        "escalation_model": strip_provider_prefix(role_models["strong_model"]),
+        "escalation_model": get_effective_model_name(role_models["strong_model"]),
         "escalation_key": escalation_key,
     }
 
@@ -305,14 +333,20 @@ def build_toml_content(preset, spec):
                 ]
             )
         else:
-            lines.extend(
+            escalation_lines = [
+                "[escalation]",
+                f'provider = "{spec["escalation_provider"]}"',
+            ]
+            # Write baseUrl for ollama provider (handles non-default OLLAMA_HOST)
+            if spec["escalation_provider"] == "ollama":
+                escalation_lines.append(f'baseUrl = "{get_ollama_local_base_url()}"')
+            escalation_lines.extend(
                 [
-                    "[escalation]",
-                    f'provider = "{spec["escalation_provider"]}"',
                     f'model = "{spec["escalation_model"]}"',
                     "",
                 ]
             )
+            lines.extend(escalation_lines)
 
     return "\n".join(lines)
 
@@ -401,22 +435,7 @@ def resolve_local_models(
             f"Failed to resolve local roles via resolve_roles_from_list: {exc}"
         )
 
-    # Fallback: orchestrate_tier_switch (has side effects, but returns resolved roles)
-    try:
-        result = helper_module.orchestrate_tier_switch(
-            preset,
-            no_local_fallbacks=no_local_fallbacks,
-            local_fallback_preset=local_fallback_preset,
-            local_fallback_placeholders=local_fallback_placeholders,
-            local_fallback_roles=local_fallback_roles,
-        )
-        if isinstance(result, dict) and "roles" in result:
-            return result["roles"]
-        if isinstance(result, dict):
-            return result
-    except Exception as exc:
-        logger.warning(f"Failed to orchestrate tier switch: {exc}")
-
+    logger.warning("Local Ollama model resolution failed — no local models available")
     return {}
 
 
@@ -455,8 +474,8 @@ def apply_local_overrides(spec, resolved_roles, preset):
         if current == placeholder and isinstance(resolved_roles, dict):
             model_name = resolved_roles.get(category)
             if model_name:
-                # Strip the ollama/ prefix — SmallCode uses SMALLCODE_PROVIDER separately
-                spec[slot] = strip_provider_prefix(model_name)
+                # Keep provider-aware effective names for SmallCode config values
+                spec[slot] = get_effective_model_name(model_name)
 
     # Fallback: if reasoning category has no resolved model, try code-gen
     for slot in ["medium_model", "strong_model"]:
@@ -466,9 +485,9 @@ def apply_local_overrides(spec, resolved_roles, preset):
             if code_gen_model:
                 logger.info(
                     f"No reasoning model found for {slot}; "
-                    f"falling back to code-gen: {strip_provider_prefix(code_gen_model)}"
+                    f"falling back to code-gen: {get_effective_model_name(code_gen_model)}"
                 )
-                spec[slot] = strip_provider_prefix(code_gen_model)
+                spec[slot] = get_effective_model_name(code_gen_model)
 
     # Also resolve any remaining _local:* placeholders
     for slot in ["default_model", "fast_model", "medium_model", "strong_model"]:
@@ -478,7 +497,7 @@ def apply_local_overrides(spec, resolved_roles, preset):
             if isinstance(resolved_roles, dict):
                 model_name = resolved_roles.get(category)
                 if model_name:
-                    spec[slot] = strip_provider_prefix(model_name)
+                    spec[slot] = get_effective_model_name(model_name)
 
     return spec
 
