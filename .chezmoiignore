@@ -19,3 +19,10 @@ private_dot_basilisk_ii_prefs
 # from the chezmoi source directory — they should NOT be applied to ~/.
 Brewfile*
 wingetfile*
+
+# Repo build tooling, documentation, and source templates — not dotfiles.
+AGENTS.md
+Makefile
+README.md
+config.json
+docs/

@@ -1,0 +1,84 @@
+# Voice Plugin (opencode-voice)
+
+> Deep reference for voice plugin configuration, tier mapping, and dependencies.
+
+OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin that adds voice input (STT) and output (TTS) to the OpenCode terminal interface.
+
+---
+
+## Key Properties
+
+- **TUI-only**: The plugin only hooks into the TUI, not the desktop app or VSCode extension
+- **Configured in `tui.json`**: Separate from `opencode.json`; written by `configure-opencode-voice.py`
+- **Tier-aware**: Voice LLM endpoint and STT backend are selected based on the active preset
+- **Local-first**: Default uses local Ollama + whisper-cli; cloud STT is an upgrade when API keys are available
+
+---
+
+## Voice Config Generation
+
+`scripts/configure-opencode-voice.py` writes `~/.config/opencode/tui.json` with a tier-aware voice plugin config. It is called automatically by `configure-opencode.py` after tier switching.
+
+| Tier | Voice LLM | STT Backend |
+|------|-----------|-------------|
+| **local-pro** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-mini** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-nano** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
+| **plus** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **plus-anthropic** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
+
+**Meridian detection**: `is_meridian_configured()` from `constants.py` controls Meridian routing for voice. If it returns true, the Anthropic tier uses Meridian as the voice LLM endpoint. Otherwise it falls back to direct Anthropic API.
+
+**Cloud STT upgrade**: When `OPENAI_API_KEY` is available, non-OpenAI tiers add `sttEndpoint`/`sttModel`/`sttApiKeyEnv` pointing to OpenAI's `/v1/audio/transcriptions`. Tiers already using OpenAI for the LLM use OpenAI STT by default.
+
+**Local Ollama model selection**: All `local-*` tiers reuse `configure-opencode-tier.py`'s model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models).
+
+---
+
+## STT/TTS Dependencies
+
+Voice requires local STT/TTS tooling regardless of tier:
+
+| Component | Install | Purpose |
+|-----------|---------|---------|
+| `whisper-cpp` | `brew install whisper-cpp` | Local speech-to-text |
+| `sox` | `brew install sox` | Audio format conversion (required by whisper-cli) |
+| `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
+| Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model file |
+| Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice file |
+
+These are installed by `scripts/install-opencode.sh` step 8 (gated on `DOTFILES_RUN_VOICE_SETUP=1`).
+
+---
+
+## Model Defaults
+
+| Component | Env Var | Default | Notes |
+|-----------|---------|---------|-------|
+| Whisper model | `DOTFILES_WHISPER_MODEL` | `ggml-large-v3-turbo.bin` | Best balance of accuracy (1.5 GiB) |
+| Piper voice | `DOTFILES_PIPER_VOICE` | `en_US-lessac-high` | High-quality English voice |
+
+Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_US/lessac/high/en_US-lessac-high.onnx`
+
+---
+
+## Voice Plugin Config Locations
+
+| File | Purpose |
+|------|---------|
+| `~/.config/opencode/tui.json` | Voice plugin config (+ other TUI plugins) |
+| `~/.local/share/whisper-cpp/` | Whisper model directory |
+| `~/.local/share/piper-voices/` | Piper voice directory |
+| `~/.local/bin/piper` | Piper TTS binary (installed by `uv tool install piper-tts`) |
+
+---
+
+## Environment Gating
+
+Voice setup in `install-opencode.sh` is gated on `DOTFILES_RUN_VOICE_SETUP=1` (default: 0). The voice config writer (`configure-opencode-voice.py`) runs unconditionally — it only writes `tui.json` and always respects the active tier.

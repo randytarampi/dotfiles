@@ -228,7 +228,6 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── private_dot_npmrc.tmpl        # npm auth tokens
 ├── private_dot_ssh/config        # SSH config
 ├── private_dot_vuescanrc.tmpl    # VueScan license
-├── CLAUDE.md                     # Applied to ~/CLAUDE.md; keep aligned with AGENTS.md
 ├── Brewfile*                     # 13 composable Brewfiles (macOS/Linux)
 ├── wingetfile*                   # Category-based wingetfiles (Windows)
 ├── configs/
