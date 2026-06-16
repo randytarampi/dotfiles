@@ -21,6 +21,7 @@ Key directories and files that agents interact with:
 │   ├── # Phase 2: Package installation (08–11)
 │   └── # Phase 3: Tool configuration (12–17)
 ├── configs/
+│   ├── agents/home-agents.md     # Source of truth for home-level agent guidance
 │   ├── junie/model-groups.json   # Junie model profile definitions
 │   ├── mcp/                      # MCP server configs
 │   │   ├── betterstack.json
@@ -74,6 +75,7 @@ Key directories and files that agents interact with:
 │   ├── configure-mcp-all.py       # Generate MCP configs for all AI tools
 │   ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
 │   ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
+│   ├── configure-agent-guidance.py # Distribute home-level guidance to all agent files
 │   ├── configure-mozart-router.py # Configure Mozart AI router
 │   ├── configure-ai.py            # Resolve paths/secrets for AI tool .env files
 │   ├── configure-jetbrains-workspace.py # Configure AI dirs in JB workspace modules
@@ -228,10 +230,24 @@ Default preset: auto-detected from available API keys during `run_once_14-config
 
 - **Zero-config**: No config file, no API keys, fully local
 - **MCP server**: `codegraph serve --mcp` (stdio transport)
-- **Per-project setup**: `codegraph init -i` creates `.codegraph/` with a SQLite index
+- **Parent-walk**: CodeGraph automatically walks up from CWD to find `.codegraph/` in parent directories. A project in `~/Development/dotfiles` will use `~/Development/.codegraph/` if no local index exists.
+- **`projectPath` parameter**: All CodeGraph MCP tools accept a `projectPath` parameter to query a specific indexed project. Use this only when parent-walk won't find the right index (sibling/unrelated directories). The value is the directory containing `.codegraph/`, not the `.codegraph/` directory itself. `projectPath` overrides parent-walk.
+- **Fallback rule**: Always try CodeGraph tools first. If they return empty results, fall back to grep/glob/read. Do not retry CodeGraph for the same query.
+- **Installation**: If codegraph MCP tools are unavailable (server failed to start), install: `scripts/install-opencode.sh` (or `npm i -g @colbymchenry/codegraph`)
 - **⚠️ Bare `codegraph` triggers the interactive installer** — use `codegraph status`, `codegraph init`, `codegraph install`, etc.
 
-Available steps for `configure-opencode-project.py --steps`: `opencode` (always), `tier`, `codegraph`, `mcps`.
+| Situation | Action |
+|-----------|--------|
+| Working in an indexed project | Nothing — parent-walk finds it |
+| Working in a subdirectory of an indexed parent | Nothing — parent-walk finds it |
+| Need to query a sibling project's index | Pass `projectPath` to that project's root |
+| No `.codegraph/` anywhere in ancestor chain | Pass `projectPath` to a known indexed directory, or fall back to grep/glob |
+
+**EMFILE troubleshooting**: If you see `EMFILE: too many open files, watch` errors in `~/.codegraph/daemon.log` on large indexes, either:
+- Increase system limits: `sudo sysctl -w kern.maxfiles=65536 kern.maxfilesperproc=65536`
+- Or disable file watching: use `codegraph serve --mcp --no-watch` in your MCP config (rebuild index manually with `codegraph init` after changes)
+
+Available steps for `configure-opencode-project.py --steps`: `opencode` (always), `tier`, `codegraph` (opt-in), `mcps`. Default: `opencode,tier`. Run `codegraph init` manually in any directory you want to index.
 
 ---
 
@@ -247,11 +263,11 @@ Key template files: `dot_gitconfig.tmpl` (GIT_AUTHOR_*, GPG_SIGNING_KEY, GITHUB_
 
 ## AI Agent Guidance Files
 
-- `AGENTS.md` is applied by chezmoi to `~/AGENTS.md`. This is the canonical file.
+- `AGENTS.md` (this file) is repo-level guidance for agents working on the dotfiles repo itself. It is in `.chezmoiignore` and is NOT deployed to `~/AGENTS.md`.
+- `configs/agents/home-agents.md` is the source of truth for home-level agent guidance. The script `configure-agent-guidance.py` distributes it to `~/AGENTS.md` and all 6 agent locations: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.cursor/AGENTS.md`, and `~/.ai/AGENTS.md` (resolving `~/.junie` symlink).
 - Deep reference material lives in `docs/` (linked throughout this file).
-- `~/.codex/AGENTS.md` and `~/.cursor/AGENTS.md` are created by `run_onchange_12-configure-secrets.sh.tmpl` and point at the home-level guidance.
 
-When editing agent guidance, edit `AGENTS.md` first. All cross-references should link to `docs/` files.
+When editing home-level agent guidance, edit `configs/agents/home-agents.md` first, then run `scripts/configure-agent-guidance.py` to distribute. For repo-level guidance (this file), edit `AGENTS.md` directly. All cross-references should link to `docs/` files.
 
 ---
 
@@ -274,6 +290,7 @@ When editing agent guidance, edit `AGENTS.md` first. All cross-references should
 | Configure JetBrains AI | `scripts/configure-jetbrains-ai.py --all` |
 | Setup AI env files | `scripts/configure-ai.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
+| Distribute agent guidance | `scripts/configure-agent-guidance.py` |
 | Check env template drift | `make env-check` |
 | Preview pending changes | `make diff` |
 | Apply all dotfiles | `make deploy` |

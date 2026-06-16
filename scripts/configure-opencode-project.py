@@ -5,7 +5,7 @@ configure-opencode-project.py — Writes project-specific OpenCode config overri
 Steps:
   1. opencode    — Generate project opencode.json (always runs)
   2. tier        — Switch oh-my-opencode-slim preset for the project
-  3. codegraph   — Run codegraph init -i for the project
+  3. codegraph   — Run codegraph init -i for the project (opt-in)
   4. mcps        — Configure MCPs for other AI tools (via configure-mcp-all.py)
 
 By default all steps run. Use --steps to select specific steps.
@@ -29,7 +29,7 @@ from env import load_env
 from opencode_config import build_tier_args
 
 ALL_STEPS = ["opencode", "tier", "codegraph", "mcps"]
-DEFAULT_STEPS = ["opencode", "tier", "codegraph"]
+DEFAULT_STEPS = ["opencode", "tier"]
 
 
 def step_name(s):

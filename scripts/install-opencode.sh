@@ -128,6 +128,10 @@ if command -v codegraph &>/dev/null; then
 else
   warn "codegraph CLI not found; skipping agent MCP config"
 fi
+# Distribute home-level agent guidance to all agent files
+# (reads configs/agents/home-agents.md, writes to ~/AGENTS.md and agent files)
+# Runs even if codegraph CLI is missing — it distributes guidance, not codegraph config.
+"$SCRIPT_DIR/configure-agent-guidance.py"
 
 # ---------------------------------------------------------------------------
 # 7. Install opencode-voice plugin (voice input/output for TUI)
