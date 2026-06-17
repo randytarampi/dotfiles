@@ -10,7 +10,7 @@
 
 | Junie field | oh-my-opencode-slim source | Notes |
 |-------------|---------------------------|-------|
-| `primaryModel` | `orchestrator` model | Strip provider prefix (e.g., `ollama-cloud/glm-5.1` → `glm-5.1`) |
+| `primaryModel` | `orchestrator` model | Strip provider prefix (e.g., `ollama-cloud/glm-5.2` → `glm-5.2`) |
 | `fasterModel` | `librarian` model | Strip provider prefix; add `fasterProvider` if different from `provider` |
 | `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama-local`: 0.6 |
 | `modelTemperatures` | — (Junie-specific) | Model-family temperature map; applied per-role at profile generation time |
@@ -24,7 +24,7 @@ When the librarian model uses a different provider than the orchestrator, add a 
 ```json
 "pro-plus": {
   "provider": "ollama-cloud",
-  "primaryModel": "glm-5.1",
+  "primaryModel": "glm-5.2",
   "fasterModel": "gpt-5.4-mini",
   "fasterProvider": "openai"
 }

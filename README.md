@@ -442,7 +442,7 @@ Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (s
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.2`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
 
@@ -556,7 +556,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | Profile | Provider | Primary | Faster | Temp |
 |---------|----------|---------|--------|------|
 | `deepseek` | cloud | `deepseek-v4-pro` | `deepseek-v4-flash` | 0 |
-| `glm` | cloud | `glm-5.1` | — | 0.7 |
+| `glm` | cloud | `glm-5.2` | — | 0.7 |
 | `kimi` | cloud | `kimi-k2.6` | — | 1 |
 | `kimi-code` | cloud | `kimi-k2.7-code` | — | 0.7 |
 | `mistral` | cloud | `mistral-large-3:675b` | `ministral-3:14b` | 0.7 |

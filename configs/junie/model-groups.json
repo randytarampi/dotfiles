@@ -44,12 +44,12 @@
   "groups": {
     "pro": {
       "provider": "ollama-cloud",
-      "primaryModel": "glm-5.1",
+      "primaryModel": "glm-5.2",
       "fasterModel": "gemma4:31b"
     },
     "pro-plus": {
       "provider": "ollama-cloud",
-      "primaryModel": "glm-5.1",
+      "primaryModel": "glm-5.2",
       "fasterModel": "gpt-5.4-mini",
       "fasterProvider": "openai"
     },

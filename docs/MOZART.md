@@ -43,7 +43,7 @@ When the local Ollama daemon is running **and** signed in (`ollama signin`), it 
 
 2. When the daemon is **cloud-capable** (running + signed in):
    - All Ollama models (local + cloud) route through `OLLAMA_HOST`
-   - Cloud model names get `:cloud` suffix (e.g., `glm-5.1` → `glm-5.1:cloud`)
+   - Cloud model names get `:cloud` suffix (e.g., `glm-5.2` → `glm-5.2:cloud`)
    - OpenCode gets a single `ollama` provider instead of separate `ollama` + `ollama-cloud`
    - SmallCode, Voice, and Mozart all route through the local daemon
 
@@ -67,8 +67,8 @@ The `:cloud` suffix is appended **only** when routing through the local daemon. 
 
 | Routing | Model Name | Example |
 |---------|-----------|---------|
-| Local daemon (cloud-capable) | `model:cloud` | `glm-5.1:cloud` |
-| Direct cloud API (`ollama.com/v1`) | `model` (plain) | `glm-5.1` |
+| Local daemon (cloud-capable) | `model:cloud` | `glm-5.2:cloud` |
+| Direct cloud API (`ollama.com/v1`) | `model` (plain) | `glm-5.2` |
 | Local model (any routing) | `model` (plain) | `qwen3-coder:14b` |
 
 #### Scripts Affected

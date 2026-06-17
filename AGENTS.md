@@ -205,7 +205,7 @@ Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth). 
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
-| **pro** | Ollama Cloud (glm-5.1 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
+| **pro** | Ollama Cloud (glm-5.2 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
