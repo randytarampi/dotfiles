@@ -26,7 +26,12 @@ from constants import (
     get_provider_base_url,
     check_ollama_daemon,
 )
-from opencode_config import get_available_tiers, build_tier_args
+from opencode_config import (
+    get_available_tiers,
+    build_tier_args,
+    get_preset_providers,
+    get_slim_config_path,
+)
 from env import load_env
 from models_dev import (
     fetch_models_dev,
@@ -196,6 +201,8 @@ def main():
         }
 
     meridian_plugin_path = os.environ.get("MERIDIAN_PLUGIN_PATH", "")
+    # include_anthropic governs the anthropic provider block in global mode.
+    # Project mode derives providers from the preset instead (see below).
     include_anthropic = args.preset in [
         "pro-plus-anthropic",
         "plus-anthropic",
@@ -203,24 +210,57 @@ def main():
     ] or bool(meridian_plugin_path)
 
     if args.mode == "project":
+        # Project configs must be self-sufficient: emit every provider the
+        # selected preset references, and reset disabled_providers so an
+        # unrelated global tier cannot suppress them. This makes project
+        # presets orthogonal to the global tier (e.g. global `pro` disables
+        # anthropic, but a project `anthropic` preset still works).
+        try:
+            needed_providers = get_preset_providers(args.preset, get_slim_config_path())
+        except Exception as e:
+            logger.warning(
+                f"Could not derive required providers for preset "
+                f"'{args.preset}' ({e}); project config may be incomplete."
+            )
+            needed_providers = set()
+
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
             "provider": {},
             "plugin": [],
             "agent": {},
+            # Always reset; project presets must not inherit a global tier's
+            # disabled_providers (e.g. global `pro` disables anthropic).
+            "disabled_providers": [],
         }
 
-        if (
-            include_anthropic
-            and anthropic_models
-            and args.preset in ["pro-plus-anthropic", "plus-anthropic", "anthropic"]
-        ):
-            enriched_anthropic = {
-                mid: build_model_entry(mid, models_dev_data, "anthropic")
-                for mid in anthropic_models
+        if "openai" in needed_providers and openai_models:
+            config["provider"]["openai"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "openai")
+                    for mid in openai_models
+                }
             }
-            config["provider"]["anthropic"] = {"models": enriched_anthropic}
+        if "anthropic" in needed_providers and anthropic_models:
+            config["provider"]["anthropic"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "anthropic")
+                    for mid in anthropic_models
+                }
+            }
+        # Project mode uses the direct ollama-cloud provider rather than the
+        # merged local+cloud `ollama` block, so configs remain portable across
+        # machines whether or not the local daemon proxies cloud.
+        if "ollama-cloud" in needed_providers and ollama_cloud_models:
+            config["provider"]["ollama-cloud"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
+                    for mid in ollama_cloud_models
+                }
+            }
+        if "ollama" in needed_providers and local_ollama:
+            config["provider"]["ollama"] = local_ollama
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
@@ -234,6 +274,8 @@ def main():
             del config["mcp"]
         if not config["provider"]:
             del config["provider"]
+        # Note: disabled_providers is intentionally retained even when empty,
+        # so it overrides (clears) any inherited global disabled_providers.
 
     else:
         config = {

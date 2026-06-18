@@ -268,6 +268,17 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 ---
 
+## Project Presets (Orthogonal to Global Tier)
+
+`configure-opencode-project.py --preset <tier>` writes a **self-sufficient** project `opencode.json`. It derives the set of providers the preset references (via `get_preset_providers()` in `scripts/lib/opencode_config.py`) and emits a `provider` block for each — `openai`, `anthropic`, `ollama-cloud`, and/or `ollama` — rather than relying on the global `~/.config/opencode/opencode.json` to define them.
+
+This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
+
+> [!IMPORTANT]
+> If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-opencode-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
+
+---
+
 ## Ollama Cloud Models
 
 Ollama Cloud presets use models like `glm-5.2`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
