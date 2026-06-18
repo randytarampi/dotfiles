@@ -3,12 +3,16 @@ set -euo pipefail
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_MACOS_SECURITY_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
 
 {{- if eq .chezmoi.os "darwin" }}
 
-# Gate on DOTFILES_RUN_MACOS_SECURITY env var (set in ~/.env)
-if [[ "${DOTFILES_RUN_MACOS_SECURITY:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_MACOS_SECURITY='${DOTFILES_RUN_MACOS_SECURITY:-0}' — skipping macOS security defaults"
+# Gate on DOTFILES_RUN_MACOS_SECURITY_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MACOS_SECURITY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MACOS_SECURITY_SETUP='${DOTFILES_RUN_MACOS_SECURITY_SETUP:-0}' — skipping macOS security defaults"
   exit 0
 fi
 

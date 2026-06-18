@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-# ─── run_once_12-install-smallcode.sh.tmpl ──────────────────────────────────
+# ─── run_onchange_10-install-smallcode.sh.tmpl ──────────────────────────────
 # Installs the smallcode CLI (npm global package).
 # Gated on DOTFILES_RUN_SMALLCODE_SETUP=1 in ~/.env.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -9,6 +9,9 @@ set -euo pipefail
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when installer changes):
+# scripts/install-smallcode.sh: {{ include "scripts/install-smallcode.sh" | sha256sum }}
 
 # Load environment for API keys
 load_env || warn "\$HOME/.env not found, skipping env load"

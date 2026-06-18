@@ -7,6 +7,10 @@ source "${LIB_DIR}/env.sh"
 source "${LIB_DIR}/tier_detect.sh"
 source "${LIB_DIR}/tier_args.sh"
 
+# Script hash triggers (re-run when smallcode config changes):
+# configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
+# scripts/configure-smallcode.py: {{ include "scripts/configure-smallcode.py" | sha256sum }}
+
 # Load environment for API keys (must happen before gate)
 load_env || warn "\$HOME/.env not found, skipping env load"
 

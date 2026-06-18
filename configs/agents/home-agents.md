@@ -3,6 +3,16 @@
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
 <!-- AGENT_GUIDANCE_START -->
+## Dotfiles Repo Development
+
+When working on the dotfiles repo itself:
+- **Before committing:** `make verify` (lint + drift + doctor + check-hashes + dry-run)
+- **After pulling:** `make deploy` (full rebuild — chezmoi apply + configure-all.sh)
+- **Adding a configure script:** Wire it into both a `run_onchange_*` chezmoi script AND `configure-all.sh`. Add hash triggers for its config inputs.
+- **Adding a gate:** Use `DOTFILES_RUN_*_SETUP` pattern. Document in `.env.example`. Default to `0`.
+- **Script conventions:** `run_once_*` for one-time ops only, `run_onchange_*` for everything else. See `AGENTS.md` Scripting Conventions for full policy.
+- **Architecture:** Three layers — templates, chezmoi scripts, configure scripts. See `docs/ORCHESTRATION.md` for the canonical reference.
+
 ## CodeGraph Integration
 
 [CodeGraph](https://github.com/colbymchenry/codegraph) is a local-first semantic code index + MCP server.

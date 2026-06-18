@@ -11,15 +11,17 @@ eeeeee eeeee eeeee eeee e  e     eeee eeeee
 ## Quick Start
 
 ```bash
-# Preview pending changes with ~/.env loaded
-make diff
-
-# Run lint, env drift reporting, and a chezmoi dry run
-make test
-
-# Apply all dotfiles with ~/.env loaded
+# Apply all dotfiles and run runtime config generation
 make deploy
 ```
+
+On first setup, run `make deploy` twice. The second pass should be a no-op, but it helps surface any idempotency gaps.
+
+## Architecture
+
+- Canonical orchestration doc: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)
+- Repo-level agent guidance: [AGENTS.md](AGENTS.md)
+- Home-level agent guidance source: [configs/agents/home-agents.md](configs/agents/home-agents.md)
 
 ## Initial Installation & Run Instructions
 
@@ -52,7 +54,7 @@ Local configuration toggles and secrets are managed through `~/.env` (on Windows
      ```
 2. Open the file in your preferred editor and populate your API keys (such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) and toggle gates. To enable automatic package installation during setup, ensure:
    ```env
-   DOTFILES_RUN_INSTALL_PACKAGES=1
+   DOTFILES_RUN_PACKAGES_SETUP=1
    ```
 
 ---
@@ -64,9 +66,8 @@ We use `chezmoi` to manage all symlinks, templates, and setup run scripts. The M
   # Ensure chezmoi is installed
   command -v chezmoi >/dev/null 2>&1 || brew install chezmoi
 
-  # Initialize source, preview, then apply
+  # Initialize source, then apply
   chezmoi init --source ~/Development/dotfiles
-  make diff
   make deploy
   ```
 - **Windows (PowerShell 7):**
@@ -94,7 +95,7 @@ To verify files and run offline/local check suites using the project's central `
   pre-commit install
 
   # Run standard offline code verification checks
-  make test
+  make verify
   # Or via pre-commit:
   pre-commit run --all-files
   ```
@@ -102,7 +103,7 @@ To verify files and run offline/local check suites using the project's central `
   Windows users can run these checks inside POSIX-compatible environments such as Git Bash, WSL, or MSYS2, or natively:
   ```powershell
   # Ensure all CLI linting packages are installed via winget
-  # (Automatic if DOTFILES_RUN_INSTALL_PACKAGES=1 was enabled in ~/.env on chezmoi apply)
+  # (Automatic if DOTFILES_RUN_PACKAGES_SETUP=1 was enabled in ~/.env on chezmoi apply)
   # Or install manually via winget:
   winget install GnuWin32.Make OpenJS.NodeJS Python.Python.3.12 psf.black koalaman.shellcheck mvdan.shfmt
 
@@ -117,15 +118,19 @@ To verify files and run offline/local check suites using the project's central `
 ## Commands
 
 ```bash
-make diff               # Preview pending changes with ~/.env loaded
+make deploy             # Apply all dotfiles and regenerate runtime configs
+make configure          # Rebuild runtime configs only
 make dry-run            # Dry-run apply with ~/.env loaded
-make deploy             # Apply all dotfiles with ~/.env loaded
-make test               # Lint, env drift report, and dry run
-make env-check          # Report ~/.env drift from dot_dotfiles/shell/.env.example
-make env-sync           # Append missing template keys to ~/.env as comments
+make diff               # Preview pending changes with ~/.env loaded
+make doctor             # Read-only drift checks
+make verify             # Lint, env drift report, doctor, hashes, and dry run
+make check-hashes       # Hash trigger coverage audit
+make reset        # Clear chezmoi script state
+make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
+make migrate             # Migrate deprecated gate names + append missing template keys to ~/.env
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
-scripts/configure-opencode-voice.py pro-plus    # Configure voice plugin (tui.json)
+scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
 scripts/configure-mcp-all.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
@@ -138,8 +143,8 @@ scripts/install-smallcode.sh                     # Install SmallCode CLI
 - **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`
 - **Shell scripts:** `#!/usr/bin/env bash`, `set -euo pipefail`, source `lib/common.sh`
 - **Templates:** `{{ env "VAR" }}` syntax, `private_` prefix for 600 perms
-- **Run scripts:** `run_once_*` idempotent, `run_*` re-runs every apply, `run_onchange_*` re-runs on content change
-- **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*` for script gates
+- **Run scripts:** `run_once_*` for one-time ops only, `run_onchange_*` for everything else with hash triggers
+- **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*_SETUP` for script gates
 - **Secrets:** Never committed. `~/.env` is single source of truth. No age/GPG encryption (local repo).
 - **Shell indent:** 2-space (not tabs), enforced by `.editorconfig` + `shfmt`
 - **Lint/format:** `shellcheck`, `shfmt`, `pre-commit` (runs local/offline `make lint`), `black`, JSON/YAML/Large files validation via `Makefile`
@@ -151,16 +156,21 @@ Set in `~/.env` (0 = skip, 1 = run):
 
 | Toggle | Purpose | Default |
 |--------|---------|---------|
-| `DOTFILES_RUN_INSTALL_PACKAGES` | Homebrew + winget package installs | 0 |
+| `DOTFILES_RUN_PACKAGES_SETUP` | Homebrew + winget package installs | 0 |
 | `DOTFILES_RUN_MCP_SETUP` | MCP config deployment | 0 |
-| `DOTFILES_RUN_OPENCODE_SETUP` | Secrets + OpenCode tier config | 1 |
-| `DOTFILES_RUN_MACOS_DEFAULTS` | macOS system preferences | 0 |
-| `DOTFILES_RUN_MACOS_SECURITY` | macOS security defaults (firewall, FileVault, etc.) | 0 |
-| `DOTFILES_RUN_MERIDIAN_LAUNCHD` | Meridian launchd plist | 0 |
+| `DOTFILES_RUN_OPENCODE_SETUP` | OpenCode secrets + tier config | 0 |
+| `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` | macOS user preferences | 0 |
+| `DOTFILES_RUN_MACOS_SECURITY_SETUP` | macOS security defaults (firewall, FileVault, etc.) | 0 |
+| `DOTFILES_RUN_MERIDIAN_SETUP` | Meridian launchd plist | 0 |
+| `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | OpenCode plugins + CLI tools | 0 |
 | `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
-| `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 1 |
-| `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 1 |
-| `DOTFILES_RUN_SMALLCODE_SETUP` | SmallCode CLI install + config | 1 |
+| `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
+| `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 0 |
+| `DOTFILES_RUN_SMALLCODE_SETUP` | SmallCode CLI install + config | 0 |
+| `DOTFILES_RUN_MOZART_SETUP` | Mozart router config | 0 |
+| `DOTFILES_RUN_CODEGRAPH_SETUP` | CodeGraph MCP registration | 0 |
+| `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |
+| `DOTFILES_RUN_SECRETS_SETUP` | Secrets distribution helper | 0 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
 | `DO_NOT_TRACK` | Global telemetry opt-out | 1 |
@@ -173,27 +183,10 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── .chezmoiignore                # ignore patterns (scripts/, configs/, macOS-only)
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .chezmoiscripts/              # Run scripts (17 total, ordered: defaults → packages → config)
-│   ├── # Phase 1: System defaults
-│   ├── run_once_01-setup-chezmoi.sh.tmpl            # env aliasing, directories, symlinks
-│   ├── run_once_02-configure-macos-defaults.sh.tmpl   # macOS system prefs
-│   ├── run_once_03-configure-mac-defaults-extended.sh.tmpl  # Extended macOS prefs
-│   ├── run_once_04-configure-macos-security.sh.tmpl  # macOS security defaults
-│   ├── run_once_05-configure-git.sh.tmpl            # git config, GPG signing
-│   ├── run_once_06-configure-ssh.sh.tmpl            # SSH key permissions
-│   ├── run_once_07-configure-iterm2.sh.tmpl         # iTerm2 shell integration
-│   ├── # Phase 2: Package installation
-│   ├── run_onchange_08-install-packages.sh.tmpl      # brew + winget (re-runs on Brewfile/wingetfile change)
-│   ├── run_once_09-install-junie-cli.sh.tmpl         # Junie CLI EAP install/update
-│   ├── run_once_10-install-opencode-plugins.sh.tmpl # opencode plugins + OpenSpec
-│   ├── run_once_11-install-plannotator.sh.tmpl       # Plannotator install/update
-│   ├── # Phase 3: Tool configuration
-│   ├── run_onchange_12-configure-secrets.sh.tmpl    # AI tool .env files (every apply)
-│   ├── run_once_13-configure-mcp.sh.tmpl             # MCP configs (one-time setup, gated by DOTFILES_RUN_MCP_SETUP)
-│   ├── run_once_14-configure-opencode.sh.tmpl        # Tier config (every apply)
-│   ├── run_once_15-configure-mozart-router.sh.tmpl  # Mozart router setup
-│   ├── run_once_16-install-meridian-launchd.sh.tmpl # Meridian launchd plist
-│   └── run_once_17-configure-smallcode.sh.tmpl # SmallCode config (gated by DOTFILES_RUN_SMALLCODE_SETUP)
+├── .chezmoiscripts/              # 20 scripts: run_once_01-03 (one-time) + run_onchange_04-20 (hash-triggered)
+│   ├── # Phase 1: One-time setup (01-03)
+│   ├── # Phase 2: Package/CLI installs (04-11)
+│   └── # Phase 3: Tool configuration (12-20)
 ├── AGENTS.md                  # AI agent guidance (authoritative — scripts, tiers, MCP, symlinks)
 ├── dot_bashrc                     # Bash config
 ├── dot_zshrc                      # Zsh config
@@ -274,6 +267,9 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
     ├── configure-mozart-router.py # Configure Mozart AI router
     ├── configure-ai.py            # Resolve paths/secrets for AI tool .env files
+    ├── configure-all.sh           # Full orchestration wrapper (rebuild configs)
+    ├── verify-config.py           # Verify generated config presence and freshness
+    ├── check-hashes.py            # Audit hash trigger coverage
     ├── configure-jetbrains-workspace.py # Configure AI dirs in JB workspace modules
     ├── verify-brewfile-completeness.py # Verify Brewfile completeness
     ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
@@ -295,7 +291,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 
 All secrets live in `~/.env` using `KEY='VALUE'` format. Templates use `{{ env "VAR" }}` syntax.
 
-**`.env.example`** in the repo documents all available keys. Run `make env-check` to report drift and `make env-sync` to append newly documented keys to `~/.env` as commented examples without overwriting secrets.
+**`.env.example`** in the repo documents all available keys. Run `make drift` to report drift and `make migrate` to append newly documented keys to `~/.env` as commented examples without overwriting secrets.
 
 **Load env manually only for ad hoc raw chezmoi commands:** `set -a; source ~/.env; set +a`. Prefer `make diff`, `make dry-run`, and `make deploy` for normal work.
 
@@ -367,7 +363,7 @@ Local services (Ollama, Meridian) support host/port env var overrides:
 | dev.ops | `Brewfile.dev.ops` | on | Infrastructure tools |
 | legacy | `Brewfile.legacy` | off | Opt-in |
 
-Homebrew is installed automatically if missing (via `run_onchange_08-install-packages.sh.tmpl`). On Linux, Homebrew installs to `/home/linuxbrew/.linuxbrew` and `brew shellenv` is sourced automatically. Only `brew` entries run on Linux; `cask` entries are macOS-only and skipped.
+Homebrew is installed automatically if missing (via the package-install run_onchange script). On Linux, Homebrew installs to `/home/linuxbrew/.linuxbrew` and `brew shellenv` is sourced automatically. Only `brew` entries run on Linux; `cask` entries are macOS-only and skipped.
 
 Toggle a category in `categories.yaml`, then `make deploy` re-runs `brew bundle` when Brewfiles change.
 
@@ -448,7 +444,7 @@ Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. 
 
 Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
-Default preset: tier auto-detected from available API keys during `run_once_14-configure-opencode`. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
 Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. All indexed models matching a role's category are included (not just the best model). Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules, `ollama show` parameter-based classification, and capability filtering. Override per-role: `--local-fallback-role observer=ollama/qwen3.5:9b-mlx`. Override fallback preset: `--local-fallback-preset local-pro`. Override placeholder categories: `--local-fallback-placeholder reasoning=code-gen`. Environment variables: `DOTFILES_LOCAL_FALLBACK_PRESET`, `DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS` (comma-separated), `DOTFILES_LOCAL_FALLBACK_ROLES` (comma-separated).
 
@@ -533,7 +529,7 @@ Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer
 
 ### Plannotator
 
-Installed via `run_once_11-install-plannotator.sh.tmpl`. Uses `curl -fsSL https://plannotator.ai/install.sh | bash` (idempotent). OpenCode plugin (`@plannotator/opencode@latest`) is already configured in global `opencode.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
+Installed via the Plannotator install script. Uses `curl -fsSL https://plannotator.ai/install.sh | bash` (idempotent). OpenCode plugin (`@plannotator/opencode@latest`) is already configured in global `opencode.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
 
 ### OpenSpec
 
@@ -547,7 +543,7 @@ Spec-driven development (SDD) for AI coding assistants.
 
 ### Junie CLI
 
-JetBrains EAP CLI installed via `run_once_09-install-junie-cli.sh.tmpl`. Cross-platform: `curl|bash` on Mac/Linux, PowerShell on Windows.
+JetBrains EAP CLI installed via the Junie CLI install script. Cross-platform: `curl|bash` on Mac/Linux, PowerShell on Windows.
 
 #### Junie Model Profiles
 
@@ -591,7 +587,7 @@ Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templat
 
 Global MCP servers: github, idea, sentry, smallcode, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
 
-`idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. `run_once_13-configure-mcp.sh.tmpl` sources its output before the gate check.
+`idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. The MCP configure script sources its output before the gate check.
 
 ---
 
@@ -622,8 +618,8 @@ Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts
 - Homebrew: ARM Mac prefix `/opt/homebrew`, Intel Mac `/usr/local`, auto-detected via `brew --prefix`
 - Desktop apps (casks) are macOS-only, skipped on Linux
 - iTerm2 config uses Dynamic Profiles JSON (no secrets, no plist)
-- macOS security defaults gated by `DOTFILES_RUN_MACOS_SECURITY=1`
-- Meridian launchd gated by `DOTFILES_RUN_MERIDIAN_LAUNCHD=1`
+- macOS security defaults gated by `DOTFILES_RUN_MACOS_SECURITY_SETUP=1`
+- Meridian launchd gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`
 
 ### Linux
 
@@ -634,5 +630,5 @@ Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts
 ### Windows
 
 - Package management via `winget` and `wingetfile*` category bundles
-- `run_onchange_08-install-packages.sh.tmpl` handles both `brew bundle` and `winget install` (Windows-only section)
-- Windows winget install is gated by the same `DOTFILES_RUN_INSTALL_PACKAGES` toggle as Homebrew
+- `the package-install run_onchange script` handles both `brew bundle` and `winget install` (Windows-only section)
+- Windows winget install is gated by the same `DOTFILES_RUN_PACKAGES_SETUP` toggle as Homebrew

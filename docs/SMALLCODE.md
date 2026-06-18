@@ -22,8 +22,8 @@
 | `scripts/configure-smallcode.py` | Tier-aware config generator (env + TOML + MCP) |
 | `scripts/install-smallcode.sh` | Install CLI + plugins (gated on `DOTFILES_RUN_SMALLCODE_SETUP`) |
 | `configs/mcp/smallcode.json` | MCP template (command + args) |
-| `.chezmoiscripts/run_once_12-install-smallcode.sh.tmpl` | Chezmoi install (gated on `DOTFILES_RUN_SMALLCODE_SETUP`) |
-| `.chezmoiscripts/run_once_17-configure-smallcode.sh.tmpl` | Chezmoi config (gated on `DOTFILES_RUN_SMALLCODE_SETUP`) |
+| `.chezmoiscripts/run_onchange_10-install-smallcode.sh.tmpl` | Chezmoi install (gated on `DOTFILES_RUN_SMALLCODE_SETUP`) |
+| `.chezmoiscripts/run_onchange_18-configure-smallcode.sh.tmpl` | Chezmoi config (gated on `DOTFILES_RUN_SMALLCODE_SETUP`) |
 | `dot_dotfiles/shell/.env.example` | SMALLCODE_* env vars |
 | `dot_dotfiles/shell/aliases.sh` | `smallcode()` passthrough wrapper |
 
@@ -69,7 +69,7 @@ When escalation provider is `openai` or `ollama-cloud`, the TOML only writes `pr
 
 ### Environment Gating
 
-SmallCode setup is gated on `DOTFILES_RUN_SMALLCODE_SETUP=1` (default: 1 in `.env.example`, but must be explicitly set in `~/.env`).
+SmallCode setup is gated on `DOTFILES_RUN_SMALLCODE_SETUP=1` (default: 0 in `.env.example`, but must be explicitly set in `~/.env`).
 
 ### Shell Wrapper
 
@@ -77,12 +77,12 @@ The `smallcode()` function in `aliases.sh` is a simple passthrough — no multip
 
 ### Chezmoi Phase
 
-Phase 12 (`run_once_12-install-smallcode.sh.tmpl`) installs the SmallCode CLI. It:
+Phase 10 (`run_onchange_10-install-smallcode.sh.tmpl`) installs the SmallCode CLI. It:
 
 1. Checks `DOTFILES_RUN_SMALLCODE_SETUP` gate
 2. Delegates to `scripts/install-smallcode.sh` (npm/bun global install + verification)
 
-Phase 17 (`run_once_17-configure-smallcode.sh.tmpl`) runs after OpenCode config (phase 14). It:
+Phase 18 (`run_onchange_18-configure-smallcode.sh.tmpl`) runs after OpenCode config (phase 16). It:
 
 1. Checks `DOTFILES_RUN_SMALLCODE_SETUP` gate
 2. Checks `smallcode` CLI availability

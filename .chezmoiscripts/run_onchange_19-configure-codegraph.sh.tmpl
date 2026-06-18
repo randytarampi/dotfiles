@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when CodeGraph config changes):
+# configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
+
+# Load env before gate (DOTFILES_RUN_CODEGRAPH_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_CODEGRAPH_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CODEGRAPH_SETUP='${DOTFILES_RUN_CODEGRAPH_SETUP:-0}' — skipping CodeGraph MCP setup"
+  exit 0
+fi
+
+info "Configuring CodeGraph MCP..."
+
+if ! command -v codegraph >/dev/null 2>&1; then
+  warn "codegraph CLI not found; skipping CodeGraph MCP setup"
+  exit 0
+fi
+
+if codegraph install -y --target auto --location global >/dev/null 2>&1; then
+  ok "CodeGraph MCP configured for detected agents"
+else
+  warn "codegraph install failed — you can run 'codegraph install' manually"
+fi

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# run_onchange_02-setup-bin-symlinks.sh.tmpl
+# run_onchange_05-setup-bin-symlinks.sh.tmpl
 # Creates _dot--* command symlinks in ~/.dotfiles/bin/ for all scripts.
 # Re-runs when script content changes (add/remove/modify triggers hash change).
 #
@@ -24,8 +24,16 @@ set -euo pipefail
 # scripts/verify-brewfile-completeness.py: {{ include "scripts/verify-brewfile-completeness.py" | sha256sum }}
 # scripts/install-nvm-lts.sh: {{ include "scripts/install-nvm-lts.sh" | sha256sum }}
 # scripts/install-opencode.sh: {{ include "scripts/install-opencode.sh" | sha256sum }}
+# scripts/install-smallcode.sh: {{ include "scripts/install-smallcode.sh" | sha256sum }}
+# scripts/configure-smallcode.py: {{ include "scripts/configure-smallcode.py" | sha256sum }}
+# scripts/configure-agent-guidance.py: {{ include "scripts/configure-agent-guidance.py" | sha256sum }}
 # scripts/meridian-launch.sh: {{ include "scripts/meridian-launch.sh" | sha256sum }}
 # scripts/setup-bin-symlinks.sh: {{ include "scripts/setup-bin-symlinks.sh" | sha256sum }}
+# scripts/sync-brewfiles.py: {{ include "scripts/sync-brewfiles.py" | sha256sum }}
 # scripts/update-nvm-globals.sh: {{ include "scripts/update-nvm-globals.sh" | sha256sum }}
+# scripts/check-hashes.py: {{ include "scripts/check-hashes.py" | sha256sum }}
+# scripts/configure-all.sh: {{ include "scripts/configure-all.sh" | sha256sum }}
+# scripts/verify-config.py: {{ include "scripts/verify-config.py" | sha256sum }}
+# scripts/migrate-env-gates.py: {{ include "scripts/migrate-env-gates.py" | sha256sum }}
 
 "{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"

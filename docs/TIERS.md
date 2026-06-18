@@ -184,7 +184,7 @@ Switch tier: `scripts/configure-opencode-tier.py` <tier> (pro, pro-plus, pro-plu
 
 Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
 
-Default preset: auto-detected from available API keys during `run_once_14-configure-opencode.sh.tmpl`. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
 ### Model Classification Summary Table
 
@@ -261,7 +261,7 @@ When local models are appended to fallback chains, all indexed variants matching
 
 ### Environment Variable Forwarding
 
-The chezmoi bootstrap script (`run_once_14-configure-opencode.sh.tmpl`) forwards these env vars to `configure-opencode.py`:
+The OpenCode configure script forwards these env vars to `configure-opencode.py`:
 - `DOTFILES_LOCAL_FALLBACK_PRESET` → `--local-fallback-preset`
 - `DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS` → comma-separated `--local-fallback-placeholder` args (e.g. `reasoning=code-gen,vision=lightweight`)
 - `DOTFILES_LOCAL_FALLBACK_ROLES` → comma-separated `--local-fallback-role` args (e.g. `observer=ollama/qwen3.5:9b-mlx`)

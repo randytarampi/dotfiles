@@ -5,10 +5,15 @@ LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 
+# Script hash triggers (re-run when Mozart routing changes):
+# configs/mozart-router/mozart.json: {{ include "configs/mozart-router/mozart.json" | sha256sum }}
+# scripts/configure-mozart-router.py: {{ include "scripts/configure-mozart-router.py" | sha256sum }}
+
 load_env || warn "\$HOME/.env not found, skipping env load"
 
-if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_MCP_SETUP='${DOTFILES_RUN_MCP_SETUP:-0}' — skipping mozart-router configuration"
+# Gate on DOTFILES_RUN_MOZART_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MOZART_SETUP='${DOTFILES_RUN_MOZART_SETUP:-0}' — skipping mozart-router configuration"
   exit 0
 fi
 

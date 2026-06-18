@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_OPENCODE_TOOLS_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_OPENCODE_TOOLS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OPENCODE_TOOLS_SETUP='${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}' — skipping AI CLI tool setup"
+  exit 0
+fi
+
+info "Installing standalone AI CLI tools..."
+
+if command -v npm >/dev/null 2>&1; then
+  if npm list -g @fission-ai/openspec >/dev/null 2>&1; then
+    ok "openspec CLI already installed globally"
+  else
+    info "Installing @fission-ai/openspec globally..."
+    if npm install -g @fission-ai/openspec@latest 2>/dev/null; then
+      ok "openspec CLI installed globally"
+    else
+      warn "openspec CLI install failed"
+    fi
+  fi
+
+  if npm list -g @colbymchenry/codegraph >/dev/null 2>&1; then
+    ok "codegraph CLI already installed globally"
+  else
+    info "Installing @colbymchenry/codegraph globally..."
+    if npm install -g @colbymchenry/codegraph@latest 2>/dev/null; then
+      ok "codegraph CLI installed globally"
+    else
+      warn "codegraph CLI install failed — install manually with: npm i -g @colbymchenry/codegraph"
+    fi
+  fi
+else
+  warn "npm not found; skipping standalone AI CLI installs"
+fi

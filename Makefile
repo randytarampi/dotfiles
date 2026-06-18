@@ -1,4 +1,4 @@
-.PHONY: lint fix env env-check env-sync brewfile-sync brewfile-diff diff dry-run deploy symlinks test
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -90,10 +90,11 @@ fix:
 env:
 	@$(LOAD_ENV); echo "Loaded $(ENV_FILE) for this make recipe only."
 
-env-check:
+drift: ## Check ~/.env drift against .env.example (read-only)
 	@python3 scripts/sync-env.py --example "$(ENV_EXAMPLE)" --env "$(ENV_FILE)" --check
 
-env-sync:
+migrate: ## Migrate deprecated DOTFILES_RUN_* gate names in ~/.env to current names, then sync new keys
+	@python3 scripts/migrate-env-gates.py --env "$(ENV_FILE)"
 	@python3 scripts/sync-env.py --example "$(ENV_EXAMPLE)" --env "$(ENV_FILE)" --sync
 
 brewfile-sync:
@@ -108,11 +109,28 @@ diff:
 dry-run:
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run
 
-deploy:
+deploy: ## Apply dotfiles and run all configuration scripts
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply
+	@$(LOAD_ENV); bash scripts/configure-all.sh
+
+configure: ## Run all AI tool configure scripts (without chezmoi apply)
+	@$(LOAD_ENV); bash scripts/configure-all.sh
+
+doctor: ## Read-only drift checks: verify generated configs exist
+	@$(LOAD_ENV); python3 scripts/verify-config.py
+
+check-hashes: ## Verify hash trigger coverage in run_onchange scripts
+	@python3 scripts/check-hashes.py
+
+verify: lint drift doctor check-hashes dry-run ## Full verification suite
+	@echo "All checks passed."
+
+reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
+	@$(CHEZMOI) state delete-bucket --bucket scriptState
+	@echo "Script state cleared. Run 'make deploy' to re-run all scripts."
 
 symlinks:
 	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
 
-test: lint env-check dry-run
-	@echo "All checks passed."
+test: lint drift dry-run
+	@echo "All basic checks passed."

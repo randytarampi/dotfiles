@@ -3,11 +3,16 @@ set -euo pipefail
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_MERIDIAN_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
 
 {{- if eq .chezmoi.os "darwin" }}
 
-if [[ "${DOTFILES_RUN_MERIDIAN_LAUNCHD:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_MERIDIAN_LAUNCHD='${DOTFILES_RUN_MERIDIAN_LAUNCHD:-0}' — skipping Meridian launchd setup"
+# Gate on DOTFILES_RUN_MERIDIAN_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MERIDIAN_SETUP='${DOTFILES_RUN_MERIDIAN_SETUP:-0}' — skipping Meridian launchd setup"
   exit 0
 fi
 
@@ -40,7 +45,7 @@ cat >"$PLIST_PATH" <<EOF
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>{{ env "PATH" }}</string>
     </dict>
     <key>WorkingDirectory</key>
     <string>/tmp</string>

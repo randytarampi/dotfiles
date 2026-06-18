@@ -16,10 +16,10 @@ Key directories and files that agents interact with:
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
 ├── .chezmoiignore                # Ignore patterns (excludes scripts/, configs/, macOS-only on non-macOS)
-├── .chezmoiscripts/              # 18 ordered run scripts (defaults → packages → config → smallcode)
-│   ├── # Phase 1: System defaults (01–07)
-│   ├── # Phase 2: Package installation (08–11)
-│   └── # Phase 3: Tool configuration (12–17)
+├── .chezmoiscripts/              # 20 scripts: run_once_01-03 (one-time) + run_onchange_04-20 (hash-triggered)
+│   ├── # Phase 1: One-time setup (01-03)
+│   ├── # Phase 2: Package/CLI installs (04-11)
+│   └── # Phase 3: Tool configuration (12-20)
 ├── configs/
 │   ├── agents/home-agents.md     # Source of truth for home-level agent guidance
 │   ├── junie/model-groups.json   # Junie model profile definitions
@@ -78,6 +78,9 @@ Key directories and files that agents interact with:
 │   ├── configure-agent-guidance.py # Distribute home-level guidance to all agent files
 │   ├── configure-mozart-router.py # Configure Mozart AI router
 │   ├── configure-ai.py            # Resolve paths/secrets for AI tool .env files
+│   ├── configure-all.sh            # Full orchestration wrapper (rebuild configs)
+│   ├── verify-config.py            # Verify generated config presence and freshness
+│   ├── check-hashes.py             # Audit hash trigger coverage
 │   ├── configure-jetbrains-workspace.py # Configure AI dirs in JB workspace modules
 │   ├── verify-brewfile-completeness.py # Verify Brewfile completeness
 │   ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
@@ -150,13 +153,38 @@ source "$LIB_DIR/common.sh"
 
 All scripts follow: parse args → load env → gate check → main logic → ok/die
 
+### run_once vs run_onchange policy
+
+- `run_once_*` is reserved for truly one-time operations only: directory creation, security hardening, permissions, and similar setup that should not repeat on every apply.
+- `run_onchange_*` is the default for everything else. If a script can be re-run safely, it should usually live here with hash triggers.
+- Prefer idempotent scripts so `make deploy` can invoke orchestration twice without side effects.
+
+### Hash trigger convention
+
+- Use `# <path>: {{ include "<path>" | sha256sum }}` comments in `.chezmoiscripts/run_onchange_*` templates.
+- Add hash triggers whenever a script depends on configuration inputs, generated manifests, or config fragments.
+- Run `make check-hashes` before committing to confirm every input is covered.
+
+### Gate naming convention
+
+- Use `DOTFILES_RUN_*_SETUP` for opt-in orchestration gates.
+- Gates default to `0` and should cover one logical feature at a time.
+- Document new gates in `.env.example` and in the orchestration docs.
+
+### Three-layer architecture
+
+- Layer 1: Chezmoi templates (`dot_*`, `private_*`) define static machine state.
+- Layer 2: Chezmoi scripts bridge templates to runtime generation.
+- Layer 3: Configure scripts (`scripts/configure-*.py`, `configure-all.sh`) generate runtime-dependent config.
+- Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
+
 ### Environment Gating
 
-Scripts that should be toggleable check `DOTFILES_RUN_*` env vars:
+Scripts that should be toggleable check `DOTFILES_RUN_*_SETUP` env vars:
 
 ```bash
-if [[ "${DOTFILES_RUN_WHATEVER:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_WHATEVER='${DOTFILES_RUN_WHATEVER:-0}' — skipping"
+if [[ "${DOTFILES_RUN_WHATEVER_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_WHATEVER_SETUP='${DOTFILES_RUN_WHATEVER_SETUP:-0}' — skipping"
   exit 0
 fi
 ```
@@ -217,7 +245,7 @@ Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth). 
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
-Default preset: auto-detected from available API keys during `run_once_14-configure-opencode.sh.tmpl`. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
 > [!NOTE]
 > For detailed tier definitions, per-tier role/variant tables, local model classification rules, fallback chains, and variant policy, see [docs/TIERS.md](docs/TIERS.md).
@@ -255,7 +283,7 @@ Available steps for `configure-opencode-project.py --steps`: `opencode` (always)
 
 `~/.env` is the single source of truth for all secrets. Format: `KEY='VALUE'`. Templates use `{{ env "VAR" }}` syntax.
 
-Prefer Makefile targets (`make diff`, `make dry-run`, `make deploy`) because they load `~/.env` in the same shell process as chezmoi. Use `make env-check` to report drift and `make env-sync` to append newly documented keys.
+Prefer Makefile targets (`make diff`, `make dry-run`, `make deploy`) because they load `~/.env` in the same shell process as chezmoi. Use `make drift` to report drift and `make migrate` to append newly documented keys.
 
 Key template files: `dot_gitconfig.tmpl` (GIT_AUTHOR_*, GPG_SIGNING_KEY, GITHUB_USER, GH_TOKEN), `private_dot_npmrc.tmpl` (NPM_TOKEN, GH_TOKEN), `private_dot_aws/credentials.tmpl` (AWS_*), `private_dot_vuescanrc.tmpl` (VUESCAN_*), `private_dot_gnupg/gpg.conf.tmpl` (GPG_SIGNING_KEY).
 
@@ -288,10 +316,20 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Configure Mozart router | `scripts/configure-mozart-router.py` |
 | Add Meridian to OpenCode | `scripts/configure-meridian.py` |
 | Configure JetBrains AI | `scripts/configure-jetbrains-ai.py --all` |
+| Run full rebuild | `make deploy` |
+| Rebuild configs only | `make configure` |
+| Verify drift | `make doctor` |
+| Full verification | `make verify` |
+| Check hash coverage | `make check-hashes` |
+| Force full re-run | `make reset && make deploy` |
 | Setup AI env files | `scripts/configure-ai.py` |
+| Rebuild all configs | `scripts/configure-all.sh` |
+| Verify generated configs | `scripts/verify-config.py` |
+| Check hash triggers | `scripts/check-hashes.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
 | Distribute agent guidance | `scripts/configure-agent-guidance.py` |
-| Check env template drift | `make env-check` |
+| Check env template drift | `make drift` |
+| Migrate deprecated env gates | `make migrate` |
 | Preview pending changes | `make diff` |
 | Apply all dotfiles | `make deploy` |
 
@@ -311,6 +349,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing, configuration, launching, prerequisites |
 | [docs/DCP.md](docs/DCP.md) | Context compaction thresholds, OpenCode config paths |
 | [docs/ADDING.md](docs/ADDING.md) | Adding a new tier, adding an MCP server |
+| [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) | Three-layer architecture, script inventory, gates, dependency ordering, troubleshooting |
 | [docs/INSTALL.md](docs/INSTALL.md) | Full installation & run instructions (prerequisites, cloning, env seeding, chezmoi, verification) |
 
 ---
@@ -318,6 +357,9 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 ## Operational Philosophy
 
 - **Local-repo trust:** No age/GPG encryption because the repo is local-only
+- **Orchestration principle:** `make deploy` is the single command that reconciles the machine. It runs `chezmoi apply` (templates + scripts) followed by `configure-all.sh` (all AI tool config generators). Scripts are idempotent — running twice is a no-op.
+- **Development workflow:** Run `make verify` before committing. Run `make doctor` to diagnose drift. Run `make check-hashes` after adding config inputs. Run `make reset && make deploy` to force full re-run.
+- **Coherence:** All three layers must stay aligned. When adding a new configure script, wire it into both a `run_onchange_*` script (Layer 2) AND `configure-all.sh` (Makefile orchestration). When adding a new config input, add its hash trigger. When adding a new gate, document it in `.env.example`.
 - **Idempotent scripts:** Every `run_once_*` must be safe to re-run
 - **Graceful degradation:** Network failures in chezmoi scripts warn, never abort
 - **Single sources of truth:** `scripts/` for shell logic, `configs/` for JSON configs, `~/.env` for secrets, `AGENTS.md` for agent docs

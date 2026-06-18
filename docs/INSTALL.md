@@ -32,16 +32,15 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
      ```
 2. Populate the required secrets and configure active toggles. To run the automated package install during templating, set:
    ```env
-   DOTFILES_RUN_INSTALL_PACKAGES=1
+   DOTFILES_RUN_PACKAGES_SETUP=1
    ```
 
 ### Step 3: Makefile + chezmoi Orchestration
-Initialize chezmoi, then use Makefile targets so `~/.env` is loaded in the same shell process as each chezmoi command:
+Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
 - **macOS / Linux:**
   ```bash
   command -v chezmoi >/dev/null 2>&1 || brew install chezmoi
   chezmoi init --source ~/Development/dotfiles
-  make diff
   make deploy
   ```
 - **Windows (PowerShell 7):**
@@ -52,6 +51,8 @@ Initialize chezmoi, then use Makefile targets so `~/.env` is loaded in the same 
   chezmoi init --source "$HOME\Development\dotfiles"
   make deploy
   ```
+
+On first setup, run `make deploy` twice. The second pass should be a no-op, but it helps surface any idempotency gaps in the templates, scripts, or configure generators.
 
 ### Step 4: Verification & Local Linting (Optional)
 To verify repository and script health offline:
@@ -64,13 +65,13 @@ To verify repository and script health offline:
   pre-commit install
 
   # Run verification
-  make test
+  make verify
   # or
   pre-commit run --all-files
   ```
 - **Windows (PowerShell 7 / Git Bash):**
   ```powershell
-  # Install dev tools via winget (automatic via DOTFILES_RUN_INSTALL_PACKAGES=1 on chezmoi apply)
+  # Install dev tools via winget (automatic via DOTFILES_RUN_PACKAGES_SETUP=1 on chezmoi apply)
   # Or install manually:
   winget install GnuWin32.Make OpenJS.NodeJS Python.Python.3.12 psf.black koalaman.shellcheck mvdan.shfmt
 
@@ -79,9 +80,19 @@ To verify repository and script health offline:
   pre-commit install
 
   # Run verification (native PowerShell or Git Bash / WSL for Unix utility compatibility)
-  make test
+  make verify
   # or
   pre-commit run --all-files
   ```
 
 ---
+
+## Upgrading
+
+After pulling changes that rename gates or restructure scripts:
+
+1. `make migrate` — rename deprecated gates in `~/.env` to current names and append any new keys from `.env.example`
+2. Edit `~/.env` to enable any new features (set gates to `1`)
+3. `make reset` — clear orphaned chezmoi script state (only needed after script renames)
+4. `make deploy` — full rebuild
+5. `make verify` — confirm everything is in order

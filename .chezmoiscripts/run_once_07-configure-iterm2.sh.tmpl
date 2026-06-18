@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-
-target_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-source_file="{{ .chezmoi.sourceDir }}/configs/iterm2/Default.json"
-
-mkdir -p "$target_dir"
-ln -sf "$source_file" "$target_dir/Default.json"

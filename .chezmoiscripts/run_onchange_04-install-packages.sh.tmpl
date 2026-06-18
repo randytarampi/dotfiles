@@ -1,5 +1,20 @@
 #!/bin/bash
-# run_onchange_01-install-packages.sh.tmpl
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_PACKAGES_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_PACKAGES_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" != "1" ]]; then
+    info "DOTFILES_RUN_PACKAGES_SETUP='${DOTFILES_RUN_PACKAGES_SETUP:-0}' — skipping package installs"
+    exit 0
+fi
+
+# run_onchange_04-install-packages.sh.tmpl
 # Brewfile hashes (triggers re-run when any Brewfile changes):
 # base: {{ include "Brewfile" | sha256sum }}
 # dev: {{ include "Brewfile.dev" | sha256sum }}
@@ -29,16 +44,6 @@
 # desktop.productivity: {{ include "wingetfile.desktop.productivity" | sha256sum }}
 # dev.ops: {{ include "wingetfile.dev.ops" | sha256sum }}
 {{- end }}
-set -euo pipefail
-
-LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
-source "${LIB_DIR}/common.sh"
-
-# Gate on DOTFILES_RUN_INSTALL_PACKAGES env var (set in ~/.env)
-if [[ "${DOTFILES_RUN_INSTALL_PACKAGES:-0}" != "1" ]]; then
-    info "DOTFILES_RUN_INSTALL_PACKAGES='${DOTFILES_RUN_INSTALL_PACKAGES:-0}' — skipping package installs"
-    exit 0
-fi
 
 # --- Brew (macOS / Linux) ---
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then

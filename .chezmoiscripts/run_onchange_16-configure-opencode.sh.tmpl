@@ -7,6 +7,17 @@ source "${LIB_DIR}/env.sh"
 source "${LIB_DIR}/tier_detect.sh"
 source "${LIB_DIR}/tier_args.sh"
 
+# Script hash triggers (re-run when opencode config or tiers change):
+# configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
+# configs/opencode/openai-models.json: {{ include "configs/opencode/openai-models.json" | sha256sum }}
+# configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
+# configs/opencode/anthropic-models.json: {{ include "configs/opencode/anthropic-models.json" | sha256sum }}
+# configs/opencode/role-to-local-category.json: {{ include "configs/opencode/role-to-local-category.json" | sha256sum }}
+# configs/opencode/vibeguard.config.json: {{ include "configs/opencode/vibeguard.config.json" | sha256sum }}
+# scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
+# scripts/configure-opencode-tier.py: {{ include "scripts/configure-opencode-tier.py" | sha256sum }}
+# scripts/configure-opencode-voice.py: {{ include "scripts/configure-opencode-voice.py" | sha256sum }}
+
 # Load environment for API keys (must happen before gate)
 load_env || warn "\$HOME/.env not found, skipping env load"
 

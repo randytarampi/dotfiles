@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# configure-all.sh — Run all AI tool configure scripts in dependency order.
+# Called by `make deploy` (after chezmoi apply) and `make configure`.
+# Each step is gated on its DOTFILES_RUN_*_SETUP env var and warn-on-fail (never abort).
+
+_SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+source "$LIB_DIR/tier_detect.sh"
+source "$LIB_DIR/tier_args.sh"
+
+# Load environment for API keys and gate vars
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+info "Running full configuration pass..."
+
+# Detect tiers (detect_tier sets $TIER, not the env var itself)
+detect_tier DOTFILES_OPENCODE_TIER
+OC_TIER="$TIER"
+build_tier_extra_args
+OC_ARGS=("${TIER_EXTRA_ARGS[@]}")
+
+detect_tier DOTFILES_SMALLCODE_TIER
+SC_TIER="$TIER"
+build_tier_extra_args
+SC_ARGS=("${TIER_EXTRA_ARGS[@]}")
+
+# 1. Secrets/env distribution (configure-ai.py writes .env to AI tool dirs)
+#    Bridges the gap left by run_onchange_14-configure-secrets (which can't hash ~/.env).
+if [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; then
+  info "Configuring secrets and AI tool .env files..."
+  python3 "$SCRIPT_DIR/configure-ai.py" || warn "configure-ai.py failed"
+else
+  info "DOTFILES_RUN_SECRETS_SETUP not set — skipping secrets distribution"
+fi
+
+# 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
+if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
+  info "Configuring MCP servers..."
+  python3 "$SCRIPT_DIR/configure-mcp-all.py" --mode global --no-backup || warn "MCP config failed"
+else
+  info "DOTFILES_RUN_MCP_SETUP not set — skipping MCP configuration"
+fi
+
+# 3. OpenCode config (tier, models, voice — creates oh-my-opencode-slim.json)
+if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
+  info "Configuring OpenCode (tier=$OC_TIER)..."
+  python3 "$SCRIPT_DIR/configure-opencode.py" --preset "$OC_TIER" ${OC_ARGS[@]+"${OC_ARGS[@]}"} || warn "OpenCode config failed"
+else
+  info "DOTFILES_RUN_OPENCODE_SETUP not set — skipping OpenCode configuration"
+fi
+
+# 4. Mozart router
+if [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" == "1" ]]; then
+  info "Configuring Mozart router..."
+  python3 "$SCRIPT_DIR/configure-mozart-router.py" || warn "Mozart config failed"
+else
+  info "DOTFILES_RUN_MOZART_SETUP not set — skipping Mozart configuration"
+fi
+
+# 5. SmallCode config (reads oh-my-opencode-slim.json — must run after OpenCode)
+if [[ "${DOTFILES_RUN_SMALLCODE_SETUP:-0}" == "1" ]]; then
+  if command -v smallcode >/dev/null 2>&1; then
+    info "Configuring SmallCode (tier=$SC_TIER)..."
+    python3 "$SCRIPT_DIR/configure-smallcode.py" --preset "$SC_TIER" ${SC_ARGS[@]+"${SC_ARGS[@]}"} || warn "SmallCode config failed"
+  else
+    warn "smallcode CLI not found — skipping SmallCode configuration"
+  fi
+else
+  info "DOTFILES_RUN_SMALLCODE_SETUP not set — skipping SmallCode configuration"
+fi
+
+# 6. CodeGraph MCP config (modifies opencode.json — must run after OpenCode)
+if [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]; then
+  if command -v codegraph >/dev/null 2>&1; then
+    info "Configuring CodeGraph MCP..."
+    codegraph install -y --target auto --location global || warn "CodeGraph config failed"
+  else
+    warn "codegraph CLI not found — skipping CodeGraph MCP configuration"
+  fi
+else
+  info "DOTFILES_RUN_CODEGRAPH_SETUP not set — skipping CodeGraph configuration"
+fi
+
+# 7. Agent guidance distribution (writes ~/AGENTS.md and 6 other agent files)
+if [[ "${DOTFILES_RUN_AGENT_GUIDANCE_SETUP:-0}" == "1" ]]; then
+  info "Distributing agent guidance..."
+  python3 "$SCRIPT_DIR/configure-agent-guidance.py" || warn "Agent guidance failed"
+else
+  info "DOTFILES_RUN_AGENT_GUIDANCE_SETUP not set — skipping agent guidance distribution"
+fi
+
+ok "Configuration complete!"

@@ -5,6 +5,28 @@ LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 
+# Script hash triggers (re-run when MCP configs or helpers change):
+# configs/mcp/betterstack.json: {{ include "configs/mcp/betterstack.json" | sha256sum }}
+# configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
+# configs/mcp/github.json: {{ include "configs/mcp/github.json" | sha256sum }}
+# configs/mcp/global-mcps.json: {{ include "configs/mcp/global-mcps.json" | sha256sum }}
+# configs/mcp/idea.json: {{ include "configs/mcp/idea.json" | sha256sum }}
+# configs/mcp/mongodb.json: {{ include "configs/mcp/mongodb.json" | sha256sum }}
+# configs/mcp/notion.json: {{ include "configs/mcp/notion.json" | sha256sum }}
+# configs/mcp/sentry.json: {{ include "configs/mcp/sentry.json" | sha256sum }}
+# configs/mcp/shortcut.json: {{ include "configs/mcp/shortcut.json" | sha256sum }}
+# configs/mcp/smallcode.json: {{ include "configs/mcp/smallcode.json" | sha256sum }}
+# configs/mcp/templates/betterstack.json: {{ include "configs/mcp/templates/betterstack.json" | sha256sum }}
+# configs/mcp/templates/codegraph.json: {{ include "configs/mcp/templates/codegraph.json" | sha256sum }}
+# configs/mcp/templates/github.json: {{ include "configs/mcp/templates/github.json" | sha256sum }}
+# configs/mcp/templates/idea.json: {{ include "configs/mcp/templates/idea.json" | sha256sum }}
+# configs/mcp/templates/mongodb.json: {{ include "configs/mcp/templates/mongodb.json" | sha256sum }}
+# configs/mcp/templates/notion.json: {{ include "configs/mcp/templates/notion.json" | sha256sum }}
+# configs/mcp/templates/sentry.json: {{ include "configs/mcp/templates/sentry.json" | sha256sum }}
+# configs/mcp/templates/shortcut.json: {{ include "configs/mcp/templates/shortcut.json" | sha256sum }}
+# scripts/configure-mcp-all.py: {{ include "scripts/configure-mcp-all.py" | sha256sum }}
+# scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
+
 # Load env before gate (DOTFILES_RUN_MCP_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
 

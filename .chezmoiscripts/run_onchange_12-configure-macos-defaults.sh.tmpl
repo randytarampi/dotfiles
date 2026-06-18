@@ -3,23 +3,47 @@ set -euo pipefail
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_MACOS_DEFAULTS_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
 
 {{- if eq .chezmoi.os "darwin" }}
 
-# Gate on DOTFILES_RUN_MACOS_DEFAULTS env var (set in ~/.env)
-if [[ "${DOTFILES_RUN_MACOS_DEFAULTS:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_MACOS_DEFAULTS='${DOTFILES_RUN_MACOS_DEFAULTS:-0}' — skipping extended macOS defaults"
+# Gate on DOTFILES_RUN_MACOS_DEFAULTS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MACOS_DEFAULTS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MACOS_DEFAULTS_SETUP='${DOTFILES_RUN_MACOS_DEFAULTS_SETUP:-0}' — skipping macOS defaults"
   exit 0
 fi
 
-info "Configuring extended macOS defaults..."
+info "Configuring macOS defaults..."
+
+# Keyboard
+defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain InitialKeyRepeat -int 15
+
+# Finder
+defaults write com.apple.finder ShowPathbar -bool true
+defaults write com.apple.finder AppleShowAllFiles -bool true
+defaults write com.apple.finder ShowStatusBar -bool true
+defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
+
+# Dock
+defaults write com.apple.dock autohide -bool true
+defaults write com.apple.dock minimize-to-application -bool true
+defaults write com.apple.dock show-recents -bool false
+defaults write com.apple.dock mru-spaces -bool false
+
+# Screenshots
+defaults write com.apple.screencapture location ~/Downloads
 
 # TextEdit — use plain text by default
 defaults write com.apple.TextEdit RichDocument -bool false
 
-# Safari — show Develop menu
+# Safari — show Develop menu and warnings
 defaults write com.apple.Safari IncludeDevelopMenu -bool true
 defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
+defaults write com.apple.Safari WarnAboutFraudulentWebsites -bool true
 
 # Trackpad — enable tap to click
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
@@ -39,19 +63,10 @@ defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
 defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
 defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
 
-# Dock — minimize effect (scale), no recent applications
-defaults write com.apple.dock minimize-to-application -bool true
-defaults write com.apple.dock show-recents -bool false
-defaults write com.apple.dock mru-spaces -bool false
-
-# Finder — show path bar, show status bar
-defaults write com.apple.finder ShowStatusBar -bool true
-defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
-
 # Spotlight — don't send diagnostics
 defaults write com.apple.spotlight orderedItems -array-add '{"enabled" = 0;"name" = "MENU_SPOTLIGHT_SUGGESTIONS";}'
 
-ok "Extended macOS defaults configured."
+ok "macOS defaults configured."
 {{- else }}
-info "Skipping extended macOS defaults on {{ .chezmoi.os }}"
+info "Skipping macOS defaults on {{ .chezmoi.os }}"
 {{- end }}

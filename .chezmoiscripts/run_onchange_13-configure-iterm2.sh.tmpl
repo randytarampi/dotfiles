@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+
+# Script hash triggers (re-run when iTerm2 profile changes):
+# configs/iterm2/Default.json: {{ include "configs/iterm2/Default.json" | sha256sum }}
+
+target_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+source_file="{{ .chezmoi.sourceDir }}/configs/iterm2/Default.json"
+
+info "Configuring iTerm2 dynamic profile..."
+mkdir -p "$target_dir"
+ln -sf "$source_file" "$target_dir/Default.json"
+ok "iTerm2 dynamic profile linked."

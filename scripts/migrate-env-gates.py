@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""Migrate ~/.env gate names to the current DOTFILES_RUN_*_SETUP scheme.
+
+This script performs a one-way migration of deprecated gate names to their
+current counterparts, preserving existing values and optionally inheriting
+values for newly-split gates. It is idempotent: running it twice is a no-op.
+
+Usage:
+    scripts/migrate-env-gates.py              # Migrate ~/.env
+    scripts/migrate-env-gates.py --dry-run     # Preview changes without writing
+    scripts/migrate-env-gates.py --env /path    # Use a different env file
+
+Design:
+    - Conservative parser: extracts KEY='VALUE' assignments without evaluating
+      shell code. Never prints secret values.
+    - Renames: replaces old gate key with new gate key on the same line,
+      preserving the value and comment.
+    - Inherits: for newly-split gates (e.g., MOZART split from MCP_SETUP),
+      if the new gate is absent, it inherits the value of its predecessor.
+    - Removes: deprecated gates that have no current equivalent are commented
+      out with a migration note.
+    - Backs up ~/.env to ~/.env.bak before writing.
+
+When to run:
+    Run after pulling changes that rename DOTFILES_RUN_* gates. The migration
+    is safe and idempotent. After migrating, run `make reset && make deploy`
+    to apply the new gate values.
+
+Adding future migrations:
+    Update the MIGRATIONS list below with (old_key, new_key, inherit_from) tuples.
+    - old_key: deprecated gate name to remove
+    - new_key: current gate name to add/rename to
+    - inherit_from: if new_key is absent, inherit the value from this gate
+      (set to None if no inheritance)
+    The script handles the rest automatically.
+"""
+
+import argparse
+import os
+import re
+import sys
+from pathlib import Path
+
+# --- Migration definitions ---------------------------------------------------
+# Each entry: (old_key, new_key, inherit_from)
+# - old_key is removed (renamed to new_key if new_key absent)
+# - if new_key absent and inherit_from set, new_key inherits inherit_from's value
+# - if old_key absent, skip
+MIGRATIONS = [
+    # Gate renames (value preserved, key changed)
+    ("DOTFILES_RUN_MACOS_DEFAULTS", "DOTFILES_RUN_MACOS_DEFAULTS_SETUP", None),
+    ("DOTFILES_RUN_MACOS_SECURITY", "DOTFILES_RUN_MACOS_SECURITY_SETUP", None),
+    ("DOTFILES_RUN_INSTALL_PACKAGES", "DOTFILES_RUN_PACKAGES_SETUP", None),
+    ("DOTFILES_RUN_MERIDIAN_LAUNCHD", "DOTFILES_RUN_MERIDIAN_SETUP", None),
+    ("DOTFILES_RUN_OPENCODE_PLUGINS_SETUP", "DOTFILES_RUN_OPENCODE_TOOLS_SETUP", None),
+    # Gate splits (new gate inherits from shared predecessor if absent)
+    (
+        "DOTFILES_RUN_MOZART_SETUP_OLD",
+        "DOTFILES_RUN_MOZART_SETUP",
+        "DOTFILES_RUN_MCP_SETUP",
+    ),
+    ("DOTFILES_RUN_CODEGRAPH_SETUP_OLD", "DOTFILES_RUN_CODEGRAPH_SETUP", None),
+    (
+        "DOTFILES_RUN_AGENT_GUIDANCE_SETUP_OLD",
+        "DOTFILES_RUN_AGENT_GUIDANCE_SETUP",
+        None,
+    ),
+    ("DOTFILES_RUN_SECRETS_SETUP_OLD", "DOTFILES_RUN_SECRETS_SETUP", None),
+]
+
+# Assignment parser: matches KEY='VALUE' or # KEY='VALUE'
+ASSIGNMENT_RE = re.compile(r"^(\s*)(#?\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+
+def parse_env_line(line):
+    """Parse an env line into (indent, comment_prefix, key, value, trailing)."""
+    match = ASSIGNMENT_RE.match(line.rstrip("\n"))
+    if not match:
+        return None
+    indent, comment_prefix, key, value = match.groups()
+    return indent, comment_prefix, key, value
+
+
+def read_env_lines(path):
+    """Read all lines from an env file, returning list of (line, parsed_or_None)."""
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as f:
+        return f.readlines()
+
+
+def get_active_keys(lines):
+    """Return set of active (uncommented) keys in the env file."""
+    keys = set()
+    for line in lines:
+        parsed = parse_env_line(line)
+        if parsed and not parsed[1].strip().startswith("#"):
+            keys.add(parsed[2])
+    return keys
+
+
+def migrate_env(lines, dry_run=False):
+    """Migrate env lines according to MIGRATIONS. Returns (new_lines, changes)."""
+    active_keys = get_active_keys(lines)
+    changes = []
+    migrated_keys = {}  # old_key → new_key
+
+    # Build rename map from MIGRATIONS (only for entries where old_key exists)
+    rename_map = {}
+    inherit_map = {}
+    for old_key, new_key, inherit_from in MIGRATIONS:
+        rename_map[old_key] = new_key
+        if inherit_from:
+            inherit_map[new_key] = inherit_from
+
+    new_lines = []
+    for line in lines:
+        parsed = parse_env_line(line)
+        if not parsed:
+            new_lines.append(line)
+            continue
+
+        indent, comment_prefix, key, value = parsed
+        is_commented = comment_prefix.strip().startswith("#")
+
+        if key in rename_map and not is_commented:
+            new_key = rename_map[key]
+            # Only rename if new_key doesn't already exist as active
+            if new_key not in active_keys:
+                new_line = f"{indent}{comment_prefix}{new_key}={value}\n"
+                new_lines.append(new_line)
+                changes.append(f"Renamed: {key} → {new_key} (value preserved)")
+                active_keys.add(new_key)
+                migrated_keys[key] = new_key
+            else:
+                # New key already exists — comment out the old one
+                new_line = f"{indent}# {key}={value}  # migrated to {new_key}\n"
+                new_lines.append(new_line)
+                changes.append(
+                    f"Commented out: {key} (new key {new_key} already present)"
+                )
+        else:
+            new_lines.append(line)
+
+    # Handle inheritance: for new gates that are absent, inherit from predecessor
+    for old_key, new_key, inherit_from in MIGRATIONS:
+        if new_key in active_keys:
+            continue
+        if not inherit_from or inherit_from not in active_keys:
+            continue
+        # Find the inherit_from line and add new_key with same value
+        for i, line in enumerate(new_lines):
+            parsed = parse_env_line(line)
+            if (
+                not parsed
+                or parsed[2] != inherit_from
+                or parsed[1].strip().startswith("#")
+            ):
+                continue
+            indent, comment_prefix, _, value = parsed
+            # Insert new gate line right after the inherited line
+            new_gate_line = (
+                f"{indent}{new_key}={value}  # inherited from {inherit_from}\n"
+            )
+            new_lines.insert(i + 1, new_gate_line)
+            changes.append(f"Added: {new_key} (inherited from {inherit_from})")
+            active_keys.add(new_key)
+            break
+
+    return new_lines, changes
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Migrate ~/.env gate names to current DOTFILES_RUN_*_SETUP scheme"
+    )
+    parser.add_argument(
+        "--env", default=os.path.expanduser("~/.env"), help="Path to env file"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview changes without writing"
+    )
+    parser.add_argument(
+        "--no-backup", action="store_true", help="Skip backup before writing"
+    )
+    args = parser.parse_args()
+
+    env_path = Path(args.env).expanduser()
+
+    if not env_path.exists():
+        print(f"ERROR: env file not found: {env_path}", file=sys.stderr)
+        return 2
+
+    lines = read_env_lines(env_path)
+    new_lines, changes = migrate_env(lines, dry_run=True)
+
+    if not changes:
+        print(f"No migrations needed — {env_path} is already up to date.")
+        return 0
+
+    print(f"Env file: {env_path}")
+    print(f"Changes ({len(changes)}):")
+    for change in changes:
+        print(f"  • {change}")
+
+    if args.dry_run:
+        print("\n(dry-run — no changes written)")
+        return 0
+
+    if not args.no_backup:
+        backup_path = env_path.with_suffix(env_path.suffix + ".bak")
+        backup_path.write_text(env_path.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"Backup: {backup_path}")
+
+    with env_path.open("w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+    print(f"Written: {env_path}")
+    print("\nNext steps:")
+    print("  make reset && make deploy")
+    print("  make verify")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

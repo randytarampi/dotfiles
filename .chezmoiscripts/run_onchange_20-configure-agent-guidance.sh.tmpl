@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when agent guidance changes):
+# configs/agents/home-agents.md: {{ include "configs/agents/home-agents.md" | sha256sum }}
+# scripts/configure-agent-guidance.py: {{ include "scripts/configure-agent-guidance.py" | sha256sum }}
+
+# Load env before gate (DOTFILES_RUN_AGENT_GUIDANCE_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_AGENT_GUIDANCE_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_AGENT_GUIDANCE_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_AGENT_GUIDANCE_SETUP='${DOTFILES_RUN_AGENT_GUIDANCE_SETUP:-0}' — skipping agent guidance setup"
+  exit 0
+fi
+
+info "Distributing agent guidance..."
+"{{ .chezmoi.sourceDir }}/scripts/configure-agent-guidance.py"
+ok "Agent guidance distributed."
