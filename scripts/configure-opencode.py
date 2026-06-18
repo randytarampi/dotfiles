@@ -265,8 +265,15 @@ def main():
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
 
-        config["agent"]["explore"] = {"disable": True}
-        config["agent"]["general"] = {"disable": True}
+        # Mirror oh-my-opencode-slim PR #520: disable the full OpenCode
+        # built-in agent set replaced by OMOS (build, explore, general, plan).
+        # Preserve any existing agent entries instead of wholesale-replacing.
+        for _agent_name in ("build", "explore", "general", "plan"):
+            _existing = config["agent"].get(_agent_name)
+            config["agent"][_agent_name] = {
+                **(_existing if isinstance(_existing, dict) else {}),
+                "disable": True,
+            }
 
         if not config["plugin"]:
             del config["plugin"]
@@ -296,7 +303,12 @@ def main():
                 "opencode-plugin-openspec",
                 "opencode-vibeguard",
             ],
-            "agent": {"explore": {"disable": True}, "general": {"disable": True}},
+            "agent": {
+                "build": {"disable": True},
+                "explore": {"disable": True},
+                "general": {"disable": True},
+                "plan": {"disable": True},
+            },
             "disabled_providers": [
                 "google-vertex-anthropic",
                 "google-vertex",
