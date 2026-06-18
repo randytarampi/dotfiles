@@ -1,34 +1,22 @@
 {
   "models": {
     "claude-opus-4-8": {
-      "name": "claude-opus-4-8",
-      "contextWindow": 1000000,
-      "maxTokens": 128000
+      "name": "claude-opus-4-8"
     },
     "claude-opus-4-7": {
-      "name": "claude-opus-4-7",
-      "contextWindow": 1000000,
-      "maxTokens": 128000
+      "name": "claude-opus-4-7"
     },
     "claude-opus-4-6": {
-      "name": "claude-opus-4-6",
-      "contextWindow": 1000000,
-      "maxTokens": 128000
+      "name": "claude-opus-4-6"
     },
     "claude-sonnet-4-6": {
-      "name": "claude-sonnet-4-6",
-      "contextWindow": 1000000,
-      "maxTokens": 64000
+      "name": "claude-sonnet-4-6"
     },
     "claude-fable-5": {
-      "name": "claude-fable-5",
-      "contextWindow": 1000000,
-      "maxTokens": 64000
+      "name": "claude-fable-5"
     },
     "claude-haiku-4-5": {
-      "name": "claude-haiku-4-5",
-      "contextWindow": 200000,
-      "maxTokens": 64000
+      "name": "claude-haiku-4-5"
     }
   }
 }

@@ -28,6 +28,11 @@ from constants import (
 )
 from opencode_config import get_available_tiers, build_tier_args
 from env import load_env
+from models_dev import (
+    fetch_models_dev,
+    get_ollama_context_length,
+    build_model_entry,
+)
 
 
 def main():
@@ -165,13 +170,24 @@ def main():
         with open(anthropic_models_path, "r", encoding="utf-8") as f:
             anthropic_models = json.load(f).get("models", {})
 
+    # Fetch model metadata from models.dev (24h-cached, graceful degradation)
+    models_dev_data = fetch_models_dev()
+
     # Decode local ollama
     local_ollama = {}
     if local_ollama_models:
         model_names = sorted(
             m["name"] if isinstance(m, dict) else str(m) for m in local_ollama_models
         )
-        models_obj = {name: {"name": name} for name in model_names}
+        # Enrich local Ollama models with context_length from `ollama show`
+        # (ground truth — models.dev has no bare `ollama` provider). Local
+        # models are free, so no cost field.
+        models_obj = {}
+        for name in model_names:
+            ctx = get_ollama_context_length(name)
+            models_obj[name] = build_model_entry(
+                name, models_dev_data, "ollama-cloud", ollama_context=ctx
+            )
         local_ollama = {
             "models": models_obj,
             "name": "Ollama",
@@ -200,7 +216,11 @@ def main():
             and anthropic_models
             and args.preset in ["pro-plus-anthropic", "plus-anthropic", "anthropic"]
         ):
-            config["provider"]["anthropic"] = {"models": anthropic_models}
+            enriched_anthropic = {
+                mid: build_model_entry(mid, models_dev_data, "anthropic")
+                for mid in anthropic_models
+            }
+            config["provider"]["anthropic"] = {"models": enriched_anthropic}
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
@@ -248,30 +268,54 @@ def main():
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
         elif args.preset == "anthropic":
             if include_anthropic and anthropic_models:
-                config["provider"]["anthropic"] = {"models": anthropic_models}
+                enriched_anthropic = {
+                    mid: build_model_entry(mid, models_dev_data, "anthropic")
+                    for mid in anthropic_models
+                }
+                config["provider"]["anthropic"] = {"models": enriched_anthropic}
             config["disabled_providers"].extend(["openai", "ollama-cloud", "ollama"])
         elif args.preset == "plus-anthropic":
             if openai_models:
-                config["provider"]["openai"] = {"models": openai_models}
+                enriched_openai = {
+                    mid: build_model_entry(mid, models_dev_data, "openai")
+                    for mid in openai_models
+                }
+                config["provider"]["openai"] = {"models": enriched_openai}
             if include_anthropic and anthropic_models:
-                config["provider"]["anthropic"] = {"models": anthropic_models}
+                enriched_anthropic = {
+                    mid: build_model_entry(mid, models_dev_data, "anthropic")
+                    for mid in anthropic_models
+                }
+                config["provider"]["anthropic"] = {"models": enriched_anthropic}
             config["disabled_providers"].extend(["ollama-cloud", "ollama"])
         else:
             if openai_models:
-                config["provider"]["openai"] = {"models": openai_models}
+                enriched_openai = {
+                    mid: build_model_entry(mid, models_dev_data, "openai")
+                    for mid in openai_models
+                }
+                config["provider"]["openai"] = {"models": enriched_openai}
             if can_proxy_cloud and ollama_cloud_models and args.preset != "plus":
                 # Unified: merge local + cloud Ollama under single provider
                 combined_models = {}
                 if local_ollama and args.preset not in ["plus", "pro"]:
                     combined_models.update(local_ollama.get("models", {}))
-                # Add cloud models with :cloud suffix
+                # Add cloud models with :cloud suffix, enriched with
+                # models.dev metadata (looked up as ollama-cloud/<model>)
+                # and ground-truth context_length from `ollama show`.
                 for model_name in ollama_cloud_models:
                     cloud_name = (
                         f"{model_name}:cloud"
                         if not model_name.endswith(":cloud")
                         else model_name
                     )
-                    combined_models[cloud_name] = {"name": cloud_name}
+                    ctx = get_ollama_context_length(cloud_name)
+                    combined_models[cloud_name] = build_model_entry(
+                        cloud_name,
+                        models_dev_data,
+                        "ollama-cloud",
+                        ollama_context=ctx,
+                    )
                 if combined_models:
                     config["provider"]["ollama"] = {
                         "models": combined_models,
@@ -285,14 +329,22 @@ def main():
                     config["provider"]["ollama"] = local_ollama
             elif ollama_cloud_models and args.preset != "plus":
                 # Not cloud-capable: use direct ollama-cloud provider
-                config["provider"]["ollama-cloud"] = {"models": ollama_cloud_models}
+                enriched_cloud = {
+                    mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
+                    for mid in ollama_cloud_models
+                }
+                config["provider"]["ollama-cloud"] = {"models": enriched_cloud}
                 if local_ollama and args.preset not in ["plus", "pro"]:
                     config["provider"]["ollama"] = local_ollama
             elif local_ollama and args.preset not in ["plus", "pro"]:
                 # No cloud models at all; local-only provider
                 config["provider"]["ollama"] = local_ollama
             if include_anthropic and anthropic_models:
-                config["provider"]["anthropic"] = {"models": anthropic_models}
+                enriched_anthropic = {
+                    mid: build_model_entry(mid, models_dev_data, "anthropic")
+                    for mid in anthropic_models
+                }
+                config["provider"]["anthropic"] = {"models": enriched_anthropic}
             if args.preset == "pro":
                 config["provider"].pop("openai", None)
                 config["provider"].pop("anthropic", None)
