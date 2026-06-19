@@ -13,6 +13,7 @@
 .mcp.json
 .opencode
 opencode.json
+.slim
 *.iml
 
 # Serverless
