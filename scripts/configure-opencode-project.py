@@ -6,7 +6,7 @@ Steps:
   1. opencode    — Generate project opencode.json (always runs)
   2. tier        — Switch oh-my-opencode-slim preset for the project
   3. codegraph   — Run codegraph init -i for the project (opt-in)
-  4. mcps        — Configure MCPs for other AI tools (via configure-mcp-all.py)
+  4. mcps        — Configure MCPs for other AI tools (via configure-mcps.py)
 
 By default all steps run. Use --steps to select specific steps.
 Use --all-tools as shorthand for --steps with mcps included.
@@ -65,12 +65,12 @@ def main():
     parser.add_argument(
         "--mcps",
         default="",
-        help="Comma-separated AI platform list for the mcps step, e.g. cursor,ai (passed to configure-mcp-all.py --tools)",
+        help="Comma-separated AI platform list for the mcps step, e.g. cursor,ai (passed to configure-mcps.py --tools)",
     )
     parser.add_argument(
         "--project-mcps",
         default="",
-        help="Comma-separated project MCP template names (passed to configure-mcp-all.py)",
+        help="Comma-separated project MCP template names (passed to configure-mcps.py)",
     )
     parser.add_argument(
         "--local-fallback-preset",
@@ -209,15 +209,15 @@ def main():
 
     # Step 4: Configure MCPs for other AI platforms
     if "mcps" in requested:
-        logger.info("Running configure-mcp-all.py for other AI platforms...")
+        logger.info("Running configure-mcps.py for other AI platforms...")
         mcp_args = ["--mode", "project"]
         if args.mcps:
             mcp_args.extend(["--tools", args.mcps])
         if args.project_mcps:
             mcp_args.extend(["--project-mcps", args.project_mcps])
 
-        configure_mcp_all_py = os.path.join(SCRIPT_DIR, "configure-mcp-all.py")
-        subprocess.run([sys.executable, configure_mcp_all_py] + mcp_args)
+        configure_mcps_py = os.path.join(SCRIPT_DIR, "configure-mcps.py")
+        subprocess.run([sys.executable, configure_mcps_py] + mcp_args)
         logger.info("MCPs for other AI platforms configured")
     else:
         logger.info("Skipping MCP configuration for other AI tools (not in --steps)")

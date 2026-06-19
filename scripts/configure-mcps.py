@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-configure-mcp-all.py — Generate MCP configs for ALL AI tools.
+configure-mcps.py — Generate MCP configs for all registered AI tools.
 Iterates over all tools defined in global-mcps.json and calls configure-mcp-tool.py
 """
 

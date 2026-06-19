@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-configure-jetbrains-workspace.py — Configures JetBrains workspace modules.
+configure-jetbrains-workspace-project.py — Configures JetBrains workspace modules.
 Writes .ai/mcp/mcp.json and creates .junie → .ai symlink.
 """
+
+# Manual-only: not wired into configure-all.sh because it operates on a specific
+# JetBrains workspace project and requires explicit --workspace-root/--project-dir.
+# Invoke directly when configuring AI dirs for a JB workspace module.
 
 import sys
 import os
 import argparse
+import shutil
 import xml.etree.ElementTree as ET
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -192,8 +197,6 @@ def main():
                         if os.path.islink(target_path):
                             os.unlink(target_path)
                         elif os.path.isdir(target_path):
-                            import shutil
-
                             shutil.rmtree(target_path)
                         else:
                             os.remove(target_path)

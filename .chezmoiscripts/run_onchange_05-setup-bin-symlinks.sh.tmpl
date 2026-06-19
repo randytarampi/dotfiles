@@ -6,10 +6,10 @@ set -euo pipefail
 # Re-runs when script content changes (add/remove/modify triggers hash change).
 #
 # Script hash triggers (re-run when any script changes):
-# scripts/configure-ai.py: {{ include "scripts/configure-ai.py" | sha256sum }}
+# scripts/configure-secrets.py: {{ include "scripts/configure-secrets.py" | sha256sum }}
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
-# scripts/configure-jetbrains-workspace.py: {{ include "scripts/configure-jetbrains-workspace.py" | sha256sum }}
-# scripts/configure-mcp-all.py: {{ include "scripts/configure-mcp-all.py" | sha256sum }}
+# scripts/configure-jetbrains-workspace-project.py: {{ include "scripts/configure-jetbrains-workspace-project.py" | sha256sum }}
+# scripts/configure-mcps.py: {{ include "scripts/configure-mcps.py" | sha256sum }}
 # scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
 # scripts/configure-meridian.py: {{ include "scripts/configure-meridian.py" | sha256sum }}
 # scripts/configure-mozart-router.py: {{ include "scripts/configure-mozart-router.py" | sha256sum }}

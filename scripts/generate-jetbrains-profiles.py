@@ -2,7 +2,6 @@
 """Generate and synchronize JetBrains model profiles from model-groups.json."""
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
@@ -15,27 +14,7 @@ import logger
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from discover_models import list_local_ollama_models
 from ai_models import resolve_model
-
-
-def load_resolve_roles_from_list():
-    tier_script_path = os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")
-    if not os.path.exists(tier_script_path):
-        return None
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "configure_opencode_tier", tier_script_path
-        )
-        if not spec or not spec.loader:
-            return None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return getattr(module, "resolve_roles_from_list", None)
-    except Exception as e:
-        logger.warning(f"Failed to load local model resolver: {e}")
-        return None
-
-
-RESOLVE_ROLES_FROM_LIST = load_resolve_roles_from_list()
+from tier_resolve import resolve_roles_from_list
 
 
 def build_provider_configs(cfg: dict) -> dict:
@@ -174,10 +153,10 @@ def main():
     has_local_groups = any(
         g.get("provider") == "ollama-local" for g in cfg.get("groups", {}).values()
     )
-    if has_local_groups and RESOLVE_ROLES_FROM_LIST:
+    if has_local_groups:
         discovered_local_models = list_local_ollama_models()
         if discovered_local_models:
-            local_role_models = RESOLVE_ROLES_FROM_LIST(discovered_local_models) or {}
+            local_role_models = resolve_roles_from_list(discovered_local_models) or {}
             resolved_lines = [
                 f"  {k} -> {v[len('ollama/') :] if v.startswith('ollama/') else v}"
                 for k, v in sorted(local_role_models.items())

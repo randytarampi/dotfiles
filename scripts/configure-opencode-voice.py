@@ -30,7 +30,6 @@ import sys
 import json
 import argparse
 import os
-import importlib.util
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -51,6 +50,7 @@ from file_utils import backup_file, write_text_file
 from env import load_env
 from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
+from tier_resolve import resolve_roles_from_list, list_local_ollama_models
 
 
 def get_voice_config(tier: str) -> dict:
@@ -85,28 +85,16 @@ def get_voice_config(tier: str) -> dict:
         )
         if use_local_ollama:
             try:
-                tier_module_path = os.path.join(
-                    SCRIPT_DIR, "configure-opencode-tier.py"
-                )
-                spec = importlib.util.spec_from_file_location(
-                    "configure_opencode_tier", tier_module_path
-                )
-                if spec and spec.loader:
-                    tier_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(tier_module)
-                    local_models = tier_module.list_local_ollama_models()
-                    if local_models:
-                        # Prefer audio-capable models, then largest model
-                        resolved = tier_module.resolve_roles_from_list(local_models)
-                        # Use the reasoning model (largest) for voice, or code-gen
-                        voice_model = (
-                            resolved.get("reasoning")
-                            or resolved.get("code-gen")
-                            or resolved.get("lightweight")
-                        )
-                        if voice_model:
-                            # Strip ollama/ prefix if present
-                            voice_config["model"] = strip_provider_prefix(voice_model)
+                local_models = list_local_ollama_models()
+                if local_models:
+                    resolved = resolve_roles_from_list(local_models)
+                    voice_model = (
+                        resolved.get("reasoning")
+                        or resolved.get("code-gen")
+                        or resolved.get("lightweight")
+                    )
+                    if voice_model:
+                        voice_config["model"] = strip_provider_prefix(voice_model)
             except Exception:
                 pass
         if "model" not in voice_config:

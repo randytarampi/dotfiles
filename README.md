@@ -131,7 +131,7 @@ make migrate             # Migrate deprecated gate names + append missing templa
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
 scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
-scripts/configure-mcp-all.py                  # Regenerate MCP configs
+scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
 scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
@@ -262,15 +262,15 @@ Set in `~/.env` (0 = skip, 1 = run):
     │   ├── opencode_config.py     # get_available_tiers(), build_tier_args()
     │   ├── tier_detect.sh         # Shared tier auto-detection (detect_tier)
     │   └── tier_args.sh           # Shared local fallback arg forwarding
-    ├── configure-mcp-all.py       # Generate MCP configs for all AI tools
+    ├── configure-mcps.py       # Generate MCP configs for all AI tools
     ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
     ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
     ├── configure-mozart-router.py # Configure Mozart AI router
-    ├── configure-ai.py            # Resolve paths/secrets for AI tool .env files
+    ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
     ├── configure-all.sh           # Full orchestration wrapper (rebuild configs)
     ├── verify-config.py           # Verify generated config presence and freshness
     ├── check-hashes.py            # Audit hash trigger coverage
-    ├── configure-jetbrains-workspace.py # Configure AI dirs in JB workspace modules
+    ├── configure-jetbrains-workspace-project.py # Configure AI dirs in JB workspace modules
     ├── verify-brewfile-completeness.py # Verify Brewfile completeness
     ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
     ├── configure-mcp-tool.py      # Generate MCP config for a single tool
@@ -573,7 +573,7 @@ Select via: `junie --model custom:<profile>`
 
 ### MCP Configuration
 
-Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcp-all.py` generates per-tool config files.
+Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcps.py` generates per-tool config files.
 
 | Tool | Config Path | Format |
 |------|------------|--------|

@@ -28,7 +28,7 @@ flowchart TD
 
     subgraph "Layer 3: Configure Scripts"
         C1[configure-opencode.py]
-        C2[configure-mcp-all.py]
+        C2[configure-mcps.py]
         C3[configure-smallcode.py]
         C4[configure-all.sh]
         C5[configure-agent-guidance.py]
@@ -84,9 +84,11 @@ sequenceDiagram
     Chezmoi->>Scripts: Run run_onchange_04-20 (if hashes changed)
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
-    Configure->>Configure: configure-ai.py (secrets)
-    Configure->>Configure: configure-mcp-all.py (MCP)
+    Configure->>Configure: configure-secrets.py (secrets)
+    Configure->>Configure: configure-jetbrains-ai.py --models (Junie profiles)
+    Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
+    Configure->>Configure: configure-meridian.py (plugin injection)
     Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-smallcode.py
     Configure->>Configure: codegraph install
@@ -135,7 +137,7 @@ sequenceDiagram
 | 11 | install-meridian-launchd | run_onchange | Meridian launchd plist (macOS) | `DOTFILES_RUN_MERIDIAN_SETUP` |
 | 12 | configure-macos-defaults | run_onchange | macOS user preferences | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` |
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
-| 14 | configure-secrets | run_onchange | .env distribution to AI dirs | `DOTFILES_RUN_OPENCODE_SETUP` |
+| 14 | configure-secrets | run_onchange | .env distribution to AI dirs | `DOTFILES_RUN_SECRETS_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
@@ -157,10 +159,10 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
 | `DOTFILES_RUN_SMALLCODE_SETUP` | 0 | Scripts 10, 18 (SmallCode install + config) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
-| `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Scripts 14, 16 (secrets + OpenCode config) |
+| `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
-| `DOTFILES_RUN_SECRETS_SETUP` | 0 | `configure-all.sh` (secrets distribution via configure-ai.py) |
+| `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | 0 | Script 19 (CodeGraph MCP) |
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `install-opencode.sh` (voice deps) |
@@ -177,9 +179,11 @@ graph LR
     S05 --> S09[09 plannotator]
     S05 --> S10[10 smallcode]
     S04 --> S11[11 meridian]
-    S14[14 secrets] --> S15[15 MCP]
+    S14[14 secrets] --> S1_5[1.5 junie models]
+    S1_5 --> S15[15 MCP]
     S15 --> S16[16 opencode]
-    S16 --> S17[17 mozart]
+    S16 --> S3_5[3.5 meridian plugin]
+    S3_5 --> S17[17 mozart]
     S16 --> S18[18 smallcode]
     S16 --> S19[19 codegraph]
     S16 --> S20[20 agent guidance]

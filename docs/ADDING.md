@@ -25,7 +25,7 @@
 1. Create `configs/mcp/<server>.json` — MCP config JSON for the server
 2. Add entry in `configs/mcp/global-mcps.json` — register which AI tools should receive this server config
 3. Test with a single tool: `scripts/configure-mcp-tool.py <tool> <server>`
-4. Regenerate all configs: `scripts/configure-mcp-all.py`
+4. Regenerate all configs: `scripts/configure-mcps.py`
 
 Notes:
 - `idea.json` uses SSE transport by default — set `IJ_MCP_TRANSPORT=stdio` for stdio mode
@@ -38,8 +38,8 @@ Notes:
 
 These scripts are useful when you want to refresh runtime-generated files without waiting for a full orchestration pass:
 
-- `scripts/configure-ai.py` — resolves secrets and `.env`-derived paths; called by `configure-all.sh`, but also useful as a standalone refresh step
-- `scripts/configure-jetbrains-workspace.py` — updates JetBrains workspace module AI directories
+- `scripts/configure-secrets.py` — resolves secrets and `.env`-derived paths; called by `configure-all.sh`, but also useful as a standalone refresh step
+- `scripts/configure-jetbrains-workspace-project.py` — updates JetBrains workspace module AI directories; manual-only and not wired into configure-all.sh because it needs explicit workspace/project paths
 - `scripts/configure-meridian.py` — refreshes Meridian proxy config for OpenCode
 - `scripts/configure-jetbrains-ai.py --all` / `--all-tools` — regenerates JetBrains AI models, dirs, symlinks, and MCP wiring
 

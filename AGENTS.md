@@ -72,16 +72,16 @@ Key directories and files that agents interact with:
 │   │   ├── opencode_config.py     # OpenCode tier/preset helpers (get_available_tiers, build_tier_args)
 │   │   ├── idea.py                # Resolve IntelliJ app paths, java, and MCP classpaths in Python
 │   │   └── discover_models.py     # Local Ollama discovery to JSON in Python
-│   ├── configure-mcp-all.py       # Generate MCP configs for all AI tools
+│   ├── configure-mcps.py       # Generate MCP configs for all AI tools
 │   ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
 │   ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
 │   ├── configure-agent-guidance.py # Distribute home-level guidance to all agent files
 │   ├── configure-mozart-router.py # Configure Mozart AI router
-│   ├── configure-ai.py            # Resolve paths/secrets for AI tool .env files
+│   ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
 │   ├── configure-all.sh            # Full orchestration wrapper (rebuild configs)
 │   ├── verify-config.py            # Verify generated config presence and freshness
 │   ├── check-hashes.py             # Audit hash trigger coverage
-│   ├── configure-jetbrains-workspace.py # Configure AI dirs in JB workspace modules
+│   ├── configure-jetbrains-workspace-project.py # Configure AI dirs in JB workspace modules
 │   ├── verify-brewfile-completeness.py # Verify Brewfile completeness
 │   ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
 │   ├── configure-mcp-tool.py      # Generate MCP config for a single tool
@@ -307,7 +307,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Switch tier without local Ollama | `scripts/configure-opencode-tier.py --no-local-fallbacks <tier>` |
 | Switch tier with local fallback role override | `scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx <tier>` |
 | Switch tier with local fallback preset | `scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus` |
-| Regenerate all MCP configs | `scripts/configure-mcp-all.py` |
+| Regenerate all MCP configs | `scripts/configure-mcps.py` |
 | Regenerate single MCP config | `scripts/configure-mcp-tool.py <tool> <server>` |
 | Regenerate OpenCode config | `scripts/configure-opencode.py` |
 | Regenerate project config | `scripts/configure-opencode-project.py` |
@@ -322,7 +322,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Full verification | `make verify` |
 | Check hash coverage | `make check-hashes` |
 | Force full re-run | `make reset && make deploy` |
-| Setup AI env files | `scripts/configure-ai.py` |
+| Setup AI env files | `scripts/configure-secrets.py` |
 | Rebuild all configs | `scripts/configure-all.sh` |
 | Verify generated configs | `scripts/verify-config.py` |
 | Check hash triggers | `scripts/check-hashes.py` |

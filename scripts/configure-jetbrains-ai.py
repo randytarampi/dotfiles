@@ -39,7 +39,7 @@ def main():
     )
 
     parser.add_argument(
-        "--all-tools", action="store_true", help="All + configure-mcp-all.py"
+        "--all-tools", action="store_true", help="All + configure-mcps.py"
     )
     parser.add_argument(
         "--tools", default="", help="Comma-separated tool list for --all-tools"
@@ -113,25 +113,25 @@ def main():
             logger.error(f"Failed to run mcp configuration tool: {e}")
 
     if args.all_tools:
-        logger.info("Running configure-mcp-all.py for other AI tools...")
+        logger.info("Running configure-mcps.py for other AI tools...")
         mcp_all_args = ["--mode", "project", "--project-dir", project_root]
         if args.tools:
             mcp_all_args.extend(["--tools", args.tools])
         if args.project_mcps:
             mcp_all_args.extend(["--project-mcps", args.project_mcps])
 
-        configure_mcp_all_py = os.path.join(SCRIPT_DIR, "configure-mcp-all.py")
-        cmd = [sys.executable, configure_mcp_all_py] + mcp_all_args
+        configure_mcps_py = os.path.join(SCRIPT_DIR, "configure-mcps.py")
+        cmd = [sys.executable, configure_mcps_py] + mcp_all_args
         try:
             res = subprocess.run(cmd)
             if res.returncode == 0:
                 logger.info("Additional tools configured")
             else:
                 logger.error(
-                    f"Failed configure-mcp-all.py execution (exit {res.returncode})"
+                    f"Failed configure-mcps.py execution (exit {res.returncode})"
                 )
         except Exception as e:
-            logger.error(f"Failed to run configure-mcp-all.py: {e}")
+            logger.error(f"Failed to run configure-mcps.py: {e}")
 
     if do_models:
         os.makedirs(target_dir, exist_ok=True)

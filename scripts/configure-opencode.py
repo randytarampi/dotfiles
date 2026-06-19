@@ -11,7 +11,6 @@ import argparse
 import os
 import shutil
 import subprocess
-import importlib.util
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -33,6 +32,7 @@ from opencode_config import (
     get_slim_config_path,
 )
 from env import load_env
+from tier_resolve import list_local_ollama_models
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
@@ -93,7 +93,7 @@ def main():
             logger.info(f"Sourced {fallback_path} (fallback)")
         else:
             logger.warning(
-                f"{env_path} not found — run configure-ai.py first for MCP server configs"
+                f"{env_path} not found — run configure-secrets.py first for MCP server configs"
             )
 
     use_local_env = os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "true").lower()
@@ -102,14 +102,7 @@ def main():
     local_ollama_models = []
     if with_local_ollama:
         try:
-            tier_module_path = os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")
-            spec = importlib.util.spec_from_file_location(
-                "configure_opencode_tier", tier_module_path
-            )
-            if spec and spec.loader:
-                tier_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(tier_module)
-                local_ollama_models = tier_module.list_local_ollama_models()
+            local_ollama_models = list_local_ollama_models()
         except Exception:
             pass
 

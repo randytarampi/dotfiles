@@ -24,7 +24,8 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/templates/notion.json: {{ include "configs/mcp/templates/notion.json" | sha256sum }}
 # configs/mcp/templates/sentry.json: {{ include "configs/mcp/templates/sentry.json" | sha256sum }}
 # configs/mcp/templates/shortcut.json: {{ include "configs/mcp/templates/shortcut.json" | sha256sum }}
-# scripts/configure-mcp-all.py: {{ include "scripts/configure-mcp-all.py" | sha256sum }}
+# configs/mcp/templates/smallcode.json: {{ include "configs/mcp/templates/smallcode.json" | sha256sum }}
+# scripts/configure-mcps.py: {{ include "scripts/configure-mcps.py" | sha256sum }}
 # scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_MCP_SETUP is in ~/.env)
@@ -77,14 +78,14 @@ for config_file in "$MCP_SOURCE"/*.json; do
   info "Configured MCP: $basename"
 done
 
-# Also run configure-mcp-all for Codex, Claude, Cursor, etc.
-MCP_ALL="${SOURCE_DIR}/scripts/configure-mcp-all.py"
+# Also run configure-mcps for Codex, Claude, Cursor, etc.
+CONFIGURE_MCPS="${SOURCE_DIR}/scripts/configure-mcps.py"
 MCP_REGISTRY="${SOURCE_DIR}/configs/mcp/global-mcps.json"
-if [[ -x "$MCP_ALL" && -f "$MCP_REGISTRY" ]]; then
-  info "Running configure-mcp-all for all AI tools..."
-  "$MCP_ALL" --mode global --no-backup || warn "configure-mcp-all exited with errors"
+if [[ -x "$CONFIGURE_MCPS" && -f "$MCP_REGISTRY" ]]; then
+  info "Running configure-mcps for all AI tools..."
+  "$CONFIGURE_MCPS" --mode global --no-backup || warn "configure-mcps exited with errors"
 else
-  warn "configure-mcp-all.py or global-mcps.json not found, skipping AI tool MCP setup"
+  warn "configure-mcps.py or global-mcps.json not found, skipping AI tool MCP setup"
 fi
 
 ok "MCP tools configured."

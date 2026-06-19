@@ -66,6 +66,13 @@ MIGRATIONS = [
         None,
     ),
     ("DOTFILES_RUN_SECRETS_SETUP_OLD", "DOTFILES_RUN_SECRETS_SETUP", None),
+    # Secrets gate split: DOTFILES_RUN_OPENCODE_SETUP still controls script 16,
+    # so we inherit from it into DOTFILES_RUN_SECRETS_SETUP without renaming.
+    (
+        "DOTFILES_RUN_SECRETS_SETUP_OLD",
+        "DOTFILES_RUN_SECRETS_SETUP",
+        "DOTFILES_RUN_OPENCODE_SETUP",
+    ),
 ]
 
 # Assignment parser: matches KEY='VALUE' or # KEY='VALUE'

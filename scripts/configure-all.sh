@@ -30,19 +30,31 @@ SC_TIER="$TIER"
 build_tier_extra_args
 SC_ARGS=("${TIER_EXTRA_ARGS[@]}")
 
-# 1. Secrets/env distribution (configure-ai.py writes .env to AI tool dirs)
+# 1. Secrets/env distribution (configure-secrets.py writes .env to AI tool dirs)
 #    Bridges the gap left by run_onchange_14-configure-secrets (which can't hash ~/.env).
 if [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; then
   info "Configuring secrets and AI tool .env files..."
-  python3 "$SCRIPT_DIR/configure-ai.py" || warn "configure-ai.py failed"
+  python3 "$SCRIPT_DIR/configure-secrets.py" || warn "configure-secrets.py failed"
 else
   info "DOTFILES_RUN_SECRETS_SETUP not set — skipping secrets distribution"
+fi
+
+# 1.5. Refresh Junie model profiles (models-only; dir scaffolding handled by run_onchange_06)
+if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+  info "Refreshing Junie model profiles (DOTFILES_RUN_JUNIE_CLI_SETUP=1)..."
+  if python3 "$SCRIPT_DIR/configure-jetbrains-ai.py" --models; then
+    ok "Junie model profiles refreshed"
+  else
+    warn "Junie model profile refresh failed"
+  fi
+else
+  info "DOTFILES_RUN_JUNIE_CLI_SETUP='${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}' — skipping junie models refresh"
 fi
 
 # 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
 if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
   info "Configuring MCP servers..."
-  python3 "$SCRIPT_DIR/configure-mcp-all.py" --mode global --no-backup || warn "MCP config failed"
+  python3 "$SCRIPT_DIR/configure-mcps.py" --mode global --no-backup || warn "MCP config failed"
 else
   info "DOTFILES_RUN_MCP_SETUP not set — skipping MCP configuration"
 fi
@@ -53,6 +65,18 @@ if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
   python3 "$SCRIPT_DIR/configure-opencode.py" --preset "$OC_TIER" ${OC_ARGS[@]+"${OC_ARGS[@]}"} || warn "OpenCode config failed"
 else
   info "DOTFILES_RUN_OPENCODE_SETUP not set — skipping OpenCode configuration"
+fi
+
+# 3.5. Configure Meridian proxy plugin (must run after OpenCode; injects plugin into opencode.json)
+if [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
+  info "Configuring Meridian plugin (DOTFILES_RUN_MERIDIAN_SETUP=1)..."
+  if python3 "$SCRIPT_DIR/configure-meridian.py"; then
+    ok "Meridian configured"
+  else
+    warn "Meridian plugin config failed"
+  fi
+else
+  info "DOTFILES_RUN_MERIDIAN_SETUP='${DOTFILES_RUN_MERIDIAN_SETUP:-0}' — skipping meridian"
 fi
 
 # 4. Mozart router

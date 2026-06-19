@@ -83,23 +83,71 @@ def main():
         if not all_exist:
             exit_code = 1
 
-    # Also check CodeGraph MCP registration in opencode.json
+    # Parse opencode.json once for content-inspecting checks (Meridian, CodeGraph)
+    opencode_json = HOME / ".config/opencode/opencode.json"
+    opencode_config = None
+    if opencode_json.exists():
+        try:
+            with open(opencode_json) as f:
+                opencode_config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            opencode_config = None
+
+    # Optional Meridian plugin check (only enforced when enabled)
+    meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
+    if meridian_gate:
+        if opencode_config is not None:
+            plugins = opencode_config.get("plugin", [])
+            meridian_present = any(
+                isinstance(plugin, str) and "meridian.ts" in plugin
+                for plugin in plugins
+            )
+            if meridian_present:
+                print("  \u2713 Meridian plugin: registered in opencode.json")
+            else:
+                print("  \u2717 Meridian plugin: not found in opencode.json")
+                exit_code = 1
+        elif opencode_json.exists():
+            print("  \u2717 Meridian plugin: could not parse opencode.json")
+            exit_code = 1
+        else:
+            print("  \u2717 Meridian plugin: opencode.json not found")
+            exit_code = 1
+    else:
+        print("  \u2298 Meridian plugin (gate DOTFILES_RUN_MERIDIAN_SETUP=0, skipped)")
+
+    # Optional Junie model profiles check (only enforced when enabled)
+    junie_gate = os.environ.get("DOTFILES_RUN_JUNIE_CLI_SETUP", "0") == "1"
+    junie_models_dir = HOME / ".junie" / "models"
+    if junie_gate:
+        if junie_models_dir.exists() and junie_models_dir.is_dir():
+            has_models = any(junie_models_dir.iterdir())
+            if has_models:
+                print(f"  \u2713 Junie model profiles: {junie_models_dir}")
+            else:
+                print(f"  \u2717 Junie model profiles: empty {junie_models_dir}")
+                exit_code = 1
+        else:
+            print(f"  \u2717 Junie model profiles: MISSING {junie_models_dir}")
+            exit_code = 1
+    else:
+        print(
+            "  \u2298 Junie model profiles (gate DOTFILES_RUN_JUNIE_CLI_SETUP=0, skipped)"
+        )
+
+    # CodeGraph MCP registration check (reuses cached opencode_config)
     codegraph_gate = os.environ.get("DOTFILES_RUN_CODEGRAPH_SETUP", "0") == "1"
     if codegraph_gate:
-        opencode_json = HOME / ".config/opencode/opencode.json"
-        if opencode_json.exists():
-            try:
-                with open(opencode_json) as f:
-                    config = json.load(f)
-                mcps = config.get("mcp", {})
-                if "codegraph" in mcps:
-                    print(f"  \u2713 CodeGraph MCP: registered in opencode.json")
-                else:
-                    print(f"  \u2717 CodeGraph MCP: not found in opencode.json")
-                    exit_code = 1
-            except (json.JSONDecodeError, KeyError):
-                print(f"  \u2717 CodeGraph MCP: could not parse opencode.json")
+        if opencode_config is not None:
+            mcps = opencode_config.get("mcp", {})
+            if "codegraph" in mcps:
+                print(f"  \u2713 CodeGraph MCP: registered in opencode.json")
+            else:
+                print(f"  \u2717 CodeGraph MCP: not found in opencode.json")
                 exit_code = 1
+        elif opencode_json.exists():
+            print(f"  \u2717 CodeGraph MCP: could not parse opencode.json")
+            exit_code = 1
         else:
             print(f"  \u2717 CodeGraph MCP: opencode.json not found")
             exit_code = 1

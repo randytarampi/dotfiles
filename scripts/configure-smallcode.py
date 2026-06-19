@@ -10,7 +10,6 @@ import sys
 import argparse
 import json
 import os
-import importlib.util
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -35,6 +34,7 @@ from env import load_env
 from file_utils import write_text_file
 from opencode_config import get_available_tiers, get_slim_config_path
 from ai_models import strip_provider_prefix
+from tier_resolve import resolve_roles_from_list, list_local_ollama_models
 
 AVAILABLE_PRESETS = get_available_tiers()
 LOCAL_PRESETS = {t for t in AVAILABLE_PRESETS if t.startswith("local")}
@@ -44,24 +44,6 @@ _OLLAMA_DAEMON_CACHE = None
 
 def is_truthy(value):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def load_tier_helpers():
-    """Dynamically load configure-opencode-tier.py helpers."""
-    tier_module_path = os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "configure_opencode_tier",
-            tier_module_path,
-        )
-        if not spec or not spec.loader:
-            return None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    except Exception as exc:
-        logger.warning(f"Failed to load local tier helpers: {exc}")
-        return None
 
 
 def get_config_dir(mode):
@@ -359,7 +341,7 @@ def configure_mcp(config_dir_path, no_backup):
     tool in global-mcps.json (it's an MCP *server* for other tools, not
     a client managed by configure-mcp-tool.py), we write a minimal
     config directly. Users can add servers manually or via
-    configure-mcp-all.py in the future.
+    configure-mcps.py in the future.
     """
     mcp_path = os.path.join(config_dir_path, "mcp.json")
     mcp_content = json.dumps({"mcpServers": {}}, indent=2) + "\n"
@@ -377,7 +359,7 @@ def local_summary_lines(resolved_roles):
     """Generate summary lines from resolved local roles.
 
     resolved_roles is a dict of {category: "ollama/model_name"} strings
-    from configure-opencode-tier.py resolve_roles_from_list().
+    from tier_resolve.resolve_roles_from_list().
     """
     if not isinstance(resolved_roles, dict):
         return []
@@ -407,7 +389,7 @@ def resolve_local_models(
 ):
     """Resolve local Ollama model placeholders for SmallCode tiers.
 
-    Uses configure-opencode-tier.py resolve_roles_from_list for role
+    Uses tier_resolve.resolve_roles_from_list for role
     resolution. Returns a dict mapping category names to resolved model
     name strings, or an empty dict if local fallbacks are disabled or
     unavailable.
@@ -415,18 +397,10 @@ def resolve_local_models(
     if no_local_fallbacks and not preset.startswith("local"):
         return {}
 
-    helper_module = load_tier_helpers()
-    if not helper_module:
-        logger.warning(
-            "Local tier helpers unavailable; using SmallCode local placeholders only"
-        )
-        return {}
-
-    # Primary: resolve_roles_from_list directly (no side effects)
     try:
-        local_models = helper_module.list_local_ollama_models()
+        local_models = list_local_ollama_models()
         if local_models:
-            roles = helper_module.resolve_roles_from_list(local_models)
+            roles = resolve_roles_from_list(local_models)
             return roles
         logger.info("No local Ollama models discovered")
         return {}
@@ -450,7 +424,7 @@ def apply_local_overrides(spec, resolved_roles, preset):
       _local:solo      → DEFAULT, FAST, MEDIUM, STRONG (local-solo only)
 
     resolved_roles is a dict of {category: "ollama/model_name"} strings
-    from configure-opencode-tier.py resolve_roles_from_list().
+    from tier_resolve.resolve_roles_from_list().
     """
     # Map SmallCode slots to local categories
     if preset == "local-solo":
