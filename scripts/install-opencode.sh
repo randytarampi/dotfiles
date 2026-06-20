@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 #   5. Ollama Cloud model metadata (pulled locally for OpenCode discovery)
 # ───────────────────────────────────────────────────────────────────────────────
 
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/common.sh"
 
 REQUIRE_CMD="${REQUIRE_CMD:-1}"
@@ -281,6 +282,51 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 9. ACP (Agent Client Protocol) adapters
+#    Each ACP agent requires its own prior login/auth state:
+#      - OpenCode: configured via this script
+#      - Gemini: GEMINI_API_KEY env var or `gemini auth`
+#      - Claude Code: `claude /login` (claude-code-acp wraps claude)
+#      - Codex: OpenAI auth (codex-acp wraps codex)
+#      - Junie: JetBrains IDE login
+#      - Copilot: GitHub auth (`copilot auth` or GITHUB_TOKEN)
+# ---------------------------------------------------------------------------
+if command -v copilot >/dev/null 2>&1; then
+  ok "GitHub Copilot CLI already installed"
+else
+  info "Installing GitHub Copilot CLI..."
+  if brew install copilot-cli 2>/dev/null; then
+    ok "GitHub Copilot CLI installed"
+  else
+    warn "Failed to install GitHub Copilot CLI (public preview — may require manual install)"
+  fi
+fi
+
+# Claude Code ACP adapter (Zed adapter)
+if npm list -g @zed-industries/claude-code-acp &>/dev/null 2>&1; then
+  ok "@zed-industries/claude-code-acp already installed"
+else
+  info "Installing @zed-industries/claude-code-acp..."
+  if npm install -g @zed-industries/claude-code-acp@latest 2>/dev/null; then
+    ok "@zed-industries/claude-code-acp installed"
+  else
+    warn "Failed to install @zed-industries/claude-code-acp"
+  fi
+fi
+
+# Codex ACP adapter (Zed adapter)
+if npm list -g codex-acp &>/dev/null 2>&1; then
+  ok "codex-acp already installed"
+else
+  info "Installing codex-acp..."
+  if npm install -g codex-acp@latest 2>/dev/null; then
+    ok "codex-acp installed"
+  else
+    warn "Failed to install codex-acp"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Done!
 # ---------------------------------------------------------------------------
 info "OpenCode tools installed!
@@ -294,5 +340,9 @@ Next steps:
   4. Voice setup:        configure-opencode-voice.py --preset <tier>
   5. Voice deps:         DOTFILES_RUN_VOICE_SETUP=1 install-opencode.sh
       → Installs whisper-cpp, sox, piper-tts, and downloads models
+  6. ACP adapters:       install-opencode.sh
+      → ACP adapters installed (Copilot CLI, claude-code-acp, codex-acp).
+        After install, run: make brewfile-sync
+        (captures the new npm/brew entries into Brewfiles for reproducibility)
 
 Install script complete!"

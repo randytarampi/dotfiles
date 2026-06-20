@@ -133,10 +133,22 @@ scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
 scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
 scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
+scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
 scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
 scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
 scripts/install-smallcode.sh                     # Install SmallCode CLI
 ```
+
+### ACP Agents
+
+`acpAgents` in `oh-my-opencode-slim.json` auto-exposes ACP-capable tools as sandboxed wrapper subagents.
+
+- Auto-detected agents: `opencode`, `gemini`, `claude-code`, `codex`, `junie`, `cursor`, `cline`, `copilot`.
+- `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
+- `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
+- Install adapter prerequisites with `scripts/install-opencode.sh` (`brew install copilot-cli`, `npm i -g @zed-industries/claude-code-acp`, `npm i -g codex-acp`), then sign in to each agent separately.
+- After the first install, run `make brewfile-sync` to capture the new npm globals in the Brewfiles.
+- Regenerate with `scripts/configure-acp-agents.py --preset <tier>`.
 
 ## Conventions
 

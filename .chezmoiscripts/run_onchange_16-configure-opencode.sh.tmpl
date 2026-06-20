@@ -18,6 +18,7 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/configure-opencode-tier.py: {{ include "scripts/configure-opencode-tier.py" | sha256sum }}
 # scripts/configure-opencode-voice.py: {{ include "scripts/configure-opencode-voice.py" | sha256sum }}
 # scripts/configure-opencode-dcp.py: {{ include "scripts/configure-opencode-dcp.py" | sha256sum }}
+# scripts/configure-acp-agents.py: {{ include "scripts/configure-acp-agents.py" | sha256sum }}
 
 # Load environment for API keys (must happen before gate)
 load_env || warn "\$HOME/.env not found, skipping env load"

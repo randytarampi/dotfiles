@@ -468,6 +468,62 @@ def main():
         logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
         sys.exit(1)
 
+    # 3b. Generate and merge acpAgents (ACP-capable agent wrappers)
+    acp_agents_source_path = os.path.join(
+        configs_dir_path, "opencode", "acp-agents.json"
+    )
+    logger.info("Generating ACP agent wrappers...")
+    try:
+        acp_args = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
+            "--preset",
+            args.preset,
+            "--no-backup",
+        ]
+        acp_result = subprocess.run(
+            acp_args,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if acp_result.returncode != 0:
+            stderr = (acp_result.stderr or acp_result.stdout or "").strip()
+            logger.warning(
+                f"ACP agent generation failed (exit {acp_result.returncode}); skipping merge"
+                + (f": {stderr}" if stderr else "")
+            )
+        elif not os.path.exists(acp_agents_source_path):
+            logger.warning(
+                f"ACP agent generation completed but {acp_agents_source_path} was not found; skipping merge"
+            )
+        else:
+            slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
+            try:
+                with open(slim_output_path, "r", encoding="utf-8") as f:
+                    slim_data = json.load(f)
+                with open(acp_agents_source_path, "r", encoding="utf-8") as f:
+                    acp_data = json.load(f)
+                if isinstance(acp_data, dict) and isinstance(
+                    acp_data.get("acpAgents"), dict
+                ):
+                    slim_data["acpAgents"] = acp_data["acpAgents"]
+                    with open(slim_output_path, "w", encoding="utf-8") as f:
+                        json.dump(slim_data, f, indent=2)
+                        f.write("\n")
+                    logger.info("acpAgents merged into oh-my-opencode-slim.json")
+                else:
+                    logger.warning(
+                        f"ACP agent config at {acp_agents_source_path} did not contain acpAgents; skipping merge"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to merge acpAgents into oh-my-opencode-slim.json: {e}"
+                )
+    except Exception as e:
+        logger.warning(f"Failed to configure ACP agents: {e}")
+
     # 4. Set active tier
     logger.info(f"Setting active tier to {args.preset}...")
     try:
@@ -523,6 +579,7 @@ def main():
         "  • opencode.json (providers, MCP servers, plugins)",
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
         "  • vibeguard.config.json (sensitive-string redaction)",
+        "  • acp-agents.json (ACP-capable agent wrappers — see ~/.config/opencode/oh-my-opencode-slim.json)",
         "  • tui.json (voice + DCP TUI plugin config)",
         "",
         "To switch tiers:",

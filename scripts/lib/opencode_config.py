@@ -154,3 +154,11 @@ def get_preset_providers(preset_name, slim_json_path=None):
     _collect_providers(tier.get("fallback", {}), providers)
 
     return providers
+
+
+def get_fixer_model(preset_name, slim_json_path=None):
+    """Return the fixer model string for a given preset/tier."""
+    source_path = slim_json_path or get_slim_config_path()
+    with open(source_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("presets", {}).get(preset_name, {}).get("fixer", {}).get("model")

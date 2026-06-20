@@ -17,6 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 CONFIGS_DIR = REPO_ROOT / "configs"
 CHEZMOI_SCRIPTS = REPO_ROOT / ".chezmoiscripts"
+NON_TRACKED_CONFIGS = {
+    "configs/opencode/acp-agents.json",
+}
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
 HASH_PATTERN = re.compile(
@@ -61,6 +64,8 @@ def find_trackable_files():
         for f in CONFIGS_DIR.rglob("*"):
             if f.is_file() and f.suffix in (".json", ".md", ".yaml", ".yml", ".toml"):
                 rel = f.relative_to(REPO_ROOT)
+                if str(rel) in NON_TRACKED_CONFIGS:
+                    continue
                 trackable.add(str(rel))
 
     return trackable

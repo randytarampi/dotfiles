@@ -177,6 +177,7 @@ All scripts follow: parse args → load env → gate check → main logic → ok
 - Layer 2: Chezmoi scripts bridge templates to runtime generation.
 - Layer 3: Configure scripts (`scripts/configure-*.py`, `configure-all.sh`) generate runtime-dependent config.
 - Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
+- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns.
 
 ### Environment Gating
 
@@ -310,6 +311,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Regenerate all MCP configs | `scripts/configure-mcps.py` |
 | Regenerate single MCP config | `scripts/configure-mcp-tool.py <tool> <server>` |
 | Regenerate OpenCode config | `scripts/configure-opencode.py` |
+| Regenerate ACP agent config | `scripts/configure-acp-agents.py --preset <tier>` |
 | Regenerate project config | `scripts/configure-opencode-project.py` |
 | Configure voice plugin | `scripts/configure-opencode-voice.py --preset <tier>` |
 | Configure SmallCode | `scripts/configure-smallcode.py --preset <tier>` |

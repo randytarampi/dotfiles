@@ -40,3 +40,9 @@ __pycache__/
 
 # chezmoi runtime
 .chezmoi-cache/
+
+# Generated ACP agent config (emitted by configure-acp-agents.py)
+configs/opencode/acp-agents.json
+
+# Deepwork session state
+.slim/deepwork/
