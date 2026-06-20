@@ -503,6 +503,19 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to configure voice plugin: {e}")
 
+    # 5b. Configure DCP TUI plugin (tui.json)
+    logger.info("Configuring DCP TUI plugin...")
+    try:
+        dcp_args = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-opencode-dcp.py"),
+            "--no-backup",
+        ]
+        subprocess.run(dcp_args, check=True)
+        logger.info("DCP TUI plugin configured")
+    except Exception as e:
+        logger.warning(f"Failed to configure DCP TUI plugin: {e}")
+
     summary_lines = [
         "OpenCode configured!",
         "",
@@ -510,7 +523,7 @@ def main():
         "  • opencode.json (providers, MCP servers, plugins)",
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
         "  • vibeguard.config.json (sensitive-string redaction)",
-        "  • tui.json (voice plugin config)",
+        "  • tui.json (voice + DCP TUI plugin config)",
         "",
         "To switch tiers:",
         "     configure-opencode-tier.py pro",

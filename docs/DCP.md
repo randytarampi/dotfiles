@@ -23,3 +23,29 @@ Cross-platform OpenCode configuration paths:
 - Data: `~/.local/share/opencode/` (macOS/Linux), `%USERPROFILE%\.local\share\opencode` (Windows)
 
 Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks needed.
+
+---
+
+## TUI Panel (`/dcp`)
+
+Since v3.1.13, DCP ships a TUI panel entrypoint (`./tui`) alongside its server entrypoint (`./server`). The panel provides:
+- Context window visualization and stats
+- Manual-mode controls (`manualMode.enabled`, `manualMode.automaticStrategies`)
+- `/dcp-compress [focus]` for prompt-triggered manual compression
+
+**Loading the panel requires DCP in `tui.json`** (in addition to `opencode.json` for core compression):
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    "@tarquinen/opencode-dcp@latest",
+    ["@renjfk/opencode-voice", { "...": "..." }]
+  ]
+}
+```
+
+No options tuple is needed for the DCP entry — the panel reads thresholds and state from `~/.config/opencode/dcp.json`. The DCP entry is written by `scripts/configure-opencode-dcp.py`, which defensively merges into `tui.json` (creating the file if missing, touching only the DCP entry). Other TUI plugins (e.g. voice) are preserved.
+
+> [!NOTE]
+> `tui.json` is a shared file — each TUI plugin has its own `configure-opencode-*.py` that defensively merges only its own entry. See [VOICE.md](VOICE.md) for the voice plugin's equivalent.

@@ -72,7 +72,7 @@ Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_U
 
 | File | Purpose |
 |------|---------|
-| `~/.config/opencode/tui.json` | Voice plugin config (+ other TUI plugins) |
+| `~/.config/opencode/tui.json` | Voice plugin config (+ other TUI plugins). `tui.json` is a shared file — each TUI plugin has its own `configure-opencode-*.py` that defensively merges only its own entry. DCP (`/dcp` panel, v3.1.13+) is co-located here; see [DCP.md](DCP.md). |
 | `~/.local/share/whisper-cpp/` | Whisper model directory |
 | `~/.local/share/piper-voices/` | Piper voice directory |
 | `~/.local/bin/piper` | Piper TTS binary (installed by `uv tool install piper-tts`) |

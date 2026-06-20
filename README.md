@@ -456,6 +456,8 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
+**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. Requires DCP in `tui.json` (written by `scripts/configure-opencode-dcp.py`). Core compression still loads from `opencode.json`. See [docs/DCP.md](docs/DCP.md).
+
 ### Voice Plugin (opencode-voice)
 
 OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
