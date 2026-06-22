@@ -18,7 +18,6 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 DEFAULT_OUTPUT_PATH = os.path.join(REPO_ROOT, "configs", "opencode", "acp-agents.json")
 
 import logger
-from opencode_config import get_fixer_model
 
 ACP_AGENTS = {
     "opencode": {
@@ -68,7 +67,11 @@ ACP_AGENTS = {
 
 def main():
     parser = argparse.ArgumentParser(description="Generate ACP agent wrappers.")
-    parser.add_argument("--preset", required=True, help="Active OpenCode tier name")
+    parser.add_argument(
+        "--preset",
+        help="Active OpenCode tier name (accepted for caller compatibility; "
+        "wrapperModel is resolved by OMO-Slim from its active preset)",
+    )
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT_PATH,
@@ -82,8 +85,6 @@ def main():
     args = parser.parse_args()
 
     try:
-        wrapper_model = get_fixer_model(args.preset)
-
         detected_agents = {}
         detected_names = []
         for name, entry in ACP_AGENTS.items():
@@ -93,8 +94,6 @@ def main():
                 agent_entry = dict(entry)
                 agent_entry["permissionMode"] = "ask"
                 agent_entry["timeoutMs"] = 300000
-                if wrapper_model is not None:
-                    agent_entry["wrapperModel"] = wrapper_model
                 detected_agents[name] = agent_entry
             else:
                 logger.info(
