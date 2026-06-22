@@ -1,20 +1,109 @@
 # OS files
+## macOS
+.AppleDesktop
+.AppleDouble
+.AppleDB
 .DS_Store
+.LSOverride
+.Spotlight-V100
+._*
+## *nix
+.directory
+.fuse_hidden*
+.nfs*
+.Trash-*
+## Windows
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+Thumbs.db
+$RECYCLE.BIN
+*.lnk
+*.stackdump
 
-# Project files
+# Generated
+*.class
+*.log
+*.pid
+*.pid.lock
+*.out
+*.rs.bk
+*.seed
+*.test
+bin
+build
+coverage
+dist
+logs
+out
+target
+.cache
+.gradle
+.nyc_output
+## Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.coverage
+.mypy_cache
+.pytest_cache
+.python-version
+.ruff_cache
+.tox
+.venv
+htmlcov
+venv
+config.json
+## Node
+node_modules
+.eslintcache
+.stylelintcache
+.npm
+.parcel-cache
+.pnpm-store
+.turbo
+.yarn
+## Terraform
+*.tfstate
+*.tfstate.*
+.terraform
+.terraform.lock.hcl
+
+
+# Developer
+*~
+.#*
+\#*#
+*.swp
+*.swo
+*.tmp
+.claude
+.codex
+.copilot
+.cursor
+.gemini
+.github-copilot
+.ollama
+.plannotator
+.vscode
+## Jetbrains
 .ai
 .aiassistant
 .air
-.claude
-.codex
-.cursor
-.junie
 .idea
+.junie
 .mcp.json
-.opencode
-opencode.json
-.slim
 *.iml
-
-# Serverless
+## CodeGraph
+.codegraph
+## OpenCode
+opencode.json
+.opencode
+.slim
+## SmallCode
+.code-graph
+.smallcode
+.memory
+## Serverless
 .serverless-secrets.json
