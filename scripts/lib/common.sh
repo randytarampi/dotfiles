@@ -19,7 +19,7 @@ _err_handler() {
       use_color=false
     fi
     if [[ "$use_color" == "true" ]]; then
-      level_str="\033[0;31m${level_str}\033[0m"
+      level_str="[\033[0;31mERROR\033[0m]"
     fi
 
     echo -e "${timestamp} ${level_str} (${caller_file}:${line_no}): Command '${command}' failed with exit code ${exit_code}" >&2
@@ -59,9 +59,9 @@ _log() {
     use_color=false
   fi
 
-  local level_str="[$level]"
+  local level_str="[${level}]"
   if [[ "$use_color" == "true" ]]; then
-    level_str="${color}${level_str}\033[0m"
+    level_str="[${color}${level}\033[0m]"
   fi
 
   local caller_file="unknown"
