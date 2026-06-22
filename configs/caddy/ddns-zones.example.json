@@ -1,0 +1,20 @@
+{
+  "zones": [
+    {
+      "hostedZoneId": "Z1FDZJSPGC7GU7",
+      "records": [
+        { "name": "shush.example.ca.", "type": "A", "ttl": 300 },
+        { "name": "shush.example.ca.", "type": "AAAA", "ttl": 300 },
+        { "name": "local.example.ca.", "type": "A", "ttl": 300 },
+        { "name": "local.example.ca.", "type": "AAAA", "ttl": 300 }
+      ]
+    },
+    {
+      "hostedZoneId": "Z359MD72AU2BDH",
+      "records": [
+        { "name": "shush.example.com.", "type": "A", "ttl": 300 },
+        { "name": "shush.example.com.", "type": "AAAA", "ttl": 300 }
+      ]
+    }
+  ]
+}

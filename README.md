@@ -174,6 +174,8 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` | macOS user preferences | 0 |
 | `DOTFILES_RUN_MACOS_SECURITY_SETUP` | macOS security defaults (firewall, FileVault, etc.) | 0 |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | Meridian launchd plist | 0 |
+| `DOTFILES_RUN_CADDY_SETUP` | Caddy LAN exposure + Plannotator | 0 |
+| `DOTFILES_RUN_OPENCODE_WEB` | Optional OpenCode web LaunchAgent | 0 |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | OpenCode plugins + CLI tools | 0 |
 | `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
@@ -195,7 +197,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── .chezmoiignore                # ignore patterns (scripts/, configs/, macOS-only)
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .chezmoiscripts/              # 20 scripts: run_once_01-03 (one-time) + run_onchange_04-20 (hash-triggered)
+├── .chezmoiscripts/              # 26 scripts: run_once_01-03 (one-time) + run_onchange_04-26 (hash-triggered)
 │   ├── # Phase 1: One-time setup (01-03)
 │   ├── # Phase 2: Package/CLI installs (04-11)
 │   └── # Phase 3: Tool configuration (12-20)
@@ -543,7 +545,7 @@ Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer
 
 ### Plannotator
 
-Installed via the Plannotator install script. Uses `curl -fsSL https://plannotator.ai/install.sh | bash` (idempotent). OpenCode plugin (`@plannotator/opencode@latest`) is already configured in global `opencode.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
+Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode@latest`) is already configured in global `opencode.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
 
 ### OpenSpec
 

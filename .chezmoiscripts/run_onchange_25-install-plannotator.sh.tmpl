@@ -1,0 +1,82 @@
+#!/bin/bash
+set -euo pipefail
+
+# dot_config/plannotator/config.json.tmpl: {{ include "dot_config/plannotator/config.json.tmpl" | sha256sum }}
+# scripts/install-plannotator.sh: {{ include "scripts/install-plannotator.sh" | sha256sum }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/common.sh"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/env.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping Plannotator paste setup"
+  exit 0
+fi
+
+if ! command -v brew >/dev/null 2>&1; then
+  die "Homebrew not found; install Homebrew first"
+fi
+
+INSTALL_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/install-plannotator.sh"
+PLIST_DIR="$HOME/Library/LaunchAgents"
+PLIST_PATH="$PLIST_DIR/com.plannotator.paste.plist"
+PLANNOTATOR_BIN="$(brew --prefix)/bin/plannotator-paste"
+CONFIG_PATH="$HOME/.config/plannotator/config.json"
+
+info "Running Plannotator installer..."
+bash "$INSTALL_SCRIPT"
+
+info "Installing Plannotator paste LaunchAgent..."
+mkdir -p "$PLIST_DIR"
+
+cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.plannotator.paste</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${PLANNOTATOR_BIN}</string>
+    <string>--config</string>
+    <string>${CONFIG_PATH}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/com.plannotator.paste.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/com.plannotator.paste.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>{{ env "PATH" }}</string>
+  </dict>
+</dict>
+</plist>
+EOF
+
+if launchctl print "gui/$UID/com.plannotator.paste" >/dev/null 2>&1; then
+  info "Reloading com.plannotator.paste..."
+  launchctl unload -w "$PLIST_PATH" || warn "Failed to unload com.plannotator.paste"
+fi
+
+if launchctl load -w "$PLIST_PATH"; then
+  ok "com.plannotator.paste loaded"
+else
+  warn "Failed to load com.plannotator.paste"
+fi
+
+ok "Plannotator paste LaunchAgent setup complete"
+{{- else }}
+info "Skipping Plannotator paste LaunchAgent on {{ .chezmoi.os }}"
+{{- end }}

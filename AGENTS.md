@@ -16,7 +16,7 @@ Key directories and files that agents interact with:
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
 ├── .chezmoiignore                # Ignore patterns (excludes scripts/, configs/, macOS-only on non-macOS)
-├── .chezmoiscripts/              # 20 scripts: run_once_01-03 (one-time) + run_onchange_04-20 (hash-triggered)
+├── .chezmoiscripts/              # 26 scripts: run_once_01-03 (one-time) + run_onchange_04-26 (hash-triggered)
 │   ├── # Phase 1: One-time setup (01-03)
 │   ├── # Phase 2: Package/CLI installs (04-11)
 │   └── # Phase 3: Tool configuration (12-20)
@@ -54,7 +54,8 @@ Key directories and files that agents interact with:
 │   └── INSTALL.md                # Full installation & run instructions
 ├── AGENTS.md                    # THIS FILE — agent guidance (source of truth)
 ├── dot_config/
-│   ├── opencode/dcp.json          # DCP context compaction thresholds
+│   └── opencode/dcp.json          # DCP context compaction thresholds
+├── private_dot_config/
 │   └── plannotator/config.json.tmpl
 ├── scripts/                      # Utility scripts + lib/
 │   ├── lib/                       # Shared helpers

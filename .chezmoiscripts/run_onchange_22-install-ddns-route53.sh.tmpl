@@ -1,0 +1,181 @@
+#!/bin/bash
+set -euo pipefail
+
+# configs/caddy/ddns-zones.example.json: {{ include "configs/caddy/ddns-zones.example.json" | sha256sum }}
+# scripts/configure-ddns.py: {{ include "scripts/configure-ddns.py" | sha256sum }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/common.sh"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/env.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# {{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping ddns-route53 install"
+  exit 0
+fi
+
+if ! command -v brew &>/dev/null; then
+  die "Homebrew not found; install Homebrew first"
+fi
+
+if ! command -v curl &>/dev/null; then
+  die "curl not found"
+fi
+
+if ! command -v tar &>/dev/null; then
+  die "tar not found"
+fi
+
+if ! command -v python3 &>/dev/null; then
+  die "python3 not found"
+fi
+
+VER="${DDNS_ROUTE53_VERSION:-2.14.0}"
+case "$(uname -m)" in
+arm64) PKG="darwin_arm64" ;;
+x86_64) PKG="darwin_amd64" ;;
+*) die "Unsupported architecture: $(uname -m)" ;;
+esac
+
+BREW_PREFIX="$(brew --prefix)"
+INSTALL_DIR="/tmp/ddns-route53-install"
+BIN_PATH="${BREW_PREFIX}/bin/ddns-route53"
+CONFIG_DIR="$HOME/.config/ddns-route53"
+ZONES_CONFIG_PATH="${CADDY_ZONES_CONFIG:-$HOME/.config/caddy/ddns-zones.json}"
+PLIST_DIR="$HOME/Library/LaunchAgents"
+LEGACY_LABEL="com.crazymax.ddns-route53"
+LEGACY_PLIST_PATH="$PLIST_DIR/${LEGACY_LABEL}.plist"
+
+info "Installing ddns-route53 ${VER} for ${PKG}..."
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+curl -fsSL "https://github.com/crazy-max/ddns-route53/releases/download/v${VER}/ddns-route53_${VER}_${PKG}.tar.gz" | tar -xz -C "$INSTALL_DIR" || die "Failed to download ddns-route53 ${VER}"
+
+if [[ ! -f "$INSTALL_DIR/ddns-route53" ]]; then
+  die "ddns-route53 binary not found after extraction"
+fi
+
+info "Installing binary to ${BIN_PATH}..."
+mkdir -p "${BREW_PREFIX}/bin"
+cp "$INSTALL_DIR/ddns-route53" "$BIN_PATH"
+chmod 755 "$BIN_PATH"
+rm -rf "$INSTALL_DIR" || warn "Failed to remove temporary install directory"
+
+info "Generating ddns-route53 zone configs..."
+python3 "{{ .chezmoi.sourceDir }}/scripts/configure-ddns.py" || warn "configure-ddns.py failed"
+
+ZONE_IDS_RAW=""
+if ZONE_IDS_RAW="$(
+  python3 - "$ZONES_CONFIG_PATH" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+config_path = Path(os.path.expandvars(os.path.expanduser(sys.argv[1])))
+if not config_path.exists():
+    sys.exit(0)
+
+try:
+    zones_data = json.loads(config_path.read_text(encoding="utf-8"))
+except Exception:
+    sys.exit(1)
+
+zones = zones_data.get("zones", [])
+if not isinstance(zones, list):
+    sys.exit(1)
+
+for zone in zones:
+    if not isinstance(zone, dict):
+        continue
+    zone_id = str(zone.get("hostedZoneId", "")).strip()
+    if zone_id:
+        print(zone_id)
+PY
+)"; then
+  :
+else
+  warn "Failed to read ddns zones from ${ZONES_CONFIG_PATH}"
+  ZONE_IDS_RAW=""
+fi
+
+if [[ -z "$ZONE_IDS_RAW" ]]; then
+  ok "No ddns-route53 zones configured"
+else
+  if launchctl print "gui/$UID/${LEGACY_LABEL}" &>/dev/null; then
+    info "Removing legacy ${LEGACY_LABEL} LaunchAgent..."
+    launchctl bootout "gui/$UID/${LEGACY_LABEL}" || warn "Failed to bootout ${LEGACY_LABEL}"
+  fi
+
+  if [[ -f "$LEGACY_PLIST_PATH" ]]; then
+    rm -f "$LEGACY_PLIST_PATH" || warn "Failed to remove ${LEGACY_PLIST_PATH}"
+  fi
+
+  mkdir -p "$PLIST_DIR"
+  ZONE_COUNT=0
+  while IFS= read -r zone_id; do
+    [[ -z "$zone_id" ]] && continue
+
+    ZONE_COUNT=$((ZONE_COUNT + 1))
+    CONFIG_PATH="$CONFIG_DIR/zone-${zone_id}.yml"
+    LABEL="${LEGACY_LABEL}.${zone_id}"
+    PLIST_PATH="$PLIST_DIR/${LABEL}.plist"
+
+    info "Writing LaunchAgent plist for zone ${zone_id}..."
+    cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${BIN_PATH}</string>
+    <string>--config</string>
+    <string>${CONFIG_PATH}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/${LABEL}.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/${LABEL}.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>{{ env "PATH" }}</string>
+  </dict>
+</dict>
+</plist>
+EOF
+
+    if launchctl print "gui/$UID/${LABEL}" &>/dev/null; then
+      info "Reloading ${LABEL}..."
+      launchctl bootout "gui/$UID/${LABEL}" || warn "Failed to bootout ${LABEL}"
+    fi
+
+    if launchctl bootstrap "gui/$UID" "$PLIST_PATH"; then
+      ok "${LABEL} loaded"
+    else
+      warn "Failed to load ${LABEL}"
+    fi
+  done <<<"$ZONE_IDS_RAW"
+
+  ok "ddns-route53 setup complete.
+
+Binary:        ${BIN_PATH}
+Zone configs:  ${CONFIG_DIR}/zone-<zoneId>.yml
+LaunchAgents:  ${PLIST_DIR}/${LEGACY_LABEL}.<zoneId>.plist
+Zones loaded:  ${ZONE_COUNT}"
+fi
+# {{- else }}
+info "Skipping ddns-route53 install on {{ .chezmoi.os }}"
+# {{- end }}

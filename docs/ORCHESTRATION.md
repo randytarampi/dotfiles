@@ -23,7 +23,7 @@ flowchart TD
 
     subgraph "Layer 2: Chezmoi Scripts"
         S1[run_once_01-03<br/>One-time: dirs, security, perms]
-        S2[run_onchange_04-20<br/>Hash-triggered: installs, config]
+        S2[run_onchange_04-24<br/>Hash-triggered: installs, config]
     end
 
     subgraph "Layer 3: Configure Scripts"
@@ -33,6 +33,7 @@ flowchart TD
         C4[configure-all.sh]
         C5[configure-agent-guidance.py]
         C6[configure-mozart-router.py]
+        C7[configure-caddy.py]
     end
 
     T1 --> S2
@@ -43,11 +44,13 @@ flowchart TD
     S2 --> C3
     S2 --> C5
     S2 --> C6
+    S2 --> C7
     C4 --> C1
     C4 --> C2
     C4 --> C3
     C4 --> C5
     C4 --> C6
+    C4 --> C7
 ```
 
 ### Layer 1: Chezmoi Templates (`dot_*`)
@@ -57,7 +60,7 @@ flowchart TD
 
 ### Layer 2: Chezmoi Scripts (`.chezmoiscripts/`)
 - `run_once_01-03`: One-time operations (directory creation, security hardening, SSH permissions)
-- `run_onchange_04-20`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
+- `run_onchange_04-26`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
 - Bridge between templates and configure scripts
 - Chezmoi sorts `run_once_*` before `run_onchange_*`, then by numeric prefix
 
@@ -81,7 +84,7 @@ sequenceDiagram
     Make->>Chezmoi: chezmoi apply
     Chezmoi->>Chezmoi: Apply templates (Layer 1)
     Chezmoi->>Scripts: Run run_once_01-03
-    Chezmoi->>Scripts: Run run_onchange_04-20 (if hashes changed)
+    Chezmoi->>Scripts: Run run_onchange_04-24 (if hashes changed)
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
@@ -144,6 +147,12 @@ sequenceDiagram
 | 18 | configure-smallcode | run_onchange | SmallCode config | `DOTFILES_RUN_SMALLCODE_SETUP` |
 | 19 | configure-codegraph | run_onchange | CodeGraph MCP registration | `DOTFILES_RUN_CODEGRAPH_SETUP` |
 | 20 | configure-agent-guidance | run_onchange | Agent guidance distribution | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` |
+| 21 | migrate-acme-ddns | run_once | Decommission legacy ACME/DDNS setup | `DOTFILES_RUN_CADDY_SETUP` |
+| 22 | install-ddns-route53 | run_onchange | ddns-route53 LaunchAgent | `DOTFILES_RUN_CADDY_SETUP` |
+| 23 | install-acme | run_onchange | acme.sh install + renewal hook | `DOTFILES_RUN_CADDY_SETUP` |
+| 24 | install-caddy | run_onchange | Caddy install + Caddyfile generation | `DOTFILES_RUN_CADDY_SETUP` |
+| 25 | install-plannotator | run_onchange | Plannotator paste install + LaunchAgent | `DOTFILES_RUN_CADDY_SETUP` |
+| 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent | `DOTFILES_RUN_OPENCODE_WEB` |
 
 ## Gate Reference
 
@@ -159,6 +168,8 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
 | `DOTFILES_RUN_SMALLCODE_SETUP` | 0 | Scripts 10, 18 (SmallCode install + config) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
+| `DOTFILES_RUN_CADDY_SETUP` | 0 | Scripts 21-25 (migration, ddns-route53, acme.sh, Caddy, Plannotator) |
+| `DOTFILES_RUN_OPENCODE_WEB` | 0 | Script 26 (OpenCode web LaunchAgent) |
 | `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |

@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping acme/ddns migration"
+  exit 0
+fi
+
+MIGRATE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/migrate-acme-ddns.sh"
+bash "$MIGRATE_SCRIPT" --yes
+
+{{- else }}
+info "Skipping acme/ddns migration on {{ .chezmoi.os }}"
+{{- end }}

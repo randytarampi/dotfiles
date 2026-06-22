@@ -1,0 +1,33 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/common.sh"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when installer changes):
+# scripts/lib/caddy_domains.py: {{ include "scripts/lib/caddy_domains.py" | sha256sum }}
+# scripts/install-acme-cert.sh: {{ include "scripts/install-acme-cert.sh" | sha256sum }}
+
+# Load env before gate (DOTFILES_RUN_CADDY_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping acme.sh installation"
+  exit 0
+fi
+
+INSTALL_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/install-acme-cert.sh"
+if [[ -f "$INSTALL_SCRIPT" ]]; then
+  bash "$INSTALL_SCRIPT"
+else
+  warn "install-acme-cert.sh not found; skipping acme.sh installation"
+fi
+
+{{- else }}
+info "Skipping acme.sh setup on {{ .chezmoi.os }}"
+{{- end }}

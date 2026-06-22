@@ -1,11 +1,9 @@
 {
-  "displayName": "{{ .chezmoi.username }}@{{ .chezmoi.hostname }}",
-  "diffOptions": {
-    "defaultDiffType": "uncommitted",
-    "hideWhitespace": true,
-    "diffIndicators": "classic",
-    "diffStyle": "unified"
-  },
-  "conventionalComments": true,
-  "pfmReminder": true
+  "shareUrl": "https://{{ .chezmoi.hostname }}/",
+  "pasteUrl": "https://{{ .chezmoi.hostname }}/plannotator",
+  "pastePort": {{ env "PASTE_PORT" | default "19433" | int }},
+  "pasteDataDir": "{{ env "PASTE_DATA_DIR" | default (printf "%s/.plannotator/pastes" .chezmoi.homeDir) }}",
+  "pasteTtlDays": {{ env "PASTE_TTL_DAYS" | default "30" | int }},
+  "pasteMaxSize": {{ env "PASTE_MAX_SIZE" | default "10485760" | int }},
+  "pasteAllowedOrigins": ["https://{{ .chezmoi.hostname }}"]
 }

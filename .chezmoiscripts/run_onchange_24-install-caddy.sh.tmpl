@@ -1,0 +1,180 @@
+#!/bin/bash
+set -euo pipefail
+
+# configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
+# scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
+# scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
+# scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
+
+BREW_BIN="${BREW_BIN:-$(command -v brew 2>/dev/null || true)}"
+export BREW_BIN
+if [[ -z "$BREW_BIN" ]]; then
+  printf 'Homebrew not found; install Homebrew first\n' >&2
+  exit 1
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  exec sudo --preserve-env=BREW_BIN "$0" "$@"
+fi
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+# shellcheck disable=SC1091
+source "$LIB_DIR/common.sh"
+# shellcheck disable=SC1091
+source "$LIB_DIR/env.sh"
+# shellcheck disable=SC1091
+source "$LIB_DIR/caddy_helpers.sh"
+
+REAL_USER="${SUDO_USER:-}"
+if [[ -z "$REAL_USER" || "$REAL_USER" == "root" ]]; then
+  REAL_USER="{{ .chezmoi.username }}"
+fi
+REAL_HOME="/Users/${REAL_USER}"
+export HOME="$REAL_HOME"
+
+# Load env before gate (DOTFILES_RUN_CADDY_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+PATH="$(dirname "$BREW_BIN"):${PATH}"
+export PATH
+
+{{- if eq .chezmoi.os "darwin" }}
+
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping Caddy setup"
+  exit 0
+fi
+
+BREW_PREFIX="$($BREW_BIN --prefix)"
+CADDYFILE_PATH="${BREW_PREFIX}/etc/caddy/Caddyfile"
+PLIST_PATH="/Library/LaunchDaemons/com.caddy.proxy.plist"
+OLD_PLIST_PATH="$REAL_HOME/Library/LaunchAgents/com.caddy.proxy.plist"
+
+info "Installing Caddy..."
+sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" "$BREW_BIN" install caddy || warn "brew install caddy failed"
+
+info "Generating Caddyfile..."
+sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" || warn "configure-caddy.py failed"
+
+info "Ensuring Caddy-served domains resolve in /etc/hosts..."
+# Caddy serves OpenCode web at opencode.localhost (all modes) plus:
+# - localhost: local.* domains and their opencode subdomains
+# - lan/public: all domains and their opencode subdomains
+# macOS doesn't auto-resolve *.localhost subdomains or local.* domains, so add entries to /etc/hosts.
+HOSTS_FILE="/etc/hosts"
+MARKER="# dotfiles-caddy-managed"
+# Remove old managed entries (idempotent)
+if grep -Fq "$MARKER" "$HOSTS_FILE" 2>/dev/null; then
+  tmp_file="$(mktemp)"
+  grep -Fv "$MARKER" "$HOSTS_FILE" >"$tmp_file" || true
+  cat "$tmp_file" >"$HOSTS_FILE"
+  rm -f "$tmp_file"
+fi
+
+SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
+HOSTS_ENTRIES="$(
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" python3 - <<'PY' 2>/dev/null || true
+import os
+import sys
+from pathlib import Path
+
+script_dir = os.environ["SCRIPT_DIR"]
+sys.path.insert(0, os.path.join(script_dir, "lib"))
+
+from caddy_domains import load_domains
+
+zones_path = Path(
+    os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json"))
+)
+domains = load_domains(zones_path)
+access_mode = os.environ.get("CADDY_ACCESS", "localhost")
+
+entries: list[str] = []
+marker = "# dotfiles-caddy-managed"
+
+entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
+entries.append(f"::1\t\topencode.localhost\t{marker}")
+
+if access_mode == "localhost":
+    served_domains = [domain for domain in domains if domain.startswith("local.")]
+else:
+    served_domains = domains
+
+for domain in served_domains:
+    entries.append(f"127.0.0.1\t{domain}\t{marker}")
+    entries.append(f"::1\t\t{domain}\t{marker}")
+    entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
+
+for entry in entries:
+    print(entry)
+PY
+)"
+
+if [[ -n "$HOSTS_ENTRIES" ]]; then
+  {
+    echo "$MARKER"
+    printf '%s\n' "$HOSTS_ENTRIES"
+  } >>"$HOSTS_FILE"
+fi
+ok "/etc/hosts updated with Caddy-served domain entries"
+
+# Clear Caddy autosave to force fresh TLS config load
+AUTOSAVE_PATH="$REAL_HOME/Library/Application Support/Caddy/autosave.json"
+if [[ -f "$AUTOSAVE_PATH" ]]; then
+  info "Clearing Caddy autosave at $AUTOSAVE_PATH..."
+  rm -f "$AUTOSAVE_PATH" || warn "Failed to clear Caddy autosave"
+fi
+
+info "Writing Caddy LaunchDaemon..."
+launchctl bootout gui/"$(id -u "$REAL_USER")"/com.caddy.proxy 2>/dev/null || true
+rm -f "$OLD_PLIST_PATH"
+
+cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.caddy.proxy</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${BREW_PREFIX}/bin/caddy</string>
+    <string>run</string>
+    <string>--config</string>
+    <string>${BREW_PREFIX}/etc/caddy/Caddyfile</string>
+  </array>
+  <key>UserName</key>
+  <string>root</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/com.caddy.proxy.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/com.caddy.proxy.stderr.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>${REAL_HOME}</string>
+    <key>PATH</key>
+    <string>${PATH}</string>
+  </dict>
+</dict>
+</plist>
+EOF
+
+chown root:wheel "$PLIST_PATH"
+chmod 644 "$PLIST_PATH"
+
+info "Loading Caddy LaunchDaemon..."
+launchctl bootout system/com.caddy.proxy 2>/dev/null || true
+sleep 2
+launchctl bootstrap system/ "$PLIST_PATH" || warn "launchctl bootstrap system/ failed"
+
+caddy_validate "$CADDYFILE_PATH" || warn "Caddy validation reported issues"
+caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
+
+ok "Caddy setup complete."
+{{- else }}
+info "Skipping Caddy setup on {{ .chezmoi.os }}"
+{{- end }}

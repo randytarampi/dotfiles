@@ -11,6 +11,7 @@ import argparse
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -32,12 +33,55 @@ from opencode_config import (
     get_slim_config_path,
 )
 from env import load_env
+from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
     build_model_entry,
 )
+
+DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
+
+
+def expand_path(path_value: str) -> Path:
+    return Path(os.path.expandvars(os.path.expanduser(path_value)))
+
+
+def build_opencode_server_config() -> dict[str, object] | None:
+    if os.environ.get("DOTFILES_RUN_OPENCODE_WEB", "0") != "1":
+        return None
+
+    access_mode = (
+        os.environ.get("CADDY_ACCESS", "localhost").strip().lower() or "localhost"
+    )
+    port = int(os.environ.get("OPENCODE_SERVER_PORT", "4096") or "4096")
+    zones_path = expand_path(DEFAULT_CADDY_ZONES_CONFIG)
+    domains = load_domains(zones_path)
+
+    cors_origins = ["https://localhost"]
+    cors_origins.extend(f"https://{domain}" for domain in domains)
+
+    seen_origins: set[str] = set()
+    cors: list[str] = []
+    for origin in cors_origins:
+        if origin in seen_origins:
+            continue
+        seen_origins.add(origin)
+        cors.append(origin)
+
+    mdns_enabled = access_mode in ("lan", "public")
+    mdns_domain = "opencode.local"
+    if domains:
+        mdns_domain = domains[0]
+
+    return {
+        "port": port,
+        "hostname": "127.0.0.1",
+        "mdns": mdns_enabled,
+        "mdnsDomain": mdns_domain,
+        "cors": cors,
+    }
 
 
 def main():
@@ -409,6 +453,14 @@ def main():
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
+
+    server_config = build_opencode_server_config()
+    if server_config:
+        existing_server = config.get("server")
+        if isinstance(existing_server, dict):
+            existing_server.update(server_config)
+        else:
+            config["server"] = server_config
 
     # Write opencode.json
     output_path = os.path.join(config_dir_path, "opencode.json")

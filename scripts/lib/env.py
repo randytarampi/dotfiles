@@ -28,11 +28,25 @@ def load_env(env_file=None):
                     if key.startswith("export "):
                         key = key.split(None, 1)[1].strip()
                     val = val.strip()
-                    # Strip wrapping quotes if any
-                    if val.startswith('"') and val.endswith('"'):
-                        val = val[1:-1]
-                    elif val.startswith("'") and val.endswith("'"):
-                        val = val[1:-1]
+                    # Strip inline comments (# outside of quotes)
+                    if val.startswith("'"):
+                        close = val.find("'", 1)
+                        if close != -1:
+                            val = val[1:close]
+                        else:
+                            pass  # No closing quote — leave as-is
+                    elif val.startswith('"'):
+                        close = val.find('"', 1)
+                        if close != -1:
+                            val = val[1:close]
+                        else:
+                            pass  # No closing quote — leave as-is
+                    else:
+                        # Unquoted — strip at first # preceded by whitespace
+                        for i, c in enumerate(val):
+                            if c == "#" and (i == 0 or val[i - 1] in " \t"):
+                                val = val[:i].strip()
+                                break
                     os.environ[key] = val
         alias_github_token()
         return True

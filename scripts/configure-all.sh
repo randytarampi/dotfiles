@@ -119,4 +119,14 @@ else
   info "DOTFILES_RUN_AGENT_GUIDANCE_SETUP not set — skipping agent guidance distribution"
 fi
 
+# 8. Caddy config (LAN exposure front door)
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
+  info "Configuring ddns-route53..."
+  python3 "$SCRIPT_DIR/configure-ddns.py" || warn "configure-ddns.py failed"
+  info "Configuring Caddy..."
+  python3 "$SCRIPT_DIR/configure-caddy.py" || warn "Caddy config generation failed"
+else
+  info "DOTFILES_RUN_CADDY_SETUP not set — skipping Caddy configuration"
+fi
+
 ok "Configuration complete!"

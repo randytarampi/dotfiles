@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -107,7 +107,7 @@ diff:
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" diff
 
 dry-run:
-	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run
+	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run --force
 
 deploy: ## Apply dotfiles and run all configuration scripts
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply
@@ -134,3 +134,19 @@ symlinks:
 
 test: lint drift dry-run
 	@echo "All basic checks passed."
+
+caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
+	@bash scripts/migrate-acme-ddns.sh
+
+caddy-deploy: ## Generate Caddyfile and restart Caddy (root LaunchDaemon)
+	@$(LOAD_ENV); python3 scripts/configure-caddy.py
+	@rm -f "$(HOME)/Library/Application Support/Caddy/autosave.json" 2>/dev/null || true
+	@sudo launchctl bootout system/com.caddy.proxy 2>/dev/null || true
+	@sleep 2
+	@sudo launchctl bootstrap system /Library/LaunchDaemons/com.caddy.proxy.plist
+
+caddy-validate: ## Validate Caddyfile syntax
+	@caddy validate --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddyfile validation failed (is Caddy installed?)"
+
+caddy-reload: ## Hot-reload Caddy config
+	@sudo "$$(brew --prefix)/bin/caddy" reload --force --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddy reload failed"
