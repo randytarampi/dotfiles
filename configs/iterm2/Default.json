@@ -2,8 +2,8 @@
   "Profiles" : [
     {
       "Use Separate Colors for Light and Dark Mode" : false,
-      "Name" : "local",
       "Rewritable" : true,
+      "Name" : "local",
       "Guid" : "randy.tarampi-default-profile-v1"
     }
   ]
