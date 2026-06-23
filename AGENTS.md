@@ -16,7 +16,7 @@ Key directories and files that agents interact with:
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
 ├── .chezmoiignore                # Ignore patterns (excludes scripts/, configs/, macOS-only on non-macOS)
-├── .chezmoiscripts/              # 26 scripts: run_once_01-03 (one-time) + run_onchange_04-26 (hash-triggered)
+├── .chezmoiscripts/              # 27 scripts: run_once_01-03 (one-time) + run_onchange_04-27 (hash-triggered)
 │   ├── # Phase 1: One-time setup (01-03)
 │   ├── # Phase 2: Package/CLI installs (04-11)
 │   └── # Phase 3: Tool configuration (12-20)

@@ -1,0 +1,142 @@
+#!/bin/bash
+set -euo pipefail
+
+# Hash trigger: re-run when env template changes
+# dot_dotfiles/shell/.env.example: {{ include "dot_dotfiles/shell/.env.example" | sha256sum }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_OLLAMA_DAEMON_SETUP is in ~/.env)
+load_env || warn "$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_OLLAMA_DAEMON_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OLLAMA_DAEMON_SETUP='${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}' — skipping Ollama daemon env config"
+  exit 0
+fi
+
+# Read env vars (loaded from ~/.env)
+FA_VAL="${OLLAMA_FLASH_ATTENTION:-}"
+KV_VAL="${OLLAMA_KV_CACHE_TYPE:-}"
+
+if [[ -z "$FA_VAL" && -z "$KV_VAL" ]]; then
+  info "No Ollama daemon env vars (OLLAMA_FLASH_ATTENTION, OLLAMA_KV_CACHE_TYPE) configured — skipping"
+  exit 0
+fi
+
+info "Configuring Ollama daemon env vars..."
+
+{{- if eq .chezmoi.os "darwin" }}
+
+# --- macOS ---
+# launchctl setenv injects into the GUI session namespace (affects newly-launched processes).
+# The Ollama.app's own plist is app-managed and clobbered on update, so we don't edit it.
+# A dedicated LaunchAgent (com.dotfiles.ollama-env) re-applies on every login for persistence.
+
+# Immediate: set in current session
+if [[ -n "$FA_VAL" ]]; then
+  launchctl setenv OLLAMA_FLASH_ATTENTION "$FA_VAL" || warn "Failed to launchctl setenv OLLAMA_FLASH_ATTENTION"
+  ok "OLLAMA_FLASH_ATTENTION=$FA_VAL set via launchctl"
+fi
+if [[ -n "$KV_VAL" ]]; then
+  launchctl setenv OLLAMA_KV_CACHE_TYPE "$KV_VAL" || warn "Failed to launchctl setenv OLLAMA_KV_CACHE_TYPE"
+  ok "OLLAMA_KV_CACHE_TYPE=$KV_VAL set via launchctl"
+fi
+
+# Persistent: LaunchAgent that re-applies on login by sourcing ~/.env at runtime
+PLIST_DIR="$HOME/Library/LaunchAgents"
+PLIST_PATH="$PLIST_DIR/com.dotfiles.ollama-env.plist"
+
+info "Installing LaunchAgent for Ollama env persistence..."
+mkdir -p "$PLIST_DIR"
+
+cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.dotfiles.ollama-env</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>set -a; . "$HOME/.env"; set +a; launchctl setenv OLLAMA_FLASH_ATTENTION "$OLLAMA_FLASH_ATTENTION"; launchctl setenv OLLAMA_KV_CACHE_TYPE "$OLLAMA_KV_CACHE_TYPE"</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+EOF
+ok "LaunchAgent written to $PLIST_PATH"
+
+if launchctl list | grep -q "com.dotfiles.ollama-env"; then
+  ok "com.dotfiles.ollama-env is already loaded."
+else
+  info "Loading com.dotfiles.ollama-env..."
+  launchctl load -w "$PLIST_PATH" && ok "com.dotfiles.ollama-env loaded." || warn "Failed to load com.dotfiles.ollama-env."
+fi
+
+info "Note: restart Ollama.app for the env vars to take effect — 'killall Ollama; open -a Ollama'"
+
+{{- else if eq .chezmoi.os "linux" }}
+
+# --- Linux ---
+# systemd service override is the documented method. Detect system vs user service.
+
+OVERRIDE_CONTENT="[Service]
+Environment=\"OLLAMA_FLASH_ATTENTION=${FA_VAL}\"
+Environment=\"OLLAMA_KV_CACHE_TYPE=${KV_VAL}\""
+
+# Check for system-level service
+if systemctl list-unit-files 2>/dev/null | grep -q "ollama.service"; then
+  info "Found system-level ollama.service — writing override..."
+  OVERRIDE_DIR="/etc/systemd/system/ollama.service.d"
+  OVERRIDE_PATH="$OVERRIDE_DIR/override.conf"
+  sudo mkdir -p "$OVERRIDE_DIR" || warn "Failed to create $OVERRIDE_DIR (need sudo)"
+  echo "$OVERRIDE_CONTENT" | sudo tee "$OVERRIDE_PATH" >/dev/null || warn "Failed to write $OVERRIDE_PATH"
+  sudo systemctl daemon-reload || warn "Failed to daemon-reload"
+  sudo systemctl restart ollama || warn "Failed to restart ollama service"
+  ok "System ollama service override written to $OVERRIDE_PATH"
+
+# Check for user-level service
+elif systemctl --user list-unit-files 2>/dev/null | grep -q "ollama.service"; then
+  info "Found user-level ollama.service — writing override..."
+  OVERRIDE_DIR="$HOME/.config/systemd/user/ollama.service.d"
+  OVERRIDE_PATH="$OVERRIDE_DIR/override.conf"
+  mkdir -p "$OVERRIDE_DIR"
+  echo "$OVERRIDE_CONTENT" > "$OVERRIDE_PATH"
+  systemctl --user daemon-reload || warn "Failed to user daemon-reload"
+  systemctl --user restart ollama || warn "Failed to restart user ollama service"
+  ok "User ollama service override written to $OVERRIDE_PATH"
+
+else
+  info "No systemd ollama service found — vars in ~/.env will apply to manual 'ollama serve'"
+fi
+
+{{- else if eq .chezmoi.os "windows" }}
+
+# --- Windows ---
+# setx writes to the user registry (persists across reboots). Ollama inherits user env vars.
+# The running service/app must be restarted to pick up the new values.
+
+if [[ -n "$FA_VAL" ]]; then
+  cmd.exe /c "setx OLLAMA_FLASH_ATTENTION $FA_VAL" >/dev/null || warn "Failed to setx OLLAMA_FLASH_ATTENTION"
+  ok "OLLAMA_FLASH_ATTENTION=$FA_VAL set via setx (persists in registry)"
+fi
+if [[ -n "$KV_VAL" ]]; then
+  cmd.exe /c "setx OLLAMA_KV_CACHE_TYPE $KV_VAL" >/dev/null || warn "Failed to setx OLLAMA_KV_CACHE_TYPE"
+  ok "OLLAMA_KV_CACHE_TYPE=$KV_VAL set via setx (persists in registry)"
+fi
+
+info "Note: restart Ollama for the env vars to take effect — quit the tray app and relaunch from Start menu, or 'net stop Ollama && net start Ollama' if running as a service"
+
+{{- else }}
+
+info "Unsupported OS {{ .chezmoi.os }} — skipping Ollama daemon config"
+
+{{- end }}
+
+ok "Ollama daemon env config complete!"
