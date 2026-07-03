@@ -98,6 +98,32 @@ fi
 ok "Ollama Cloud model metadata pulled"
 
 # ---------------------------------------------------------------------------
+# 5b. Remove stale Ollama Cloud model stubs no longer in the registry
+#   (Cleans up retired models that were previously `ollama pull`ed as :cloud stubs)
+# ---------------------------------------------------------------------------
+info "Cleaning up stale Ollama Cloud model stubs..."
+if command -v ollama &>/dev/null; then
+  # Build the set of expected cloud model names from the registry (both :cloud and -cloud suffixes)
+  expected_cloud=$(python3 -c "
+import json
+try:
+    data = json.load(open('$CONFIG_FILE'))
+    for m in data.get('models', {}):
+        print(f'{m}-cloud')
+        print(f'{m}:cloud')
+except Exception:
+    pass
+" 2>/dev/null | sort -u)
+  # List currently pulled cloud models and remove any not in expected set
+  ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' | grep -E '(:cloud|-cloud)$' | while read -r stale; do
+    if ! echo "$expected_cloud" | grep -qxF "$stale"; then
+      ollama rm "$stale" 2>/dev/null && info "Removed stale cloud stub: $stale" || warn "Could not remove '$stale'"
+    fi
+  done
+fi
+ok "Stale cloud model stub cleanup complete"
+
+# ---------------------------------------------------------------------------
 # 6. Install CodeGraph CLI (local semantic code index + MCP server)
 # ---------------------------------------------------------------------------
 info "Installing @colbymchenry/codegraph globally..."

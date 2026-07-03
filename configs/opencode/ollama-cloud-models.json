@@ -18,9 +18,6 @@
     "deepseek-v4-flash": {
       "name": "deepseek-v4-flash"
     },
-    "qwen3-coder:480b": {
-      "name": "qwen3-coder:480b"
-    },
     "gemma4:31b": {
       "name": "gemma4:31b"
     },
@@ -32,9 +29,6 @@
     },
     "mistral-large-3:675b": {
       "name": "mistral-large-3:675b"
-    },
-    "ministral-3:14b": {
-      "name": "ministral-3:14b"
     },
     "nemotron-3-nano:30b": {
       "name": "nemotron-3-nano:30b"
@@ -50,12 +44,6 @@
     },
     "gpt-oss:20b": {
       "name": "gpt-oss:20b"
-    },
-    "devstral-2:123b": {
-      "name": "devstral-2:123b"
-    },
-    "devstral-small-2:24b": {
-      "name": "devstral-small-2:24b"
     }
   }
 }

@@ -567,19 +567,21 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 
 | Profile | Provider | Primary | Faster | Temp |
 |---------|----------|---------|--------|------|
-| `deepseek` | cloud | `deepseek-v4-pro` | `deepseek-v4-flash` | 0 |
-| `glm` | cloud | `glm-5.2` | — | 0.7 |
-| `kimi` | cloud | `kimi-k2.6` | — | 1 |
-| `kimi-code` | cloud | `kimi-k2.7-code` | — | 0.7 |
-| `mistral` | cloud | `mistral-large-3:675b` | `ministral-3:14b` | 0.7 |
-| `nemotron` | cloud | `nemotron-3-ultra` | `nemotron-3-nano:30b` | 0.7 |
-| `minimax` | cloud | `minimax-m3` | `minimax-m2.7` | 0.3 |
-| `qwen` | cloud | `qwen3.5:397b` | — | 0.6 |
-| `gpt-oss` | cloud | `gpt-oss:120b` | `gpt-oss:20b` | 0.7 |
-| `devstral` | cloud | `devstral-2:123b-cloud` | `devstral-small-2:24b` | 0.7 |
-| `qwen3` | local | `qwen3.6:27b-mlx` | `qwen3.5:9b-mlx` | 0.6 |
-| `qwen3-coder` | local | `qwen3.6:27b-coding` | `qwen3.5:9b-mlx` | 0.6 |
-| `gemma4` | local | `gemma4:26b-mlx` | `gemma4:e4b-mlx` | 0.7 |
+| `pro` | cloud | `glm-5.2` | `gemma4:31b` | 0.7 |
+| `pro-plus` | cloud | `glm-5.2` | `gpt-5.4-mini` (openai) | 0.7 |
+| `pro-plus-anthropic` | meridian | `claude-opus-4-6` | `claude-haiku-4-5` | 1 |
+| `anthropic` | meridian | `claude-opus-4-6` | `claude-haiku-4-5` | 1 |
+| `plus` | openai | `gpt-5.5` | `gpt-5.4-nano` | 1 |
+| `plus-anthropic` | openai | `gpt-5.5` | `claude-haiku-4-5` (meridian) | 1 |
+| `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
+| `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
+| `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
+| `local-nano` | local | `_local:code-gen` | — | 0.6 |
+| `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
+| `meridian-opus` | meridian | `claude-opus-4-6` | — | 1 |
+| `meridian-sonnet` | meridian | `claude-sonnet-4-6` | — | 1 |
+| `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
+| `meridian-fable` | meridian | `claude-fable-5` | — | 1 |
 
 Local Ollama profiles resolve model IDs dynamically via `ollama ls` prefix matching. Cloud profiles use hardcoded IDs from `model-groups.json`. Temperatures follow Junie's recommendations.
 
