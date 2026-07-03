@@ -42,11 +42,11 @@ if [ "$shell_is_zsh" -eq 1 ]; then
 	# Homebrew and third-party completion directories can occasionally be
 	# group/world-writable, which makes zsh prompt during startup:
 	#   zsh compinit: insecure directories, run compaudit for list...
-	# Repair dirs we own, then use -i so shell startup remains non-interactive
-	# if any external/root-owned directory is still considered insecure.
+	# Best-effort repair (owned or not), then use -i so shell startup remains
+	# non-interactive even if some root-owned directory is still flagged.
 	_insecure_completion_dirs=(${(f)"$(compaudit 2>/dev/null)"});
 	for _completion_dir in "${_insecure_completion_dirs[@]}"; do
-		[[ -d "$_completion_dir" && -O "$_completion_dir" ]] && chmod go-w "$_completion_dir" 2>/dev/null || true;
+		[[ -d "$_completion_dir" ]] && chmod go-w "$_completion_dir" 2>/dev/null || true;
 	done;
 	unset _insecure_completion_dirs _completion_dir;
 
