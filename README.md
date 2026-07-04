@@ -445,7 +445,7 @@ Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (s
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only (`opus-4-7`, `sonnet-4-6`, `haiku-4-5`) | Anthropic-first workflow |
+| **anthropic** | Anthropic only (`sonnet-5`, `fable-5`, `haiku-4-5`, `opus-4-6`) | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
@@ -454,7 +454,7 @@ Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (s
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.2`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision). The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles.
 
-**Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like opus-4-7). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized) or `low` (general). See `AGENTS.md` for the full variant convention table.
+**Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
 Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
@@ -569,8 +569,8 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 |---------|----------|---------|--------|------|
 | `pro` | cloud | `glm-5.2` | `gemma4:31b` | 0.7 |
 | `pro-plus` | cloud | `glm-5.2` | `gpt-5.4-mini` (openai) | 0.7 |
-| `pro-plus-anthropic` | meridian | `claude-opus-4-6` | `claude-haiku-4-5` | 1 |
-| `anthropic` | meridian | `claude-opus-4-6` | `claude-haiku-4-5` | 1 |
+| `pro-plus-anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
+| `anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
 | `plus` | openai | `gpt-5.5` | `gpt-5.4-nano` | 1 |
 | `plus-anthropic` | openai | `gpt-5.5` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
@@ -579,7 +579,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | `local-nano` | local | `_local:code-gen` | — | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
 | `meridian-opus` | meridian | `claude-opus-4-6` | — | 1 |
-| `meridian-sonnet` | meridian | `claude-sonnet-4-6` | — | 1 |
+| `meridian-sonnet` | meridian | `claude-sonnet-5` | — | 1 |
 | `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
 | `meridian-fable` | meridian | `claude-fable-5` | — | 1 |
 

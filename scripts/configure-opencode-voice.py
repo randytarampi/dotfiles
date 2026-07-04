@@ -119,13 +119,13 @@ def get_voice_config(tier: str) -> dict:
         if use_meridian:
             voice_config = {
                 "endpoint": get_meridian_base_url(),
-                "model": "claude-sonnet-4-6",
+                "model": "claude-sonnet-5",
                 "apiKeyEnv": "MERIDIAN_API_KEY",
             }
         else:
             voice_config = {
                 "endpoint": get_provider_base_url("anthropic"),
-                "model": "claude-sonnet-4-6",
+                "model": "claude-sonnet-5",
                 "apiKeyEnv": "ANTHROPIC_API_KEY",
             }
 

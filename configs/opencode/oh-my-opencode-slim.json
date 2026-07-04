@@ -121,7 +121,7 @@
     },
     "pro-plus-anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-6",
+        "model": "anthropic/claude-sonnet-5",
         "skills": [
           "*"
         ],
@@ -131,7 +131,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-fable-5",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -155,7 +155,7 @@
         "mcps": []
       },
       "designer": {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": "anthropic/claude-sonnet-5",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -163,7 +163,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "anthropic/claude-haiku-4-5",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -179,7 +179,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-6",
+        "model": "anthropic/claude-sonnet-5",
         "skills": [
           "*"
         ],
@@ -189,7 +189,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-fable-5",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -213,7 +213,7 @@
         "mcps": []
       },
       "designer": {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": "anthropic/claude-sonnet-5",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -221,8 +221,8 @@
         "mcps": []
       },
       "fixer": {
-        "model": "anthropic/claude-sonnet-4-6",
-        "variant": "low",
+        "model": "anthropic/claude-haiku-4-5",
+        "variant": "high",
         "skills": [],
         "mcps": []
       },
@@ -231,7 +231,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-sonnet-5",
         "variant": "xhigh"
       }
     },
@@ -305,7 +305,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-fable-5",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -329,7 +329,7 @@
         "mcps": []
       },
       "designer": {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": "anthropic/claude-sonnet-5",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -337,7 +337,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "anthropic/claude-haiku-4-5",
         "variant": "high",
         "skills": [],
         "mcps": []
@@ -347,7 +347,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-sonnet-5",
         "variant": "xhigh"
       }
     },
@@ -677,7 +677,7 @@
       },
       "pro-plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-8"
+          "model": "anthropic/claude-fable-5"
         },
         "beta": {
           "model": "ollama-cloud/deepseek-v4-pro"
@@ -699,7 +699,7 @@
       },
       "plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-8"
+          "model": "anthropic/claude-fable-5"
         },
         "beta": {
           "model": "openai/gpt-5.5"
@@ -710,10 +710,10 @@
       },
       "anthropic": {
         "alpha": {
-          "model": "anthropic/claude-opus-4-8"
+          "model": "anthropic/claude-fable-5"
         },
         "beta": {
-          "model": "anthropic/claude-sonnet-4-6"
+          "model": "anthropic/claude-sonnet-5"
         },
         "gamma": {
           "model": "anthropic/claude-opus-4-6"
@@ -908,7 +908,7 @@
         "presets": {
           "pro-plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-8"
+              "model": "anthropic/claude-fable-5"
             },
             "beta": {
               "model": "ollama-cloud/deepseek-v4-pro"
@@ -925,7 +925,6 @@
       },
       "fallback": {
         "orchestrator": [
-          "anthropic/claude-opus-4-8",
           "openai/gpt-5.5",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/nemotron-3-ultra"
@@ -967,16 +966,16 @@
         "presets": {
           "anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-8"
+              "model": "anthropic/claude-fable-5"
             },
             "beta": {
-              "model": "anthropic/claude-sonnet-4-6"
+              "model": "anthropic/claude-sonnet-5"
             },
             "gamma": {
               "model": "anthropic/claude-opus-4-6"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-8",
+              "model": "anthropic/claude-sonnet-5",
               "variant": "xhigh"
             }
           }
@@ -1041,7 +1040,7 @@
         "presets": {
           "plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-opus-4-8"
+              "model": "anthropic/claude-fable-5"
             },
             "beta": {
               "model": "openai/gpt-5.5"
@@ -1050,7 +1049,7 @@
               "model": "openai/gpt-5.4"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-8",
+              "model": "anthropic/claude-sonnet-5",
               "variant": "xhigh"
             }
           }
@@ -1058,13 +1057,12 @@
       },
       "fallback": {
         "orchestrator": [
-          "anthropic/claude-opus-4-8",
           "anthropic/claude-opus-4-6",
-          "anthropic/claude-sonnet-4-6"
+          "anthropic/claude-sonnet-5"
         ],
         "oracle": [
           "openai/gpt-5.5",
-          "anthropic/claude-sonnet-4-6"
+          "anthropic/claude-sonnet-5"
         ],
         "librarian": [
           "anthropic/claude-haiku-4-5",
@@ -1075,7 +1073,7 @@
           "openai/gpt-5.4-mini"
         ],
         "fixer": [
-          "anthropic/claude-sonnet-4-6"
+          "anthropic/claude-sonnet-5"
         ],
         "designer": [
           "openai/gpt-5.5",

@@ -55,12 +55,12 @@
     },
     "pro-plus-anthropic": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-opus-4-6",
+      "primaryModel": "anthropic/claude-sonnet-5",
       "fasterModel": "anthropic/claude-haiku-4-5"
     },
     "anthropic": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-opus-4-6",
+      "primaryModel": "anthropic/claude-sonnet-5",
       "fasterModel": "anthropic/claude-haiku-4-5"
     },
     "plus": {
@@ -104,7 +104,7 @@
     },
     "meridian-sonnet": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-sonnet-4-6"
+      "primaryModel": "anthropic/claude-sonnet-5"
     },
     "meridian-haiku": {
       "provider": "meridian",
