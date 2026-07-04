@@ -1,0 +1,224 @@
+#!/bin/bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Load env before gate (DOTFILES_RUN_*_DEFAULTS_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+{{- if eq .chezmoi.os "darwin" }}
+
+# Gate on DOTFILES_RUN_MACOS_DEFAULTS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_MACOS_DEFAULTS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_MACOS_DEFAULTS_SETUP='${DOTFILES_RUN_MACOS_DEFAULTS_SETUP:-0}' — skipping macOS defaults"
+  exit 0
+fi
+
+info "Configuring macOS defaults..."
+
+# Keyboard
+defaults write NSGlobalDomain KeyRepeat -int 2 || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain InitialKeyRepeat -int 15 || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 2 || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain com.apple.keyboard.fnState -bool true || warn "Failed: NSGlobalDomain"
+defaults write com.apple.HIToolbox AppleFnUsageType -int 2 || warn "Failed: com.apple.HIToolbox"
+
+# Keyboard — disable typing substitutions
+defaults write NSGlobalDomain NSAutomaticPeriodSubstitutionEnabled -bool false || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSAutomaticCapitalizationEnabled -bool false || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSAutomaticDashSubstitutionEnabled -bool false || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSAutomaticQuoteSubstitutionEnabled -bool false || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false || warn "Failed: NSGlobalDomain"
+
+# Trackpad / Mouse
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true || warn "Failed: com.apple.driver.AppleBluetoothMultitouch.trackpad"
+defaults write NSGlobalDomain com.apple.mouse.tapBehavior -bool true || warn "Failed: NSGlobalDomain"
+
+# Finder
+defaults write com.apple.finder ShowPathbar -bool true || warn "Failed: com.apple.finder"
+defaults write com.apple.finder ShowStatusBar -bool true || warn "Failed: com.apple.finder"
+defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false || warn "Failed: com.apple.finder"
+defaults write com.apple.finder FXPreferredViewStyle -string Nlsv || warn "Failed: com.apple.finder"
+defaults write com.apple.finder FXDefaultSearchScope -string SCcf || warn "Failed: com.apple.finder"
+defaults write com.apple.finder _FXSortFoldersFirst -bool true || warn "Failed: com.apple.finder"
+defaults write com.apple.finder _FXEnableColumnAutoSizing -bool true || warn "Failed: com.apple.finder"
+defaults write com.apple.finder FXRemoveOldTrashItems -bool true || warn "Failed: com.apple.finder"
+defaults write com.apple.finder FXInfoPanesExpanded -bool true || warn "Failed: com.apple.finder"
+# Desktop services — no .DS_Store on external volumes
+defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true || warn "Failed: com.apple.desktopservices"
+defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true || warn "Failed: com.apple.desktopservices"
+
+# Dock
+defaults write com.apple.dock autohide -bool true || warn "Failed: com.apple.dock"
+defaults write com.apple.dock minimize-to-application -bool true || warn "Failed: com.apple.dock"
+defaults write com.apple.dock show-recents -bool false || warn "Failed: com.apple.dock"
+defaults write com.apple.dock mru-spaces -bool false || warn "Failed: com.apple.dock"
+defaults write com.apple.dock mineffect -string scale || warn "Failed: com.apple.dock"
+defaults write com.apple.dock orientation -string left || warn "Failed: com.apple.dock"
+defaults write com.apple.dock expose-group-apps -bool true || warn "Failed: com.apple.dock"
+
+# Spaces
+defaults write NSGlobalDomain AppleSpacesSwitchOnActivate -bool false || warn "Failed: NSGlobalDomain"
+defaults write com.apple.spaces spans-displays -bool false || warn "Failed: com.apple.spaces"
+
+# Save / Print panels — expand by default
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false || warn "Failed: NSGlobalDomain"
+
+# Login window
+defaults write com.apple.loginwindow DisableConsoleAccess -bool true || warn "Failed: com.apple.loginwindow"
+
+# Menu bar
+defaults write com.apple.menuextra.battery ShowPercent -bool true || warn "Failed: com.apple.menuextra.battery"
+defaults write com.apple.menuextra.clock FlashDateSeparators -bool true || warn "Failed: com.apple.menuextra.clock"
+defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM HH:mm:ss" || warn "Failed: com.apple.menuextra.clock"
+
+# TextEdit — plain text by default
+defaults write com.apple.TextEdit RichText -bool false || warn "Failed: com.apple.TextEdit"
+
+# Safari — show Develop menu and warnings
+defaults write com.apple.Safari IncludeDevelopMenu -bool true || warn "Failed: com.apple.Safari"
+defaults write com.apple.Safari IncludeInternalDebugMenu -bool true || warn "Failed: com.apple.Safari"
+defaults write com.apple.Safari WarnAboutFraudulentWebsites -bool true || warn "Failed: com.apple.Safari"
+
+# Activity Monitor — show CPU usage in Dock icon
+defaults write com.apple.ActivityMonitor IconType -int 6 || warn "Failed: com.apple.ActivityMonitor"
+# Dictionary — don't open new window for each lookup
+defaults write com.apple.Dictionary ProhibitNewWindowForRequest -bool true || warn "Failed: com.apple.Dictionary"
+# Disk Utility — show every partition
+defaults write com.apple.DiskUtility DUShowEveryPartition -bool true || warn "Failed: com.apple.DiskUtility"
+# AddressBook — debug menu
+defaults write com.apple.addressbook ABShowDebugMenu -bool true || warn "Failed: com.apple.addressbook"
+# Feedback Assistant — don't auto-gather large files
+defaults write com.apple.appleseed.FeedbackAssistant Autogather -bool false || warn "Failed: com.apple.appleseed.FeedbackAssistant"
+# Xcode — show build duration
+defaults write com.apple.dt.Xcode ShowBuildOperationDuration -bool true || warn "Failed: com.apple.dt.Xcode"
+
+# Time Machine — don't offer new disks for backup
+defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true || warn "Failed: com.apple.TimeMachine"
+
+# App Store / Software Update (legacy — no-op on Ventura+; manage via System Settings)
+defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true || warn "Failed: com.apple.SoftwareUpdate"
+defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1 || warn "Failed: com.apple.SoftwareUpdate"
+defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1 || warn "Failed: com.apple.SoftwareUpdate"
+
+# Spotlight — don't send diagnostics (idempotent: -array replaces the whole array)
+defaults write com.apple.spotlight orderedItems -array '{"enabled" = 0;"name" = "MENU_SPOTLIGHT_SUGGESTIONS";}' || warn "Failed: com.apple.spotlight"
+
+ok "macOS defaults configured."
+
+{{- else if eq .chezmoi.os "windows" }}
+
+# Gate on DOTFILES_RUN_WINDOWS_DEFAULTS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_WINDOWS_DEFAULTS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_WINDOWS_DEFAULTS_SETUP='${DOTFILES_RUN_WINDOWS_DEFAULTS_SETUP:-0}' — skipping Windows defaults"
+  exit 0
+fi
+
+info "Configuring Windows defaults..."
+
+# Keyboard — max repeat speed, min delay (parity with macOS KeyRepeat=2 / InitialKeyRepeat=15)
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Control Panel\Keyboard' -Name 'KeyboardSpeed' -Value '31' -Type String" || warn "Failed to set KeyboardSpeed"
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Control Panel\Keyboard' -Name 'KeyboardDelay' -Value '0' -Type String" || warn "Failed to set KeyboardDelay"
+
+# Explorer — show hidden files
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'Hidden' -Value 1 -Type DWord" || warn "Failed to set Hidden"
+
+# Dark mode — force dark (parity with macOS AppleInterfaceStyle=Dark)
+# No native Windows registry "auto by time of day" value exists; a scheduled-task
+# toggle of AppsUseLightTheme is possible but out of scope here.
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name 'AppsUseLightTheme' -Value 0 -Type DWord" || warn "Failed to set AppsUseLightTheme"
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name 'SystemUsesLightTheme' -Value 0 -Type DWord" || warn "Failed to set SystemUsesLightTheme"
+
+# Explorer — no Thumbs.db on network folders
+powershell.exe -NoProfile -Command "Set-ItemProperty -Path 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' -Name 'DisableThumbsDBOnNetworkFolders' -Value 1 -Type DWord" || warn "Failed to set DisableThumbsDBOnNetworkFolders"
+
+# Windows Update — auto-download + scheduled install (HKLM; needs admin)
+# NoAutoUpdate=0 (enable auto), AUOptions=4 (auto-download + scheduled install),
+# ScheduledInstallDay=0 (daily), ScheduledInstallTime=3 (3am)
+info "Configuring Windows Update (HKLM — elevation required)..."
+powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command',\"New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Force | Out-Null; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'NoAutoUpdate' -Value 0 -Type DWord; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'AUOptions' -Value 4 -Type DWord; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'ScheduledInstallDay' -Value 0 -Type DWord; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' -Name 'ScheduledInstallTime' -Value 3 -Type DWord\"" || warn "Failed to set Windows Update HKLM keys (UAC declined or not admin)"
+
+ok "Windows defaults configured."
+
+{{- else if eq .chezmoi.os "linux" }}
+
+# Gate on DOTFILES_RUN_LINUX_DEFAULTS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_LINUX_DEFAULTS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_LINUX_DEFAULTS_SETUP='${DOTFILES_RUN_LINUX_DEFAULTS_SETUP:-0}' — skipping Linux defaults"
+  exit 0
+fi
+
+# Detect desktop environment
+case "${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}" in
+  *GNOME*|*ubuntu:GNOME*) DESKTOP=GNOME ;;
+  *KDE*|*PLASMA*) DESKTOP=KDE ;;
+  *) DESKTOP=unknown ;;
+esac
+
+if [[ "$DESKTOP" == "unknown" ]]; then
+  info "Unsupported or undetected desktop (XDG_CURRENT_DESKTOP='${XDG_CURRENT_DESKTOP:-}') — skipping Linux defaults"
+  exit 0
+fi
+
+# KDE: detect kwriteconfig6 (Plasma 6) or kwriteconfig5 (Plasma 5)
+KWRITECONFIG=""
+if [[ "$DESKTOP" == "KDE" ]]; then
+  KWRITECONFIG="$(command -v kwriteconfig6 2>/dev/null || command -v kwriteconfig5 2>/dev/null || echo "")"
+  if [[ -z "$KWRITECONFIG" ]]; then
+    warn "Neither kwriteconfig6 nor kwriteconfig5 found — skipping Linux defaults"
+    exit 0
+  fi
+fi
+
+info "Configuring Linux defaults ($DESKTOP)..."
+
+# Keyboard — repeat rate parity with macOS KeyRepeat=2 / InitialKeyRepeat=15
+# GNOME defaults: repeat-interval=30, delay=500 (ms)
+if [[ "$DESKTOP" == "GNOME" ]]; then
+  gsettings set org.gnome.desktop.peripherals.keyboard repeat-interval 20 || warn "Failed to set keyboard repeat-interval"
+  gsettings set org.gnome.desktop.peripherals.keyboard delay 200 || warn "Failed to set keyboard delay"
+fi
+# KDE: keyboard repeat CLI keys are version-sensitive; Plasma UI is the reliable path.
+
+# Dark mode — force dark (parity with macOS AppleInterfaceStyle=Dark and Windows AppsUseLightTheme=0)
+if [[ "$DESKTOP" == "GNOME" ]]; then
+  gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' || warn "Failed to set GNOME color-scheme"
+elif [[ "$DESKTOP" == "KDE" ]]; then
+  "$KWRITECONFIG" --file kdeglobals --group KDE --key ColorScheme BreezeDark || warn "Failed to set KDE ColorScheme"
+fi
+
+# Files — show hidden files
+if [[ "$DESKTOP" == "GNOME" ]]; then
+  gsettings set org.gtk.Settings.FileChooser show-hidden true || warn "Failed to set FileChooser show-hidden"
+elif [[ "$DESKTOP" == "KDE" ]]; then
+  "$KWRITECONFIG" --file dolphinrc --group General --key ShowHiddenFiles true || warn "Failed to set Dolphin ShowHiddenFiles"
+fi
+
+# Files — list view + sort folders first
+if [[ "$DESKTOP" == "GNOME" ]]; then
+  gsettings set org.gnome.nautilus.preferences default-folder-viewer 'list-view' || warn "Failed to set Nautilus default-folder-viewer"
+  gsettings set org.gnome.nautilus.list-view folders-first true || warn "Failed to set Nautilus folders-first"
+elif [[ "$DESKTOP" == "KDE" ]]; then
+  "$KWRITECONFIG" --file dolphinrc --group General --key ViewMode DetailsView || warn "Failed to set Dolphin ViewMode"
+  "$KWRITECONFIG" --file dolphinrc --group General --key SortFoldersFirst true || warn "Failed to set Dolphin SortFoldersFirst"
+fi
+
+# Dock — autohide (GNOME only; Plasma panel config is version-sensitive)
+if [[ "$DESKTOP" == "GNOME" ]]; then
+  gsettings set org.gnome.shell.extensions.dash-to-dock dock-fixed false || warn "Failed to set dash-to-dock dock-fixed (extension may not be installed)"
+fi
+
+ok "Linux defaults configured ($DESKTOP)."
+
+{{- else }}
+
+info "Unsupported OS {{ .chezmoi.os }} — skipping desktop defaults"
+
+{{- end }}
