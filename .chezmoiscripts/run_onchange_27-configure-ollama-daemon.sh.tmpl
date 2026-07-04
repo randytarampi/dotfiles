@@ -17,16 +17,81 @@ if [[ "${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}" != "1" ]]; then
   exit 0
 fi
 
-# Read env vars (loaded from ~/.env)
-FA_VAL="${OLLAMA_FLASH_ATTENTION:-}"
-KV_VAL="${OLLAMA_KV_CACHE_TYPE:-}"
+# Full menu of Ollama daemon tuning vars (applied uniformly across OS branches)
+OLLAMA_DAEMON_VARS=(
+  OLLAMA_FLASH_ATTENTION
+  OLLAMA_KV_CACHE_TYPE
+  OLLAMA_NUM_PARALLEL
+  OLLAMA_MAX_LOADED_MODELS
+  OLLAMA_KEEP_ALIVE
+  OLLAMA_NUM_CTX
+  OLLAMA_LLM_LIBRARY
+  OLLAMA_SCHED_SPREAD
+  OLLAMA_ORIGINS
+)
 
-if [[ -z "$FA_VAL" && -z "$KV_VAL" ]]; then
-  info "No Ollama daemon env vars (OLLAMA_FLASH_ATTENTION, OLLAMA_KV_CACHE_TYPE) configured — skipping"
+# Detect hardware profile for guidance messages (does not force any settings)
+detect_gpu_profile() {
+  local os="{{ .chezmoi.os }}"
+  if [[ "$os" == "darwin" ]]; then
+    if sysctl -n machdep.cpu.brand_string 2>/dev/null | grep -qi "apple"; then
+      echo "apple-silicon"
+    else
+      echo "cpu-only"
+    fi
+  elif [[ "$os" == "linux" ]]; then
+    if command -v nvidia-smi >/dev/null 2>&1; then
+      echo "cuda"
+    elif command -v rocminfo >/dev/null 2>&1 || ls /sys/class/kfd 2>/dev/null | grep -q .; then
+      echo "rocm"
+    elif command -v sycl-info >/dev/null 2>&1 || lspci 2>/dev/null | grep -qi "intel.*arc"; then
+      echo "intel-gpu"
+    else
+      echo "cpu-only"
+    fi
+  else
+    echo "cpu-only"
+  fi
+}
+
+GPU_PROFILE="$(detect_gpu_profile)"
+
+# Collect only the vars that are set in ~/.env
+ACTIVE_VARS=()
+for var in "${OLLAMA_DAEMON_VARS[@]}"; do
+  val="${!var:-}"
+  if [[ -n "$val" ]]; then
+    ACTIVE_VARS+=("$var=$val")
+  fi
+done
+
+if [[ ${#ACTIVE_VARS[@]} -eq 0 ]]; then
+  info "No Ollama daemon env vars configured. Detected profile: $GPU_PROFILE"
+  case "$GPU_PROFILE" in
+    apple-silicon)
+      info "Apple Silicon: MLX is auto-enabled. Recommended: OLLAMA_KV_CACHE_TYPE=q8_0 + OLLAMA_FLASH_ATTENTION=1 if memory-bound. Otherwise defaults are optimal."
+      ;;
+    cuda)
+      info "NVIDIA CUDA: Flash Attention auto-detected. Recommended: OLLAMA_KV_CACHE_TYPE=q8_0 + OLLAMA_FLASH_ATTENTION=1 for context-heavy workloads. OLLAMA_NUM_PARALLEL=1 for desktop."
+      ;;
+    rocm)
+      info "AMD ROCm: Use defaults first. OLLAMA_KV_CACHE_TYPE=q8_0 can help memory. Avoid forcing flash until stable."
+      ;;
+    intel-gpu)
+      info "Intel GPU: Prefer defaults. Avoid forcing flash/parallelism until stable."
+      ;;
+    cpu-only)
+      info "CPU-only: OLLAMA_NUM_PARALLEL=1, default MAX_LOADED_MODELS. Tune OLLAMA_KEEP_ALIVE for latency vs RAM tradeoff."
+      ;;
+  esac
+  info "Set vars in ~/.env and re-run (DOTFILES_RUN_OLLAMA_DAEMON_SETUP=1) to apply. See .env.example for full menu."
   exit 0
 fi
 
-info "Configuring Ollama daemon env vars..."
+info "Configuring Ollama daemon env vars (profile: $GPU_PROFILE)..."
+for av in "${ACTIVE_VARS[@]}"; do
+  ok "  $av"
+done
 
 {{- if eq .chezmoi.os "darwin" }}
 
@@ -36,14 +101,13 @@ info "Configuring Ollama daemon env vars..."
 # A dedicated LaunchAgent (com.dotfiles.ollama-env) re-applies on every login for persistence.
 
 # Immediate: set in current session
-if [[ -n "$FA_VAL" ]]; then
-  launchctl setenv OLLAMA_FLASH_ATTENTION "$FA_VAL" || warn "Failed to launchctl setenv OLLAMA_FLASH_ATTENTION"
-  ok "OLLAMA_FLASH_ATTENTION=$FA_VAL set via launchctl"
-fi
-if [[ -n "$KV_VAL" ]]; then
-  launchctl setenv OLLAMA_KV_CACHE_TYPE "$KV_VAL" || warn "Failed to launchctl setenv OLLAMA_KV_CACHE_TYPE"
-  ok "OLLAMA_KV_CACHE_TYPE=$KV_VAL set via launchctl"
-fi
+for var in "${OLLAMA_DAEMON_VARS[@]}"; do
+  val="${!var:-}"
+  if [[ -n "$val" ]]; then
+    launchctl setenv "$var" "$val" || warn "Failed to launchctl setenv $var"
+    ok "$var=$val set via launchctl"
+  fi
+done
 
 # Persistent: LaunchAgent that re-applies on login by sourcing ~/.env at runtime
 PLIST_DIR="$HOME/Library/LaunchAgents"
@@ -51,6 +115,13 @@ PLIST_PATH="$PLIST_DIR/com.dotfiles.ollama-env.plist"
 
 info "Installing LaunchAgent for Ollama env persistence..."
 mkdir -p "$PLIST_DIR"
+
+# Build the launchctl setenv command string for all set vars (evaluated at runtime from ~/.env)
+SETENV_CMDS=""
+for var in "${OLLAMA_DAEMON_VARS[@]}"; do
+  SETENV_CMDS+="launchctl setenv $var \\\"\$$var\\\"; "
+done
+SETENV_CMDS="${SETENV_CMDS%; }"
 
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,7 +134,7 @@ cat >"$PLIST_PATH" <<EOF
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>set -a; . "$HOME/.env"; set +a; launchctl setenv OLLAMA_FLASH_ATTENTION "$OLLAMA_FLASH_ATTENTION"; launchctl setenv OLLAMA_KV_CACHE_TYPE "$OLLAMA_KV_CACHE_TYPE"</string>
+        <string>set -a; . "$HOME/.env"; set +a; $SETENV_CMDS</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -86,9 +157,15 @@ info "Note: restart Ollama.app for the env vars to take effect — 'killall Olla
 # --- Linux ---
 # systemd service override is the documented method. Detect system vs user service.
 
-OVERRIDE_CONTENT="[Service]
-Environment=\"OLLAMA_FLASH_ATTENTION=${FA_VAL}\"
-Environment=\"OLLAMA_KV_CACHE_TYPE=${KV_VAL}\""
+# Build Environment= lines for all set vars
+OVERRIDE_LINES=""
+for var in "${OLLAMA_DAEMON_VARS[@]}"; do
+  val="${!var:-}"
+  if [[ -n "$val" ]]; then
+    OVERRIDE_LINES+="Environment=\"$var=$val\"\n"
+  fi
+done
+OVERRIDE_CONTENT="[Service]\n$OVERRIDE_LINES"
 
 # Check for system-level service
 if systemctl list-unit-files 2>/dev/null | grep -q "ollama.service"; then
@@ -96,7 +173,7 @@ if systemctl list-unit-files 2>/dev/null | grep -q "ollama.service"; then
   OVERRIDE_DIR="/etc/systemd/system/ollama.service.d"
   OVERRIDE_PATH="$OVERRIDE_DIR/override.conf"
   sudo mkdir -p "$OVERRIDE_DIR" || warn "Failed to create $OVERRIDE_DIR (need sudo)"
-  echo "$OVERRIDE_CONTENT" | sudo tee "$OVERRIDE_PATH" >/dev/null || warn "Failed to write $OVERRIDE_PATH"
+  printf "$OVERRIDE_CONTENT" | sudo tee "$OVERRIDE_PATH" >/dev/null || warn "Failed to write $OVERRIDE_PATH"
   sudo systemctl daemon-reload || warn "Failed to daemon-reload"
   sudo systemctl restart ollama || warn "Failed to restart ollama service"
   ok "System ollama service override written to $OVERRIDE_PATH"
@@ -107,7 +184,7 @@ elif systemctl --user list-unit-files 2>/dev/null | grep -q "ollama.service"; th
   OVERRIDE_DIR="$HOME/.config/systemd/user/ollama.service.d"
   OVERRIDE_PATH="$OVERRIDE_DIR/override.conf"
   mkdir -p "$OVERRIDE_DIR"
-  echo "$OVERRIDE_CONTENT" > "$OVERRIDE_PATH"
+  printf "$OVERRIDE_CONTENT" > "$OVERRIDE_PATH"
   systemctl --user daemon-reload || warn "Failed to user daemon-reload"
   systemctl --user restart ollama || warn "Failed to restart user ollama service"
   ok "User ollama service override written to $OVERRIDE_PATH"
@@ -122,14 +199,13 @@ fi
 # setx writes to the user registry (persists across reboots). Ollama inherits user env vars.
 # The running service/app must be restarted to pick up the new values.
 
-if [[ -n "$FA_VAL" ]]; then
-  cmd.exe /c "setx OLLAMA_FLASH_ATTENTION $FA_VAL" >/dev/null || warn "Failed to setx OLLAMA_FLASH_ATTENTION"
-  ok "OLLAMA_FLASH_ATTENTION=$FA_VAL set via setx (persists in registry)"
-fi
-if [[ -n "$KV_VAL" ]]; then
-  cmd.exe /c "setx OLLAMA_KV_CACHE_TYPE $KV_VAL" >/dev/null || warn "Failed to setx OLLAMA_KV_CACHE_TYPE"
-  ok "OLLAMA_KV_CACHE_TYPE=$KV_VAL set via setx (persists in registry)"
-fi
+for var in "${OLLAMA_DAEMON_VARS[@]}"; do
+  val="${!var:-}"
+  if [[ -n "$val" ]]; then
+    cmd.exe /c "setx $var $val" >/dev/null || warn "Failed to setx $var"
+    ok "$var=$val set via setx (persists in registry)"
+  fi
+done
 
 info "Note: restart Ollama for the env vars to take effect — quit the tray app and relaunch from Start menu, or 'net stop Ollama && net start Ollama' if running as a service"
 
