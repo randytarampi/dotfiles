@@ -87,7 +87,12 @@ def get_voice_config(tier: str) -> dict:
             try:
                 local_models = list_local_ollama_models()
                 if local_models:
-                    resolved = resolve_roles_from_list(local_models)
+                    min_emb = int(
+                        os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"
+                    )
+                    resolved = resolve_roles_from_list(
+                        local_models, min_reasoning_embedding=min_emb
+                    )
                     voice_model = (
                         resolved.get("reasoning")
                         or resolved.get("code-gen")

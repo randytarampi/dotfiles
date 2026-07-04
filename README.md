@@ -186,6 +186,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |
 | `DOTFILES_RUN_SECRETS_SETUP` | Secrets distribution helper | 0 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
+| `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
 | `DO_NOT_TRACK` | Global telemetry opt-out | 1 |
 

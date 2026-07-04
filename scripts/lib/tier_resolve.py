@@ -40,15 +40,31 @@ def extract_param_count(model_name: str) -> int:
 
 
 def get_model_details(model_name: str) -> dict:
-    """Run ollama show <model> and parse parameters/capabilities.
+    """Run ollama show <model> and parse parameters, capabilities, and architecture metadata.
 
-    Returns {"param_count": int, "capabilities": [str]}.
-    Returns {"param_count": None, "capabilities": []} if ollama show fails or
-    no parameters found.
+    Returns a dict with keys:
+      - param_count (int|None): parameter count in billions
+      - capabilities ([str]): capability tags from ollama show
+      - architecture (str|None): model architecture (e.g. "qwen3_5", "qwen3_5_moe", "gemma4")
+      - embedding_length (int|None): embedding dimension from ollama show
+      - context_length (int|None): context window length
+      - quantization (str|None): quantization format (e.g. "q4_K_M", "f16")
+      - is_moe (bool): True if architecture name contains "moe"
+
+    Returns defaults (param_count=None, capabilities=[], others None/False)
+    if ollama show fails or no parameters found.
     """
     ollama_bin = find_ollama()
     if not ollama_bin:
-        return {"param_count": None, "capabilities": []}
+        return {
+            "param_count": None,
+            "capabilities": [],
+            "architecture": None,
+            "embedding_length": None,
+            "context_length": None,
+            "quantization": None,
+            "is_moe": False,
+        }
 
     try:
         result = subprocess.run(
@@ -58,10 +74,22 @@ def get_model_details(model_name: str) -> dict:
             timeout=10,
         )
         if result.returncode != 0:
-            return {"param_count": None, "capabilities": []}
+            return {
+                "param_count": None,
+                "capabilities": [],
+                "architecture": None,
+                "embedding_length": None,
+                "context_length": None,
+                "quantization": None,
+                "is_moe": False,
+            }
 
         param_count = None
         capabilities = []
+        architecture = None
+        embedding_length = None
+        context_length = None
+        quantization = None
         in_capabilities = False
 
         for line in result.stdout.splitlines():
@@ -92,15 +120,73 @@ def get_model_details(model_name: str) -> dict:
                         param_count = int(value / 1000000.0)
                 continue
 
+            # architecture: "qwen3_5_moe", "gemma4", etc.
+            if line.strip().lower().startswith("architecture"):
+                match = re.search(r"architecture\s+(\S+)", line, re.IGNORECASE)
+                if match:
+                    architecture = match.group(1).strip()
+                continue
+
+            # embedding length: "embedding length 2048" or "embedding_length 2048"
+            if "embedding" in line.lower() and "length" in line.lower():
+                match = re.search(
+                    r"embedding\s*(?:_)?length\s+(\d+)", line, re.IGNORECASE
+                )
+                if match:
+                    embedding_length = int(match.group(1))
+                continue
+
+            # context length
+            if "context" in line.lower() and "length" in line.lower():
+                match = re.search(
+                    r"context\s*(?:_)?length\s+(\d+)", line, re.IGNORECASE
+                )
+                if match:
+                    context_length = int(match.group(1))
+                continue
+
+            # quantization
+            if line.strip().lower().startswith("quantization"):
+                match = re.search(r"quantization\s+(\S+)", line, re.IGNORECASE)
+                if match:
+                    quantization = match.group(1).strip()
+                continue
+
             if line.strip().lower() == "capabilities":
                 in_capabilities = True
 
-        return {"param_count": param_count, "capabilities": capabilities}
+        is_moe = bool(architecture) and "moe" in architecture.lower()
+
+        return {
+            "param_count": param_count,
+            "capabilities": capabilities,
+            "architecture": architecture,
+            "embedding_length": embedding_length,
+            "context_length": context_length,
+            "quantization": quantization,
+            "is_moe": is_moe,
+        }
     except Exception:
-        return {"param_count": None, "capabilities": []}
+        return {
+            "param_count": None,
+            "capabilities": [],
+            "architecture": None,
+            "embedding_length": None,
+            "context_length": None,
+            "quantization": None,
+            "is_moe": False,
+        }
 
 
-def resolve_roles_from_list(models: list) -> dict:
+def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> dict:
+    """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
+
+    Args:
+      models: list of model dicts ({"name": str, "size_gb": float}) or strings
+      min_reasoning_embedding: if > 0, exclude models whose embedding_length is
+        below this threshold from reasoning/solo roles (0 = disabled, default).
+        Models with unknown embedding_length are not filtered out.
+    """
     classified = {
         "reasoning": [],
         "code-gen": [],
@@ -155,7 +241,34 @@ def resolve_roles_from_list(models: list) -> dict:
         else:
             category = "all"
 
-        classified[category].append({"name": model_name, "size_gb": size_gb})
+        classified[category].append(
+            {"name": model_name, "size_gb": size_gb, "primary_category": category}
+        )
+
+    # Cross-category promotion: add capability-qualified code-gen models to
+    # reasoning. A model name-heuristically routed to code-gen but with
+    # `thinking` + `tools` capabilities is also a valid reasoning model.
+    # Promote it into the reasoning bucket (in addition to its primary
+    # category) so density-aware sort can rank it for reasoning roles.
+    # Lightweight models are NOT promoted — they are small by definition
+    # (name heuristic or < 12 GB) and should not serve as reasoning models
+    # when larger models are available.
+    # Dedup by model name to avoid double entries from the `all` fallback.
+    existing_reasoning_names = {m["name"] for m in classified["reasoning"]}
+    for model in classified["code-gen"]:
+        if model["name"] in existing_reasoning_names:
+            continue
+        details = get_cached_model_details(model["name"])
+        caps = set(details.get("capabilities", []))
+        if {"thinking", "tools"}.issubset(caps):
+            classified["reasoning"].append(
+                {
+                    "name": model["name"],
+                    "size_gb": model.get("size_gb", 0.0),
+                    "primary_category": "code-gen",
+                }
+            )
+            existing_reasoning_names.add(model["name"])
 
     remaining = classified["all"]
     if remaining:
@@ -202,6 +315,11 @@ def resolve_roles_from_list(models: list) -> dict:
             if param_count is not None:
                 model["param_count"] = param_count
             model["capabilities"] = details.get("capabilities", [])
+            model["architecture"] = details.get("architecture")
+            model["embedding_length"] = details.get("embedding_length")
+            model["context_length"] = details.get("context_length")
+            model["quantization"] = details.get("quantization")
+            model["is_moe"] = details.get("is_moe", False)
 
         def _sort_key(m):
             name_count = extract_param_count(m.get("name", ""))
@@ -214,6 +332,31 @@ def resolve_roles_from_list(models: list) -> dict:
 
         classified[cat].sort(key=_sort_key, reverse=True)
 
+    def _density_sort_key(m):
+        """Sort key for reasoning/solo roles: prefer dense > MoE, then higher
+        embedding_length, then larger param count, with lightweight-origin
+        models downranked to the bottom.
+
+        Returns a tuple (non_lightweight_first, dense_first, embedding_length,
+        param_count) for descending sort. Lightweight-origin models (those
+        whose primary_category is "lightweight") sort last so a 9B lightweight
+        model never outranks a 35B for deep reasoning. Within non-lightweight
+        models, dense (is_moe=False) sorts before MoE, then higher embedding
+        wins, then larger param count.
+        """
+        primary_cat = m.get("primary_category", "")
+        non_lightweight_first = 0 if primary_cat == "lightweight" else 1
+        is_moe = m.get("is_moe", False)
+        dense_first = 0 if is_moe else 1
+        embedding = m.get("embedding_length") or 0
+        name_count = extract_param_count(m.get("name", ""))
+        if name_count > 0:
+            param_count = float(name_count)
+        else:
+            show_count = m.get("param_count")
+            param_count = float(show_count) if show_count else 0.0
+        return (non_lightweight_first, dense_first, embedding, param_count)
+
     def _has_required_capabilities(model, required_caps):
         capabilities = model.get("capabilities", [])
         if not capabilities:
@@ -225,6 +368,25 @@ def resolve_roles_from_list(models: list) -> dict:
         for m in classified["reasoning"]
         if _has_required_capabilities(m, ["thinking", "tools"])
     ]
+
+    # Optional hard filter: exclude sub-threshold embedding_length from reasoning
+    if min_reasoning_embedding and min_reasoning_embedding > 0:
+        before = len(classified["reasoning"])
+        classified["reasoning"] = [
+            m
+            for m in classified["reasoning"]
+            if m.get("embedding_length") is None
+            or m["embedding_length"] >= min_reasoning_embedding
+        ]
+        dropped = before - len(classified["reasoning"])
+        if dropped:
+            logger.info(
+                f"--min-reasoning-embedding={min_reasoning_embedding}: "
+                f"dropped {dropped} reasoning model(s) with low embedding_length"
+            )
+
+    # Density-aware sort: dense > MoE, then higher embedding, then larger params
+    classified["reasoning"].sort(key=_density_sort_key, reverse=True)
     _code_gen_name_qualified = set()
     for m in classified.get("_name_qualified_code_gen", []):
         _code_gen_name_qualified.add(m["name"])
@@ -254,7 +416,8 @@ def resolve_roles_from_list(models: list) -> dict:
         classified["code-gen"] = classified["reasoning"][:]
 
     # Build solo category: models with ALL 4 capabilities (completion + thinking + tools + vision).
-    # Purely capability-based — no name heuristics. Sort by param count descending (prefer larger).
+    # Purely capability-based — no name heuristics. Sorted by density-aware key
+    # (dense > MoE, then higher embedding_length, then larger param count).
     required_solo_caps = {"completion", "thinking", "tools", "vision"}
     solo_candidates = []
     seen_names = set()
@@ -265,9 +428,7 @@ def resolve_roles_from_list(models: list) -> dict:
                 caps = set(model.get("capabilities", []))
                 if required_solo_caps.issubset(caps):
                     solo_candidates.append(model)
-    classified["solo"] = sorted(
-        solo_candidates, key=lambda m: _effective_param_count(m), reverse=True
-    )
+    classified["solo"] = sorted(solo_candidates, key=_density_sort_key, reverse=True)
 
     if not classified["solo"]:
         logger.warning(

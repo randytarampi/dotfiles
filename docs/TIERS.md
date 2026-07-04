@@ -156,12 +156,12 @@ Council: α `_local:solo` max, β `_local:solo` high, γ `_local:solo` high. Div
 
 ## Local Model Classification
 
-Placeholders are resolved by `configure-opencode-tier.py` using model name heuristics, size rules, `ollama show` parameter counts, and capability-aware classification:
+Placeholders are resolved by `configure-opencode-tier.py` using model name heuristics, size rules, `ollama show` parameter counts, capability-aware classification, and density-aware sorting:
 - **reasoning**: models containing `r1`, `reasoning`, `deep-think`, `think`, `qwq`, `reflection`
 - **code-gen**: models containing `coder`, `code`, `coding`, `devstral`, `codestral`, `deepseek-coder`, `qwen2.5-coder`, `qwen3-coder`, `codeqwen`
 - **lightweight**: models containing `mini`, `small`, `tiny`, `phi`, `gemma:2`, `gemma3`, `smol`
 - **vision**: subset of `lightweight` models that also have the `vision` capability (from `ollama show`)
-- **solo**: models with all four capabilities (`completion` + `thinking` + `tools` + `vision`), purely capability-based (no name heuristics), sorted by parameter count descending
+- **solo**: models with all four capabilities (`completion` + `thinking` + `tools` + `vision`), purely capability-based (no name heuristics), sorted by density-aware key (dense > MoE, then embedding_length, then param count)
 
 Indexed placeholders (`_local:<category>_2`) resolve to the second-best model in a category, ensuring council diversity. For example, `_local:code-gen_2` gives a different model from `_local:code-gen` when multiple code-gen models are available, or falls back to the second-best reasoning model if code-gen only has one entry.
 
@@ -174,6 +174,9 @@ Additional classification rules (applied after name heuristics):
   - `lightweight` requires `tools`
   - `vision` requires `tools` + `vision` (subset of lightweight)
   - `solo` requires `completion` + `thinking` + `tools` + `vision` (no name heuristics)
+- **Cross-category promotion**: models name-heuristically routed to `code-gen` but with `thinking` + `tools` capabilities are also added to the `reasoning` bucket. This lets dense coding/general models (e.g. `qwen3.6:27b-coding-nvfp4`) serve as `reasoning_2`/`reasoning_3` when their embedding and density justify it, without losing their primary category assignment. Lightweight models are **not** promoted — they are small by definition and should not serve as reasoning models when larger models are available.
+- **Density-aware sorting** (reasoning + solo only): after capability filtering, models are sorted by `(non_lightweight_first, dense_first, embedding_length, param_count)` descending. Lightweight-origin models sort last so a 9B lightweight model never outranks a 35B for deep reasoning. Among non-lightweight models, dense (non-MoE) models rank above MoE models of equal or larger parameter count, and higher embedding dimensions rank above lower. This prevents thin-embedding MoE models from outranking denser models for deep reasoning. `code-gen` and `lightweight` keep the param-count sort (MoE breadth helps code-gen diversity).
+- **Embedding hard filter** (optional): `--min-reasoning-embedding N` (or `DOTFILES_MIN_REASONING_EMBEDDING=N` env var) excludes models with `embedding_length < N` from reasoning roles entirely. Default `0` = disabled. Models with unknown embedding_length are never filtered out. Useful to hard-exclude MoE models with very thin embeddings (e.g. `--min-reasoning-embedding 3200`).
 - **Code-gen reuse**: if no code-gen model is found via name heuristic, the reasoning model is reused for code-gen roles
 - **Vision fallback**: if no vision-capable model exists, the best lightweight model is used with a warning
 - **Indexed placeholders**: `_local:<category>_2` resolves to the second-best model in a category (e.g., `_local:code-gen_2` for council gamma diversity)
@@ -194,6 +197,9 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 | code-gen | `coder`, `code`, `coding`, `devstral`, `codestral`, `laguna` | `thinking` + `completion` (name-qualified bypass) | orchestrator, fixer, designer |
 | lightweight | `mini`, `small`, `tiny`, `phi`, `smol` | `tools` | librarian, explorer |
 | vision | subset of lightweight with `vision` capability | `tools` + `vision` | observer |
+
+> [!TIP]
+> `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
 
 ---
 

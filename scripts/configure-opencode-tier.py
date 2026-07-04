@@ -139,6 +139,7 @@ def orchestrate_tier_switch(
     local_fallback_roles: list,
     local_fallback_preset: Optional[str] = None,
     local_fallback_placeholders: Optional[list] = None,
+    min_reasoning_embedding: int = 0,
 ):
     opencode_dir = os.environ.get("OPENCODE_DIR")
     if opencode_dir:
@@ -228,7 +229,9 @@ def orchestrate_tier_switch(
     if not no_local_fallbacks or tier.startswith("local"):
         models_list = list_local_ollama_models()
         if models_list:
-            local_role_models = resolve_roles_from_list(models_list)
+            local_role_models = resolve_roles_from_list(
+                models_list, min_reasoning_embedding=min_reasoning_embedding
+            )
 
     cloud_role_models = {}
     _, can_proxy_cloud = check_ollama_daemon()
@@ -238,7 +241,10 @@ def orchestrate_tier_switch(
 
             cloud_models_list = list_cloud_ollama_models()
             if cloud_models_list:
-                cloud_role_models = resolve_roles_from_list(cloud_models_list)
+                cloud_role_models = resolve_roles_from_list(
+                    cloud_models_list,
+                    min_reasoning_embedding=min_reasoning_embedding,
+                )
                 logger.info(
                     f"Cloud models available via local proxy: {len(cloud_models_list)} models"
                 )
@@ -414,9 +420,15 @@ def main():
         )
         subparsers = parser.add_subparsers(dest="command", required=True)
 
-        subparsers.add_parser(
+        resolve_roles_parser = subparsers.add_parser(
             "resolve-roles",
             help="Reads model names from stdin and outputs role mapping JSON",
+        )
+        resolve_roles_parser.add_argument(
+            "--min-reasoning-embedding",
+            type=int,
+            default=0,
+            help="Minimum embedding_length for reasoning/solo roles (0 = disabled)",
         )
 
         placeholder_parser = subparsers.add_parser(
@@ -455,7 +467,10 @@ def main():
                 except Exception:
                     pass
                 stdin_models.append({"name": line, "size_gb": 0.0})
-            resolved = resolve_roles_from_list(stdin_models)
+            min_emb = getattr(args, "min_reasoning_embedding", 0) or 0
+            resolved = resolve_roles_from_list(
+                stdin_models, min_reasoning_embedding=min_emb
+            )
             print(json.dumps(resolved))
         elif args.command == "resolve-placeholders":
             resolve_placeholders(args.config_path, args.local_roles)
@@ -488,6 +503,13 @@ def main():
             help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
         )
         parser.add_argument(
+            "--min-reasoning-embedding",
+            type=int,
+            default=int(os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"),
+            help="Minimum embedding_length for reasoning/solo roles (0 = disabled). "
+            "Env: DOTFILES_MIN_REASONING_EMBEDDING (default 0).",
+        )
+        parser.add_argument(
             "--preset",
             dest="preset",
             choices=available_tiers,
@@ -512,6 +534,7 @@ def main():
             args.local_fallback_role,
             local_fallback_preset=args.local_fallback_preset,
             local_fallback_placeholders=args.local_fallback_placeholder,
+            min_reasoning_embedding=args.min_reasoning_embedding,
         )
 
 

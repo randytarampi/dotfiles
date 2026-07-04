@@ -386,6 +386,7 @@ def resolve_local_models(
     local_fallback_preset,
     local_fallback_placeholders,
     local_fallback_roles,
+    min_reasoning_embedding: int = 0,
 ):
     """Resolve local Ollama model placeholders for SmallCode tiers.
 
@@ -400,7 +401,9 @@ def resolve_local_models(
     try:
         local_models = list_local_ollama_models()
         if local_models:
-            roles = resolve_roles_from_list(local_models)
+            roles = resolve_roles_from_list(
+                local_models, min_reasoning_embedding=min_reasoning_embedding
+            )
             return roles
         logger.info("No local Ollama models discovered")
         return {}
@@ -529,6 +532,13 @@ def main():
         default=None,
         help="Custom Ollama base URL (default: http://localhost:11434/v1)",
     )
+    parser.add_argument(
+        "--min-reasoning-embedding",
+        type=int,
+        default=int(os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"),
+        help="Minimum embedding_length for reasoning/solo roles (0 = disabled). "
+        "Env: DOTFILES_MIN_REASONING_EMBEDDING (default 0).",
+    )
     args = parser.parse_args()
 
     if not load_env():
@@ -550,6 +560,7 @@ def main():
             args.local_fallback_preset,
             args.local_fallback_placeholder,
             args.local_fallback_role,
+            min_reasoning_embedding=args.min_reasoning_embedding,
         )
         if resolved_roles and args.preset in LOCAL_PRESETS:
             spec = apply_local_overrides(spec, resolved_roles, args.preset)
