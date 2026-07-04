@@ -31,11 +31,15 @@ detect_tier() {
     _has_ollama_cloud=true
   fi
 
-  # Check CLI authentication — codex requires OpenAI, claude requires Anthropic
-  if command -v codex >/dev/null 2>&1; then
+  # CLI auth fallback: a CLI on PATH can signal provider access via its own
+  # OAuth login — but only when the user hasn't explicitly declared the key
+  # in ~/.env. A set-but-empty assignment (`KEY=''`) is an explicit opt-out
+  # and must override the CLI signal. `-z "${VAR+set}"` is true only when VAR
+  # is unset (never declared), so the fallback fires only for absent keys.
+  if command -v codex >/dev/null 2>&1 && [[ -z "${OPENAI_API_KEY+set}" ]]; then
     _has_openai=true
   fi
-  if command -v claude >/dev/null 2>&1; then
+  if command -v claude >/dev/null 2>&1 && [[ -z "${ANTHROPIC_API_KEY+set}" ]]; then
     _has_anthropic=true
   fi
 
@@ -57,6 +61,8 @@ detect_tier() {
     TIER="pro-plus"
   elif [[ "$_has_ollama_cloud" == true ]] && [[ "$_has_anthropic" == true ]]; then
     TIER="pro-plus-anthropic"
+  elif [[ "$_has_ollama_cloud" == true ]]; then
+    TIER="pro"
   elif [[ "$_has_openai" == true ]] && [[ "$_has_anthropic" == true ]]; then
     TIER="plus-anthropic"
   elif [[ "$_has_openai" == true ]]; then
