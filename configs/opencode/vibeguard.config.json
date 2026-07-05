@@ -12,9 +12,31 @@
       { "pattern": "sk-[A-Za-z0-9]{48}", "category": "OPENAI_KEY" },
       { "pattern": "(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]+", "category": "GITHUB_TOKEN" },
       { "pattern": "AKIA[0-9A-Z]{16}", "category": "AWS_ACCESS_KEY" },
-      { "pattern": "sntryu_[A-Za-z0-9]+", "category": "SENTRY_TOKEN" }
+      { "pattern": "sntryu_[A-Za-z0-9]+", "category": "SENTRY_TOKEN" },
+      { "pattern": "sk-ant-api03-[A-Za-z0-9_-]{93}", "category": "ANTHROPIC_KEY" },
+      { "pattern": "github_pat_[A-Za-z0-9_]{82}", "category": "GITHUB_PAT" },
+      { "pattern": "AIza[A-Za-z0-9_-]{35}", "category": "GEMINI_API_KEY" },
+      { "pattern": "glpat-[A-Za-z0-9_-]{20}", "category": "GITLAB_TOKEN" },
+      { "pattern": "npm_[A-Za-z0-9]{36}", "category": "NPM_TOKEN" },
+      { "pattern": "dckr_pat_[A-Za-z0-9_-]{27}", "category": "DOCKER_HUB_TOKEN" },
+      { "pattern": "2/[0-9]+\\|[A-Za-z0-9]+", "category": "ASANA_TOKEN" },
+      { "pattern": "\\$2[aby]\\$\\d{2}\\$[A-Za-z0-9./]{53}", "category": "BCRYPT_HASH" },
+      { "pattern": "Z[0-9A-Z]{13}", "category": "ROUTE53_ZONE_ID" },
+      { "pattern": "-----BEGIN (RSA |OPENSSH |EC |)PRIVATE KEY-----", "category": "PRIVATE_KEY_BLOCK" },
+      { "pattern": "eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]*", "category": "JWT_TOKEN" }
     ],
-    "builtin": ["email", "ipv4", "uuid"],
-    "exclude": ["example.com", "localhost", "127.0.0.1", "0.0.0.0"]
+    "builtin": ["email", "ipv4", "ipv6", "uuid"],
+    "exclude": [
+      "example.com",
+      "localhost",
+      "127.0.0.1",
+      "0.0.0.0",
+      "example.ca",
+      "::1",
+      "Z1FDZJSPGC7GU7",
+      "Z359MD72AU2BDH",
+      "REPLACE_WITH_HASH",
+      "000000000000"
+    ]
   }
 }
