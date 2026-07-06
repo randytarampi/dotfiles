@@ -236,10 +236,17 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
             )
         elif any(p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]):
             category = "lightweight"
-        elif size_gb < 12:
-            category = "lightweight"
         else:
-            category = "all"
+            # Prefer parameter count from `ollama show` over disk size — disk size
+            # varies by quantization (q8_0 vs q4_K_M) and doesn't reflect the
+            # model's intrinsic capability class. Fall back to disk size only
+            # when ollama show is unavailable.
+            details = get_cached_model_details(model_name)
+            param_count = details.get("param_count")
+            if param_count is not None:
+                category = "lightweight" if param_count <= 12 else "all"
+            else:
+                category = "lightweight" if size_gb <= 12 else "all"
 
         classified[category].append(
             {"name": model_name, "size_gb": size_gb, "primary_category": category}
