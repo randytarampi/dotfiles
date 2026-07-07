@@ -19,7 +19,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "ollama-cloud/gemma4:31b",
@@ -35,7 +37,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "ollama-cloud/kimi-k2.7-code",
@@ -49,7 +53,9 @@
         "model": "ollama-cloud/deepseek-v4-flash",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "ollama-cloud/gemma4:31b",
@@ -78,7 +84,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "openai/gpt-5.4-mini",
@@ -94,7 +102,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "openai/gpt-5.4-mini",
@@ -108,7 +118,9 @@
         "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "openai/gpt-5.4-mini",
@@ -136,7 +148,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "anthropic/claude-haiku-4-5",
@@ -152,7 +166,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "anthropic/claude-sonnet-5",
@@ -166,7 +182,9 @@
         "model": "anthropic/claude-haiku-4-5",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -194,7 +212,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "anthropic/claude-haiku-4-5",
@@ -210,7 +230,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "anthropic/claude-sonnet-5",
@@ -224,7 +246,9 @@
         "model": "anthropic/claude-haiku-4-5",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -252,7 +276,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "openai/gpt-5.4-nano",
@@ -268,7 +294,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "openai/gpt-5.5",
@@ -282,7 +310,9 @@
         "model": "openai/gpt-5.4-mini",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "openai/gpt-5.4-nano",
@@ -310,7 +340,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "openai/gpt-5.4-nano",
@@ -326,7 +358,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "anthropic/claude-sonnet-5",
@@ -340,7 +374,9 @@
         "model": "anthropic/claude-haiku-4-5",
         "variant": "high",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "anthropic/claude-haiku-4-5",
@@ -368,7 +404,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:lightweight",
@@ -384,7 +422,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:code-gen",
@@ -398,7 +438,9 @@
         "model": "_local:code-gen",
         "variant": "low",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:vision",
@@ -426,7 +468,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:lightweight",
@@ -442,7 +486,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:code-gen",
@@ -456,7 +502,9 @@
         "model": "_local:code-gen",
         "variant": "low",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:vision",
@@ -484,7 +532,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:lightweight",
@@ -500,7 +550,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:code-gen",
@@ -514,7 +566,9 @@
         "model": "_local:code-gen",
         "variant": "low",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:vision",
@@ -542,7 +596,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:code-gen",
@@ -558,7 +614,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:code-gen",
@@ -572,7 +630,9 @@
         "model": "_local:code-gen",
         "variant": "low",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:vision",
@@ -600,7 +660,9 @@
         "skills": [
           "simplify"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:solo",
@@ -616,7 +678,9 @@
         "skills": [
           "codemap"
         ],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:solo",
@@ -630,7 +694,9 @@
         "model": "_local:solo",
         "variant": "low",
         "skills": [],
-        "mcps": []
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:solo",
