@@ -34,6 +34,7 @@ npm update -g 2>&1 || warn "npm update -g on $DEFAULT_VERSION had failures"
 
 # Step 2: Get all other installed versions (sorted newest-first, deduplicated, excluding default)
 OTHER_VERSIONS=$(nvm ls --no-colors 2>/dev/null |
+  grep -v 'N/A' |
   grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' |
   grep -v "^$DEFAULT_VERSION$" |
   sort -rV |
@@ -48,7 +49,10 @@ info "Propagating packages from $DEFAULT_VERSION to other versions..."
 
 for ver in $OTHER_VERSIONS; do
   info "Reinstalling packages on $ver from $DEFAULT_VERSION..."
-  nvm use "$ver" >/dev/null 2>&1
+  nvm use "$ver" >/dev/null 2>&1 || {
+    warn "nvm use $ver failed — skipping"
+    continue
+  }
   nvm reinstall-packages default 2>&1 || warn "reinstall-packages on $ver had failures"
 done
 
