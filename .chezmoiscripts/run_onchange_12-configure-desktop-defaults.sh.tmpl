@@ -23,7 +23,7 @@ defaults write NSGlobalDomain KeyRepeat -int 2 || warn "Failed: NSGlobalDomain"
 defaults write NSGlobalDomain InitialKeyRepeat -int 15 || warn "Failed: NSGlobalDomain"
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 2 || warn "Failed: NSGlobalDomain"
 defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false || warn "Failed: NSGlobalDomain"
-defaults write NSGlobalDomain com.apple.keyboard.fnState -bool true || warn "Failed: NSGlobalDomain"
+defaults write NSGlobalDomain com.apple.keyboard.fnState -bool false || warn "Failed: NSGlobalDomain"
 defaults write com.apple.HIToolbox AppleFnUsageType -int 2 || warn "Failed: com.apple.HIToolbox"
 
 # Keyboard — disable typing substitutions
