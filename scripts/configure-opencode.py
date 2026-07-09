@@ -246,6 +246,19 @@ def main():
         "anthropic",
     ] or bool(meridian_plugin_path)
 
+    # Allow access to cross-platform temp directories (/tmp, macOS
+    # $TMPDIR, Windows %TEMP%) without prompting. These are used by
+    # subagent fanout, build tools, and the orchestrator's own
+    # configure-opencode-project.py (tempfile.mkdtemp).
+    _external_dir_permissions = {
+        "/tmp/**": "allow",
+        "/var/tmp/**": "allow",
+        "/var/folders/**": "allow",
+        "/private/tmp/**": "allow",
+        "/private/var/folders/**": "allow",
+        "~/AppData/Local/Temp/**": "allow",
+    }
+
     if args.mode == "project":
         # Project configs must be self-sufficient: emit every provider the
         # selected preset references, and reset disabled_providers so an
@@ -267,6 +280,12 @@ def main():
             "provider": {},
             "plugin": [],
             "agent": {},
+            # Allow access to cross-platform temp directories without
+            # prompting. Project configs must be self-sufficient (same
+            # rationale as disabled_providers reset below).
+            "permission": {
+                "external_directory": _external_dir_permissions,
+            },
             # Always reset; project presets must not inherit a global tier's
             # disabled_providers (e.g. global `pro` disables anthropic).
             "disabled_providers": [],
@@ -345,6 +364,9 @@ def main():
                 "explore": {"disable": True},
                 "general": {"disable": True},
                 "plan": {"disable": True},
+            },
+            "permission": {
+                "external_directory": _external_dir_permissions,
             },
             "disabled_providers": [
                 "google-vertex-anthropic",
