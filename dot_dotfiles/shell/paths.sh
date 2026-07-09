@@ -63,7 +63,15 @@ fi
 
 # nvm
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+# Run compinit -i (silently ignore insecure dirs) before nvm's bash_completion
+# so that nvm skips its own bare `compinit` call (which lacks -i and prompts on
+# group-writable brew completion dirs after `brew bundle` runs). Running here
+# also defines `compdef`, which nvm's `complete -F` needs. completions.bash
+# later runs `compinit -C -i` (fast cache-hit path).
+if [[ -n "${ZSH_VERSION-}" ]] && ! command -v compdef >/dev/null 2>&1; then
+  autoload -Uz compinit && compinit -i -C 2>/dev/null
+fi
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
 
 # rbenv
