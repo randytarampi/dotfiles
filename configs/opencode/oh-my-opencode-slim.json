@@ -1,4 +1,5 @@
 {
+  "compactSidebar": true,
   "preset": "pro-plus",
   "presets": {
     "pro": {
