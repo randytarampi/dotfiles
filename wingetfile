@@ -18,3 +18,21 @@ Microsoft.DotNet.DesktopRuntime.8
 GnuWin32.Make
 # Cross-ref: brew 'node'
 OpenJS.NodeJS
+# Cross-ref: brew 'chezmoi'
+twpayne.chezmoi
+# Cross-ref: brew 'gh'
+GitHub.cli
+# Cross-ref: brew 'jq'
+jqlang.jq
+# Cross-ref: brew 'uv'
+astral-sh.uv
+# Cross-ref: brew 'yq'
+MikeFarah.yq
+# Cross-ref: brew 'nvm'
+CoreyButler.NVMforWindows
+# Cross-ref: brew 'wget'
+JernejSimoncic.Wget
+# Cross-ref: brew 'go'
+GoLang.Go
+# Cross-ref: brew 'powershell'
+Microsoft.PowerShell
