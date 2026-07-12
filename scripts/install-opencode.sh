@@ -13,8 +13,10 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 #   1. oh-my-opencode-slim (agent orchestration plugin)
 #   2. @plannotator/opencode (plan annotation plugin)
 #   3. @tarquinen/opencode-dcp (conversation compression plugin)
+#   3b. @ramtinj95/opencode-tokenscope (token usage and cost analysis)
 #   4. plannotator CLI (for slash commands)
 #   5. Ollama Cloud model metadata (pulled locally for OpenCode discovery)
+#   6. lazyskills CLI (skill discovery and management)
 # ───────────────────────────────────────────────────────────────────────────────
 
 # shellcheck disable=SC1091
@@ -74,6 +76,13 @@ opencode plugin opencode-vibeguard --global
 ok "vibeguard plugin installed"
 
 # ---------------------------------------------------------------------------
+# 3b. Install opencode-tokenscope (token usage and cost analysis)
+# ---------------------------------------------------------------------------
+info "Installing @ramtinj95/opencode-tokenscope..."
+opencode plugin @ramtinj95/opencode-tokenscope@latest --global
+ok "opencode-tokenscope plugin installed"
+
+# ---------------------------------------------------------------------------
 # 4. Install plannotator CLI (for /plannotator-review slash commands)
 #     (was step 3 before vibeguard was added)
 # ---------------------------------------------------------------------------
@@ -124,7 +133,25 @@ fi
 ok "Stale cloud model stub cleanup complete"
 
 # ---------------------------------------------------------------------------
-# 6. Install CodeGraph CLI (local semantic code index + MCP server)
+# 6. Install lazyskills CLI (skill discovery and management)
+# ---------------------------------------------------------------------------
+info "Installing lazyskills CLI..."
+if command -v npm &>/dev/null; then
+  if npm list -g lazyskills &>/dev/null 2>&1; then
+    ok "lazyskills CLI already installed globally"
+  else
+    if npm install -g lazyskills@latest 2>/dev/null; then
+      ok "lazyskills CLI installed globally"
+    else
+      warn "lazyskills CLI install failed — you can install manually with: npm i -g lazyskills"
+    fi
+  fi
+else
+  warn "npm not found; skipping lazyskills CLI install"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Install CodeGraph CLI (local semantic code index + MCP server)
 # ---------------------------------------------------------------------------
 info "Installing @colbymchenry/codegraph globally..."
 if command -v npm &>/dev/null; then
@@ -161,14 +188,14 @@ fi
 "$SCRIPT_DIR/configure-agent-guidance.py"
 
 # ---------------------------------------------------------------------------
-# 7. Install opencode-voice plugin (voice input/output for TUI)
+# 8. Install opencode-voice plugin (voice input/output for TUI)
 # ---------------------------------------------------------------------------
 info "Installing @renjfk/opencode-voice..."
 opencode plugin @renjfk/opencode-voice@latest --global
 ok "opencode-voice plugin installed"
 
 # ---------------------------------------------------------------------------
-# 8. Install voice dependencies (whisper-cpp, sox, piper-tts) + models
+# 8b. Install voice dependencies (whisper-cpp, sox, piper-tts) + models
 #      Controlled by DOTFILES_RUN_VOICE_SETUP (default: 0 — skip)
 #      Models: DOTFILES_WHISPER_MODEL (default: ggml-large-v3-turbo.bin)
 #              DOTFILES_PIPER_VOICE (default: en_US-lessac-high)
@@ -370,5 +397,14 @@ Next steps:
       → ACP adapters installed (Copilot CLI, claude-code-acp, codex-acp).
         After install, run: make brewfile-sync
         (captures the new npm/brew entries into Brewfiles for reproducibility)
+  7. Skills:             configure-skills.py
+      → Distributes skills from configs/skills/ to all agent skill directories
+  8. lazyskills:         lazyskills find --json \"query\"
+      → Search and discover skills from the registry
+  9. Tokenscope:         Run /tokenscope in OpenCode UI to verify
+      → Token usage and cost analysis for OpenCode sessions
+  10. ACP auth:          Run \`copilot auth\` for Copilot ACP agent
+      → Required before using copilot-acp agent
+  11. Restart OpenCode:  Restart OpenCode after install for all plugins to load
 
 Install script complete!"
