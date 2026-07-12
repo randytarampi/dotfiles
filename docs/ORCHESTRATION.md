@@ -23,7 +23,7 @@ flowchart TD
 
     subgraph "Layer 2: Chezmoi Scripts"
         S1[run_once_01-03<br/>One-time: dirs, security, perms]
-        S2[run_onchange_04-24<br/>Hash-triggered: installs, config]
+        S2[run_onchange_04-28<br/>Hash-triggered: installs, config]
     end
 
     subgraph "Layer 3: Configure Scripts"
@@ -34,6 +34,7 @@ flowchart TD
         C5[configure-agent-guidance.py]
         C6[configure-mozart-router.py]
         C7[configure-caddy.py]
+        C8[configure-skills.py]
     end
 
     T1 --> S2
@@ -45,12 +46,14 @@ flowchart TD
     S2 --> C5
     S2 --> C6
     S2 --> C7
+    S2 --> C8
     C4 --> C1
     C4 --> C2
     C4 --> C3
     C4 --> C5
     C4 --> C6
     C4 --> C7
+    C4 --> C8
 ```
 
 ### Layer 1: Chezmoi Templates (`dot_*`)
@@ -60,7 +63,7 @@ flowchart TD
 
 ### Layer 2: Chezmoi Scripts (`.chezmoiscripts/`)
 - `run_once_01-03`: One-time operations (directory creation, security hardening, SSH permissions)
-- `run_onchange_04-26`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
+- `run_onchange_04-28`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
 - Bridge between templates and configure scripts
 - Chezmoi sorts `run_once_*` before `run_onchange_*`, then by numeric prefix
 
@@ -84,7 +87,7 @@ sequenceDiagram
     Make->>Chezmoi: chezmoi apply
     Chezmoi->>Chezmoi: Apply templates (Layer 1)
     Chezmoi->>Scripts: Run run_once_01-03
-    Chezmoi->>Scripts: Run run_onchange_04-24 (if hashes changed)
+    Chezmoi->>Scripts: Run run_onchange_04-28 (if hashes changed)
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
@@ -96,6 +99,7 @@ sequenceDiagram
     Configure->>Configure: configure-smallcode.py
     Configure->>Configure: codegraph install
     Configure->>Configure: configure-agent-guidance.py
+    Configure->>Configure: configure-skills.py
 ```
 
 ## Makefile Targets
@@ -105,6 +109,7 @@ sequenceDiagram
 | `make deploy` | `chezmoi apply` + `configure-all.sh` | After pulling changes, first setup |
 | `make configure` | `configure-all.sh` only (no chezmoi apply) | Changed API keys, pulled new Ollama models |
 | `make verify` | lint + drift + doctor + check-hashes + dry-run | Before committing |
+| `make ci-verify` | lint + drift + doctor + check-hashes (no dry-run) | CI pipeline |
 | `make doctor` | Read-only drift checks (verify generated configs exist) | Diagnosing issues |
 | `make check-hashes` | Hash trigger coverage audit | After adding config inputs |
 | `make reset` | Clear chezmoi script state | Force full re-run |
@@ -113,6 +118,11 @@ sequenceDiagram
 | `make lint` | Syntax + format checks | Before committing |
 | `make drift` | Verify ~/.env matches .env.example (read-only) | After updating secrets |
 | `make migrate` | Rename deprecated gates + append missing keys | After pulling gate renames |
+| `make opencode-start` | Start OpenCode Web LaunchAgent/Service | After config regeneration |
+| `make opencode-stop` | Stop OpenCode Web LaunchAgent/Service | Before config changes |
+| `make opencode-restart` | Stop + start OpenCode Web | After config regeneration |
+| `make plannotator-restart` | Clear Plannotator paste backend port (19433) | Port conflict resolution |
+| `make services-restart` | opencode-restart + plannotator-restart | Full service restart |
 
 ## Design Decisions
 
@@ -152,7 +162,9 @@ sequenceDiagram
 | 23 | install-acme | run_onchange | acme.sh install + renewal hook | `DOTFILES_RUN_CADDY_SETUP` |
 | 24 | install-caddy | run_onchange | Caddy install + Caddyfile generation | `DOTFILES_RUN_CADDY_SETUP` |
 | 25 | install-plannotator | run_onchange | Plannotator paste install + LaunchAgent | `DOTFILES_RUN_CADDY_SETUP` |
-| 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent | `DOTFILES_RUN_OPENCODE_WEB` |
+| 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent | `DOTFILES_RUN_OPENCODE_WEB_SETUP` |
+| 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
+| 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
 
 ## Gate Reference
 
@@ -169,13 +181,15 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_SMALLCODE_SETUP` | 0 | Scripts 10, 18 (SmallCode install + config) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
 | `DOTFILES_RUN_CADDY_SETUP` | 0 | Scripts 21-25 (migration, ddns-route53, acme.sh, Caddy, Plannotator) |
-| `DOTFILES_RUN_OPENCODE_WEB` | 0 | Script 26 (OpenCode web LaunchAgent) |
+| `DOTFILES_RUN_OPENCODE_WEB_SETUP` | 0 | Script 26 (OpenCode web LaunchAgent) |
 | `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | 0 | Script 19 (CodeGraph MCP) |
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
+| `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
+| `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `install-opencode.sh` (voice deps) |
 
 ## Dependency Ordering
@@ -198,6 +212,8 @@ graph LR
     S16 --> S18[18 smallcode]
     S16 --> S19[19 codegraph]
     S16 --> S20[20 agent guidance]
+    S20 --> S27[27 ollama daemon]
+    S20 --> S28[28 skills]
 ```
 
 ## Adding New Components
