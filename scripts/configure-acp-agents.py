@@ -33,14 +33,14 @@ ACP_AGENTS = {
         "description": "Gemini CLI — Google's coding agent",
     },
     "claude-code": {
-        "command": "claude-code-acp",
+        "command": "claude-agent-acp",
         "args": [],
-        "description": "Claude Code via Zed ACP adapter",
+        "description": "Claude Code via ACP adapter",
     },
     "codex": {
         "command": "codex-acp",
         "args": [],
-        "description": "Codex CLI via Zed ACP adapter",
+        "description": "Codex CLI via ACP adapter",
     },
     "junie": {
         "command": "junie",
