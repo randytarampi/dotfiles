@@ -90,7 +90,7 @@
         ]
       },
       "librarian": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low",
         "skills": [],
         "mcps": [
@@ -98,7 +98,7 @@
         ]
       },
       "explorer": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low",
         "skills": [
           "codemap"
@@ -108,7 +108,7 @@
         ]
       },
       "designer": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "openai/gpt-5.6-terra",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -116,19 +116,19 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.4-mini",
-        "variant": "high",
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium",
         "skills": [],
         "mcps": [
           "codegraph"
         ]
       },
       "observer": {
-        "model": "openai/gpt-5.4-mini",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low"
       },
       "council": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-sol",
         "variant": "high"
       }
     },
@@ -192,7 +192,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-sol",
         "variant": "high"
       }
     },
@@ -262,7 +262,8 @@
     },
     "plus": {
       "orchestrator": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-terra",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -272,7 +273,7 @@
         ]
       },
       "oracle": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-sol",
         "variant": "high",
         "skills": [
           "simplify"
@@ -282,7 +283,7 @@
         ]
       },
       "librarian": {
-        "model": "openai/gpt-5.4-nano",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low",
         "skills": [],
         "mcps": [
@@ -290,7 +291,7 @@
         ]
       },
       "explorer": {
-        "model": "openai/gpt-5.4-nano",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low",
         "skills": [
           "codemap"
@@ -300,7 +301,7 @@
         ]
       },
       "designer": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-terra",
         "variant": "medium",
         "skills": [
           "agent-browser"
@@ -308,25 +309,26 @@
         "mcps": []
       },
       "fixer": {
-        "model": "openai/gpt-5.4-mini",
-        "variant": "high",
+        "model": "openai/gpt-5.6-luna",
+        "variant": "medium",
         "skills": [],
         "mcps": [
           "codegraph"
         ]
       },
       "observer": {
-        "model": "openai/gpt-5.4-nano",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low"
       },
       "council": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-sol",
         "variant": "high"
       }
     },
     "plus-anthropic": {
       "orchestrator": {
-        "model": "openai/gpt-5.5",
+        "model": "openai/gpt-5.6-terra",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -346,7 +348,7 @@
         ]
       },
       "librarian": {
-        "model": "openai/gpt-5.4-nano",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low",
         "skills": [],
         "mcps": [
@@ -750,18 +752,18 @@
           "model": "ollama-cloud/deepseek-v4-pro"
         },
         "gamma": {
-          "model": "openai/gpt-5.5"
+          "model": "openai/gpt-5.6-sol"
         }
       },
       "plus": {
         "alpha": {
-          "model": "openai/gpt-5.5"
+          "model": "openai/gpt-5.6-sol"
         },
         "beta": {
-          "model": "openai/gpt-5.4"
+          "model": "openai/gpt-5.5"
         },
         "gamma": {
-          "model": "openai/gpt-5.3-codex"
+          "model": "openai/gpt-5.4"
         }
       },
       "plus-anthropic": {
@@ -769,10 +771,10 @@
           "model": "anthropic/claude-fable-5"
         },
         "beta": {
-          "model": "openai/gpt-5.5"
+          "model": "openai/gpt-5.6-sol"
         },
         "gamma": {
-          "model": "openai/gpt-5.4"
+          "model": "openai/gpt-5.5"
         }
       },
       "anthropic": {
@@ -906,6 +908,11 @@
           "ollama-cloud/deepseek-v4-flash",
           "ollama-cloud/kimi-k2.6",
           "ollama-cloud/minimax-m3"
+        ],
+        "council": [
+          "ollama-cloud/nemotron-3-ultra",
+          "ollama-cloud/deepseek-v4-pro",
+          "ollama-cloud/kimi-k2.7-code"
         ]
       }
     },
@@ -924,7 +931,7 @@
               "model": "ollama-cloud/kimi-k2.7-code"
             },
             "council": {
-              "model": "openai/gpt-5.5",
+              "model": "openai/gpt-5.6-sol",
               "variant": "high"
             }
           }
@@ -943,29 +950,34 @@
           "ollama-cloud/glm-5.2"
         ],
         "librarian": [
+          "openai/gpt-5.6-luna",
           "ollama-cloud/deepseek-v4-flash",
-          "ollama-cloud/glm-5.2",
-          "ollama-cloud/kimi-k2.6"
-        ],
-        "explorer": [
-          "ollama-cloud/deepseek-v4-flash",
-          "ollama-cloud/glm-5.2",
-          "ollama-cloud/kimi-k2.6"
-        ],
-        "fixer": [
-          "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/qwen3.5:397b",
           "ollama-cloud/glm-5.2"
         ],
-        "designer": [
-          "ollama-cloud/glm-5.2",
+        "explorer": [
+          "openai/gpt-5.6-luna",
+          "ollama-cloud/deepseek-v4-flash",
+          "ollama-cloud/glm-5.2"
+        ],
+        "fixer": [
+          "openai/gpt-5.6-luna",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/kimi-k2.7-code"
+          "ollama-cloud/qwen3.5:397b"
+        ],
+        "designer": [
+          "openai/gpt-5.6-terra",
+          "ollama-cloud/glm-5.2",
+          "ollama-cloud/deepseek-v4-pro"
         ],
         "observer": [
+          "openai/gpt-5.6-luna",
           "ollama-cloud/gemma4:31b",
-          "ollama-cloud/minimax-m3",
-          "ollama-cloud/deepseek-v4-flash"
+          "ollama-cloud/minimax-m3"
+        ],
+        "council": [
+          "openai/gpt-5.6-sol",
+          "ollama-cloud/nemotron-3-ultra",
+          "ollama-cloud/deepseek-v4-pro"
         ]
       }
     },
@@ -981,10 +993,10 @@
               "model": "ollama-cloud/deepseek-v4-pro"
             },
             "gamma": {
-              "model": "openai/gpt-5.5"
+              "model": "openai/gpt-5.6-sol"
             },
             "council": {
-              "model": "openai/gpt-5.5",
+              "model": "openai/gpt-5.6-sol",
               "variant": "high"
             }
           }
@@ -992,38 +1004,44 @@
       },
       "fallback": {
         "orchestrator": [
+          "openai/gpt-5.6-terra",
           "openai/gpt-5.5",
-          "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/nemotron-3-ultra"
+          "ollama-cloud/deepseek-v4-pro"
         ],
         "oracle": [
+          "openai/gpt-5.6-sol",
           "openai/gpt-5.5",
-          "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/nemotron-3-ultra"
+          "ollama-cloud/deepseek-v4-pro"
         ],
         "librarian": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-mini",
-          "ollama-cloud/deepseek-v4-flash",
-          "ollama-cloud/glm-5.2"
+          "ollama-cloud/deepseek-v4-flash"
         ],
         "explorer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-mini",
-          "ollama-cloud/deepseek-v4-flash",
-          "ollama-cloud/gemma4:31b"
+          "ollama-cloud/deepseek-v4-flash"
         ],
         "fixer": [
+          "openai/gpt-5.6-luna",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/qwen3.5:397b"
         ],
         "designer": [
+          "openai/gpt-5.6-terra",
           "openai/gpt-5.4-mini",
-          "ollama-cloud/glm-5.2",
-          "ollama-cloud/deepseek-v4-pro"
+          "ollama-cloud/glm-5.2"
         ],
         "observer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-nano",
-          "ollama-cloud/gemma4:31b",
-          "ollama-cloud/minimax-m3"
+          "ollama-cloud/gemma4:31b"
+        ],
+        "council": [
+          "openai/gpt-5.6-sol",
+          "anthropic/claude-fable-5",
+          "ollama-cloud/deepseek-v4-pro"
         ]
       }
     },
@@ -1048,7 +1066,13 @@
           }
         }
       },
-      "fallback": {}
+      "fallback": {
+        "council": [
+          "anthropic/claude-sonnet-5",
+          "anthropic/claude-fable-5",
+          "anthropic/claude-opus-4-6"
+        ]
+      }
     },
     "plus": {
       "council": {
@@ -1056,16 +1080,16 @@
         "presets": {
           "plus": {
             "alpha": {
-              "model": "openai/gpt-5.5"
+              "model": "openai/gpt-5.6-sol"
             },
             "beta": {
-              "model": "openai/gpt-5.4"
+              "model": "openai/gpt-5.5"
             },
             "gamma": {
-              "model": "openai/gpt-5.3-codex"
+              "model": "openai/gpt-5.4"
             },
             "council": {
-              "model": "openai/gpt-5.5",
+              "model": "openai/gpt-5.6-sol",
               "variant": "high"
             }
           }
@@ -1073,31 +1097,42 @@
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-5.4",
-          "openai/gpt-5.3-codex"
+          "openai/gpt-5.6-terra",
+          "openai/gpt-5.5",
+          "openai/gpt-5.4"
         ],
         "oracle": [
-          "openai/gpt-5.4",
-          "openai/gpt-5.3-codex"
+          "openai/gpt-5.6-sol",
+          "openai/gpt-5.5",
+          "openai/gpt-5.4"
         ],
         "librarian": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.4"
         ],
         "explorer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-mini",
           "openai/gpt-5.4"
         ],
         "fixer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.3-codex"
         ],
         "designer": [
-          "openai/gpt-5.4-mini",
-          "openai/gpt-5.4",
-          "openai/gpt-5.3-codex"
+          "openai/gpt-5.6-terra",
+          "openai/gpt-5.5",
+          "openai/gpt-5.4-mini"
         ],
         "observer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-mini"
+        ],
+        "council": [
+          "openai/gpt-5.6-sol",
+          "openai/gpt-5.5",
+          "openai/gpt-5.4"
         ]
       }
     },
@@ -1110,10 +1145,10 @@
               "model": "anthropic/claude-fable-5"
             },
             "beta": {
-              "model": "openai/gpt-5.5"
+              "model": "openai/gpt-5.6-sol"
             },
             "gamma": {
-              "model": "openai/gpt-5.4"
+              "model": "openai/gpt-5.5"
             },
             "council": {
               "model": "anthropic/claude-sonnet-5",
@@ -1124,18 +1159,22 @@
       },
       "fallback": {
         "orchestrator": [
+          "openai/gpt-5.6-terra",
           "anthropic/claude-opus-4-6",
           "anthropic/claude-sonnet-5"
         ],
         "oracle": [
+          "openai/gpt-5.6-sol",
           "openai/gpt-5.5",
           "anthropic/claude-sonnet-5"
         ],
         "librarian": [
+          "openai/gpt-5.6-luna",
           "anthropic/claude-haiku-4-5",
           "openai/gpt-5.4-mini"
         ],
         "explorer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-nano",
           "openai/gpt-5.4-mini"
         ],
@@ -1143,11 +1182,18 @@
           "anthropic/claude-sonnet-5"
         ],
         "designer": [
+          "openai/gpt-5.6-terra",
           "openai/gpt-5.5",
           "openai/gpt-5.4-mini"
         ],
         "observer": [
+          "openai/gpt-5.6-luna",
           "openai/gpt-5.4-nano"
+        ],
+        "council": [
+          "anthropic/claude-sonnet-5",
+          "openai/gpt-5.6-sol",
+          "anthropic/claude-fable-5"
         ]
       }
     },
