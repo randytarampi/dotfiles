@@ -49,7 +49,7 @@ def expand_path(path_value: str) -> Path:
 
 
 def build_opencode_server_config() -> dict[str, object] | None:
-    if os.environ.get("DOTFILES_RUN_OPENCODE_WEB", "0") != "1":
+    if os.environ.get("DOTFILES_RUN_OPENCODE_WEB_SETUP", "0") != "1":
         return None
 
     access_mode = (
@@ -358,6 +358,7 @@ def main():
                 ],
                 "opencode-plugin-openspec",
                 "opencode-vibeguard",
+                "@ramtinj95/opencode-tokenscope@latest",
             ],
             "agent": {
                 "build": {"disable": True},
