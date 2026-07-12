@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -125,6 +125,10 @@ check-hashes: ## Verify hash trigger coverage in run_onchange scripts
 verify: lint drift doctor check-hashes dry-run ## Full verification suite
 	@echo "All checks passed."
 
+.PHONY: ci-verify
+ci-verify: lint drift doctor check-hashes
+	@echo "CI verification complete."
+
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
 	@$(CHEZMOI) state delete-bucket --bucket scriptState
 	@echo "Script state cleared. Run 'make deploy' to re-run all scripts."
@@ -150,3 +154,41 @@ caddy-validate: ## Validate Caddyfile syntax
 
 caddy-reload: ## Hot-reload Caddy config
 	@sudo "$$(brew --prefix)/bin/caddy" reload --force --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddy reload failed"
+
+# ─── Service management ───────────────────────────────────────────────────────
+# OpenCode Web does not pick up config changes automatically — restart is
+# required after any config regeneration (opencode.json, oh-my-opencode-slim.json,
+# acp-agents.json, etc.).
+
+opencode-start: ## Start OpenCode Web service
+	@echo "Starting OpenCode Web..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.opencode.web.plist 2>/dev/null || true; \
+		launchctl kickstart -k "gui/$$(id -u)/com.opencode.web" 2>/dev/null || true; \
+	else \
+		systemctl --user start opencode-web 2>/dev/null || true; \
+	fi
+	@echo "OpenCode Web started."
+
+opencode-stop: ## Stop OpenCode Web service
+	@echo "Stopping OpenCode Web..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl bootout "gui/$$(id -u)/com.opencode.web" 2>/dev/null || true; \
+	else \
+		systemctl --user stop opencode-web 2>/dev/null || true; \
+	fi
+	@echo "OpenCode Web stopped."
+
+opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
+	@echo "OpenCode Web restarted."
+
+# Plannotator uses a fixed port (19432 for portal, 19433 for paste backend).
+# Multiple OpenCode sessions can conflict on the same port. This target
+# clears the paste backend port so a fresh session can bind.
+plannotator-restart: ## Restart Plannotator (clear paste backend port)
+	@echo "Restarting Plannotator..."
+	@lsof -ti:19433 | xargs kill -9 2>/dev/null || true
+	@sleep 1
+	@echo "Plannotator port cleared."
+
+services-restart: opencode-restart plannotator-restart ## Restart all services
