@@ -25,7 +25,7 @@ When the librarian model uses a different provider than the orchestrator, add a 
 "pro-plus": {
   "provider": "ollama-cloud",
   "primaryModel": "glm-5.2",
-  "fasterModel": "gpt-5.4-mini",
+  "fasterModel": "gpt-5.6-luna",
   "fasterProvider": "openai"
 }
 ```
