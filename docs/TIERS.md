@@ -21,9 +21,9 @@ Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud (glm-5.2 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
@@ -59,15 +59,15 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `openai/gpt-5.5` | — |
+| orchestrator | `openai/gpt-5.6-terra` | — |
 | oracle | `anthropic/claude-fable-5` | xhigh |
-| librarian | `openai/gpt-5.4-nano` | low |
+| librarian | `openai/gpt-5.6-luna` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
 | designer | `anthropic/claude-sonnet-5` | medium |
 | fixer | `anthropic/claude-haiku-4-5` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5`, beta `gpt-5.5`, gamma `gpt-5.4`. Council synthesizer uses `claude-sonnet-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5`, beta `gpt-5.6-terra`, gamma `gpt-5.6-luna`. Council synthesizer uses `claude-sonnet-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Local-Pro Tier (`local-pro`)
 
@@ -289,6 +289,30 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 Ollama Cloud presets use models like `glm-5.2`, `glm-5.1`, `kimi-k2.6`, `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
+## OpenAI Models (gpt-5.6 Family)
+
+The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI model line:
+
+| Model | Role | Description |
+|-------|------|-------------|
+| `gpt-5.6-terra` | Balanced | Primary orchestrator and general-purpose model. Replaces gpt-5.5 (balanced) as the default for orchestrator, librarian, and general roles. |
+| `gpt-5.6-sol` | Flagship | Primary oracle and deep reasoning model. Replaces gpt-5.5 (flagship) for oracle, council, and complex analysis. |
+| `gpt-5.6-luna` | Lightweight | Primary lightweight model for librarian, explorer, and fixer roles. Replaces gpt-5.4-mini and gpt-5.4-nano. |
+
+**Fallback chain**: When gpt-5.6 models are unavailable, the tier falls back to gpt-5.5 (flagship) → gpt-5.4-mini → gpt-5.4-nano in degraded mode. The `plus` and `plus-anthropic` presets define these fallback chains per role in `oh-my-opencode-slim.json`.
+
+## Council Fallback
+
+Each cloud tier (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic) now defines a `council` fallback key in its preset configuration. This key specifies the fallback model for the council synthesizer role when the primary council model is unavailable:
+
+- **pro**: council fallback uses `glm-5.1` (Ollama Cloud)
+- **pro-plus**: council fallback uses `gpt-5.6-luna` (OpenAI)
+- **pro-plus-anthropic**: council fallback uses `claude-haiku-4-5` (Anthropic)
+- **plus**: council fallback uses `gpt-5.6-luna` (OpenAI)
+- **plus-anthropic**: council fallback uses `claude-haiku-4-5` (Anthropic)
+
+The council fallback is defined in `oh-my-opencode-slim.json` under each preset's `council` key and is applied automatically by `configure-opencode-tier.py`.
+
 ---
 
 ## Variant Policy
@@ -320,10 +344,14 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
-| `gpt-5.5` | standard | `high` | Upstream openai preset uses high for oracle |
+| `gpt-5.6-terra` | standard | `high` | Primary balanced model; orchestrator default, oracle uses high |
+| `gpt-5.6-sol` | standard | `high` | Primary flagship model; oracle uses high, council uses high |
+| `gpt-5.6-luna` | standard | `high` | Primary lightweight model; librarian/explorer use low, fixer uses high |
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
 | `glm-5.1` | standard | none | Upstream uses no variant for orchestrator |
 | `glm-5.2` | standard | max | 1M context; supports High/Max thinking effort; orchestrator uses max, oracle fallback uses max, other fallbacks use standard |
 | `kimi-k2.6` | standard | none | Upstream uses no variant for observer, `medium` for designer |
 | `kimi-k2.7-code` | standard | none | Code-focused; mandatory thinking (cannot disable); ~30% lower thinking tokens vs kimi-k2.6 |
-| `gpt-5.4-mini` | standard | `high` | Upstream uses high for fixer (code execution) |
+| `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
+| `gpt-5.4-mini` | standard | `high` | Legacy lightweight; now a degraded fallback when gpt-5.6-luna is unavailable |
+| `gpt-5.4-nano` | standard | `high` | Legacy nano; now a degraded fallback when gpt-5.6-luna is unavailable |
