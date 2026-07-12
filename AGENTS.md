@@ -16,10 +16,10 @@ Key directories and files that agents interact with:
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
 ├── .chezmoiignore                # Ignore patterns (excludes scripts/, configs/, macOS-only on non-macOS)
-├── .chezmoiscripts/              # 27 scripts: run_once_01-03 (one-time) + run_onchange_04-27 (hash-triggered)
+├── .chezmoiscripts/              # 28 scripts: run_once_01-03 (one-time) + run_onchange_04-28 (hash-triggered)
 │   ├── # Phase 1: One-time setup (01-03)
 │   ├── # Phase 2: Package/CLI installs (04-11)
-│   └── # Phase 3: Tool configuration (12-20)
+│   └── # Phase 3: Tool configuration (12-28)
 ├── configs/
 │   ├── agents/home-agents.md     # Source of truth for home-level agent guidance
 │   ├── junie/model-groups.json   # Junie model profile definitions
@@ -236,9 +236,9 @@ Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth). 
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud (glm-5.2 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
@@ -331,10 +331,17 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Check hash triggers | `scripts/check-hashes.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
 | Distribute agent guidance | `scripts/configure-agent-guidance.py` |
+| Distribute skills to all agent directories | `scripts/configure-skills.py` |
 | Check env template drift | `make drift` |
 | Migrate deprecated env gates | `make migrate` |
 | Preview pending changes | `make diff` |
 | Apply all dotfiles | `make deploy` |
+| Restart OpenCode Web service | `make opencode-restart` |
+| Stop OpenCode Web service | `make opencode-stop` |
+| Start OpenCode Web service | `make opencode-start` |
+| Clear Plannotator port conflicts | `make plannotator-restart` |
+| Restart all managed services | `make services-restart` |
+| CI verification (no dry-run) | `make ci-verify` |
 
 > For more tasks (SmallCode, voice, multiplexer, Ollama routing, JetBrains), see the relevant docs: [SMALLCODE.md](docs/SMALLCODE.md), [VOICE.md](docs/VOICE.md), [MULTIPLEXER.md](docs/MULTIPLEXER.md), [MOZART.md](docs/MOZART.md), [JUNIE.md](docs/JUNIE.md).
 
