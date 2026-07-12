@@ -126,7 +126,7 @@ manually if you prefer to manage Keychain trust yourself.
 |---------|------|----------|-------|
 | Ollama | `/ollama/*` | `http://127.0.0.1:11434` | Read-only proxy; write endpoints are blocked. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
-| OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB=1`; Caddy `basic_auth` is the only external auth layer. |
+| OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; Caddy `basic_auth` is the only external auth layer. |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |
 | Plannotator portal | `/` | static files | Static share portal; no backend control plane exposed. |
 
@@ -176,7 +176,7 @@ Caddy's `basic_auth` from `~/.config/caddy/caddy-auth.conf` is the sole auth
 boundary for external access to `/opencode/*`.
 
 The generated `opencode.json` contains the `server` block used by `opencode web`
-(`port`, `hostname`, and `cors`). When `DOTFILES_RUN_OPENCODE_WEB=1`, the
+(`port`, `hostname`, and `cors`). When `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`, the
 LaunchAgent keeps that server running so Caddy can proxy `/opencode/*` to it.
 
 ### Plannotator
