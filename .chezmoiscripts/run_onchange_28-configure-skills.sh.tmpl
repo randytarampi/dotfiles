@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when skills or the script itself change):
+# configs/skills/iamhumans/SKILL.md: {{ include "configs/skills/iamhumans/SKILL.md" | sha256sum }}
+# scripts/configure-skills.py: {{ include "scripts/configure-skills.py" | sha256sum }}
+
+# Load env before gate (DOTFILES_RUN_SKILLS_SETUP is in ~/.env)
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_SKILLS_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_SKILLS_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_SKILLS_SETUP='${DOTFILES_RUN_SKILLS_SETUP:-0}' — skipping skills distribution"
+  exit 0
+fi
+
+info "Distributing skills..."
+"{{ .chezmoi.sourceDir }}/scripts/configure-skills.py"
+ok "Skills distributed."
