@@ -1,16 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 
 # Script hash triggers (re-run when iTerm2 profile changes):
-# configs/iterm2/Default.json: {{ include "configs/iterm2/Default.json" | sha256sum }}
+# configs/iterm2/Default.json.tmpl: {{ include "configs/iterm2/Default.json.tmpl" | sha256sum }}
 
+source_dir="{{ .chezmoi.sourceDir }}"
 target_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-source_file="{{ .chezmoi.sourceDir }}/configs/iterm2/Default.json"
+target_file="$target_dir/Default.json"
+template_file="$source_dir/configs/iterm2/Default.json.tmpl"
 
 info "Configuring iTerm2 dynamic profile..."
 mkdir -p "$target_dir"
-ln -sf "$source_file" "$target_dir/Default.json"
-ok "iTerm2 dynamic profile linked."
+
+# Render the chezmoi template and write to DynamicProfiles
+# Using chezmoi execute-template to resolve the output expression in the template
+cat "$template_file" | chezmoi execute-template > "$target_file"
+
+ok "iTerm2 dynamic profile configured (non-rewritable, tmux command)."
