@@ -79,6 +79,8 @@ MIGRATIONS = [
         "DOTFILES_RUN_SECRETS_SETUP",
         "DOTFILES_RUN_OPENCODE_SETUP",
     ),
+    # OpenCode web gate: add _SETUP suffix for consistency
+    ("DOTFILES_RUN_OPENCODE_WEB", "DOTFILES_RUN_OPENCODE_WEB_SETUP", None),
 ]
 
 CADDY_V1_REMOVALS = {
