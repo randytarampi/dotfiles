@@ -20,7 +20,7 @@ fi
 # Outside multiplexer: passes through to opencode unchanged.
 opencode() {
   _opencode_subcommands="completion acp mcp attach run debug providers auth agent upgrade uninstall serve web models stats export import github pr session plugin db"
-  if { [ -n "${TMUX:-}" ] || [ -n "${ZELLIJ:-}" ]; } && ! echo "$_opencode_subcommands" | grep -qw "${1:-__default__}"; then
+  if { [ -n "${TMUX:-}" ] || [ -n "${ZELLIJ:-}" ]; } && ! echo "$_opencode_subcommands" | grep -qw -- "${1:-__default__}"; then
     export OPENCODE_PORT="${OPENCODE_PORT:-$(jot -r 1 49152 65535)}"
     command opencode --port "$OPENCODE_PORT" "$@"
   else
