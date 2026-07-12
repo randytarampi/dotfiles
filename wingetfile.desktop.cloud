@@ -4,5 +4,13 @@
 # Categories mirror Brewfile categories where applicable
 
 # --- Cloud / sync / AI ---
-# No direct matches from current export.
-# Add cloud/sync/AI packages here as the Windows inventory grows.
+# Cross-ref: cask 'ollama-app'
+Ollama.Ollama
+# Cross-ref: cask 'opencode-desktop'
+SST.OpenCodeDesktop
+# Cross-ref: cask 'google-drive'
+Google.GoogleDrive
+# Cross-ref: cask 'cyberduck'
+Cyberduck.Cyberduck
+# Cross-ref: cask 'ngrok'
+ngrok.ngrok
