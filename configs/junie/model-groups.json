@@ -50,7 +50,7 @@
     "pro-plus": {
       "provider": "ollama-cloud",
       "primaryModel": "glm-5.2",
-      "fasterModel": "gpt-5.4-mini",
+      "fasterModel": "gpt-5.6-luna",
       "fasterProvider": "openai"
     },
     "pro-plus-anthropic": {
@@ -65,12 +65,12 @@
     },
     "plus": {
       "provider": "openai",
-      "primaryModel": "gpt-5.5",
-      "fasterModel": "gpt-5.4-nano"
+      "primaryModel": "gpt-5.6-terra",
+      "fasterModel": "gpt-5.6-luna"
     },
     "plus-anthropic": {
       "provider": "openai",
-      "primaryModel": "gpt-5.5",
+      "primaryModel": "gpt-5.6-terra",
       "fasterModel": "anthropic/claude-haiku-4-5",
       "fasterProvider": "meridian"
     },
