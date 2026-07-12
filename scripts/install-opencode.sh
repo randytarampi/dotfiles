@@ -355,27 +355,27 @@ else
   fi
 fi
 
-# Claude Code ACP adapter (Zed adapter)
-if npm list -g @zed-industries/claude-code-acp &>/dev/null 2>&1; then
-  ok "@zed-industries/claude-code-acp already installed"
+# Claude Code ACP adapter (agentclientprotocol adapter)
+if npm list -g @agentclientprotocol/claude-agent-acp &>/dev/null 2>&1; then
+  ok "@agentclientprotocol/claude-agent-acp already installed"
 else
-  info "Installing @zed-industries/claude-code-acp..."
-  if npm install -g @zed-industries/claude-code-acp@latest 2>/dev/null; then
-    ok "@zed-industries/claude-code-acp installed"
+  info "Installing @agentclientprotocol/claude-agent-acp..."
+  if npm install -g @agentclientprotocol/claude-agent-acp@latest 2>/dev/null; then
+    ok "@agentclientprotocol/claude-agent-acp installed"
   else
-    warn "Failed to install @zed-industries/claude-code-acp"
+    warn "Failed to install @agentclientprotocol/claude-agent-acp"
   fi
 fi
 
-# Codex ACP adapter (Zed adapter)
-if npm list -g codex-acp &>/dev/null 2>&1; then
-  ok "codex-acp already installed"
+# Codex ACP adapter (agentclientprotocol adapter)
+if npm list -g @agentclientprotocol/codex-acp &>/dev/null 2>&1; then
+  ok "@agentclientprotocol/codex-acp already installed"
 else
-  info "Installing codex-acp..."
-  if npm install -g codex-acp@latest 2>/dev/null; then
-    ok "codex-acp installed"
+  info "Installing @agentclientprotocol/codex-acp..."
+  if npm install -g @agentclientprotocol/codex-acp@latest 2>/dev/null; then
+    ok "@agentclientprotocol/codex-acp installed"
   else
-    warn "Failed to install codex-acp"
+    warn "Failed to install @agentclientprotocol/codex-acp"
   fi
 fi
 
