@@ -12,6 +12,7 @@ Exit codes:
 import os
 import sys
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -116,7 +117,57 @@ CHECKS = [
         "Caddy config",
         CADDY_CHECK_PATHS,
     ),
+    (
+        "DOTFILES_RUN_SKILLS_SETUP",
+        "Skills distribution",
+        [
+            HOME / ".agents/skills/iamhumans/SKILL.md",
+        ],
+    ),
+    (
+        "DOTFILES_RUN_OLLAMA_DAEMON_SETUP",
+        "Ollama daemon env config",
+        [
+            HOME / "Library/LaunchAgents/com.dotfiles.ollama-env.plist",
+        ],
+    ),
 ]
+
+
+def check_acp_agents(config):
+    """Warn if acpAgents entry exists but CLI not on PATH."""
+    acp_agents = config.get("acpAgents", {})
+    for name, entry in acp_agents.items():
+        cmd = entry.get("command", "")
+        if cmd and not shutil.which(cmd):
+            print(
+                f"  \u26a0 ACP agent '{name}' configured but command '{cmd}' not found on PATH"
+            )
+
+
+def check_ssh_permissions():
+    """Warn if SSH config or private keys have wrong permissions."""
+    ssh_dir = HOME / ".ssh"
+    if not ssh_dir.exists():
+        return
+
+    # Check ~/.ssh/config should be 0600
+    config = ssh_dir / "config"
+    if config.exists():
+        stat = config.stat()
+        mode = stat.st_mode & 0o777
+        if mode != 0o600:
+            print(f"  \u26a0 SSH config permissions: {oct(mode)} (should be 600)")
+
+    # Check private keys should be 0600
+    for key in ssh_dir.glob("id_*"):
+        if key.is_file() and not key.name.endswith(".pub"):
+            stat = key.stat()
+            mode = stat.st_mode & 0o777
+            if mode != 0o600:
+                print(
+                    f"  \u26a0 SSH key {key.name} permissions: {oct(mode)} (should be 600)"
+                )
 
 
 def main():
@@ -130,6 +181,10 @@ def main():
 
         if gate == "DOTFILES_RUN_CADDY_SETUP" and BREW_PREFIX is None:
             print(f"  \u2298 {description} (brew not found, skipped)")
+            continue
+
+        if gate == "DOTFILES_RUN_OLLAMA_DAEMON_SETUP" and sys.platform != "darwin":
+            print(f"  \u2298 {description} (non-macOS, skipped)")
             continue
 
         all_exist = True
@@ -268,7 +323,7 @@ def main():
 
     # OpenCode web checks (only enforced when enabled): localhost binding +
     # server block shape. External auth is handled by Caddy.
-    opencode_web_gate = os.environ.get("DOTFILES_RUN_OPENCODE_WEB", "0") == "1"
+    opencode_web_gate = os.environ.get("DOTFILES_RUN_OPENCODE_WEB_SETUP", "0") == "1"
     opencode_web_plist = HOME / "Library/LaunchAgents/com.opencode.web.plist"
     if opencode_web_gate:
         if opencode_web_plist.exists():
@@ -295,7 +350,7 @@ def main():
             print("  \u2717 OpenCode web server: opencode.json not found")
             exit_code = 1
     else:
-        print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB=0, skipped)")
+        print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
@@ -357,6 +412,13 @@ def main():
             exit_code = 1
     else:
         print(f"  \u2298 CodeGraph MCP (gate DOTFILES_RUN_CODEGRAPH_SETUP=0, skipped)")
+
+    # ACP agent CLI availability check (runs whenever opencode.json is parseable)
+    if opencode_config is not None:
+        check_acp_agents(opencode_config)
+
+    # SSH permissions drift check (always runs — security-critical)
+    check_ssh_permissions()
 
     if exit_code == 0:
         print("\nAll enabled features have their output files.")
