@@ -9,3 +9,7 @@ AgileBits.1Password
 Discord.Discord
 SlackTechnologies.Slack
 Microsoft.Teams
+# Cross-ref: cask 'zoom'
+Zoom.Zoom
+# Cross-ref: cask 'webex'
+Cisco.Webex
