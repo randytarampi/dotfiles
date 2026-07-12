@@ -29,8 +29,8 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **plus** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
-| **plus-anthropic** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **plus** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
+| **plus-anthropic** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
 | **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
 
 **Meridian detection**: `is_meridian_configured()` from `constants.py` controls Meridian routing for voice. If it returns true, the Anthropic tier uses Meridian as the voice LLM endpoint. Otherwise it falls back to direct Anthropic API.
