@@ -26,3 +26,6 @@ Makefile
 README.md
 config.json
 docs/
+
+# GitHub special files (PR templates, issue templates, CI workflows) — not dotfiles.
+.github/
