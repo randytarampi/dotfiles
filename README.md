@@ -444,7 +444,23 @@ Packages available on both platforms by category:
 | PIA | `private-internet-access` (cask) | `PrivateInternetAccess.PrivateInternetAccess` |
 | AWS VPN | `aws-vpn-client` (cask) | `Amazon.AWSVPNClient` |
 | 1Password | `1password` (cask) | `AgileBits.1Password` |
+| Adobe Creative Cloud | `adobe-creative-cloud` (cask) | `Adobe.AdobeCreativeCloud` |
+| chezmoi | `chezmoi` | `twpayne.chezmoi` |
+| Cyberduck | `cyberduck` (cask) | `Cyberduck.Cyberduck` |
+| Go | `go` | `GoLang.Go` |
+| Google Drive | `google-drive` (cask) | `Google.GoogleDrive` |
+| GitHub CLI | `gh` | `GitHub.cli` |
+| jq | `jq` | `jqlang.jq` |
+| ngrok | `ngrok` (cask) | `ngrok.ngrok` |
+| nvm | `nvm` | `CoreyButler.NVMforWindows` |
+| OBS Studio | `obs` (cask) | `OBSProject.OBSStudio` |
+| PowerShell | `powershell` | `Microsoft.PowerShell` |
 | Sublime Text | `sublime-text` (cask) | `SublimeHQ.SublimeText.4` |
+| uv | `uv` | `astral-sh.uv` |
+| Webex | `webex` (cask) | `Cisco.Webex` |
+| wget | `wget` | `JernejSimoncic.Wget` |
+| yq | `yq` | `MikeFarah.yq` |
+| Zoom | `zoom` (cask) | `Zoom.Zoom` |
 | Geekbench | `geekbench` (cask) | `PrimateLabs.Geekbench.5` / `PrimateLabs.Geekbench.6` |
 | Steam | `steam` (cask) | `Valve.Steam` |
 
