@@ -32,14 +32,14 @@ detect_tier() {
   fi
 
   # CLI auth fallback: a CLI on PATH can signal provider access via its own
-  # OAuth login — but only when the user hasn't explicitly declared the key
-  # in ~/.env. A set-but-empty assignment (`KEY=''`) is an explicit opt-out
-  # and must override the CLI signal. `-z "${VAR+set}"` is true only when VAR
-  # is unset (never declared), so the fallback fires only for absent keys.
-  if command -v codex >/dev/null 2>&1 && [[ -z "${OPENAI_API_KEY+set}" ]]; then
+  # OAuth login (e.g., `codex` uses ChatGPT Plus browser OAuth, `claude` uses
+  # Anthropic console login). The fallback fires when the API key is absent OR
+  # empty — an empty assignment (`KEY=''`) means "no API key, use CLI auth"
+  # rather than an explicit opt-out.
+  if command -v codex >/dev/null 2>&1 && [[ -z "${OPENAI_API_KEY:-}" ]]; then
     _has_openai=true
   fi
-  if command -v claude >/dev/null 2>&1 && [[ -z "${ANTHROPIC_API_KEY+set}" ]]; then
+  if command -v claude >/dev/null 2>&1 && [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
     _has_anthropic=true
   fi
 
