@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
@@ -17,8 +17,8 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 OS_NAME="{{ .chezmoi.os }}"
 
 if [[ "$OS_NAME" == "darwin" ]]; then
-  if [[ "${DOTFILES_RUN_OPENCODE_WEB:-0}" != "1" ]]; then
-    info "DOTFILES_RUN_OPENCODE_WEB='${DOTFILES_RUN_OPENCODE_WEB:-0}' — skipping OpenCode web LaunchAgent"
+  if [[ "${DOTFILES_RUN_OPENCODE_WEB_SETUP:-0}" != "1" ]]; then
+    info "DOTFILES_RUN_OPENCODE_WEB_SETUP='${DOTFILES_RUN_OPENCODE_WEB_SETUP:-0}' — skipping OpenCode web LaunchAgent"
     exit 0
   fi
 
