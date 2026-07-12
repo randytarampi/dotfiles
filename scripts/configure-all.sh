@@ -119,6 +119,25 @@ else
   info "DOTFILES_RUN_AGENT_GUIDANCE_SETUP not set — skipping agent guidance distribution"
 fi
 
+# 7.5. Ollama daemon env config (launchctl/systemd/setx — applies OLLAMA_* tuning vars)
+if [[ "${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}" == "1" ]]; then
+  info "Configuring Ollama daemon env vars (DOTFILES_RUN_OLLAMA_DAEMON_SETUP=1)..."
+  # This is a chezmoi script (run_onchange_27), not a Python configure script.
+  # configure-all.sh doesn't re-run it — chezmoi apply handles it.
+  # This step exists in configure-all.sh for documentation/consistency.
+  ok "Ollama daemon env config handled by chezmoi (run_onchange_27)"
+else
+  info "DOTFILES_RUN_OLLAMA_DAEMON_SETUP='${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}' — skipping Ollama daemon env config"
+fi
+
+# 7b. Skills distribution (copies SKILL.md from configs/skills/ to agent skill dirs)
+if [[ "${DOTFILES_RUN_SKILLS_SETUP:-0}" == "1" ]]; then
+  info "Distributing skills..."
+  python3 "$SCRIPT_DIR/configure-skills.py" || warn "Skills distribution failed"
+else
+  info "DOTFILES_RUN_SKILLS_SETUP not set — skipping skills distribution"
+fi
+
 # 8. Caddy config (LAN exposure front door)
 if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   info "Configuring ddns-route53..."
@@ -127,6 +146,20 @@ if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   python3 "$SCRIPT_DIR/configure-caddy.py" || warn "Caddy config generation failed"
 else
   info "DOTFILES_RUN_CADDY_SETUP not set — skipping Caddy configuration"
+fi
+
+# 9. Restart OpenCode Web to pick up config changes (opencode.json, acp-agents.json, etc.)
+if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
+  info "Restarting OpenCode Web to pick up config changes..."
+  if [[ "$(uname)" == "Darwin" ]]; then
+    launchctl bootout "gui/$(id -u)/com.opencode.web" 2>/dev/null || true
+    sleep 1
+    launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.opencode.web.plist 2>/dev/null || true
+    launchctl kickstart -k "gui/$(id -u)/com.opencode.web" 2>/dev/null || true
+  else
+    systemctl --user restart opencode-web 2>/dev/null || true
+  fi
+  ok "OpenCode Web restarted."
 fi
 
 ok "Configuration complete!"
