@@ -137,6 +137,13 @@ scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
 scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
 scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
 scripts/install-smallcode.sh                     # Install SmallCode CLI
+scripts/configure-skills.py                  # Distribute skills to all agent directories
+make opencode-restart                        # Restart OpenCode Web service
+make opencode-stop                           # Stop OpenCode Web service
+make opencode-start                          # Start OpenCode Web service
+make plannotator-restart                     # Clear Plannotator port conflicts
+make services-restart                        # Restart all managed services
+make ci-verify                               # CI verification (lint + drift + doctor + check-hashes, no dry-run)
 ```
 
 ### ACP Agents
@@ -175,7 +182,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_MACOS_SECURITY_SETUP` | macOS security defaults (firewall, FileVault, etc.) | 0 |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | Meridian launchd plist | 0 |
 | `DOTFILES_RUN_CADDY_SETUP` | Caddy LAN exposure + Plannotator | 0 |
-| `DOTFILES_RUN_OPENCODE_WEB` | Optional OpenCode web LaunchAgent | 0 |
+| `DOTFILES_RUN_OPENCODE_WEB_SETUP` | Optional OpenCode web LaunchAgent | 0 |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | OpenCode plugins + CLI tools | 0 |
 | `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
@@ -185,6 +192,8 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | CodeGraph MCP registration | 0 |
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |
 | `DOTFILES_RUN_SECRETS_SETUP` | Secrets distribution helper | 0 |
+| `DOTFILES_RUN_SKILLS_SETUP` | Skills distribution to all agent directories | 0 |
+| `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | Ollama daemon env config | 0 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
@@ -198,10 +207,15 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── .chezmoiignore                # ignore patterns (scripts/, configs/, macOS-only)
 ├── .chezmoidata/
 │   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .chezmoiscripts/              # 26 scripts: run_once_01-03 (one-time) + run_onchange_04-26 (hash-triggered)
+├── .github/                        # GitHub templates, workflows, dependabot
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   ├── ISSUE_TEMPLATE/
+│   ├── workflows/ci.yml
+│   └── dependabot.yml
+├── .chezmoiscripts/              # 28 scripts: run_once_01-03 (one-time) + run_onchange_04-28 (hash-triggered)
 │   ├── # Phase 1: One-time setup (01-03)
 │   ├── # Phase 2: Package/CLI installs (04-11)
-│   └── # Phase 3: Tool configuration (12-20)
+│   └── # Phase 3: Tool configuration (12-28)
 ├── AGENTS.md                  # AI agent guidance (authoritative — scripts, tiers, MCP, symlinks)
 ├── dot_bashrc                     # Bash config
 ├── dot_zshrc                      # Zsh config
@@ -252,7 +266,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   │   ├── smallcode.json          # SmallCode — MCP server (stdio)
 │   │   ├── codegraph.json          # CodeGraph — local-first semantic code index (stdio MCP)
 │   │   └── templates/            # Symlinks → ../ for configure-mcp-tool.sh
-│   ├── iterm2/Default.json        # iTerm2 Dynamic Profile (clean, no secrets)
+│   ├── iterm2/Default.json.tmpl   # iTerm2 Dynamic Profile template (tmux command, non-rewritable)
 │   ├── mozart-router/mozart.json # Mozart AI router gateway config
 │   └── opencode/
 │       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
@@ -260,6 +274,8 @@ Set in `~/.env` (0 = skip, 1 = run):
 │       ├── role-to-local-category.json # New
 │       ├── openai-models.json        # New
 │       └── ollama-cloud-models.json  # New
+│   ├── skills/                       # Skill source files (distributed to all agent dirs)
+│   │   └── iamhumans/SKILL.md        # Humanization skill for LLM conversations
 ├── ~/.dotfiles/scripts -> ~/Development/dotfiles/scripts  # helper-script symlink on PATH
 └── scripts/                      # Utility scripts + lib/
     ├── lib/                       # Shared helpers
@@ -283,6 +299,7 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── configure-mozart-router.py # Configure Mozart AI router
     ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
     ├── configure-all.sh           # Full orchestration wrapper (rebuild configs)
+    ├── configure-skills.py          # Distribute skills to all agent skill directories
     ├── verify-config.py           # Verify generated config presence and freshness
     ├── check-hashes.py            # Audit hash trigger coverage
     ├── configure-jetbrains-workspace-project.py # Configure AI dirs in JB workspace modules
@@ -442,9 +459,9 @@ Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (s
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.5`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-sol`, `gpt-5.6-luna`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.5`, `gpt-5.4-mini`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only (`sonnet-5`, `fable-5`, `haiku-4-5`, `opus-4-6`) | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
@@ -489,8 +506,8 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **plus** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
-| **plus-anthropic** | `gpt-5.4-mini` via OpenAI | OpenAI STT |
+| **plus** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
+| **plus-anthropic** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
 | **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
 
 **Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
@@ -569,11 +586,11 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | Profile | Provider | Primary | Faster | Temp |
 |---------|----------|---------|--------|------|
 | `pro` | cloud | `glm-5.2` | `gemma4:31b` | 0.7 |
-| `pro-plus` | cloud | `glm-5.2` | `gpt-5.4-mini` (openai) | 0.7 |
+| `pro-plus` | cloud | `glm-5.2` | `gpt-5.6-luna` (openai) | 0.7 |
 | `pro-plus-anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
 | `anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
-| `plus` | openai | `gpt-5.5` | `gpt-5.4-nano` | 1 |
-| `plus-anthropic` | openai | `gpt-5.5` | `claude-haiku-4-5` (meridian) | 1 |
+| `plus` | openai | `gpt-5.6-terra` | `gpt-5.6-luna` | 1 |
+| `plus-anthropic` | openai | `gpt-5.6-terra` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
