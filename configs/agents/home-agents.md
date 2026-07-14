@@ -40,33 +40,67 @@ Available steps for `configure-opencode-project.py --steps`: `opencode` (always)
 
 ## Skills Distribution
 
-Skills are distributed from `configs/skills/` to all configured agent skill directories by `scripts/configure-skills.py` (invoked via `run_onchange_28-configure-skills.sh.tmpl` and `configure-all.sh`).
+Skills are managed declaratively via a manifest at `configs/skills/skills.json` (analogous to Brewfile/wingetfile for packages). The script `scripts/configure-skills.py` reconciles installed skills against the manifest:
+1. Fetches missing skills via the `skills` CLI (`vercel-labs/skills`) into `~/.agents/skills/` (canonical store)
+2. Symlinks each skill to all 8 agent skill directories (`.agents`, `.config/opencode`, `.claude`, `.gemini`, `.codex`, `.cursor`, `.ai`/`.junie`, `.hermes`)
+3. Removes stale skills not in the active manifest
+4. Supports optional profiles gated on `DOTFILES_RUN_*` env vars
+
+The `skills` CLI only installs to 4 agent dirs; `configure-skills.py` extends coverage to all 8.
+
+### Manifest format
+
+The manifest (`configs/skills/skills.json`) declares skills by source repo and name:
+```json
+{ "source": "owner/repo", "name": "skill-name" }
+```
+Skills are grouped into profiles:
+- **global** — always active, ~114 skills covering AWS, MongoDB, Prisma, TypeScript dev workflow, content/media, Plannotator, CodeGraph, iamhumans, agent meta
+- **macos** — Apple ecosystem (apple-notes, apple-reminders, findmy, imessage), gated on `DOTFILES_RUN_MACOS_SKILLS_SETUP=1`, macOS only
 
 ### iamhumans
 
-The [iamhumans](https://github.com/hoainho/iamhumans) skill provides a humanization layer for LLM conversation — making the model sound and respond like a real, thoughtful, embodied human rather than an assistant or chatbot.
+The [iamhumans](https://github.com/hoainho/iamhumans) skill provides a humanization layer for LLM conversation. It's fetched via `skills add hoainho/iamhumans --global -y` — no copy-paste needed. Full `references/` tree is included.
 
-- **Source**: `configs/skills/iamhumans/SKILL.md`
-- **Targets**: `~/.agents/skills/iamhumans/`, `~/.config/opencode/skills/iamhumans/`, `~/.claude/skills/iamhumans/`, `~/.gemini/skills/iamhumans/`, `~/.codex/skills/iamhumans/`, `~/.cursor/skills/iamhumans/`, `~/.ai/skills/iamhumans/`
-- **Gate**: `DOTFILES_RUN_OPENCODE_SETUP=1`
-- **Usage**: The skill auto-loads when emotional, relational, or personal-decision context is detected. See the SKILL.md for full trigger surface.
+### Updating skills
+
+- **Update all**: `make skills-update` or `skills update --global -y`
+- **Update one**: `skills update <skill-name> --global -y`
+- **Add a skill**: Add entry to `configs/skills/skills.json`, then `make deploy`
+- **Remove a skill**: Remove entry from manifest, then `make deploy` (stale skill gets removed)
+- **Lock file**: `~/.agents/.skill-lock.json` tracks installed state
+
+> [!IMPORTANT]
+> Skill names in the manifest must match the `name` field in `~/.agents/.skill-lock.json` exactly. Before editing `skills.json`, list installed names with `jq -r '.skills[].name' ~/.agents/.skill-lock.json`. Guessed names (e.g. `aws-messaging` vs the real `aws-messaging-and-streaming`) cause `skills add` to fail silently.
+
+### Gate
+
+- `DOTFILES_RUN_SKILLS_SETUP=1` — enables global skills distribution (default: 0)
+- `DOTFILES_RUN_MACOS_SKILLS_SETUP=1` — enables macOS-only Apple ecosystem profile (default: 0)
+
+### `skills` CLI
+
+The [`skills`](https://www.skills.sh) CLI (`vercel-labs/skills`) fetches skills from GitHub repos:
+```bash
+skills add owner/repo/skill-name --global -y   # Install a skill
+skills ls -g                                     # List global skills
+skills update --global -y                        # Update all skills
+skills find "humanization"                       # Search registry
+```
+
+Install via `brew install skills` (macOS/Linux) or `npm install -g skills` (all platforms).
 
 ### lazyskills CLI
 
 `lazyskills` is a CLI tool for discovering and managing skills from the registry:
 
 ```bash
-# Search skills by query
 lazyskills find --json "humanization"
-
-# List all available skills
 lazyskills list
-
-# Get skill details
 lazyskills info iamhumans
 ```
 
-Install via `scripts/install-opencode.sh` (step 6) or manually: `npm i -g lazyskills`.
+Install via `scripts/install-skills.sh` or manually: `brew install --cask alvinunreal/tap/lazyskills` (macOS), `curl -fsSL https://lazyskills.sh/install | sh` (Linux), `irm https://lazyskills.sh/install.ps1 | iex` (Windows).
 
 ## ACP Agent Verification
 
