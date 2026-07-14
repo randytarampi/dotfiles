@@ -66,6 +66,7 @@ fix:
 	fi
 	@if command -v black >/dev/null 2>&1; then \
 		black scripts/ scripts/lib/; \
+		chmod +x scripts/*.py; \
 	else \
 		echo "black not installed; skipping python formatting"; \
 	fi
