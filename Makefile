@@ -122,11 +122,14 @@ doctor: ## Read-only drift checks: verify generated configs exist
 check-hashes: ## Verify hash trigger coverage in run_onchange scripts
 	@python3 scripts/check-hashes.py
 
-verify: lint drift doctor check-hashes dry-run ## Full verification suite
+check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
+	@python3 scripts/check-env-coverage.py
+
+verify: lint drift doctor check-hashes check-env-coverage dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes
+ci-verify: lint drift doctor check-hashes check-env-coverage
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)

@@ -369,7 +369,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 - **Local-repo trust:** No age/GPG encryption because the repo is local-only
 - **Orchestration principle:** `make deploy` is the single command that reconciles the machine. It runs `chezmoi apply` (templates + scripts) followed by `configure-all.sh` (all AI tool config generators). Scripts are idempotent — running twice is a no-op.
 - **Development workflow:** Run `make verify` before committing. Run `make doctor` to diagnose drift. Run `make check-hashes` after adding config inputs. Run `make reset && make deploy` to force full re-run.
-- **Coherence:** All three layers must stay aligned. When adding a new configure script, wire it into both a `run_onchange_*` script (Layer 2) AND `configure-all.sh` (Makefile orchestration). When adding a new config input, add its hash trigger. When adding a new gate, document it in `.env.example`.
+- **Coherence:** All three layers must stay aligned. When adding a new configure script, wire it into both a `run_onchange_*` script (Layer 2) AND `configure-all.sh` (Makefile orchestration). When adding a new config input, add its hash trigger. When adding a new gate or any `DOTFILES_*` env var read by a script, document it in `.env.example`; `make check-env-coverage` enforces this.
 - **Idempotent scripts:** Every `run_once_*` must be safe to re-run
 - **Graceful degradation:** Network failures in chezmoi scripts warn, never abort
 - **Single sources of truth:** `scripts/` for shell logic, `configs/` for JSON configs, `~/.env` for secrets, `AGENTS.md` for agent docs
