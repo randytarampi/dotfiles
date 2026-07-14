@@ -27,4 +27,17 @@ fi
 # Using chezmoi execute-template to resolve the output expression in the template
 cat "$template_file" | chezmoi execute-template >"$target_file"
 
-ok "iTerm2 dynamic profile configured (non-rewritable, tmux command)."
+# Set this dynamic profile as the iTerm2 default profile.
+# Dynamic profiles cannot self-declare as default in their JSON, so we set the
+# `Default Bookmark Guid` preference to match our profile's Guid.
+# `defaults` coordinates with cfprefsd, so no manual killall is needed.
+profile_guid="randy.tarampi-default-profile-v1"
+current_default="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
+if [[ "$current_default" != "$profile_guid" ]]; then
+  info "Setting iTerm2 default profile to Guid: $profile_guid"
+  defaults write com.googlecode.iterm2 "Default Bookmark Guid" -string "$profile_guid"
+else
+  info "iTerm2 default profile already set to $profile_guid"
+fi
+
+ok "iTerm2 dynamic profile configured (non-rewritable, tmux command, default)."
