@@ -169,6 +169,51 @@ def format_configs_to_str(fmt, defs):
             result["mcpServers"][name] = entry
         return json.dumps(result, indent=4)
 
+    elif fmt == "json-mcpServers-merge":
+        # Same output shape as json-mcpServers; merge path differs in
+        # merge_configs_to_file (top-level merge vs overwrite) to preserve other
+        # keys in shared config files (e.g. claude_desktop_config.json).
+        result = {"mcpServers": {}}
+        for d in defs:
+            name = d["name"]
+            entry = {}
+            if d.get("type") == "url":
+                entry["type"] = "streamable-http"
+                entry["url"] = d["url"]
+            else:
+                entry["command"] = d["command"]
+                if d.get("args"):
+                    entry["args"] = d["args"]
+            if d.get("env") and any(v for v in d["env"].values()):
+                entry["env"] = {k: v for k, v in d["env"].items() if v}
+            if d.get("headers"):
+                entry["headers"] = d["headers"]
+            if "enabled" in d:
+                entry["enabled"] = d["enabled"]
+            result["mcpServers"][name] = entry
+        return json.dumps(result, indent=4)
+
+    elif fmt == "json-servers":
+        # VS Code MCP format: top-level "servers" key with explicit type field.
+        result = {"servers": {}}
+        for d in defs:
+            name = d["name"]
+            entry = {}
+            if d.get("type") == "url":
+                entry["type"] = "http"
+                entry["url"] = d["url"]
+            else:
+                entry["type"] = "stdio"
+                entry["command"] = d["command"]
+                if d.get("args"):
+                    entry["args"] = d["args"]
+            if d.get("env") and any(v for v in d["env"].values()):
+                entry["env"] = {k: v for k, v in d["env"].items() if v}
+            if d.get("headers"):
+                entry["headers"] = d["headers"]
+            result["servers"][name] = entry
+        return json.dumps(result, indent=4)
+
     elif fmt == "toml-mcpServers":
         lines = []
         for d in defs:
@@ -272,7 +317,13 @@ def redact_secrets(obj):
 
 
 def redact_output_content(format_type, output_content):
-    if format_type in ["json-mcpServers", "opencode-internal", "json-settings-merge"]:
+    if format_type in [
+        "json-mcpServers",
+        "json-mcpServers-merge",
+        "json-servers",
+        "opencode-internal",
+        "json-settings-merge",
+    ]:
         try:
             return json.dumps(redact_secrets(json.loads(output_content)), indent=4)
         except json.JSONDecodeError:
@@ -293,6 +344,19 @@ def merge_configs_to_file(fmt, mcp_path, output):
         return
 
     if fmt == "json-settings-merge":
+        new_data = json.loads(output)
+        with open(mcp_path, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+        existing.update(new_data)
+        with open(mcp_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=4)
+            f.write("\n")
+        logger.info(f"Merged config into: {mcp_path}")
+
+    elif fmt in ("json-mcpServers-merge", "json-servers"):
+        # Merge the generated top-level key (mcpServers or servers) into the
+        # existing JSON file, preserving other top-level keys. Required for
+        # shared app config files like claude_desktop_config.json.
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
             existing = json.load(f)
@@ -585,7 +649,7 @@ def main():
         )
         parser.add_argument(
             "tool",
-            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie",
+            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode",
         )
         args = parser.parse_args()
 
