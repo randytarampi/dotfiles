@@ -58,7 +58,7 @@ PYEOF
 # Dynamic profiles cannot self-declare as default in their JSON, so we set the
 # `Default Bookmark Guid` preference to match our profile's Guid.
 # `defaults` coordinates with cfprefsd, so no manual killall is needed.
-profile_guid="randy.tarampi-default-profile-v1"
+profile_guid="dotfiles-default-profile-v1"
 current_default="$(defaults read com.googlecode.iterm2 "Default Bookmark Guid" 2>/dev/null || true)"
 if [[ "$current_default" != "$profile_guid" ]]; then
   info "Setting iTerm2 default profile to Guid: $profile_guid"
