@@ -35,6 +35,8 @@ Key directories and files that agents interact with:
 │   │   └── shortcut.json
 │   ├── iterm2/Default.json
 │   ├── mozart-router/mozart.json
+│   ├── skills/                      # Skills manifest + repo-local skills
+│   │   └── skills.json               # Declarative skill manifest (analogous to Brewfile)
 │   └── opencode/
 │       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
 │       ├── vibeguard.config.json      # VibeGuard sensitive-string redaction config
@@ -72,6 +74,7 @@ Key directories and files that agents interact with:
 │   │   ├── ai_models.py           # Model prefix mappings, temperatures, strip_provider_prefix
 │   │   ├── opencode_config.py     # OpenCode tier/preset helpers (get_available_tiers, build_tier_args)
 │   │   ├── idea.py                # Resolve IntelliJ app paths, java, and MCP classpaths in Python
+│   │   ├── skills_manifest.py     # Skills manifest parser, profile gating, stale detection
 │   │   └── discover_models.py     # Local Ollama discovery to JSON in Python
 │   ├── configure-mcps.py       # Generate MCP configs for all AI tools
 │   ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
@@ -93,6 +96,7 @@ Key directories and files that agents interact with:
 │   ├── generate-jetbrains-profiles.py # Generate model profiles JSON files
 │   ├── get-tools.py               # Get MCP tool registry keys
 │   ├── install-opencode.sh        # Install OpenCode plugins and tools (incl. voice)
+│   ├── install-skills.sh          # Cross-platform skills + lazyskills CLI installer
 │   ├── install-nvm-lts.sh         # Reinstall all LTS node versions
 │   ├── update-nvm-globals.sh     # Update npm globals across all nvm versions
 │   └── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
@@ -331,7 +335,9 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Check hash triggers | `scripts/check-hashes.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
 | Distribute agent guidance | `scripts/configure-agent-guidance.py` |
-| Distribute skills to all agent directories | `scripts/configure-skills.py` |
+| Reconcile skills against manifest | `scripts/configure-skills.py` |
+| Update skills from upstream | `make skills-update` |
+| Install skills CLI tools | `scripts/install-skills.sh` |
 | Check env template drift | `make drift` |
 | Migrate deprecated env gates | `make migrate` |
 | Preview pending changes | `make diff` |
