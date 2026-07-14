@@ -20,6 +20,7 @@ brew "ruby-build"
 brew "scons"
 brew "tfenv"
 brew "hermes-agent"
+brew "skills"
 
 # --- Facebook dev ---
 brew "edencommon"
@@ -159,6 +160,8 @@ cask "parallels"
 cask "vmware-fusion"
 cask "sublime-text"
 cask "visual-studio-code"
+tap "alvinunreal/tap"
+cask "lazyskills"
 
 # --- uv ---
 uv "piper-tts"
@@ -176,4 +179,3 @@ npm "tumor"
 npm "yarn"
 npm "@agentclientprotocol/claude-agent-acp"
 npm "@agentclientprotocol/codex-acp"
-npm "lazyskills"

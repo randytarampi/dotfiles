@@ -134,20 +134,20 @@ ok "Stale cloud model stub cleanup complete"
 
 # ---------------------------------------------------------------------------
 # 6. Install lazyskills CLI (skill discovery and management)
+#    macOS: brew cask (alvinunreal/tap/lazyskills)
+#    Linux: curl installer (https://lazyskills.sh/install)
+#    Windows: PowerShell installer (irm https://lazyskills.sh/install.ps1 | iex)
 # ---------------------------------------------------------------------------
 info "Installing lazyskills CLI..."
-if command -v npm &>/dev/null; then
-  if npm list -g lazyskills &>/dev/null 2>&1; then
-    ok "lazyskills CLI already installed globally"
-  else
-    if npm install -g lazyskills@latest 2>/dev/null; then
-      ok "lazyskills CLI installed globally"
-    else
-      warn "lazyskills CLI install failed — you can install manually with: npm i -g lazyskills"
-    fi
-  fi
+if command -v lazyskills &>/dev/null; then
+  ok "lazyskills CLI already installed"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  brew tap alvinunreal/tap 2>/dev/null || true
+  brew install --cask lazyskills || warn "brew install --cask lazyskills failed — see scripts/install-skills.sh"
+elif command -v curl &>/dev/null; then
+  curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
 else
-  warn "npm not found; skipping lazyskills CLI install"
+  warn "Cannot install lazyskills — see scripts/install-skills.sh for manual instructions"
 fi
 
 # ---------------------------------------------------------------------------
