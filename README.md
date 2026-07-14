@@ -625,7 +625,7 @@ Select via: `junie --model custom:<profile>`
 
 ### MCP Configuration
 
-Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcps.py` generates per-tool config files.
+Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcps.py` generates per-tool config files.
 
 | Tool | Config Path | Format |
 |------|------------|--------|
@@ -636,6 +636,8 @@ Centralized in `configs/mcp/`. `global-mcps.json` maps 7 AI tools to MCP templat
 | Cursor | `~/.cursor/mcp.json` | JSON mcpServers (global: github, idea, sentry) |
 | Codex | `~/.codex/config.toml` | TOML (global: github, idea, sentry) |
 | Gemini | `~/.gemini/settings.json` | JSON merge (global: github, sentry) |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | JSON merge, stdio only (global: github, sentry, codegraph, smallcode) |
+| VS Code | `~/Library/Application Support/Code/User/mcp.json` | JSON `servers` with explicit `type` (global: github, idea, sentry, codegraph, smallcode) |
 
 Global MCP servers: github, idea, sentry, smallcode, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
 

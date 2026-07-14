@@ -24,13 +24,36 @@
 
 1. Create `configs/mcp/<server>.json` — MCP config JSON for the server
 2. Add entry in `configs/mcp/global-mcps.json` — register which AI tools should receive this server config
-3. Test with a single tool: `scripts/configure-mcp-tool.py <tool> <server>`
+3. Test with a single tool: `scripts/configure-mcp-tool.py --dry-run <tool>` (use `--show-secrets` to print resolved values; `<tool>` is a registry key like `cursor`, `claude_desktop`, `vscode`)
 4. Regenerate all configs: `scripts/configure-mcps.py`
 
 Notes:
 - `idea.json` uses SSE transport by default — set `IJ_MCP_TRANSPORT=stdio` for stdio mode
 - `sentry.json` passes `SENTRY_ACCESS_TOKEN` via `env`, not CLI args — don't expose tokens in command strings
 - `run_onchange_15-configure-mcp.sh.tmpl` sources `detect-ij-mcp.py` output before the gate check
+
+### Formats
+
+Each tool in `global-mcps.json` declares a `format` that `configure-mcp-tool.py` uses to render and merge the config. Choose based on the target app's schema:
+
+| Format | Output shape | Merge behavior | Used by |
+|---|---|---|---|
+| `json-mcpServers` | `{"mcpServers": {name: {command, args, env, [headers], [enabled]}}}` | Overwrite entire file | ai, air, cursor, junie (dedicated MCP-only files) |
+| `json-mcpServers-merge` | Same as `json-mcpServers` | Top-level JSON merge (preserves other keys) | claude_desktop (shared app config file) |
+| `json-servers` | `{"servers": {name: {type: stdio\|http, command, args, env, url, headers}}}` | Top-level JSON merge | vscode (VS Code `servers` schema) |
+| `toml-mcpServers` | `[mcp_servers.NAME]` blocks | Regex strip + append | codex |
+| `opencode-internal` | `{"mcp": {name: {type, command, environment, headers, enabled}}}` | Deep-merge `mcp` key | opencode |
+| `json-settings-merge` | `{"mcpServers": {...}}` | Top-level JSON merge | gemini |
+
+Use `json-mcpServers-merge` (not `json-mcpServers`) when the target file is a shared app config that contains other top-level keys (e.g. `claude_desktop_config.json` has `coworkUserFilesPath`, `preferences`). The plain `json-mcpServers` format overwrites the entire file and would clobber those keys.
+
+### Per-tool constraints
+
+Some tools cannot consume the full template set. Check the target app's documented schema before adding a template to a tool:
+
+- **Claude Desktop** (`claude_desktop_config.json`) is **stdio-only**. Its parser is gated by a Zod schema that rejects `url`/`type`/`transport` fields; passing them causes the app to silently destroy the entire `mcpServers` block and strip `preferences` keys on save (see anthropics/claude-code#37286). Exclude the `idea` template (IntelliJ streamable-HTTP) from `claude_desktop`. Remote MCP for Claude Desktop is managed via the Connectors UI or the `mcp-remote` stdio bridge, not the config file.
+- **ChatGPT Desktop** has no local MCP config file — MCP is configured via workspace/UI connectors. Do not add it to `global-mcps.json`.
+- **VS Code** uses the `servers` top-level key (not `mcpServers`) with an explicit `type: stdio|http` field — use the `json-servers` format. It supports both stdio and HTTP servers.
 
 ---
 
