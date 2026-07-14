@@ -54,12 +54,15 @@ cat >"$PLIST_PATH" <<EOF
 EOF
 ok "Meridian launchd plist written to ${PLIST_PATH}."
 
-if launchctl list | grep -q "com.meridian.proxy"; then
-  ok "com.meridian.proxy is already loaded."
+LAUNCHCTL_DOMAIN="gui/$(id -u)"
+if launchctl print "$LAUNCHCTL_DOMAIN/com.meridian.proxy" >/dev/null 2>&1; then
+  info "Reloading com.meridian.proxy..."
+  launchctl bootout "$LAUNCHCTL_DOMAIN/com.meridian.proxy" 2>/dev/null || warn "Failed to bootout com.meridian.proxy"
+  sleep 2
 else
   info "Loading com.meridian.proxy..."
-  launchctl load -w "$PLIST_PATH" && ok "com.meridian.proxy loaded." || warn "Failed to load com.meridian.proxy."
 fi
+BOOTSTRAP_OUTPUT=$(launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" 2>&1) && ok "com.meridian.proxy loaded." || warn "Failed to bootstrap com.meridian.proxy: $BOOTSTRAP_OUTPUT"
 
 ok "Meridian launchd setup complete."
 {{- else }}
