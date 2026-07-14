@@ -27,6 +27,33 @@ fi
 # Using chezmoi execute-template to resolve the output expression in the template
 cat "$template_file" | chezmoi execute-template >"$target_file"
 
+# Validate the rendered JSON: iTerm2's ProfileModel.m calls isEqualToString: on
+# several fields that must be JSON strings, not booleans. A boolean in any of
+# these fields causes an EXC_BREAKPOINT crash on launch (unreported iTerm2 bug).
+# See configs/iterm2/Default.json.tmpl history for the original incident.
+python3 - "$target_file" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+  data = json.load(f)
+# Keys iTerm2 treats as strings — a boolean here crashes on load.
+string_keys = {
+  "Custom Command", "Command", "Name", "Guid", "Terminal Type",
+  "Custom Directory", "Description", "Shortcut", "Working Directory",
+  "Normal Font", "Non Ascii Font",
+}
+errors = []
+for profile in data.get("Profiles", []):
+  for key, value in profile.items():
+    if key in string_keys and isinstance(value, bool):
+      errors.append(f"  {key}: {value!r} (boolean, expected string)")
+if errors:
+  print(f"ERROR: {path} has string-typed fields set as booleans (iTerm2 crash risk):", file=sys.stderr)
+  for e in errors:
+    print(e, file=sys.stderr)
+  sys.exit(1)
+PYEOF
+
 # Set this dynamic profile as the iTerm2 default profile.
 # Dynamic profiles cannot self-declare as default in their JSON, so we set the
 # `Default Bookmark Guid` preference to match our profile's Guid.
