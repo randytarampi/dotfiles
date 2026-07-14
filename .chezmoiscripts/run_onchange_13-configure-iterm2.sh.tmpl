@@ -15,8 +15,16 @@ template_file="$source_dir/configs/iterm2/Default.json.tmpl"
 info "Configuring iTerm2 dynamic profile..."
 mkdir -p "$target_dir"
 
+# Remove stale symlink if present (older setups symlinked to configs/iterm2/Default.json,
+# which no longer exists — only the .tmpl does. `>` follows symlinks and would write through
+# the broken link instead of creating a fresh file).
+if [[ -L "$target_file" ]]; then
+  warn "Removing stale symlink at $target_file"
+  rm -f "$target_file"
+fi
+
 # Render the chezmoi template and write to DynamicProfiles
 # Using chezmoi execute-template to resolve the output expression in the template
-cat "$template_file" | chezmoi execute-template > "$target_file"
+cat "$template_file" | chezmoi execute-template >"$target_file"
 
 ok "iTerm2 dynamic profile configured (non-rewritable, tmux command)."
