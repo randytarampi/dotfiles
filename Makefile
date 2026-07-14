@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -195,3 +195,7 @@ plannotator-restart: ## Restart Plannotator (clear paste backend port)
 	@echo "Plannotator port cleared."
 
 services-restart: opencode-restart plannotator-restart ## Restart all services
+
+skills-update: ## Update all skills from upstream via `skills` CLI
+	@$(LOAD_ENV); python3 scripts/configure-skills.py --update
+	@echo "Skills updated."
