@@ -119,9 +119,13 @@ CHECKS = [
     ),
     (
         "DOTFILES_RUN_SKILLS_SETUP",
-        "Skills distribution",
+        "Skills manifest",
         [
-            HOME / ".agents/skills/iamhumans/SKILL.md",
+            Path(
+                os.path.join(
+                    os.path.dirname(__file__), "..", "configs", "skills", "skills.json"
+                )
+            ),
         ],
     ),
     (

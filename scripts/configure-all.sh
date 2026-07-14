@@ -130,7 +130,7 @@ else
   info "DOTFILES_RUN_OLLAMA_DAEMON_SETUP='${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}' — skipping Ollama daemon env config"
 fi
 
-# 7b. Skills distribution (copies SKILL.md from configs/skills/ to agent skill dirs)
+# 7b. Skills distribution (manifest-driven reconcile via `skills` CLI + symlinks to all agent dirs)
 if [[ "${DOTFILES_RUN_SKILLS_SETUP:-0}" == "1" ]]; then
   info "Distributing skills..."
   python3 "$SCRIPT_DIR/configure-skills.py" || warn "Skills distribution failed"
