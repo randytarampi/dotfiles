@@ -266,7 +266,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   │   ├── smallcode.json          # SmallCode — MCP server (stdio)
 │   │   ├── codegraph.json          # CodeGraph — local-first semantic code index (stdio MCP)
 │   │   └── templates/            # Symlinks → ../ for configure-mcp-tool.sh
-│   ├── iterm2/Default.json.tmpl   # iTerm2 Dynamic Profile template (tmux command, non-rewritable)
+│   ├── iterm2/Default.json.tmpl   # iTerm2 Dynamic Profile template (tmux command, rewritable, default)
 │   ├── mozart-router/mozart.json # Mozart AI router gateway config
 │   └── opencode/
 │       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
@@ -670,6 +670,7 @@ Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts
 - Homebrew: ARM Mac prefix `/opt/homebrew`, Intel Mac `/usr/local`, auto-detected via `brew --prefix`
 - Desktop apps (casks) are macOS-only, skipped on Linux
 - iTerm2 config uses Dynamic Profiles JSON (no secrets, no plist)
+- The dynamic profile has `Rewritable: true` — iTerm2 UI edits override the JSON in the plist, but `make deploy` resets to the template. To persist UI changes back into the repo, extract the profile from `~/Library/Preferences/com.googlecode.iterm2.plist` (entry with `Guid: dotfiles-default-profile-v1`) and update `configs/iterm2/Default.json.tmpl`
 - macOS security defaults gated by `DOTFILES_RUN_MACOS_SECURITY_SETUP=1`
 - Meridian launchd gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`
 
