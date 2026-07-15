@@ -97,8 +97,9 @@ sequenceDiagram
     Configure->>Configure: configure-meridian.py (plugin injection)
     Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-smallcode.py
-    Configure->>Configure: codegraph install
     Configure->>Configure: configure-agent-guidance.py
+    Configure->>Configure: codegraph install
+    Configure->>Configure: configure-codegraph.py
     Configure->>Configure: configure-skills.py
 ```
 
