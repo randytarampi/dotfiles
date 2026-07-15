@@ -79,6 +79,7 @@ Key directories and files that agents interact with:
 │   ├── configure-mcps.py       # Generate MCP configs for all AI tools
 │   ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
 │   ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
+│   ├── configure-codegraph.py     # Batch-initialize per-project CodeGraph indexes
 │   ├── configure-agent-guidance.py # Distribute home-level guidance to all agent files
 │   ├── configure-mozart-router.py # Configure Mozart AI router
 │   ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
@@ -291,6 +292,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Regenerate OpenCode config | `scripts/configure-opencode.py` |
 | Regenerate ACP agent config | `scripts/configure-acp-agents.py --preset <tier>` |
 | Regenerate project config | `scripts/configure-opencode-project.py` |
+| Batch-index CodeGraph | `scripts/configure-codegraph.py` |
 | Configure voice plugin | `scripts/configure-opencode-voice.py --preset <tier>` |
 | Configure SmallCode | `scripts/configure-smallcode.py --preset <tier>` |
 | Configure Mozart router | `scripts/configure-mozart-router.py` |
