@@ -134,7 +134,7 @@
     },
     "pro-plus-anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-sonnet-5",
+        "model": "anthropic/claude-opus-4-8",
         "skills": [
           "*"
         ],
@@ -198,7 +198,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-sonnet-5",
+        "model": "anthropic/claude-opus-4-8",
         "skills": [
           "*"
         ],
@@ -256,7 +256,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-sonnet-5",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh"
       }
     },
@@ -386,7 +386,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-sonnet-5",
+        "model": "anthropic/claude-opus-4-8",
         "variant": "xhigh"
       }
     },
@@ -785,7 +785,7 @@
           "model": "anthropic/claude-sonnet-5"
         },
         "gamma": {
-          "model": "anthropic/claude-opus-4-6"
+          "model": "anthropic/claude-opus-4-8"
         }
       },
       "local-pro": {
@@ -1057,10 +1057,10 @@
               "model": "anthropic/claude-sonnet-5"
             },
             "gamma": {
-              "model": "anthropic/claude-opus-4-6"
+              "model": "anthropic/claude-opus-4-8"
             },
             "council": {
-              "model": "anthropic/claude-sonnet-5",
+              "model": "anthropic/claude-opus-4-8",
               "variant": "xhigh"
             }
           }
@@ -1151,7 +1151,7 @@
               "model": "openai/gpt-5.5"
             },
             "council": {
-              "model": "anthropic/claude-sonnet-5",
+              "model": "anthropic/claude-opus-4-8",
               "variant": "xhigh"
             }
           }
@@ -1160,7 +1160,7 @@
       "fallback": {
         "orchestrator": [
           "openai/gpt-5.6-terra",
-          "anthropic/claude-opus-4-6",
+          "anthropic/claude-opus-4-8",
           "anthropic/claude-sonnet-5"
         ],
         "oracle": [
