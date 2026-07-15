@@ -20,6 +20,11 @@ CHEZMOI_SCRIPTS = REPO_ROOT / ".chezmoiscripts"
 NON_TRACKED_CONFIGS = {
     "configs/opencode/acp-agents.json",
 }
+# Scripts that are verification/audit tools, not config inputs — no hash trigger needed
+NON_TRACKED_SCRIPTS = {
+    "scripts/check-env-coverage.py",
+    "scripts/check-hashes.py",  # self — doesn't need to track itself
+}
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
 HASH_PATTERN = re.compile(
@@ -53,7 +58,10 @@ def find_trackable_files():
 
     # All Python scripts in scripts/
     for f in SCRIPTS_DIR.glob("*.py"):
-        trackable.add(f"scripts/{f.name}")
+        rel = f"scripts/{f.name}"
+        if rel in NON_TRACKED_SCRIPTS:
+            continue
+        trackable.add(rel)
 
     # All shell scripts in scripts/
     for f in SCRIPTS_DIR.glob("*.sh"):
