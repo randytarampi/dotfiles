@@ -3,7 +3,7 @@
 
 Reads configs/agents/home-agents.md from the dotfiles repo and distributes its
 AGENT_GUIDANCE_START/END section to each agent instruction file. Also writes
-~/AGENTS.md as a convenience copy and migrates legacy CODEGRAPH_START/END markers.
+~/AGENTS.md as a convenience copy.
 
 Usage:
     configure-agent-guidance.py [--source PATH] [--dry-run] [--force] [--check]
@@ -46,8 +46,6 @@ AGENT_FILES = [
 
 MARKER_START = "<!-- AGENT_GUIDANCE_START -->"
 MARKER_END = "<!-- AGENT_GUIDANCE_END -->"
-LEGACY_MARKER_START = "<!-- CODEGRAPH_START -->"
-LEGACY_MARKER_END = "<!-- CODEGRAPH_END -->"
 HEADER_COMMENT = "<!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->"
 
 
@@ -90,7 +88,6 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
     Handles:
     - Broken symlinks (removes them, creates real file)
     - Files with AGENT_GUIDANCE markers (replace block)
-    - Files with legacy CODEGRAPH markers (migrate)
     - Files without markers (skip unless --force)
     - Missing files (skip unless --force)
     """
@@ -176,27 +173,6 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
         backup_file(agent_path, enabled=True)
         write_text_file(agent_path, new_content, backup=False)
         logger.info(f"Updated: {agent_path}")
-        return True
-
-    # Migrate legacy CODEGRAPH markers
-    if LEGACY_MARKER_START in content and LEGACY_MARKER_END in content:
-        if check:
-            logger.error(
-                f"DRIFT: {agent_path} (has legacy CODEGRAPH markers, needs migration)"
-            )
-            return False
-
-        start_idx = content.find(LEGACY_MARKER_START)
-        end_idx = content.find(LEGACY_MARKER_END) + len(LEGACY_MARKER_END)
-        new_content = content[:start_idx] + new_block + content[end_idx:]
-
-        if dry_run:
-            logger.info(f"[DRY RUN] Would migrate legacy markers in: {agent_path}")
-            return True
-
-        backup_file(agent_path, enabled=True)
-        write_text_file(agent_path, new_content, backup=False)
-        logger.info(f"Migrated legacy markers in: {agent_path}")
         return True
 
     # No markers found
