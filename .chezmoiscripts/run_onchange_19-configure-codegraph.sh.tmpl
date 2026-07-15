@@ -7,6 +7,7 @@ source "${LIB_DIR}/env.sh"
 
 # Script hash triggers (re-run when CodeGraph config changes):
 # configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
+# scripts/configure-codegraph.py: {{ include "scripts/configure-codegraph.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_CODEGRAPH_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -28,4 +29,16 @@ if codegraph install -y --target auto --location global >/dev/null 2>&1; then
   ok "CodeGraph MCP configured for detected agents"
 else
   warn "codegraph install failed — you can run 'codegraph install' manually"
+fi
+
+# Batch-initialize per-project .codegraph/ indexes (separate gate from MCP registration)
+if [[ "${DOTFILES_RUN_CODEGRAPH_INDEX_SETUP:-0}" == "1" ]]; then
+  info "Batch-indexing CodeGraph for git repos..."
+  if command -v codegraph >/dev/null 2>&1; then
+    python3 "{{ .chezmoi.sourceDir }}/scripts/configure-codegraph.py" || warn "CodeGraph batch indexing failed"
+  else
+    warn "codegraph CLI not found; skipping batch indexing"
+  fi
+else
+  info "DOTFILES_RUN_CODEGRAPH_INDEX_SETUP='${DOTFILES_RUN_CODEGRAPH_INDEX_SETUP:-0}' — skipping CodeGraph batch indexing"
 fi
