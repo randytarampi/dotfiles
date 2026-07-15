@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -126,11 +126,14 @@ check-hashes: ## Verify hash trigger coverage in run_onchange scripts
 check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
 	@python3 scripts/check-env-coverage.py
 
-verify: lint drift doctor check-hashes check-env-coverage dry-run ## Full verification suite
+check-slim-invariants: ## Verify oh-my-opencode-slim fallback arrays have no dupes
+	@python3 scripts/verify-slim-invariants.py
+
+verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-env-coverage
+ci-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
