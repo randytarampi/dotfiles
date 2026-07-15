@@ -188,9 +188,9 @@ def main():
     if "codegraph" in requested:
         codegraph_cmd = shutil.which("codegraph")
         if codegraph_cmd:
-            logger.info("Running codegraph init -i for project...")
+            logger.info("Running codegraph init for project...")
             res = subprocess.run(
-                [codegraph_cmd, "init", "-i", project_root],
+                [codegraph_cmd, "init", project_root],
                 capture_output=True,
                 text=True,
             )
