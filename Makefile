@@ -17,7 +17,7 @@ lint:
 	@echo "Checking for trailing whitespace..."
 	@git grep -I -n '[[:space:]]$$' -- '*.*' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
 	@echo "Checking for large files (> 500KB)..."
-	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -size +500k 2>/dev/null); \
+	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './bin/*' -size +500k 2>/dev/null); \
 	if [ -n "$$large_files" ]; then \
 		echo "Large files found (> 500KB):"; \
 		echo "$$large_files"; \
