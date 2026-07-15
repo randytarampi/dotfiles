@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -203,3 +203,7 @@ services-restart: opencode-restart plannotator-restart ## Restart all services
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update
 	@echo "Skills updated."
+
+codegraph: ## Batch-initialize CodeGraph indexes in all git repos under ~/Development
+	@$(LOAD_ENV); python3 scripts/configure-codegraph.py
+	@echo "CodeGraph indexes configured."
