@@ -333,6 +333,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Rebuild all configs | `scripts/configure-all.sh` |
 | Verify generated configs | `scripts/verify-config.py` |
 | Check hash triggers | `scripts/check-hashes.py` |
+| Check slim fallback invariants | `scripts/verify-slim-invariants.py` |
 | Install OpenCode plugins | `scripts/install-opencode.sh` |
 | Distribute agent guidance | `scripts/configure-agent-guidance.py` |
 | Reconcile skills against manifest | `scripts/configure-skills.py` |
