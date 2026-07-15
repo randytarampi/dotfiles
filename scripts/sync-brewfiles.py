@@ -204,7 +204,6 @@ DEV_FORMULA_EXACT = {
     "watchman",
     "whisper-cpp",
     "wimlib",
-    "yarn",
     "zlib",
 }
 

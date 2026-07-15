@@ -160,8 +160,8 @@ cask "parallels"
 cask "vmware-fusion"
 cask "sublime-text"
 cask "visual-studio-code"
-tap "alvinunreal/tap"
-cask "lazyskills"
+tap "alvinunreal/tap", trusted: true
+cask "alvinunreal/tap/lazyskills"
 
 # --- uv ---
 uv "piper-tts"
@@ -176,6 +176,5 @@ npm "js-yaml"
 npm "mozart-router"
 npm "smallcode"
 npm "tumor"
-npm "yarn"
 npm "@agentclientprotocol/claude-agent-acp"
 npm "@agentclientprotocol/codex-acp"
