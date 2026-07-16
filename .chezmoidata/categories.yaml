@@ -6,7 +6,7 @@ categories:
   desktop_security: true  # VPN/security tools (macOS-only)
   desktop_media: true     # Media apps (macOS-only)
   desktop_utilities: true # Desktop utilities (macOS-only)
-  desktop_fonts: true     # Fonts (macOS-only for now)
+  desktop_fonts: true     # Fonts (cross-platform: macOS brew, Linux apt/dnf+manual, Windows manual)
   desktop_gaming: false   # Gaming clients (opt-in, macOS-only)
   desktop_cloud: true     # Cloud/sync apps (macOS-only)
   desktop_productivity: true # Office/productivity apps (macOS-only)
