@@ -31,6 +31,7 @@ fi
 {{- end }}
 # dev.ops: {{ include "Brewfile.dev.ops" | sha256sum }}
 # legacy: {{ include "Brewfile.legacy" | sha256sum }}
+# install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
 # base: {{ include "wingetfile" | sha256sum }}
@@ -116,6 +117,17 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy
     {{- end }}
 fi
+
+# --- Cross-platform fonts (Linux + Windows; macOS handled by brew bundle above) ---
+{{- if .categories.desktop_fonts }}
+{{- if eq .chezmoi.os "linux" }}
+if command -v bash &>/dev/null; then
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" linux || warn "Font installation completed with warnings"
+fi
+{{- else if eq .chezmoi.os "windows" }}
+bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" windows || warn "Font installation completed with warnings"
+{{- end }}
+{{- end }}
 
 # --- Winget (Windows) ---
 {{- if eq .chezmoi.os "windows" }}
