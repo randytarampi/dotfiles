@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants check-templates verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants check-templates verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -103,6 +103,9 @@ brewfile-sync:
 
 brewfile-diff:
 	@python3 scripts/sync-brewfiles.py --diff
+
+brewfile-cleanup:
+	@python3 scripts/cleanup-brewfiles.py
 
 diff:
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" diff
