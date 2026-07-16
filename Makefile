@@ -1,4 +1,4 @@
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants check-templates verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -129,11 +129,33 @@ check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
 check-slim-invariants: ## Verify oh-my-opencode-slim fallback arrays have no dupes
 	@python3 scripts/verify-slim-invariants.py
 
-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants dry-run ## Full verification suite
+check-templates: ## Render JSON chezmoi templates and validate output (catches Go template errors that lint misses)
+	@echo "Rendering and validating JSON templates..."
+	@set -e; \
+	for tmpl in configs/iterm2/Default.json.tmpl dot_config/plannotator/config.json.tmpl; do \
+		if [ -f "$$tmpl" ]; then \
+			echo "  Rendering $$tmpl..."; \
+			rendered=$$(cat "$$tmpl" | $(CHEZMOI) execute-template 2>&1) || { \
+				echo "ERROR: $$tmpl failed to render:"; \
+				echo "$$rendered"; \
+				exit 1; \
+			}; \
+			if [ -z "$$rendered" ]; then \
+				echo "ERROR: $$tmpl rendered to empty output"; \
+				exit 1; \
+			fi; \
+			echo "$$rendered" | python3 -m json.tool > /dev/null || { \
+				echo "ERROR: $$tmpl rendered invalid JSON"; \
+				exit 1; \
+			}; \
+		fi; \
+	done
+
+verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants
+ci-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
@@ -143,7 +165,7 @@ reset: ## Clear chezmoi script state (forces re-run of all scripts on next deplo
 symlinks:
 	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
 
-test: lint drift dry-run
+test: lint drift check-templates dry-run
 	@echo "All basic checks passed."
 
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup

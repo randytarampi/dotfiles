@@ -303,6 +303,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Verify drift | `make doctor` |
 | Full verification | `make verify` |
 | Check hash coverage | `make check-hashes` |
+| Validate JSON templates render | `make check-templates` |
 | Force full re-run | `make reset && make deploy` |
 | Setup AI env files | `scripts/configure-secrets.py` |
 | Rebuild all configs | `scripts/configure-all.sh` |
