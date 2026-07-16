@@ -1,7 +1,7 @@
 {
   "compress": {
     "maxContextLimit": "67%",
-    "minContextLimit": "20%",
+    "minContextLimit": "10%",
     "nudgeFrequency": 3,
     "iterationNudgeThreshold": 9,
     "nudgeForce": "strong"
