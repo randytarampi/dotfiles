@@ -479,7 +479,7 @@ Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (s
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only (`sonnet-5`, `fable-5`, `haiku-4-5`, `opus-4-8`) | Anthropic-first workflow |
+| **anthropic** | Anthropic only (`sonnet-5`, `fable-5`, `haiku-4-5`, `opus-5`) | Anthropic-first workflow |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
@@ -603,8 +603,8 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 |---------|----------|---------|--------|------|
 | `pro` | cloud | `glm-5.2` | `gemma4:31b` | 0.7 |
 | `pro-plus` | cloud | `glm-5.2` | `gpt-5.6-luna` (openai) | 0.7 |
-| `pro-plus-anthropic` | meridian | `claude-opus-4-8` | `claude-haiku-4-5` | 1 |
-| `anthropic` | meridian | `claude-opus-4-8` | `claude-haiku-4-5` | 1 |
+| `pro-plus-anthropic` | meridian | `claude-opus-5` | `claude-haiku-4-5` | 1 |
+| `anthropic` | meridian | `claude-opus-5` | `claude-haiku-4-5` | 1 |
 | `plus` | openai | `gpt-5.6-terra` | `gpt-5.6-luna` | 1 |
 | `plus-anthropic` | openai | `gpt-5.6-terra` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
@@ -612,7 +612,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
 | `local-nano` | local | `_local:code-gen` | — | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
-| `meridian-opus` | meridian | `claude-opus-4-8` | — | 1 |
+| `meridian-opus` | meridian | `claude-opus-5` | — | 1 |
 | `meridian-sonnet` | meridian | `claude-sonnet-5` | — | 1 |
 | `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
 | `meridian-fable` | meridian | `claude-fable-5` | — | 1 |

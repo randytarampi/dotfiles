@@ -134,7 +134,7 @@
     },
     "pro-plus-anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-opus-5",
         "skills": [
           "*"
         ],
@@ -198,7 +198,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-opus-5",
         "skills": [
           "*"
         ],
@@ -256,7 +256,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-opus-5",
         "variant": "xhigh"
       }
     },
@@ -386,7 +386,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "anthropic/claude-opus-4-8",
+        "model": "anthropic/claude-opus-5",
         "variant": "xhigh"
       }
     },
@@ -785,7 +785,7 @@
           "model": "anthropic/claude-sonnet-5"
         },
         "gamma": {
-          "model": "anthropic/claude-opus-4-8"
+          "model": "anthropic/claude-opus-5"
         }
       },
       "local-pro": {
@@ -1040,16 +1040,22 @@
               "model": "anthropic/claude-sonnet-5"
             },
             "gamma": {
-              "model": "anthropic/claude-opus-4-8"
+              "model": "anthropic/claude-opus-5"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-8",
+              "model": "anthropic/claude-opus-5",
               "variant": "xhigh"
             }
           }
         }
       },
       "fallback": {
+        "orchestrator": [
+          "anthropic/claude-opus-4-8"
+        ],
+        "oracle": [
+          "anthropic/claude-opus-4-8"
+        ],
         "council": []
       }
     },
@@ -1119,7 +1125,7 @@
               "model": "openai/gpt-5.5"
             },
             "council": {
-              "model": "anthropic/claude-opus-4-8",
+              "model": "anthropic/claude-opus-5",
               "variant": "xhigh"
             }
           }
@@ -1127,13 +1133,14 @@
       },
       "fallback": {
         "orchestrator": [
-          "anthropic/claude-opus-4-8",
-          "anthropic/claude-sonnet-5"
+          "anthropic/claude-sonnet-5",
+          "anthropic/claude-opus-4-8"
         ],
         "oracle": [
           "openai/gpt-5.6-sol",
           "openai/gpt-5.5",
-          "anthropic/claude-sonnet-5"
+          "anthropic/claude-sonnet-5",
+          "anthropic/claude-opus-4-8"
         ],
         "librarian": [
           "anthropic/claude-haiku-4-5",
