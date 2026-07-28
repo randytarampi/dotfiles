@@ -61,7 +61,7 @@ Junie recommends model-family-specific temperatures for optimal results. The `mo
 | `gemma` | 1 | Gemma 2/3/4 |
 | `glm` | 0.7 | GLM-4/5 |
 | `gpt` | 1 | GPT |
-| `kimi` | 0.8 | Kimi K2 |
+| `kimi` | 0.8 | Kimi K2/K3 |
 | `mimo` | 0.3 | MiMo |
 | `qwen` | 0.6 | Qwen 2.5/3/3.5/3.6 |
 
