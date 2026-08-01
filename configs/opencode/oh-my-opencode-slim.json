@@ -180,7 +180,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "anthropic/claude-haiku-4-5",
+        "model": "openai/gpt-5.6-luna",
         "variant": "high",
         "skills": [],
         "mcps": [
@@ -1008,7 +1008,6 @@
           "ollama-cloud/deepseek-v4-flash"
         ],
         "fixer": [
-          "openai/gpt-5.6-luna",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/qwen3.5:397b"
         ],
