@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify structural invariants of oh-my-opencode-slim.json fallback arrays.
+"""Verify structural invariants of oh-my-opencode-slim.json.
 
 Model-assignment swaps are a frequent edit to configs/opencode/oh-my-opencode-slim.json
 (see git history). A recurring bug class is fallback-array redundancy: a role's
@@ -12,6 +12,10 @@ Invariants enforced:
   2. No council fallback entry mirrors an alpha/beta/gamma/synth member of the
      same tier's council preset.
   3. No within-array duplicates in any fallback array.
+  4. Preset names are consistent across the role presets, council presets, and
+     tier definitions.
+  5. Top-level council alpha/beta/gamma models match each tier definition.
+  6. Every configured model is present in its provider's model allowlist.
 
 The fallback arrays live at `_tiers.<tier>.fallback.<role>`. Role primaries live
 at `presets.<preset>.<role>.model` (the council synth primary is
@@ -29,6 +33,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
+MODEL_ALLOWLIST_PATHS = {
+    "openai": REPO_ROOT / "configs" / "opencode" / "openai-models.json",
+    "anthropic": REPO_ROOT / "configs" / "opencode" / "anthropic-models.json",
+    "ollama-cloud": REPO_ROOT / "configs" / "opencode" / "ollama-cloud-models.json",
+}
 
 
 def _model(cfg):
@@ -57,6 +66,102 @@ def _council_members(council_presets, tier):
     return members
 
 
+def _model_allowlists():
+    """Load provider model IDs from the checked-in OpenCode allowlists."""
+    allowlists = {}
+    for provider, path in MODEL_ALLOWLIST_PATHS.items():
+        with open(path, encoding="utf-8") as f:
+            config = json.load(f)
+        models = config.get("models", {})
+        allowlists[provider] = set(models)
+        if isinstance(models, dict):
+            allowlists[provider].update(
+                entry.get("name")
+                for entry in models.values()
+                if isinstance(entry, dict) and entry.get("name")
+            )
+    return allowlists
+
+
+def _iter_model_values(value, path=""):
+    """Yield every model string, including fallback-array model entries."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            if key == "model" and isinstance(child, str):
+                yield child_path, child
+            else:
+                yield from _iter_model_values(child, child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            child_path = f"{path}[{index}]"
+            if ".fallback." in path and isinstance(child, str):
+                yield child_path, child
+            else:
+                yield from _iter_model_values(child, child_path)
+
+
+def _model_allowlist_violations(data):
+    """Validate provider-prefixed models and permit dynamic local models."""
+    allowlists = _model_allowlists()
+    violations = []
+    for path, model in _iter_model_values(data):
+        if model.startswith("_local:") or model.startswith("ollama/"):
+            continue
+        if "/" not in model:
+            violations.append(
+                f"{path} = {model!r} has no provider prefix or local placeholder"
+            )
+            continue
+        provider, model_id = model.split("/", 1)
+        if provider not in allowlists:
+            violations.append(f"{path} = {model!r} uses unknown provider '{provider}'")
+        elif model_id not in allowlists[provider]:
+            violations.append(
+                f"{path} = {model!r} is not in {provider} model allowlist"
+            )
+    return violations
+
+
+def _preset_violations(presets, council_presets, tiers):
+    """Validate preset names and council model synchronization."""
+    violations = []
+    preset_names = set(presets)
+    council_names = set(council_presets)
+    tier_names = set(tiers)
+    all_names = preset_names | council_names | tier_names
+
+    for label, names in (
+        ("presets", preset_names),
+        ("council.presets", council_names),
+        ("_tiers", tier_names),
+    ):
+        for name in sorted(all_names - names):
+            violations.append(f"{label} is missing preset name {name!r}")
+
+    for tier in sorted(tier_names):
+        tier_council = tiers.get(tier, {}).get("council", {})
+        tier_presets = tier_council.get("presets", {})
+        if set(tier_presets) != {tier}:
+            violations.append(
+                f"_tiers.{tier}.council.presets names {sorted(tier_presets)}; "
+                f"expected [{tier!r}]"
+            )
+
+        top_preset = council_presets.get(tier, {})
+        nested_preset = tier_presets.get(tier, {})
+        for member in ("alpha", "beta", "gamma"):
+            top_model = _model(top_preset.get(member))
+            nested_model = _model(nested_preset.get(member))
+            if top_model != nested_model:
+                violations.append(
+                    f"council.presets.{tier}.{member}.model = {top_model!r} "
+                    f"does not match _tiers.{tier}.council.presets.{tier}."
+                    f"{member}.model = {nested_model!r}"
+                )
+    return violations
+
+
 def main():
     if not SLIM_PATH.exists():
         print(f"✗ {SLIM_PATH} not found")
@@ -70,6 +175,8 @@ def main():
     council_presets = data.get("council", {}).get("presets", {})
 
     violations = []
+    violations.extend(_preset_violations(presets, council_presets, tiers))
+    violations.extend(_model_allowlist_violations(data))
 
     for tier, tier_block in tiers.items():
         if not isinstance(tier_block, dict):
@@ -117,7 +224,7 @@ def main():
                 else:
                     seen[entry] = idx
 
-    print("oh-my-opencode-slim fallback invariants")
+    print("oh-my-opencode-slim invariants")
     print("=" * 60)
 
     if violations:
@@ -133,8 +240,8 @@ def main():
         sys.exit(1)
     else:
         print(
-            "\n\u2713 All fallback invariants hold (no primary-in-own-fallback, "
-            "no council-member mirrors, no within-array dupes)."
+            "\n\u2713 All slim invariants hold (fallback arrays, preset names, "
+            "council synchronization, and model allowlists)."
         )
         sys.exit(0)
 
