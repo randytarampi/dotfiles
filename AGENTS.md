@@ -3,120 +3,20 @@
 > **This is the authoritative agent guidance document for this dotfiles repo.**
 > For human-facing quick start, commands, and package management, see `README.md`.
 > For deep reference material, see the `docs/` directory.
-> For historical migration notes, see `docs/CHEZMOI_MIGRATION_PLAN.md` (agents should not need to consult it).
 
----
+## Documentation Conventions
 
-## Repo Structure
+`AGENTS.md` is authoritative **policy** only. Reference content lives in `docs/` and `README.md` — link, don't duplicate. When editing, check `docs/` first and link there.
 
-Key directories and files that agents interact with:
-
-```
-~/Development/dotfiles/           # chezmoi source directory
-├── .chezmoidata/
-│   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .chezmoiignore                # Ignore patterns (excludes scripts/, configs/, macOS-only on non-macOS)
-├── .chezmoiscripts/              # 28 scripts: run_once_01-03 (one-time) + run_onchange_04-28 (hash-triggered)
-│   ├── # Phase 1: One-time setup (01-03)
-│   ├── # Phase 2: Package/CLI installs (04-11)
-│   └── # Phase 3: Tool configuration (12-28)
-├── configs/
-│   ├── agents/home-agents.md     # Source of truth for home-level agent guidance
-│   ├── junie/model-groups.json   # Junie model profile definitions
-│   ├── mcp/                      # MCP server configs
-│   │   ├── betterstack.json
-│   │   ├── codegraph.json         # CodeGraph — local-first semantic code index (stdio MCP)
-│   │   ├── github.json
-│   │   ├── global-mcps.json       # Tool→template registry
-│   │   ├── idea.json              # JetBrains MCP — SSE transport (stdio via IJ_MCP_TRANSPORT=stdio)
-│   │   ├── mongodb.json
-│   │   ├── notion.json
-│   │   ├── sentry.json            # SENTRY_ACCESS_TOKEN via env, not CLI args
-│   │   └── shortcut.json
-│   ├── iterm2/Default.json
-│   ├── mozart-router/mozart.json
-│   ├── skills/                      # Skills manifest + repo-local skills
-│   │   └── skills.json               # Declarative skill manifest (analogous to Brewfile)
-│   └── opencode/
-│       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
-│       ├── vibeguard.config.json      # VibeGuard sensitive-string redaction config
-│       ├── anthropic-models.json     # Relocated
-│       ├── role-to-local-category.json # New
-│       ├── openai-models.json        # New
-│       └── ollama-cloud-models.json  # New
-├── docs/                          # Deep reference docs (linked from AGENTS.md)
-│   ├── TIERS.md                  # Tier definitions, model classification, fallback, variants
-│   ├── MOZART.md                 # Mozart router, gateways, Ollama routing, provider overrides
-│   ├── SMALLCODE.md              # SmallCode integration, tier mapping, escalation
-│   ├── VOICE.md                  # Voice plugin, STT/TTS, tier-aware config
-│   ├── JUNIE.md                  # Junie model groups ↔ Oh My OpenCode sync
-│   ├── MULTIPLEXER.md            # tmux/zellij side-by-side editing with OpenCode
-│   ├── DCP.md                    # Context compaction thresholds and config paths
-│   ├── ADDING.md                 # Adding new tiers and MCP servers
-│   └── INSTALL.md                # Full installation & run instructions
-├── AGENTS.md                    # THIS FILE — agent guidance (source of truth)
-├── dot_config/
-│   └── opencode/dcp.json          # DCP context compaction thresholds
-├── private_dot_config/
-│   └── plannotator/config.json.tmpl
-├── scripts/                      # Utility scripts + lib/
-│   ├── lib/                       # Shared helpers
-│   │   ├── common.sh              # Standardized logging & ERR trap stack traces
-│   │   ├── env.sh                 # load_env(), alias_github_token() for shell bootstrap
-│   │   ├── tier_detect.sh         # Shared tier auto-detection for chezmoi scripts
-│   │   ├── tier_args.sh           # Shared local fallback arg forwarding for chezmoi scripts
-│   │   ├── logger.py              # Central Python logging module
-│   │   ├── env.py                 # load_env() and token aliases in Python
-│   │   ├── constants.py           # Shared constants (BASE_URLS, etc.)
-│   │   ├── file_utils.py          # Shared file utilities (backup_file, write_text_file)
-│   │   ├── ai_mcps.py             # Filter template globs in Python
-│   │   ├── ai_dirs.py             # Python-ported platform-independent directory setups
-│   │   ├── ai_models.py           # Model prefix mappings, temperatures, strip_provider_prefix
-│   │   ├── opencode_config.py     # OpenCode tier/preset helpers (get_available_tiers, build_tier_args)
-│   │   ├── idea.py                # Resolve IntelliJ app paths, java, and MCP classpaths in Python
-│   │   ├── skills_manifest.py     # Skills manifest parser, profile gating, stale detection
-│   │   └── discover_models.py     # Local Ollama discovery to JSON in Python
-│   ├── configure-mcps.py       # Generate MCP configs for all AI tools
-│   ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
-│   ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
-│   ├── configure-codegraph.py     # Batch-initialize per-project CodeGraph indexes
-│   ├── configure-agent-guidance.py # Distribute home-level guidance to all agent files
-│   ├── configure-mozart-router.py # Configure Mozart AI router
-│   ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
-│   ├── configure-all.sh            # Full orchestration wrapper (rebuild configs)
-│   ├── verify-config.py            # Verify generated config presence and freshness
-│   ├── check-hashes.py             # Audit hash trigger coverage
-│   ├── configure-jetbrains-workspace-project.py # Configure AI dirs in JB workspace modules
-│   ├── verify-brewfile-completeness.py # Verify Brewfile completeness
-│   ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
-│   ├── configure-mcp-tool.py      # Generate MCP config for a single tool
-│   ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
-│   ├── configure-opencode.py      # Write OpenCode config (local ollama default)
-│   ├── configure-opencode-tier.py # Switch active preset tier (source of truth)
-│   ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
-│   ├── generate-jetbrains-profiles.py # Generate model profiles JSON files
-│   ├── get-tools.py               # Get MCP tool registry keys
-│   ├── install-opencode.sh        # Install OpenCode plugins and tools (incl. voice)
-│   ├── install-skills.sh          # Cross-platform skills + lazyskills CLI installer
-│   ├── install-nvm-lts.sh         # Reinstall all LTS node versions
-│   ├── update-nvm-globals.sh     # Update npm globals across all nvm versions
-│   └── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
-└── private_dot_ssh/config        # SSH config
-```
+The repo is a chezmoi source directory. For the full directory tree and script inventory, see [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md). For package management details, see `README.md`.
 
 ---
 
 ## Installation
 
-> See [docs/INSTALL.md](docs/INSTALL.md) for full step-by-step instructions, or `README.md` for the human-facing quick start.
-
-Quick reference:
-```bash
-command -v chezmoi >/dev/null 2>&1 || brew install chezmoi
-chezmoi init --source ~/Development/dotfiles
-make diff    # Preview changes
-make deploy  # Apply all dotfiles
-```
+See [docs/INSTALL.md](docs/INSTALL.md) for the complete installation, upgrade, and verification flow.
+In normal use, `make deploy` is the canonical entrypoint.
+Run it twice on first setup to surface idempotency gaps.
 
 ---
 
@@ -231,31 +131,13 @@ To ensure clean, prefix-continuous, and readable logs:
 - **Network resilience:** Never `set -e` on network calls; use `|| warn` pattern
 - **Idempotency:** All `run_once_*` scripts must be safe to re-run
 - **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*` for script gates
+- **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`
 
 ---
 
 ## Model Tiers
 
-Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth). Switch with: `scripts/configure-opencode-tier.py <tier>`
-
-| Tier | Providers | Best For |
-|------|-----------|----------|
-| **pro** | Ollama Cloud (glm-5.2 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`) | General development |
-| **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
-| **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only | Anthropic-first workflow |
-| **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
-| **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
-| **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
-| **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
-| **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
-
-Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
-
-> [!NOTE]
-> For detailed tier definitions, per-tier role/variant tables, local model classification rules, fallback chains, and variant policy, see [docs/TIERS.md](docs/TIERS.md).
+Eleven tiers are defined in `scripts/configure-opencode-tier.py` (source of truth). For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md). Switch with: `scripts/configure-opencode-tier.py <tier>`.
 
 ---
 
@@ -264,6 +146,8 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 `~/.env` is the single source of truth for all secrets. Format: `KEY='VALUE'`. Templates use `{{ env "VAR" }}` syntax.
 
 Prefer Makefile targets (`make diff`, `make dry-run`, `make deploy`) because they load `~/.env` in the same shell process as chezmoi. Use `make drift` to report drift and `make migrate` to append newly documented keys.
+
+No age/GPG encryption is used because this is a local-only repository. Never commit secrets.
 
 Key template files: `dot_gitconfig.tmpl` (GIT_AUTHOR_*, GPG_SIGNING_KEY, GITHUB_USER, GH_TOKEN), `private_dot_npmrc.tmpl` (NPM_TOKEN, GH_TOKEN), `private_dot_aws/credentials.tmpl` (AWS_*), `private_dot_vuescanrc.tmpl` (VUESCAN_*), `private_dot_gnupg/gpg.conf.tmpl` (GPG_SIGNING_KEY).
 
@@ -281,52 +165,12 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 
 ## Common Tasks
 
-| Task | Command |
-|------|---------|
-| Switch AI tier | `scripts/configure-opencode-tier.py <tier>` |
-| Switch tier without local Ollama | `scripts/configure-opencode-tier.py --no-local-fallbacks <tier>` |
-| Switch tier with local fallback role override | `scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx <tier>` |
-| Switch tier with local fallback preset | `scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus` |
-| Regenerate all MCP configs | `scripts/configure-mcps.py` |
-| Regenerate single MCP config | `scripts/configure-mcp-tool.py <tool> <server>` |
-| Regenerate OpenCode config | `scripts/configure-opencode.py` |
-| Regenerate ACP agent config | `scripts/configure-acp-agents.py --preset <tier>` |
-| Regenerate project config | `scripts/configure-opencode-project.py` |
-| Batch-index CodeGraph | `scripts/configure-codegraph.py` |
-| Configure voice plugin | `scripts/configure-opencode-voice.py --preset <tier>` |
-| Configure SmallCode | `scripts/configure-smallcode.py --preset <tier>` |
-| Configure Mozart router | `scripts/configure-mozart-router.py` |
-| Add Meridian to OpenCode | `scripts/configure-meridian.py` |
-| Configure JetBrains AI | `scripts/configure-jetbrains-ai.py --all` |
-| Run full rebuild | `make deploy` |
-| Rebuild configs only | `make configure` |
-| Verify drift | `make doctor` |
-| Full verification | `make verify` |
-| Check hash coverage | `make check-hashes` |
-| Validate JSON templates render | `make check-templates` |
-| Force full re-run | `make reset && make deploy` |
-| Setup AI env files | `scripts/configure-secrets.py` |
-| Rebuild all configs | `scripts/configure-all.sh` |
-| Verify generated configs | `scripts/verify-config.py` |
-| Check hash triggers | `scripts/check-hashes.py` |
-| Check slim fallback invariants | `scripts/verify-slim-invariants.py` |
-| Install OpenCode plugins | `scripts/install-opencode.sh` |
-| Distribute agent guidance | `scripts/configure-agent-guidance.py` |
-| Reconcile skills against manifest | `scripts/configure-skills.py` |
-| Update skills from upstream | `make skills-update` |
-| Install skills CLI tools | `scripts/install-skills.sh` |
-| Check env template drift | `make drift` |
-| Migrate deprecated env gates | `make migrate` |
-| Preview pending changes | `make diff` |
-| Apply all dotfiles | `make deploy` |
-| Restart OpenCode Web service | `make opencode-restart` |
-| Stop OpenCode Web service | `make opencode-stop` |
-| Start OpenCode Web service | `make opencode-start` |
-| Clear Plannotator port conflicts | `make plannotator-restart` |
-| Restart all managed services | `make services-restart` |
-| CI verification (no dry-run) | `make ci-verify` |
+Run `make help` for the full command list. For task-specific guidance, see the relevant `docs/` reference.
 
-> For more tasks (SmallCode, voice, multiplexer, Ollama routing, JetBrains), see the relevant docs: [SMALLCODE.md](docs/SMALLCODE.md), [VOICE.md](docs/VOICE.md), [MULTIPLEXER.md](docs/MULTIPLEXER.md), [MOZART.md](docs/MOZART.md), [JUNIE.md](docs/JUNIE.md).
+- Switch AI tier: `scripts/configure-opencode-tier.py <tier>`
+- Apply all dotfiles: `make deploy`
+- Full verification: `make verify`
+- Check hash coverage: `make check-hashes`
 
 ---
 
@@ -335,27 +179,18 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 | Doc | Content |
 |-----|---------|
 | [docs/TIERS.md](docs/TIERS.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
+| [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
 | [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
 | [docs/SMALLCODE.md](docs/SMALLCODE.md) | SmallCode integration, tier mapping, escalation, config generation, environment gating |
 | [docs/VOICE.md](docs/VOICE.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
 | [docs/JUNIE.md](docs/JUNIE.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |
-| [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing, configuration, launching, prerequisites |
+| [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing with OpenCode, configuration, launching, prerequisites |
 | [docs/DCP.md](docs/DCP.md) | Context compaction thresholds, OpenCode config paths |
-| [docs/ADDING.md](docs/ADDING.md) | Adding a new tier, adding an MCP server |
+| [docs/ADDING.md](docs/ADDING.md) | Adding a new tier, an MCP server, configure script, gate, or hash trigger |
 | [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) | Three-layer architecture, script inventory, gates, dependency ordering, troubleshooting |
-| [docs/INSTALL.md](docs/INSTALL.md) | Full installation & run instructions (prerequisites, cloning, env seeding, chezmoi, verification) |
+| [docs/INSTALL.md](docs/INSTALL.md) | Full installation, upgrade, and verification instructions |
+| [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
 
 ---
 
-## Operational Philosophy
-
-- **Local-repo trust:** No age/GPG encryption because the repo is local-only
-- **Orchestration principle:** `make deploy` is the single command that reconciles the machine. It runs `chezmoi apply` (templates + scripts) followed by `configure-all.sh` (all AI tool config generators). Scripts are idempotent — running twice is a no-op.
-- **Development workflow:** Run `make verify` before committing. Run `make doctor` to diagnose drift. Run `make check-hashes` after adding config inputs. Run `make reset && make deploy` to force full re-run.
-- **Coherence:** All three layers must stay aligned. When adding a new configure script, wire it into both a `run_onchange_*` script (Layer 2) AND `configure-all.sh` (Makefile orchestration). When adding a new config input, add its hash trigger. When adding a new gate or any `DOTFILES_*` env var read by a script, document it in `.env.example`; `make check-env-coverage` enforces this.
-- **Idempotent scripts:** Every `run_once_*` must be safe to re-run
-- **Graceful degradation:** Network failures in chezmoi scripts warn, never abort
-- **Single sources of truth:** `scripts/` for shell logic, `configs/` for JSON configs, `~/.env` for secrets, `AGENTS.md` for agent docs
-- **Homebrew-agnostic paths:** Always `$(brew --prefix)` — never hardcode platform paths
-- **2-space shell indent:** Enforced by `.editorconfig` + `shfmt`
-- **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`
+For human-facing commands, package management, platform notes, and component-specific reference, see [README.md](README.md) and the linked `docs/` files above.
