@@ -46,6 +46,12 @@ def ensure_ai_dirs(project_root):
     Ensure the standard JetBrains AI directory structure under a base dir.
     Creates: .ai/mcp, .ai/plans, .ai/review, .ai/rules, .ai/agents
     Then creates symlinks: .junie -> .ai, .aiassistant/rules -> .ai/rules
+
+    Note: .ai/memory/ is NOT created here — it is managed by JetBrains AI
+    Assistant tooling at runtime. It is gitignored and local-only. It may
+    contain: tasks.md, errors.md, feedback.md (agent memory placeholders,
+    typically empty), language.json and memory.version (JetBrains artifacts).
+    Keep the directory; do not commit its contents.
     """
     project_path = Path(project_root)
     ai_dir = project_path / ".ai"
