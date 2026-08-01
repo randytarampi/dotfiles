@@ -1,3 +1,9 @@
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+
 .PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup diff dry-run deploy configure doctor check-hashes check-env-coverage check-slim-invariants check-templates verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph
 
 SHELL := /usr/bin/env bash
@@ -11,7 +17,7 @@ define LOAD_ENV
 set -a; [ -f "$(ENV_FILE)" ] && . "$(ENV_FILE)"; set +a
 endef
 
-lint:
+lint: ## Run repository lint and syntax checks
 	@echo "Checking for merge conflicts..."
 	@git grep -n '^<<<<<<<' -- '*.*' 2>/dev/null && { echo "Merge conflict markers found!"; exit 1; } || true
 	@echo "Checking for trailing whitespace..."
@@ -57,7 +63,7 @@ lint:
 		echo "black not installed; skipping Python format check"; \
 	fi
 
-fix:
+fix: ## Format shell and Python files and normalize text files
 	@if [ -n "$(SHFMT)" ]; then \
 		"$(SHFMT)" -i 2 -w scripts/*.sh scripts/lib/*.sh dot_dotfiles/shell/*.sh; \
 	else \
@@ -88,7 +94,7 @@ fix:
 	"                    print(\"Fixed \" + f)\n" \
 	"            except Exception: pass\n")'
 
-env:
+env: ## Load ~/.env for this make recipe only
 	@$(LOAD_ENV); echo "Loaded $(ENV_FILE) for this make recipe only."
 
 drift: ## Check ~/.env drift against .env.example (read-only)
@@ -98,19 +104,19 @@ migrate: ## Migrate deprecated DOTFILES_RUN_* gate names in ~/.env to current na
 	@python3 scripts/migrate-env-gates.py --env "$(ENV_FILE)"
 	@python3 scripts/sync-env.py --example "$(ENV_EXAMPLE)" --env "$(ENV_FILE)" --sync
 
-brewfile-sync:
+brewfile-sync: ## Synchronize Brewfile and Wingetfile package manifests
 	@python3 scripts/sync-brewfiles.py
 
-brewfile-diff:
+brewfile-diff: ## Show package manifest differences
 	@python3 scripts/sync-brewfiles.py --diff
 
-brewfile-cleanup:
+brewfile-cleanup: ## Remove stale package manifest entries
 	@python3 scripts/cleanup-brewfiles.py
 
-diff:
+diff: ## Show pending chezmoi changes
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" diff
 
-dry-run:
+dry-run: ## Preview chezmoi changes without applying them
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run --force
 
 deploy: ## Apply dotfiles and run all configuration scripts
@@ -154,21 +160,27 @@ check-templates: ## Render JSON chezmoi templates and validate output (catches G
 		fi; \
 	done
 
-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates dry-run ## Full verification suite
+check-docs-drift: ## Check for documentation drift between AGENTS.md, README.md, and docs/
+	@python3 scripts/check-docs-drift.py
+
+verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
+	@python3 scripts/verify-iterm2.py
+
+verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates check-docs-drift verify-iterm2 dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates
+ci-verify: lint drift doctor check-hashes check-env-coverage check-slim-invariants check-templates check-docs-drift verify-iterm2 ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
 	@$(CHEZMOI) state delete-bucket --bucket scriptState
 	@echo "Script state cleared. Run 'make deploy' to re-run all scripts."
 
-symlinks:
+symlinks: ## Create symlinks for repository scripts
 	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
 
-test: lint drift check-templates dry-run
+test: lint drift check-templates dry-run ## Run basic repository checks
 	@echo "All basic checks passed."
 
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
