@@ -8,3 +8,7 @@
 Amazon.AWSCLI
 # Cross-ref: brew 'session-manager-plugin'
 Amazon.SessionManagerPlugin
+# Cross-ref: brew 'grype'
+Anchore.Grype
+# Cross-ref: brew 'syft'
+Anchore.Syft

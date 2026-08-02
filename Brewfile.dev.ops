@@ -19,6 +19,8 @@ brew "mailutils"
 brew "mongosh"
 brew "postgresql@16"
 brew "ssh-audit"
+brew "grype"
+brew "syft"
 
 # --- Casks ---
 cask "gcloud-cli"
