@@ -3,6 +3,24 @@
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
 <!-- AGENT_GUIDANCE_START -->
+## Working with me
+
+These apply to every repo, every session.
+
+### Commits
+
+- **One concern per commit.** When closing out a session, commit each logical change individually — never batch unrelated changes into a single commit. If a session touched three concerns, that's three commits.
+- **Never push unless explicitly asked.** Default to local commits only. "Don't push anything yet" is the standing instruction; the user will say when to push.
+- **Don't commit until the plan is approved.** If the user hasn't approved a plan or explicitly said to proceed, give the plan first. Don't pre-emptively commit work-in-progress.
+
+### Verifying before declaring success
+
+- **Run the repo's standard verify command before claiming a change is done.** Don't report "done" or "working" based on reasoning alone — execute the actual check.
+  - dotfiles: `make verify`
+  - other repos: whatever the repo defines (`yarn test`, `yarn lerna run <job>`, `npm run build`, the repo's Makefile target, etc.)
+- If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
+- Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
+
 ## Dotfiles Repo Development
 
 When working on the dotfiles repo itself:
