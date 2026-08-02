@@ -8,6 +8,8 @@ cask "claude"
 cask "claude-code"
 cask "discord"
 cask "slack"
-cask "microsoft-teams"
+# microsoft-teams: intentionally omitted — bundled by microsoft-office-businesspro
+# (Brewfile.desktop.productivity). The standalone microsoft-teams cask conflicts
+# with microsoft-office-businesspro. See wingetfile.desktop.comms for Windows.
 cask "webex"
 cask "zoom"
