@@ -5,6 +5,8 @@ The parser is intentionally conservative: it extracts assignment keys without
 evaluating shell code and never prints secret values.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import re
