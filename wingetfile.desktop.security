@@ -7,3 +7,5 @@
 MullvadVPN.MullvadVPN
 Amazon.AWSVPNClient
 PrivateInternetAccess.PrivateInternetAccess
+# Cross-ref: cask 'keeper-password-manager'
+KeeperSecurity.KeeperDesktop
