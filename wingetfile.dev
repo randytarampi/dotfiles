@@ -34,3 +34,5 @@ psf.black
 koalaman.shellcheck
 # Cross-ref: brew 'shfmt'
 mvdan.shfmt
+# Cross-ref: brew 'stripe-cli'
+Stripe.StripeCli
