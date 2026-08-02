@@ -24,6 +24,9 @@ NON_TRACKED_CONFIGS = {
 NON_TRACKED_SCRIPTS = {
     "scripts/check-env-coverage.py",
     "scripts/check-hashes.py",  # self — doesn't need to track itself
+    "scripts/check-docs-drift.py",  # Makefile-only verification tool
+    "scripts/cleanup-brewfiles.py",  # Makefile-only cleanup tool
+    "scripts/verify-iterm2.py",  # Makefile-only verification tool
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
