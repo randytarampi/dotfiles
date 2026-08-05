@@ -1,9 +1,9 @@
 {
   "name": "github",
-  "type": "command",
-  "command": "github-mcp-server",
-  "args": ["stdio"],
-  "env": {
-    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GH_TOKEN}"
-  }
+  "type": "url",
+  "url": "https://api.githubcopilot.com/mcp/",
+  "headers": {
+    "Authorization": "Bearer ${GH_TOKEN}"
+  },
+  "note": "GitHub Copilot MCP. Static token auth via GH_TOKEN. Remote server."
 }

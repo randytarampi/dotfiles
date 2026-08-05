@@ -122,7 +122,6 @@ DEV_FORMULA_EXACT = {
     "gemini-cli",
     "gettext",
     "gh",
-    "github-mcp-server",
     "glow",
     "gradle",
     "gradle-completion",

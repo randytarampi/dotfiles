@@ -241,10 +241,6 @@
       "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (betterstack, shortcut, sentry, github, context7) managed via Connectors UI.",
       "mcp_servers": [
         {
-          "template": "github",
-          "name_override": "github"
-        },
-        {
           "template": "codegraph"
         },
         {
