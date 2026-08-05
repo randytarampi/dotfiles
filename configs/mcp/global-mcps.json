@@ -300,6 +300,46 @@
           "template": "smallcode"
         }
       ]
+    },
+    "copilot": {
+      "mcp_path": "~/.copilot/mcp-config.json",
+      "project_mcp_path": ".mcp.json",
+      "format": "json-mcpServers-http",
+      "mcp_servers": [
+        {
+          "template": "betterstack"
+        },
+        {
+          "template": "context7"
+        },
+        {
+          "template": "codegraph"
+        },
+        {
+          "template": "mongodb"
+        },
+        {
+          "template": "notion"
+        },
+        {
+          "template": "shortcut"
+        },
+        {
+          "template": "smallcode"
+        },
+        {
+          "template": "atlassian"
+        },
+        {
+          "template": "testrigor"
+        },
+        {
+          "template": "sentry"
+        },
+        {
+          "template": "github"
+        }
+      ]
     }
   }
 }

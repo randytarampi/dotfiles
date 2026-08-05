@@ -290,6 +290,30 @@ def format_configs_to_str(fmt, defs):
                 entry["headers"] = _resolved_headers(d)
             mcp_servers[name] = entry
         return json.dumps({"mcpServers": mcp_servers}, indent=4)
+
+    elif fmt == "json-mcpServers-http":
+        # GitHub Copilot CLI (~/.copilot/mcp-config.json). Remote renders
+        # as {type: "http", url, headers, tools: ["*"]}; stdio as
+        # {command, args, env}. Merges into existing mcpServers key.
+        result = {"mcpServers": {}}
+        for d in defs:
+            name = d["name"]
+            entry = {}
+            if d.get("type") == "url":
+                entry["type"] = "http"
+                entry["url"] = d["url"]
+                if _resolved_headers(d):
+                    entry["headers"] = _resolved_headers(d)
+                entry["tools"] = ["*"]
+            else:
+                entry["type"] = "stdio"
+                entry["command"] = d["command"]
+                if d.get("args"):
+                    entry["args"] = d["args"]
+                if d.get("env") and any(v for v in d["env"].values()):
+                    entry["env"] = {k: v for k, v in d["env"].items() if v}
+            result["mcpServers"][name] = entry
+        return json.dumps(result, indent=4)
     else:
         logger.critical(f"Unsupported format: {fmt}")
         sys.exit(1)
@@ -328,6 +352,7 @@ def redact_output_content(format_type, output_content):
         "json-servers",
         "opencode-internal",
         "json-settings-merge",
+        "json-mcpServers-http",
     ]:
         try:
             return json.dumps(redact_secrets(json.loads(output_content)), indent=4)
@@ -358,7 +383,7 @@ def merge_configs_to_file(fmt, mcp_path, output):
             f.write("\n")
         logger.info(f"Merged config into: {mcp_path}")
 
-    elif fmt in ("json-mcpServers-merge", "json-servers"):
+    elif fmt in ("json-mcpServers-merge", "json-servers", "json-mcpServers-http"):
         # Merge the generated top-level key (mcpServers or servers) into the
         # existing JSON file, preserving other top-level keys. Required for
         # shared app config files like claude_desktop_config.json.
@@ -654,7 +679,7 @@ def main():
         )
         parser.add_argument(
             "tool",
-            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode",
+            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode, copilot",
         )
         args = parser.parse_args()
 

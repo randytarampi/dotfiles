@@ -42,6 +42,7 @@ AGENT_FILES = [
     os.path.join(HOME, ".config", "opencode", "AGENTS.md"),
     os.path.join(HOME, ".cursor", "AGENTS.md"),
     os.path.join(JUNIE_DIR, "AGENTS.md"),
+    os.path.join(HOME, ".copilot", "copilot-instructions.md"),
 ]
 
 MARKER_START = "<!-- AGENT_GUIDANCE_START -->"
