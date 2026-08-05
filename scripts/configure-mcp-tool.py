@@ -20,6 +20,11 @@ import logger
 from env import load_env
 
 
+def _resolved_headers(d):
+    headers = d.get("headers") or {}
+    return {k: v for k, v in headers.items() if "${" not in str(v)}
+
+
 def get_tool_config(registry_file: str, tool: str) -> dict:
     if not os.path.exists(registry_file):
         logger.critical(f"Registry file not found: {registry_file}")
@@ -162,8 +167,8 @@ def format_configs_to_str(fmt, defs):
                     entry["args"] = d["args"]
             if d.get("env") and any(v for v in d["env"].values()):
                 entry["env"] = {k: v for k, v in d["env"].items() if v}
-            if d.get("headers"):
-                entry["headers"] = d["headers"]
+            if _resolved_headers(d):
+                entry["headers"] = _resolved_headers(d)
             if "enabled" in d:
                 entry["enabled"] = d["enabled"]
             result["mcpServers"][name] = entry
@@ -186,8 +191,8 @@ def format_configs_to_str(fmt, defs):
                     entry["args"] = d["args"]
             if d.get("env") and any(v for v in d["env"].values()):
                 entry["env"] = {k: v for k, v in d["env"].items() if v}
-            if d.get("headers"):
-                entry["headers"] = d["headers"]
+            if _resolved_headers(d):
+                entry["headers"] = _resolved_headers(d)
             if "enabled" in d:
                 entry["enabled"] = d["enabled"]
             result["mcpServers"][name] = entry
@@ -209,8 +214,8 @@ def format_configs_to_str(fmt, defs):
                     entry["args"] = d["args"]
             if d.get("env") and any(v for v in d["env"].values()):
                 entry["env"] = {k: v for k, v in d["env"].items() if v}
-            if d.get("headers"):
-                entry["headers"] = d["headers"]
+            if _resolved_headers(d):
+                entry["headers"] = _resolved_headers(d)
             result["servers"][name] = entry
         return json.dumps(result, indent=4)
 
@@ -222,9 +227,9 @@ def format_configs_to_str(fmt, defs):
             if d.get("type") == "url":
                 lines.append('type = "streamable-http"')
                 lines.append(f'url = "{d["url"]}"')
-                if d.get("headers"):
+                if _resolved_headers(d):
                     header_str = ", ".join(
-                        f'"{k}" = "{v}"' for k, v in d["headers"].items()
+                        f'"{k}" = "{v}"' for k, v in _resolved_headers(d).items()
                     )
                     lines.append(f"http_headers = {{ {header_str} }}")
             else:
@@ -260,8 +265,8 @@ def format_configs_to_str(fmt, defs):
                 entry["command"] = cmd_array
             if d.get("env") and any(v for v in d["env"].values()):
                 entry["environment"] = {k: v for k, v in d["env"].items() if v}
-            if d.get("headers"):
-                entry["headers"] = d["headers"]
+            if _resolved_headers(d):
+                entry["headers"] = _resolved_headers(d)
             if "enabled" in d:
                 entry["enabled"] = d["enabled"]
             result[name] = entry
@@ -281,8 +286,8 @@ def format_configs_to_str(fmt, defs):
                     entry["args"] = d["args"]
             if d.get("env") and any(v for v in d["env"].values()):
                 entry["env"] = {k: v for k, v in d["env"].items() if v}
-            if d.get("headers"):
-                entry["headers"] = d["headers"]
+            if _resolved_headers(d):
+                entry["headers"] = _resolved_headers(d)
             mcp_servers[name] = entry
         return json.dumps({"mcpServers": mcp_servers}, indent=4)
     else:
