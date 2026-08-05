@@ -314,6 +314,28 @@ def format_configs_to_str(fmt, defs):
                     entry["env"] = {k: v for k, v in d["env"].items() if v}
             result["mcpServers"][name] = entry
         return json.dumps(result, indent=4)
+
+    elif fmt == "json-mcpServers-antigravity":
+        # Google Antigravity CLI (~/.gemini/config/mcp_config.json). Remote
+        # renders as {serverUrl, headers} (no `type` field; uses `serverUrl`
+        # not `url`); stdio as {command, args, env}. Merges into existing
+        # mcpServers key to preserve other servers (e.g. codegraph).
+        result = {"mcpServers": {}}
+        for d in defs:
+            name = d["name"]
+            entry = {}
+            if d.get("type") == "url":
+                entry["serverUrl"] = d["url"]
+                if _resolved_headers(d):
+                    entry["headers"] = _resolved_headers(d)
+            else:
+                entry["command"] = d["command"]
+                if d.get("args"):
+                    entry["args"] = d["args"]
+                if d.get("env") and any(v for v in d["env"].values()):
+                    entry["env"] = {k: v for k, v in d["env"].items() if v}
+            result["mcpServers"][name] = entry
+        return json.dumps(result, indent=4)
     else:
         logger.critical(f"Unsupported format: {fmt}")
         sys.exit(1)
@@ -353,6 +375,7 @@ def redact_output_content(format_type, output_content):
         "opencode-internal",
         "json-settings-merge",
         "json-mcpServers-http",
+        "json-mcpServers-antigravity",
     ]:
         try:
             return json.dumps(redact_secrets(json.loads(output_content)), indent=4)
@@ -383,7 +406,12 @@ def merge_configs_to_file(fmt, mcp_path, output):
             f.write("\n")
         logger.info(f"Merged config into: {mcp_path}")
 
-    elif fmt in ("json-mcpServers-merge", "json-servers", "json-mcpServers-http"):
+    elif fmt in (
+        "json-mcpServers-merge",
+        "json-servers",
+        "json-mcpServers-http",
+        "json-mcpServers-antigravity",
+    ):
         # Merge the generated top-level key (mcpServers or servers) into the
         # existing JSON file, preserving other top-level keys. Required for
         # shared app config files like claude_desktop_config.json.
@@ -679,7 +707,7 @@ def main():
         )
         parser.add_argument(
             "tool",
-            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode, copilot",
+            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode, copilot, agy",
         )
         args = parser.parse_args()
 
