@@ -1,0 +1,9 @@
+{
+  "name": "testrigor",
+  "type": "url",
+  "url": "https://api2.testrigor.com/api/v1/mcp",
+  "headers": {
+    "personal-access-token": "${TESTRIGOR_TOKEN}"
+  },
+  "note": "TestRigor remote MCP. PAT is read from TESTRIGOR_TOKEN in ~/.env."
+}

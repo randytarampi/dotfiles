@@ -1,0 +1,6 @@
+{
+  "name": "atlassian",
+  "type": "url",
+  "url": "https://mcp.atlassian.com/v1/mcp/authv2",
+  "note": "Atlassian Rovo remote MCP. OAuth 2.1 flow runs in the browser on first connect; no token or env var required."
+}

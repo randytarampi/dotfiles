@@ -6,6 +6,7 @@ source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 
 # Script hash triggers (re-run when MCP configs or helpers change):
+# configs/mcp/atlassian.json: {{ include "configs/mcp/atlassian.json" | sha256sum }}
 # configs/mcp/betterstack.json: {{ include "configs/mcp/betterstack.json" | sha256sum }}
 # configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
 # configs/mcp/github.json: {{ include "configs/mcp/github.json" | sha256sum }}
@@ -16,6 +17,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/sentry.json: {{ include "configs/mcp/sentry.json" | sha256sum }}
 # configs/mcp/shortcut.json: {{ include "configs/mcp/shortcut.json" | sha256sum }}
 # configs/mcp/smallcode.json: {{ include "configs/mcp/smallcode.json" | sha256sum }}
+# configs/mcp/templates/atlassian.json: {{ include "configs/mcp/templates/atlassian.json" | sha256sum }}
 # configs/mcp/templates/betterstack.json: {{ include "configs/mcp/templates/betterstack.json" | sha256sum }}
 # configs/mcp/templates/codegraph.json: {{ include "configs/mcp/templates/codegraph.json" | sha256sum }}
 # configs/mcp/templates/github.json: {{ include "configs/mcp/templates/github.json" | sha256sum }}
@@ -25,6 +27,8 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/templates/sentry.json: {{ include "configs/mcp/templates/sentry.json" | sha256sum }}
 # configs/mcp/templates/shortcut.json: {{ include "configs/mcp/templates/shortcut.json" | sha256sum }}
 # configs/mcp/templates/smallcode.json: {{ include "configs/mcp/templates/smallcode.json" | sha256sum }}
+# configs/mcp/templates/testrigor.json: {{ include "configs/mcp/templates/testrigor.json" | sha256sum }}
+# configs/mcp/testrigor.json: {{ include "configs/mcp/testrigor.json" | sha256sum }}
 # scripts/configure-mcps.py: {{ include "scripts/configure-mcps.py" | sha256sum }}
 # scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
 
