@@ -1,11 +1,23 @@
 {
-  "project_mcp_templates": ["betterstack", "codegraph", "mongodb", "notion", "shortcut", "smallcode", "atlassian", "testrigor"],
+  "project_mcp_templates": [
+    "betterstack",
+    "codegraph",
+    "mongodb",
+    "notion",
+    "shortcut",
+    "smallcode",
+    "atlassian",
+    "testrigor"
+  ],
   "tools": {
     "ai": {
       "mcp_path": "~/.ai/mcp/mcp.json",
       "project_mcp_path": ".ai/mcp/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "shortcut"
+        },
         {
           "template": "betterstack"
         },
@@ -34,6 +46,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "shortcut"
+        },
+        {
           "template": "betterstack"
         },
         {
@@ -61,6 +76,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "shortcut"
+        },
+        {
           "template": "betterstack"
         },
         {
@@ -77,7 +95,12 @@
         {
           "template": "codegraph",
           "extra_fields": {
-            "args": ["serve", "--mcp", "--path", "${workspaceFolder}"]
+            "args": [
+              "serve",
+              "--mcp",
+              "--path",
+              "${workspaceFolder}"
+            ]
           }
         },
         {
@@ -90,6 +113,9 @@
       "project_mcp_path": ".codex/config.toml",
       "format": "toml-mcpServers",
       "mcp_servers": [
+        {
+          "template": "shortcut"
+        },
         {
           "template": "betterstack"
         },
@@ -117,6 +143,9 @@
       "project_mcp_path": "opencode.json",
       "format": "opencode-internal",
       "mcp_servers": [
+        {
+          "template": "shortcut"
+        },
         {
           "template": "betterstack"
         },
@@ -151,6 +180,9 @@
       "format": "json-settings-merge",
       "mcp_servers": [
         {
+          "template": "shortcut"
+        },
+        {
           "template": "betterstack"
         },
         {
@@ -177,6 +209,9 @@
       "project_mcp_path": ".ai/mcp/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "shortcut"
+        },
         {
           "template": "betterstack"
         },
@@ -226,6 +261,9 @@
       "project_mcp_path": ".vscode/mcp.json",
       "format": "json-servers",
       "mcp_servers": [
+        {
+          "template": "shortcut"
+        },
         {
           "template": "betterstack"
         },

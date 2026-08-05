@@ -1,9 +1,6 @@
 {
   "name": "shortcut",
-  "type": "command",
-  "command": "npx",
-  "args": ["-y", "@shortcut/mcp@latest"],
-  "env": {
-    "SHORTCUT_API_TOKEN": "${SHORTCUT_API_TOKEN}"
-  }
+  "type": "url",
+  "url": "https://mcp.shortcut.com/mcp",
+  "note": "Shortcut MCP. OAuth client-side auth (no static token). Remote server."
 }
