@@ -16,6 +16,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "context7"
+        },
+        {
           "template": "shortcut"
         },
         {
@@ -46,6 +49,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "context7"
+        },
+        {
           "template": "shortcut"
         },
         {
@@ -75,6 +81,9 @@
       "project_mcp_path": ".cursor/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "context7"
+        },
         {
           "template": "shortcut"
         },
@@ -114,6 +123,9 @@
       "format": "toml-mcpServers",
       "mcp_servers": [
         {
+          "template": "context7"
+        },
+        {
           "template": "shortcut"
         },
         {
@@ -143,6 +155,9 @@
       "project_mcp_path": "opencode.json",
       "format": "opencode-internal",
       "mcp_servers": [
+        {
+          "template": "context7"
+        },
         {
           "template": "shortcut"
         },
@@ -180,6 +195,9 @@
       "format": "json-settings-merge",
       "mcp_servers": [
         {
+          "template": "context7"
+        },
+        {
           "template": "shortcut"
         },
         {
@@ -209,6 +227,9 @@
       "project_mcp_path": ".ai/mcp/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "context7"
+        },
         {
           "template": "shortcut"
         },
@@ -253,6 +274,9 @@
       "project_mcp_path": ".vscode/mcp.json",
       "format": "json-servers",
       "mcp_servers": [
+        {
+          "template": "context7"
+        },
         {
           "template": "shortcut"
         },

@@ -1,0 +1,9 @@
+{
+  "name": "context7",
+  "type": "url",
+  "url": "https://mcp.context7.com/mcp",
+  "headers": {
+    "Authorization": "Bearer ${CONTEXT7_API_KEY}"
+  },
+  "note": "Context7 MCP. Anonymous works; CONTEXT7_API_KEY optional for higher rate limits. Remote server."
+}
