@@ -238,15 +238,11 @@
       "mcp_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "project_mcp_path": ".claude/claude_desktop_config.json",
       "format": "json-mcpServers-merge",
-      "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP managed via Connectors UI.",
+      "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (betterstack, shortcut, sentry, github, context7) managed via Connectors UI.",
       "mcp_servers": [
         {
           "template": "github",
           "name_override": "github"
-        },
-        {
-          "template": "sentry",
-          "name_override": "Sentry"
         },
         {
           "template": "codegraph"
