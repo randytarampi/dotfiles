@@ -18,9 +18,6 @@
           "template": "context7"
         },
         {
-          "template": "betterstack"
-        },
-        {
           "template": "github",
           "name_override": "github"
         },
@@ -48,9 +45,6 @@
           "template": "context7"
         },
         {
-          "template": "betterstack"
-        },
-        {
           "template": "github",
           "name_override": "github"
         },
@@ -76,9 +70,6 @@
       "mcp_servers": [
         {
           "template": "context7"
-        },
-        {
-          "template": "betterstack"
         },
         {
           "template": "github",
@@ -116,9 +107,6 @@
           "template": "context7"
         },
         {
-          "template": "betterstack"
-        },
-        {
           "template": "github",
           "name_override": "github"
         },
@@ -144,9 +132,6 @@
       "mcp_servers": [
         {
           "template": "context7"
-        },
-        {
-          "template": "betterstack"
         },
         {
           "template": "github",
@@ -182,9 +167,6 @@
           "template": "context7"
         },
         {
-          "template": "betterstack"
-        },
-        {
           "template": "github",
           "name_override": "github"
         },
@@ -212,9 +194,6 @@
           "template": "context7"
         },
         {
-          "template": "betterstack"
-        },
-        {
           "template": "github",
           "name_override": "github"
         },
@@ -237,7 +216,7 @@
       "mcp_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "project_mcp_path": ".claude/claude_desktop_config.json",
       "format": "json-mcpServers-merge",
-      "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (betterstack, sentry, github, context7) managed via Connectors UI.",
+      "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (sentry, github, context7) managed via Connectors UI.",
       "mcp_servers": [
         {
           "template": "codegraph"
@@ -254,9 +233,6 @@
       "mcp_servers": [
         {
           "template": "context7"
-        },
-        {
-          "template": "betterstack"
         },
         {
           "template": "github",
@@ -282,9 +258,6 @@
       "project_mcp_path": ".mcp.json",
       "format": "json-mcpServers-http",
       "mcp_servers": [
-        {
-          "template": "betterstack"
-        },
         {
           "template": "context7"
         },
@@ -319,9 +292,6 @@
       "project_mcp_path": ".agents/mcp_config.json",
       "format": "json-mcpServers-antigravity",
       "mcp_servers": [
-        {
-          "template": "betterstack"
-        },
         {
           "template": "context7"
         },
