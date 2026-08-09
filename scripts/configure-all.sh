@@ -30,6 +30,15 @@ SC_TIER="$TIER"
 build_tier_extra_args
 SC_ARGS=("${TIER_EXTRA_ARGS[@]}")
 
+# 0.5. Reconcile npm "..." entries from the base Brewfile into the active nvm node.
+#       Runs after chezmoi apply (nvm should be active on PATH here). warn-on-fail.
+if [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" == "1" ]]; then
+  info "Reconciling npm packages from base Brewfile into active node..."
+  bash "$SCRIPT_DIR/install-npm-brewfile-packages.sh" "$SCRIPT_DIR/../Brewfile" || warn "npm package reconciliation failed for base Brewfile"
+else
+  info "DOTFILES_RUN_PACKAGES_SETUP not set — skipping npm package reconciliation"
+fi
+
 # 1. Secrets/env distribution (configure-secrets.py writes .env to AI tool dirs)
 #    Bridges the gap left by run_onchange_14-configure-secrets (which can't hash ~/.env).
 if [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; then

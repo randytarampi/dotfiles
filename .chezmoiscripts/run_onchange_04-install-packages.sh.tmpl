@@ -32,6 +32,7 @@ fi
 # dev.ops: {{ include "Brewfile.dev.ops" | sha256sum }}
 # legacy: {{ include "Brewfile.legacy" | sha256sum }}
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
+# install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
 # wingetfile hashes (triggers re-run when any wingetfile changes):
 # base: {{ include "wingetfile" | sha256sum }}
@@ -67,54 +68,67 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
 
     # dev.cli — always installed
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile" || warn "npm package reconciliation failed for Brewfile"
 
     {{- if .categories.dev }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
     {{- end }}
 
     # Desktop Brewfiles include cask entries and are skipped on Linux.
     {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers" || warn "npm package reconciliation failed for Brewfile.desktop.browsers"
     {{- end }}
 
     {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.comms
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms" || warn "npm package reconciliation failed for Brewfile.desktop.comms"
     {{- end }}
 
     {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.security
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.security" || warn "npm package reconciliation failed for Brewfile.desktop.security"
     {{- end }}
 
     {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.media
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.media" || warn "npm package reconciliation failed for Brewfile.desktop.media"
     {{- end }}
 
     {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities" || warn "npm package reconciliation failed for Brewfile.desktop.utilities"
     {{- end }}
 
     {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts" || warn "npm package reconciliation failed for Brewfile.desktop.fonts"
     {{- end }}
 
     {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming" || warn "npm package reconciliation failed for Brewfile.desktop.gaming"
     {{- end }}
 
     {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud" || warn "npm package reconciliation failed for Brewfile.desktop.cloud"
     {{- end }}
 
     {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity" || warn "npm package reconciliation failed for Brewfile.desktop.productivity"
     {{- end }}
 
     {{- if .categories.dev_ops }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev.ops
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops" || warn "npm package reconciliation failed for Brewfile.dev.ops"
     {{- end }}
 
     {{- if .categories.legacy }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy" || warn "npm package reconciliation failed for Brewfile.legacy"
     {{- end }}
 fi
 
