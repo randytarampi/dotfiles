@@ -37,7 +37,7 @@ ACP_AGENTS = {
         "args": [],
         "description": "Antigravity (via agy-acp bridge)",
     },
-    "claude-code": {
+    "claude": {
         "command": "claude-agent-acp",
         "args": [],
         "description": "Claude Code via ACP adapter",

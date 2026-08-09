@@ -150,7 +150,7 @@ make ci-verify                               # CI verification (lint + drift + d
 
 `acpAgents` in `oh-my-opencode-slim.json` auto-exposes ACP-capable tools as sandboxed wrapper subagents.
 
-- Auto-detected agents: `opencode`, `gemini`, `claude-code`, `codex`, `junie`, `cursor`, `cline`, `copilot`.
+- Auto-detected agents: `opencode`, `gemini`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`.
 - `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
 - `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
 - Install adapter prerequisites with `scripts/install-opencode.sh` (`brew install copilot-cli`, `npm i -g @zed-industries/claude-code-acp`, `npm i -g codex-acp`), then sign in to each agent separately.
