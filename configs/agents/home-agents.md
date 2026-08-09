@@ -108,6 +108,10 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
    - **Codex**: OpenAI auth (codex-acp wraps codex)
    - **Gemini**: `GEMINI_API_KEY` env var or `gemini auth`
    - **Junie**: JetBrains IDE login
+   - **Antigravity**: `agy auth login` (Google Sign-In via system keyring). Then enable the bridge: set `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP=1` and `make deploy`.
+
+     > [!CAUTION]
+     > Google's Antigravity ToS prohibit using third-party software to access the Service. Routing Antigravity OAuth through the `antigravity-acp` bridge *may lead to account suspension*. Use Vertex AI / AI Studio API keys instead if this risk is unacceptable.
 5. **Test**: In OpenCode, use `/agent <agent-name>` to invoke a specific ACP agent (e.g., `@gemini hello` or `@copilot explain this code`)
 
 ## Tokenscope

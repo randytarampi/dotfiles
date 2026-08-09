@@ -188,6 +188,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 0 |
 | `DOTFILES_RUN_SMALLCODE_SETUP` | SmallCode CLI install + config | 0 |
+| `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP` | antigravity-acp bridge (agy-acp) install | 0 |
 | `DOTFILES_RUN_MOZART_SETUP` | Mozart router config | 0 |
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | CodeGraph MCP registration | 0 |
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |

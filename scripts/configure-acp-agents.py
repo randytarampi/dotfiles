@@ -32,6 +32,11 @@ ACP_AGENTS = {
         "args": ["--acp"],
         "description": "Gemini CLI — Google's coding agent",
     },
+    "antigravity": {
+        "command": "agy-acp",
+        "args": [],
+        "description": "Antigravity (via agy-acp bridge)",
+    },
     "claude-code": {
         "command": "claude-agent-acp",
         "args": [],
