@@ -1,0 +1,27 @@
+{
+  "$schema": "https://skills.sh/schema.json",
+  "version": 1,
+  "profiles": {
+    "core": {
+      "description": "Core skills always active for all agents and all repos — iamhumans, find-skills, codegraph, plannotator, key mattpocock engineering skills, cross-cutting tools",
+      "skills": [
+        { "source": "hoainho/iamhumans", "name": "iamhumans" },
+        { "source": "vercel-labs/skills", "name": "find-skills" },
+        { "source": "colbymchenry/codegraph", "name": "add-lang" },
+        { "source": "colbymchenry/codegraph", "name": "agent-eval" },
+        { "source": "backnotprop/plannotator", "name": "plannotator-compound" },
+        { "source": "backnotprop/plannotator", "name": "plannotator-setup-goal" },
+        { "source": "backnotprop/plannotator", "name": "plannotator-visual-explainer" },
+        { "source": "mattpocock/skills", "name": "handoff" },
+        { "source": "mattpocock/skills", "name": "implement" },
+        { "source": "mattpocock/skills", "name": "tdd" },
+        { "source": "mattpocock/skills", "name": "diagnosing-bugs" },
+        { "source": "mattpocock/skills", "name": "code-review" },
+        { "source": "mattpocock/skills", "name": "resolving-merge-conflicts" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-billing-and-cost-management" },
+        { "source": "vercel-labs/agent-browser", "name": "agent-browser" },
+        { "source": "vercel/turborepo", "name": "turborepo" }
+      ]
+    }
+  }
+}

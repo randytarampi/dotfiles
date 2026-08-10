@@ -1,0 +1,19 @@
+{
+  "$schema": "https://skills.sh/schema.json",
+  "version": 1,
+  "profiles": {
+    "mongodb": {
+      "description": "MongoDB agent skills — opt-in via DOTFILES_RUN_SKILLS_MONGODB_SETUP=1.",
+      "gate": "DOTFILES_RUN_SKILLS_MONGODB_SETUP",
+      "skills": [
+        { "source": "mongodb/agent-skills", "name": "mongodb-atlas-stream-processing" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-connection" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-mcp-setup" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-natural-language-querying" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-query-optimizer" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-schema-design" },
+        { "source": "mongodb/agent-skills", "name": "mongodb-search-and-ai" }
+      ]
+    }
+  }
+}

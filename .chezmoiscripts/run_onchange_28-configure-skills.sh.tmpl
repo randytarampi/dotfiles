@@ -7,6 +7,11 @@ source "${LIB_DIR}/env.sh"
 
 # Script hash triggers (re-run when skills manifest, lib, or script change):
 # configs/skills/skills.json: {{ include "configs/skills/skills.json" | sha256sum }}
+# configs/skills/skills.core.json: {{ include "configs/skills/skills.core.json" | sha256sum }}
+# configs/skills/skills.mattpocock.json: {{ include "configs/skills/skills.mattpocock.json" | sha256sum }}
+# configs/skills/skills.aws.json: {{ include "configs/skills/skills.aws.json" | sha256sum }}
+# configs/skills/skills.mongodb.json: {{ include "configs/skills/skills.mongodb.json" | sha256sum }}
+# configs/skills/skills.prisma.json: {{ include "configs/skills/skills.prisma.json" | sha256sum }}
 # scripts/configure-skills.py: {{ include "scripts/configure-skills.py" | sha256sum }}
 # scripts/lib/skills_manifest.py: {{ include "scripts/lib/skills_manifest.py" | sha256sum }}
 

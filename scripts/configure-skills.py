@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Reconcile installed skills against the declarative manifest.
 
-Reads configs/skills/skills.json, fetches missing skills via the `skills` CLI
-into ~/.agents/skills/ (canonical store), symlinks them to all agent skill dirs,
+Reads configs/skills/skills.json and category files, fetches missing skills via
+the `skills` CLI into ~/.local/share/dotfiles/skills/ (canonical store), symlinks them to all agent skill dirs,
 and removes stale skills not in the active manifest.
 
 Agent target dirs (symlink targets):
@@ -44,17 +44,54 @@ from skills_manifest import (  # noqa: E402
     find_missing_skills,
     find_stale_skills,
     get_active_skill_names,
+    get_catalog_skills,
+    get_globally_active_skills,
+    get_symlinked_skills,
     get_installed_skills,
     get_preinstalled_skills,
-    get_symlinked_skills,
     install_repo_local_skill,
-    parse_manifest,
+    remove_stale_from_canonical_store,
+    remove_stale_from_lock_file,
     remove_stale_from_targets,
+    remove_stale_via_cli,
     symlink_skill_to_targets,
+    verify_reconciliation,
 )
 
 MANIFEST_PATH = os.path.join(DOTFILES_DIR, "configs", "skills", "skills.json")
 REPO_LOCAL_SKILLS_DIR = os.path.join(DOTFILES_DIR, "configs", "skills")
+LEGACY_CANONICAL_STORE = os.path.join(os.path.expanduser("~"), ".agents", "skills")
+
+
+def migrate_legacy_canonical_store(dry_run: bool = False) -> None:
+    """Migrate declared skills from the former discovery-dir store."""
+    if not os.path.isdir(LEGACY_CANONICAL_STORE):
+        return
+    logger.info(
+        "Migrating legacy skills store: %s -> %s",
+        LEGACY_CANONICAL_STORE,
+        CANONICAL_STORE,
+    )
+    catalog = {entry.name for entry in get_catalog_skills(MANIFEST_PATH)}
+    if dry_run:
+        for name in sorted(catalog):
+            if not os.path.isdir(os.path.join(CANONICAL_STORE, name)):
+                logger.info("[DRY RUN] Would migrate/fetch catalog skill: %s", name)
+        return
+    try:
+        os.makedirs(CANONICAL_STORE, exist_ok=True)
+        for name in sorted(catalog):
+            source = os.path.join(LEGACY_CANONICAL_STORE, name)
+            target = os.path.join(CANONICAL_STORE, name)
+            # Only migrate real legacy directories; symlinks are rebuilt below.
+            if (
+                not os.path.exists(target)
+                and os.path.isdir(source)
+                and not os.path.islink(source)
+            ):
+                shutil.move(source, target)
+    except OSError as exc:
+        logger.warning("Legacy skills store migration failed: %s", exc)
 
 
 def update_all_skills(dry_run: bool = False) -> bool:
@@ -141,11 +178,14 @@ def main():
         )
         return
 
-    # Parse the manifest to get active skills
-    active_skills = parse_manifest(MANIFEST_PATH)
+    # Catalog and global activation are deliberately separate: gated skills are
+    # cached, but are not exposed through discovery directories.
+    migrate_legacy_canonical_store(dry_run=args.dry_run)
+    catalog_skills = get_catalog_skills(MANIFEST_PATH)
+    active_skills = get_globally_active_skills(MANIFEST_PATH)
 
-    if not active_skills:
-        logger.warning("No active skills found in manifest %s", MANIFEST_PATH)
+    if not catalog_skills:
+        logger.warning("No catalog skills found in manifest %s", MANIFEST_PATH)
         return
 
     # Get preinstalled skills (installed by other means, just symlink them)
@@ -155,7 +195,8 @@ def main():
     repo_local_dirs = discover_repo_local_skills(REPO_LOCAL_SKILLS_DIR)
 
     # Add repo-local and preinstalled skills to the active set
-    active_names = get_active_skill_names(active_skills)
+    catalog_names = {skill.name for skill in catalog_skills}
+    active_names = {skill.name for skill in active_skills}
     for skill_name, source_dir in repo_local_dirs.items():
         if skill_name not in active_names:
             logger.info("Found repo-local skill not in manifest: %s", skill_name)
@@ -172,13 +213,15 @@ def main():
     installed_names = get_installed_skills(CANONICAL_STORE)
 
     # Find missing and stale skills
-    missing = find_missing_skills(active_names, installed_names)
-    stale = find_stale_skills(active_names, installed_names)
+    missing = find_missing_skills(catalog_names, installed_names)
+    stale = find_stale_skills(catalog_names, installed_names)
 
     # Fetch missing skills via `skills` CLI
     fetched = 0
-    for skill in active_skills:
+    for skill in catalog_skills:
         if skill.name in missing and not skill.is_repo_local:
+            if skill.name in preinstalled_names:
+                continue
             success = fetch_skill_via_cli(
                 skill.source, skill.name, dry_run=args.dry_run
             )
@@ -210,29 +253,70 @@ def main():
         )
         symlinked += count
 
-    # Remove stale skills from agent dirs (but not from canonical store — CLI handles that)
-    # Recompute stale based on what's actually installed now
+    # Recompute stale based on what's actually installed now. Cache cleanup is
+    # manual because the CLI only knows about ~/.agents/skills.
     if not args.dry_run:
         installed_names = get_installed_skills(CANONICAL_STORE)
-        stale = find_stale_skills(active_names, installed_names)
-    # Preinstalled skills are never removed (managed by other installers)
-    stale -= preinstalled_names
-    removed = remove_stale_from_targets(stale, dry_run=args.dry_run)
+        stale = find_stale_skills(catalog_names, installed_names)
+    removed_cache = remove_stale_from_canonical_store(stale, dry_run=args.dry_run)
+    stale_targets = set()
+    for target_dir in SKILL_TARGET_DIRS:
+        stale_targets |= get_symlinked_skills(target_dir) - active_names
+        if os.path.isdir(target_dir):
+            stale_targets |= {
+                name
+                for name in os.listdir(target_dir)
+                if os.path.islink(os.path.join(target_dir, name))
+                and not os.path.exists(os.path.join(target_dir, name))
+            }
+    legacy_real_stale = {
+        name
+        for name in stale_targets
+        if os.path.isdir(os.path.join(LEGACY_CANONICAL_STORE, name))
+        and not os.path.islink(os.path.join(LEGACY_CANONICAL_STORE, name))
+    }
+    removed_targets = remove_stale_from_targets(stale_targets, dry_run=args.dry_run)
+    removed_cli = remove_stale_via_cli(legacy_real_stale, dry_run=args.dry_run)
+    removed_lock = 0
+    # Remove every lock entry that is not declared, including entries no longer
+    # present on disk (the CLI cannot clean those).
+    lock_stale = set()
+    lock_path = os.path.join(os.path.expanduser("~"), ".agents", ".skill-lock.json")
+    if os.path.isfile(lock_path):
+        import json
+
+        with open(lock_path, encoding="utf-8") as f:
+            lock_stale = {
+                item if isinstance(item, str) else item.get("name")
+                for item in json.load(f).get("skills", [])
+            } - catalog_names
+    removed_lock += remove_stale_from_lock_file(lock_stale, dry_run=args.dry_run)
 
     # Summary
     summary_lines = [
         f"Skills reconciliation complete!",
         f"  Manifest: {MANIFEST_PATH}",
-        f"  Active skills in manifest: {len(active_names)}",
+        f"  Catalog skills: {len(catalog_names)}",
+        f"  Globally active skills: {len(active_names)}",
         f"  Already installed: {len(installed_names) - len(missing)}",
         f"  Fetched via CLI: {fetched}",
         f"  Repo-local installed: {repo_local_installed}",
         f"  Symlinked to agent dirs: {symlinked}",
-        f"  Stale removed: {removed}",
+        f"  Stale removed: {removed_cache + removed_targets + removed_cli + removed_lock}",
     ]
     if args.dry_run:
         summary_lines.insert(0, "[DRY RUN] Skills reconciliation preview:")
     logger.info("\n".join(summary_lines))
+    result = verify_reconciliation(MANIFEST_PATH)
+    logger.info(
+        "Reconciliation postconditions: %d catalog cached, %d globally active, %d stale lock entries, %d broken links",
+        result["catalog"],
+        result["active"],
+        result["removed"],
+        result["broken_links"],
+    )
+    for violation in result["violations"]:
+        logger.warning("Reconciliation postcondition failed: %s", violation)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://skills.sh/schema.json",
+  "version": 1,
+  "profiles": {
+    "prisma": {
+      "description": "Prisma skills — opt-in via DOTFILES_RUN_SKILLS_PRISMA_SETUP=1.",
+      "gate": "DOTFILES_RUN_SKILLS_PRISMA_SETUP",
+      "skills": [
+        { "source": "prisma/skills", "name": "prisma-cli" },
+        { "source": "prisma/skills", "name": "prisma-client-api" },
+        { "source": "prisma/skills", "name": "prisma-compute" },
+        { "source": "prisma/skills", "name": "prisma-database-setup" },
+        { "source": "prisma/skills", "name": "prisma-driver-adapter-implementation" },
+        { "source": "prisma/skills", "name": "prisma-mongodb-upgrade" },
+        { "source": "prisma/skills", "name": "prisma-postgres" },
+        { "source": "prisma/skills", "name": "prisma-postgres-setup" },
+        { "source": "prisma/skills", "name": "prisma-upgrade-v7" }
+      ]
+    }
+  }
+}

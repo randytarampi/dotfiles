@@ -1,0 +1,31 @@
+{
+  "$schema": "https://skills.sh/schema.json",
+  "version": 1,
+  "profiles": {
+    "mattpocock": {
+      "description": "Matt Pocock engineering skills — grill, writing, prototype, triage, wayfinder, to-spec/to-tickets, setup-*, etc. Always-on alongside core.",
+      "skills": [
+        { "source": "mattpocock/skills", "name": "ask-matt" },
+        { "source": "mattpocock/skills", "name": "git-guardrails-claude-code" },
+        { "source": "mattpocock/skills", "name": "grill-me" },
+        { "source": "mattpocock/skills", "name": "grill-with-docs" },
+        { "source": "mattpocock/skills", "name": "grilling" },
+        { "source": "mattpocock/skills", "name": "improve-codebase-architecture" },
+        { "source": "mattpocock/skills", "name": "loop-me" },
+        { "source": "mattpocock/skills", "name": "migrate-to-shoehorn" },
+        { "source": "mattpocock/skills", "name": "prototype" },
+        { "source": "mattpocock/skills", "name": "scaffold-exercises" },
+        { "source": "mattpocock/skills", "name": "setup-matt-pocock-skills" },
+        { "source": "mattpocock/skills", "name": "setup-pre-commit" },
+        { "source": "mattpocock/skills", "name": "setup-ts-deep-modules" },
+        { "source": "mattpocock/skills", "name": "to-spec" },
+        { "source": "mattpocock/skills", "name": "to-tickets" },
+        { "source": "mattpocock/skills", "name": "triage" },
+        { "source": "mattpocock/skills", "name": "wayfinder" },
+        { "source": "mattpocock/skills", "name": "writing-beats" },
+        { "source": "mattpocock/skills", "name": "writing-fragments" },
+        { "source": "mattpocock/skills", "name": "writing-shape" }
+      ]
+    }
+  }
+}

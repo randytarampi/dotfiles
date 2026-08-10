@@ -121,10 +121,12 @@ CHECKS = [
         "DOTFILES_RUN_SKILLS_SETUP",
         "Skills manifest",
         [
-            Path(
-                os.path.join(
-                    os.path.dirname(__file__), "..", "configs", "skills", "skills.json"
-                )
+            Path(os.path.dirname(__file__), "..", "configs", "skills", "skills.json"),
+            *sorted(
+                Path(path)
+                for path in Path(
+                    os.path.dirname(__file__), "..", "configs", "skills"
+                ).glob("skills.*.json")
             ),
         ],
     ),

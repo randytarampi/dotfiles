@@ -1,0 +1,28 @@
+{
+  "$schema": "https://skills.sh/schema.json",
+  "version": 1,
+  "profiles": {
+    "aws": {
+      "description": "AWS agent-toolkit skills — opt-in via DOTFILES_RUN_SKILLS_AWS_SETUP=1 or project config. Security/devops-agent skills removed (niche).",
+      "gate": "DOTFILES_RUN_SKILLS_AWS_SETUP",
+      "skills": [
+        { "source": "aws/agent-toolkit-for-aws", "name": "amazon-bedrock" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "analyzing-release-readiness" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-cdk" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-cloudformation" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-containers" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-database" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-iam" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-messaging-and-streaming" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-networking" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-observability" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-sdk-js-v3-usage" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-sdk-python-usage" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-secrets-manager" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "aws-serverless" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "setup" },
+        { "source": "aws/agent-toolkit-for-aws", "name": "signing-in-to-aws" }
+      ]
+    }
+  }
+}
