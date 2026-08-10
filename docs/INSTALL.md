@@ -54,6 +54,22 @@ Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same she
 
 On first setup, run `make deploy` twice. The second pass should be a no-op, but it helps surface any idempotency gaps in the templates, scripts, or configure generators.
 
+### Project Setup (Optional)
+
+For project-specific AI configuration, create `.opencode/.env` in the project
+(see [project-env.example](project-env.example)), then run:
+
+```bash
+scripts/configure-project.py
+# Or only reconcile project skills:
+scripts/configure-project.py --steps skills
+```
+
+Project configuration values select the tier, skills, MCPs, ACP agents, CodeGraph,
+JetBrains, Junie, and project secrets. `.opencode/.env` is the user-authored
+declaration; generated secrets go to the gitignored `.opencode/.env.local`.
+CLI arguments take precedence over project and global environment values.
+
 ### Step 4: Verification & Local Linting (Optional)
 To verify repository and script health offline:
 - **macOS / Linux:**

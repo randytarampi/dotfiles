@@ -1,0 +1,25 @@
+# Project-scoped AI configuration
+# Copy to <project>/.opencode/.env. This file is user-authored and is not
+# overwritten. Generated secrets are written to .opencode/.env.local.
+
+# Model/tier selection
+DOTFILES_PROJECT_PRESET='pro-plus'
+
+# Optional explicit step selection (overrides automatic selection below)
+# DOTFILES_PROJECT_STEPS='opencode,tier,skills,acp-agents'
+
+# Skills: category profiles plus individual additions/removals
+DOTFILES_PROJECT_SKILL_PROFILES='core,aws,mongodb,prisma'
+DOTFILES_PROJECT_SKILLS=''
+DOTFILES_PROJECT_SKIP_SKILLS=''
+
+# MCP templates and target AI platforms
+DOTFILES_PROJECT_MCPS='github,sentry'
+DOTFILES_PROJECT_MCP_TOOLS='cursor,ai'
+
+# Optional project integrations
+DOTFILES_PROJECT_CODEGRAPH='true'
+DOTFILES_PROJECT_JETBRAINS='true'
+DOTFILES_PROJECT_JUNIE='true'
+DOTFILES_PROJECT_ACP_AGENTS='gemini,claude'
+DOTFILES_PROJECT_SECRETS='true'

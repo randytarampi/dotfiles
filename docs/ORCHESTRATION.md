@@ -6,7 +6,8 @@
 
 ## Overview
 
-The dotfiles repo uses a three-layer architecture to manage machine configuration.
+The dotfiles repo uses a three-layer architecture to manage machine configuration,
+with project-scoped configuration as the project-facing extension of Layer 3.
 `make deploy` is the single command that reconciles a machine — it runs `chezmoi apply`
 (templates + scripts) followed by `configure-all.sh` (AI tool config generators).
 
@@ -72,6 +73,9 @@ flowchart TD
 - Excluded from chezmoi via `.chezmoiignore`
 - Called by Layer 2 scripts AND by `configure-all.sh` (Makefile orchestration)
 - Do runtime discovery (Ollama models, API keys, JetBrains paths) that templates can't
+- `configure-project.py` is the unified project orchestrator. It reads
+  `.opencode/.env` and runs selected project steps; generated secrets go to
+  `.opencode/.env.local`.
 
 ## Execution Flow
 
@@ -166,6 +170,28 @@ sequenceDiagram
 | 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent | `DOTFILES_RUN_OPENCODE_WEB_SETUP` |
 | 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
+| 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work) | project `.opencode/.env` |
+
+`configure-opencode-project.py` and `configure-jetbrains-workspace-project.py` are
+permanent thin wrappers around `configure-project.py`. `configure-jetbrains-ai.py
+--models` remains the global Junie-model path; project Junie work is delegated by
+the unified script.
+
+### Skills catalog
+
+The skills manifest uses category files rather than a monolithic profile:
+
+| File | Profile | Activation |
+|------|---------|------------|
+| `configs/skills/skills.core.json` | `core` | Always on |
+| `configs/skills/skills.mattpocock.json` | `mattpocock` | Always on (no gate) |
+| `configs/skills/skills.aws.json` | `aws` | `DOTFILES_RUN_SKILLS_AWS_SETUP` |
+| `configs/skills/skills.mongodb.json` | `mongodb` | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` |
+| `configs/skills/skills.prisma.json` | `prisma` | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` |
+
+`configs/skills/skills.json` remains the index for `preinstalled` and `repo_local`.
+The canonical fetched-skill cache is `~/.local/share/dotfiles/skills/`, outside
+OpenCode discovery paths; `~/.agents/skills/` contains active discovery links.
 
 ## Gate Reference
 
@@ -191,6 +217,9 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
 | `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
+| `DOTFILES_RUN_SKILLS_AWS_SETUP` | 0 | Activate the AWS skills category globally |
+| `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
+| `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `install-opencode.sh` (voice deps) |
 
 ## Dependency Ordering

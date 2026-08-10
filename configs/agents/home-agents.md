@@ -33,8 +33,8 @@ When working on the dotfiles repo itself:
 
 ## Skills Distribution
 
-Skills are managed declaratively via a manifest at `configs/skills/skills.json` (analogous to Brewfile/wingetfile for packages). The script `scripts/configure-skills.py` reconciles installed skills against the manifest:
-1. Fetches missing skills via the `skills` CLI (`vercel-labs/skills`) into `~/.agents/skills/` (canonical store)
+Skills are managed declaratively via category manifests in `configs/skills/` (analogous to Brewfile/wingetfile for packages). The script `scripts/configure-skills.py` reconciles installed skills against the merged manifests:
+1. Fetches missing skills via the `skills` CLI (`vercel-labs/skills`) into `~/.local/share/dotfiles/skills/` (canonical cache, not a discovery directory)
 2. Symlinks each skill to all 8 agent skill directories (`.agents`, `.config/opencode`, `.claude`, `.gemini`, `.codex`, `.cursor`, `.ai`/`.junie`, `.hermes`)
 3. Removes stale skills not in the active manifest
 4. Supports optional profiles gated on `DOTFILES_RUN_*` env vars
@@ -47,9 +47,11 @@ The manifest (`configs/skills/skills.json`) declares skills by source repo and n
 ```json
 { "source": "owner/repo", "name": "skill-name" }
 ```
-Skills are grouped into profiles:
-- **global** — always active, ~114 skills covering AWS, MongoDB, Prisma, TypeScript dev workflow, content/media, Plannotator, CodeGraph, iamhumans, agent meta
-- **macos** — Apple ecosystem (apple-notes, apple-reminders, findmy, imessage), gated on `DOTFILES_RUN_MACOS_SKILLS_SETUP=1`, macOS only
+The five category files are `skills.core.json`, `skills.mattpocock.json`,
+`skills.aws.json`, `skills.mongodb.json`, and `skills.prisma.json`. Core and
+mattpocock are always-on (mattpocock has no gate); AWS, MongoDB, and Prisma are
+opt-in via their `DOTFILES_RUN_SKILLS_*_SETUP` gates. Project configuration can
+select any category without enabling a global gate.
 
 ### iamhumans
 
@@ -59,8 +61,8 @@ The [iamhumans](https://github.com/hoainho/iamhumans) skill provides a humanizat
 
 - **Update all**: `make skills-update` or `skills update --global -y`
 - **Update one**: `skills update <skill-name> --global -y`
-- **Add a skill**: Add entry to `configs/skills/skills.json`, then `make deploy`
-- **Remove a skill**: Remove entry from manifest, then `make deploy` (stale skill gets removed)
+- **Add a skill**: Add entry to the appropriate `configs/skills/skills.<category>.json`, then `make deploy`
+- **Remove a skill**: Remove entry from its category file, then `make deploy`; stale entries use `skills remove <name> --global -y` (with target cleanup fallback)
 - **Lock file**: `~/.agents/.skill-lock.json` tracks installed state
 
 > [!IMPORTANT]
@@ -69,7 +71,18 @@ The [iamhumans](https://github.com/hoainho/iamhumans) skill provides a humanizat
 ### Gate
 
 - `DOTFILES_RUN_SKILLS_SETUP=1` — enables global skills distribution (default: 0)
-- `DOTFILES_RUN_MACOS_SKILLS_SETUP=1` — enables macOS-only Apple ecosystem profile (default: 0)
+- `DOTFILES_RUN_SKILLS_AWS_SETUP=1` — enables the AWS category globally (default: 0)
+- `DOTFILES_RUN_SKILLS_MONGODB_SETUP=1` — enables the MongoDB category globally (default: 0)
+- `DOTFILES_RUN_SKILLS_PRISMA_SETUP=1` — enables the Prisma category globally (default: 0)
+
+### Project-scoped skills
+
+Put `DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb` in a project's
+`.opencode/.env` and run `scripts/configure-project.py --steps skills`. Add
+`DOTFILES_PROJECT_SKILLS` or `DOTFILES_PROJECT_SKIP_SKILLS` for individual
+overrides. Generated `.opencode/.env.local` contains secrets and is loaded after
+`.env`; users edit only `.env`. `~/.agents/skills/` remains a discovery target for
+active links, while the canonical cache is `~/.local/share/dotfiles/skills/`.
 
 ### `skills` CLI
 

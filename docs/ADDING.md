@@ -100,3 +100,36 @@ See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger pol
 7. Run `make verify` to confirm the new script fits the orchestration flow
 
 **Gate renames:** When renaming a gate, add a migration entry to `scripts/migrate-env-gates.py` `MIGRATIONS` list. See [docs/ORCHESTRATION.md](ORCHESTRATION.md) "Gate Migrations" section.
+
+## Adding a Skills Category
+
+Create `configs/skills/skills.<name>.json` with a unique profile and its skill
+entries. Omit `gate` for always-on categories such as `core` and `mattpocock`.
+For opt-in categories, add the corresponding category skills setup gate to
+`dot_dotfiles/shell/.env.example` and the gate table in
+[ORCHESTRATION.md](ORCHESTRATION.md). Add the category file to the hash triggers
+in `.chezmoiscripts/run_onchange_28-configure-skills.sh.tmpl`, then run
+`make check-hashes` and `make verify`.
+
+## Project-Scoped Skills and Configuration
+
+Create `.opencode/.env` in a project and select categories independently of global
+gates:
+
+```bash
+DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb
+DOTFILES_PROJECT_SKILLS=plannotator-review
+DOTFILES_PROJECT_SKIP_SKILLS=handoff
+```
+
+Run `scripts/configure-project.py --steps skills`. CLI flags override the project
+file. Selected skills are symlinked from the canonical cache into
+`.opencode/skills/`, and stale project links are removed.
+
+`.opencode/.env` is user-authored project configuration and is never overwritten.
+Generated secrets go to `.opencode/.env.local` (gitignored), loaded after `.env`.
+See [project-env.example](project-env.example) for the complete template.
+
+`configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`,
+`jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Use `--steps` to run any
+subset; JetBrains and Junie project work delegates to the existing scripts.

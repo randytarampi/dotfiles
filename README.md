@@ -138,6 +138,7 @@ scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TO
 scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
 scripts/install-smallcode.sh                     # Install SmallCode CLI
 scripts/configure-skills.py                  # Distribute skills to all agent directories
+scripts/configure-project.py                 # Configure project-scoped AI tooling
 make opencode-restart                        # Restart OpenCode Web service
 make opencode-stop                           # Stop OpenCode Web service
 make opencode-start                          # Start OpenCode Web service
@@ -165,6 +166,15 @@ make ci-verify                               # CI verification (lint + drift + d
 - **Run scripts:** `run_once_*` for one-time ops only, `run_onchange_*` for everything else with hash triggers
 - **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*_SETUP` for script gates
 - **Secrets:** Never committed. `~/.env` is single source of truth. No age/GPG encryption (local repo).
+
+### Project-scoped configuration
+
+In a project, put user-authored project settings in `.opencode/.env`,
+then run `scripts/configure-project.py` (or `--steps skills` for skills only).
+Select categories with `DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb`; use
+`DOTFILES_PROJECT_SKILLS` and `DOTFILES_PROJECT_SKIP_SKILLS` for individual
+overrides. Generated secrets go to `.opencode/.env.local`, leaving `.env` intact.
+See [docs/project-env.example](docs/project-env.example).
 - **Shell indent:** 2-space (not tabs), enforced by `.editorconfig` + `shfmt`
 - **Lint/format:** `shellcheck`, `shfmt`, `pre-commit` (runs local/offline `make lint`), `black`, JSON/YAML/Large files validation via `Makefile`
 - **Cross-platform:** `brew --prefix` pattern for all Homebrew paths (Intel/ARM agnostic). Network failures in `chezmoi apply` scripts warn, never abort.
@@ -194,6 +204,9 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |
 | `DOTFILES_RUN_SECRETS_SETUP` | Secrets distribution helper | 0 |
 | `DOTFILES_RUN_SKILLS_SETUP` | Skills distribution to all agent directories | 0 |
+| `DOTFILES_RUN_SKILLS_AWS_SETUP` | Global AWS skills category | 0 |
+| `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | Global MongoDB skills category | 0 |
+| `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | Global Prisma skills category | 0 |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | Ollama daemon env config | 0 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |

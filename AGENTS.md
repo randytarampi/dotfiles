@@ -82,6 +82,8 @@ All scripts follow: parse args → load env → gate check → main logic → ok
 - Layer 1: Chezmoi templates (`dot_*`, `private_*`) define static machine state.
 - Layer 2: Chezmoi scripts bridge templates to runtime generation.
 - Layer 3: Configure scripts (`scripts/configure-*.py`, `configure-all.sh`) generate runtime-dependent config.
+- Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with
+  `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
 - Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 - `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns.
 
@@ -171,6 +173,11 @@ Run `make help` for the full command list. For task-specific guidance, see the r
 - Apply all dotfiles: `make deploy`
 - Full verification: `make verify`
 - Check hash coverage: `make check-hashes`
+- Configure a project: `scripts/configure-project.py [--steps skills]`
+
+Project skills are defined in category files under `configs/skills/`; the canonical
+cache is `~/.local/share/dotfiles/skills/`. See
+[docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) for the full workflow.
 
 ---
 
