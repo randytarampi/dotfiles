@@ -87,12 +87,25 @@ def main():
         action="store_true",
         help="Accepted for consistency; no-op for generated output",
     )
+    parser.add_argument(
+        "--slim-file",
+        help="Optional oh-my-opencode-slim.json to merge the generated agents into",
+    )
+    parser.add_argument(
+        "--agents",
+        help="Comma-separated ACP agent names to include (default: all detected)",
+    )
     args = parser.parse_args()
 
     try:
         detected_agents = {}
         detected_names = []
+        requested_agents = {
+            name.strip() for name in (args.agents or "").split(",") if name.strip()
+        }
         for name, entry in ACP_AGENTS.items():
+            if requested_agents and name not in requested_agents:
+                continue
             if shutil.which(entry["command"]):
                 logger.info(f"Detected ACP agent: {name} ({entry['command']})")
                 detected_names.append(name)
@@ -112,6 +125,16 @@ def main():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump({"acpAgents": detected_agents}, f, indent=2)
             f.write("\n")
+
+        if args.slim_file:
+            slim_path = os.path.abspath(os.path.expanduser(args.slim_file))
+            with open(slim_path, "r", encoding="utf-8") as f:
+                slim_data = json.load(f)
+            slim_data["acpAgents"] = detected_agents
+            with open(slim_path, "w", encoding="utf-8") as f:
+                json.dump(slim_data, f, indent=2)
+                f.write("\n")
+            logger.info(f"acpAgents merged into {slim_path}")
 
         summary_lines = [
             "ACP agents configured!",
