@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt python3 python3-pip
+          sudo apt-get install -y shellcheck shfmt python3 python3-pip tmux
           pip3 install black --user
 
       - name: Run CI verification
