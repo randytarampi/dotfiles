@@ -20,7 +20,7 @@ info "Installing/updating plannotator..."
 # If plannotator is already installed, running the script again updates it (idempotent)
 # Network failures are caught — warn and continue rather than blocking chezmoi apply
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-  if ! curl -fsSL https://plannotator.ai/install.sh | bash 2>&1; then
+  if ! curl -fsSL https://plannotator.ai/install.sh | bash -s -- --no-extras --model-invocable none 2>&1; then
     warn "plannotator install fetch failed (network error?) — try again with: curl -fsSL https://plannotator.ai/install.sh | bash"
   fi
 elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then

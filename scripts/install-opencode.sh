@@ -87,7 +87,7 @@ ok "opencode-tokenscope plugin installed"
 #     (was step 3 before vibeguard was added)
 # ---------------------------------------------------------------------------
 info "Installing plannotator CLI..."
-curl -fsSL https://plannotator.ai/install.sh | bash
+curl -fsSL https://plannotator.ai/install.sh | bash -s -- --no-extras --model-invocable none
 ok "plannotator CLI installed"
 
 # ---------------------------------------------------------------------------
