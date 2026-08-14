@@ -15,6 +15,9 @@ DOTFILES_SCRIPTS="$HOME/.dotfiles/scripts"
 
 info "Setting up bin symlinks..."
 
+# Ensure ~/.dotfiles exists (clean machine — parent dir may not exist yet)
+mkdir -p "$HOME/.dotfiles"
+
 # Ensure scripts symlink exists
 if [[ ! -L "$DOTFILES_SCRIPTS" && ! -d "$DOTFILES_SCRIPTS" ]]; then
   ln -s "$SOURCE_SCRIPTS" "$DOTFILES_SCRIPTS"

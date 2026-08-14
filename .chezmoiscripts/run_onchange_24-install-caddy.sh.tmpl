@@ -13,8 +13,21 @@ if [[ -z "$BREW_BIN" ]]; then
   exit 1
 fi
 
+# Check gate BEFORE sudo re-exec — avoids unnecessary password prompts when
+# Caddy setup is disabled. Load ~/.env directly (no lib sourcing needed yet).
+if [[ -f "$HOME/.env" ]]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.env"
+fi
+if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
+  printf 'DOTFILES_RUN_CADDY_SETUP=%s — skipping Caddy setup\n' "${DOTFILES_RUN_CADDY_SETUP:-0}"
+  exit 0
+fi
+
+{{- if eq .chezmoi.os "darwin" }}
+
 if [[ "$(id -u)" -ne 0 ]]; then
-  exec sudo --preserve-env=BREW_BIN "$0" "$@"
+  exec sudo --preserve-env=BREW_BIN,DOTFILES_RUN_CADDY_SETUP "$0" "$@"
 fi
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
@@ -32,17 +45,10 @@ fi
 REAL_HOME="/Users/${REAL_USER}"
 export HOME="$REAL_HOME"
 
-# Load env before gate (DOTFILES_RUN_CADDY_SETUP is in ~/.env)
+# Reload env under correct HOME (may already be loaded from pre-sudo check)
 load_env || warn "\$HOME/.env not found, skipping env load"
 PATH="$(dirname "$BREW_BIN"):${PATH}"
 export PATH
-
-{{- if eq .chezmoi.os "darwin" }}
-
-if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping Caddy setup"
-  exit 0
-fi
 
 BREW_PREFIX="$($BREW_BIN --prefix)"
 CADDYFILE_PATH="${BREW_PREFIX}/etc/caddy/Caddyfile"
