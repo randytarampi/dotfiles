@@ -1,0 +1,6 @@
+# Brewfile.dev.security
+# Security/pentest CLI tools — opt-in via categories.dev_security
+# These may trigger corporate security alerts or conflict with enterprise AV.
+
+brew "clamav"
+brew "ffuf"

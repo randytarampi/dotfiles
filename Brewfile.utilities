@@ -1,0 +1,5 @@
+# Brewfile.utilities
+# Non-desktop CLI utilities that don't fit the core or dev profile — opt-in via categories.utilities
+
+brew "flashrom"
+brew "testdisk"

@@ -1,7 +1,5 @@
 cask "cyberduck"
 cask "google-drive"
-cask "ipfs-desktop"
-cask "ngrok"
 cask "ollama-app"
 cask "opencode-desktop"
 cask "windows-app"

@@ -28,9 +28,12 @@ fi
 # desktop.gaming: {{ include "Brewfile.desktop.gaming" | sha256sum }}
 # desktop.cloud: {{ include "Brewfile.desktop.cloud" | sha256sum }}
 # desktop.productivity: {{ include "Brewfile.desktop.productivity" | sha256sum }}
+# desktop.dev: {{ include "Brewfile.desktop.dev" | sha256sum }}
+# dev.security: {{ include "Brewfile.dev.security" | sha256sum }}
 {{- end }}
 # dev.ops: {{ include "Brewfile.dev.ops" | sha256sum }}
 # legacy: {{ include "Brewfile.legacy" | sha256sum }}
+# utilities: {{ include "Brewfile.utilities" | sha256sum }}
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
 # install-npm-brewfile-packages.sh: {{ include "scripts/install-npm-brewfile-packages.sh" | sha256sum }}
 {{- if eq .chezmoi.os "windows" }}
@@ -45,6 +48,12 @@ fi
 # desktop.cloud: {{ include "wingetfile.desktop.cloud" | sha256sum }}
 # desktop.productivity: {{ include "wingetfile.desktop.productivity" | sha256sum }}
 # dev.ops: {{ include "wingetfile.dev.ops" | sha256sum }}
+# dev.security: {{ include "wingetfile.dev.security" | sha256sum }}
+# utilities: {{ include "wingetfile.utilities" | sha256sum }}
+# desktop.dev: {{ include "wingetfile.desktop.dev" | sha256sum }}
+# desktop.gaming: {{ include "wingetfile.desktop.gaming" | sha256sum }}
+# desktop.fonts: {{ include "wingetfile.desktop.fonts" | sha256sum }}
+# legacy: {{ include "wingetfile.legacy" | sha256sum }}
 {{- end }}
 
 # --- Brew (macOS / Linux) ---
@@ -73,6 +82,16 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
     {{- if .categories.dev }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev
     bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
+    {{- end }}
+
+    {{- if .categories.dev_security }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev.security
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.security" || warn "npm package reconciliation failed for Brewfile.dev.security"
+    {{- end }}
+
+    {{- if .categories.utilities }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.utilities
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.utilities" || warn "npm package reconciliation failed for Brewfile.utilities"
     {{- end }}
 
     # Desktop Brewfiles include cask entries and are skipped on Linux.
@@ -121,6 +140,11 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
     bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity" || warn "npm package reconciliation failed for Brewfile.desktop.productivity"
     {{- end }}
 
+    {{- if and .categories.desktop_dev (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.dev
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev" || warn "npm package reconciliation failed for Brewfile.desktop.dev"
+    {{- end }}
+
     {{- if .categories.dev_ops }}
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.dev.ops
     bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops" || warn "npm package reconciliation failed for Brewfile.dev.ops"
@@ -159,6 +183,18 @@ else
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.dev"
     {{- end }}
 
+    {{- if .categories.dev_security }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.dev.security"
+    {{- end }}
+
+    {{- if .categories.utilities }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.utilities"
+    {{- end }}
+
+    {{- if .categories.desktop_dev }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.dev"
+    {{- end }}
+
     {{- if .categories.desktop_browsers }}
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
     {{- end }}
@@ -179,6 +215,14 @@ else
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
     {{- end }}
 
+    {{- if and .categories.desktop_gaming }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming"
+    {{- end }}
+
+    {{- if .categories.desktop_fonts }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.fonts"
+    {{- end }}
+
     {{- if .categories.desktop_cloud }}
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
     {{- end }}
@@ -189,6 +233,10 @@ else
 
     {{- if .categories.dev_ops }}
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
+    {{- end }}
+
+    {{- if .categories.legacy }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
     {{- end }}
 fi
 {{- end }}

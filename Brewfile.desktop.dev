@@ -1,0 +1,5 @@
+# Brewfile.desktop.dev
+# Developer-focused desktop apps — opt-in via categories.desktop_dev
+# Useful for testing but not needed on every machine.
+
+cask "ungoogled-chromium"

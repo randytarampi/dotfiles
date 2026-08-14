@@ -1,0 +1,3 @@
+# wingetfile.desktop.fonts
+# Fonts — opt-in via categories.desktop_fonts
+# Windows font installation handled by scripts/install-fonts.sh; this file aligns the category.
