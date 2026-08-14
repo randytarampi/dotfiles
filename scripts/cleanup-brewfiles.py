@@ -21,21 +21,54 @@ if str(LIB_DIR) not in sys.path:
 
 import logger
 
-CATEGORY_SPECS = [
-    ("dev_cli", "Brewfile", True),
-    ("dev", "Brewfile.dev", True),
-    ("desktop_browsers", "Brewfile.desktop.browsers", True),
-    ("desktop_comms", "Brewfile.desktop.comms", True),
-    ("desktop_security", "Brewfile.desktop.security", True),
-    ("desktop_media", "Brewfile.desktop.media", True),
-    ("desktop_utilities", "Brewfile.desktop.utilities", True),
-    ("desktop_fonts", "Brewfile.desktop.fonts", True),
-    ("desktop_gaming", "Brewfile.desktop.gaming", False),
-    ("desktop_cloud", "Brewfile.desktop.cloud", True),
-    ("desktop_productivity", "Brewfile.desktop.productivity", True),
-    ("dev_ops", "Brewfile.dev.ops", True),
-]
 LEGACY_BREWFILE = "Brewfile.legacy"
+
+
+def category_to_brewfile(category):
+    """Map a category name to its Brewfile filename.
+
+    Convention: dev_cli -> Brewfile, everything else -> Brewfile.<category>
+    with underscores replaced by dots (e.g. desktop_gaming -> Brewfile.desktop.gaming).
+    """
+    if category == "dev_cli":
+        return "Brewfile"
+    return f"Brewfile.{category.replace('_', '.')}"
+
+
+def load_category_specs():
+    """Read category names and defaults from categories.yaml, returning
+    (category, brewfile, default) tuples — replaces the hardcoded CATEGORY_SPECS."""
+    categories_path = REPO_ROOT / ".chezmoidata" / "categories.yaml"
+    specs = []
+    if yaml is not None:
+        with categories_path.open(encoding="utf-8") as file:
+            data = yaml.safe_load(file) or {}
+        for key, value in (data.get("categories") or {}).items():
+            if key == "legacy":
+                continue  # legacy is handled separately
+            specs.append((key, category_to_brewfile(key), bool(value)))
+    else:
+        # Minimal parser for Homebrew's stripped Python
+        in_categories = False
+        for line in categories_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped == "categories:":
+                in_categories = True
+            elif in_categories and line.startswith("  ") and ":" in stripped:
+                key, value = stripped.split(":", 1)
+                key = key.strip()
+                if key == "legacy":
+                    continue
+                specs.append(
+                    (
+                        key,
+                        category_to_brewfile(key),
+                        value.split("#", 1)[0].strip().lower() == "true",
+                    )
+                )
+            elif in_categories and stripped and not line.startswith(" "):
+                break
+    return specs
 
 
 def parse_args():
@@ -57,32 +90,71 @@ def parse_args():
 
 
 def load_categories():
+    """Load category settings, merging .chezmoidata/categories.yaml with per-machine
+    overrides from ~/.config/chezmoi/chezmoi.toml (which takes precedence)."""
     categories_path = REPO_ROOT / ".chezmoidata" / "categories.yaml"
+    categories = {}
+
     if yaml is not None:
         with categories_path.open(encoding="utf-8") as file:
             data = yaml.safe_load(file) or {}
-        return data.get("categories", {})
+        categories = data.get("categories", {})
+    else:
+        # Keep the standalone cleanup command usable with Homebrew's minimal Python.
+        in_categories = False
+        for line in categories_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped == "categories:":
+                in_categories = True
+            elif in_categories and line.startswith("  ") and ":" in stripped:
+                key, value = stripped.split(":", 1)
+                categories[key] = value.split("#", 1)[0].strip().lower() == "true"
+            elif in_categories and stripped and not line.startswith(" "):
+                break
 
-    # Keep the standalone cleanup command usable with Homebrew's minimal Python.
+    # Merge per-machine overrides from chezmoi.toml [data.categories] (takes precedence)
+    chezmoi_config = Path.home() / ".config" / "chezmoi" / "chezmoi.toml"
+    if chezmoi_config.is_file():
+        override_categories = _parse_toml_categories(chezmoi_config)
+        categories.update(override_categories)
+
+    return categories
+
+
+def _parse_toml_categories(toml_path):
+    """Extract [data.categories] overrides from a chezmoi.toml file.
+
+    Uses a lightweight parser to avoid a toml dependency — we only need
+    boolean values under the [data.categories] table.
+    """
     categories = {}
-    in_categories = False
-    for line in categories_path.read_text(encoding="utf-8").splitlines():
+    try:
+        content = toml_path.read_text(encoding="utf-8")
+    except OSError:
+        return categories
+
+    in_data_categories = False
+    for line in content.splitlines():
         stripped = line.strip()
-        if stripped == "categories:":
-            in_categories = True
-        elif in_categories and line.startswith("  ") and ":" in stripped:
-            key, value = stripped.split(":", 1)
-            categories[key] = value.split("#", 1)[0].strip().lower() == "true"
-        elif in_categories and stripped and not line.startswith(" "):
-            break
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_data_categories = stripped == "[data.categories]"
+            continue
+        if in_data_categories and "=" in stripped and not stripped.startswith("#"):
+            key, value = stripped.split("=", 1)
+            key = key.strip().strip('"')
+            value = value.strip()
+            if value.lower() in ("true", "false"):
+                categories[key] = value.lower() == "true"
+
     return categories
 
 
 def get_brewfiles():
     categories = load_categories()
+    category_specs = load_category_specs()
     active = [
         REPO_ROOT / filename
-        for key, filename, default in CATEGORY_SPECS
+        for key, filename, default in category_specs
         if categories.get(key, default)
     ]
     legacy = REPO_ROOT / LEGACY_BREWFILE

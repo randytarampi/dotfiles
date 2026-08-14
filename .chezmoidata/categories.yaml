@@ -1,14 +1,27 @@
+# Brewfile + wingetfile category toggles.
+# Committed defaults for all machines. Per-machine overrides go in
+# ~/.config/chezmoi/chezmoi.toml under [data.categories] — e.g.:
+#   [data.categories]
+#   desktop_gaming = true
+# Chezmoi merges those on top of this file, and `make brewfile-cleanup` reads them too.
+# Run `make categories` to view or toggle per-machine state.
+#
+# Note: dev_cli is always installed (no gate in run_onchange_04); setting it to
+# false here or in chezmoi.toml has no effect — the base Brewfile always runs.
 categories:
-  dev_cli: true           # Always installed (core CLI tools)
-  dev: true               # Development tools + dev desktop apps
-  desktop_browsers: true  # Web browsers (macOS-only)
-  desktop_comms: true     # Communication apps (macOS-only)
-  desktop_security: true  # VPN/security tools (macOS-only)
-  desktop_media: true     # Media apps (macOS-only)
-  desktop_utilities: true # Desktop utilities (macOS-only)
-  desktop_fonts: true     # Fonts (cross-platform: macOS brew, Linux apt/dnf+manual, Windows manual)
-  desktop_gaming: false   # Gaming clients (opt-in, macOS-only)
-  desktop_cloud: true     # Cloud/sync apps (macOS-only)
-  desktop_productivity: true # Office/productivity apps (macOS-only)
-  dev_ops: true            # Ops/infrastructure tools
-  legacy: false            # Legacy/specialty tools (opt-in)
+  dev: true                 # Development tools + dev desktop apps
+  dev_cli: true             # Always installed (core CLI tools — not gateable)
+  dev_ops: false            # Ops/infrastructure tools (opt-in)
+  dev_security: false       # Security/pentest CLI tools (opt-in)
+  desktop_browsers: false   # Web browsers (opt-in, macOS-only)
+  desktop_cloud: false      # Cloud/sync apps (opt-in, macOS-only)
+  desktop_comms: false      # Communication apps (opt-in, macOS-only)
+  desktop_dev: false         # Dev-focused desktop apps (opt-in, macOS-only)
+  desktop_fonts: false      # Fonts (opt-in; macOS brew, Linux apt/dnf+manual, Windows manual)
+  desktop_gaming: false     # Gaming clients (opt-in, macOS-only)
+  desktop_media: false      # Media apps (opt-in, macOS-only)
+  desktop_productivity: false # Office/productivity apps (opt-in, macOS-only)
+  desktop_security: false   # VPN/security tools (opt-in, macOS-only)
+  desktop_utilities: false  # Desktop utilities (opt-in, macOS-only)
+  legacy: false             # Legacy/specialty tools (opt-in)
+  utilities: false          # Non-desktop CLI utilities (opt-in)

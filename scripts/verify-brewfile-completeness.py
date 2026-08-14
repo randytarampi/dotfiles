@@ -15,6 +15,17 @@ if LIB_DIR not in sys.path:
 import logger
 
 
+def category_to_brewfile(category):
+    """Map a category name to its Brewfile filename.
+
+    Convention: dev_cli -> Brewfile, everything else -> Brewfile.<category>
+    with underscores replaced by dots (e.g. desktop_gaming -> Brewfile.desktop.gaming).
+    """
+    if category == "dev_cli":
+        return "Brewfile"
+    return f"Brewfile.{category.replace('_', '.')}"
+
+
 def main():
     dotfiles_dir = os.path.dirname(SCRIPT_DIR)
     categories_file = os.path.join(dotfiles_dir, ".chezmoidata", "categories.yaml")
@@ -41,27 +52,8 @@ def main():
 
     errors = 0
 
-    category_mapping = {
-        "dev_cli": "Brewfile",
-        "dev": "Brewfile.dev",
-        "desktop_browsers": "Brewfile.desktop.browsers",
-        "desktop_comms": "Brewfile.desktop.comms",
-        "desktop_security": "Brewfile.desktop.security",
-        "desktop_media": "Brewfile.desktop.media",
-        "desktop_utilities": "Brewfile.desktop.utilities",
-        "desktop_fonts": "Brewfile.desktop.fonts",
-        "desktop_gaming": "Brewfile.desktop.gaming",
-        "desktop_cloud": "Brewfile.desktop.cloud",
-        "desktop_productivity": "Brewfile.desktop.productivity",
-        "dev_ops": "Brewfile.dev.ops",
-        "legacy": "Brewfile.legacy",
-    }
-
     for cat in categories:
-        brewfile = category_mapping.get(cat)
-        if not brewfile:
-            logger.warning(f"  WARN: Unknown category {cat}")
-            continue
+        brewfile = category_to_brewfile(cat)
 
         filepath = os.path.join(dotfiles_dir, brewfile)
         if os.path.isfile(filepath):

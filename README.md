@@ -264,7 +264,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 ├── private_dot_npmrc.tmpl        # npm auth tokens
 ├── private_dot_ssh/config        # SSH config
 ├── private_dot_vuescanrc.tmpl    # VueScan license
-├── Brewfile*                     # 13 composable Brewfiles (macOS/Linux)
+├── Brewfile*                     # 16 composable Brewfiles (macOS/Linux)
 ├── wingetfile*                   # Category-based wingetfiles (Windows)
 ├── configs/
 │   ├── junie/model-groups.json   # Junie model profile definitions
@@ -391,12 +391,14 @@ Local services (Ollama, Meridian) support host/port env var overrides:
 
 ### Brewfiles (macOS/Linux)
 
-13 composable Brewfiles controlled by `.chezmoidata/categories.yaml`:
+16 composable Brewfiles controlled by `.chezmoidata/categories.yaml`:
 
 | Category | File | Default | Scope |
 |----------|------|---------|-------|
 | dev.cli | `Brewfile` | on | Core CLI tools |
 | dev | `Brewfile.dev` | on | Languages, libraries, dev apps |
+| dev.security | `Brewfile.dev.security` | off | Pentest/security CLI tools |
+| utilities | `Brewfile.utilities` | off | Non-desktop CLI utilities |
 | desktop.browsers | `Brewfile.desktop.browsers` | on | macOS-only |
 | desktop.comms | `Brewfile.desktop.comms` | on | macOS-only |
 | desktop.security | `Brewfile.desktop.security` | on | macOS-only |
@@ -406,12 +408,25 @@ Local services (Ollama, Meridian) support host/port env var overrides:
 | desktop.gaming | `Brewfile.desktop.gaming` | off | Opt-in, macOS-only |
 | desktop.cloud | `Brewfile.desktop.cloud` | on | macOS-only |
 | desktop.productivity | `Brewfile.desktop.productivity` | on | macOS-only |
+| desktop.dev | `Brewfile.desktop.dev` | off | Dev-focused desktop apps, macOS-only |
 | dev.ops | `Brewfile.dev.ops` | on | Infrastructure tools |
 | legacy | `Brewfile.legacy` | off | Opt-in |
 
 Homebrew is installed automatically if missing (via the package-install run_onchange script). On Linux, Homebrew installs to `/home/linuxbrew/.linuxbrew` and `brew shellenv` is sourced automatically. Only `brew` entries run on Linux; `cask` entries are macOS-only and skipped.
 
-Toggle a category in `categories.yaml`, then `make deploy` re-runs `brew bundle` when Brewfiles change.
+#### Per-machine category overrides
+
+`categories.yaml` sets committed defaults for all machines. To enable opt-in categories (gaming, security, dev, etc.) on a specific machine without committing the change, add a `[data.categories]` section to `~/.config/chezmoi/chezmoi.toml`:
+
+```toml
+[data.categories]
+desktop_gaming = true
+desktop_dev = true
+dev_security = true
+utilities = true
+```
+
+Chezmoi merges these overrides on top of `categories.yaml`, and `make brewfile-cleanup` reads them too — so enabled categories protect their packages from cleanup. The committed `categories.yaml` stays untouched.
 
 ### Wingetfiles (Windows)
 
@@ -421,6 +436,8 @@ Category-based wingetfiles mirror the Brewfile structure for Windows:
 |----------|------|---------|
 | winget | `wingetfile` | on |
 | winget.dev | `wingetfile.dev` | on |
+| winget.dev.security | `wingetfile.dev.security` | off (stub) |
+| winget.utilities | `wingetfile.utilities` | off (stub) |
 | winget.dev.ops | `wingetfile.dev.ops` | on |
 | winget.desktop.browsers | `wingetfile.desktop.browsers` | on |
 | winget.desktop.comms | `wingetfile.desktop.comms` | on |
@@ -429,6 +446,10 @@ Category-based wingetfiles mirror the Brewfile structure for Windows:
 | winget.desktop.utilities | `wingetfile.desktop.utilities` | on |
 | winget.desktop.cloud | `wingetfile.desktop.cloud` | on |
 | winget.desktop.productivity | `wingetfile.desktop.productivity` | on |
+| winget.desktop.dev | `wingetfile.desktop.dev` | off (stub) |
+| winget.desktop.gaming | `wingetfile.desktop.gaming` | off |
+| winget.desktop.fonts | `wingetfile.desktop.fonts` | on (stub) |
+| winget.legacy | `wingetfile.legacy` | off (stub) |
 
 Cross-reference comments (e.g., `# Cross-ref: brew 'git'`) link winget packages to their brew equivalents.
 
