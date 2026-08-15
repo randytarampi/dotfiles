@@ -464,6 +464,7 @@ Packages available on both platforms by category:
 | ripgrep | `ripgrep` | `BurntSushi.ripgrep.MSVC` |
 | fastfetch | `fastfetch` | `Fastfetch-cli.Fastfetch` |
 | AWS CLI | `awscli` | `Amazon.AWSCLI` |
+| Pulumi | `pulumi/tap/pulumi` (tap: `pulumi/tap`) | `Pulumi.Pulumi` |
 | Session Manager | `session-manager-plugin` | `Amazon.SessionManagerPlugin` |
 | Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
 | Ollama | `ollama-app` (cask) | `Ollama.Ollama` |

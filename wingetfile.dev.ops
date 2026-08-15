@@ -12,3 +12,5 @@ Amazon.SessionManagerPlugin
 Anchore.Grype
 # Cross-ref: brew 'syft'
 Anchore.Syft
+# Cross-ref: brew 'pulumi/tap/pulumi'
+Pulumi.Pulumi
