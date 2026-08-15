@@ -134,7 +134,7 @@
     },
     "pro-plus-anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-5",
+        "model": "anthropic/claude-sonnet-5",
         "skills": [
           "*"
         ],
@@ -198,7 +198,7 @@
     },
     "anthropic": {
       "orchestrator": {
-        "model": "anthropic/claude-opus-5",
+        "model": "anthropic/claude-sonnet-5",
         "skills": [
           "*"
         ],
