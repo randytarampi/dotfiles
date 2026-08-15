@@ -8,6 +8,7 @@ tap "microsoft/mssql-release", trusted: true
 tap "mistertea/et", trusted: true
 tap "mongodb/brew", trusted: true
 tap "phrase/brewed", trusted: true
+tap "pulumi/tap"
 tap "snyk/tap", trusted: true
 tap "steipete/tap", trusted: true
 tap "teamookla/speedtest", trusted: true

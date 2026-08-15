@@ -18,6 +18,7 @@ brew "libgphoto2"
 brew "mailutils"
 brew "mongosh"
 brew "postgresql@16"
+brew "pulumi/tap/pulumi", trusted: true
 brew "ssh-audit"
 brew "grype"
 brew "syft"
