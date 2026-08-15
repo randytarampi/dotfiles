@@ -639,8 +639,8 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 |---------|----------|---------|--------|------|
 | `pro` | cloud | `glm-5.2` | `gemma4:31b` | 0.7 |
 | `pro-plus` | cloud | `glm-5.2` | `gpt-5.6-luna` (openai) | 0.7 |
-| `pro-plus-anthropic` | meridian | `claude-opus-5` | `claude-haiku-4-5` | 1 |
-| `anthropic` | meridian | `claude-opus-5` | `claude-haiku-4-5` | 1 |
+| `pro-plus-anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
+| `anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
 | `plus` | openai | `gpt-5.6-terra` | `gpt-5.6-luna` | 1 |
 | `plus-anthropic` | openai | `gpt-5.6-terra` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
