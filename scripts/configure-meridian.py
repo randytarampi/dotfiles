@@ -19,12 +19,14 @@ if LIB_DIR not in sys.path:
 
 import logger
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
+from cli_helpers import add_common_args
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Cleanly appends the Meridian plugin path to the OpenCode configuration."
     )
+    add_common_args(parser)
     args = parser.parse_args()
 
     opencode_dir = os.environ.get("OPENCODE_DIR")
@@ -92,10 +94,13 @@ def main():
         if meridian_plugin_path not in plugins:
             plugins.append(meridian_plugin_path)
             config["plugin"] = plugins
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-                f.write("\n")
-            logger.info("Meridian plugin path appended successfully")
+            if args.dry_run:
+                logger.info(f"Would append Meridian plugin path to {config_path}")
+            else:
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                    f.write("\n")
+                logger.info("Meridian plugin path appended successfully")
         else:
             logger.info("Meridian plugin path already present in configuration")
 

@@ -18,12 +18,14 @@ if LIB_DIR not in sys.path:
 import logger
 from env import load_env
 from idea import resolve_idea_mcp_server
+from cli_helpers import add_common_args
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Resolves machine-specific paths and secrets for AI tool configurations."
     )
+    add_common_args(parser)
     parser.add_argument("--target", help="Writes to a specific directory")
     parser.add_argument(
         "--all", action="store_true", help="Writes to all known AI tool dirs"
@@ -90,7 +92,7 @@ def main():
 
     # 1. GitHub PAT
     logger.info("Resolving GitHub PAT...")
-    gh_token = os.environ.get("GH_TOKEN", os.environ.get("GITHUB_TOKEN", ""))
+    gh_token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
     if gh_token:
         logger.info("GitHub PAT found in environment")
     elif shutil.which("gh"):
@@ -171,7 +173,10 @@ def main():
     # Write .env files
     for target_dir in target_dirs:
         logger.info(f"Processing target: {target_dir}")
-        os.makedirs(target_dir, exist_ok=True)
+        if args.dry_run:
+            logger.info(f"Would process target directory: {target_dir}")
+        else:
+            os.makedirs(target_dir, exist_ok=True)
         env_file = (
             os.path.abspath(args.output)
             if args.mode == "project" and args.output
@@ -184,6 +189,7 @@ def main():
 # DO NOT COMMIT THIS FILE — it contains secrets and machine-specific paths.
 
 export GH_TOKEN="{gh_token}"
+export GITHUB_TOKEN="$GH_TOKEN"
 export SENTRY_AUTH_TOKEN="{sentry_token}"
 export IJ_MCP_SERVER_JAVA="{java_bin}"
 export IJ_MCP_SERVER_CLASSPATH="{classpath}"
@@ -197,8 +203,11 @@ export BETTERSTACK_API_TOKEN="{betterstack_token}"
         try:
             from file_utils import write_text_file
 
-            write_text_file(env_file, env_content, backup=False)
-            logger.info(f"Environment file written to {env_file}")
+            if args.dry_run:
+                logger.info(f"Would write environment file to {env_file}")
+            else:
+                write_text_file(env_file, env_content, backup=False)
+                logger.info(f"Environment file written to {env_file}")
         except Exception as e:
             logger.critical(f"Failed to write .env file {env_file}: {e}")
 
@@ -215,7 +224,7 @@ export BETTERSTACK_API_TOKEN="{betterstack_token}"
                 except Exception:
                     pass
 
-            if needs_append:
+            if needs_append and not args.dry_run:
                 try:
                     with open(gitignore_file, "a", encoding="utf-8") as f:
                         f.write("\n.env\n")

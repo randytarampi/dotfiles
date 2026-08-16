@@ -20,6 +20,7 @@ import logger
 from opencode_config import get_available_tiers, get_slim_config_path
 from constants import check_ollama_daemon
 from tier_resolve import resolve_roles_from_list, list_local_ollama_models
+from cli_helpers import add_common_args
 
 
 def proxied_ollama_cloud_model(model_name: str) -> str:
@@ -91,6 +92,7 @@ def resolve_placeholders(
     config_path: str,
     local_roles_json: str,
     placeholder_keys: Optional[list] = None,
+    dry_run: bool = False,
 ):
     try:
         resolved = json.loads(local_roles_json)
@@ -122,8 +124,11 @@ def resolve_placeholders(
             if model:
                 content = content.replace(placeholder, model)
 
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write(content)
+        if dry_run:
+            logger.info(f"Would write resolved placeholders to {config_path}")
+        else:
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(content)
 
         resolved_map = json.loads(local_roles_json)
         resolved_lines = [f"  {k} → {v}" for k, v in sorted(resolved_map.items())]
@@ -140,6 +145,7 @@ def orchestrate_tier_switch(
     local_fallback_preset: Optional[str] = None,
     local_fallback_placeholders: Optional[list] = None,
     min_reasoning_embedding: int = 0,
+    dry_run: bool = False,
 ):
     opencode_dir = os.environ.get("OPENCODE_DIR")
     if opencode_dir:
@@ -161,9 +167,12 @@ def orchestrate_tier_switch(
         # Project mode: config_path may not exist yet. Copy from source.
         if os.path.exists(source_path):
             config_dir_path = os.path.dirname(config_path)
-            os.makedirs(config_dir_path, exist_ok=True)
-            shutil.copy2(source_path, config_path)
-            logger.info(f"Copied {source_path} → {config_path}")
+            if dry_run:
+                logger.info(f"Would copy {source_path} → {config_path}")
+            else:
+                os.makedirs(config_dir_path, exist_ok=True)
+                shutil.copy2(source_path, config_path)
+                logger.info(f"Copied {source_path} → {config_path}")
         else:
             logger.critical(f"Config path does not exist: {config_path}")
             sys.exit(1)
@@ -343,7 +352,8 @@ def orchestrate_tier_switch(
                 )
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        read_config_path = config_path if os.path.exists(config_path) else source_path
+        with open(read_config_path, "r", encoding="utf-8") as f:
             target_config = json.load(f)
     except Exception as e:
         logger.critical(f"Failed to load target config {config_path}: {e}")
@@ -393,9 +403,12 @@ def orchestrate_tier_switch(
         del target_config["_tiers"]
 
     try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(target_config, f, indent=2)
-            f.write("\n")
+        if dry_run:
+            logger.info(f"Would write tier configuration to {config_path}")
+        else:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(target_config, f, indent=2)
+                f.write("\n")
     except Exception as e:
         logger.critical(f"Failed to write configuration to {config_path}: {e}")
         sys.exit(1)
@@ -406,6 +419,7 @@ def orchestrate_tier_switch(
             config_path,
             json.dumps(fallback_role_models),
             placeholder_keys=placeholder_keys,
+            dry_run=dry_run,
         )
     else:
         logger.warning(
@@ -418,6 +432,7 @@ def main():
         parser = argparse.ArgumentParser(
             description="Helper script to handle OpenCode local model classification and placeholder resolution."
         )
+        add_common_args(parser)
         subparsers = parser.add_subparsers(dest="command", required=True)
 
         resolve_roles_parser = subparsers.add_parser(
@@ -478,6 +493,7 @@ def main():
         parser = argparse.ArgumentParser(
             description="Switches the active OpenCode tier and updates configuration."
         )
+        add_common_args(parser)
         parser.add_argument(
             "--no-local-fallbacks",
             action="store_true",
@@ -513,15 +529,18 @@ def main():
             "--preset",
             dest="preset",
             choices=available_tiers,
-            help="Active OpenCode tier to set (alias for positional TIER)",
+            help="Preferred interface: active OpenCode tier to set",
         )
         parser.add_argument(
             "tier",
             nargs="?",
             choices=available_tiers,
-            help="Active OpenCode tier to set",
+            help="Deprecated positional alias for --preset",
         )
         args = parser.parse_args()
+
+        if args.tier:
+            logger.warning("Positional tier is deprecated; use --preset instead.")
 
         # Merge --preset and positional tier; --preset takes priority
         resolved_tier = args.preset or args.tier
@@ -535,6 +554,7 @@ def main():
             local_fallback_preset=args.local_fallback_preset,
             local_fallback_placeholders=args.local_fallback_placeholder,
             min_reasoning_embedding=args.min_reasoning_embedding,
+            dry_run=args.dry_run,
         )
 
 

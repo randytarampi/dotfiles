@@ -35,6 +35,7 @@ from file_utils import write_text_file
 from opencode_config import get_available_tiers, get_slim_config_path
 from ai_models import strip_provider_prefix
 from tier_resolve import resolve_roles_from_list, list_local_ollama_models
+from cli_helpers import add_common_args
 
 AVAILABLE_PRESETS = get_available_tiers()
 LOCAL_PRESETS = {t for t in AVAILABLE_PRESETS if t.startswith("local")}
@@ -333,7 +334,7 @@ def build_toml_content(preset, spec):
     return "\n".join(lines)
 
 
-def configure_mcp(config_dir_path, no_backup):
+def configure_mcp(config_dir_path, no_backup, dry_run=False):
     """Write SmallCode MCP client config.
 
     SmallCode's mcp.json uses the mcpServers format to define which MCP
@@ -347,7 +348,10 @@ def configure_mcp(config_dir_path, no_backup):
     mcp_content = json.dumps({"mcpServers": {}}, indent=2) + "\n"
 
     try:
-        write_text_file(mcp_path, mcp_content, backup=not no_backup)
+        if dry_run:
+            logger.info(f"Would write mcp.json to {mcp_path}")
+        else:
+            write_text_file(mcp_path, mcp_content, backup=not no_backup)
         logger.info(f"mcp.json written to {mcp_path}")
         return True
     except Exception as exc:
@@ -483,16 +487,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure SmallCode environment and escalation settings."
     )
+    add_common_args(parser)
     parser.add_argument(
         "--preset",
         required=True,
         choices=AVAILABLE_PRESETS,
         help="Active tier preset",
-    )
-    parser.add_argument(
-        "--no-backup",
-        action="store_true",
-        help="Do not create .bak files for existing configs",
     )
     parser.add_argument(
         "--mode",
@@ -547,7 +547,10 @@ def main():
         )
 
     config_dir_path = get_config_dir(args.mode)
-    os.makedirs(config_dir_path, exist_ok=True)
+    if args.dry_run:
+        logger.info(f"Would create configuration directory {config_dir_path}")
+    else:
+        os.makedirs(config_dir_path, exist_ok=True)
 
     spec = build_spec(args.preset, override_base_url=args.ollama_base_url)
 
@@ -571,18 +574,28 @@ def main():
     toml_path = os.path.join(config_dir_path, "config.toml")
 
     try:
-        write_text_file(
-            env_path, build_env_content(args.preset, spec), backup=not args.no_backup
-        )
+        if args.dry_run:
+            logger.info(f"Would write SmallCode env file to {env_path}")
+        else:
+            write_text_file(
+                env_path,
+                build_env_content(args.preset, spec),
+                backup=not args.no_backup,
+            )
         logger.info(f".env written to {env_path}")
     except Exception as exc:
         logger.critical(f"Failed to write SmallCode env file: {exc}")
         sys.exit(1)
 
     try:
-        write_text_file(
-            toml_path, build_toml_content(args.preset, spec), backup=not args.no_backup
-        )
+        if args.dry_run:
+            logger.info(f"Would write SmallCode TOML file to {toml_path}")
+        else:
+            write_text_file(
+                toml_path,
+                build_toml_content(args.preset, spec),
+                backup=not args.no_backup,
+            )
         logger.info(f"config.toml written to {toml_path} ({escalation_status(spec)})")
     except Exception as exc:
         logger.critical(f"Failed to write SmallCode TOML file: {exc}")
@@ -590,7 +603,7 @@ def main():
 
     mcp_written = False
     if not args.no_mcp:
-        mcp_written = configure_mcp(config_dir_path, args.no_backup)
+        mcp_written = configure_mcp(config_dir_path, args.no_backup, args.dry_run)
 
     summary_lines = [
         "SmallCode configured!",

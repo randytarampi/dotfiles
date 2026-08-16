@@ -18,6 +18,7 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 DEFAULT_OUTPUT_PATH = os.path.join(REPO_ROOT, "configs", "opencode", "acp-agents.json")
 
 import logger
+from cli_helpers import add_common_args
 
 ACP_AGENTS = {
     "opencode": {
@@ -72,6 +73,7 @@ ACP_AGENTS = {
 
 def main():
     parser = argparse.ArgumentParser(description="Generate ACP agent wrappers.")
+    add_common_args(parser)
     parser.add_argument(
         "--preset",
         help="Active OpenCode tier name (accepted for caller compatibility; "
@@ -81,11 +83,6 @@ def main():
         "--output",
         default=DEFAULT_OUTPUT_PATH,
         help="Output path for acp-agents.json",
-    )
-    parser.add_argument(
-        "--no-backup",
-        action="store_true",
-        help="Accepted for consistency; no-op for generated output",
     )
     parser.add_argument(
         "--slim-file",
@@ -120,21 +117,28 @@ def main():
 
         output_path = os.path.abspath(os.path.expanduser(args.output))
         output_dir = os.path.dirname(output_path) or "."
-        os.makedirs(output_dir, exist_ok=True)
+        if not args.dry_run:
+            os.makedirs(output_dir, exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump({"acpAgents": detected_agents}, f, indent=2)
-            f.write("\n")
+        if args.dry_run:
+            logger.info(f"Would write ACP agents to {output_path}")
+        else:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump({"acpAgents": detected_agents}, f, indent=2)
+                f.write("\n")
 
         if args.slim_file:
             slim_path = os.path.abspath(os.path.expanduser(args.slim_file))
             with open(slim_path, "r", encoding="utf-8") as f:
                 slim_data = json.load(f)
             slim_data["acpAgents"] = detected_agents
-            with open(slim_path, "w", encoding="utf-8") as f:
-                json.dump(slim_data, f, indent=2)
-                f.write("\n")
-            logger.info(f"acpAgents merged into {slim_path}")
+            if args.dry_run:
+                logger.info(f"Would merge acpAgents into {slim_path}")
+            else:
+                with open(slim_path, "w", encoding="utf-8") as f:
+                    json.dump(slim_data, f, indent=2)
+                    f.write("\n")
+                logger.info(f"acpAgents merged into {slim_path}")
 
         summary_lines = [
             "ACP agents configured!",

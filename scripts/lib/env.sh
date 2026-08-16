@@ -16,9 +16,9 @@ load_env() {
 }
 
 alias_github_token() {
-  if [[ -n "${GITHUB_TOKEN:-}" && -z "${GH_TOKEN:-}" ]]; then
-    export GH_TOKEN="$GITHUB_TOKEN"
-  elif [[ -z "${GITHUB_TOKEN:-}" && -n "${GH_TOKEN:-}" ]]; then
+  local gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  if [[ -n "$gh_token" ]]; then
+    export GH_TOKEN="$gh_token"
     export GITHUB_TOKEN="$GH_TOKEN"
   fi
 }

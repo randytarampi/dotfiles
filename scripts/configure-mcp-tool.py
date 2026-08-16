@@ -586,7 +586,7 @@ def orchestrate_mcp_config(args):
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
-    if args.backup and os.path.exists(resolved_mcp_path):
+    if not args.no_backup and os.path.exists(resolved_mcp_path):
         from file_utils import backup_file
 
         backup_file(resolved_mcp_path, enabled=True)
@@ -697,13 +697,7 @@ def main():
             help="With --dry-run, print resolved secret values instead of redacting them",
         )
         parser.add_argument(
-            "--backup",
-            action="store_true",
-            default=True,
-            help="Create .bak of existing config",
-        )
-        parser.add_argument(
-            "--no-backup", dest="backup", action="store_false", help="Skip backup"
+            "--no-backup", action="store_true", help="Skip backup (backup-on default)"
         )
         parser.add_argument(
             "tool",

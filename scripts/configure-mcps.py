@@ -59,16 +59,8 @@ def main():
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview all configs without writing"
     )
-    backup_group = parser.add_mutually_exclusive_group()
-    backup_group.add_argument(
-        "--backup",
-        action="store_true",
-        dest="backup",
-        default=True,
-        help="Create .bak of existing configs (default)",
-    )
-    backup_group.add_argument(
-        "--no-backup", action="store_false", dest="backup", help="Skip backups"
+    parser.add_argument(
+        "--no-backup", action="store_true", help="Skip backups (backup-on default)"
     )
 
     args = parser.parse_args()
@@ -107,9 +99,7 @@ def main():
         common_args.extend(["--exclude", args.exclude])
     if args.dry_run:
         common_args.append("--dry-run")
-    if args.backup:
-        common_args.append("--backup")
-    else:
+    if args.no_backup:
         common_args.append("--no-backup")
 
     success = 0

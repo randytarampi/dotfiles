@@ -57,12 +57,13 @@ def load_env(env_file=None):
 
 def alias_github_token():
     """
-    Ensures both GITHUB_TOKEN and GH_TOKEN are set if either is defined.
+    Ensures GH_TOKEN is canonical and derives GITHUB_TOKEN for integrations
+    that require GitHub's alternate token name.
     """
-    github_token = os.environ.get("GITHUB_TOKEN")
     gh_token = os.environ.get("GH_TOKEN")
+    if not gh_token:
+        gh_token = os.environ.get("GITHUB_TOKEN")
 
-    if github_token and not gh_token:
-        os.environ["GH_TOKEN"] = github_token
-    elif gh_token and not github_token:
+    if gh_token:
+        os.environ["GH_TOKEN"] = gh_token
         os.environ["GITHUB_TOKEN"] = gh_token

@@ -71,7 +71,7 @@ def build_tier_args(
     Returns:
         List of CLI argument strings for configure-opencode-tier.py.
     """
-    args = [tier]
+    args = ["--preset", tier]
     if no_local_fallbacks:
         args.insert(0, "--no-local-fallbacks")
     if local_fallback_preset:

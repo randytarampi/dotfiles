@@ -8,6 +8,7 @@ import os
 import json
 import shutil
 import subprocess
+import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -17,9 +18,13 @@ if LIB_DIR not in sys.path:
 import logger
 from env import load_env
 from constants import check_ollama_daemon, get_ollama_local_base_url
+from cli_helpers import add_common_args
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Configure Mozart AI router.")
+    add_common_args(parser)
+    args = parser.parse_args()
     if not load_env():
         logger.warning("~/.env not found")
 
@@ -33,7 +38,8 @@ def main():
     config_src = os.path.join(dotfiles_root, "configs", "mozart-router", "mozart.json")
     config_dst = os.path.join(mozart_dir, "mozart.json")
 
-    os.makedirs(mozart_dir, exist_ok=True)
+    if not args.dry_run:
+        os.makedirs(mozart_dir, exist_ok=True)
 
     # Check for mozart-router command
     mozart_bin = shutil.which("mozart-router")
@@ -42,7 +48,12 @@ def main():
         if npm_bin:
             logger.info("Installing mozart-router globally via npm...")
             try:
-                subprocess.run([npm_bin, "install", "-g", "mozart-router"], check=True)
+                if args.dry_run:
+                    logger.info("Would install mozart-router globally via npm")
+                else:
+                    subprocess.run(
+                        [npm_bin, "install", "-g", "mozart-router"], check=True
+                    )
             except Exception as e:
                 logger.critical(f"Failed to install mozart-router: {e}")
                 sys.exit(1)
@@ -90,10 +101,13 @@ def main():
                             f"uses direct cloud URL"
                         )
 
-        with open(config_dst, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            f.write("\n")
-        os.chmod(config_dst, 0o644)
+        if args.dry_run:
+            logger.info(f"Would write Mozart router config to {config_dst}")
+        else:
+            with open(config_dst, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                f.write("\n")
+            os.chmod(config_dst, 0o644)
         logger.info(f"Configured mozart-router at {config_dst}")
     except Exception as e:
         logger.critical(f"Failed to write config: {e}")

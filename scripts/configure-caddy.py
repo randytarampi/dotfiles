@@ -18,6 +18,7 @@ import logger
 from env import load_env
 from file_utils import write_text_file
 from caddy_domains import load_domains
+from cli_helpers import add_common_args
 
 DEFAULT_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 DEFAULT_AUTH_CONF = "~/.config/caddy/caddy-auth.conf"
@@ -371,11 +372,7 @@ def build_caddyfile(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the Caddyfile.")
-    parser.add_argument(
-        "--no-backup",
-        action="store_true",
-        help="Write output without backing up any existing file.",
-    )
+    add_common_args(parser)
     args = parser.parse_args()
 
     if not load_env():
@@ -445,7 +442,10 @@ def main() -> None:
         logger.critical(f"Failed to build Caddyfile: {exc}")
         raise SystemExit(1)
 
-    write_text_file(str(output_path), caddyfile, backup=not args.no_backup)
+    if args.dry_run:
+        logger.info(f"Would write Caddyfile to {output_path}")
+    else:
+        write_text_file(str(output_path), caddyfile, backup=not args.no_backup)
 
     auth_user_list = ", ".join(user for user, _ in auth_users)
     domain_summary = ", ".join(domains) if domains else "(none)"

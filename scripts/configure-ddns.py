@@ -16,12 +16,14 @@ if str(LIB_DIR) not in sys.path:
 import logger
 from env import load_env
 from file_utils import write_text_file
+from cli_helpers import add_common_args
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate per-zone ddns-route53 configs from ddns-zones.json."
     )
+    add_common_args(parser)
     return parser.parse_args()
 
 
@@ -72,14 +74,18 @@ def render_zone_config(zone_id: str, records: list[dict[str, object]]) -> str:
 
 
 def main() -> None:
-    parse_args()
+    args = parse_args()
 
     if not load_env():
         logger.warning("~/.env not found")
 
-    if os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") != "1":
+    ddns_gate = os.environ.get(
+        "DOTFILES_RUN_DDNS_SETUP",
+        os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0"),
+    )
+    if ddns_gate != "1":
         logger.info(
-            f"DOTFILES_RUN_CADDY_SETUP='{os.environ.get('DOTFILES_RUN_CADDY_SETUP', '0')}' — skipping ddns-route53 configuration"
+            f"DOTFILES_RUN_DDNS_SETUP='{ddns_gate}' — skipping ddns-route53 configuration"
         )
         return
 
@@ -144,7 +150,10 @@ def main() -> None:
 
         config_path = config_dir / f"zone-{zone_id}.yml"
         config_text = render_zone_config(zone_id, records)
-        write_text_file(str(config_path), config_text, backup=True)
+        if args.dry_run:
+            logger.info(f"Would write DDNS zone config to {config_path}")
+        else:
+            write_text_file(str(config_path), config_text, backup=True)
         written_paths.append((zone_id, config_path))
 
     summary_lines = [
