@@ -123,8 +123,10 @@ make configure          # Rebuild runtime configs only
 make dry-run            # Dry-run apply with ~/.env loaded
 make diff               # Preview pending changes with ~/.env loaded
 make doctor             # Read-only drift checks
-make verify             # Lint, env drift report, doctor, hashes, and dry run
+make verify             # Lint, env drift, doctor, hashes, CLI contract, env coverage, and dry run
 make check-hashes       # Hash trigger coverage audit
+make check-cli-contract # Verify CLI interfaces match the capability manifest
+make check-env-coverage # Verify env vars are documented in .env.example
 make reset        # Clear chezmoi script state
 make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
 make migrate             # Migrate deprecated gate names + append missing template keys to ~/.env

@@ -36,6 +36,7 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"  # For --help, --dry-run, --no-backup support
 # source "$LIB_DIR/env.sh"        # If env loading needed
 # source "$LIB_DIR/tier_detect.sh" # For tier auto-detection (detect_tier)
 # source "$LIB_DIR/tier_args.sh"   # For local fallback arg forwarding (build_tier_extra_args)
@@ -44,7 +45,12 @@ source "$LIB_DIR/common.sh"
 # Use scripts/lib/constants.py for shared constants (BASE_URLS, get_meridian_base_url, get_ollama_local_base_url, get_provider_base_url, is_meridian_configured, PROVIDER_BASE_URL_ENVS)
 # Use scripts/lib/file_utils.py for backup_file() and write_text_file()
 # Use scripts/lib/opencode_config.py for get_available_tiers() and build_tier_args()
+# Use scripts/lib/cli_helpers.py for add_common_args(), forward_common_args(), add_local_fallback_args()
 ```
+
+For Python scripts, use `cli_helpers.add_common_args(parser)` for `--dry-run` and `--no-backup`,
+and `cli_helpers.add_local_fallback_args(parser)` for `--local-fallback-*` flags. Use
+`allow_abbrev=False` in argparse to match Bash parser parity.
 
 ### Naming
 
@@ -76,6 +82,55 @@ All scripts follow: parse args → load env → gate check → main logic → ok
 - Use `DOTFILES_RUN_*_SETUP` for opt-in orchestration gates.
 - Gates default to `0` and should cover one logical feature at a time.
 - Document new gates in `.env.example` and in the orchestration docs.
+- When splitting a gate into sub-gates, add migration entries to `scripts/migrate-env-gates.py` using the inheritance pattern so existing users' settings flow to the new sub-gates.
+
+### CLI Capability Contract
+
+All scripts must conform to the [CLI Capability Contract](docs/CONVENTIONS.md). Key requirements:
+
+- **Public scripts** must accept `--help` (exit 0, side-effect-free).
+- **Mutator scripts** must accept `--dry-run` (skip writes, log what would be done).
+- **Backup-capable scripts** must accept `--no-backup` (backup-on default; `--backup` is NOT used).
+- **Tier selectors** use `--preset` as canonical; positional operands are deprecated aliases.
+- **Irrelevant flags must be rejected** with exit code 2 (usage error), not silently accepted.
+- **Exit codes**: 0 success, 1 runtime failure, 2 usage error.
+
+Every script is registered in `scripts/lib/cli-contract.json` with its capabilities, accepted flags, and child scripts. Run `make check-cli-contract` to verify conformance.
+
+### Arg Forwarding
+
+Common flags (`--dry-run`, `--no-backup`) propagate parent→child via shared forwarding arrays:
+
+- **Shell**: `COMMON_FORWARD_ARGS` array from `common_args.sh`; pass `"${COMMON_FORWARD_ARGS[@]}"` to children that accept common flags.
+- **Python**: `forward_common_args(args)` from `cli_helpers.py`; pass the returned list to child subprocess calls.
+- **Capability-based**: Only forward flags the child actually accepts. A child without `--dry-run` must not receive it.
+
+Local-fallback flags (`--local-fallback-preset/role/placeholder`) forward explicitly to children that support them.
+
+### Env-Var Taxonomy
+
+Environment variables follow an ownership-based taxonomy (see [docs/CONVENTIONS.md](docs/CONVENTIONS.md)):
+
+- `DOTFILES_*` — repo-owned (gates, tier settings, project vars)
+- Upstream-native — keep as-is (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_*`)
+- `DOTFILES_<TOOL>_*` — adapter layer for tools that need repo-managed config
+
+One canonical name per concept. Deprecated aliases migrated one-way via `migrate-env-gates.py`. Run `make migrate` after pulling updated dotfiles to migrate `~/.env`.
+
+### Convention Enforcement
+
+`make verify` enforces conventions automatically:
+
+- `make check-cli-contract` — validates CLI surfaces against the manifest (smoke-tests `--help`, checks required flags by capability, verifies invalid flags are rejected)
+- `make check-env-coverage` — validates env vars are documented in `.env.example`, tracks deprecated aliases and known alias pairs
+- `make check-hashes` — validates hash trigger coverage in `run_onchange` scripts
+
+When adding a new script:
+1. Define its capabilities in `scripts/lib/cli-contract.json`
+2. Add common args via `common_args.sh` (shell) or `cli_helpers.py` (Python)
+3. Test `--help`, `--dry-run`, and invalid flag rejection
+4. Document any new env vars in `dot_dotfiles/shell/.env.example`
+5. Run `make verify` to confirm conformance
 
 ### Three-layer architecture
 
@@ -185,6 +240,7 @@ cache is `~/.local/share/dotfiles/skills/`. See
 
 | Doc | Content |
 |-----|---------|
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | CLI capability contract, arg forwarding, env-var taxonomy, cross-language parity, enforcement |
 | [docs/TIERS.md](docs/TIERS.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
 | [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
 | [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
