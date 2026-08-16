@@ -39,5 +39,15 @@ set -euo pipefail
 # scripts/configure-all.sh: {{ include "scripts/configure-all.sh" | sha256sum }}
 # scripts/verify-config.py: {{ include "scripts/verify-config.py" | sha256sum }}
 # scripts/migrate-env-gates.py: {{ include "scripts/migrate-env-gates.py" | sha256sum }}
+# scripts/check-cli-contract.py: {{ include "scripts/check-cli-contract.py" | sha256sum }}
+# scripts/check-env-coverage.py: {{ include "scripts/check-env-coverage.py" | sha256sum }}
+# scripts/lib/cli-contract.json: {{ include "scripts/lib/cli-contract.json" | sha256sum }}
+# scripts/lib/common_args.sh: {{ include "scripts/lib/common_args.sh" | sha256sum }}
+# scripts/lib/cli_helpers.py: {{ include "scripts/lib/cli_helpers.py" | sha256sum }}
+# scripts/configure-acp-agents.py: {{ include "scripts/configure-acp-agents.py" | sha256sum }}
+# scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
+# scripts/configure-codegraph.py: {{ include "scripts/configure-codegraph.py" | sha256sum }}
+# scripts/configure-ddns.py: {{ include "scripts/configure-ddns.py" | sha256sum }}
+# scripts/configure-skills.py: {{ include "scripts/configure-skills.py" | sha256sum }}
 
 "{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"

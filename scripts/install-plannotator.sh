@@ -7,13 +7,18 @@ LIB_DIR="$SCRIPT_DIR/lib"
 
 # shellcheck disable=SC1091
 source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
+export COMMON_USAGE="$0"
+export COMMON_HELP_TEXT="Install the Plannotator paste service."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 # shellcheck disable=SC1091
 source "$LIB_DIR/env.sh"
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 
-if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping Plannotator paste install"
+if [[ "${DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" != "1" ]]; then
+  info "DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP='${DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}' — skipping Plannotator paste install"
   exit 0
 fi
 

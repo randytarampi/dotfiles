@@ -14,6 +14,11 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 # ───────────────────────────────────────────────────────────────────────────────
 
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/common_args.sh"
+export COMMON_USAGE="$0"
+export COMMON_HELP_TEXT="Install the SmallCode CLI."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 # ---------------------------------------------------------------------------
 # Preflight checks

@@ -6,17 +6,23 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
 source "$LIB_DIR/env.sh"
+
+export COMMON_USAGE="$0 [--yes]"
+export COMMON_HELP_TEXT="Migrate the legacy ACME and DDNS setup."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 load_env || warn "$HOME/.env not found, skipping env load"
 
 YES_MODE=0
-if [[ "${1:-}" == "--yes" ]]; then
-  YES_MODE=1
-fi
+for arg in "$@"; do
+  [[ "$arg" == "--yes" ]] && YES_MODE=1
+done
 
-if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping acme/ddns migration"
+if [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" != "1" && "${DOTFILES_RUN_ACME_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" != "1" ]]; then
+  info "DDNS/ACME setup gates disabled — skipping acme/ddns migration"
   exit 0
 fi
 

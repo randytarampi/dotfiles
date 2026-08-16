@@ -5,6 +5,11 @@ _SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/common_args.sh"
+export COMMON_USAGE="$0"
+export COMMON_HELP_TEXT="Reinstall all installed Node.js LTS versions with the latest npm."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"

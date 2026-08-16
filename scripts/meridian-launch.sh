@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/common_args.sh"
+export COMMON_USAGE="$0"
+export COMMON_HELP_TEXT="Launch the Meridian proxy service."
+parse_common_args "$@"
 # meridian-launch.sh — Launch wrapper for meridian that ensures proper Keychain access
 #
 # This script is called by launchd (com.meridian.proxy.plist) to start meridian.

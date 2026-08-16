@@ -21,6 +21,11 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/common_args.sh"
+export COMMON_USAGE="$0"
+export COMMON_HELP_TEXT="Install OpenCode plugins and supporting tools."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 REQUIRE_CMD="${REQUIRE_CMD:-1}"
 

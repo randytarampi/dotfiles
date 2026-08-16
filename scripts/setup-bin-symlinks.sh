@@ -8,6 +8,11 @@ set -euo pipefail
 SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 LIB_DIR="$(cd "$(dirname "$SELF")/lib" && pwd)"
 source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/common_args.sh"
+export COMMON_USAGE="$0 [SOURCE_DIR]"
+export COMMON_HELP_TEXT="Create or update ~/.dotfiles/bin command symlinks."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 SOURCE_SCRIPTS="${1:-$(cd "$(dirname "$SELF")" && pwd)}"
 DOTFILES_BIN="$HOME/.dotfiles/bin"

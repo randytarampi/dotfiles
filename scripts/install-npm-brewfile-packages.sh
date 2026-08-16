@@ -20,6 +20,12 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
+
+export COMMON_USAGE="$0 <Brewfile-path> [options]"
+export COMMON_HELP_TEXT="Reinstall npm entries from a Brewfile into the active nvm node."
+parse_common_args "$@"
+set -- "${COMMON_ARGS_REMAINING[@]}"
 
 BREWFILE="${1:-}"
 if [[ -z "$BREWFILE" ]]; then
