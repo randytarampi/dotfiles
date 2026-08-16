@@ -17,6 +17,11 @@ import logger
 from env import load_env
 from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_targets
 from opencode_config import build_tier_args
+from cli_helpers import (
+    add_common_args,
+    forward_common_args,
+    forward_local_fallback_args,
+)
 
 ALL_STEPS = [
     "opencode",
@@ -140,6 +145,7 @@ def configure_skills(root, profiles, extras, skipped):
 
 def main():
     parser = argparse.ArgumentParser(description="Configure project-scoped AI tooling.")
+    add_common_args(parser)
     parser.add_argument("--preset", default=None)
     parser.add_argument(
         "--steps",
@@ -170,7 +176,10 @@ def main():
         parser.error(f"Unknown step(s): {', '.join(sorted(unknown))}")
     preset = env_or(args.preset, "DOTFILES_PROJECT_PRESET", "pro-plus")
     child_env = os.environ.copy()
-    os.makedirs(opencode_dir, exist_ok=True)
+    if args.dry_run:
+        logger.info(f"Would ensure project OpenCode directory exists: {opencode_dir}")
+    else:
+        os.makedirs(opencode_dir, exist_ok=True)
 
     if "opencode" in steps:
         temp = os.path.join(opencode_dir, ".tmp-opencode")
@@ -185,29 +194,39 @@ def main():
                 "project",
                 "--preset",
                 preset,
-            ],
+            ]
+            + forward_common_args(args)
+            + forward_local_fallback_args(args),
             root,
             env,
         )
-        generated = os.path.join(temp, "opencode.json")
-        if not os.path.isfile(generated):
-            raise RuntimeError("configure-opencode.py did not generate opencode.json")
-        shutil.copy(generated, os.path.join(root, "opencode.json"))
-        shutil.rmtree(temp, ignore_errors=True)
+        if args.dry_run:
+            logger.info(f"Would copy generated project config to {root}/opencode.json")
+        else:
+            generated = os.path.join(temp, "opencode.json")
+            if not os.path.isfile(generated):
+                raise RuntimeError(
+                    "configure-opencode.py did not generate opencode.json"
+                )
+            shutil.copy(generated, os.path.join(root, "opencode.json"))
+            shutil.rmtree(temp, ignore_errors=True)
     if "tier" in steps:
-        env = child_env.copy()
-        env["OPENCODE_DIR"] = opencode_dir
-        run(
-            [sys.executable, os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")]
-            + build_tier_args(
-                tier=preset,
-                local_fallback_preset=args.local_fallback_preset,
-                local_fallback_placeholders=args.local_fallback_placeholder or None,
-                local_fallback_roles=args.local_fallback_role or None,
-            ),
-            root,
-            env,
-        )
+        if args.dry_run:
+            logger.info("Would set project tier (skipped: child has no --dry-run)")
+        else:
+            env = child_env.copy()
+            env["OPENCODE_DIR"] = opencode_dir
+            run(
+                [sys.executable, os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")]
+                + build_tier_args(
+                    tier=preset,
+                    local_fallback_preset=args.local_fallback_preset,
+                    local_fallback_placeholders=args.local_fallback_placeholder or None,
+                    local_fallback_roles=args.local_fallback_role or None,
+                ),
+                root,
+                env,
+            )
     if "codegraph" in steps:
         command = shutil.which("codegraph")
         if not command:
@@ -226,27 +245,42 @@ def main():
             command += ["--tools", tools]
         if mcps:
             command += ["--project-mcps", mcps]
+        if args.dry_run:
+            command.append("--dry-run")
         run(command, root, child_env)
     if "skills" in steps:
-        configure_skills(
-            root,
-            csv(env_or(args.skill_profiles, "DOTFILES_PROJECT_SKILL_PROFILES")),
-            csv(env_or(args.skills, "DOTFILES_PROJECT_SKILLS")),
-            csv(env_or(args.skip_skills, "DOTFILES_PROJECT_SKIP_SKILLS")),
-        )
+        if args.dry_run:
+            logger.info(
+                "Would reconcile project skills (skipped: helper has no dry-run API)"
+            )
+        else:
+            configure_skills(
+                root,
+                csv(env_or(args.skill_profiles, "DOTFILES_PROJECT_SKILL_PROFILES")),
+                csv(env_or(args.skills, "DOTFILES_PROJECT_SKILLS")),
+                csv(env_or(args.skip_skills, "DOTFILES_PROJECT_SKIP_SKILLS")),
+            )
     if "jetbrains" in steps:
         env = child_env.copy()
         env["PROJECT_CONFIG_DELEGATE"] = "1"
-        run(
-            [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-jetbrains-workspace-project.py"),
-                "--workspace-root",
+        if args.dry_run:
+            logger.info(
+                "Would configure JetBrains workspace "
+                "(skipped: child has no --dry-run)"
+            )
+        else:
+            run(
+                [
+                    sys.executable,
+                    os.path.join(
+                        SCRIPT_DIR, "configure-jetbrains-workspace-project.py"
+                    ),
+                    "--workspace-root",
+                    root,
+                ],
                 root,
-            ],
-            root,
-            env,
-        )
+                env,
+            )
     if "junie" in steps:
         command = [
             sys.executable,
@@ -259,6 +293,9 @@ def main():
         if args.junie_mcp:
             command.append("--mcp")
         command.append("--all-tools")
+        command += forward_common_args(args)
+        # TODO: Junie local-fallback support is deferred until
+        # generate-jetbrains-profiles.py accepts these arguments.
         run(command, root, child_env)
     if "acp-agents" in steps:
         agents = env_or(args.acp_agents, "DOTFILES_PROJECT_ACP_AGENTS")
@@ -272,20 +309,30 @@ def main():
         ]
         if agents:
             command += ["--agents", agents]
-        run(command, root, child_env)
+        if args.dry_run:
+            logger.info(
+                "Would configure project ACP agents (skipped: child has no --dry-run)"
+            )
+        else:
+            run(command, root, child_env)
     if "secrets" in steps:
-        run(
-            [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-secrets.py"),
-                "--mode",
-                "project",
-                "--output",
-                os.path.join(opencode_dir, ".env.local"),
-            ],
-            root,
-            child_env,
-        )
+        if args.dry_run:
+            logger.info(
+                "Would generate project secrets (skipped: child has no --dry-run)"
+            )
+        else:
+            run(
+                [
+                    sys.executable,
+                    os.path.join(SCRIPT_DIR, "configure-secrets.py"),
+                    "--mode",
+                    "project",
+                    "--output",
+                    os.path.join(opencode_dir, ".env.local"),
+                ],
+                root,
+                child_env,
+            )
 
 
 if __name__ == "__main__":

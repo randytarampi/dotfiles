@@ -17,12 +17,20 @@ import logger
 from env import load_env
 from ai_dirs import ensure_ai_dirs
 from discover_models import list_local_ollama_models
+from cli_helpers import (
+    add_common_args,
+    forward_common_args,
+)
+
+# TODO: Junie local-fallback support is deferred until
+# generate-jetbrains-profiles.py accepts those arguments.
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Configure JetBrains AI tools (Junie, AI Assistant)."
     )
+    add_common_args(parser)
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
@@ -50,8 +58,10 @@ def main():
     parser.add_argument(
         "--project-dir", default=os.getcwd(), help="Project directory (default: cwd)"
     )
+    # TODO: Add local-fallback support when generate-jetbrains-profiles.py accepts these args
 
     args = parser.parse_args()
+    failures = 0
 
     # Determine what actions to take
     # If --all-tools is set, it implies --all.
@@ -91,16 +101,26 @@ def main():
 
     if do_dirs:
         logger.info(f"Ensuring AI directories at {project_root}...")
-        ensure_ai_dirs(project_root)
+        if args.dry_run:
+            logger.info("Would create AI directories and symlinks")
+        else:
+            ensure_ai_dirs(project_root)
 
     if do_mcp:
         logger.info("Generating Junie MCP config...")
-        mcp_args = ["--mode", "project", "--project-dir", project_root, "--no-backup"]
+        mcp_args = ["--mode", "project", "--project-dir", project_root]
+        if args.no_backup:
+            mcp_args.append("--no-backup")
         if args.project_mcps:
             mcp_args.extend(["--project-mcps", args.project_mcps])
 
         configure_mcp_tool_py = os.path.join(SCRIPT_DIR, "configure-mcp-tool.py")
-        cmd = [sys.executable, configure_mcp_tool_py] + mcp_args + ["junie"]
+        cmd = (
+            [sys.executable, configure_mcp_tool_py]
+            + mcp_args
+            + forward_common_args(args)
+            + ["junie"]
+        )
         try:
             res = subprocess.run(cmd)
             if res.returncode == 0:
@@ -109,8 +129,10 @@ def main():
                 logger.error(
                     f"Failed to generate Junie MCP config (exit {res.returncode})"
                 )
+                failures += 1
         except Exception as e:
             logger.error(f"Failed to run mcp configuration tool: {e}")
+            failures += 1
 
     if args.all_tools:
         logger.info("Running configure-mcps.py for other AI tools...")
@@ -121,7 +143,11 @@ def main():
             mcp_all_args.extend(["--project-mcps", args.project_mcps])
 
         configure_mcps_py = os.path.join(SCRIPT_DIR, "configure-mcps.py")
-        cmd = [sys.executable, configure_mcps_py] + mcp_all_args
+        cmd = (
+            [sys.executable, configure_mcps_py]
+            + mcp_all_args
+            + forward_common_args(args)
+        )
         try:
             res = subprocess.run(cmd)
             if res.returncode == 0:
@@ -130,38 +156,48 @@ def main():
                 logger.error(
                     f"Failed configure-mcps.py execution (exit {res.returncode})"
                 )
+                failures += 1
         except Exception as e:
             logger.error(f"Failed to run configure-mcps.py: {e}")
+            failures += 1
 
     if do_models:
-        os.makedirs(target_dir, exist_ok=True)
-        local_models = list_local_ollama_models()
-        local_model_names = [
-            m["name"] if isinstance(m, dict) else str(m) for m in local_models
-        ]
-        local_models_str = " ".join(local_model_names)
+        if args.dry_run:
+            logger.info(f"Would generate JetBrains model profiles in {target_dir}")
+            continue_models = False
+        else:
+            os.makedirs(target_dir, exist_ok=True)
+            continue_models = True
+        if continue_models:
+            local_models = list_local_ollama_models()
+            local_model_names = [
+                m["name"] if isinstance(m, dict) else str(m) for m in local_models
+            ]
+            local_models_str = " ".join(local_model_names)
 
-        generate_profiles_py = os.path.join(
-            SCRIPT_DIR, "generate-jetbrains-profiles.py"
-        )
-        cmd = [
-            sys.executable,
-            generate_profiles_py,
-            "--groups-json",
-            groups_json,
-            "--target-dir",
-            target_dir,
-            "--local-models",
-            local_models_str,
-        ]
-        try:
-            res = subprocess.run(cmd)
-            if res.returncode != 0:
-                logger.error(
-                    f"Failed to generate JetBrains model profiles (exit {res.returncode})"
-                )
-        except Exception as e:
-            logger.error(f"Failed to run profiles generation helper: {e}")
+            generate_profiles_py = os.path.join(
+                SCRIPT_DIR, "generate-jetbrains-profiles.py"
+            )
+            cmd = [
+                sys.executable,
+                generate_profiles_py,
+                "--groups-json",
+                groups_json,
+                "--target-dir",
+                target_dir,
+                "--local-models",
+                local_models_str,
+            ]
+            try:
+                res = subprocess.run(cmd)
+                if res.returncode != 0:
+                    logger.error(
+                        f"Failed to generate JetBrains model profiles (exit {res.returncode})"
+                    )
+                    failures += 1
+            except Exception as e:
+                logger.error(f"Failed to run profiles generation helper: {e}")
+                failures += 1
 
     summary_lines = [
         "JetBrains AI configured!",
@@ -174,6 +210,8 @@ def main():
         "JetBrains AI configure complete!",
     ]
     logger.info("\n".join(summary_lines))
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

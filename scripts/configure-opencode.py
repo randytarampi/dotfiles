@@ -40,6 +40,12 @@ from models_dev import (
     get_ollama_context_length,
     build_model_entry,
 )
+from cli_helpers import (
+    add_common_args,
+    add_local_fallback_args,
+    forward_common_args,
+    forward_local_fallback_args,
+)
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -88,6 +94,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure OpenCode json generator and orchestration."
     )
+    add_common_args(parser)
+    add_local_fallback_args(parser)
     available_tiers = get_available_tiers()
     parser.add_argument(
         "--preset",
@@ -95,24 +103,8 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
-    parser.add_argument(
-        "--local-fallback-preset",
-        default=None,
-        help="Which local tier's placeholder pattern to use for local fallbacks (default: local)",
-    )
-    parser.add_argument(
-        "--local-fallback-placeholder",
-        action="append",
-        default=[],
-        help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
-    )
-    parser.add_argument(
-        "--local-fallback-role",
-        action="append",
-        default=[],
-        help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
-    )
     args = parser.parse_args()
+    failures = 0
 
     configs_dir_path = os.path.abspath(
         os.path.join(os.path.dirname(SCRIPT_DIR), "configs")
@@ -124,7 +116,12 @@ def main():
     else:
         config_dir_path = os.path.join(os.path.expanduser("~"), ".config", "opencode")
 
-    os.makedirs(config_dir_path, exist_ok=True)
+    if args.dry_run:
+        logger.info(
+            f"[dry-run] Would ensure config directory exists: {config_dir_path}"
+        )
+    else:
+        os.makedirs(config_dir_path, exist_ok=True)
 
     # Load .env
     env_path = os.path.join(config_dir_path, ".env")
@@ -166,6 +163,7 @@ def main():
         "--no-backup",
         "opencode",
     ]
+    mcp_args += forward_common_args(args)
     mcp_json_str = "{}"
     try:
         result = subprocess.run(mcp_args, capture_output=True, text=True, timeout=15)
@@ -487,14 +485,17 @@ def main():
 
     # Write opencode.json
     output_path = os.path.join(config_dir_path, "opencode.json")
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            f.write("\n")
-        logger.info("opencode.json written")
-    except Exception as e:
-        logger.critical(f"Failed to write opencode.json: {e}")
-        sys.exit(1)
+    if args.dry_run:
+        logger.info(f"[dry-run] Would write opencode.json to {output_path}")
+    else:
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                f.write("\n")
+            logger.info("opencode.json written")
+        except Exception as e:
+            logger.critical(f"Failed to write opencode.json: {e}")
+            sys.exit(1)
 
     if args.mode == "project":
         summary_lines = [
@@ -513,7 +514,9 @@ def main():
     # global mode:
     # 2. Write vibeguard.config.json
     vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
-    if os.path.exists(vibeguard_src):
+    if os.path.exists(vibeguard_src) and args.dry_run:
+        logger.info(f"[dry-run] Would copy vibeguard.config.json to {config_dir_path}")
+    elif os.path.exists(vibeguard_src):
         vibeguard_dst = os.path.join(config_dir_path, "vibeguard.config.json")
         try:
             shutil.copy(vibeguard_src, vibeguard_dst)
@@ -534,70 +537,87 @@ def main():
         logger.critical(f"presets.json not found at {presets_json_path}")
         sys.exit(1)
 
-    try:
-        shutil.copy(
-            presets_json_path, os.path.join(config_dir_path, "oh-my-opencode-slim.json")
+    if args.dry_run:
+        logger.info(
+            f"[dry-run] Would copy oh-my-opencode-slim.json to {config_dir_path}"
         )
-        logger.info("oh-my-opencode-slim.json written (base config)")
-    except Exception as e:
-        logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
-        sys.exit(1)
+    else:
+        try:
+            shutil.copy(
+                presets_json_path,
+                os.path.join(config_dir_path, "oh-my-opencode-slim.json"),
+            )
+            logger.info("oh-my-opencode-slim.json written (base config)")
+        except Exception as e:
+            logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
+            sys.exit(1)
 
     # 3b. Generate and merge acpAgents (ACP-capable agent wrappers)
     acp_agents_source_path = os.path.join(
         configs_dir_path, "opencode", "acp-agents.json"
     )
     logger.info("Generating ACP agent wrappers...")
-    try:
-        acp_args = [
-            sys.executable,
-            os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
-            "--preset",
-            args.preset,
-            "--no-backup",
-        ]
-        acp_result = subprocess.run(
-            acp_args,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
+    if args.dry_run:
+        logger.info(
+            "[dry-run] Would run configure-acp-agents.py (skipped: child has no --dry-run)"
         )
-        if acp_result.returncode != 0:
-            stderr = (acp_result.stderr or acp_result.stdout or "").strip()
-            logger.warning(
-                f"ACP agent generation failed (exit {acp_result.returncode}); skipping merge"
-                + (f": {stderr}" if stderr else "")
+    else:
+        try:
+            acp_args = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-acp-agents.py"),
+                "--preset",
+                args.preset,
+            ]
+            acp_result = subprocess.run(
+                acp_args,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
-        elif not os.path.exists(acp_agents_source_path):
-            logger.warning(
-                f"ACP agent generation completed but {acp_agents_source_path} was not found; skipping merge"
-            )
-        else:
-            slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
-            try:
-                with open(slim_output_path, "r", encoding="utf-8") as f:
-                    slim_data = json.load(f)
-                with open(acp_agents_source_path, "r", encoding="utf-8") as f:
-                    acp_data = json.load(f)
-                if isinstance(acp_data, dict) and isinstance(
-                    acp_data.get("acpAgents"), dict
-                ):
-                    slim_data["acpAgents"] = acp_data["acpAgents"]
-                    with open(slim_output_path, "w", encoding="utf-8") as f:
-                        json.dump(slim_data, f, indent=2)
-                        f.write("\n")
-                    logger.info("acpAgents merged into oh-my-opencode-slim.json")
-                else:
-                    logger.warning(
-                        f"ACP agent config at {acp_agents_source_path} did not contain acpAgents; skipping merge"
-                    )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to merge acpAgents into oh-my-opencode-slim.json: {e}"
+            if acp_result.returncode != 0:
+                stderr = (acp_result.stderr or acp_result.stdout or "").strip()
+                logger.error(
+                    f"ACP agent generation failed (exit {acp_result.returncode}); skipping merge"
+                    + (f": {stderr}" if stderr else "")
                 )
-    except Exception as e:
-        logger.warning(f"Failed to configure ACP agents: {e}")
+                failures += 1
+            elif not os.path.exists(acp_agents_source_path):
+                logger.error(
+                    f"ACP agent generation completed but {acp_agents_source_path} was not found; skipping merge"
+                )
+                failures += 1
+            else:
+                slim_output_path = os.path.join(
+                    config_dir_path, "oh-my-opencode-slim.json"
+                )
+                try:
+                    with open(slim_output_path, "r", encoding="utf-8") as f:
+                        slim_data = json.load(f)
+                    with open(acp_agents_source_path, "r", encoding="utf-8") as f:
+                        acp_data = json.load(f)
+                    if isinstance(acp_data, dict) and isinstance(
+                        acp_data.get("acpAgents"), dict
+                    ):
+                        slim_data["acpAgents"] = acp_data["acpAgents"]
+                        with open(slim_output_path, "w", encoding="utf-8") as f:
+                            json.dump(slim_data, f, indent=2)
+                            f.write("\n")
+                        logger.info("acpAgents merged into oh-my-opencode-slim.json")
+                    else:
+                        failures += 1
+                        logger.error(
+                            f"ACP agent config at {acp_agents_source_path} did not contain acpAgents; skipping merge"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to merge acpAgents into oh-my-opencode-slim.json: {e}"
+                    )
+                    failures += 1
+        except Exception as e:
+            logger.error(f"Failed to configure ACP agents: {e}")
+            failures += 1
 
     # 4. Set active tier
     logger.info(f"Setting active tier to {args.preset}...")
@@ -605,10 +625,8 @@ def main():
         tier_args_list = build_tier_args(
             tier=args.preset,
             no_local_fallbacks=not with_local_ollama,
-            local_fallback_preset=args.local_fallback_preset,
-            local_fallback_placeholders=args.local_fallback_placeholder or None,
-            local_fallback_roles=args.local_fallback_role or None,
-        )
+        ) + forward_local_fallback_args(args)
+        # configure-opencode-tier.py does not accept --dry-run or --no-backup; don't forward common args.
         tier_args = [
             sys.executable,
             os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
@@ -616,8 +634,8 @@ def main():
         subprocess.run(tier_args, check=True)
         logger.info(f"Active tier set to {args.preset}")
     except Exception as e:
-        logger.critical(f"Failed to set active tier: {e}")
-        sys.exit(1)
+        logger.error(f"Failed to set active tier: {e}")
+        failures += 1
 
     # 5. Configure voice plugin (tui.json)
     logger.info("Configuring voice plugin...")
@@ -627,12 +645,14 @@ def main():
             os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),
             "--preset",
             args.preset,
-            "--no-backup",
-        ]
+        ] + forward_common_args(args)
+        if args.no_backup:
+            voice_args.append("--no-backup")
         subprocess.run(voice_args, check=True)
         logger.info("Voice plugin configured")
     except Exception as e:
-        logger.warning(f"Failed to configure voice plugin: {e}")
+        logger.error(f"Failed to configure voice plugin: {e}")
+        failures += 1
 
     # 5b. Configure DCP TUI plugin (tui.json)
     logger.info("Configuring DCP TUI plugin...")
@@ -640,12 +660,14 @@ def main():
         dcp_args = [
             sys.executable,
             os.path.join(SCRIPT_DIR, "configure-opencode-dcp.py"),
-            "--no-backup",
-        ]
+        ] + forward_common_args(args)
+        if args.no_backup:
+            dcp_args.append("--no-backup")
         subprocess.run(dcp_args, check=True)
         logger.info("DCP TUI plugin configured")
     except Exception as e:
-        logger.warning(f"Failed to configure DCP TUI plugin: {e}")
+        logger.error(f"Failed to configure DCP TUI plugin: {e}")
+        failures += 1
 
     summary_lines = [
         "OpenCode configured!",
@@ -658,16 +680,16 @@ def main():
         "  • tui.json (voice + DCP TUI plugin config)",
         "",
         "To switch tiers:",
-        "     configure-opencode-tier.py pro",
-        "     configure-opencode-tier.py pro-plus",
-        "     configure-opencode-tier.py pro-plus-anthropic",
-        "     configure-opencode-tier.py plus",
-        "     configure-opencode-tier.py anthropic",
-        "     configure-opencode-tier.py local-pro",
-        "     configure-opencode-tier.py local",
-        "     configure-opencode-tier.py local-mini",
-        "     configure-opencode-tier.py local-nano",
-        "     configure-opencode-tier.py local-solo",
+        "     configure-opencode-tier.py --preset pro",
+        "     configure-opencode-tier.py --preset pro-plus",
+        "     configure-opencode-tier.py --preset pro-plus-anthropic",
+        "     configure-opencode-tier.py --preset plus",
+        "     configure-opencode-tier.py --preset anthropic",
+        "     configure-opencode-tier.py --preset local-pro",
+        "     configure-opencode-tier.py --preset local",
+        "     configure-opencode-tier.py --preset local-mini",
+        "     configure-opencode-tier.py --preset local-nano",
+        "     configure-opencode-tier.py --preset local-solo",
         "",
         "To regenerate without local ollama:",
         "     set DOTFILES_USE_LOCAL_OLLAMA=0 and re-run configure-opencode.py",
@@ -681,6 +703,8 @@ def main():
         "Configure script complete!",
     ]
     logger.info("\n".join(summary_lines))
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
