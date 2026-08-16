@@ -14,8 +14,8 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 
 {{- if eq .chezmoi.os "darwin" }}
 
-if [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_CADDY_SETUP='${DOTFILES_RUN_CADDY_SETUP:-0}' — skipping Plannotator paste setup"
+if [[ "${DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" != "1" ]]; then
+  info "DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP='${DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}' — skipping Plannotator paste setup"
   exit 0
 fi
 

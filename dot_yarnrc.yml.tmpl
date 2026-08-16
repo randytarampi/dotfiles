@@ -8,6 +8,6 @@ npmRegistries:
     npmAuthToken: {{ env "NPM_TOKEN" }}
     {{- end }}
   "https://npm.pkg.github.com":
-    {{- if env "GITHUB_TOKEN" }}
-    npmAuthToken: {{ env "GITHUB_TOKEN" }}
+    {{- if or (env "GH_TOKEN") (env "GITHUB_TOKEN") }}
+    npmAuthToken: {{ env "GH_TOKEN" | default (env "GITHUB_TOKEN") }}
     {{- end }}

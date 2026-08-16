@@ -1,6 +1,10 @@
-# Project-scoped AI configuration
+# Project-scoped AI configuration — reference for <project>/.opencode/.env files.
 # Copy to <project>/.opencode/.env. This file is user-authored and is not
 # overwritten. Generated secrets are written to .opencode/.env.local.
+#
+# Home-level (non-project) env vars are documented in dot_dotfiles/shell/.env.example
+# (symlinked from the repo root as .env.example). This file covers project-scoped
+# vars only.
 
 # Model/tier selection
 DOTFILES_PROJECT_PRESET='pro-plus'

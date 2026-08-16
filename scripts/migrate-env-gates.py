@@ -81,6 +81,23 @@ MIGRATIONS = [
     ),
     # OpenCode web gate: add _SETUP suffix for consistency
     ("DOTFILES_RUN_OPENCODE_WEB", "DOTFILES_RUN_OPENCODE_WEB_SETUP", None),
+    # Caddy gate split: retain CADDY_SETUP for Caddy and inherit it into the
+    # independent DDNS, ACME, and Plannotator paste gates when absent.
+    (
+        "DOTFILES_RUN_CADDY_SETUP",
+        "DOTFILES_RUN_DDNS_SETUP",
+        "DOTFILES_RUN_CADDY_SETUP",
+    ),
+    (
+        "DOTFILES_RUN_CADDY_SETUP",
+        "DOTFILES_RUN_ACME_SETUP",
+        "DOTFILES_RUN_CADDY_SETUP",
+    ),
+    (
+        "DOTFILES_RUN_CADDY_SETUP",
+        "DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP",
+        "DOTFILES_RUN_CADDY_SETUP",
+    ),
 ]
 
 CADDY_V1_REMOVALS = {
@@ -166,7 +183,10 @@ def migrate_env(lines, dry_run=False):
     rename_map = {}
     inherit_map = {}
     for old_key, new_key, inherit_from in MIGRATIONS:
-        rename_map[old_key] = new_key
+        # A split entry uses the existing gate as its inheritance source; it
+        # must remain in place rather than being renamed to the sub-gate.
+        if old_key != inherit_from:
+            rename_map[old_key] = new_key
         if inherit_from:
             inherit_map[new_key] = inherit_from
 
