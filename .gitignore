@@ -11,3 +11,6 @@
 
 # Generated ACP agent config (emitted by configure-acp-agents.py)
 configs/opencode/acp-agents.json
+
+# Deepwork progress state (kept git-local; OpenCode-readable via .ignore)
+.slim/deepwork/
