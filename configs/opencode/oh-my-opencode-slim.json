@@ -847,8 +847,7 @@
   },
   "fallback": {
     "enabled": true,
-    "timeoutMs": 60000,
-    "retryDelayMs": 1000
+    "maxRetries": 3
   },
   "_tiers": {
     "pro": {
