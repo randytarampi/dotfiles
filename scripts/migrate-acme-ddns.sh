@@ -12,7 +12,7 @@ source "$LIB_DIR/env.sh"
 export COMMON_USAGE="$0 [--yes]"
 export COMMON_HELP_TEXT="Migrate the legacy ACME and DDNS setup."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 load_env || warn "$HOME/.env not found, skipping env load"
 

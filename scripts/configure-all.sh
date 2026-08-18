@@ -50,7 +50,7 @@ info "Running full configuration pass..."
 detect_tier DOTFILES_OPENCODE_TIER
 OC_TIER="$TIER"
 build_tier_extra_args
-OC_ARGS=("${COMMON_FORWARD_ARGS[@]}" "${TIER_EXTRA_ARGS[@]}")
+OC_ARGS=(${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"} ${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"})
 
 detect_tier DOTFILES_SMALLCODE_TIER
 SC_TIER="$TIER"
@@ -95,7 +95,7 @@ fi
 # 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
 if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
   info "Configuring MCP servers..."
-  run_step "MCP configuration" python3 "$SCRIPT_DIR/configure-mcps.py" --mode global "${COMMON_FORWARD_ARGS[@]}"
+  run_step "MCP configuration" python3 "$SCRIPT_DIR/configure-mcps.py" --mode global ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 else
   info "DOTFILES_RUN_MCP_SETUP not set — skipping MCP configuration"
 fi
@@ -231,7 +231,7 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Caddy configuration (dry-run mode)"
 elif [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   info "Configuring Caddy..."
-  run_step "Caddy configuration" python3 "$SCRIPT_DIR/configure-caddy.py" "${COMMON_FORWARD_ARGS[@]}"
+  run_step "Caddy configuration" python3 "$SCRIPT_DIR/configure-caddy.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 fi
 
 # 9. Restart OpenCode Web to pick up config changes (opencode.json, acp-agents.json, etc.)

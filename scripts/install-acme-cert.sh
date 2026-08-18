@@ -11,7 +11,7 @@ source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Issue and install configured ACME certificates."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 # shellcheck disable=SC1091
 source "$LIB_DIR/env.sh"
 

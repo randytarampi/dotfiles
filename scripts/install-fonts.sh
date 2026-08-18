@@ -11,7 +11,7 @@ source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0 <linux|windows>"
 export COMMON_HELP_TEXT="Install the configured developer fonts for the selected platform."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 MESLO_DZ_FALLBACK_URL="https://github.com/andreberg/Meslo-Font/raw/master/dist/v1.2.1/Meslo%20LG%20DZ%20v1.2.1.zip"
 MESLO_DZ_URL="$MESLO_DZ_FALLBACK_URL"

@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/lib/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Reinstall all installed Node.js LTS versions with the latest npm."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"

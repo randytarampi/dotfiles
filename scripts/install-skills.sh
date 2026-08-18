@@ -10,7 +10,7 @@ source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Install the skills and lazyskills CLI tools."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 # install-skills.sh — Cross-platform installer for skills CLI tools.
 # Installs:

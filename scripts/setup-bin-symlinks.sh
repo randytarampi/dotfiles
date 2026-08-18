@@ -12,7 +12,7 @@ source "${LIB_DIR}/common_args.sh"
 export COMMON_USAGE="$0 [SOURCE_DIR]"
 export COMMON_HELP_TEXT="Create or update ~/.dotfiles/bin command symlinks."
 parse_common_args "$@"
-set -- "${COMMON_ARGS_REMAINING[@]}"
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 SOURCE_SCRIPTS="${1:-$(cd "$(dirname "$SELF")" && pwd)}"
 DOTFILES_BIN="$HOME/.dotfiles/bin"
