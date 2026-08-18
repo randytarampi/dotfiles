@@ -106,7 +106,7 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
             tmpfile="$(mktemp)"
             # Build grep pattern: skip lines matching any ignored name
             local pattern
-            pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|' | sed 's/|/\\|/g')"
+            pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|')"
             grep -vE "(brew|cask) \"($pattern)\"" "$file" > "$tmpfile"
             brew bundle --file="$tmpfile"
             local rc=$?
@@ -271,14 +271,14 @@ else
             local tmpfile
             tmpfile="$(mktemp)"
             local pattern
-            pattern="$(echo "$DOTFILES_WINGETFILE_IGNORE" | tr ',' '|' | sed 's/|/\\|/g')"
+            pattern="$(echo "$DOTFILES_WINGETFILE_IGNORE" | tr ',' '|')"
             grep -vE "^($pattern)$" "$file" > "$tmpfile"
-            winget_import_filtered "$tmpfile"
+            winget import --import-file "$tmpfile"
             local rc=$?
             rm -f "$tmpfile"
             return $rc
         else
-            winget_import_filtered "$file"
+            winget import --import-file "$file"
         fi
     }
 
