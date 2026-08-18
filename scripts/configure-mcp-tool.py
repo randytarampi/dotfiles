@@ -482,15 +482,23 @@ def cmd_get_info(args):
 
 def cmd_get_templates(args):
     if args.mode == "project":
-        if args.project_mcps:
-            print(" ".join(args.project_mcps.split(",")))
-            return
         if not os.path.exists(args.registry_file):
             logger.critical(f"Registry file not found: {args.registry_file}")
             sys.exit(1)
         with open(args.registry_file, "r", encoding="utf-8") as f:
             reg = json.load(f)
-        print(" ".join(reg.get("project_mcp_templates", [])))
+        registry_templates = reg.get("project_mcp_templates", [])
+        if args.project_mcps:
+            raw_list = [t.strip() for t in args.project_mcps.split(",") if t.strip()]
+            expanded = []
+            for item in raw_list:
+                if item == "all":
+                    expanded.extend(registry_templates)
+                else:
+                    expanded.append(item)
+            print(" ".join(expanded))
+            return
+        print(" ".join(registry_templates))
     else:
         cfg = get_tool_config(args.registry_file, args.tool)
         servers = cfg.get("mcp_servers", [])
@@ -548,12 +556,19 @@ def orchestrate_mcp_config(args):
     format_type = tool_config.get("format", "")
 
     if args.mode == "project":
+        with open(registry_file, "r", encoding="utf-8") as f:
+            reg = json.load(f)
+        registry_templates = reg.get("project_mcp_templates", [])
         if args.project_mcps:
-            template_list = args.project_mcps.split(",")
+            raw_list = [t.strip() for t in args.project_mcps.split(",") if t.strip()]
+            template_list = []
+            for item in raw_list:
+                if item == "all":
+                    template_list.extend(registry_templates)
+                else:
+                    template_list.append(item)
         else:
-            with open(registry_file, "r", encoding="utf-8") as f:
-                reg = json.load(f)
-            template_list = reg.get("project_mcp_templates", [])
+            template_list = registry_templates
     else:
         servers = tool_config.get("mcp_servers", [])
         template_list = [s["template"] for s in servers if "template" in s]
