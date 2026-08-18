@@ -1,5 +1,7 @@
 cask "cyberduck"
 cask "google-drive"
 cask "windows-app"
+# tailscale-app: managed outside Homebrew (App Store) or installed system-wide
 #cask "tailscale-app"
+# onedrive: conflicts with Microsoft Office bundled in Brewfile.desktop.productivity.msoffice
 #cask "onedrive"

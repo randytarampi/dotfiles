@@ -1,5 +1,8 @@
 # Brewfile.utilities
 # Non-desktop CLI utilities that don't fit the core or dev profile — opt-in via categories.utilities
 
+tap "teamookla/speedtest", trusted: true
+
 brew "flashrom"
 brew "testdisk"
+brew "teamookla/speedtest/speedtest"
