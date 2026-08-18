@@ -101,7 +101,7 @@ Every script is registered in `scripts/lib/cli-contract.json` with its capabilit
 
 Common flags (`--dry-run`, `--no-backup`) propagate parent→child via shared forwarding arrays:
 
-- **Shell**: `COMMON_FORWARD_ARGS` array from `common_args.sh`; pass `"${COMMON_FORWARD_ARGS[@]}"` to children that accept common flags.
+- **Shell**: `COMMON_FORWARD_ARGS` array from `common_args.sh`; pass `${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}` to children that accept common flags. The `${array[@]+"..."}` pattern is required because `set -u` treats empty arrays as unset — bare `"${array[@]}"` fails with `unbound variable` when the array is empty.
 - **Python**: `forward_common_args(args)` from `cli_helpers.py`; pass the returned list to child subprocess calls.
 - **Capability-based**: Only forward flags the child actually accepts. A child without `--dry-run` must not receive it.
 

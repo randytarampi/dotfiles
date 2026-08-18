@@ -35,11 +35,14 @@ own help and exits 0; it is not forwarded to children.
 Script-specific flags, such as `--local-fallback-*`, are explicit and are
 passed only when relevant.
 
-Shell scripts forward arguments with arrays:
+Shell scripts forward arguments with arrays. Under `set -euo pipefail`,
+the `-u` (nounset) option treats empty arrays as unset, so the safe
+`${array[@]+"${array[@]}"}` pattern is required — bare `"${array[@]}"`
+fails with `unbound variable` when the array is empty:
 
 ```bash
 COMMON_ARGS=("--dry-run" "--no-backup")
-"$CHILD_SCRIPT" "${COMMON_ARGS[@]}"
+"$CHILD_SCRIPT" ${COMMON_ARGS[@]+"${COMMON_ARGS[@]}"}
 ```
 
 Python scripts use helper functions that construct argument lists from the
