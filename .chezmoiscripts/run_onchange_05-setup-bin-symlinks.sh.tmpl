@@ -49,5 +49,7 @@ set -euo pipefail
 # scripts/configure-codegraph.py: {{ include "scripts/configure-codegraph.py" | sha256sum }}
 # scripts/configure-ddns.py: {{ include "scripts/configure-ddns.py" | sha256sum }}
 # scripts/configure-skills.py: {{ include "scripts/configure-skills.py" | sha256sum }}
+# scripts/check-pep604.py: {{ include "scripts/check-pep604.py" | sha256sum }}
+# scripts/check-categories.py: {{ include "scripts/check-categories.py" | sha256sum }}
 
 "{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"

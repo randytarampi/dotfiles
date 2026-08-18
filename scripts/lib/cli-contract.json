@@ -5,73 +5,665 @@
       "flag": "--help",
       "type": "boolean",
       "semantics": "print usage and exit 0",
-      "required_for_capabilities": ["public"]
+      "required_for_capabilities": [
+        "public"
+      ]
     },
     "dry_run": {
       "flag": "--dry-run",
       "type": "boolean",
       "default": false,
       "semantics": "preview without writing to filesystem",
-      "required_for_capabilities": ["mutates"]
+      "required_for_capabilities": [
+        "mutates"
+      ]
     },
     "no_backup": {
       "flag": "--no-backup",
       "type": "boolean",
       "default": false,
       "semantics": "disable backup file creation (backup-on default)",
-      "required_for_capabilities": ["backups"]
+      "required_for_capabilities": [
+        "backups"
+      ]
     },
     "preset": {
       "flag": "--preset",
       "type": "string",
       "metavar": "TIER",
       "semantics": "AI model tier preset",
-      "required_for_capabilities": ["tier_selector"]
+      "required_for_capabilities": [
+        "tier_selector"
+      ]
     },
     "mode": {
       "flag": "--mode",
       "type": "choice",
-      "choices": ["global", "project"],
+      "choices": [
+        "global",
+        "project"
+      ],
       "semantics": "configuration scope",
-      "required_for_capabilities": ["scope_selector"]
+      "required_for_capabilities": [
+        "scope_selector"
+      ]
     }
   },
   "local_fallback_flags": {
-    "preset": {"flag": "--local-fallback-preset", "type": "string", "metavar": "PRESET"},
-    "role": {"flag": "--local-fallback-role", "type": "string", "metavar": "ROLE", "repeatable": true},
-    "placeholder": {"flag": "--local-fallback-placeholder", "type": "string", "metavar": "PLACEHOLDER", "repeatable": true}
+    "preset": {
+      "flag": "--local-fallback-preset",
+      "type": "string",
+      "metavar": "PRESET"
+    },
+    "role": {
+      "flag": "--local-fallback-role",
+      "type": "string",
+      "metavar": "ROLE",
+      "repeatable": true
+    },
+    "placeholder": {
+      "flag": "--local-fallback-placeholder",
+      "type": "string",
+      "metavar": "PLACEHOLDER",
+      "repeatable": true
+    }
   },
-  "exit_codes": {"success": 0, "runtime_failure": 1, "usage_error": 2},
+  "exit_codes": {
+    "success": 0,
+    "runtime_failure": 1,
+    "usage_error": 2
+  },
   "scripts": [
-    {"path": "scripts/configure-acp-agents.py", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help", "--preset", "--output", "--slim-file", "--agents"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-agent-guidance.py", "capabilities": ["public", "mutates"], "enforcement": "strict", "accepted_flags": ["--help", "--source", "--dry-run", "--force", "--check"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-all.sh", "capabilities": ["public", "mutates", "orchestrates"], "enforcement": "strict", "failure_policy": "aggregate", "accepted_flags": ["--help", "--dry-run", "--no-backup"], "positional_operand": null, "child_scripts": ["install-npm-brewfile-packages.sh", "configure-secrets.py", "configure-jetbrains-ai.py", "configure-mcps.py", "configure-opencode.py", "configure-meridian.py", "configure-mozart-router.py", "configure-smallcode.py", "configure-agent-guidance.py", "configure-codegraph.py", "configure-skills.py", "configure-ddns.py", "configure-caddy.py"]},
-    {"path": "scripts/configure-caddy.py", "capabilities": ["public", "mutates", "backups"], "enforcement": "pending", "accepted_flags": ["--help", "--no-backup"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-codegraph.py", "capabilities": ["public", "mutates"], "enforcement": "strict", "accepted_flags": ["--help", "--root", "--dry-run", "--force"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-ddns.py", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-jetbrains-ai.py", "capabilities": ["public", "mutates", "orchestrates"], "enforcement": "strict", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--dry-run", "--no-backup", "--models", "--dirs", "--mcp", "--all", "--all-tools", "--tools", "--project-mcps", "--project-dir"], "positional_operand": null, "child_scripts": ["configure-mcps.py", "generate-jetbrains-profiles.py"]},
-    {"path": "scripts/configure-jetbrains-workspace-project.py", "capabilities": ["public", "mutates", "orchestrates"], "enforcement": "pending", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--workspace-root", "--project-dir"], "positional_operand": null, "child_scripts": ["_configure-jetbrains-workspace-project.py", "configure-project.py"]},
-    {"path": "scripts/configure-mcp-tool.py", "capabilities": ["public", "mutates", "backups", "scope_selector"], "enforcement": "pending", "accepted_flags": ["--help", "--mode", "--project-dir", "--project-mcps", "--include", "--exclude", "--env-file", "--dry-run", "--show-secrets", "--no-backup"], "positional_operand": "tool", "child_scripts": []},
-    {"path": "scripts/configure-mcps.py", "capabilities": ["public", "mutates", "backups", "scope_selector", "orchestrates"], "enforcement": "pending", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--mode", "--project-dir", "--project-mcps", "--tools", "--include", "--exclude", "--env-file", "--dry-run", "--no-backup"], "positional_operand": null, "child_scripts": ["configure-mcp-tool.py"]},
-    {"path": "scripts/configure-meridian.py", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-mozart-router.py", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-opencode-dcp.py", "capabilities": ["public", "mutates", "backups"], "enforcement": "pending", "accepted_flags": ["--help", "--dry-run", "--no-backup"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-opencode-project.py", "capabilities": ["public", "mutates", "orchestrates"], "enforcement": "pending", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--preset", "--steps", "--workspace-root", "--project-mcps", "--mcps", "--all-mcps"], "positional_operand": null, "child_scripts": ["configure-project.py"]},
-    {"path": "scripts/configure-opencode-tier.py", "capabilities": ["public", "mutates", "tier_selector"], "enforcement": "pending", "accepted_flags": ["--help", "--preset", "--no-local-fallbacks", "--local-fallback-role", "--local-fallback-preset", "--local-fallback-placeholder", "--min-reasoning-embedding"], "positional_operand": "tier", "child_scripts": []},
-    {"path": "scripts/configure-opencode-voice.py", "capabilities": ["public", "mutates", "backups"], "enforcement": "pending", "accepted_flags": ["--help", "--preset", "--dry-run", "--show-secrets", "--no-backup"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/configure-opencode.py", "capabilities": ["public", "mutates", "tier_selector", "scope_selector", "orchestrates"], "enforcement": "strict", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--dry-run", "--no-backup", "--preset", "--mode", "--local-fallback-preset", "--local-fallback-role", "--local-fallback-placeholder"], "positional_operand": null, "child_scripts": ["configure-mcp-tool.py", "configure-acp-agents.py", "configure-opencode-tier.py", "configure-opencode-voice.py", "configure-opencode-dcp.py"]},
-    {"path": "scripts/configure-project.py", "capabilities": ["public", "mutates", "tier_selector", "orchestrates"], "enforcement": "strict", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--dry-run", "--no-backup", "--preset", "--steps", "--workspace-root", "--skill-profiles", "--skills", "--skip-skills", "--mcps", "--mcp-tools", "--acp-agents", "--junie-dirs", "--junie-mcp", "--local-fallback-preset", "--local-fallback-placeholder", "--local-fallback-role"], "positional_operand": null, "child_scripts": ["configure-opencode.py", "configure-opencode-tier.py", "configure-mcps.py", "configure-jetbrains-workspace-project.py", "configure-jetbrains-ai.py", "configure-acp-agents.py", "configure-secrets.py"]},
-    {"path": "scripts/configure-secrets.py", "capabilities": ["public", "mutates", "scope_selector", "orchestrates"], "enforcement": "pending", "failure_policy": "fail_fast", "accepted_flags": ["--help", "--target", "--all", "--configure-jetbrains-ai", "--mode", "--output"], "positional_operand": null, "child_scripts": ["configure-jetbrains-ai.py"]},
-    {"path": "scripts/configure-skills.py", "capabilities": ["public", "mutates"], "enforcement": "strict", "accepted_flags": ["--help", "--dry-run", "--update"], "positional_operand": null, "child_scripts": ["skills"]},
-    {"path": "scripts/configure-smallcode.py", "capabilities": ["public", "mutates", "backups", "tier_selector", "scope_selector"], "enforcement": "pending", "accepted_flags": ["--help", "--preset", "--no-backup", "--mode", "--no-mcp", "--no-local-fallbacks", "--local-fallback-placeholder", "--local-fallback-role", "--local-fallback-preset", "--ollama-base-url", "--min-reasoning-embedding"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-acme-cert.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-antigravity-acp.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-fonts.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-npm-brewfile-packages.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": "brewfile", "child_scripts": []},
-    {"path": "scripts/install-nvm-lts.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-opencode.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-plannotator.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-skills.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []},
-    {"path": "scripts/install-smallcode.sh", "capabilities": ["public", "mutates"], "enforcement": "pending", "accepted_flags": ["--help"], "positional_operand": null, "child_scripts": []}
+    {
+      "path": "scripts/configure-acp-agents.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--preset",
+        "--output",
+        "--slim-file",
+        "--agents"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-agent-guidance.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--source",
+        "--dry-run",
+        "--force",
+        "--check"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-all.sh",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "aggregate",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "install-npm-brewfile-packages.sh",
+        "configure-secrets.py",
+        "configure-jetbrains-ai.py",
+        "configure-mcps.py",
+        "configure-opencode.py",
+        "configure-meridian.py",
+        "configure-mozart-router.py",
+        "configure-smallcode.py",
+        "configure-agent-guidance.py",
+        "configure-codegraph.py",
+        "configure-skills.py",
+        "configure-ddns.py",
+        "configure-caddy.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-caddy.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-codegraph.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--root",
+        "--dry-run",
+        "--force"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-ddns.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-jetbrains-ai.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--models",
+        "--dirs",
+        "--mcp",
+        "--all",
+        "--all-tools",
+        "--tools",
+        "--project-mcps",
+        "--project-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-mcps.py",
+        "generate-jetbrains-profiles.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-jetbrains-workspace-project.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "pending",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--workspace-root",
+        "--project-dir"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "_configure-jetbrains-workspace-project.py",
+        "configure-project.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-mcp-tool.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups",
+        "scope_selector"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--mode",
+        "--project-dir",
+        "--project-mcps",
+        "--include",
+        "--exclude",
+        "--env-file",
+        "--dry-run",
+        "--show-secrets",
+        "--no-backup"
+      ],
+      "positional_operand": "tool",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-mcps.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups",
+        "scope_selector",
+        "orchestrates"
+      ],
+      "enforcement": "pending",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--mode",
+        "--project-dir",
+        "--project-mcps",
+        "--tools",
+        "--include",
+        "--exclude",
+        "--env-file",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-mcp-tool.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-meridian.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-mozart-router.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-opencode-dcp.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-opencode-project.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "pending",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--preset",
+        "--steps",
+        "--workspace-root",
+        "--project-mcps",
+        "--mcps",
+        "--all-mcps"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-project.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-opencode-tier.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "tier_selector"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--preset",
+        "--no-local-fallbacks",
+        "--local-fallback-role",
+        "--local-fallback-preset",
+        "--local-fallback-placeholder",
+        "--min-reasoning-embedding"
+      ],
+      "positional_operand": "tier",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-opencode-voice.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--preset",
+        "--dry-run",
+        "--show-secrets",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-opencode.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "tier_selector",
+        "scope_selector",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--preset",
+        "--mode",
+        "--local-fallback-preset",
+        "--local-fallback-role",
+        "--local-fallback-placeholder"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-mcp-tool.py",
+        "configure-acp-agents.py",
+        "configure-opencode-tier.py",
+        "configure-opencode-voice.py",
+        "configure-opencode-dcp.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-project.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "tier_selector",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--preset",
+        "--steps",
+        "--workspace-root",
+        "--skill-profiles",
+        "--skills",
+        "--skip-skills",
+        "--mcps",
+        "--mcp-tools",
+        "--acp-agents",
+        "--junie-dirs",
+        "--junie-mcp",
+        "--local-fallback-preset",
+        "--local-fallback-placeholder",
+        "--local-fallback-role"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-opencode.py",
+        "configure-opencode-tier.py",
+        "configure-mcps.py",
+        "configure-jetbrains-workspace-project.py",
+        "configure-jetbrains-ai.py",
+        "configure-acp-agents.py",
+        "configure-secrets.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-secrets.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "scope_selector",
+        "orchestrates"
+      ],
+      "enforcement": "pending",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--target",
+        "--all",
+        "--configure-jetbrains-ai",
+        "--mode",
+        "--output"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "configure-jetbrains-ai.py"
+      ]
+    },
+    {
+      "path": "scripts/configure-skills.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--update"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "skills"
+      ]
+    },
+    {
+      "path": "scripts/configure-smallcode.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups",
+        "tier_selector",
+        "scope_selector"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--preset",
+        "--no-backup",
+        "--mode",
+        "--no-mcp",
+        "--no-local-fallbacks",
+        "--local-fallback-placeholder",
+        "--local-fallback-role",
+        "--local-fallback-preset",
+        "--ollama-base-url",
+        "--min-reasoning-embedding"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-acme-cert.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-antigravity-acp.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-fonts.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-npm-brewfile-packages.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": "brewfile",
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-nvm-lts.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-opencode.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-plannotator.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-skills.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-smallcode.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/check-pep604.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/check-categories.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    }
   ]
 }
