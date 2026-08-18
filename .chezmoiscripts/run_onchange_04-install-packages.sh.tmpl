@@ -93,6 +93,10 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
         brew trust "$tap_name" 2>/dev/null || true
     done
 
+    # Accept EULA for Microsoft SQL Server formulas (msodbcsql18, mssql-tools18)
+    # to avoid interactive prompt hanging brew bundle in non-interactive mode.
+    export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
+
     # Filter ignored packages from a Brewfile before running brew bundle.
     # Controlled by DOTFILES_BREWFILE_IGNORE (comma-separated brew/cask names).
     brew_bundle_filtered() {
@@ -104,12 +108,12 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
             local pattern
             pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|' | sed 's/|/\\|/g')"
             grep -vE "(brew|cask) \"($pattern)\"" "$file" > "$tmpfile"
-            brew_bundle_filtered "$tmpfile"
+            brew bundle --file="$tmpfile"
             local rc=$?
             rm -f "$tmpfile"
             return $rc
         else
-            brew_bundle_filtered "$file"
+            brew bundle --file="$file"
         fi
     }
 
