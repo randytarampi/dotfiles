@@ -12,6 +12,7 @@ Exit codes:
 import os
 import sys
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -174,6 +175,77 @@ def check_ssh_permissions():
                 print(
                     f"  \u26a0 SSH key {key.name} permissions: {oct(mode)} (should be 600)"
                 )
+
+
+def check_opencode_orphan_files():
+    """Detect unmanaged OpenCode config files that may override opencode.json."""
+    if os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") != "1":
+        print(
+            "  \u2298 OpenCode orphan file checks "
+            "(gate DOTFILES_RUN_OPENCODE_SETUP=0, skipped)"
+        )
+        return 0
+
+    opencode_dir = HOME / ".config/opencode"
+    managed_config_path = opencode_dir / "opencode.json"
+    dcp_config_path = opencode_dir / "dcp.jsonc"
+    exit_code = 0
+
+    if dcp_config_path.exists():
+        print(f"  \u2713 DCP config: {dcp_config_path}")
+    else:
+        print(f"  \u2717 DCP config: MISSING {dcp_config_path}")
+        exit_code = 1
+
+    try:
+        managed_config = json.loads(managed_config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        managed_config = {}
+    managed_keys = set(managed_config) if isinstance(managed_config, dict) else set()
+
+    for path in sorted(opencode_dir.glob("*.jsonc")):
+        if path.name == "dcp.jsonc":
+            continue
+
+        try:
+            content = path.read_text(encoding="utf-8")
+            try:
+                config = json.loads(content)
+            except json.JSONDecodeError:
+                content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+                content = re.sub(r"(^|\s)//.*$", r"\1", content, flags=re.MULTILINE)
+                config = json.loads(content)
+        except (json.JSONDecodeError, OSError):
+            print(f"  \u26a0 Orphan config file: {path.name} (could not parse)")
+            continue
+
+        if not isinstance(config, dict):
+            print(f"  \u26a0 Orphan config file: {path.name} (not managed by dotfiles)")
+            continue
+
+        if "plugin" in config:
+            print(
+                f"  \u2717 OpenCode override risk: {path.name} has a 'plugin' key "
+                "that replaces the managed opencode.json plugin array"
+            )
+            exit_code = 1
+
+        overlapping_keys = (set(config) & managed_keys) - {"plugin"}
+        if overlapping_keys:
+            for key in sorted(overlapping_keys):
+                print(
+                    f"  \u26a0 OpenCode override: {path.name} has key '{key}' "
+                    "that may override opencode.json"
+                )
+        elif "plugin" not in config:
+            print(
+                f"  \u26a0 Orphan config file: {path.name} " "(not managed by dotfiles)"
+            )
+
+    for path in sorted(opencode_dir.glob("*.bak")):
+        print(f"  \u26a0 Stale backup: {path.name}")
+
+    return exit_code
 
 
 def main():
@@ -418,6 +490,9 @@ def main():
             exit_code = 1
     else:
         print(f"  \u2298 CodeGraph MCP (gate DOTFILES_RUN_CODEGRAPH_SETUP=0, skipped)")
+
+    # OpenCode orphan config check (only enforced when OpenCode setup is enabled)
+    exit_code = max(exit_code, check_opencode_orphan_files())
 
     # ACP agent CLI availability check (runs whenever opencode.json is parseable)
     if opencode_config is not None:
