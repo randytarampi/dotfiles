@@ -147,15 +147,24 @@ brew "vale"
 brew "parallel"
 brew "cask"
 
-# --- Dev desktop apps ---
-cask "docker-desktop"
-cask "iterm2"
-cask "jetbrains-toolbox"
-cask "oracle-jdk"
-cask "parallels"
-cask "vmware-fusion"
-cask "sublime-text"
-cask "visual-studio-code"
+# --- Shared tap formulas (from core Brewfile) ---
+brew "anomalyco/tap/opencode", trusted: true
+brew "facebook/fb/idb-companion"
+brew "microsoft/mssql-release/msodbcsql18"
+brew "microsoft/mssql-release/mssql-tools18"
+brew "mongodb/brew/mongodb-database-tools"
+brew "mongodb/brew/mongodb-community"
+brew "phrase/brewed/phraseapp"
+brew "snyk/tap/snyk"
+brew "wix/brew/applesimutils"
+
+# --- CLI casks ---
+cask "1password-cli"
+cask "codex"
+cask "copilot-cli"
+cask "claude-code"
+cask "antigravity-cli"
+
 tap "alvinunreal/tap", trusted: true
 cask "alvinunreal/tap/lazyskills"
 

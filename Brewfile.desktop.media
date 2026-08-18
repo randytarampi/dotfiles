@@ -1,4 +1,3 @@
-cask "adobe-creative-cloud"
 cask "imageoptim"
 cask "mactex"
 cask "obs"

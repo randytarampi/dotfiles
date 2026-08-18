@@ -1,6 +1,3 @@
-cask "aws-vpn-client"
-cask "gpg-suite"
-cask "mullvad-vpn"
-cask "private-internet-access"
+cask "1password"
 cask "keeper-password-manager"
 cask "wireshark-app"

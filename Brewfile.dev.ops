@@ -23,10 +23,11 @@ brew "ssh-audit"
 brew "grype"
 brew "syft"
 
+# --- Shared tap formulas (from core Brewfile) ---
+brew "heroku/brew/heroku", trusted: true
+
 # --- Casks ---
 cask "gcloud-cli"
-cask "mongodb-compass"
-cask "session-manager-plugin"
 
 # --- npm ---
 npm "speed-cloudflare-cli"

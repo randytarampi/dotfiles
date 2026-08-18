@@ -1,6 +1,3 @@
 cask "battle-net"
-cask "dolphin"
 cask "ea"
-cask "pcsx2"
 cask "steam"
-cask "utm"

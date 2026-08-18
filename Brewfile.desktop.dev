@@ -2,4 +2,34 @@
 # Developer-focused desktop apps — opt-in via categories.desktop_dev
 # Useful for testing but not needed on every machine.
 
+# --- Dev desktop apps (from Brewfile.dev) ---
+cask "docker-desktop"
+cask "iterm2"
+cask "jetbrains-toolbox"
+cask "oracle-jdk"
+cask "sublime-text"
+cask "visual-studio-code"
+
+# --- AI/LLM desktop apps (from Brewfile.desktop.cloud) ---
+cask "antigravity"
+cask "opencode-desktop"
+cask "ollama-app"
+
+# --- Dev tools (from Brewfile.desktop.comms) ---
+cask "codexbar"
+
+# --- Security tools (from Brewfile.desktop.security) ---
+cask "aws-vpn-client"
+cask "gpg-suite"
+
+# --- Dev ops tools (from Brewfile.dev.ops) ---
+cask "mongodb-compass"
+cask "session-manager-plugin"
+
+# --- Utilities (from Brewfile.desktop.utilities) ---
+cask "itermai"
+cask "siliconscope"
+cask "mx-power-gadget"
+
+# --- Other ---
 cask "ungoogled-chromium"

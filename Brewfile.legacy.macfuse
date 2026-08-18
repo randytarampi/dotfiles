@@ -1,0 +1,6 @@
+tap "gromgit/fuse", trusted: true
+
+brew "gromgit/fuse/ext2fuse-mac"
+brew "gromgit/fuse/ext4fuse-mac"
+brew "gromgit/fuse/ntfs-3g-mac"
+brew "gromgit/fuse/s3fs-mac"

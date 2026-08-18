@@ -1,2 +1,3 @@
-cask "microsoft-auto-update"
-cask "microsoft-office-businesspro"
+cask "chatgpt"
+cask "ollama-app"
+cask "claude"
