@@ -63,8 +63,22 @@ CATEGORY_SPECS: list[CategorySpec] = [
     CategorySpec("desktop_gaming", "Brewfile.desktop.gaming", False),
     CategorySpec("desktop_cloud", "Brewfile.desktop.cloud", True),
     CategorySpec("desktop_productivity", "Brewfile.desktop.productivity", True),
+    CategorySpec("desktop_dev", "Brewfile.desktop.dev", False),
     CategorySpec("dev_ops", "Brewfile.dev.ops", True),
+    CategorySpec("desktop_privacy", "Brewfile.desktop.privacy", False),
+    CategorySpec("desktop_emulation", "Brewfile.desktop.emulation", False),
+    CategorySpec(
+        "desktop_gaming_emulation", "Brewfile.desktop.gaming.emulation", False
+    ),
+    CategorySpec(
+        "desktop_productivity_msoffice", "Brewfile.desktop.productivity.msoffice", False
+    ),
+    CategorySpec(
+        "desktop_productivity_adobe", "Brewfile.desktop.productivity.adobe", False
+    ),
     CategorySpec("legacy", "Brewfile.legacy", False),
+    CategorySpec("legacy_macfuse", "Brewfile.legacy.macfuse", False),
+    CategorySpec("legacy_vmware", "Brewfile.legacy.vmware", False),
 ]
 
 ENTRY_RE = re.compile(r'^(tap|brew|cask|npm)\s+"([^"]+)"(?:\s*,\s*(.*))?$')
@@ -236,10 +250,8 @@ DEV_OPS_FORMULAS = {
     "kubernetes-cli",
     "libgphoto2",
     "mailutils",
-    "mongodb-compass",
     "mongosh",
     "postgresql@16",
-    "session-manager-plugin",
     "ssh-audit",
     "terraform",
     "speed-cloudflare-cli",
@@ -254,13 +266,9 @@ BROWSER_CASK_HINTS = (
     "vivaldi",
     "safari-technology-preview",
     "chromium",
-    "mullvad-browser",
 )
 
 COMM_CASK_HINTS = (
-    "1password",
-    "claude",
-    "codex",
     "discord",
     "slack",
     "signal",
@@ -273,10 +281,11 @@ COMM_CASK_HINTS = (
 )
 
 SECURITY_CASK_HINTS = (
-    "mullvadvpn",
-    "private-internet-access",
     "tunnelblick",
     "wireguard",
+    "aws-vpn-client",
+    "gpg-suite",
+    "1password",
 )
 
 MEDIA_CASK_HINTS = (
@@ -320,6 +329,54 @@ GAMING_CASK_HINTS = (
     "heroic",
     "minecraft",
     "steam",
+)
+
+PRIVACY_CASK_HINTS = (
+    "mullvad-browser",
+    "mullvadvpn",
+    "mullvad-vpn",
+    "private-internet-access",
+)
+
+EMULATION_CASK_HINTS = (
+    "parallels",
+    "utm",
+    "vmware-fusion",
+)
+
+GAMING_EMULATION_CASK_HINTS = (
+    "dolphin",
+    "pcsx2",
+)
+
+PRODUCTIVITY_MSOFFICE_CASK_HINTS = (
+    "microsoft-auto-update",
+    "microsoft-office",
+    "microsoft-teams",
+)
+
+PRODUCTIVITY_ADOBE_CASK_HINTS = (
+    "adobe-creative-cloud",
+    "adobe-acrobat",
+)
+
+DESKTOP_DEV_CASK_HINTS = (
+    "docker-desktop",
+    "iterm2",
+    "jetbrains-toolbox",
+    "oracle-jdk",
+    "sublime-text",
+    "visual-studio-code",
+    "ungoogled-chromium",
+    "antigravity",
+    "opencode-desktop",
+    "ollama-app",
+    "codexbar",
+    "itermai",
+    "siliconscope",
+    "mx-power-gadget",
+    "mongodb-compass",
+    "session-manager-plugin",
 )
 
 
@@ -437,6 +494,18 @@ def classify_entry(entry: BrewEntry) -> str | None:
             return "desktop_productivity"
         if _matches_hint(name, GAMING_CASK_HINTS):
             return "desktop_gaming"
+        if _matches_hint(name, PRIVACY_CASK_HINTS):
+            return "desktop_privacy"
+        if _matches_hint(name, EMULATION_CASK_HINTS):
+            return "desktop_emulation"
+        if _matches_hint(name, GAMING_EMULATION_CASK_HINTS):
+            return "desktop_gaming_emulation"
+        if _matches_hint(name, PRODUCTIVITY_MSOFFICE_CASK_HINTS):
+            return "desktop_productivity_msoffice"
+        if _matches_hint(name, PRODUCTIVITY_ADOBE_CASK_HINTS):
+            return "desktop_productivity_adobe"
+        if _matches_hint(name, DESKTOP_DEV_CASK_HINTS):
+            return "desktop_dev"
         return None
 
     if entry.kind == "brew":

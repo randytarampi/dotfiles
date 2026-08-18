@@ -32,6 +32,13 @@ fi
 # dev.security: {{ include "Brewfile.dev.security" | sha256sum }}
 {{- end }}
 # dev.ops: {{ include "Brewfile.dev.ops" | sha256sum }}
+# desktop.privacy: {{ include "Brewfile.desktop.privacy" | sha256sum }}
+# desktop.emulation: {{ include "Brewfile.desktop.emulation" | sha256sum }}
+# desktop.gaming.emulation: {{ include "Brewfile.desktop.gaming.emulation" | sha256sum }}
+# desktop.productivity.msoffice: {{ include "Brewfile.desktop.productivity.msoffice" | sha256sum }}
+# desktop.productivity.adobe: {{ include "Brewfile.desktop.productivity.adobe" | sha256sum }}
+# legacy.macfuse: {{ include "Brewfile.legacy.macfuse" | sha256sum }}
+# legacy.vmware: {{ include "Brewfile.legacy.vmware" | sha256sum }}
 # legacy: {{ include "Brewfile.legacy" | sha256sum }}
 # utilities: {{ include "Brewfile.utilities" | sha256sum }}
 # install-fonts.sh: {{ include "scripts/install-fonts.sh" | sha256sum }}
@@ -53,6 +60,13 @@ fi
 # desktop.dev: {{ include "wingetfile.desktop.dev" | sha256sum }}
 # desktop.gaming: {{ include "wingetfile.desktop.gaming" | sha256sum }}
 # desktop.fonts: {{ include "wingetfile.desktop.fonts" | sha256sum }}
+# desktop.privacy: {{ include "wingetfile.desktop.privacy" | sha256sum }}
+# desktop.emulation: {{ include "wingetfile.desktop.emulation" | sha256sum }}
+# desktop.gaming.emulation: {{ include "wingetfile.desktop.gaming.emulation" | sha256sum }}
+# desktop.productivity.msoffice: {{ include "wingetfile.desktop.productivity.msoffice" | sha256sum }}
+# desktop.productivity.adobe: {{ include "wingetfile.desktop.productivity.adobe" | sha256sum }}
+# legacy.macfuse: {{ include "wingetfile.legacy.macfuse" | sha256sum }}
+# legacy.vmware: {{ include "wingetfile.legacy.vmware" | sha256sum }}
 # legacy: {{ include "wingetfile.legacy" | sha256sum }}
 {{- end }}
 
@@ -154,6 +168,41 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
     brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy
     bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy" || warn "npm package reconciliation failed for Brewfile.legacy"
     {{- end }}
+
+    {{- if and .categories.legacy_macfuse (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse" || warn "npm package reconciliation failed for Brewfile.legacy.macfuse"
+    {{- end }}
+
+    {{- if and .categories.legacy_vmware (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware" || warn "npm package reconciliation failed for Brewfile.legacy.vmware"
+    {{- end }}
+
+    {{- if and .categories.desktop_privacy (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy" || warn "npm package reconciliation failed for Brewfile.desktop.privacy"
+    {{- end }}
+
+    {{- if and .categories.desktop_emulation (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.emulation"
+    {{- end }}
+
+    {{- if and .categories.desktop_gaming_emulation (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.gaming.emulation"
+    {{- end }}
+
+    {{- if and .categories.desktop_productivity_msoffice (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.msoffice"
+    {{- end }}
+
+    {{- if and .categories.desktop_productivity_adobe (eq .chezmoi.os "darwin") }}
+    brew bundle --file={{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe
+    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.adobe"
+    {{- end }}
 fi
 
 # --- Cross-platform fonts (Linux + Windows; macOS handled by brew bundle above) ---
@@ -237,6 +286,34 @@ else
 
     {{- if .categories.legacy }}
     winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
+    {{- end }}
+
+    {{- if .categories.legacy_macfuse }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.legacy.macfuse"
+    {{- end }}
+
+    {{- if .categories.legacy_vmware }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.legacy.vmware"
+    {{- end }}
+
+    {{- if .categories.desktop_privacy }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.privacy"
+    {{- end }}
+
+    {{- if .categories.desktop_emulation }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.emulation"
+    {{- end }}
+
+    {{- if .categories.desktop_gaming_emulation }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming.emulation"
+    {{- end }}
+
+    {{- if .categories.desktop_productivity_msoffice }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.msoffice"
+    {{- end }}
+
+    {{- if .categories.desktop_productivity_adobe }}
+    winget import --accept-package-agreements --accept-source-agreements "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.adobe"
     {{- end }}
 fi
 {{- end }}
