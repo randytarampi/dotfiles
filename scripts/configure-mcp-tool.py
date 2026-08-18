@@ -399,7 +399,8 @@ def merge_configs_to_file(fmt, mcp_path, output):
     if fmt == "json-settings-merge":
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
-            existing = json.load(f)
+            content = f.read().strip()
+        existing = json.loads(content) if content else {}
         existing.update(new_data)
         with open(mcp_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=4)
@@ -417,7 +418,8 @@ def merge_configs_to_file(fmt, mcp_path, output):
         # shared app config files like claude_desktop_config.json.
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
-            existing = json.load(f)
+            content = f.read().strip()
+        existing = json.loads(content) if content else {}
         existing.update(new_data)
         with open(mcp_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=4)
@@ -427,7 +429,8 @@ def merge_configs_to_file(fmt, mcp_path, output):
     elif fmt == "opencode-internal":
         new_data = json.loads(output)
         with open(mcp_path, "r", encoding="utf-8") as f:
-            existing = json.load(f)
+            content = f.read().strip()
+        existing = json.loads(content) if content else {}
         if "mcp" in new_data:
             if "mcp" not in existing:
                 existing["mcp"] = {}
