@@ -67,6 +67,8 @@ CATEGORY_SPECS: list[CategorySpec] = [
     CategorySpec("desktop_productivity", "Brewfile.desktop.productivity", True),
     CategorySpec("desktop_dev", "Brewfile.desktop.dev", False),
     CategorySpec("dev_ops", "Brewfile.dev.ops", True),
+    CategorySpec("dev_security", "Brewfile.dev.security", False),
+    CategorySpec("utilities", "Brewfile.utilities", False),
     CategorySpec("desktop_privacy", "Brewfile.desktop.privacy", False),
     CategorySpec("desktop_emulation", "Brewfile.desktop.emulation", False),
     CategorySpec(
@@ -230,6 +232,24 @@ DEV_FORMULA_PREFIXES = (
     "ruby",
 )
 
+DEV_SECURITY_FORMULAS = {
+    "clamav",
+    "ffuf",
+    "nmap",
+    "nikto",
+    "hydra",
+    "john",
+    "aircrack-ng",
+    "sqlmap",
+    "metasploit",
+}
+
+UTILITIES_FORMULAS = {
+    "flashrom",
+    "testdisk",
+    "speedtest",
+}
+
 DEV_OPS_FORMULAS = {
     "ansible",
     "arping",
@@ -290,6 +310,8 @@ SECURITY_CASK_HINTS = (
     "gpg-suite",
     "1password",
 )
+
+DEV_SECURITY_CASK_HINTS = ("1password-cli",)
 
 MEDIA_CASK_HINTS = (
     "handbrake",
@@ -498,6 +520,8 @@ def classify_entry(entry: BrewEntry) -> str | None:
             return "desktop_comms"
         if _matches_hint(name, SECURITY_CASK_HINTS):
             return "desktop_security"
+        if _matches_hint(name, DEV_SECURITY_CASK_HINTS):
+            return "dev_security"
         if _matches_hint(name, MEDIA_CASK_HINTS):
             return "desktop_media"
         if _matches_hint(name, UTILITY_CASK_HINTS):
@@ -531,6 +555,10 @@ def classify_entry(entry: BrewEntry) -> str | None:
             return "dev_cli"
         if name in DEV_OPS_FORMULAS:
             return "dev_ops"
+        if name in DEV_SECURITY_FORMULAS:
+            return "dev_security"
+        if name in UTILITIES_FORMULAS:
+            return "utilities"
         if name in DEV_FORMULA_EXACT or any(
             name.startswith(prefix) for prefix in DEV_FORMULA_PREFIXES
         ):
