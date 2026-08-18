@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Generate and synchronize JetBrains model profiles from model-groups.json."""
 
+from __future__ import annotations
+
 import argparse
 import json
 import os

@@ -3,6 +3,8 @@
 sync-brewfiles.py — Sync installed Homebrew packages into category Brewfiles.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import re

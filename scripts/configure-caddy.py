@@ -2,6 +2,8 @@
 # pyright: reportMissingImports=false
 """Configure Caddy: generate a multi-domain Caddyfile from env + template."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import string

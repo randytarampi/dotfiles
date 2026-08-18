@@ -5,6 +5,8 @@ Constructs the opencode.json configuration based on presets, mode, local Ollama,
 Also generates tui.json for the voice plugin via configure-opencode-voice.py.
 """
 
+from __future__ import annotations
+
 import sys
 import json
 import argparse
