@@ -123,7 +123,7 @@ dry-run: ## Preview chezmoi changes without applying them
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --dry-run --force
 
 deploy: ## Apply dotfiles and run all configuration scripts
-	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply
+	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --force
 	@$(LOAD_ENV); bash scripts/configure-all.sh
 
 configure: ## Run all AI tool configure scripts (without chezmoi apply)
