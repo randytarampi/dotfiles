@@ -14,7 +14,12 @@ SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+mkdir -p "$NVM_DIR" 2>/dev/null
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+elif [ -s "$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/nvm/nvm.sh" ]; then
+  . "$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/nvm/nvm.sh"
+fi
 
 if ! command -v nvm >/dev/null 2>&1; then
   die "nvm not found. Ensure NVM_DIR=$NVM_DIR and nvm.sh is sourced."

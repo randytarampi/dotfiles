@@ -12,7 +12,12 @@ parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+mkdir -p "$NVM_DIR" 2>/dev/null
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+elif [ -s "$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/nvm/nvm.sh" ]; then
+  . "$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/nvm/nvm.sh"
+fi
 
 # Get current default version (source for --reinstall-packages-from)
 DEFAULT_VERSION=$(nvm version default 2>/dev/null | sed 's/^v//')

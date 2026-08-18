@@ -61,9 +61,15 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   export PATH="$HOME/.fastlane/bin:$PATH"
 fi
 
-# nvm
+# nvm — source from standard install or Homebrew
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+mkdir -p "$NVM_DIR" 2>/dev/null
+# Prefer standard nvm install, fall back to Homebrew's nvm.sh
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  \. "$NVM_DIR/nvm.sh" # This loads nvm
+elif [ -s "${HOMEBREW_PREFIX:-/opt/homebrew}/opt/nvm/nvm.sh" ]; then
+  \. "${HOMEBREW_PREFIX:-/opt/homebrew}/opt/nvm/nvm.sh" # This loads nvm from Homebrew
+fi
 # Run compinit -i (silently ignore insecure dirs) before nvm's bash_completion
 # so that nvm skips its own bare `compinit` call (which lacks -i and prompts on
 # group-writable brew completion dirs after `brew bundle` runs). Running here
@@ -72,7 +78,11 @@ export NVM_DIR="$HOME/.nvm"
 if [[ -n "${ZSH_VERSION-}" ]] && ! command -v compdef >/dev/null 2>&1; then
   autoload -Uz compinit && compinit -i -C 2>/dev/null
 fi
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+if [ -s "$NVM_DIR/bash_completion" ]; then
+  \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+elif [ -s "${HOMEBREW_PREFIX:-/opt/homebrew}/opt/nvm/etc/bash_completion.d/nvm" ]; then
+  \. "${HOMEBREW_PREFIX:-/opt/homebrew}/opt/nvm/etc/bash_completion.d/nvm" # This loads nvm bash_completion from Homebrew
+fi
 
 # rbenv
 command -v rbenv &>/dev/null && eval "$(rbenv init -)"
