@@ -28,6 +28,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/cleanup-brewfiles.py",  # Makefile-only cleanup tool
     "scripts/show-categories.py",  # Makefile-only category management tool
     "scripts/verify-iterm2.py",  # Makefile-only verification tool
+    "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}

@@ -653,6 +653,18 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/check-plugin-consistency.py",
+      "capabilities": [
+        "help"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
