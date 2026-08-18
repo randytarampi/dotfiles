@@ -537,14 +537,15 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-antigravity-acp.sh",
+      "path": "scripts/install-acp-adapters.sh",
       "capabilities": [
         "public",
         "mutates"
       ],
       "enforcement": "pending",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -577,19 +578,6 @@
     },
     {
       "path": "scripts/install-nvm-lts.sh",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "pending",
-      "accepted_flags": [
-        "--help"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/install-opencode.sh",
       "capabilities": [
         "public",
         "mutates"

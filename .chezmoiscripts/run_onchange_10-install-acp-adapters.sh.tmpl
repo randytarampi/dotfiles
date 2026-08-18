@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ─── run_onchange_10-install-acp-adapters.sh.tmpl ──────────────────────────
+# Installs ACP (Agent Client Protocol) adapters for OpenCode:
+#   - Google Antigravity bridge (agy-acp) — gated on DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP
+#   - GitHub Copilot CLI          \
+#   - Claude Code ACP adapter       |  gated on DOTFILES_RUN_OPENCODE_TOOLS_SETUP
+#   - Codex ACP adapter            /
+# Delegates to scripts/install-acp-adapters.sh.
+# ──────────────────────────────────────────────────────────────────────────────
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when installer changes):
+# scripts/install-acp-adapters.sh: {{ include "scripts/install-acp-adapters.sh" | sha256sum }}
+
+# Load environment for gates
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+INSTALL_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/install-acp-adapters.sh"
+if [[ -f "$INSTALL_SCRIPT" ]]; then
+  bash "$INSTALL_SCRIPT"
+else
+  warn "install-acp-adapters.sh not found; skipping ACP adapter installation"
+fi
+
+ok "ACP adapters: done."

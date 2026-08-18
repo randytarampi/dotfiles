@@ -5,9 +5,6 @@ LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 
-# Script hash triggers (re-run when plugin installer changes):
-# scripts/install-opencode.sh: {{ include "scripts/install-opencode.sh" | sha256sum }}
-
 # Load env before gate (DOTFILES_RUN_OPENCODE_TOOLS_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
 
@@ -24,13 +21,26 @@ if ! command -v opencode >/dev/null 2>&1; then
   exit 0
 fi
 
+# Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
+# --background-subagents=yes enables background subagents during install
+# Pipe 'n' to skip the "Star the repo on GitHub?" prompt
+info "Installing oh-my-opencode-slim..."
+if command -v bun &>/dev/null; then
+  echo n | bunx oh-my-opencode-slim@latest install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+else
+  echo n | npx oh-my-opencode-slim@latest install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+fi
+ok "oh-my-opencode-slim installed"
+
 # Plugin definitions matching ~/.config/opencode/opencode.json
 # opencode plugin <module> --global — installs the plugin and updates global config
 PLUGINS=(
   "@tarquinen/opencode-dcp@latest"
   "@plannotator/opencode@latest"
-  "oh-my-opencode-slim"
   "opencode-plugin-openspec"
+  "opencode-vibeguard"
+  "@ramtinj95/opencode-tokenscope@latest"
+  "@renjfk/opencode-voice@latest"
 )
 
 for plugin in "${PLUGINS[@]}"; do
@@ -57,6 +67,141 @@ if [[ -f "${MERIDIAN_PATH}" ]]; then
   ok "opencode plugin: meridian (already installed globally via npm)"
 else
   warn "opencode plugin: meridian not found at ${MERIDIAN_PATH} — install @rynfar/meridian globally with npm"
+fi
+
+# ---------------------------------------------------------------------------
+# Voice dependencies (whisper-cpp, sox, piper-tts) + models
+#   Controlled by DOTFILES_RUN_VOICE_SETUP (default: 0 — skip)
+#   Models: DOTFILES_WHISPER_MODEL (default: ggml-large-v3-turbo.bin)
+#          DOTFILES_PIPER_VOICE (default: en_US-lessac-high)
+# ---------------------------------------------------------------------------
+VOICE_SETUP="${DOTFILES_RUN_VOICE_SETUP:-0}"
+if [[ "$VOICE_SETUP" != "1" ]]; then
+  info "DOTFILES_RUN_VOICE_SETUP='${VOICE_SETUP}' — skipping voice deps & models"
+  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to install whisper-cpp, sox, piper-tts, and models"
+else
+  info "Installing voice dependencies..."
+
+  # ── whisper-cpp + sox (STT) ──────────────────────────────────────
+  if command -v brew &>/dev/null; then
+    for pkg in whisper-cpp sox; do
+      if brew list "$pkg" &>/dev/null 2>&1; then
+        ok "$pkg already installed"
+      else
+        if brew install "$pkg" 2>/dev/null; then
+          ok "$pkg installed"
+        else
+          warn "$pkg install failed — install manually: brew install $pkg"
+        fi
+      fi
+    done
+  else
+    warn "brew not found; skipping whisper-cpp/sox install"
+  fi
+
+  # ── Piper TTS ─────────────────────────────────────────────────────
+  if command -v uv &>/dev/null; then
+    if uv tool list 2>/dev/null | grep -q "piper-tts"; then
+      ok "piper-tts already installed via uv"
+    else
+      if uv tool install piper-tts 2>/dev/null; then
+        ok "piper-tts installed via uv"
+      else
+        warn "piper-tts install failed — install manually: uv tool install piper-tts"
+      fi
+    fi
+  elif command -v pip &>/dev/null; then
+    if pip show piper-tts &>/dev/null 2>&1; then
+      ok "piper-tts already installed via pip"
+    else
+      if pip install piper-tts 2>/dev/null; then
+        ok "piper-tts installed via pip"
+      else
+        warn "piper-tts install failed — install manually: pip install piper-tts"
+      fi
+    fi
+  else
+    warn "Neither uv nor pip found; skipping piper-tts install"
+  fi
+
+  # ── Download Whisper model ─────────────────────────────────────────
+  WHISPER_MODEL="${DOTFILES_WHISPER_MODEL:-ggml-large-v3-turbo.bin}"
+  WHISPER_DIR="$HOME/.local/share/whisper-cpp"
+  WHISPER_PATH="$WHISPER_DIR/$WHISPER_MODEL"
+
+  if [[ -f "$WHISPER_PATH" ]]; then
+    ok "Whisper model already exists: $WHISPER_MODEL"
+  else
+    info "Downloading Whisper model: $WHISPER_MODEL..."
+    mkdir -p "$WHISPER_DIR"
+    WHISPER_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$WHISPER_MODEL"
+    if curl -L --fail --progress-bar -o "$WHISPER_PATH" "$WHISPER_URL" 2>/dev/null; then
+      ok "Whisper model downloaded: $WHISPER_MODEL"
+    else
+      rm -f "$WHISPER_PATH"
+      warn "Whisper model download failed — download manually from:"
+      warn "  $WHISPER_URL"
+      warn "  Save to: $WHISPER_PATH"
+    fi
+  fi
+
+  # ── Download Piper voice ───────────────────────────────────────────
+  PIPER_VOICE="${DOTFILES_PIPER_VOICE:-en_US-lessac-high}"
+  PIPER_DIR="$HOME/.local/share/piper-voices"
+  VOICE_LOCALE="$(echo "$PIPER_VOICE" | cut -d- -f1)"
+  VOICE_NAME="$(echo "$PIPER_VOICE" | cut -d- -f2)"
+  VOICE_QUALITY="$(echo "$PIPER_VOICE" | cut -d- -f3)"
+  VOICE_LANG="$(echo "$VOICE_LOCALE" | cut -d_ -f1)"
+  VOICE_URL_PATH="${VOICE_LANG}/${VOICE_LOCALE}/${VOICE_NAME}/${VOICE_QUALITY}"
+  PIPER_ONNX="$PIPER_DIR/$PIPER_VOICE.onnx"
+  PIPER_JSON="$PIPER_DIR/$PIPER_VOICE.onnx.json"
+  PIPER_BASE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+
+  PIPER_DOWNLOAD_NEEDED=0
+  if [[ ! -f "$PIPER_ONNX" ]]; then
+    PIPER_DOWNLOAD_NEEDED=1
+  fi
+  if [[ ! -f "$PIPER_JSON" ]]; then
+    PIPER_DOWNLOAD_NEEDED=1
+  fi
+
+  if [[ "$PIPER_DOWNLOAD_NEEDED" -eq 0 ]]; then
+    ok "Piper voice already exists: $PIPER_VOICE"
+  else
+    info "Downloading Piper voice: $PIPER_VOICE..."
+    mkdir -p "$PIPER_DIR"
+    DL_FAILED=0
+
+    if [[ ! -f "$PIPER_ONNX" ]]; then
+      ONNX_URL="$PIPER_BASE_URL/$VOICE_URL_PATH/$PIPER_VOICE.onnx"
+      if curl -L --fail --progress-bar -o "$PIPER_ONNX" "$ONNX_URL" 2>/dev/null; then
+        ok "Piper voice .onnx downloaded"
+      else
+        rm -f "$PIPER_ONNX"
+        warn "Piper voice .onnx download failed — download manually from:"
+        warn "  $ONNX_URL"
+        warn "  Save to: $PIPER_ONNX"
+        DL_FAILED=1
+      fi
+    fi
+
+    if [[ ! -f "$PIPER_JSON" ]]; then
+      JSON_URL="$PIPER_BASE_URL/$VOICE_URL_PATH/$PIPER_VOICE.onnx.json"
+      if curl -L --fail --progress-bar -o "$PIPER_JSON" "$JSON_URL" 2>/dev/null; then
+        ok "Piper voice .onnx.json downloaded"
+      else
+        rm -f "$PIPER_JSON"
+        warn "Piper voice .onnx.json download failed — download manually from:"
+        warn "  $JSON_URL"
+        warn "  Save to: $PIPER_JSON"
+        DL_FAILED=1
+      fi
+    fi
+
+    if [[ "$DL_FAILED" -eq 0 ]]; then
+      ok "Piper voice setup complete: $PIPER_VOICE"
+    fi
+  fi
 fi
 
 ok "opencode plugins: done."

@@ -5,6 +5,9 @@ LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 
+# Hash triggers (re-run when cloud model registry changes):
+# configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
+
 # Load env before gate (DOTFILES_RUN_OPENCODE_TOOLS_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
 
@@ -40,4 +43,61 @@ if command -v npm >/dev/null 2>&1; then
   fi
 else
   warn "npm not found; skipping standalone AI CLI installs"
+fi
+
+# ---------------------------------------------------------------------------
+# Ollama Cloud model metadata (pulled locally for OpenCode discovery)
+#   Reads model names from configs/opencode/ollama-cloud-models.json
+#   Each model is pulled as a :cloud stub so OpenCode can discover it
+# ---------------------------------------------------------------------------
+info "Pulling Ollama Cloud model metadata..."
+CONFIG_FILE="{{ .chezmoi.sourceDir }}/configs/opencode/ollama-cloud-models.json"
+if [ -f "$CONFIG_FILE" ]; then
+  while IFS= read -r model; do
+    ollama pull "${model}:cloud" 2>/dev/null || warn "Could not pull '${model}:cloud' — you may need 'ollama login' first"
+  done < <(python3 -c "import json; data=json.load(open('$CONFIG_FILE')); [print(m) for m in data['models']]" 2>/dev/null)
+else
+  warn "ollama-cloud-models.json not found at $CONFIG_FILE — skipping cloud model pull"
+fi
+ok "Ollama Cloud model metadata pulled"
+
+# ---------------------------------------------------------------------------
+# Remove stale Ollama Cloud model stubs no longer in the registry
+#   (Cleans up retired models that were previously `ollama pull`ed as :cloud stubs)
+# ---------------------------------------------------------------------------
+info "Cleaning up stale Ollama Cloud model stubs..."
+if command -v ollama &>/dev/null; then
+  expected_cloud=$(python3 -c "
+import json
+try:
+    data = json.load(open('$CONFIG_FILE'))
+    for m in data.get('models', {}):
+        print(f'{m}-cloud')
+        print(f'{m}:cloud')
+except Exception:
+    pass
+" 2>/dev/null | sort -u)
+  ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' | grep -E '(:cloud|-cloud)$' | while read -r stale; do
+    if ! echo "$expected_cloud" | grep -qxF "$stale"; then
+      ollama rm "$stale" 2>/dev/null && info "Removed stale cloud stub: $stale" || warn "Could not remove '$stale'"
+    fi
+  done
+fi
+ok "Stale cloud model stub cleanup complete"
+
+# ---------------------------------------------------------------------------
+# lazyskills CLI (skill discovery and management)
+#   macOS: brew cask (alvinunreal/tap/lazyskills)
+#   Linux: curl installer (https://lazyskills.sh/install)
+# ---------------------------------------------------------------------------
+info "Installing lazyskills CLI..."
+if command -v lazyskills &>/dev/null; then
+  ok "lazyskills CLI already installed"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  brew tap alvinunreal/tap 2>/dev/null || true
+  brew install --cask lazyskills || warn "brew install --cask lazyskills failed — see scripts/install-skills.sh"
+elif command -v curl &>/dev/null; then
+  curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
+else
+  warn "Cannot install lazyskills — see scripts/install-skills.sh for manual instructions"
 fi

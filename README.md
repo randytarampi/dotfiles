@@ -156,7 +156,7 @@ make ci-verify                               # CI verification (lint + drift + d
 - Auto-detected agents: `opencode`, `gemini`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`.
 - `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
 - `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
-- Install adapter prerequisites with `scripts/install-opencode.sh` (`brew install copilot-cli`, `npm i -g @zed-industries/claude-code-acp`, `npm i -g codex-acp`), then sign in to each agent separately.
+- Install adapter prerequisites with `scripts/install-acp-adapters.sh` (`brew install copilot-cli`, `npm i -g @agentclientprotocol/claude-agent-acp`, `npm i -g @agentclientprotocol/codex-acp`), then sign in to each agent separately.
 - After the first install, run `make brewfile-sync` to capture the new npm globals in the Brewfiles.
 - Regenerate with `scripts/configure-acp-agents.py --preset <tier>`.
 
@@ -327,7 +327,7 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── configure-opencode-tier.py # Switch active preset tier (source of truth)
     ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
     ├── get-tools.py               # Get MCP tool registry keys
-    ├── install-opencode.sh        # Install OpenCode plugins and tools (incl. voice)
+    ├── install-acp-adapters.sh    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
     ├── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
     ├── configure-smallcode.py      # Configure SmallCode (env + TOML + MCP, tier-aware)
@@ -566,7 +566,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 
 **Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
 
-**Local STT/TTS dependencies** (installed by `scripts/install-opencode.sh` step 8, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
+**Local STT/TTS dependencies** (installed by `run_onchange_07` during `make deploy`, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
 
 | Component | Install | Purpose |
 |-----------|---------|---------|
