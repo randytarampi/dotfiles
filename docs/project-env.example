@@ -12,6 +12,9 @@ DOTFILES_PROJECT_PRESET='pro-plus'
 # Optional explicit step selection (overrides automatic selection below)
 # DOTFILES_PROJECT_STEPS='opencode,tier,skills,acp-agents'
 
+# Optional steps to exclude from the resolved set (applied after --steps/env resolution)
+# DOTFILES_PROJECT_SKIP='mcps,secrets'
+
 # Skills: category profiles plus individual additions/removals
 DOTFILES_PROJECT_SKILL_PROFILES='core,aws,mongodb,prisma'
 DOTFILES_PROJECT_SKILLS=''

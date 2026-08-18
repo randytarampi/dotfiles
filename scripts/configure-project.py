@@ -152,6 +152,14 @@ def main():
         default=None,
         help=f"Comma-separated steps (default: {','.join(DEFAULT_STEPS)})",
     )
+    parser.add_argument(
+        "--skip",
+        default=None,
+        help=(
+            "Comma-separated steps to remove from the resolved set "
+            f"(any of: {','.join(ALL_STEPS)})"
+        ),
+    )
     parser.add_argument("--workspace-root", default=os.getcwd())
     parser.add_argument("--skill-profiles", default=None)
     parser.add_argument("--skills", default=None)
@@ -171,6 +179,12 @@ def main():
     load_env(os.path.join(opencode_dir, ".env"))
     load_env(os.path.join(opencode_dir, ".env.local"))
     steps = resolve_steps(args)
+    skipped = csv(env_or(args.skip, "DOTFILES_PROJECT_SKIP"))
+    if skipped:
+        unknown_skip = set(skipped) - set(ALL_STEPS)
+        if unknown_skip:
+            parser.error(f"Unknown --skip step(s): {', '.join(sorted(unknown_skip))}")
+        steps = [s for s in steps if s not in set(skipped)]
     unknown = set(steps) - set(ALL_STEPS)
     if unknown:
         parser.error(f"Unknown step(s): {', '.join(sorted(unknown))}")

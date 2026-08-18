@@ -432,6 +432,7 @@
         "--no-backup",
         "--preset",
         "--steps",
+        "--skip",
         "--workspace-root",
         "--skill-profiles",
         "--skills",
