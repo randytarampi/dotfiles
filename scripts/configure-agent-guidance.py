@@ -11,8 +11,11 @@ Usage:
 Options:
     --source PATH   Path to home-agents.md (default: configs/agents/home-agents.md in dotfiles repo)
     --dry-run       Show what would change without writing files
-    --force         Create missing agent files or overwrite unmarked files
+    --force         Append guidance to existing files without markers
     --check         Audit drift without writing (exit 1 if drift found)
+
+Missing agent files are created by default. Existing files without markers
+require --force to append (avoids clobbering user content).
 """
 
 import argparse
@@ -88,9 +91,9 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
 
     Handles:
     - Broken symlinks (removes them, creates real file)
+    - Missing files (creates them with guidance block)
     - Files with AGENT_GUIDANCE markers (replace block)
     - Files without markers (skip unless --force)
-    - Missing files (skip unless --force)
     """
     # Handle broken symlink at the file path
     if os.path.islink(agent_path):
@@ -116,28 +119,25 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
     # Build the new guidance block (header + markers)
     new_block = f"{HEADER_COMMENT}\n{guidance}"
 
-    # File doesn't exist
+    # File doesn't exist — create it (safe: nothing to clobber)
     if not os.path.exists(agent_path):
-        if force:
-            parent = os.path.dirname(agent_path)
-            if not os.path.isdir(parent):
-                if dry_run:
-                    logger.info(f"[DRY RUN] Would create directory: {parent}")
-                else:
-                    os.makedirs(parent, exist_ok=True)
-                    logger.info(f"Created directory: {parent}")
-            content = f"{new_block}\n"
-            if check:
-                logger.error(f"MISSING: {agent_path} (would create with --force)")
-                return False
+        parent = os.path.dirname(agent_path)
+        if not os.path.isdir(parent):
             if dry_run:
-                logger.info(f"[DRY RUN] Would create: {agent_path}")
-                return True
-            write_text_file(agent_path, content, backup=False)
-            logger.info(f"Created: {agent_path}")
+                logger.info(f"[DRY RUN] Would create directory: {parent}")
+            else:
+                os.makedirs(parent, exist_ok=True)
+                logger.info(f"Created directory: {parent}")
+        content = f"{new_block}\n"
+        if check:
+            logger.error(f"MISSING: {agent_path} (would create)")
+            return False
+        if dry_run:
+            logger.info(f"[DRY RUN] Would create: {agent_path}")
             return True
-        logger.warning(f"Not found (use --force to create): {agent_path}")
-        return False
+        write_text_file(agent_path, content, backup=False)
+        logger.info(f"Created: {agent_path}")
+        return True
 
     # Read existing content
     with open(agent_path, encoding="utf-8") as f:
@@ -216,7 +216,7 @@ def main():
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Create missing agent files or append to files without markers",
+        help="Append guidance to existing files without markers",
     )
     parser.add_argument(
         "--check",
