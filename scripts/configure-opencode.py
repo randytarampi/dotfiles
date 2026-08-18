@@ -347,17 +347,27 @@ def main():
             "lsp": True,
             "provider": {},
             "plugin": [
-                "oh-my-opencode-slim",
+                "oh-my-opencode-slim@latest",
                 "@tarquinen/opencode-dcp@latest",
                 [
                     "@plannotator/opencode@latest",
                     {
                         "workflow": "plan-agent",
-                        "planningAgents": ["orchestrator", "plan", "council"],
+                        "planningAgents": [
+                            "orchestrator",
+                            "plan",
+                            "council",
+                            "claude",
+                            "codex",
+                            "gemini",
+                            "junie",
+                            "copilot",
+                            "opencode",
+                        ],
                     },
                 ],
-                "opencode-plugin-openspec",
-                "opencode-vibeguard",
+                "opencode-plugin-openspec@latest",
+                "opencode-vibeguard@latest",
                 "@ramtinj95/opencode-tokenscope@latest",
             ],
             "agent": {
