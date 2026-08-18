@@ -4,8 +4,6 @@
 # Categories mirror Brewfile categories where applicable
 
 # --- Media ---
-# Cross-ref: cask 'adobe-creative-cloud'
-Adobe.AdobeCreativeCloud
 # Cross-ref: cask 'obs'
 OBSProject.OBSStudio
 VideoLAN.VLC

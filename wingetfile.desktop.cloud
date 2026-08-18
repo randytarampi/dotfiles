@@ -14,3 +14,5 @@ Google.GoogleDrive
 Cyberduck.Cyberduck
 # Cross-ref: cask 'ngrok'
 ngrok.ngrok
+# Cross-ref: cask 'onedrive'
+Microsoft.OneDrive

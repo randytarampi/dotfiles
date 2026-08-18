@@ -4,8 +4,6 @@
 # Categories mirror Brewfile categories where applicable
 
 # --- Office / productivity ---
-Microsoft.Office
-Microsoft.OneDrive
 SublimeHQ.SublimeText.4
 Apple.BonjourPrintServices
 Apple.Bonjour

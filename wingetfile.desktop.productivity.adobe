@@ -3,11 +3,5 @@
 # Comments start with #
 # Categories mirror Brewfile categories where applicable
 
-# --- Communication apps ---
-Discord.Discord
-SlackTechnologies.Slack
-Microsoft.Teams
-# Cross-ref: cask 'zoom'
-Zoom.Zoom
-# Cross-ref: cask 'webex'
-Cisco.Webex
+# --- Adobe ---
+Adobe.AdobeCreativeCloud
