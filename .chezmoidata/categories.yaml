@@ -23,6 +23,8 @@ categories:
   desktop_productivity: false # Office/productivity apps (opt-in, macOS-only)
   desktop_security: false   # VPN/security tools (opt-in, macOS-only)
   desktop_utilities: false  # Desktop utilities (opt-in, macOS-only)
+  desktop_devices: false    # Device drivers/peripherals (opt-in, macOS-only)
+  desktop_macos: false     # macOS system utilities (opt-in, macOS-only)
   legacy: false             # Legacy/specialty tools (opt-in)
   legacy_macfuse: false     # Legacy macFUSE filesystem tools (opt-in, macOS-only)
   legacy_vmware: false      # Legacy VMware Fusion (opt-in, macOS-only)

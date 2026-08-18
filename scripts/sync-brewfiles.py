@@ -59,6 +59,8 @@ CATEGORY_SPECS: list[CategorySpec] = [
     CategorySpec("desktop_security", "Brewfile.desktop.security", True),
     CategorySpec("desktop_media", "Brewfile.desktop.media", True),
     CategorySpec("desktop_utilities", "Brewfile.desktop.utilities", True),
+    CategorySpec("desktop_devices", "Brewfile.desktop.devices", False),
+    CategorySpec("desktop_macos", "Brewfile.desktop.macos", False),
     CategorySpec("desktop_fonts", "Brewfile.desktop.fonts", True),
     CategorySpec("desktop_gaming", "Brewfile.desktop.gaming", False),
     CategorySpec("desktop_cloud", "Brewfile.desktop.cloud", True),
@@ -91,8 +93,6 @@ CORE_CLI_FORMULAS = {
     "curl",
     "gh",
     "git",
-    "git-filter-repo",
-    "git-lfs",
     "go",
     "htop",
     "jq",
@@ -138,6 +138,9 @@ DEV_FORMULA_EXACT = {
     "gemini-cli",
     "gettext",
     "gh",
+    "git-filter-repo",
+    "git-lfs",
+    "github-mcp-server",
     "glow",
     "gradle",
     "gradle-completion",
@@ -301,8 +304,19 @@ UTILITY_CASK_HINTS = (
     "appcleaner",
     "bettertouchtool",
     "karabiner",
-    "macfuse",
     "rectangle",
+)
+
+DESKTOP_DEVICES_CASK_HINTS = (
+    "displaylink",
+    "logi-options",
+    "logitech-camera-settings",
+)
+
+DESKTOP_MACOS_CASK_HINTS = (
+    "betterdisplay",
+    "coconutbattery",
+    "steermouse",
 )
 
 FONT_CASK_PREFIX = "font-"
@@ -488,6 +502,10 @@ def classify_entry(entry: BrewEntry) -> str | None:
             return "desktop_media"
         if _matches_hint(name, UTILITY_CASK_HINTS):
             return "desktop_utilities"
+        if _matches_hint(name, DESKTOP_DEVICES_CASK_HINTS):
+            return "desktop_devices"
+        if _matches_hint(name, DESKTOP_MACOS_CASK_HINTS):
+            return "desktop_macos"
         if _matches_hint(name, CLOUD_CASK_HINTS):
             return "desktop_cloud"
         if _matches_hint(name, PRODUCTIVITY_CASK_HINTS):
