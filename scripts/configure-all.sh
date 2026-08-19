@@ -44,6 +44,25 @@ run_step() {
 # Load environment for API keys and gate vars
 load_env || warn "\$HOME/.env not found, skipping env load"
 
+# Clean up stale files from chezmoi renames.
+# When a chezmoi source file is renamed (e.g., dcp.json → dcp.jsonc),
+# chezmoi writes the new file but leaves the old one. Remove known orphans.
+info "Cleaning stale chezmoi targets..."
+
+OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
+
+# dcp.json was renamed to dcp.jsonc in the chezmoi source.
+# If both exist, dcp.jsonc takes precedence (DCP config.ts prefers .jsonc),
+# but the stale dcp.json causes verify-config.py to report a shadowing error.
+if [[ -f "$OPENCODE_CONFIG_DIR/dcp.json" && -f "$OPENCODE_CONFIG_DIR/dcp.jsonc" ]]; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "Would remove stale $OPENCODE_CONFIG_DIR/dcp.json (dcp.jsonc exists)"
+  else
+    rm -f "$OPENCODE_CONFIG_DIR/dcp.json"
+    ok "Removed stale dcp.json (superseded by dcp.jsonc)"
+  fi
+fi
+
 info "Running full configuration pass..."
 
 # Detect tiers (detect_tier sets $TIER, not the env var itself)

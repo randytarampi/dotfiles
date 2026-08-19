@@ -128,6 +128,7 @@ make check-hashes       # Hash trigger coverage audit
 make check-cli-contract # Verify CLI interfaces match the capability manifest
 make check-env-coverage # Verify env vars are documented in .env.example
 make reset        # Clear chezmoi script state
+make clean-backups       # Remove stale .bak files from ~/.config/opencode/
 make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
 make migrate             # Migrate deprecated gate names + append missing template keys to ~/.env
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
