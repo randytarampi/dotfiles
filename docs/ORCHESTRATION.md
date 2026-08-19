@@ -221,7 +221,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_SKILLS_AWS_SETUP` | 0 | Activate the AWS skills category globally |
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |
-| `DOTFILES_RUN_VOICE_SETUP` | 0 | `install-opencode.sh` (voice deps) |
+| `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper-cpp, sox, piper-tts, models) |
 
 ## Dependency Ordering
 

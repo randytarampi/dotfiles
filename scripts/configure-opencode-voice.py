@@ -378,7 +378,7 @@ def main():
             f"  Recommended voice: {piper_voice}",
             "",
             "To switch tiers: configure-opencode-voice.py --preset <tier>",
-            "To install models: install-opencode.sh (step 8)",
+            "To install models: run_onchange_07 (DOTFILES_RUN_VOICE_SETUP=1)",
             "",
             "Voice plugin configuration complete!",
         ]

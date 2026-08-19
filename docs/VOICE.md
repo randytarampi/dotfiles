@@ -53,7 +53,7 @@ Voice requires local STT/TTS tooling regardless of tier:
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model file |
 | Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice file |
 
-These are installed by `scripts/install-opencode.sh` step 8 (gated on `DOTFILES_RUN_VOICE_SETUP=1`).
+These are installed by `run_onchange_07-install-opencode-plugins.sh.tmpl` (gated on `DOTFILES_RUN_VOICE_SETUP=1`).
 
 ---
 
@@ -81,4 +81,4 @@ Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_U
 
 ## Environment Gating
 
-Voice setup in `install-opencode.sh` is gated on `DOTFILES_RUN_VOICE_SETUP=1` (default: 0). The voice config writer (`configure-opencode-voice.py`) runs unconditionally — it only writes `tui.json` and always respects the active tier.
+Voice deps in `run_onchange_07-install-opencode-plugins.sh.tmpl` are gated on `DOTFILES_RUN_VOICE_SETUP=1` (default: 0). The voice config writer (`configure-opencode-voice.py`) runs unconditionally — it only writes `tui.json` and always respects the active tier.
