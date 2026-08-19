@@ -101,9 +101,7 @@ node_modules
 opencode.json
 .opencode
 .slim
-## SmallCode
 .code-graph
-.smallcode
 .memory
 ## Serverless
 .serverless-secrets.json

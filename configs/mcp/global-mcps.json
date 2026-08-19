@@ -30,9 +30,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -57,9 +54,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -92,9 +86,6 @@
               "${workspaceFolder}"
             ]
           }
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -119,9 +110,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -149,12 +137,6 @@
           "extra_fields": {
             "enabled": true
           }
-        },
-        {
-          "template": "smallcode",
-          "extra_fields": {
-            "enabled": true
-          }
         }
       ]
     },
@@ -179,9 +161,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -206,9 +185,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -220,9 +196,6 @@
       "mcp_servers": [
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -247,9 +220,6 @@
         },
         {
           "template": "codegraph"
-        },
-        {
-          "template": "smallcode"
         }
       ]
     },
@@ -269,9 +239,6 @@
         },
         {
           "template": "notion"
-        },
-        {
-          "template": "smallcode"
         },
         {
           "template": "atlassian"
@@ -303,9 +270,6 @@
         },
         {
           "template": "notion"
-        },
-        {
-          "template": "smallcode"
         },
         {
           "template": "atlassian"

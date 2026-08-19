@@ -45,7 +45,7 @@ When the local Ollama daemon is running **and** signed in (`ollama signin`), it 
    - All Ollama models (local + cloud) route through `OLLAMA_HOST`
    - Cloud model names get `:cloud` suffix (e.g., `glm-5.2` → `glm-5.2:cloud`)
    - OpenCode gets a single `ollama` provider instead of separate `ollama` + `ollama-cloud`
-   - SmallCode, Voice, and Mozart all route through the local daemon
+   - Voice and Mozart route through the local daemon
 
 3. When the daemon is **not cloud-capable** (not running, not signed in, or proxy disabled):
    - Falls back to the current two-provider approach: `ollama` (local) + `ollama-cloud` (direct)
@@ -77,7 +77,6 @@ The `:cloud` suffix is appended **only** when routing through the local daemon. 
 |--------|--------|
 | `configure-opencode.py` | Merges `ollama` + `ollama-cloud` into single provider when cloud-capable |
 | `configure-opencode-tier.py` | Discovers cloud models, appends `:cloud` suffixes to fallback chains |
-| `configure-smallcode.py` | Routes `ollama-cloud/` models through local daemon with `:cloud` suffix |
 | `configure-opencode-voice.py` | Routes voice through local daemon with `:cloud` suffix when capable |
 | `configure-mozart-router.py` | Routes `ollama-cloud` gateway through local daemon when proxy enabled |
 

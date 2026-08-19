@@ -2,7 +2,7 @@
 """Shared constants for AI configuration scripts.
 
 Centralizes provider base URLs and other constants used across
-configure-opencode.py, configure-opencode-voice.py, configure-smallcode.py,
+configure-opencode.py and configure-opencode-voice.py,
 configure-meridian.py, and generate-jetbrains-profiles.py.
 
 `BASE_URLS` only contains cloud providers (`ollama-cloud`, `openai`,
@@ -112,8 +112,7 @@ def is_meridian_configured():
     """Check if Meridian proxy is configured.
 
     Returns True if MERIDIAN_API_KEY or ANTHROPIC_BASE_URL is set.
-    This is the canonical detection used by configure-smallcode.py
-    and configure-opencode-voice.py.
+    This is the canonical detection used by configure-opencode-voice.py.
     """
     import os
 

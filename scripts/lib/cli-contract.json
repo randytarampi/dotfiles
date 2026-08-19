@@ -132,7 +132,6 @@
         "configure-meridian.py",
         "configure-codex.py",
         "configure-mozart-router.py",
-        "configure-smallcode.py",
         "configure-agent-guidance.py",
         "configure-codegraph.py",
         "configure-skills.py",
@@ -514,32 +513,6 @@
       ]
     },
     {
-      "path": "scripts/configure-smallcode.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups",
-        "tier_selector",
-        "scope_selector"
-      ],
-      "enforcement": "pending",
-      "accepted_flags": [
-        "--help",
-        "--preset",
-        "--no-backup",
-        "--mode",
-        "--no-mcp",
-        "--no-local-fallbacks",
-        "--local-fallback-placeholder",
-        "--local-fallback-role",
-        "--local-fallback-preset",
-        "--ollama-base-url",
-        "--min-reasoning-embedding"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/install-acme-cert.sh",
       "capabilities": [
         "public",
@@ -620,19 +593,6 @@
     },
     {
       "path": "scripts/install-skills.sh",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "pending",
-      "accepted_flags": [
-        "--help"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
-      "path": "scripts/install-smallcode.sh",
       "capabilities": [
         "public",
         "mutates"

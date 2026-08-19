@@ -245,7 +245,6 @@ cache is `~/.local/share/dotfiles/skills/`. See
 | [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
 | [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
 | [docs/MERIDIAN.md](docs/MERIDIAN.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
-| [docs/SMALLCODE.md](docs/SMALLCODE.md) | SmallCode integration, tier mapping, escalation, config generation, environment gating |
 | [docs/VOICE.md](docs/VOICE.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
 | [docs/JUNIE.md](docs/JUNIE.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |
 | [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing with OpenCode, configuration, launching, prerequisites |

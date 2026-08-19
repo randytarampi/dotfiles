@@ -30,7 +30,6 @@ flowchart TD
     subgraph "Layer 3: Configure Scripts"
         C1[configure-opencode.py]
         C2[configure-mcps.py]
-        C3[configure-smallcode.py]
         C4[configure-all.sh]
         C5[configure-agent-guidance.py]
         C6[configure-mozart-router.py]
@@ -43,14 +42,12 @@ flowchart TD
     S1 --> S2
     S2 --> C1
     S2 --> C2
-    S2 --> C3
     S2 --> C5
     S2 --> C6
     S2 --> C7
     S2 --> C8
     C4 --> C1
     C4 --> C2
-    C4 --> C3
     C4 --> C5
     C4 --> C6
     C4 --> C7
@@ -101,7 +98,6 @@ sequenceDiagram
     Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
     Configure->>Configure: configure-codex.py (Codex provider config)
     Configure->>Configure: configure-mozart-router.py
-    Configure->>Configure: configure-smallcode.py
     Configure->>Configure: configure-agent-guidance.py
     Configure->>Configure: codegraph install
     Configure->>Configure: configure-codegraph.py
@@ -152,7 +148,6 @@ sequenceDiagram
 | 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: openspec, codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
-| 10 | install-smallcode | run_onchange | SmallCode CLI | `DOTFILES_RUN_SMALLCODE_SETUP` |
 | 11 | install-meridian-launchd | run_onchange | Meridian launchd plist (macOS) | `DOTFILES_RUN_MERIDIAN_SETUP` |
 | 12 | configure-macos-defaults | run_onchange | macOS user preferences | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` |
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
@@ -160,7 +155,6 @@ sequenceDiagram
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
-| 18 | configure-smallcode | run_onchange | SmallCode config | `DOTFILES_RUN_SMALLCODE_SETUP` |
 | 19 | configure-codegraph | run_onchange | CodeGraph MCP registration | `DOTFILES_RUN_CODEGRAPH_SETUP` |
 | 20 | configure-agent-guidance | run_onchange | Agent guidance distribution | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` |
 | 21 | migrate-acme-ddns | run_once | Decommission legacy ACME/DDNS setup | `DOTFILES_RUN_CADDY_SETUP` |
@@ -206,7 +200,6 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | 0 | Script 06 (Junie CLI install) |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | 0 | Scripts 07, 08 (OpenCode plugins + CLI tools) |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
-| `DOTFILES_RUN_SMALLCODE_SETUP` | 0 | Scripts 10, 18 (SmallCode install + config) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
 | `DOTFILES_RUN_CADDY_SETUP` | 0 | Scripts 21-25 (migration, ddns-route53, acme.sh, Caddy, Plannotator) |
 | `DOTFILES_RUN_OPENCODE_WEB_SETUP` | 0 | Script 26 (OpenCode web LaunchAgent) |
@@ -233,14 +226,12 @@ graph LR
     S05 --> S07[07 opencode plugins]
     S05 --> S08[08 CLI tools]
     S05 --> S09[09 plannotator]
-    S05 --> S10[10 smallcode]
     S04 --> S11[11 meridian]
     S14[14 secrets] --> S1_5[1.5 junie models]
     S1_5 --> S15[15 MCP]
     S15 --> S16[16 opencode]
     S16 --> S3_5[3.5 meridian plugin]
     S3_5 --> S17[17 mozart]
-    S16 --> S18[18 smallcode]
     S16 --> S19[19 codegraph]
     S16 --> S20[20 agent guidance]
     S20 --> S27[27 ollama daemon]

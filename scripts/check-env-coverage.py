@@ -37,6 +37,11 @@ DEPRECATED_VARS = {
     "DOTFILES_RUN_SECRETS_SETUP_OLD": "DOTFILES_RUN_SECRETS_SETUP",
 }
 
+REMOVED_VARS = {
+    "DOTFILES_RUN_SMALLCODE_SETUP",
+    "DOTFILES_SMALLCODE_TIER",
+}
+
 KNOWN_ALIASES = {
     "GH_TOKEN": ["GITHUB_TOKEN"],
     "OLLAMA_HOST": ["OLLAMA_LOCAL_HOST", "OLLAMA_LOCAL_PORT"],
@@ -149,7 +154,7 @@ def main():
     all_referenced = find_referenced_env_names()
     documented = find_documented_vars()
     documented_env_vars = find_documented_env_vars()
-    missing = referenced - documented - set(DEPRECATED_VARS)
+    missing = referenced - documented - set(DEPRECATED_VARS) - REMOVED_VARS
     deprecated = find_deprecated_vars(referenced)
     example_lines = ENV_EXAMPLE.read_text().splitlines()
 

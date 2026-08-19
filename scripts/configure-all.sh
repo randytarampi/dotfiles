@@ -63,6 +63,70 @@ if [[ -f "$OPENCODE_CONFIG_DIR/dcp.json" && -f "$OPENCODE_CONFIG_DIR/dcp.jsonc" 
   fi
 fi
 
+# SmallCode was removed from the managed MCP registry. Remove its old config
+# directory and stale server entries left behind by merge-based MCP writers.
+SMALLCODE_CONFIG_DIR="$HOME/.config/smallcode"
+if [[ -d "$SMALLCODE_CONFIG_DIR" ]]; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "Would remove stale $SMALLCODE_CONFIG_DIR"
+  else
+    rm -rf "$SMALLCODE_CONFIG_DIR"
+    ok "Removed stale SmallCode configuration directory"
+  fi
+fi
+
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  info "Would remove stale SmallCode MCP entries from generated tool configs"
+else
+  python3 - "$HOME" <<'PY'
+import json
+import os
+import sys
+
+home = sys.argv[1]
+roots = [
+    os.path.join(home, ".ai"),
+    os.path.join(home, ".codex"),
+    os.path.join(home, ".cursor"),
+    os.path.join(home, ".gemini"),
+    os.path.join(home, ".config", "opencode"),
+]
+
+def remove_smallcode(value):
+    changed = False
+    if isinstance(value, dict):
+        for key in list(value):
+            if key.lower() == "smallcode":
+                del value[key]
+                changed = True
+            else:
+                changed = remove_smallcode(value[key]) or changed
+    elif isinstance(value, list):
+        for item in value:
+            changed = remove_smallcode(item) or changed
+    return changed
+
+for root in roots:
+    if not os.path.isdir(root):
+        continue
+    for directory, _, filenames in os.walk(root):
+        for filename in filenames:
+            if not filename.endswith((".json", ".jsonc")):
+                continue
+            path = os.path.join(directory, filename)
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    data = json.load(handle)
+                if remove_smallcode(data):
+                    with open(path, "w", encoding="utf-8") as handle:
+                        json.dump(data, handle, indent=2)
+                        handle.write("\n")
+                    print(f"Removed stale SmallCode MCP entries from {path}")
+            except (OSError, ValueError):
+                continue
+PY
+fi
+
 info "Running full configuration pass..."
 
 # Detect tiers (detect_tier sets $TIER, not the env var itself)
@@ -70,14 +134,6 @@ detect_tier DOTFILES_OPENCODE_TIER
 OC_TIER="$TIER"
 build_tier_extra_args
 OC_ARGS=(${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"} ${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"})
-
-detect_tier DOTFILES_SMALLCODE_TIER
-SC_TIER="$TIER"
-build_tier_extra_args
-# SmallCode does not accept --dry-run; forward only --no-backup.
-SC_ARGS=()
-[[ "$COMMON_NO_BACKUP" == "1" ]] && SC_ARGS+=("--no-backup")
-SC_ARGS+=("${TIER_EXTRA_ARGS[@]}")
 
 # 0.5. Reconcile npm "..." entries from the base Brewfile into the active nvm node.
 #       Runs after chezmoi apply (nvm should be active on PATH here). warn-on-fail.
@@ -162,18 +218,6 @@ elif [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" == "1" ]]; then
   run_step "Mozart configuration" python3 "$SCRIPT_DIR/configure-mozart-router.py"
 else
   info "DOTFILES_RUN_MOZART_SETUP not set — skipping Mozart configuration"
-fi
-
-# 5. SmallCode config (reads oh-my-opencode-slim.json — must run after OpenCode)
-if [[ "${DOTFILES_RUN_SMALLCODE_SETUP:-0}" == "1" ]]; then
-  if command -v smallcode >/dev/null 2>&1; then
-    info "Configuring SmallCode (tier=$SC_TIER)..."
-    run_step "SmallCode configuration" python3 "$SCRIPT_DIR/configure-smallcode.py" --preset "$SC_TIER" "${SC_ARGS[@]}"
-  else
-    warn "smallcode CLI not found — skipping SmallCode configuration"
-  fi
-else
-  info "DOTFILES_RUN_SMALLCODE_SETUP not set — skipping SmallCode configuration"
 fi
 
 # 7. Agent guidance distribution (writes ~/AGENTS.md and 6 other agent files)

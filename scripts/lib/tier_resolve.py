@@ -3,7 +3,7 @@
 
 Extracted from configure-opencode-tier.py to eliminate dynamic module loading
 across configure-opencode.py, configure-opencode-voice.py, and
-configure-smallcode.py.
+other tier-aware configuration scripts.
 
 Provides:
   - extract_param_count(): parse :NNb/:NNm/:NNt size tags from model names

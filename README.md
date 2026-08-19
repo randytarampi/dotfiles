@@ -137,9 +137,6 @@ scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (t
 scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
-scripts/configure-smallcode.py --preset <tier>   # Configure SmallCode (env + TOML + MCP)
-scripts/configure-smallcode.py --preset <tier> --no-local-fallbacks  # Without local models
-scripts/install-smallcode.sh                     # Install SmallCode CLI
 scripts/configure-skills.py                  # Distribute skills to all agent directories
 scripts/configure-project.py                 # Configure project-scoped AI tooling
 make opencode-restart                        # Restart OpenCode Web service
@@ -200,7 +197,6 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 0 |
-| `DOTFILES_RUN_SMALLCODE_SETUP` | SmallCode CLI install + config | 0 |
 | `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP` | antigravity-acp bridge (agy-acp) install | 0 |
 | `DOTFILES_RUN_MOZART_SETUP` | Mozart router config | 0 |
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | CodeGraph MCP registration | 0 |
@@ -280,7 +276,6 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   │   ├── notion.json
 │   │   ├── sentry.json            # Passes SENTRY_ACCESS_TOKEN via env, not CLI args
 │   │   ├── shortcut.json
-│   │   ├── smallcode.json          # SmallCode — MCP server (stdio)
 │   │   ├── codegraph.json          # CodeGraph — local-first semantic code index (stdio MCP)
 │   │   └── templates/            # Symlinks → ../ for configure-mcp-tool.sh
 │   ├── iterm2/Default.json.tmpl   # iTerm2 Dynamic Profile template (tmux command, rewritable, default)
@@ -331,8 +326,6 @@ Set in `~/.env` (0 = skip, 1 = run):
     ├── install-acp-adapters.sh    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
     ├── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
-    ├── configure-smallcode.py      # Configure SmallCode (env + TOML + MCP, tier-aware)
-    ├── install-smallcode.sh        # Install SmallCode CLI + plugins
     └── generate-jetbrains-profiles.py # Generate model profiles JSON files
 ```
 
@@ -581,28 +574,6 @@ Model defaults are configurable: `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VO
 
 Configure voice: `scripts/configure-opencode-voice.py --preset <tier>`
 
-### SmallCode
-
-[SmallCode](https://github.com/Doorman11991/smallcode) is a terminal-native coding agent for small local models (8B–35B). It provides budgeted context, forgiving tool-call parsing, search/replace patching, persistent memory, and adaptive cloud escalation.
-
-**Configuration:** `~/.config/smallcode/` (env + TOML + MCP, written by `configure-smallcode.py`, tier-aware)
-
-| SmallCode Slot | OpenCode Role |
-|---------------|-------------|
-| DEFAULT | orchestrator |
-| FAST | librarian |
-| MEDIUM | fixer |
-| STRONG | oracle |
-
-Escalation uses the STRONG/oracle model and its provider. After 3+ calls, if failure rate >0.3 → MEDIUM, >0.6 → STRONG.
-
-- **Install:** `scripts/install-smallcode.sh` (gated on `DOTFILES_RUN_SMALLCODE_SETUP=1`)
-- **Configure:** `scripts/configure-smallcode.py --preset <tier>` writes `.env`, `smallcode.toml`, and `mcp.json`
-- **Context budget:** `SMALLCODE_CONTEXT_BUDGET=67` (aligned with OpenCode's DCP threshold)
-- **Meridian routing:** Anthropic models route through Meridian when `is_meridian_configured()` returns true
-- **MCP:** `smallcode --mcp` (stdio integration)
-- **Shell:** `smallcode` passthrough wrapper in `aliases.sh`
-
 ### Mozart Router
 
 Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer of `~/.mozart/mozart.json` (the template was removed to avoid dual-source conflicts).
@@ -664,7 +635,7 @@ Select via: `junie --model custom:<profile>`
 
 ### MCP Configuration
 
-Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus shared `smallcode` and `codegraph` server templates. `configure-mcps.py` generates per-tool config files.
+Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus the shared `codegraph` server template. `configure-mcps.py` generates per-tool config files.
 
 | Tool | Config Path | Format |
 |------|------------|--------|
@@ -675,10 +646,10 @@ Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templat
 | Cursor | `~/.cursor/mcp.json` | JSON mcpServers (global: github, idea, sentry) |
 | Codex | `~/.codex/config.toml` | TOML (global: github, idea, sentry) |
 | Gemini | `~/.gemini/settings.json` | JSON merge (global: github, sentry) |
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | JSON merge, stdio only (global: github, sentry, codegraph, smallcode) |
-| VS Code | `~/Library/Application Support/Code/User/mcp.json` | JSON `servers` with explicit `type` (global: github, idea, sentry, codegraph, smallcode) |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | JSON merge, stdio only (global: github, sentry, codegraph) |
+| VS Code | `~/Library/Application Support/Code/User/mcp.json` | JSON `servers` with explicit `type` (global: github, idea, sentry, codegraph) |
 
-Global MCP servers: github, idea, sentry, smallcode, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
+Global MCP servers: github, idea, sentry, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
 
 `idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. The MCP configure script sources its output before the gate check.
 

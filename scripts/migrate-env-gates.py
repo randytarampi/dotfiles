@@ -100,6 +100,11 @@ MIGRATIONS = [
     ),
 ]
 
+# Removed integrations are deleted from ~/.env rather than retained as
+# commented-out settings, so they cannot be rediscovered by future tooling.
+REMOVED_ENV_VARS = {"DOTFILES_RUN_SMALLCODE_SETUP", "DOTFILES_SMALLCODE_TIER"}
+REMOVED_ENV_PREFIXES = ("SMALLCODE_",)
+
 CADDY_V1_REMOVALS = {
     "CADDY_BASIC_AUTH_USERS": "moved to caddy-auth.conf",
     "CADDY_BASIC_AUTH_HASH": "moved to caddy-auth.conf",
@@ -209,6 +214,10 @@ def migrate_env(lines, dry_run=False):
 
         indent, comment_prefix, key, value = parsed
         is_commented = comment_prefix.strip().startswith("#")
+
+        if key in REMOVED_ENV_VARS or key.startswith(REMOVED_ENV_PREFIXES):
+            changes.append(f"Removed obsolete SmallCode setting: {key}")
+            continue
 
         if key in CADDY_V1_REMOVALS_DELETE:
             changes.append(f"Removed: {key} ({CADDY_V1_REMOVALS[key]})")

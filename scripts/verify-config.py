@@ -94,14 +94,6 @@ CHECKS = [
         ],
     ),
     (
-        "DOTFILES_RUN_SMALLCODE_SETUP",
-        "SmallCode config",
-        [
-            HOME / ".config/smallcode/config.toml",
-            HOME / ".config/smallcode/.env",
-        ],
-    ),
-    (
         "DOTFILES_RUN_AGENT_GUIDANCE_SETUP",
         "Agent guidance files",
         [

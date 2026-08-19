@@ -136,7 +136,6 @@ manually if you prefer to manage Keychain trust yourself.
 |---------|------------------|
 | JetBrains MCP | IDE control plane; exposing it would grant remote IDE control. |
 | Mozart | Router config, not a network service. |
-| SmallCode | stdio MCP only; no LAN HTTP server. |
 | CodeGraph | stdio MCP only; no LAN HTTP server. |
 
 ## Environment variables

@@ -27,8 +27,3 @@ opencode() {
     command opencode "$@"
   fi
 }
-
-# SmallCode passthrough wrapper.
-smallcode() {
-  command smallcode "$@"
-}
