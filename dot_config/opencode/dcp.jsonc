@@ -1,6 +1,6 @@
 {
   "compress": {
     "maxContextLimit": "67%",
-    "minContextLimit": "20%"
+    "minContextLimit": "33%"
   }
 }

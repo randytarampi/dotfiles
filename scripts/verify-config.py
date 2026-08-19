@@ -188,11 +188,32 @@ def check_opencode_orphan_files():
 
     opencode_dir = HOME / ".config/opencode"
     managed_config_path = opencode_dir / "opencode.json"
+    dcp_json_path = opencode_dir / "dcp.json"
     dcp_config_path = opencode_dir / "dcp.jsonc"
     exit_code = 0
 
+    if dcp_json_path.exists() and dcp_config_path.exists():
+        print(
+            "  \u2717 Both dcp.json and dcp.jsonc exist in ~/.config/opencode/ "
+            "— dcp.jsonc will shadow dcp.json. Remove dcp.json."
+        )
+        exit_code = 1
+
     if dcp_config_path.exists():
         print(f"  \u2713 DCP config: {dcp_config_path}")
+        try:
+            content = dcp_config_path.read_text(encoding="utf-8")
+            content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+            content = re.sub(r"(^|\s)//.*$", r"\1", content, flags=re.MULTILINE)
+            dcp_config = json.loads(content)
+        except (json.JSONDecodeError, OSError):
+            dcp_config = {}
+
+        if not isinstance(dcp_config, dict) or "compress" not in dcp_config:
+            print(
+                '  \u26a0 dcp.jsonc has no "compress" configuration — '
+                "DCP will use defaults."
+            )
     else:
         print(f"  \u2717 DCP config: MISSING {dcp_config_path}")
         exit_code = 1

@@ -245,7 +245,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   ├── gh/config.yml.tmpl        # GitHub CLI config
 │   ├── git/ignore                # Global gitignore rules
 │   ├── opencode/
-│   │   └── dcp.json              # DCP context compaction (percentage thresholds)
+│   │   └── dcp.jsonc             # DCP context compaction (percentage thresholds)
 │   ├── ripgrep/config            # ripgrep defaults
 │   └── starship.toml.tmpl        # Starship prompt
 ├── dot_dotfiles/                 # Managed shell configs (→ ~/.dotfiles/shell/)
@@ -536,9 +536,9 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 
 ### DCP Context Compaction
 
-`~/.config/opencode/dcp.json` uses percentage-based thresholds:
-- Compress at **67%** of context window
-- Leave at least **20%** filled
+`~/.config/opencode/dcp.jsonc` uses percentage-based thresholds:
+- Soft nudges at **33%** context usage
+- Strong compression nudges at **67%**
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
