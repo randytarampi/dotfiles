@@ -12,7 +12,7 @@
 |-------------|---------------------------|-------|
 | `primaryModel` | `orchestrator` model | Strip provider prefix (e.g., `ollama-cloud/glm-5.2` → `glm-5.2`) |
 | `fasterModel` | `librarian` model | Strip provider prefix; add `fasterProvider` if different from `provider` |
-| `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama-local`: 0.6 |
+| `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama`: 0.6 |
 | `modelTemperatures` | — (Junie-specific) | Model-family temperature map; applied per-role at profile generation time |
 
 ---

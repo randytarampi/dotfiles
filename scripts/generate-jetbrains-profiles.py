@@ -100,7 +100,7 @@ def resolve_group_model(
 ) -> str:
     if pattern.startswith("_local:"):
         return resolve_local_placeholder(pattern, local_role_models)
-    if provider_name == "ollama-local":
+    if provider_name == "ollama":
         return resolve_model(pattern, local_models)
     return pattern
 
@@ -153,7 +153,7 @@ def main():
     local_models_list = args.local_models.split()
     local_role_models = {}
     has_local_groups = any(
-        g.get("provider") == "ollama-local" for g in cfg.get("groups", {}).values()
+        g.get("provider") == "ollama" for g in cfg.get("groups", {}).values()
     )
     if has_local_groups:
         discovered_local_models = list_local_ollama_models()
@@ -188,7 +188,7 @@ def main():
         faster_provider = group_def.get("fasterProvider") or provider
 
         if (
-            provider == "ollama-local"
+            provider == "ollama"
             and not local_models_list
             and not primary_pattern.startswith("_local:")
         ):
@@ -197,7 +197,7 @@ def main():
 
         if (
             faster_pattern
-            and faster_provider == "ollama-local"
+            and faster_provider == "ollama"
             and not local_models_list
             and not faster_pattern.startswith("_local:")
         ):

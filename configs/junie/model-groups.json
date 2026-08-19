@@ -20,7 +20,7 @@
       "portEnv": "MERIDIAN_PORT",
       "baseUrlEnv": "ANTHROPIC_BASE_URL"
     },
-    "ollama-local": {
+    "ollama": {
       "baseUrl": "http://localhost:11434/v1",
       "apiType": "OpenAICompletion",
       "apiKeyEnv": "",
@@ -75,26 +75,26 @@
       "fasterProvider": "meridian"
     },
     "local-pro": {
-      "provider": "ollama-local",
+      "provider": "ollama",
       "primaryModel": "_local:reasoning",
       "fasterModel": "_local:lightweight"
     },
     "local": {
-      "provider": "ollama-local",
+      "provider": "ollama",
       "primaryModel": "_local:code-gen",
       "fasterModel": "_local:lightweight"
     },
     "local-mini": {
-      "provider": "ollama-local",
+      "provider": "ollama",
       "primaryModel": "_local:code-gen",
       "fasterModel": "_local:vision"
     },
     "local-nano": {
-      "provider": "ollama-local",
+      "provider": "ollama",
       "primaryModel": "_local:code-gen"
     },
     "local-solo": {
-      "provider": "ollama-local",
+      "provider": "ollama",
       "primaryModel": "_local:solo",
       "fasterModel": "_local:solo"
     },

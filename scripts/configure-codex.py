@@ -36,7 +36,7 @@ base_url = "https://ollama.com/v1"
 wire_api = "chat"
 env_key = "OLLAMA_API_KEY"
 
-[model_providers.ollama-local]
+[model_providers.ollama]
 name = "Ollama Local"
 base_url = "http://localhost:11434/v1"
 wire_api = "chat"
@@ -62,7 +62,8 @@ def main():
         original_content = content
 
         content = re.sub(r"^model_provider\s*=.*$\n?", "", content, flags=re.MULTILINE)
-        for provider in ("meridian", "ollama-cloud", "ollama-local"):
+        # Transitional dual-strip: remove both provider IDs for one release cycle.
+        for provider in ("meridian", "ollama-cloud", "ollama-local", "ollama"):
             content = re.sub(
                 r"\n*\[model_providers\.%s\].*?(?=\n\[|\Z)" % re.escape(provider),
                 "",
@@ -97,12 +98,12 @@ def main():
         "  • Default: OpenAI (unchanged)",
         "  • meridian: http://127.0.0.1:3456/v1 — responses",
         "  • ollama-cloud: https://ollama.com/v1 — chat",
-        "  • ollama-local: http://localhost:11434/v1 — chat",
+        "  • ollama: http://localhost:11434/v1 — chat",
         "",
         "Switch providers at runtime:",
         "  codex -c model_provider=meridian -m claude-sonnet-5",
         "  codex -c model_provider=ollama-cloud -m glm-5.2",
-        "  codex -c model_provider=ollama-local -m qwen2.5-coder",
+        "  codex -c model_provider=ollama -m qwen2.5-coder",
         "",
         "Configure script complete!",
     ]

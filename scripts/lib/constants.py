@@ -90,13 +90,13 @@ def get_provider_base_url(provider):
 
     Checks PROVIDER_BASE_URL_ENVS for an official SDK env var override.
     Falls back to BASE_URLS[provider] if no override is set.
-    For 'meridian' and 'ollama-local', delegates to their dedicated functions.
+    For 'meridian' and 'ollama', delegates to their dedicated functions.
     """
     import os
 
     if provider == "meridian":
         return get_meridian_base_url()
-    if provider == "ollama-local":
+    if provider == "ollama":
         return get_ollama_local_base_url()
 
     env_var = PROVIDER_BASE_URL_ENVS.get(provider)
