@@ -90,7 +90,15 @@ def check_consistency(install_plugins, config_plugins):
             )
             exit_code = 1
 
+    # TUI plugins are configured in tui.json (not opencode.json) by dedicated
+    # configure-opencode-*.py scripts. They are intentionally absent from the
+    # opencode.json plugin array, so suppress the false-positive warning.
+    # Keys use plugin_base() format (trailing @ retained after @latest strip).
+    TUI_PLUGINS = {"@renjfk/opencode-voice@"}
+
     for name in sorted(set(install_by_base) - set(config_by_base)):
+        if name in TUI_PLUGINS:
+            continue
         print(f"WARNING: installed but not configured: {install_by_base[name]}")
     for name in sorted(set(config_by_base) - set(install_by_base)):
         print(f"WARNING: configured but not installed: {config_by_base[name]}")
