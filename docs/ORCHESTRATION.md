@@ -98,7 +98,8 @@ sequenceDiagram
     Configure->>Configure: configure-jetbrains-ai.py --models (Junie profiles)
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
-    Configure->>Configure: configure-meridian.py (plugin injection)
+    Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
+    Configure->>Configure: configure-codex.py (Codex provider config)
     Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-smallcode.py
     Configure->>Configure: configure-agent-guidance.py
