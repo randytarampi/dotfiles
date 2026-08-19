@@ -21,92 +21,11 @@ These apply to every repo, every session.
 - If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
 - Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
 
-## Dotfiles Repo Development
+### Delegation discipline
 
-When working on the dotfiles repo itself:
-- **Before committing:** `make verify` (lint + drift + doctor + check-hashes + dry-run)
-- **After pulling:** `make deploy` (full rebuild — chezmoi apply + configure-all.sh)
-- **Adding a configure script:** Wire it into both a `run_onchange_*` chezmoi script AND `configure-all.sh`. Add hash triggers for its config inputs.
-- **Adding a gate:** Use `DOTFILES_RUN_*_SETUP` pattern. Document in `.env.example`. Default to `0`.
-- **Script conventions:** `run_once_*` for one-time ops only, `run_onchange_*` for everything else. See `AGENTS.md` Scripting Conventions for full policy.
-- **Architecture:** Three layers — templates, chezmoi scripts, configure scripts. See `docs/ORCHESTRATION.md` for the canonical reference.
+For changes requiring exploration of unknown scope, delegate bounded discovery first. Use direct reads for files you expect to edit, reconcile, or verify. If scope is unclear after two discovery calls, or discovery spans multiple subsystems, delegate one bounded exploration task. Request concise file:line findings, avoid full file dumps in parent context.
 
-## Skills Distribution
-
-Skills are managed declaratively via category manifests in `configs/skills/` (analogous to Brewfile/wingetfile for packages). The script `scripts/configure-skills.py` reconciles installed skills against the merged manifests:
-1. Fetches missing skills via the `skills` CLI (`vercel-labs/skills`) into `~/.local/share/dotfiles/skills/` (canonical cache, not a discovery directory)
-2. Symlinks each skill to all 8 agent skill directories (`.agents`, `.config/opencode`, `.claude`, `.gemini`, `.codex`, `.cursor`, `.ai`/`.junie`, `.hermes`)
-3. Removes stale skills not in the active manifest
-4. Supports optional profiles gated on `DOTFILES_RUN_*` env vars
-
-The `skills` CLI only installs to 4 agent dirs; `configure-skills.py` extends coverage to all 8.
-
-### Manifest format
-
-The manifest (`configs/skills/skills.json`) declares skills by source repo and name:
-```json
-{ "source": "owner/repo", "name": "skill-name" }
-```
-The five category files are `skills.core.json`, `skills.mattpocock.json`,
-`skills.aws.json`, `skills.mongodb.json`, and `skills.prisma.json`. Core and
-mattpocock are always-on (mattpocock has no gate); AWS, MongoDB, and Prisma are
-opt-in via their `DOTFILES_RUN_SKILLS_*_SETUP` gates. Project configuration can
-select any category without enabling a global gate.
-
-### iamhumans
-
-The [iamhumans](https://github.com/hoainho/iamhumans) skill provides a humanization layer for LLM conversation. It's fetched via `skills add hoainho/iamhumans --global -y` — no copy-paste needed. Full `references/` tree is included.
-
-### Updating skills
-
-- **Update all**: `make skills-update` or `skills update --global -y`
-- **Update one**: `skills update <skill-name> --global -y`
-- **Add a skill**: Add entry to the appropriate `configs/skills/skills.<category>.json`, then `make deploy`
-- **Remove a skill**: Remove entry from its category file, then `make deploy`; stale entries use `skills remove <name> --global -y` (with target cleanup fallback)
-- **Lock file**: `~/.agents/.skill-lock.json` tracks installed state
-
-> [!IMPORTANT]
-> Skill names in the manifest must match the `name` field in `~/.agents/.skill-lock.json` exactly. Before editing `skills.json`, list installed names with `jq -r '.skills[].name' ~/.agents/.skill-lock.json`. Guessed names (e.g. `aws-messaging` vs the real `aws-messaging-and-streaming`) cause `skills add` to fail silently.
-
-### Gate
-
-- `DOTFILES_RUN_SKILLS_SETUP=1` — enables global skills distribution (default: 0)
-- `DOTFILES_RUN_SKILLS_AWS_SETUP=1` — enables the AWS category globally (default: 0)
-- `DOTFILES_RUN_SKILLS_MONGODB_SETUP=1` — enables the MongoDB category globally (default: 0)
-- `DOTFILES_RUN_SKILLS_PRISMA_SETUP=1` — enables the Prisma category globally (default: 0)
-
-### Project-scoped skills
-
-Put `DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb` in a project's
-`.opencode/.env` and run `scripts/configure-project.py --steps skills`. Add
-`DOTFILES_PROJECT_SKILLS` or `DOTFILES_PROJECT_SKIP_SKILLS` for individual
-overrides. Generated `.opencode/.env.local` contains secrets and is loaded after
-`.env`; users edit only `.env`. `~/.agents/skills/` remains a discovery target for
-active links, while the canonical cache is `~/.local/share/dotfiles/skills/`.
-
-### `skills` CLI
-
-The [`skills`](https://www.skills.sh) CLI (`vercel-labs/skills`) fetches skills from GitHub repos:
-```bash
-skills add owner/repo/skill-name --global -y   # Install a skill
-skills ls -g                                     # List global skills
-skills update --global -y                        # Update all skills
-skills find "humanization"                       # Search registry
-```
-
-Install via `brew install skills` (macOS/Linux) or `npm install -g skills` (all platforms).
-
-### lazyskills CLI
-
-`lazyskills` is a CLI tool for discovering and managing skills from the registry:
-
-```bash
-lazyskills find --json "humanization"
-lazyskills list
-lazyskills info iamhumans
-```
-
-Install via `scripts/install-skills.sh` or manually: `brew install --cask alvinunreal/tap/lazyskills` (macOS), `curl -fsSL https://lazyskills.sh/install | sh` (Linux), `irm https://lazyskills.sh/install.ps1 | iex` (Windows).
+> Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/ORCHESTRATION.md`.
 
 ## ACP Agent Verification
 
@@ -123,8 +42,6 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
    - **Junie**: JetBrains IDE login
    - **Antigravity**: `agy auth login` (Google Sign-In via system keyring). Then enable the bridge: set `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP=1` and `make deploy`.
 
-     > [!CAUTION]
-     > Google's Antigravity ToS prohibit using third-party software to access the Service. Routing Antigravity OAuth through the `antigravity-acp` bridge *may lead to account suspension*. Use Vertex AI / AI Studio API keys instead if this risk is unacceptable.
 5. **Test**: In OpenCode, use `/agent <agent-name>` to invoke a specific ACP agent (e.g., `@gemini hello` or `@copilot explain this code`)
 
 ## Tokenscope
