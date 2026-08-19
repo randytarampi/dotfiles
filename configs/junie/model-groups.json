@@ -27,6 +27,11 @@
       "hostEnv": "OLLAMA_LOCAL_HOST",
       "portEnv": "OLLAMA_LOCAL_PORT",
       "hostEnvAlt": "OLLAMA_HOST"
+    },
+    "github-copilot": {
+      "baseUrl": "https://api.githubcopilot.com/v1",
+      "apiKeyEnv": "GITHUB_TOKEN",
+      "apiType": "OpenAIResponses"
     }
   },
   "modelTemperatures": {
@@ -113,6 +118,10 @@
     "meridian-fable": {
       "provider": "meridian",
       "primaryModel": "claude-fable-5"
+    },
+    "copilot": {
+      "provider": "github-copilot",
+      "primaryModel": "copilot-model-id"
     }
   }
 }

@@ -4,6 +4,21 @@
 
 `configs/junie/model-groups.json` defines Junie model profiles that should stay aligned with `configs/opencode/oh-my-opencode-slim.json` presets. When changing one, update the other.
 
+### GitHub Copilot provider (experimental)
+
+The `github-copilot` provider and `copilot` group are experimental and require
+`GITHUB_TOKEN`. They use GitHub Copilot's OpenAI Responses-compatible endpoint;
+validate the model ID and Junie compatibility before relying on the generated
+profile. The generator skips this group when the token is unavailable.
+
+## Other CLI provider capabilities
+
+| Tool | Profile/provider config | Supported setup |
+|------|--------------------------|------------------|
+| Claude Code | No custom provider block in the deployed settings file | Use the upstream `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` environment variables (Meridian uses its SDK/OAuth flow). |
+| Gemini CLI | No custom provider block in the deployed settings file | Use the upstream `GOOGLE_GEMINI_BASE_URL` environment variable where supported; no dotfiles profile is generated. |
+| GitHub Copilot CLI | No `~/.copilot/config.toml` provider/profile configuration | Provider selection is unsupported here; use Copilot CLI authentication and its command-line behavior. |
+
 ---
 
 ## Mapping Rule

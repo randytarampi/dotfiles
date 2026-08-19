@@ -178,6 +178,15 @@ def main():
             logger.warning(f"No provider configured for {group_name} — skipping")
             continue
 
+        if (
+            provider == "github-copilot"
+            and not os.environ.get("GITHUB_TOKEN", "").strip()
+        ):
+            logger.info(
+                "GITHUB_TOKEN not set — skipping experimental %s group", group_name
+            )
+            continue
+
         provider_cfg = provider_configs.get(provider)
         if not provider_cfg:
             logger.warning(f"Unknown provider '{provider}' for {group_name} — skipping")
