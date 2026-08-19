@@ -20,6 +20,8 @@ On first setup, run `make deploy` twice. The second pass should be a no-op, but 
 ## Architecture
 
 - Canonical orchestration doc: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)
+- Agent capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
+- Pi terminal coding agent: [docs/PI.md](docs/PI.md)
 - Snowflake Cortex Code specialist: [docs/CORTEX.md](docs/CORTEX.md)
 - Repo-level agent guidance: [AGENTS.md](AGENTS.md)
 - Home-level agent guidance source: [configs/agents/home-agents.md](configs/agents/home-agents.md)
@@ -152,7 +154,7 @@ make ci-verify                               # CI verification (lint + drift + d
 
 `acpAgents` in `oh-my-opencode-slim.json` auto-exposes ACP-capable tools as sandboxed wrapper subagents.
 
-- Auto-detected agents: `opencode`, `gemini`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`.
+- Auto-detected agents: `opencode`, `gemini`, `antigravity`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`, `pi`, and `cortex`.
 - `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
 - `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
 - Install adapter prerequisites with `scripts/install-acp-adapters.sh` (`brew install copilot-cli`, `npm i -g @agentclientprotocol/claude-agent-acp`, `npm i -g @agentclientprotocol/codex-acp`), then sign in to each agent separately.
@@ -650,7 +652,7 @@ Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templat
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | JSON merge, stdio only (global: github, sentry, codegraph) |
 | VS Code | `~/Library/Application Support/Code/User/mcp.json` | JSON `servers` with explicit `type` (global: github, idea, sentry, codegraph) |
 
-Global MCP servers: github, idea, sentry, codegraph. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`.
+Global MCP servers: github, idea, sentry, codegraph, and the shared Pi helper template. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`. See [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) for the complete per-tool matrix.
 
 `idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. The MCP configure script sources its output before the gate check.
 
@@ -702,3 +704,7 @@ Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts
 ## Pi
 
 Pi is the optional terminal coding agent. Enable it with `DOTFILES_RUN_PI_SETUP=1`; see [docs/PI.md](docs/PI.md) for providers, MCP, ACP, plugins, and skills.
+
+### Cortex
+
+Cortex Code is the Snowflake specialist. Enable it with `DOTFILES_RUN_CORTEX_SETUP=1`; see [docs/CORTEX.md](docs/CORTEX.md) for native MCP, ACP delegation, and Snowflake skills.

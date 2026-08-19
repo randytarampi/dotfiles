@@ -3,6 +3,10 @@
 Pi is the terminal coding-agent harness configured in `~/.pi/agent/`.
 Cortex Code is Snowflake's specialist terminal agent configured in `~/.snowflake/cortex/`; use it for Snowflake-specific work, not general provider-agnostic tasks.
 
+Configured agent tools are OpenCode, Codex, Junie, Pi, Cortex, Claude,
+Copilot, Gemini, Cursor, Cline, and Antigravity. Their integration details
+are documented in `docs/CAPABILITY_MATRIX.md` in the dotfiles repository.
+
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
 <!-- AGENT_GUIDANCE_START -->

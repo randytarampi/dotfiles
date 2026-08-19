@@ -46,6 +46,8 @@ AGENT_FILES = [
     os.path.join(HOME, ".cursor", "AGENTS.md"),
     os.path.join(JUNIE_DIR, "AGENTS.md"),
     os.path.join(HOME, ".copilot", "copilot-instructions.md"),
+    os.path.join(HOME, ".pi", "agent", "AGENTS.md"),
+    os.path.join(HOME, ".snowflake", "cortex", "AGENTS.md"),
 ]
 
 MARKER_START = "<!-- AGENT_GUIDANCE_START -->"

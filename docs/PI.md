@@ -31,3 +31,16 @@ make verify
 
 Installation runs in phase 10 and configuration in phase 18, after OpenCode.
 Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.
+
+## Usage patterns
+
+- Use Pi as a lightweight, scriptable terminal agent when a full OpenCode
+  session is unnecessary.
+- Switch between OpenAI, Anthropic, Ollama, and Meridian providers through
+  Pi's generated `models.json`.
+- Use generated subagents for parallel work; their roles mirror the
+  orchestrator, librarian, fixer, and oracle workflow.
+- Enable `pi-web-access` for web-backed research and use the Plannotator Pi
+  extension for plan review.
+- From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
+  entry.
