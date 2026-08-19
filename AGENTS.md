@@ -253,6 +253,7 @@ cache is `~/.local/share/dotfiles/skills/`. See
 | [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) | Three-layer architecture, script inventory, gates, dependency ordering, troubleshooting |
 | [docs/INSTALL.md](docs/INSTALL.md) | Full installation, upgrade, and verification instructions |
 | [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
+| [docs/PI.md](docs/PI.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
 
 ---
 

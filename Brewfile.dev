@@ -185,3 +185,6 @@ npm "tumor"
 npm "@agentclientprotocol/claude-agent-acp"
 npm "@agentclientprotocol/codex-acp"
 npm "@google/gemini-cli"
+
+# Pi terminal coding agent
+npm "@earendil-works/pi-coding-agent"

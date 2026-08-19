@@ -53,6 +53,8 @@ from pathlib import Path
 # - v1 defaults and localhost-only modes map to CADDY_ACCESS='localhost'
 # - v1 auth/zone env vars are removed because they now live in config files
 MIGRATIONS = [
+    # Pi is a new opt-in integration; its documented settings are preserved.
+    ("DOTFILES_RUN_PI", "DOTFILES_RUN_PI_SETUP", None),
     # Gate renames (value preserved, key changed)
     ("DOTFILES_RUN_MACOS_DEFAULTS", "DOTFILES_RUN_MACOS_DEFAULTS_SETUP", None),
     ("DOTFILES_RUN_MACOS_SECURITY", "DOTFILES_RUN_MACOS_SECURITY_SETUP", None),

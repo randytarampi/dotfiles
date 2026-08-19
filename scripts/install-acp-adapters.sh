@@ -136,6 +136,7 @@ install_opencode_adapters() {
 
   install_npm_adapter "@agentclientprotocol/claude-agent-acp"
   install_npm_adapter "@agentclientprotocol/codex-acp"
+  install_npm_adapter "pi-acp"
 }
 
 install_npm_adapter() {

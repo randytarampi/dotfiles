@@ -1,0 +1,1 @@
+{"name": "pi-mcp-adapter", "type": "command", "command": "pi", "args": ["mcp"]}

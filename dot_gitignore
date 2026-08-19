@@ -105,3 +105,6 @@ opencode.json
 .memory
 ## Serverless
 .serverless-secrets.json
+
+# Pi agent runtime configuration
+**/.pi/

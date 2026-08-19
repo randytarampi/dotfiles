@@ -136,7 +136,8 @@
         "configure-codegraph.py",
         "configure-skills.py",
         "configure-ddns.py",
-        "configure-caddy.py"
+        "configure-caddy.py",
+        "configure-pi.py"
       ]
     },
     {
@@ -638,6 +639,46 @@
       "enforcement": "pending",
       "accepted_flags": [
         "--help"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-pi.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-pi.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups",
+        "tier_selector",
+        "scope_selector"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--preset",
+        "--no-backup",
+        "--mode",
+        "--no-mcp",
+        "--no-local-fallbacks",
+        "--local-fallback-placeholder",
+        "--local-fallback-role",
+        "--local-fallback-preset",
+        "--ollama-base-url"
       ],
       "positional_operand": null,
       "child_scripts": []

@@ -1,5 +1,7 @@
 # Home Agent Guidance
 
+Pi is the terminal coding-agent harness configured in `~/.pi/agent/`.
+
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
 <!-- AGENT_GUIDANCE_START -->

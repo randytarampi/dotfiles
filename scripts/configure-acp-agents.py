@@ -68,6 +68,12 @@ ACP_AGENTS = {
         "args": ["--acp", "--stdio"],
         "description": "GitHub Copilot CLI (public preview)",
     },
+    "pi": {
+        "command": "npx",
+        "args": ["-y", "pi-acp"],
+        "description": "Pi coding agent (via pi-acp bridge)",
+        "env": {"PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true"},
+    },
 }
 
 

@@ -154,6 +154,7 @@ sequenceDiagram
 | 14 | configure-secrets | run_onchange | .env distribution to AI dirs | `DOTFILES_RUN_SECRETS_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
+| 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
 | 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
 | 19 | configure-codegraph | run_onchange | CodeGraph MCP registration | `DOTFILES_RUN_CODEGRAPH_SETUP` |
 | 20 | configure-agent-guidance | run_onchange | Agent guidance distribution | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` |

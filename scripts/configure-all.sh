@@ -190,6 +190,14 @@ else
   info "DOTFILES_RUN_OPENCODE_SETUP not set — skipping OpenCode configuration"
 fi
 
+# 3.1. Pi config (reads the OpenCode preset generated above)
+if [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
+  info "Configuring Pi (tier=$OC_TIER)..."
+  run_step "Pi configuration" python3 "$SCRIPT_DIR/configure-pi.py" --preset "$OC_TIER" "${OC_ARGS[@]}"
+else
+  info "DOTFILES_RUN_PI_SETUP not set — skipping Pi configuration"
+fi
+
 # 3.5. Configure Meridian proxy plugin (must run after OpenCode; injects plugin into opencode.json)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Meridian configuration (dry-run mode)"

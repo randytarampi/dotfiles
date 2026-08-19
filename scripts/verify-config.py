@@ -94,6 +94,15 @@ CHECKS = [
         ],
     ),
     (
+        "DOTFILES_RUN_PI_SETUP",
+        "Pi config",
+        [
+            HOME / ".pi/agent/settings.json",
+            HOME / ".pi/agent/models.json",
+            HOME / ".pi/agent/auth.json",
+        ],
+    ),
+    (
         "DOTFILES_RUN_AGENT_GUIDANCE_SETUP",
         "Agent guidance files",
         [

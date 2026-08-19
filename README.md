@@ -697,3 +697,7 @@ Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts
 - Package management via `winget` and `wingetfile*` category bundles
 - `the package-install run_onchange script` handles both `brew bundle` and `winget install` (Windows-only section)
 - Windows winget install is gated by the same `DOTFILES_RUN_PACKAGES_SETUP` toggle as Homebrew
+
+## Pi
+
+Pi is the optional terminal coding agent. Enable it with `DOTFILES_RUN_PI_SETUP=1`; see [docs/PI.md](docs/PI.md) for providers, MCP, ACP, plugins, and skills.

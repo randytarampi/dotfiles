@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+source "$LIB_DIR/tier_detect.sh"
+source "$LIB_DIR/tier_args.sh"
+# configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
+# scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
+load_env || true
+if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_PI_SETUP='${DOTFILES_RUN_PI_SETUP:-0}' — skipping Pi configuration"
+  exit 0
+fi
+detect_tier DOTFILES_PI_TIER
+build_tier_extra_args
+python3 "{{ .chezmoi.sourceDir }}/scripts/configure-pi.py" --preset "$TIER" "${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"}"

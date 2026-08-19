@@ -29,3 +29,6 @@ docs/
 
 # GitHub special files (PR templates, issue templates, CI workflows) — not dotfiles.
 .github/
+
+# Pi agent runtime configuration
+**/.pi/

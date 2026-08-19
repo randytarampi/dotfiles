@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# scripts/install-pi.sh: {{ include "scripts/install-pi.sh" | sha256sum }}
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+load_env || true
+if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_PI_SETUP='${DOTFILES_RUN_PI_SETUP:-0}' — skipping Pi install"
+  exit 0
+fi
+bash "{{ .chezmoi.sourceDir }}/scripts/install-pi.sh"

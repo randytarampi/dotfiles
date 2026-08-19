@@ -35,6 +35,7 @@ SKILL_TARGET_DIRS = [
     os.path.join(HOME, ".cursor", "skills"),
     os.path.join(JUNIE_DIR, "skills"),
     os.path.join(HOME, ".copilot", "skills"),
+    os.path.join(HOME, ".pi", "agent", "skills"),
     os.path.join(HOME, ".gemini", "antigravity-cli", "skills"),
 ]
 
