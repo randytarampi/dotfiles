@@ -55,13 +55,13 @@
     },
     "pro-plus-anthropic": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-sonnet-5",
-      "fasterModel": "anthropic/claude-haiku-4-5"
+      "primaryModel": "claude-sonnet-5",
+      "fasterModel": "claude-haiku-4-5"
     },
     "anthropic": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-sonnet-5",
-      "fasterModel": "anthropic/claude-haiku-4-5"
+      "primaryModel": "claude-sonnet-5",
+      "fasterModel": "claude-haiku-4-5"
     },
     "plus": {
       "provider": "openai",
@@ -71,7 +71,7 @@
     "plus-anthropic": {
       "provider": "openai",
       "primaryModel": "gpt-5.6-terra",
-      "fasterModel": "anthropic/claude-haiku-4-5",
+      "fasterModel": "claude-haiku-4-5",
       "fasterProvider": "meridian"
     },
     "local-pro": {
@@ -100,19 +100,19 @@
     },
     "meridian-opus": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-opus-5"
+      "primaryModel": "claude-opus-5"
     },
     "meridian-sonnet": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-sonnet-5"
+      "primaryModel": "claude-sonnet-5"
     },
     "meridian-haiku": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-haiku-4-5-20251001"
+      "primaryModel": "claude-haiku-4-5-20251001"
     },
     "meridian-fable": {
       "provider": "meridian",
-      "primaryModel": "anthropic/claude-fable-5"
+      "primaryModel": "claude-fable-5"
     }
   }
 }
