@@ -72,5 +72,6 @@ Verify alignment by checking:
 ## Configuration Scripts
 
 - `scripts/configure-meridian.py` — appends Meridian plugin path to `opencode.json` plugin array. Also manages `~/.config/meridian/sdk-features.json` (ensures `opencode.codeSystemPrompt=false`, preserving other adapter settings).
+- `scripts/configure-codex.py` — adds Meridian as an available provider in `~/.codex/config.toml` (base_url, wire_api, env_key). Codex defaults to OpenAI; switch to Meridian with `codex -c model_provider=meridian -m <model>`. Preserves existing runtime settings.
 - `scripts/meridian-launch.sh` — launches Meridian proxy, unsets `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`.
 - `.chezmoiscripts/run_onchange_11-install-meridian-launchd.sh.tmpl` — installs launchd plist for Meridian.

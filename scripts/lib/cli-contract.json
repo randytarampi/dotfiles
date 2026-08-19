@@ -130,6 +130,7 @@
         "configure-mcps.py",
         "configure-opencode.py",
         "configure-meridian.py",
+        "configure-codex.py",
         "configure-mozart-router.py",
         "configure-smallcode.py",
         "configure-agent-guidance.py",
@@ -282,6 +283,21 @@
       "child_scripts": [
         "configure-mcp-tool.py"
       ]
+    },
+    {
+      "path": "scripts/configure-codex.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "pending",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     },
     {
       "path": "scripts/configure-meridian.py",

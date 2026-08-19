@@ -144,6 +144,16 @@ else
   info "DOTFILES_RUN_MERIDIAN_SETUP='${DOTFILES_RUN_MERIDIAN_SETUP:-0}' — skipping meridian"
 fi
 
+# 3.6. Configure Codex CLI provider (must run after MCP config which also writes to config.toml)
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  info "Skipping Codex configuration (dry-run mode)"
+elif [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
+  info "Configuring Codex CLI provider (DOTFILES_RUN_MERIDIAN_SETUP=1)..."
+  run_step "Codex configuration" python3 "$SCRIPT_DIR/configure-codex.py"
+else
+  info "DOTFILES_RUN_MERIDIAN_SETUP not set — skipping Codex configuration"
+fi
+
 # 4. Mozart router
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Mozart configuration (dry-run mode)"
