@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Optional
 
 HOME = Path.home()
+CORTEX_HOME = Path(
+    os.environ.get("SNOWFLAKE_HOME", str(HOME / ".snowflake")).strip()
+).expanduser()
 
 
 def get_brew_prefix() -> Optional[Path]:
@@ -100,6 +103,15 @@ CHECKS = [
             HOME / ".pi/agent/settings.json",
             HOME / ".pi/agent/models.json",
             HOME / ".pi/agent/auth.json",
+        ],
+    ),
+    (
+        "DOTFILES_RUN_CORTEX_SETUP",
+        "Cortex config",
+        [
+            CORTEX_HOME / "cortex/settings.json",
+            CORTEX_HOME / "cortex/permissions.json",
+            CORTEX_HOME / "cortex/mcp.json",
         ],
     ),
     (

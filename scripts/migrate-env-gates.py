@@ -55,6 +55,10 @@ from pathlib import Path
 MIGRATIONS = [
     # Pi is a new opt-in integration; its documented settings are preserved.
     ("DOTFILES_RUN_PI", "DOTFILES_RUN_PI_SETUP", None),
+    ("DOTFILES_RUN_CORTEX", "DOTFILES_RUN_CORTEX_SETUP", None),
+    ("DOTFILES_CORTEX_CONNECTION", "CORTEX_CONNECTION", None),
+    ("DOTFILES_SNOWFLAKE_HOME", "SNOWFLAKE_HOME", None),
+    ("DOTFILES_CORTEX_AGENT_MODEL", "CORTEX_AGENT_MODEL", None),
     # Gate renames (value preserved, key changed)
     ("DOTFILES_RUN_MACOS_DEFAULTS", "DOTFILES_RUN_MACOS_DEFAULTS_SETUP", None),
     ("DOTFILES_RUN_MACOS_SECURITY", "DOTFILES_RUN_MACOS_SECURITY_SETUP", None),

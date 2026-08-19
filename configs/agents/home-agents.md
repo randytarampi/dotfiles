@@ -1,6 +1,7 @@
 # Home Agent Guidance
 
 Pi is the terminal coding-agent harness configured in `~/.pi/agent/`.
+Cortex Code is Snowflake's specialist terminal agent configured in `~/.snowflake/cortex/`; use it for Snowflake-specific work, not general provider-agnostic tasks.
 
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 

@@ -47,6 +47,8 @@ KNOWN_ALIASES = {
     "OLLAMA_HOST": ["OLLAMA_LOCAL_HOST", "OLLAMA_LOCAL_PORT"],
 }
 
+KNOWN_UPSTREAM_VARS = {"SNOWFLAKE_HOME", "CORTEX_CONNECTION", "CORTEX_AGENT_MODEL"}
+
 
 def find_referenced_vars():
     """Find DOTFILES_* variables referenced by scripts and documentation."""

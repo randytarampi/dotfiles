@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+# scripts/configure-cortex.py: {{ include "scripts/configure-cortex.py" | sha256sum }}
+if [[ "${DOTFILES_RUN_CORTEX_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CORTEX_SETUP='${DOTFILES_RUN_CORTEX_SETUP:-0}' — skipping Cortex configuration"
+  exit 0
+fi
+python3 "{{ .chezmoi.sourceDir }}/scripts/configure-cortex.py"

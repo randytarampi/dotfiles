@@ -108,3 +108,4 @@ opencode.json
 
 # Pi agent runtime configuration
 **/.pi/
+**/.snowflake/cortex/

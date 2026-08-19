@@ -32,3 +32,4 @@ docs/
 
 # Pi agent runtime configuration
 **/.pi/
+**/.snowflake/cortex/

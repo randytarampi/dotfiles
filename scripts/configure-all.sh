@@ -198,6 +198,14 @@ else
   info "DOTFILES_RUN_PI_SETUP not set — skipping Pi configuration"
 fi
 
+# 3.2. Cortex Code configuration (Snowflake specialist)
+if [[ "${DOTFILES_RUN_CORTEX_SETUP:-0}" == "1" ]]; then
+  info "Configuring Cortex Code..."
+  run_step "Cortex configuration" python3 "$SCRIPT_DIR/configure-cortex.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+else
+  info "DOTFILES_RUN_CORTEX_SETUP not set — skipping Cortex configuration"
+fi
+
 # 3.5. Configure Meridian proxy plugin (must run after OpenCode; injects plugin into opencode.json)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Meridian configuration (dry-run mode)"

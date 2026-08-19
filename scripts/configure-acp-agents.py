@@ -74,6 +74,12 @@ ACP_AGENTS = {
         "description": "Pi coding agent (via pi-acp bridge)",
         "env": {"PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true"},
     },
+    "cortex": {
+        "command": "cortex",
+        "args": ["acp", "serve", "-c", "${CORTEX_CONNECTION}"],
+        "description": "Snowflake Cortex Code agent (ACP)",
+        "env": {"SNOWFLAKE_HOME": "${SNOWFLAKE_HOME}"},
+    },
 }
 
 

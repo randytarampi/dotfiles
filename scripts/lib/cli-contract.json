@@ -137,7 +137,9 @@
         "configure-skills.py",
         "configure-ddns.py",
         "configure-caddy.py",
-        "configure-pi.py"
+        "configure-pi.py",
+        "install-cortex.sh",
+        "configure-cortex.py"
       ]
     },
     {
@@ -654,6 +656,22 @@
         "--help",
         "--dry-run"
       ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/install-cortex.sh",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-cortex.py",
+      "capabilities": ["public", "mutates", "backups"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
       "positional_operand": null,
       "child_scripts": []
     },

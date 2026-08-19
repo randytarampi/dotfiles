@@ -20,6 +20,7 @@ On first setup, run `make deploy` twice. The second pass should be a no-op, but 
 ## Architecture
 
 - Canonical orchestration doc: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)
+- Snowflake Cortex Code specialist: [docs/CORTEX.md](docs/CORTEX.md)
 - Repo-level agent guidance: [AGENTS.md](AGENTS.md)
 - Home-level agent guidance source: [configs/agents/home-agents.md](configs/agents/home-agents.md)
 

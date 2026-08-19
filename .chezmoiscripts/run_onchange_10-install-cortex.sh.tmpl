@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
+# scripts/install-cortex.sh: {{ include "scripts/install-cortex.sh" | sha256sum }}
+if [[ "${DOTFILES_RUN_CORTEX_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_CORTEX_SETUP='${DOTFILES_RUN_CORTEX_SETUP:-0}' — skipping Cortex install"
+  exit 0
+fi
+"{{ .chezmoi.sourceDir }}/scripts/install-cortex.sh"
