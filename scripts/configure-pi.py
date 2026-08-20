@@ -107,7 +107,7 @@ def main():
             "keepRecentTokens": 20000,
         },
         "retry": {"enabled": True, "maxRetries": 3},
-        "enabledModels": ["claude-*", "gpt-5*", "gpt-4o", "qwen3-coder"],
+        "enabledModels": [],  # populated after providers are built
         "packages": [
             "pi-skills",
             "pi-mcp-adapter",
@@ -177,6 +177,36 @@ def main():
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},
         "google": {"type": "api_key", "key": "$GOOGLE_API_KEY"},
     }
+    # Derive enabledModels from actual provider model IDs instead of hardcoding
+    # patterns that may not match any available model (e.g. gpt-4o, qwen3-coder
+    # are meaningless in a local-solo tier with only ollama models).
+    all_model_ids = [
+        m["id"] for prov in providers.values() for m in prov.get("models", [])
+    ]
+    # Build glob patterns from model family prefixes.
+    # - Cloud models (name:tag:cloud) → glob on the name prefix (e.g. "glm-*")
+    # - Local Ollama models (name:tag) → include the full ID (tags aren't globbable)
+    # - API models (family-variant) → glob on the family prefix (e.g. "claude-*")
+    prefixes: set[str] = set()
+    for mid in all_model_ids:
+        if ":cloud" in mid:
+            # Strip ":cloud" suffix, then glob on the family prefix
+            base = mid.replace(":cloud", "")
+            parts = base.split("-", 1)
+            if len(parts) == 2:
+                prefixes.add(f"{parts[0]}-*")
+            else:
+                prefixes.add(base)
+        elif ":" in mid:
+            # Local Ollama model — include the full ID
+            prefixes.add(mid)
+        else:
+            parts = mid.split("-", 1)
+            if len(parts) == 2:
+                prefixes.add(f"{parts[0]}-*")
+    if default_model:
+        prefixes.add(default_model)
+    settings["enabledModels"] = sorted(prefixes)
     out = (
         Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
         if args.mode == "global"
