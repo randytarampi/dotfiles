@@ -190,10 +190,11 @@ else
   info "DOTFILES_RUN_OPENCODE_SETUP not set — skipping OpenCode configuration"
 fi
 
-# 3.1. Pi config (reads the OpenCode preset generated above)
+# 3.1. Pi config (reads DOTFILES_PI_TIER if set, falls back to the OpenCode tier)
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
-  info "Configuring Pi (tier=$OC_TIER)..."
-  run_step "Pi configuration" python3 "$SCRIPT_DIR/configure-pi.py" --preset "$OC_TIER" "${OC_ARGS[@]}"
+  PI_TIER="${DOTFILES_PI_TIER:-$OC_TIER}"
+  info "Configuring Pi (tier=$PI_TIER)..."
+  run_step "Pi configuration" python3 "$SCRIPT_DIR/configure-pi.py" --preset "$PI_TIER" "${OC_ARGS[@]}"
 else
   info "DOTFILES_RUN_PI_SETUP not set — skipping Pi configuration"
 fi
