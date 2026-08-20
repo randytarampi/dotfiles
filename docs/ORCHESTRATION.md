@@ -118,8 +118,8 @@ sequenceDiagram
 | `make diff` | Preview chezmoi changes | Before deploying |
 | `make dry-run` | Dry-run chezmoi apply | Before deploying |
 | `make lint` | Syntax + format checks | Before committing |
-| `make drift` | Verify ~/.env matches .env.example (read-only) | After updating secrets |
-| `make migrate` | Rename deprecated gates + append missing keys | After pulling gate renames |
+| `make drift` | Verify ~/.env matches .env.example (read-only, includes section mismatch check) | After updating secrets |
+| `make migrate` | Rename deprecated gates + insert missing keys into correct sections | After pulling gate renames |
 | `make opencode-start` | Start OpenCode Web LaunchAgent/Service | After config regeneration |
 | `make opencode-stop` | Stop OpenCode Web LaunchAgent/Service | Before config changes |
 | `make opencode-restart` | Stop + start OpenCode Web | After config regeneration |
@@ -272,7 +272,7 @@ When gate names change (e.g., `DOTFILES_RUN_*` → `DOTFILES_RUN_*_SETUP`), the 
 ### Migration flow for consumers
 
 1. `git pull`
-2. `make migrate` — rename old gates to new names in `~/.env` and append any still-missing new keys as commented defaults
+2. `make migrate` — rename old gates to new names in `~/.env` and insert any still-missing new keys into their correct sections as commented defaults
 3. Edit `~/.env` to enable new gates (set to `1`) if desired
 4. `make reset` — clear orphaned chezmoi script state from renamed scripts
 5. `make deploy` — full rebuild

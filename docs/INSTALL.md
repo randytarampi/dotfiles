@@ -107,7 +107,7 @@ To verify repository and script health offline:
 
 After pulling changes that rename gates or restructure scripts:
 
-1. `make migrate` — rename deprecated gates in `~/.env` to current names and append any new keys from `.env.example`
+1. `make migrate` — rename deprecated gates in `~/.env` to current names and insert any new keys from `.env.example` into their correct sections
 2. Edit `~/.env` to enable any new features (set gates to `1`)
 3. `make reset` — clear orphaned chezmoi script state (only needed after script renames)
 4. `make deploy` — full rebuild
