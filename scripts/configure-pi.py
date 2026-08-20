@@ -43,12 +43,19 @@ def pi_model(value, local):
 
 
 def model_entry(model_id, name=None, local=False):
+    # Read context window from OLLAMA_CONTEXT_LENGTH (matches the Ollama daemon's
+    # KV cache sizing). Falls back to 128000 if unset. Keeping pi and Ollama in
+    # sync avoids reserving VRAM that pi can never use.
+    context_window = 128000
+    env_ctx = os.environ.get("OLLAMA_CONTEXT_LENGTH", "")
+    if env_ctx.isdigit():
+        context_window = int(env_ctx)
     return {
         "id": model_id,
         "name": name or model_id,
         "reasoning": True,
         "input": ["text"],
-        "contextWindow": 128000,
+        "contextWindow": context_window,
         "maxTokens": 32000,
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
         **(
