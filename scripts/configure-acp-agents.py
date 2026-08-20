@@ -24,6 +24,17 @@ from constants import get_ollama_local_base_url
 from discover_models import list_local_ollama_models
 from tier_resolve import resolve_roles_from_list
 
+# Internal-only metadata keys that must not leak into the generated
+# acp-agents.json / oh-my-opencode-slim.json — OpenCode's schema rejects
+# unrecognized keys.
+_INTERNAL_KEYS = frozenset({"local_fallback", "experimental"})
+
+
+def _strip_internal(entry):
+    """Return a copy of *entry* with internal metadata keys removed."""
+    return {k: v for k, v in entry.items() if k not in _INTERNAL_KEYS}
+
+
 ACP_AGENTS = {
     # Local fallbacks are intentionally limited: Copilot has no native Ollama
     # provider; OpenCode has native tier switching; Cortex and Antigravity are
@@ -247,7 +258,7 @@ def main():
             if include_base and shutil.which(entry["command"]):
                 logger.info(f"Detected ACP agent: {name} ({entry['command']})")
                 detected_names.append(name)
-                agent_entry = dict(entry)
+                agent_entry = _strip_internal(entry)
                 agent_entry["permissionMode"] = "ask"
                 agent_entry["timeoutMs"] = 300000
                 detected_agents[name] = agent_entry
@@ -267,7 +278,7 @@ def main():
                     logger.info(
                         f"Detected ACP agent: {local_name} ({local_entry['command']})"
                     )
-                    local_entry = dict(local_entry)
+                    local_entry = _strip_internal(local_entry)
                     local_entry["permissionMode"] = "ask"
                     local_entry["timeoutMs"] = 300000
                     detected_agents[local_name] = local_entry
