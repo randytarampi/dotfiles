@@ -15,9 +15,6 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "context7"
         },
         {
@@ -42,9 +39,6 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "context7"
         },
         {
@@ -68,9 +62,6 @@
       "project_mcp_path": ".cursor/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
-        {
-          "template": "pi"
-        },
         {
           "template": "context7"
         },
@@ -104,9 +95,6 @@
       "format": "toml-mcpServers",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "context7"
         },
         {
@@ -130,9 +118,6 @@
       "project_mcp_path": "opencode.json",
       "format": "opencode-internal",
       "mcp_servers": [
-        {
-          "template": "pi"
-        },
         {
           "template": "context7"
         },
@@ -161,9 +146,6 @@
       "format": "json-settings-merge",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "context7"
         },
         {
@@ -187,9 +169,6 @@
       "project_mcp_path": ".ai/mcp/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
-        {
-          "template": "pi"
-        },
         {
           "template": "context7"
         },
@@ -216,9 +195,6 @@
       "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (sentry, github, context7) managed via Connectors UI.",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "codegraph"
         }
       ]
@@ -228,9 +204,6 @@
       "project_mcp_path": ".vscode/mcp.json",
       "format": "json-servers",
       "mcp_servers": [
-        {
-          "template": "pi"
-        },
         {
           "template": "context7"
         },
@@ -255,9 +228,6 @@
       "project_mcp_path": ".mcp.json",
       "format": "json-mcpServers-http",
       "mcp_servers": [
-        {
-          "template": "pi"
-        },
         {
           "template": "context7"
         },
@@ -290,9 +260,6 @@
       "format": "json-mcpServers-antigravity",
       "mcp_servers": [
         {
-          "template": "pi"
-        },
-        {
           "template": "context7"
         },
         {
@@ -315,6 +282,30 @@
         },
         {
           "template": "github"
+        }
+      ]
+    },
+    "pi": {
+      "mcp_path": "~/.pi/agent/mcp.json",
+      "project_mcp_path": ".pi/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "context7"
+        },
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
         }
       ]
     }
