@@ -105,6 +105,11 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
+    parser.add_argument(
+        "--skip-mcp",
+        action="store_true",
+        help="Skip embedding MCP server config into opencode.json (for project mode when mcps step is handled separately)",
+    )
     args = parser.parse_args()
     failures = 0
 
@@ -152,40 +157,44 @@ def main():
     # Check if local Ollama daemon can proxy cloud models
     _, can_proxy_cloud = check_ollama_daemon()
 
-    # Generate MCP Config
-    mcp_args = [
-        sys.executable,
-        os.path.join(SCRIPT_DIR, "configure-mcp-tool.py"),
-        "--mode",
-        args.mode,
-        "--env-file",
-        env_path,
-        "--dry-run",
-        "--show-secrets",
-        "--no-backup",
-        "opencode",
-    ]
-    mcp_args += forward_common_args(args)
-    mcp_json_str = "{}"
-    try:
-        result = subprocess.run(mcp_args, capture_output=True, text=True, timeout=15)
-        # Extract JSON from dry-run output (skip comment header lines starting with #)
-        json_lines = [
-            line
-            for line in result.stdout.strip().splitlines()
-            if not line.strip().startswith("#")
+    # Generate MCP Config (unless --skip-mcp was passed)
+    mcp_config = {}
+    if not args.skip_mcp:
+        mcp_args = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-mcp-tool.py"),
+            "--mode",
+            args.mode,
+            "--env-file",
+            env_path,
+            "--dry-run",
+            "--show-secrets",
+            "--no-backup",
+            "opencode",
         ]
-        mcp_json_str = "\n".join(json_lines).strip()
-        if not mcp_json_str:
-            mcp_json_str = "{}"
-    except Exception as e:
-        logger.warning(f"Failed to generate MCP config: {e}")
+        mcp_args += forward_common_args(args)
+        mcp_json_str = "{}"
+        try:
+            result = subprocess.run(
+                mcp_args, capture_output=True, text=True, timeout=15
+            )
+            # Extract JSON from dry-run output (skip comment header lines starting with #)
+            json_lines = [
+                line
+                for line in result.stdout.strip().splitlines()
+                if not line.strip().startswith("#")
+            ]
+            mcp_json_str = "\n".join(json_lines).strip()
+            if not mcp_json_str:
+                mcp_json_str = "{}"
+        except Exception as e:
+            logger.warning(f"Failed to generate MCP config: {e}")
 
-    try:
-        mrg_data = json.loads(mcp_json_str) if mcp_json_str else {}
-        mcp_config = mrg_data.get("mcp", {})
-    except Exception:
-        mcp_config = {}
+        try:
+            mrg_data = json.loads(mcp_json_str) if mcp_json_str else {}
+            mcp_config = mrg_data.get("mcp", {})
+        except Exception:
+            mcp_config = {}
 
     # Read externalized models configs
     openai_models_path = os.path.join(

@@ -200,15 +200,19 @@ def main():
         os.makedirs(temp, exist_ok=True)
         env = child_env.copy()
         env["OPENCODE_DIR"] = temp
+        opencode_cmd = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-opencode.py"),
+            "--mode",
+            "project",
+            "--preset",
+            preset,
+        ]
+        # If mcps was explicitly skipped, don't embed MCP config in opencode.json
+        if "mcps" not in steps:
+            opencode_cmd.append("--skip-mcp")
         run(
-            [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-opencode.py"),
-                "--mode",
-                "project",
-                "--preset",
-                preset,
-            ]
+            opencode_cmd
             + forward_common_args(args)
             + forward_local_fallback_args(args),
             root,
