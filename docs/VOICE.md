@@ -82,3 +82,54 @@ Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_U
 ## Environment Gating
 
 Voice deps in `run_onchange_07-install-opencode-plugins.sh.tmpl` are gated on `DOTFILES_RUN_VOICE_SETUP=1` (default: 0). The voice config writer (`configure-opencode-voice.py`) runs unconditionally — it only writes `tui.json` and always respects the active tier.
+
+## Cross-tool voice support
+
+| Tool | Voice support | Mechanism | Notes |
+|---|---|---|---|
+| opencode | Full (STT + TTS) | `@renjfk/opencode-voice` plugin | Tier-aware; see sections above |
+| pi | STT only | `@juicesharp/rpiv-voice` plugin | TTS not available; hallucination filter configurable |
+| claude | STT only | built-in `/voice` dictation | No TTS; speech-to-text only |
+| codex | None | — | No voice plugin or built-in support |
+| copilot | None | — | No voice plugin or built-in support |
+| gemini | None | — | No voice plugin or built-in support |
+| cursor | None | — | No voice plugin or built-in support |
+| cline | None | — | No voice plugin or built-in support |
+| junie | None | — | No voice plugin or built-in support |
+| cortex | None | — | No voice plugin or built-in support |
+| agy (Antigravity) | None | — | No voice plugin or built-in support |
+
+## Sharing voice infrastructure across tools
+
+Voice plugins are tool-specific — each tool requires its own plugin and cannot
+reuse another tool's voice runtime. However, the underlying services and models
+can be shared:
+
+### Whisper models (STT)
+
+Pi uses a fixed sherpa-onnx Whisper model under `~/.pi/models/whisper-base/`.
+The OpenCode voice plugin uses a separate whisper-cli/whisper-cpp model and
+format. The two runtimes cannot practically share model files due to different
+model formats and fixed paths.
+
+### Piper TTS
+
+Piper is currently OpenCode-only (via `@renjfk/opencode-voice`). No other tool
+in this repo has Piper integration. The Piper voice model is configured via
+`DOTFILES_PIPER_VOICE` and managed by `scripts/configure-opencode-voice.py`.
+
+### i18n / locale
+
+No tool in this repo has dedicated i18n plugin support beyond Pi's `@juicesharp/rpiv-i18n`
+plugin. Locale behaviour for all other tools falls back to the standard `LANG`
+and `LC_ALL` environment variables (see `dot_dotfiles/shell/.env.example`).
+Note: `LANG`/`LC_ALL` provide OS locale input to processes; they do not guarantee
+that each tool's UI is translated. Pi's i18n plugin only localizes participating
+`rpiv-*` extension UI.
+
+### Why voice can't be shared like guidance
+
+Agent guidance (`AGENTS.md`) is plain markdown that any tool can read. Voice
+plugins are binary/integrated runtimes — a Whisper process, audio capture, TTS
+engine — that must run inside the host tool's process. There is no protocol for
+cross-tool voice sharing, unlike MCP/ACP which are designed for inter-tool communication.

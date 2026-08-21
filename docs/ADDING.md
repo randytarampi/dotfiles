@@ -133,3 +133,20 @@ See [project-env.example](project-env.example) for the complete template.
 `configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`,
 `jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Use `--steps` to run any
 subset; JetBrains and Junie project work delegates to the existing scripts.
+
+## Adding a new agent tool
+
+When adding a new agent tool to the fleet:
+
+1. **Fleet registry**: Add an entry to `scripts/lib/fleet-registry.json` with
+   telemetry disposition, voice support, i18n mechanism, and guidance path.
+2. **Telemetry**: If the tool supports a local opt-out, add env vars to
+   `dot_dotfiles/shell/.env.example` (uncommented if effective). Document the
+   disposition in `docs/TELEMETRY.md`.
+3. **Guidance**: If the tool reads instruction files, add its path to
+   `AGENT_FILES` in `scripts/configure-agent-guidance.py` and to the path list
+   in `scripts/verify-config.py`.
+4. **Capability matrix**: Add a row to the table in `docs/CAPABILITY_MATRIX.md`
+   including the new Telemetry, Voice, and i18n columns.
+5. **Verify**: Run `make check-fleet-coverage` to confirm the registry matches
+   the actual repo state, then `make verify` for full validation.
