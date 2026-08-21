@@ -8,6 +8,8 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when agent guidance changes):
 # configs/agents/home-agents.md: {{ include "configs/agents/home-agents.md" | sha256sum }}
 # scripts/configure-agent-guidance.py: {{ include "scripts/configure-agent-guidance.py" | sha256sum }}
+# scripts/check-fleet-coverage.py: {{ include "scripts/check-fleet-coverage.py" | sha256sum }}
+# scripts/lib/fleet-registry.json: {{ include "scripts/lib/fleet-registry.json" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_AGENT_GUIDANCE_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
