@@ -124,6 +124,11 @@ CHECKS = [
             HOME / ".cursor/AGENTS.md",
             HOME / ".config/opencode/AGENTS.md",
             HOME / ".gemini/GEMINI.md",
+            HOME / ".junie/AGENTS.md",
+            HOME / ".copilot/copilot-instructions.md",
+            HOME / ".pi/agent/AGENTS.md",
+            HOME / ".snowflake/cortex/AGENTS.md",
+            HOME / "Documents/Cline/Rules/AGENTS.md",
         ],
     ),
     (
