@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph clean-backups
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph clean-backups
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -148,6 +148,9 @@ check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
 check-cli-contract: ## Verify CLI interfaces match the capability manifest
 	@python3 scripts/check-cli-contract.py
 
+check-fleet-coverage: ## Verify fleet telemetry and guidance coverage
+	@python3 scripts/check-fleet-coverage.py
+
 check-pep604: ## Check for PEP 604 type hints without future annotations import
 	@python3 scripts/check-pep604.py
 
@@ -188,11 +191,11 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 dry-run ## Full verification suite
+verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 ## Run CI verification checks
+ci-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
