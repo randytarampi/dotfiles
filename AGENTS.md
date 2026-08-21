@@ -213,7 +213,7 @@ Key template files: `dot_gitconfig.tmpl` (GIT_AUTHOR_*, GPG_SIGNING_KEY, GITHUB_
 ## AI Agent Guidance Files
 
 - `AGENTS.md` (this file) is repo-level guidance for agents working on the dotfiles repo itself. It is in `.chezmoiignore` and is NOT deployed to `~/AGENTS.md`.
-- `configs/agents/home-agents.md` is the source of truth for home-level agent guidance. The script `configure-agent-guidance.py` distributes it to `~/AGENTS.md` and all 6 agent locations: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.cursor/AGENTS.md`, and `~/.ai/AGENTS.md` (resolving `~/.junie` symlink).
+- `configs/agents/home-agents.md` is the source of truth for home-level agent guidance. The script `configure-agent-guidance.py` distributes it to `~/AGENTS.md` and all configured agent locations: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.cursor/AGENTS.md`, `~/.ai/AGENTS.md` (resolving `~/.junie` symlink), `~/.copilot/copilot-instructions.md`, `~/.pi/agent/AGENTS.md`, `~/.snowflake/cortex/AGENTS.md`, and `~/Documents/Cline/Rules/AGENTS.md`.
 - Deep reference material lives in `docs/` (linked throughout this file).
 
 When editing home-level agent guidance, edit `configs/agents/home-agents.md` first, then run `scripts/configure-agent-guidance.py` to distribute. For repo-level guidance (this file), edit `AGENTS.md` directly. All cross-references should link to `docs/` files.
@@ -241,6 +241,7 @@ cache is `~/.local/share/dotfiles/skills/`. See
 | Doc | Content |
 |-----|---------|
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | CLI capability contract, arg forwarding, env-var taxonomy, cross-language parity, enforcement |
+| [docs/TELEMETRY.md](docs/TELEMETRY.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
 | [docs/TIERS.md](docs/TIERS.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
 | [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
 | [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
