@@ -71,6 +71,40 @@ def model_entry(model_id, name=None, local=False):
     }
 
 
+def seed_plugin_configs(dry_run=False, mode="global"):
+    """Seed default rpiv-* plugin config files. Non-destructive: skips existing."""
+    if os.environ.get("DOTFILES_RUN_PI_SETUP", "0") != "1":
+        return
+    # Only seed global configs in global mode — project mode should not
+    # write to the user's ~/.config directory.
+    if mode != "global":
+        return
+    config_dir = Path(
+        os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    )
+    seeds = {
+        "rpiv-todo/config.json": {"maxWidgetLines": 8, "collapseKey": "alt+t"},
+        "rpiv-ask-user-question/config.json": {"collapseKey": "alt+o"},
+        "rpiv-voice/voice.json": {
+            "hallucinationFilterEnabled": True,
+            "equalizerEnabled": False,
+        },
+        "rpiv-i18n/locale.json": {"locale": "en"},
+    }
+    for rel_path, content in seeds.items():
+        target = config_dir / rel_path
+        if target.exists():
+            continue
+        if dry_run:
+            logger.info("Would seed plugin config: %s", target)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("w", encoding="utf-8") as f:
+            json.dump(content, f, indent=2)
+            f.write("\n")
+        logger.info("Seeded plugin config: %s", target)
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
@@ -114,6 +148,8 @@ def main():
             "keepRecentTokens": 20000,
         },
         "retry": {"enabled": True, "maxRetries": 3},
+        "enableInstallTelemetry": False,
+        "enableAnalytics": False,
         "enabledModels": [],  # populated after providers are built
         "packages": [
             "pi-skills",
@@ -121,6 +157,10 @@ def main():
             "pi-web-access",
             "pi-subagents",
             "@plannotator/pi-extension",
+            "@juicesharp/rpiv-todo",
+            "@juicesharp/rpiv-ask-user-question",
+            "@juicesharp/rpiv-voice",
+            "@juicesharp/rpiv-i18n",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],
@@ -245,6 +285,7 @@ def main():
         if path.exists() and not args.no_backup:
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
+    seed_plugin_configs(dry_run=args.dry_run, mode=args.mode)
     logger.info("Pi configured: %s (preset=%s)", out, preset)
 
 
