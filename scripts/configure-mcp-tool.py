@@ -719,7 +719,7 @@ def main():
         )
         parser.add_argument(
             "tool",
-            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude_desktop, vscode, copilot, agy",
+            help="AI tool to configure: ai, air, cursor, codex, opencode, gemini, junie, claude, claude_desktop, vscode, copilot, agy, cline, cortex",
         )
         args = parser.parse_args()
 

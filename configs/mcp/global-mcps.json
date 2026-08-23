@@ -188,6 +188,31 @@
         }
       ]
     },
+    "claude": {
+      "mcp_path": "~/.claude.json",
+      "project_mcp_path": ".claude/mcp.json",
+      "format": "json-mcpServers-merge",
+      "note": "Claude Code CLI. ~/.claude.json is a shared app config with many top-level keys; merge preserves them. Project-mode writes to .claude/mcp.json.",
+      "mcp_servers": [
+        {
+          "template": "context7"
+        },
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
+        }
+      ]
+    },
     "claude_desktop": {
       "mcp_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "project_mcp_path": ".claude/claude_desktop_config.json",
@@ -288,6 +313,54 @@
     "pi": {
       "mcp_path": "~/.pi/agent/mcp.json",
       "project_mcp_path": ".pi/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "context7"
+        },
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
+        }
+      ]
+    },
+    "cline": {
+      "mcp_path": "~/.cline/mcp.json",
+      "project_mcp_path": ".cline/mcp.json",
+      "format": "json-mcpServers",
+      "mcp_servers": [
+        {
+          "template": "context7"
+        },
+        {
+          "template": "github",
+          "name_override": "github"
+        },
+        {
+          "template": "idea"
+        },
+        {
+          "template": "sentry",
+          "name_override": "Sentry"
+        },
+        {
+          "template": "codegraph"
+        }
+      ]
+    },
+    "cortex": {
+      "mcp_path": "~/.snowflake/cortex/mcp.json",
+      "project_mcp_path": ".snowflake/cortex/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
         {
