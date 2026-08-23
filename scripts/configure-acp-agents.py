@@ -77,9 +77,10 @@ ACP_AGENTS = {
         "local_fallback": True,
     },
     "cursor": {
-        "command": "agent",
+        "command": "cursor-agent",
         "args": ["acp"],
-        "description": "Cursor CLI",
+        "description": "Cursor CLI (via cursor-agent)",
+        "env": {"CURSOR_API_KEY": "${CURSOR_API_KEY}"},
     },
     "cline": {
         "command": "cline",
@@ -280,7 +281,7 @@ def main():
                     )
                     local_entry = _strip_internal(local_entry)
                     local_entry["permissionMode"] = "ask"
-                    local_entry["timeoutMs"] = 300000
+                    local_entry["timeoutMs"] = 900000
                     detected_agents[local_name] = local_entry
                     detected_names.append(local_name)
                 else:

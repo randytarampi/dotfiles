@@ -14,7 +14,7 @@ bridge or compatibility layer is used.
 | claude | Anthropic and compatible `ANTHROPIC_BASE_URL` endpoints | native Claude configuration | `claude-agent-acp` adapter | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | `@claude--local` | env var | stt-only | env-vars |
 | copilot | GitHub Copilot / environment-configured providers | native/config varies by CLI | Copilot ACP adapter | yes, `~/.copilot/skills` | no | yes | no | UNSUPPORTED | no local opt-out | none | env-vars |
 | gemini | Google Gemini / environment-configured providers | native/config varies by CLI | `gemini --acp` adapter | yes, `~/.gemini/skills` | no | yes | no | `@gemini--local` (experimental) | env var | none | env-vars |
-| cursor | Cursor-configured providers | native `~/.cursor/mcp.json` | `agent acp` | yes, `~/.cursor/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
+| cursor | Cursor-configured providers | native `~/.cursor/mcp.json` | `cursor-agent acp` | yes, `~/.cursor/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 | cline | Cline-configured providers | native/config varies by extension | `cline --acp` | yes, shared skill distribution | no | yes | no | N/A | env var (Cline OTel) | none | env-vars |
 | agy | Antigravity-configured providers | native `~/.gemini/config/mcp_config.json` | native `agy-acp` bridge | yes, `~/.gemini/antigravity-cli/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 

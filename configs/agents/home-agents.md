@@ -48,6 +48,7 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
 3. **Restart OpenCode**: After any ACP config change, restart OpenCode for agents to load
 4. **Authenticate**: Each ACP agent requires its own auth:
    - **Copilot**: `copilot auth` (or set `GITHUB_TOKEN`)
+   - **Cursor**: `cursor-agent login` (browser auth via Cursor account)
    - **Claude**: `claude /login` (claude-code-acp wraps claude)
    - **Codex**: OpenAI auth (codex-acp wraps codex)
    - **Gemini**: `GEMINI_API_KEY` env var or `gemini auth`

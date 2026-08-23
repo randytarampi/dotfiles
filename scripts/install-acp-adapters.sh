@@ -155,5 +155,42 @@ install_npm_adapter() {
   fi
 }
 
+install_cursor_agent() {
+  if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
+    info "DOTFILES_RUN_OPENCODE_TOOLS_SETUP='${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}' — skipping Cursor agent CLI"
+    return 0
+  fi
+
+  if command -v cursor-agent >/dev/null 2>&1; then
+    ok "Cursor agent CLI already installed"
+    info "Next step: cursor-agent login (browser auth via Cursor account)"
+    return 0
+  fi
+
+  if ! command -v cursor >/dev/null 2>&1; then
+    warn "'cursor' not found — skipping cursor-agent install (Cursor IDE required)"
+    return 0
+  fi
+
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would trigger cursor-agent auto-install via 'cursor agent --version'"
+    return 0
+  fi
+
+  info "Triggering cursor-agent auto-install (first 'cursor agent' invocation)..."
+  # Cursor's first-run mechanism installs cursor-agent and agent wrappers to ~/.local/bin/
+  cursor agent --version 2>/dev/null || true
+  hash -r 2>/dev/null || true
+
+  if command -v cursor-agent >/dev/null 2>&1; then
+    ok "Cursor agent CLI installed at $(command -v cursor-agent)"
+  else
+    warn "cursor-agent not found on PATH after auto-install — ensure ~/.local/bin is in your PATH"
+    warn "Try running 'cursor agent' manually to trigger the install"
+  fi
+  info "Next step: cursor-agent login (browser auth via Cursor account)"
+}
+
 install_antigravity_acp
+install_cursor_agent
 install_opencode_adapters
