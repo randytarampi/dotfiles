@@ -44,3 +44,64 @@ Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.
   extension for plan review.
 - From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
   entry.
+
+## Local model timeouts
+
+Pi has three timeout layers that affect local Ollama inference:
+
+| Timeout | Location | Purpose | Default | Our setting |
+|---|---|---|---|---:|
+| `httpIdleTimeoutMs` | `~/.pi/agent/settings.json` | Undici body/headers idle timeout + fallback provider timeout | `300000` (5 min) | `900000` (15 min) |
+| `retry.provider.timeoutMs` | `~/.pi/agent/settings.json` | Pi → provider HTTP request | SDK default (600000 / 10 min) | not set (SDK default) |
+| `timeoutMs` (ACP) | `configs/opencode/acp-agents.json` | OpenCode → ACP agent session | `300000` (5 min) | `900000` (15 min, `--local` only) |
+
+### Why `httpIdleTimeoutMs` matters
+
+Pi's `DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000` (5 min) governs both the Undici
+transport's `bodyTimeout`/`headersTimeout` and the fallback value for
+`retry.provider.timeoutMs` when that key is absent. The 5-minute default is too
+short for cold 27B Ollama model loads, causing `"Error: Request timed out."`
+followed by `"Aborted after 3 retry attempts"`.
+
+We override `httpIdleTimeoutMs` to `900000` (15 min) and leave
+`retry.provider.timeoutMs` unset so the SDK defaults apply (OpenAI SDK:
+600000ms / 10 min, Anthropic SDK: 600000ms / 10 min). The HTTP idle timeout
+must be ≥ the provider timeout, so 15 min > 10 min is correct.
+
+### `OLLAMA_KEEP_ALIVE` coordination
+
+`OLLAMA_KEEP_ALIVE` (default 5m, recommended 20m for interactive coding) controls
+how long Ollama keeps a model loaded **after** the last request completes. It does
+not affect in-progress requests — an active request keeps the model loaded
+regardless of keep-alive.
+
+The timeouts serve different purposes:
+
+- **HTTP idle timeout** must exceed the worst-case inference time (cold model load
+  + token generation). 15 minutes covers cold 27B loads + long agentic generations.
+- **Keep-alive** must exceed the expected idle gap between agent requests. Too
+  short and the model unloads between turns, adding cold-load latency to every
+  request.
+
+Rule of thumb:
+
+```
+httpIdleTimeoutMs > cold-load time + expected generation time + safety margin
+OLLAMA_KEEP_ALIVE > expected idle interval between requests
+```
+
+### Other agents
+
+Pi is unusual in exposing `httpIdleTimeoutMs` and `retry.provider.timeoutMs`.
+Claude Code, Codex CLI, Gemini CLI, and Junie do not expose equivalent settings
+for local model calls. For those agents, the ACP session `timeoutMs` (bumped to
+`900000` for `--local` variants) is the only tunable timeout.
+
+### Recommended values
+
+| Workload | `httpIdleTimeoutMs` | Keep-alive |
+|---|---:|---:|
+| Small GPU model (≤8B) | 5 min (default) | 10–20 min |
+| Large GPU model (27B+) | 15 min | 20–30 min |
+| CPU inference | 30–60 min | 30–60 min |
+| Always-on workstation | 30–60 min | `-1` (indefinite) |

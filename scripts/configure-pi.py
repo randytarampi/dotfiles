@@ -147,7 +147,16 @@ def main():
             "reserveTokens": 16384,
             "keepRecentTokens": 20000,
         },
-        "retry": {"enabled": True, "maxRetries": 3},
+        "retry": {
+            "enabled": True,
+            "maxRetries": 3,
+        },
+        # Override Pi's DEFAULT_HTTP_IDLE_TIMEOUT_MS (300000ms / 5 min) which
+        # governs both the Undici body/headers idle timeout and the fallback
+        # provider timeout. 15 min covers cold 27B Ollama loads + long generation
+        # while keeping failure-detection latency reasonable. The SDK defaults
+        # (OpenAI/Anthropic: 600000ms / 10 min) apply for retry.provider.timeoutMs.
+        "httpIdleTimeoutMs": 900000,
         "enableInstallTelemetry": False,
         "enableAnalytics": False,
         "enabledModels": [],  # populated after providers are built
