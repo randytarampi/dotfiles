@@ -12,6 +12,7 @@ cask "visual-studio-code"
 
 # --- AI/LLM desktop apps (from Brewfile.desktop.cloud) ---
 cask "antigravity"
+cask "cursor"
 cask "opencode-desktop"
 cask "ollama-app"
 
