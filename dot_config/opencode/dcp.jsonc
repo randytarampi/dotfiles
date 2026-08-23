@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
   "compress": {
     "maxContextLimit": "67%",
     "minContextLimit": "33%"
