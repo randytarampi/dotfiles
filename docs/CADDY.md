@@ -215,6 +215,14 @@ user home so its PKI store remains under the user Library tree.
 
 `make caddy-deploy` restarts the daemon with `sudo launchctl bootout/bootstrap`
 and `make caddy-reload` uses `sudo` for the reload command.
+`make caddy-restart` does a full service restart (distinct from `caddy-reload`).
+
+### Linux
+
+On Linux, Caddy runs as a systemd system service (`/etc/systemd/system/caddy.service`).
+The install script (`run_onchange_24`) handles binary installation, Caddyfile
+generation, `/etc/hosts` management, and service enablement. Restart with
+`make caddy-restart` (calls `sudo systemctl restart caddy`).
 
 `make migrate` handles the env-var rename/cleanup, while `make caddy-migrate`
 removes the old dedicated-user runtime pieces.

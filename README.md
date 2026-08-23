@@ -145,7 +145,12 @@ scripts/configure-project.py                 # Configure project-scoped AI tooli
 make opencode-restart                        # Restart OpenCode Web service
 make opencode-stop                           # Stop OpenCode Web service
 make opencode-start                          # Start OpenCode Web service
-make plannotator-restart                     # Clear Plannotator port conflicts
+make meridian-restart                        # Restart Meridian proxy service
+make ddns-restart                            # Restart all ddns-route53 agents
+make caddy-restart                           # Restart Caddy service (system-level)
+make caddy-reload                            # Hot-reload Caddy config
+make plannotator-restart                     # Restart Plannotator paste service
+make ollama-env-restart                      # Re-apply Ollama daemon env vars
 make services-restart                        # Restart all managed services
 make ci-verify                               # CI verification (lint + drift + doctor + check-hashes, no dry-run)
 ```

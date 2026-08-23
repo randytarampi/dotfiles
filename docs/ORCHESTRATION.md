@@ -123,8 +123,13 @@ sequenceDiagram
 | `make opencode-start` | Start OpenCode Web LaunchAgent/Service | After config regeneration |
 | `make opencode-stop` | Stop OpenCode Web LaunchAgent/Service | Before config changes |
 | `make opencode-restart` | Stop + start OpenCode Web | After config regeneration |
-| `make plannotator-restart` | Clear Plannotator paste backend port (19433) | Port conflict resolution |
-| `make services-restart` | opencode-restart + plannotator-restart | Full service restart |
+| `make meridian-restart` | Restart Meridian proxy (launchd/systemd) | After Meridian config changes |
+| `make ddns-restart` | Restart all ddns-route53 agents (launchd/systemd) | After DDNS config changes |
+| `make caddy-restart` | Restart Caddy service (launchd/systemd, system-level) | Full Caddy restart |
+| `make caddy-reload` | Hot-reload Caddy config without restart | After Caddyfile changes |
+| `make plannotator-restart` | Restart Plannotator paste service (launchd/systemd) | Port conflict or config change |
+| `make ollama-env-restart` | Re-apply Ollama daemon environment variables | After OLLAMA_* env changes |
+| `make services-restart` | All managed services: opencode + plannotator + meridian + ddns + caddy + ollama-env | Full service restart |
 
 ## Design Decisions
 
