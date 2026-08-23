@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart services-restart skills-update codegraph clean-backups
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -224,6 +224,16 @@ caddy-validate: ## Validate Caddyfile syntax
 caddy-reload: ## Hot-reload Caddy config
 	@sudo "$$(brew --prefix)/bin/caddy" reload --force --config "$$(brew --prefix)/etc/caddy/Caddyfile" || echo "Caddy reload failed"
 
+caddy-restart: ## Restart Caddy service (system-level)
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		sudo launchctl bootout system/com.caddy.proxy 2>/dev/null || true; \
+		sleep 2; \
+		sudo launchctl bootstrap system/ /Library/LaunchDaemons/com.caddy.proxy.plist 2>/dev/null || true; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		sudo systemctl restart caddy 2>/dev/null || true; \
+	fi
+	@echo "Caddy restarted."
+
 # ─── Service management ───────────────────────────────────────────────────────
 # OpenCode Web does not pick up config changes automatically — restart is
 # required after any config regeneration (opencode.json, oh-my-opencode-slim.json,
@@ -251,16 +261,60 @@ opencode-stop: ## Stop OpenCode Web service
 opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
 	@echo "OpenCode Web restarted."
 
+meridian-restart: ## Restart Meridian proxy service
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl bootout "gui/$$(id -u)/com.meridian.proxy" 2>/dev/null || true; \
+		sleep 1; \
+		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.meridian.proxy.plist 2>/dev/null || true; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user restart meridian-proxy 2>/dev/null || true; \
+	fi
+	@echo "Meridian restarted."
+
+ddns-restart: ## Restart all ddns-route53 services
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		for plist in ~/Library/LaunchAgents/com.crazymax.ddns-route53.*.plist; do \
+			[ -f "$$plist" ] || continue; \
+			label=$$(basename "$$plist" .plist); \
+			launchctl bootout "gui/$$(id -u)/$$label" 2>/dev/null || true; \
+			sleep 1; \
+			launchctl bootstrap "gui/$$(id -u)" "$$plist" 2>/dev/null || true; \
+		done; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user restart 'ddns-route53-*' 2>/dev/null || true; \
+	fi
+	@echo "DDNS Route53 agents restarted."
+
+ollama-env-restart: ## Re-apply Ollama daemon environment variables
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl kickstart -k "gui/$$(id -u)/com.dotfiles.ollama-env" 2>/dev/null || true; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		if systemctl list-unit-files 2>/dev/null | grep -q ollama.service; then \
+			sudo systemctl restart ollama 2>/dev/null || true; \
+		elif systemctl --user list-unit-files 2>/dev/null | grep -q ollama.service; then \
+			systemctl --user restart ollama 2>/dev/null || true; \
+		fi; \
+	fi
+	@echo "Ollama env re-applied."
+
 # Plannotator uses a fixed port (19432 for portal, 19433 for paste backend).
 # Multiple OpenCode sessions can conflict on the same port. This target
 # clears the paste backend port so a fresh session can bind.
-plannotator-restart: ## Restart Plannotator (clear paste backend port)
+plannotator-restart: ## Restart Plannotator paste service
 	@echo "Restarting Plannotator..."
-	@lsof -ti:19433 | xargs kill -9 2>/dev/null || true
-	@sleep 1
-	@echo "Plannotator port cleared."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		lsof -ti:19433 | xargs kill -9 2>/dev/null || true; \
+		launchctl bootout "gui/$$(id -u)/com.plannotator.paste" 2>/dev/null || true; \
+		sleep 1; \
+		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.plannotator.paste.plist 2>/dev/null || true; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user restart plannotator-paste 2>/dev/null || true; \
+	else \
+		lsof -ti:19433 | xargs kill -9 2>/dev/null || true; \
+	fi
+	@echo "Plannotator restarted."
 
-services-restart: opencode-restart plannotator-restart ## Restart all services
+services-restart: opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart ## Restart all services
 
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update
