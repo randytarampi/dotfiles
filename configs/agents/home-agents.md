@@ -19,6 +19,7 @@ These apply to every repo, every session.
 - **One concern per commit.** When closing out a session, commit each logical change individually — never batch unrelated changes into a single commit. If a session touched three concerns, that's three commits.
 - **Never push unless explicitly asked.** Default to local commits only. "Don't push anything yet" is the standing instruction; the user will say when to push.
 - **Don't commit until the plan is approved.** If the user hasn't approved a plan or explicitly said to proceed, give the plan first. Don't pre-emptively commit work-in-progress.
+- **Don't add repo artifacts for unapproved features.** This covers more than commits — don't add env vars, config entries, docs files, or other repo artifacts for a feature that hasn't been decided on. Prerequisite fixes that exist independently of the feature are fine; anything that only makes sense if the feature is chosen is not.
 
 ### Verifying before declaring success
 
@@ -31,6 +32,10 @@ These apply to every repo, every session.
 ### Delegation discipline
 
 For changes requiring exploration of unknown scope, delegate bounded discovery first. Use direct reads for files you expect to edit, reconcile, or verify. If scope is unclear after two discovery calls, or discovery spans multiple subsystems, delegate one bounded exploration task. Request concise file:line findings, avoid full file dumps in parent context.
+
+### Planning scope
+
+When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront — not just the obvious ones. If a plan covers some tools but not others, the user will ask about the missing ones. Enumerate all configured tools (OpenCode, Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Pi, Junie, Cline, Cortex, Antigravity) in the initial plan rather than discovering them through rejection cycles.
 
 > Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/ORCHESTRATION.md`.
 
