@@ -22,17 +22,14 @@ if [[ "${DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" 
   exit 0
 fi
 
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  warn "Skipping Plannotator paste install on $(uname -s)"
-  exit 0
+# Install binary to brew prefix if available, else ~/.local/bin
+if command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix)"
+  BIN_PATH="$BREW_PREFIX/bin/plannotator-paste"
+else
+  BIN_PATH="${HOME}/.local/bin/plannotator-paste"
+  mkdir -p "$(dirname "$BIN_PATH")"
 fi
-
-if ! command -v brew >/dev/null 2>&1; then
-  die "Homebrew not found; install Homebrew first"
-fi
-
-BREW_PREFIX="$(brew --prefix)"
-BIN_PATH="$BREW_PREFIX/bin/plannotator-paste"
 DATA_DIR="${PASTE_DATA_DIR:-$HOME/.plannotator/pastes}"
 PORTAL_DIR="$HOME/.plannotator/portal"
 BUILD_DIR="/tmp/plannotator-build"
@@ -43,18 +40,26 @@ if [[ -n "$PRESENT_BIN" ]]; then
 elif [[ -x "$BIN_PATH" ]]; then
   ok "Plannotator paste already installed at ${BIN_PATH}"
 else
-  case "$(uname -m)" in
-  arm64 | aarch64) ARCH="arm64" ;;
-  x86_64) ARCH="x64" ;;
-  *) die "Unsupported architecture: $(uname -m)" ;;
+  case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64) ARCH="darwin-arm64" ;;
+  Darwin/x86_64) ARCH="darwin-x64" ;;
+  Linux/arm64 | Linux/aarch64) ARCH="linux-arm64" ;;
+  Linux/x86_64) ARCH="linux-x64" ;;
+  MINGW*/arm64 | MSYS*/arm64 | CYGWIN*/arm64) ARCH="win32-arm64" ;;
+  MINGW*/x86_64 | MSYS*/x86_64 | CYGWIN*/x86_64) ARCH="win32-x64" ;;
+  *) die "Unsupported platform: $(uname -s)/$(uname -m)" ;;
   esac
 
   TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/plannotator-paste.XXXXXX")"
   trap 'rm -rf "$TMP_DIR"' EXIT
 
-  info "Installing Plannotator paste binary for darwin/${ARCH}..."
+  info "Installing Plannotator paste binary for ${ARCH}..."
   # Intentionally unpinned — always install latest Plannotator release (matches Junie CLI install pattern)
-  DOWNLOAD_URL="https://github.com/backnotprop/plannotator/releases/latest/download/plannotator-paste-darwin-${ARCH}"
+  DOWNLOAD_URL="https://github.com/backnotprop/plannotator/releases/latest/download/plannotator-paste-${ARCH}"
+  if [[ "$ARCH" == win32-* ]]; then
+    DOWNLOAD_URL="${DOWNLOAD_URL}.exe"
+    BIN_PATH="${BIN_PATH}.exe"
+  fi
   if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/plannotator-paste"; then
     die "Plannotator paste install failed (URL: ${DOWNLOAD_URL})"
   fi
@@ -63,9 +68,10 @@ else
     die "Plannotator paste binary not found after download"
   fi
 
-  mkdir -p "$BREW_PREFIX/bin"
   cp "$TMP_DIR/plannotator-paste" "$BIN_PATH"
-  chmod 755 "$BIN_PATH"
+  if [[ "$ARCH" != win32-* ]]; then
+    chmod 755 "$BIN_PATH"
+  fi
   ok "Plannotator paste installed to ${BIN_PATH}"
 fi
 

@@ -6,12 +6,14 @@ set -euo pipefail
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
 
+{{- if eq .chezmoi.os "darwin" }}
 BREW_BIN="${BREW_BIN:-$(command -v brew 2>/dev/null || true)}"
 export BREW_BIN
 if [[ -z "$BREW_BIN" ]]; then
   printf 'Homebrew not found; install Homebrew first\n' >&2
   exit 1
 fi
+{{- end }}
 
 # Check gate BEFORE sudo re-exec — avoids unnecessary password prompts when
 # Caddy setup is disabled. Load ~/.env directly (no lib sourcing needed yet).
@@ -181,6 +183,117 @@ caddy_validate "$CADDYFILE_PATH" || warn "Caddy validation reported issues"
 caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
 
 ok "Caddy setup complete."
+{{- else if eq .chezmoi.os "linux" }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+# shellcheck disable=SC1091
+source "$LIB_DIR/common.sh"
+# shellcheck disable=SC1091
+source "$LIB_DIR/env.sh"
+# shellcheck disable=SC1091
+source "$LIB_DIR/caddy_helpers.sh"
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+REAL_HOME="$HOME"
+REAL_USER="$(whoami)"
+export HOME="$REAL_HOME"
+PATH="/usr/local/bin:/usr/bin:/bin:${REAL_HOME}/.local/bin:${PATH}"
+export PATH
+CADDYFILE_PATH="/etc/caddy/Caddyfile"
+
+if ! command -v caddy >/dev/null 2>&1; then
+  info "Installing Caddy..."
+  if ! sudo apt-get update || ! sudo apt-get install -y caddy; then
+    warn "apt-get could not install Caddy; trying the official binary"
+    arch="$(uname -m)"
+    case "$arch" in
+      x86_64) arch="amd64" ;;
+      aarch64|arm64) arch="arm64" ;;
+      *) die "Unsupported Linux architecture for Caddy: $arch" ;;
+    esac
+    caddy_tmp="$(mktemp)"
+    curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${arch}" -o "$caddy_tmp" || die "Failed to download Caddy"
+    sudo install -m 0755 "$caddy_tmp" /usr/bin/caddy
+    rm -f "$caddy_tmp"
+  fi
+fi
+
+info "Generating Caddyfile..."
+sudo -E env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" || warn "configure-caddy.py failed"
+# configure-caddy.py uses the shared /usr prefix on Linux; keep the service's
+# conventional /etc/caddy path in sync for distro-installed Caddy.
+if [[ -f /usr/etc/caddy/Caddyfile && ! -f "$CADDYFILE_PATH" ]]; then
+  sudo mkdir -p /etc/caddy
+  sudo cp /usr/etc/caddy/Caddyfile "$CADDYFILE_PATH"
+fi
+
+info "Ensuring Caddy-served domains resolve in /etc/hosts..."
+HOSTS_FILE="/etc/hosts"
+MARKER="# dotfiles-caddy-managed"
+if sudo grep -Fq "$MARKER" "$HOSTS_FILE" 2>/dev/null; then
+  tmp_file="$(mktemp)"
+  sudo grep -Fv "$MARKER" "$HOSTS_FILE" >"$tmp_file" || true
+  sudo install -m 0644 "$tmp_file" "$HOSTS_FILE"
+  rm -f "$tmp_file"
+fi
+
+SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
+HOSTS_ENTRIES="$({
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" python3 - <<'PY' 2>/dev/null || true
+import os
+import sys
+from pathlib import Path
+
+script_dir = os.environ["SCRIPT_DIR"]
+sys.path.insert(0, os.path.join(script_dir, "lib"))
+from caddy_domains import load_domains
+
+zones_path = Path(os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")))
+domains = load_domains(zones_path)
+access_mode = os.environ.get("CADDY_ACCESS", "localhost")
+entries: list[str] = []
+marker = "# dotfiles-caddy-managed"
+entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
+entries.append(f"::1\t\topencode.localhost\t{marker}")
+served_domains = [domain for domain in domains if domain.startswith("local.")] if access_mode == "localhost" else domains
+for domain in served_domains:
+    entries.append(f"127.0.0.1\t{domain}\t{marker}")
+    entries.append(f"::1\t\t{domain}\t{marker}")
+    entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
+for entry in entries:
+    print(entry)
+PY
+})"
+if [[ -n "$HOSTS_ENTRIES" ]]; then
+  {
+    echo "$MARKER"
+    printf '%s\n' "$HOSTS_ENTRIES"
+  } | sudo tee -a "$HOSTS_FILE" >/dev/null
+fi
+ok "/etc/hosts updated with Caddy-served domain entries"
+
+info "Writing Caddy systemd service..."
+sudo tee /etc/systemd/system/caddy.service >/dev/null <<EOF
+[Unit]
+Description=Caddy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile
+Restart=always
+RestartSec=5
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now caddy
+
+caddy_validate "$CADDYFILE_PATH" || warn "Caddy validation reported issues"
+caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
+ok "Caddy systemd setup complete."
 {{- else }}
 info "Skipping Caddy setup on {{ .chezmoi.os }}"
 {{- end }}

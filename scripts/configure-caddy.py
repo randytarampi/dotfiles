@@ -28,6 +28,11 @@ ALLOWED_ACCESS = {"localhost", "lan", "public"}
 
 
 def get_brew_prefix() -> str:
+    import platform
+
+    if platform.system() != "Darwin":
+        # Linux: Caddy installed via package manager, config in /etc/caddy
+        return "/usr"
     try:
         result = subprocess.run(
             ["brew", "--prefix"], capture_output=True, text=True, check=True
@@ -44,18 +49,30 @@ def get_brew_prefix() -> str:
 
 
 def get_bind_ip() -> str:
+    import platform
+
     try:
-        result = subprocess.run(
-            ["ipconfig", "getifaddr", "en0"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        if platform.system() == "Darwin":
+            result = subprocess.run(
+                ["ipconfig", "getifaddr", "en0"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        else:
+            # Linux: hostname -I returns space-separated IPs
+            result = subprocess.run(
+                ["hostname", "-I"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            ip = result.stdout.strip().split()[0] if result.stdout.strip() else ""
+            return ip or "0.0.0.0"
+        ip = result.stdout.strip()
+        return ip or "0.0.0.0"
     except Exception:
         return "0.0.0.0"
-
-    bind_ip = result.stdout.strip()
-    return bind_ip or "0.0.0.0"
 
 
 def resolve_tls_for_local_domains(brew_prefix: str) -> str:

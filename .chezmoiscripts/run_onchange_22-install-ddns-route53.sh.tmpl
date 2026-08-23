@@ -12,15 +12,11 @@ source "${LIB_DIR}/env.sh"
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 
-# {{- if eq .chezmoi.os "darwin" }}
+# {{- if or (eq .chezmoi.os "darwin") (eq .chezmoi.os "linux") (eq .chezmoi.os "windows") }}
 
 if [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" != "1" ]]; then
   info "DOTFILES_RUN_DDNS_SETUP='${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}' — skipping ddns-route53 install"
   exit 0
-fi
-
-if ! command -v brew &>/dev/null; then
-  die "Homebrew not found; install Homebrew first"
 fi
 
 if ! command -v curl &>/dev/null; then
@@ -36,15 +32,39 @@ if ! command -v python3 &>/dev/null; then
 fi
 
 VER="${DDNS_ROUTE53_VERSION:-2.14.0}"
-case "$(uname -m)" in
-arm64) PKG="darwin_arm64" ;;
-x86_64) PKG="darwin_amd64" ;;
-*) die "Unsupported architecture: $(uname -m)" ;;
+case "$(uname -s)" in
+Darwin)
+  case "$(uname -m)" in
+  arm64) PKG="darwin_arm64" ;;
+  x86_64) PKG="darwin_amd64" ;;
+  *) die "Unsupported architecture: $(uname -m)" ;;
+  esac
+  ;;
+Linux)
+  case "$(uname -m)" in
+  arm64|aarch64) PKG="linux_arm64" ;;
+  x86_64) PKG="linux_amd64" ;;
+  *) die "Unsupported architecture: $(uname -m)" ;;
+  esac
+  ;;
+MINGW*|MSYS*|CYGWIN*)
+  case "$(uname -m)" in
+  arm64|aarch64) PKG="windows_arm64" ;;
+  x86_64) PKG="windows_amd64" ;;
+  *) die "Unsupported architecture: $(uname -m)" ;;
+  esac
+  ;;
+*) die "Unsupported OS: $(uname -s)" ;;
 esac
 
-BREW_PREFIX="$(brew --prefix)"
+if command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix)"
+  BIN_PATH="${BREW_PREFIX}/bin/ddns-route53"
+else
+  BIN_PATH="${HOME}/.local/bin/ddns-route53"
+  mkdir -p "$(dirname "$BIN_PATH")"
+fi
 INSTALL_DIR="/tmp/ddns-route53-install"
-BIN_PATH="${BREW_PREFIX}/bin/ddns-route53"
 CONFIG_DIR="$HOME/.config/ddns-route53"
 ZONES_CONFIG_PATH="${CADDY_ZONES_CONFIG:-$HOME/.config/caddy/ddns-zones.json}"
 PLIST_DIR="$HOME/Library/LaunchAgents"
@@ -56,13 +76,18 @@ rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 curl -fsSL "https://github.com/crazy-max/ddns-route53/releases/download/v${VER}/ddns-route53_${VER}_${PKG}.tar.gz" | tar -xz -C "$INSTALL_DIR" || die "Failed to download ddns-route53 ${VER}"
 
-if [[ ! -f "$INSTALL_DIR/ddns-route53" ]]; then
+if [[ -f "$INSTALL_DIR/ddns-route53" ]]; then
+  EXTRACTED_BIN="$INSTALL_DIR/ddns-route53"
+elif [[ -f "$INSTALL_DIR/ddns-route53.exe" ]]; then
+  EXTRACTED_BIN="$INSTALL_DIR/ddns-route53.exe"
+  BIN_PATH="${BIN_PATH}.exe"
+else
   die "ddns-route53 binary not found after extraction"
 fi
 
 info "Installing binary to ${BIN_PATH}..."
-mkdir -p "${BREW_PREFIX}/bin"
-cp "$INSTALL_DIR/ddns-route53" "$BIN_PATH"
+mkdir -p "$(dirname "$BIN_PATH")"
+cp "$EXTRACTED_BIN" "$BIN_PATH"
 chmod 755 "$BIN_PATH"
 rm -rf "$INSTALL_DIR" || warn "Failed to remove temporary install directory"
 
@@ -106,7 +131,7 @@ fi
 
 if [[ -z "$ZONE_IDS_RAW" ]]; then
   ok "No ddns-route53 zones configured"
-else
+elif [[ "$(uname -s)" == "Darwin" ]]; then
   if launchctl print "gui/$UID/${LEGACY_LABEL}" &>/dev/null; then
     info "Removing legacy ${LEGACY_LABEL} LaunchAgent..."
     launchctl bootout "gui/$UID/${LEGACY_LABEL}" || warn "Failed to bootout ${LEGACY_LABEL}"
@@ -175,6 +200,68 @@ Binary:        ${BIN_PATH}
 Zone configs:  ${CONFIG_DIR}/zone-<zoneId>.yml
 LaunchAgents:  ${PLIST_DIR}/${LEGACY_LABEL}.<zoneId>.plist
 Zones loaded:  ${ZONE_COUNT}"
+elif [[ "$(uname -s)" == "Linux" ]]; then
+  SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+  mkdir -p "$SYSTEMD_USER_DIR"
+  ZONE_COUNT=0
+  DDNS_INTERVAL="${DDNS_INTERVAL:-300}"
+
+  while IFS= read -r zone_id; do
+    [[ -z "$zone_id" ]] && continue
+    ZONE_COUNT=$((ZONE_COUNT + 1))
+    CONFIG_PATH="$CONFIG_DIR/zone-${zone_id}.yml"
+    SERVICE_NAME="ddns-route53-${zone_id}"
+    SERVICE_PATH="$SYSTEMD_USER_DIR/${SERVICE_NAME}.service"
+    TIMER_PATH="$SYSTEMD_USER_DIR/${SERVICE_NAME}.timer"
+
+    info "Writing systemd service+timer for zone ${zone_id}..."
+    cat >"$SERVICE_PATH" <<EOF
+[Unit]
+Description=ddns-route53 for zone ${zone_id}
+
+[Service]
+Type=oneshot
+ExecStart=${BIN_PATH} --config ${CONFIG_PATH}
+EOF
+    cat >"$TIMER_PATH" <<EOF
+[Unit]
+Description=Run ddns-route53 for zone ${zone_id} every ${DDNS_INTERVAL}s
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=${DDNS_INTERVAL}s
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+EOF
+    ok "${SERVICE_NAME} service+timer written"
+  done <<<"$ZONE_IDS_RAW"
+
+  systemctl --user daemon-reload || warn "Failed to daemon-reload"
+  while IFS= read -r zone_id; do
+    [[ -z "$zone_id" ]] && continue
+    SERVICE_NAME="ddns-route53-${zone_id}"
+    systemctl --user enable --now "${SERVICE_NAME}.timer" 2>/dev/null && ok "${SERVICE_NAME}.timer enabled" || warn "Failed to enable ${SERVICE_NAME}.timer"
+  done <<<"$ZONE_IDS_RAW"
+  ok "ddns-route53 setup complete.
+
+Binary:        ${BIN_PATH}
+Zone configs:  ${CONFIG_DIR}/zone-<zoneId>.yml
+Services:      ${SYSTEMD_USER_DIR}/ddns-route53-<zoneId>.{service,timer}
+Zones loaded:  ${ZONE_COUNT}"
+elif [[ "$(uname -s)" == *"MINGW"* || "$(uname -s)" == *"MSYS"* || "$(uname -s)" == *"CYGWIN"* ]]; then
+  ZONE_COUNT=0
+  DDNS_INTERVAL="${DDNS_INTERVAL:-300}"
+  while IFS= read -r zone_id; do
+    [[ -z "$zone_id" ]] && continue
+    ZONE_COUNT=$((ZONE_COUNT + 1))
+    CONFIG_PATH="$CONFIG_DIR/zone-${zone_id}.yml"
+    TASK_NAME="ddns-route53-${zone_id}"
+    info "Creating scheduled task for zone ${zone_id}..."
+    schtasks //Create //TN "$TASK_NAME" //TR "\"${BIN_PATH}\" --config \"${CONFIG_PATH}\"" //SC MINUTE //MO $((DDNS_INTERVAL / 60)) //F 2>/dev/null && ok "$TASK_NAME scheduled task created" || warn "Failed to create $TASK_NAME scheduled task"
+  done <<<"$ZONE_IDS_RAW"
+  ok "ddns-route53 setup complete. Zones loaded: ${ZONE_COUNT}"
 fi
 # {{- else }}
 info "Skipping ddns-route53 install on {{ .chezmoi.os }}"

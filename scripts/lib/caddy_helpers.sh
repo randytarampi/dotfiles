@@ -5,12 +5,30 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 caddy_get_bind_ip() {
   local ip
-  ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  else
+    # Linux: try hostname -I (first IP), then ip addr
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    if [[ -z "$ip" ]]; then
+      ip="$(ip -4 addr show 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '127.0.0.1' | head -1 || true)"
+    fi
+  fi
   echo "${ip:-0.0.0.0}"
 }
 
+caddy_prefix() {
+  if command -v brew >/dev/null 2>&1; then
+    brew --prefix
+  elif [[ "$(uname -s)" == "Linux" ]]; then
+    echo "/usr"
+  else
+    echo ""
+  fi
+}
+
 caddy_validate() {
-  local caddyfile="${1:-$(brew --prefix)/etc/caddy/Caddyfile}"
+  local caddyfile="${1:-$(caddy_prefix)/etc/caddy/Caddyfile}"
   if caddy validate --config "$caddyfile" 2>/dev/null; then
     ok "Caddyfile validation passed: $caddyfile"
     return 0
@@ -21,7 +39,7 @@ caddy_validate() {
 }
 
 caddy_reload() {
-  local caddyfile="${1:-$(brew --prefix)/etc/caddy/Caddyfile}"
+  local caddyfile="${1:-$(caddy_prefix)/etc/caddy/Caddyfile}"
   if caddy reload --force --config "$caddyfile" 2>/dev/null; then
     ok "Caddy reloaded: $caddyfile"
   else

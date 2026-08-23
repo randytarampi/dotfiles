@@ -77,6 +77,53 @@ else
 fi
 
 ok "Plannotator paste LaunchAgent setup complete"
+{{- else if eq .chezmoi.os "linux" }}
+
+# Plannotator paste binary is installed by scripts/install-plannotator.sh (cross-platform)
+# Here we create the systemd user service.
+if ! command -v plannotator-paste >/dev/null 2>&1; then
+  warn "plannotator-paste not found — run install-plannotator.sh first"
+  exit 0
+fi
+
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+SERVICE_PATH="$SYSTEMD_USER_DIR/plannotator-paste.service"
+PLANNOTATOR_BIN="$(command -v plannotator-paste)"
+CONFIG_PATH="$HOME/.config/plannotator/config.json"
+DATA_DIR="${PASTE_DATA_DIR:-$HOME/.plannotator/pastes}"
+
+info "Installing Plannotator paste systemd user service..."
+mkdir -p "$SYSTEMD_USER_DIR"
+mkdir -p "$DATA_DIR"
+cat >"$SERVICE_PATH" <<EOF
+[Unit]
+Description=Plannotator paste backend
+
+[Service]
+Type=simple
+ExecStart=${PLANNOTATOR_BIN} --config ${CONFIG_PATH}
+Restart=always
+RestartSec=5
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=default.target
+EOF
+ok "Plannotator systemd service written to ${SERVICE_PATH}"
+systemctl --user daemon-reload || warn "Failed to daemon-reload"
+systemctl --user enable --now plannotator-paste.service && ok "plannotator-paste.service enabled and started" || warn "Failed to enable/start plannotator-paste.service"
+ok "Plannotator paste systemd setup complete"
+{{- else if eq .chezmoi.os "windows" }}
+
+# Plannotator paste binary is installed by scripts/install-plannotator.sh (cross-platform)
+# Windows: create a startup shortcut instead of a service.
+if ! command -v plannotator-paste >/dev/null 2>&1 && ! command -v plannotator-paste.exe >/dev/null 2>&1; then
+  warn "plannotator-paste not found — run install-plannotator.sh first"
+  exit 0
+fi
+info "Plannotator paste on Windows: manual service setup required."
+info "Run plannotator-paste --config \"$HOME/.config/plannotator/config.json\" at startup."
+ok "Plannotator paste Windows setup note printed."
 {{- else }}
 info "Skipping Plannotator paste LaunchAgent on {{ .chezmoi.os }}"
 {{- end }}

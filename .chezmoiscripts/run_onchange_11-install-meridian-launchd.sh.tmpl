@@ -8,13 +8,13 @@ source "${LIB_DIR}/env.sh"
 # Load env before gate (DOTFILES_RUN_MERIDIAN_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
 
-{{- if eq .chezmoi.os "darwin" }}
-
 # Gate on DOTFILES_RUN_MERIDIAN_SETUP env var (set in ~/.env)
 if [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_MERIDIAN_SETUP='${DOTFILES_RUN_MERIDIAN_SETUP:-0}' — skipping Meridian launchd setup"
+  info "DOTFILES_RUN_MERIDIAN_SETUP='${DOTFILES_RUN_MERIDIAN_SETUP:-0}' — skipping Meridian setup"
   exit 0
 fi
+
+{{- if eq .chezmoi.os "darwin" }}
 
 LAUNCH_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/meridian-launch.sh"
 PLIST_DIR="$HOME/Library/LaunchAgents"
@@ -65,6 +65,37 @@ fi
 BOOTSTRAP_OUTPUT=$(launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" 2>&1) && ok "com.meridian.proxy loaded." || warn "Failed to bootstrap com.meridian.proxy: $BOOTSTRAP_OUTPUT"
 
 ok "Meridian launchd setup complete."
+{{- else if eq .chezmoi.os "linux" }}
+
+# Gate check is above, env is loaded.
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+SERVICE_PATH="$SYSTEMD_USER_DIR/meridian-proxy.service"
+LAUNCH_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/meridian-launch.sh"
+
+info "Installing Meridian systemd user service..."
+mkdir -p "$SYSTEMD_USER_DIR"
+
+cat >"$SERVICE_PATH" <<EOF
+[Unit]
+Description=Meridian proxy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${LAUNCH_SCRIPT}
+Restart=always
+RestartSec=5
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin
+
+[Install]
+WantedBy=default.target
+EOF
+ok "Meridian systemd service written to ${SERVICE_PATH}"
+
+systemctl --user daemon-reload || warn "Failed to daemon-reload"
+systemctl --user enable --now meridian-proxy.service && ok "meridian-proxy.service enabled and started" || warn "Failed to enable/start meridian-proxy.service"
+
+ok "Meridian systemd setup complete."
 {{- else }}
 info "Skipping Meridian launchd setup on {{ .chezmoi.os }}"
 {{- end }}
