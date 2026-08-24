@@ -145,10 +145,10 @@ def write_local_junie_config(model, dry_run):
 def write_local_codex_config(model, dry_run):
     path = Path("~/.codex-local/config.toml").expanduser()
     content = (
-        '[model_providers.ollama]\nname = "Ollama Local"\n'
-        f'base_url = "{get_ollama_local_base_url()}"\nwire_api = "chat"\n\n'
-        "[profiles.ollama]\n"
-        f'model = "{model}"\nmodel_provider = "ollama"\n'
+        '[model_providers.ollama-local]\nname = "Ollama Local"\n'
+        f'base_url = "{get_ollama_local_base_url()}"\nwire_api = "responses"\n\n'
+        "[profiles.ollama-local]\n"
+        f'model = "{model}"\nmodel_provider = "ollama-local"\n'
     )
     if dry_run:
         logger.info(f"Would write local Codex config to {path}")

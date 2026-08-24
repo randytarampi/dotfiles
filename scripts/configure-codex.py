@@ -36,13 +36,8 @@ env_key = "MERIDIAN_API_KEY"
 [model_providers.ollama-cloud]
 name = "Ollama Cloud"
 base_url = "https://ollama.com/v1"
-wire_api = "chat"
+wire_api = "responses"
 env_key = "OLLAMA_API_KEY"
-
-[model_providers.ollama]
-name = "Ollama Local"
-base_url = "http://localhost:11434/v1"
-wire_api = "chat"
 """
 
 PROFILES_CONFIG = """# BEGIN DOTFILES MANAGED PROFILES
@@ -94,7 +89,15 @@ def strip_managed_profiles(content):
     )
     # Strip orphaned profile sections from older runs that wrote profiles
     # without the BEGIN marker, preventing duplicate-key accumulation.
-    for profile in ("meridian", "ollama-cloud", "ollama", "local-solo", "copilot"):
+    # Transitional dual-strip: remove old profile names for one release cycle.
+    for profile in (
+        "meridian",
+        "ollama-cloud",
+        "ollama-local",
+        "ollama",
+        "local-solo",
+        "copilot",
+    ):
         content = re.sub(
             r"\n*\[profiles\.%s\].*?(?=\n\[|\Z)" % re.escape(profile),
             "",
@@ -129,7 +132,7 @@ def main():
         original_content = content
 
         content = re.sub(r"^model_provider\s*=.*$\n?", "", content, flags=re.MULTILINE)
-        # Transitional dual-strip: remove both provider IDs for one release cycle.
+        # Strip old custom provider IDs (transitional: ollama-local was renamed, ollama is now built-in).
         for provider in (
             "meridian",
             "ollama-cloud",
@@ -172,8 +175,8 @@ def main():
         f"Configuration: {config_path}",
         "  • Default: OpenAI (unchanged)",
         "  • meridian: http://127.0.0.1:3456/v1 — responses",
-        "  • ollama-cloud: https://ollama.com/v1 — chat",
-        "  • ollama: http://localhost:11434/v1 — chat",
+        "  • ollama-cloud: https://ollama.com/v1 — responses",
+        "  • ollama: built-in (http://localhost:11434/v1 — responses)",
         "  • github-copilot: https://api.githubcopilot.com/v1 — responses (when GITHUB_TOKEN is set)",
         "  • profiles: meridian, ollama-cloud, ollama, local-solo, copilot",
         "",
