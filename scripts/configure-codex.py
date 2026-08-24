@@ -85,12 +85,29 @@ def build_provider_config():
 
 
 def strip_managed_profiles(content):
-    return re.sub(
+    # Strip properly marked blocks (BEGIN...END)
+    content = re.sub(
         r"\n*" + re.escape(PROFILES_START) + r".*?" + re.escape(PROFILES_END) + r"\n*",
         "\n",
         content,
         flags=re.DOTALL,
     )
+    # Strip orphaned profile sections from older runs that wrote profiles
+    # without the BEGIN marker, preventing duplicate-key accumulation.
+    for profile in ("meridian", "ollama-cloud", "ollama", "local-solo", "copilot"):
+        content = re.sub(
+            r"\n*\[profiles\.%s\].*?(?=\n\[|\Z)" % re.escape(profile),
+            "",
+            content,
+            flags=re.DOTALL,
+        )
+    # Strip any remaining orphaned END markers
+    content = re.sub(
+        r"\n*# END DOTFILES MANAGED PROFILES\n*",
+        "\n",
+        content,
+    )
+    return content
 
 
 def main():
