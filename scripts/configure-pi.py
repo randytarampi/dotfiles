@@ -18,7 +18,7 @@ from constants import (
 from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
-from tier_resolve import resolve_roles_from_list
+from tier_resolve import resolve_roles_from_list, get_model_details
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
@@ -42,20 +42,76 @@ def pi_model(value, local):
     return value
 
 
-def model_entry(model_id, name=None, local=False):
-    # Read context window from OLLAMA_CONTEXT_LENGTH (matches the Ollama daemon's
-    # KV cache sizing). Falls back to 128000 if unset. Keeping pi and Ollama in
-    # sync avoids reserving VRAM that pi can never use.
-    context_window = 128000
+# Cache of model_id -> native context window (tokens) discovered via `ollama show`.
+# A model's native window can be smaller than the global OLLAMA_CONTEXT_LENGTH cap
+# (e.g. a 128K model under a 192K cap), so we cap the advertised window at the
+# model's own limit to avoid asking it for tokens it can never hold.
+_native_ctx_cache = {}
+
+
+def _ollama_context_cap():
+    """Return the OLLAMA_CONTEXT_LENGTH cap (int), or 128000 if unset/invalid."""
     env_ctx = os.environ.get("OLLAMA_CONTEXT_LENGTH", "")
-    if env_ctx.isdigit():
-        context_window = int(env_ctx)
+    return int(env_ctx) if env_ctx.isdigit() else 128000
+
+
+def _native_context(model_id):
+    """Best-effort native context window for a model via `ollama show`.
+
+    Returns the model's own context length, or None when unknown/unavailable.
+    Cached per model so the `ollama show` subprocess runs at most once each.
+    """
+    if model_id not in _native_ctx_cache:
+        _native_ctx_cache[model_id] = get_model_details(model_id).get("context_length")
+    return _native_ctx_cache[model_id]
+
+
+def _model_context_window(model_id, local):
+    """Context window to advertise for a model.
+
+    Local Ollama models are capped at min(OLLAMA_CONTEXT_LENGTH, native) so pi
+    never requests a window the model can't hold (e.g. 128K gemma under a 192K
+    cap). Cloud/API models use the OLLAMA_CONTEXT_LENGTH cap.
+    """
+    cap = _ollama_context_cap()
+    if local:
+        native = _native_context(model_id)
+        if native:
+            return min(cap, native)
+    return cap
+
+
+def _compaction_tokens(local_ids):
+    """Compaction reserve/keep as 33% of the tightest usable local context.
+
+    Pi's compaction is a single global block, so one reserve value yields
+    different per-model *trigger fractions* (auto-compaction fires when
+    contextTokens > contextWindow - reserveTokens). Basing 33% on the smallest
+    native window (capped at OLLAMA_CONTEXT_LENGTH) guarantees the tightest model
+    triggers at ~67% (the DCP strong threshold) while larger windows get gentler,
+    later triggers -- the safe direction. Falls back to the OLLAMA cap when no
+    local model exposes a native context.
+    """
+    cap = _ollama_context_cap()
+    natives = [n for n in (_native_context(m) for m in local_ids) if n]
+    base = min(natives + [cap])  # tightest window; never above the OLLAMA cap
+    return max(8192, round(0.33 * base))
+
+
+def model_entry(model_id, name=None, local=False):
+    """Build a pi model entry.
+
+    Context window is the OLLAMA_CONTEXT_LENGTH cap, further capped at the model's
+    own native window for local Ollama models (see _model_context_window). This
+    keeps pi in sync with the Ollama daemon's KV sizing without ever asking a
+    model for a window it can't hold.
+    """
     return {
         "id": model_id,
         "name": name or model_id,
         "reasoning": True,
         "input": ["text"],
-        "contextWindow": context_window,
+        "contextWindow": _model_context_window(model_id, local),
         "maxTokens": 32000,
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
         **(
@@ -130,6 +186,12 @@ def main():
             "lightweight": "ollama/qwen3-coder",
         }
 
+    # Local model IDs (the part after "ollama/") + compaction reserve.
+    # Computed early so settings["compaction"] and the provider model
+    # entries share one set of `ollama show` lookups (cached in _native_ctx_cache).
+    local_ids = sorted({v.split("/", 1)[-1] for v in local.values()})
+    compaction_tokens = _compaction_tokens(local_ids)
+
     def resolve(v):
         return pi_model(v, local)
 
@@ -144,8 +206,8 @@ def main():
         "theme": os.environ.get("PI_THEME", "dark"),
         "compaction": {
             "enabled": True,
-            "reserveTokens": 16384,
-            "keepRecentTokens": 20000,
+            "reserveTokens": compaction_tokens,
+            "keepRecentTokens": compaction_tokens,
         },
         "retry": {
             "enabled": True,
@@ -195,7 +257,6 @@ def main():
         }
     providers = {}
     local_base = args.ollama_base_url or get_ollama_local_base_url()
-    local_ids = sorted({v.split("/", 1)[-1] for v in local.values()})
     providers["ollama"] = {
         "baseUrl": local_base,
         "api": "openai-completions",
