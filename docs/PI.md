@@ -11,7 +11,7 @@ extensible, and configured from the shared OpenCode tier registry.
 | `~/.pi/agent/models.json` | Provider and model definitions |
 | `~/.pi/agent/auth.json` | Environment-variable API-key references |
 | `~/.pi/agent/mcp.json` | Generated MCP servers |
-| `~/.pi/agent/agents/` | Generated subagent roles |
+| `~/.pi/agent/agents/` | Custom subagents (delegation uses pi-subagents built-ins) |
 
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
 orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle.
@@ -38,8 +38,8 @@ Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.
   session is unnecessary.
 - Switch between OpenAI, Anthropic, Ollama, and Meridian providers through
   Pi's generated `models.json`.
-- Use generated subagents for parallel work; their roles mirror the
-  orchestrator, librarian, fixer, and oracle workflow.
+- Delegate parallel work to the pi-subagents built-ins (scout, researcher,
+  worker, reviewer, oracle, delegate); models are pinned from the preset.
 - Enable `pi-web-access` for web-backed research and use the Plannotator Pi
   extension for plan review.
 - From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
