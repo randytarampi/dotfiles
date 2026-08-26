@@ -25,15 +25,18 @@ _BUILTIN_PACKAGES = frozenset({"pi-skills"})
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
-ROLE_MAP = {
+# Map OMO-Slim preset roles to the matching pi-subagents built-in. The six
+# built-ins (scout, researcher, worker, reviewer, oracle, delegate) already
+# carry the prompt, tools, and thinking; we only pin their model via
+# agentOverrides. Roles with no built-in (designer, council) are intentionally
+# absent so they fall through to subagents.defaultModel.
+ROLE_TO_BUILTIN = {
     "orchestrator": "delegate",
     "oracle": "oracle",
     "librarian": "researcher",
     "explorer": "scout",
-    "designer": "custom",
     "fixer": "worker",
     "observer": "reviewer",
-    "council": "workflowScript",
 }
 
 
@@ -201,6 +204,35 @@ def _ensure_packages(packages, dry_run=False, mode="global"):
         _install_package(pkg, dry_run, mode)
 
 
+def _cleanup_generated_agents(out, roles, dry_run):
+    """Remove the stub agents/<role>.md (and .bak) files a previous run
+    generated. They collide by name with the pi-subagents built-ins, so a
+    leftover stub would override the real built-in. Only files that contain
+    the generation marker are removed, preserving genuine user agents.
+    Idempotent and dry-run aware (in dry-run it logs intent, deletes nothing).
+    """
+    marker = "Pi subagent role:"
+    removed = 0
+    for role in roles:
+        for suffix in (".md", ".md.bak"):
+            path = out / "agents" / f"{role}{suffix}"
+            if not path.exists():
+                continue
+            try:
+                is_stub = marker in path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                is_stub = False
+            if not is_stub:
+                continue
+            if dry_run:
+                logger.info("Would remove stale generated agent: %s", path)
+            else:
+                path.unlink()
+            removed += 1
+    if removed:
+        logger.info("Removed %d stale generated subagent file(s)", removed)
+
+
 def seed_plugin_configs(dry_run=False, mode="global"):
     """Seed default rpiv-* plugin config files. Non-destructive: skips existing."""
     if os.environ.get("DOTFILES_RUN_PI_SETUP", "0") != "1":
@@ -311,23 +343,18 @@ def main():
         "extensions": [".pi/extensions"],
         "subagents": {"defaultModel": default, "agentOverrides": {}},
     }
-    agents = {}
+    # Pin each built-in's model via agentOverrides. The built-ins have no
+    # `model` in frontmatter, so without this they inherit only
+    # subagents.defaultModel. Model-only: each built-in keeps its native
+    # thinking level. Roles with no built-in (designer, council) are skipped.
     for role, spec in roles.items():
         if not isinstance(spec, dict):
             continue
-        model = resolve(spec.get("model", default))
-        settings["subagents"]["agentOverrides"][role] = model
-        tools = (
-            []
-            if args.no_mcp
-            else [f"mcp:{x}" for x in spec.get("mcps", []) if not x.startswith("!")]
-        )
-        agents[role] = {
-            "name": ROLE_MAP.get(role, role),
-            "model": model,
-            "thinking": spec.get("variant", "medium"),
-            "skills": spec.get("skills", []),
-            "tools": tools,
+        builtin = ROLE_TO_BUILTIN.get(role)
+        if builtin is None:
+            continue
+        settings["subagents"]["agentOverrides"][builtin] = {
+            "model": resolve(spec.get("model", default)),
         }
     providers = {}
     local_base = args.ollama_base_url or get_ollama_local_base_url()
@@ -403,19 +430,31 @@ def main():
         if args.mode == "global"
         else Path(".pi/agent")
     )
+    # Preserve any user-added agentOverrides we do not manage (e.g. a custom
+    # agent the user added by hand). The six built-in names are (re)set
+    # from the preset above; everything else is carried over so it survives
+    # a regenerate.
+    prev_settings = out / "settings.json"
+    managed = set(ROLE_TO_BUILTIN.values())
+    if prev_settings.exists():
+        try:
+            old_overrides = (
+                json.loads(prev_settings.read_text(encoding="utf-8"))
+                .get("subagents", {})
+                .get("agentOverrides", {})
+                or {}
+            )
+            for name, val in old_overrides.items():
+                if name not in managed:
+                    settings["subagents"]["agentOverrides"][name] = val
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
     files = {
         out / "settings.json": settings,
         out / "models.json": {"providers": providers},
         out / "auth.json": auth,
     }
-    files.update(
-        {
-            out
-            / "agents"
-            / f"{role}.md": f"---\nname: {a['name']}\nmodel: {a['model']}\nthinking: {a['thinking']}\n---\n\nPi subagent role: {role}.\n"
-            for role, a in agents.items()
-        }
-    )
     for path, content in files.items():
         text = (
             content
@@ -429,6 +468,11 @@ def main():
         if path.exists() and not args.no_backup:
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
+    # Remove the stub agents/<role>.md (and .bak) files a previous run
+    # generated; they shadow the pi-subagents built-ins by name, so a
+    # leftover stub would override the real built-in. Only files bearing
+    # the generation marker are touched, so a genuine user agent is left alone.
+    _cleanup_generated_agents(out, roles, args.dry_run)
     seed_plugin_configs(dry_run=args.dry_run, mode=args.mode)
     # Ensure all referenced packages are installed (idempotent).
     _ensure_packages(settings["packages"], args.dry_run, args.mode)
