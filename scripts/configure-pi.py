@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate Pi agent configuration from the shared OpenCode tier registry."""
 
-import argparse, json, os, sys
+import argparse, json, os, subprocess, sys
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -19,6 +19,9 @@ from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
 from tier_resolve import resolve_roles_from_list, get_model_details
+
+# Packages shipped with pi-core (not separate npm installs); skip `pi install`.
+_BUILTIN_PACKAGES = frozenset({"pi-skills"})
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
@@ -125,6 +128,77 @@ def model_entry(model_id, name=None, local=False):
             else {}
         ),
     }
+
+
+def _install_package(pkg, dry_run, mode):
+    """Install one pi package via `pi install`, prefixing npm: when needed."""
+    if pkg in _BUILTIN_PACKAGES:
+        return
+    source = f"npm:{pkg}"
+    if dry_run:
+        logger.info("Would install package: %s", source)
+        return
+    logger.info("Installing package: %s", source)
+    result = subprocess.run(
+        ["pi", "install", source],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.warning("Failed to install %s: %s", source, result.stderr.strip())
+    else:
+        logger.info("Installed package: %s", source)
+
+
+def _ensure_packages(packages, dry_run=False, mode="global"):
+    """Ensure all configured packages are installed (idempotent).
+
+    Runs `pi list --no-approve` to discover what is already installed, then
+    installs only the missing ones. Builtin packages (e.g. pi-skills) are
+    skipped (they ship with pi-core and have no install step); in dry-run the
+    install is logged, not executed.
+    """
+    try:
+        result = subprocess.run(
+            ["pi", "list", "--no-approve"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "Could not run `pi list` (%s); skipping package install",
+                result.stderr.strip(),
+            )
+            return
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Could not run `pi list` (%s); skipping package install", exc)
+        return
+
+    installed = set()
+    for line in result.stdout.splitlines():
+        name = line.strip()
+        if (
+            not name
+            or name.startswith("User packages:")
+            or name.startswith("Project packages:")
+            or name.startswith("/")
+        ):
+            continue
+        if name.startswith("npm:"):
+            name = name[4:]
+        installed.add(name)
+
+    to_install = [
+        pkg for pkg in packages if pkg not in _BUILTIN_PACKAGES and pkg not in installed
+    ]
+    if not to_install:
+        logger.info("All %d packages already installed", len(packages))
+        return
+    logger.info(
+        "Installing %d missing package(s): %s", len(to_install), ", ".join(to_install)
+    )
+    for pkg in to_install:
+        _install_package(pkg, dry_run, mode)
 
 
 def seed_plugin_configs(dry_run=False, mode="global"):
@@ -356,6 +430,8 @@ def main():
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
     seed_plugin_configs(dry_run=args.dry_run, mode=args.mode)
+    # Ensure all referenced packages are installed (idempotent).
+    _ensure_packages(settings["packages"], args.dry_run, args.mode)
     logger.info("Pi configured: %s (preset=%s)", out, preset)
 
 
