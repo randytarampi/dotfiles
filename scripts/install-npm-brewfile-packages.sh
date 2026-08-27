@@ -24,8 +24,13 @@ source "$LIB_DIR/common_args.sh"
 
 export COMMON_USAGE="$0 <Brewfile-path> [options]"
 export COMMON_HELP_TEXT="Reinstall npm entries from a Brewfile into the active nvm node."
+export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
 
 BREWFILE="${1:-}"
 if [[ -z "$BREWFILE" ]]; then
@@ -65,6 +70,10 @@ FAILED_COUNT=0
 
 while IFS= read -r pkg; do
   [[ -z "$pkg" ]] && continue
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would install $pkg@latest globally"
+    continue
+  fi
   info "Installing $pkg..."
   if npm install -g "$pkg@latest" >/dev/null 2>&1; then
     ok "$pkg installed"

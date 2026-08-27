@@ -15,7 +15,7 @@ if str(LIB_DIR) not in sys.path:
 
 import logger
 from env import load_env
-from file_utils import write_text_file
+from file_utils import backup_file, write_text_file
 from cli_helpers import add_common_args
 
 
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate per-zone ddns-route53 configs from ddns-zones.json."
     )
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     return parser.parse_args()
 
 
@@ -153,7 +153,11 @@ def main() -> None:
         if args.dry_run:
             logger.info(f"Would write DDNS zone config to {config_path}")
         else:
-            write_text_file(str(config_path), config_text, backup=True)
+            if config_path.exists() and not args.no_backup:
+                backup_path = backup_file(str(config_path), enabled=True)
+                if backup_path:
+                    logger.info(f"Backed up existing DDNS config to {backup_path}")
+            write_text_file(str(config_path), config_text, backup=False)
         written_paths.append((zone_id, config_path))
 
     summary_lines = [

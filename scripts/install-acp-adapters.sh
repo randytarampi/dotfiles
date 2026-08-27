@@ -17,6 +17,10 @@ export COMMON_HELP_TEXT="Install ACP (Agent Client Protocol) adapters for OpenCo
 export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
 
 install_antigravity_acp() {
   local install_dir="${HOME}/.local/share/antigravity-acp"

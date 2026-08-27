@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-configure-jetbrains-workspace-project.py — Configures JetBrains workspace modules.
+_configure-jetbrains-workspace-project.py — Configures JetBrains workspace modules.
 Writes .ai/mcp/mcp.json and creates .junie → .ai symlink.
 """
 

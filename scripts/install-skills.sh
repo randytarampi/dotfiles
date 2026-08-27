@@ -9,8 +9,13 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Install the skills and lazyskills CLI tools."
+export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
 
 # install-skills.sh — Cross-platform installer for skills CLI tools.
 # Installs:
@@ -32,9 +37,17 @@ else
   case "$OS_TYPE" in
   Darwin | Linux)
     if command -v brew >/dev/null 2>&1; then
-      brew install skills || warn "brew install skills failed"
+      if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+        info "[DRY RUN] Would run: brew install skills"
+      else
+        brew install skills || warn "brew install skills failed"
+      fi
     elif command -v npm >/dev/null 2>&1; then
-      npm install -g skills || warn "npm install -g skills failed"
+      if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+        info "[DRY RUN] Would run: npm install -g skills"
+      else
+        npm install -g skills || warn "npm install -g skills failed"
+      fi
     else
       warn "Neither brew nor npm found — cannot install skills CLI"
     fi
@@ -60,15 +73,23 @@ else
   case "$OS_TYPE" in
   Darwin)
     if command -v brew >/dev/null 2>&1; then
-      brew tap alvinunreal/tap 2>/dev/null || true
-      brew install --cask lazyskills || warn "brew install --cask lazyskills failed"
+      if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+        info "[DRY RUN] Would run: brew tap alvinunreal/tap and brew install --cask lazyskills"
+      else
+        brew tap alvinunreal/tap 2>/dev/null || true
+        brew install --cask lazyskills || warn "brew install --cask lazyskills failed"
+      fi
     else
       warn "brew not found — cannot install lazyskills on macOS"
     fi
     ;;
   Linux)
     if command -v curl >/dev/null 2>&1; then
-      curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
+      if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+        info "[DRY RUN] Would run lazyskills curl installer"
+      else
+        curl -fsSL https://lazyskills.sh/install | sh || warn "lazyskills curl install failed"
+      fi
     else
       warn "curl not found — cannot install lazyskills"
     fi
@@ -76,7 +97,12 @@ else
   MINGW* | MSYS* | CYGWIN* | Windows*)
     if command -v powershell >/dev/null 2>&1 || command -v pwsh >/dev/null 2>&1; then
       PWSH_CMD="$(command -v pwsh 2>/dev/null || command -v powershell 2>/dev/null)"
-      "$PWSH_CMD" -Command "irm https://lazyskills.sh/install.ps1 | iex" || warn "lazyskills PowerShell install failed"
+      if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+        info "[DRY RUN] Would run lazyskills PowerShell installer"
+      else
+        "$PWSH_CMD" -Command "irm https://lazyskills.sh/install.ps1 | iex" ||
+          warn "lazyskills PowerShell install failed"
+      fi
     else
       warn "PowerShell not found — cannot install lazyskills on Windows"
     fi

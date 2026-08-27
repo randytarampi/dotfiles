@@ -7,8 +7,6 @@ import re
 import sys
 from pathlib import Path
 
-from lib.cli_helpers import add_common_args
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_SCRIPT = (
     REPO_ROOT / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
@@ -109,7 +107,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="Check OpenCode plugin specs in install and config sources."
     )
-    add_common_args(parser)
     parser.parse_args()
 
     try:
@@ -118,7 +115,7 @@ def main():
         return check_consistency(install_plugins, config_plugins)
     except (OSError, SyntaxError, ValueError) as error:
         print(f"ERROR: could not check plugin consistency: {error}", file=sys.stderr)
-        return 2
+        return 1
 
 
 if __name__ == "__main__":

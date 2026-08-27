@@ -117,7 +117,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure model providers in the Codex CLI configuration."
     )
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     args = parser.parse_args()
 
     config_dir = os.path.expanduser("~/.codex")

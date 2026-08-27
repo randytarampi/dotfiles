@@ -10,8 +10,13 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0 <linux|windows>"
 export COMMON_HELP_TEXT="Install the configured developer fonts for the selected platform."
+export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
 
 MESLO_DZ_FALLBACK_URL="https://github.com/andreberg/Meslo-Font/raw/master/dist/v1.2.1/Meslo%20LG%20DZ%20v1.2.1.zip"
 MESLO_DZ_URL="$MESLO_DZ_FALLBACK_URL"
@@ -25,6 +30,11 @@ download_and_extract_font() {
 
   if [[ -d "$dest_dir" ]] && ls "$dest_dir"/*.ttf &>/dev/null; then
     info "$name already installed (found .ttf files in $dest_dir)"
+    return 0
+  fi
+
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would download and install $name into $dest_dir"
     return 0
   fi
 
@@ -82,21 +92,31 @@ install_linux() {
 
   if command -v apt-get &>/dev/null; then
     package_manager="apt-get"
-    sudo apt-get install -y fonts-jetbrains-mono fonts-source-code-pro ||
-      warn "apt-get font installation failed; continuing with manual downloads"
+    if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+      info "[DRY RUN] Would install fonts-jetbrains-mono and fonts-source-code-pro with apt-get"
+    else
+      sudo apt-get install -y fonts-jetbrains-mono fonts-source-code-pro ||
+        warn "apt-get font installation failed; continuing with manual downloads"
+    fi
   elif command -v dnf &>/dev/null; then
     package_manager="dnf"
-    sudo dnf install -y jetbrains-mono-fonts adobe-source-code-pro-fonts ||
-      warn "dnf font installation failed; continuing with manual downloads"
+    if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+      info "[DRY RUN] Would install jetbrains-mono-fonts and adobe-source-code-pro-fonts with dnf"
+    else
+      sudo dnf install -y jetbrains-mono-fonts adobe-source-code-pro-fonts ||
+        warn "dnf font installation failed; continuing with manual downloads"
+    fi
   else
     warn "Neither apt-get nor dnf found; downloading package fonts manually"
   fi
 
-  resolve_meslo_dz_url
+  [[ "$COMMON_DRY_RUN" == "1" ]] || resolve_meslo_dz_url
   download_and_extract_font "meslo-lg-dz" "$MESLO_DZ_URL" "$font_root/meslo-lg-dz"
   download_and_extract_font "meslo-nerd" "$MESLO_NERD_URL" "$font_root/meslo-nerd"
 
-  if command -v fc-cache &>/dev/null; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would refresh the font cache"
+  elif command -v fc-cache &>/dev/null; then
     fc-cache -f || warn "fc-cache failed"
   else
     warn "fc-cache not found; refresh the font cache manually"
@@ -112,6 +132,10 @@ Font directory: $font_root"
 install_windows() {
   local temp_dir powershell_script
 
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would download, register, and copy Windows fonts"
+    return 0
+  fi
   temp_dir="$(mktemp -d)"
   trap 'rm -rf "$temp_dir"' RETURN
 

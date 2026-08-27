@@ -8,11 +8,18 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Reinstall all installed Node.js LTS versions with the latest npm."
+export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
 
 export NVM_DIR="$HOME/.nvm"
-mkdir -p "$NVM_DIR" 2>/dev/null
+if [[ "$COMMON_DRY_RUN" != "1" ]]; then
+  mkdir -p "$NVM_DIR" 2>/dev/null
+fi
 if [ -s "$NVM_DIR/nvm.sh" ]; then
   . "$NVM_DIR/nvm.sh"
 elif [ -s "$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/nvm/nvm.sh" ]; then
@@ -29,7 +36,11 @@ LTS_VERSIONS=$(nvm ls --no-colors | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/
 info "Reinstalling all LTS node versions with latest npm and global packages from v$DEFAULT_VERSION..."
 for ver in $LTS_VERSIONS; do
   info "Reinstalling node $ver..."
-  nvm install "$ver" --reinstall-packages-from="$DEFAULT_VERSION" --latest-npm 2>&1 || warn "node $ver reinstall failed"
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would reinstall node $ver with latest npm and global packages"
+  else
+    nvm install "$ver" --reinstall-packages-from="$DEFAULT_VERSION" --latest-npm 2>&1 || warn "node $ver reinstall failed"
+  fi
 done
 
 ok "All LTS versions reinstalled."

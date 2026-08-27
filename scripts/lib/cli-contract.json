@@ -78,11 +78,13 @@
       "path": "scripts/configure-acp-agents.py",
       "capabilities": [
         "public",
-        "mutates"
+        "mutates",
+        "tier_selector"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
+        "--dry-run",
         "--preset",
         "--output",
         "--slim-file",
@@ -120,7 +122,7 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup"
+        "--skip"
       ],
       "positional_operand": null,
       "child_scripts": [
@@ -149,9 +151,10 @@
         "mutates",
         "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
+        "--dry-run",
         "--no-backup"
       ],
       "positional_operand": null,
@@ -177,11 +180,14 @@
       "path": "scripts/configure-ddns.py",
       "capabilities": [
         "public",
-        "mutates"
+        "mutates",
+        "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run",
+        "--no-backup"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -198,40 +204,17 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup",
-        "--models",
-        "--dirs",
-        "--mcp",
-        "--all",
-        "--all-tools",
-        "--tools",
-        "--project-mcps",
-        "--project-dir"
+        "--min-reasoning-embedding",
+        "--skip",
+        "--project-dir",
+        "--local-fallback-preset",
+        "--local-fallback-role",
+        "--local-fallback-placeholder"
       ],
       "positional_operand": null,
       "child_scripts": [
         "configure-mcps.py",
         "generate-jetbrains-profiles.py"
-      ]
-    },
-    {
-      "path": "scripts/configure-jetbrains-workspace-project.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "orchestrates"
-      ],
-      "enforcement": "pending",
-      "failure_policy": "fail_fast",
-      "accepted_flags": [
-        "--help",
-        "--workspace-root",
-        "--project-dir"
-      ],
-      "positional_operand": null,
-      "child_scripts": [
-        "_configure-jetbrains-workspace-project.py",
-        "configure-project.py"
       ]
     },
     {
@@ -242,7 +225,7 @@
         "backups",
         "scope_selector"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--mode",
@@ -267,7 +250,7 @@
         "scope_selector",
         "orchestrates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "failure_policy": "fail_fast",
       "accepted_flags": [
         "--help",
@@ -290,9 +273,10 @@
       "path": "scripts/configure-codex.py",
       "capabilities": [
         "public",
-        "mutates"
+        "mutates",
+        "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--dry-run",
@@ -305,11 +289,14 @@
       "path": "scripts/configure-meridian.py",
       "capabilities": [
         "public",
-        "mutates"
+        "mutates",
+        "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run",
+        "--no-backup"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -320,9 +307,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -334,7 +322,7 @@
         "mutates",
         "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--dry-run",
@@ -344,38 +332,16 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/configure-opencode-project.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "orchestrates"
-      ],
-      "enforcement": "pending",
-      "failure_policy": "fail_fast",
-      "accepted_flags": [
-        "--help",
-        "--preset",
-        "--steps",
-        "--workspace-root",
-        "--project-mcps",
-        "--mcps",
-        "--all-mcps"
-      ],
-      "positional_operand": null,
-      "child_scripts": [
-        "configure-project.py"
-      ]
-    },
-    {
       "path": "scripts/configure-opencode-tier.py",
       "capabilities": [
         "public",
         "mutates",
         "tier_selector"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
+        "--dry-run",
         "--preset",
         "--no-local-fallbacks",
         "--local-fallback-role",
@@ -383,7 +349,7 @@
         "--local-fallback-placeholder",
         "--min-reasoning-embedding"
       ],
-      "positional_operand": "tier",
+      "positional_operand": null,
       "child_scripts": []
     },
     {
@@ -393,13 +359,14 @@
         "mutates",
         "backups"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--preset",
         "--dry-run",
         "--show-secrets",
-        "--no-backup"
+        "--no-backup",
+        "--min-reasoning-embedding"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -423,7 +390,9 @@
         "--mode",
         "--local-fallback-preset",
         "--local-fallback-role",
-        "--local-fallback-placeholder"
+        "--local-fallback-placeholder",
+        "--min-reasoning-embedding",
+        "--skip"
       ],
       "positional_operand": null,
       "child_scripts": [
@@ -447,7 +416,6 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup",
         "--preset",
         "--steps",
         "--skip",
@@ -458,18 +426,16 @@
         "--mcps",
         "--mcp-tools",
         "--acp-agents",
-        "--junie-dirs",
-        "--junie-mcp",
         "--local-fallback-preset",
         "--local-fallback-placeholder",
-        "--local-fallback-role"
+        "--local-fallback-role",
+        "--min-reasoning-embedding"
       ],
       "positional_operand": null,
       "child_scripts": [
         "configure-opencode.py",
         "configure-opencode-tier.py",
         "configure-mcps.py",
-        "configure-jetbrains-workspace-project.py",
         "configure-jetbrains-ai.py",
         "configure-acp-agents.py",
         "configure-secrets.py"
@@ -483,10 +449,11 @@
         "scope_selector",
         "orchestrates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "failure_policy": "fail_fast",
       "accepted_flags": [
         "--help",
+        "--dry-run",
         "--target",
         "--all",
         "--configure-jetbrains-ai",
@@ -521,9 +488,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -534,7 +502,7 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--dry-run"
@@ -548,11 +516,12 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
-      "positional_operand": null,
+      "positional_operand": "platform",
       "child_scripts": []
     },
     {
@@ -561,9 +530,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": "brewfile",
       "child_scripts": []
@@ -574,9 +544,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -587,9 +558,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -600,9 +572,10 @@
         "public",
         "mutates"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -636,9 +609,9 @@
     {
       "path": "scripts/check-plugin-consistency.py",
       "capabilities": [
-        "help"
+        "public"
       ],
-      "enforcement": "pending",
+      "enforcement": "strict",
       "accepted_flags": [
         "--help"
       ],
@@ -661,17 +634,31 @@
     },
     {
       "path": "scripts/install-cortex.sh",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-cortex.py",
-      "capabilities": ["public", "mutates", "backups"],
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -691,11 +678,12 @@
         "--preset",
         "--no-backup",
         "--mode",
-        "--no-mcp",
+        "--skip",
         "--no-local-fallbacks",
         "--local-fallback-placeholder",
         "--local-fallback-role",
         "--local-fallback-preset",
+        "--min-reasoning-embedding",
         "--ollama-base-url"
       ],
       "positional_operand": null,

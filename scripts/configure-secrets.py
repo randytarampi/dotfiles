@@ -31,11 +31,6 @@ def main():
         "--all", action="store_true", help="Writes to all known AI tool dirs"
     )
     parser.add_argument(
-        "--configure-jetbrains-ai",
-        action="store_true",
-        help="Also run configure-jetbrains-ai.py",
-    )
-    parser.add_argument(
         "--mode",
         choices=["global", "project"],
         default="global",
@@ -231,16 +226,6 @@ export BETTERSTACK_API_TOKEN="{betterstack_token}"
                     logger.info(f"Added .env to {gitignore_file}")
                 except Exception as e:
                     logger.warning(f"Failed to update {gitignore_file}: {e}")
-
-    # Optionally configure JetBrains AI
-    if args.configure_jetbrains_ai:
-        logger.info("Configuring JetBrains AI...")
-        configure_jb_py = os.path.join(SCRIPT_DIR, "configure-jetbrains-ai.py")
-        try:
-            subprocess.run([sys.executable, configure_jb_py, "--all"], check=True)
-            logger.info("JetBrains AI configured")
-        except Exception as e:
-            logger.error(f"Failed to execute configure-jetbrains-ai.py: {e}")
 
     summary_lines = [
         "Environment resolved!",

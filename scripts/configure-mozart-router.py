@@ -113,6 +113,10 @@ def main():
         logger.critical(f"Failed to write config: {e}")
         sys.exit(1)
 
+    if args.dry_run:
+        logger.info("(dry-run: skipped mozart-router doctor)")
+        return
+
     # Run doctor check
     try:
         res = subprocess.run(["mozart-router", "doctor"])

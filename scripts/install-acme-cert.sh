@@ -10,8 +10,17 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0"
 export COMMON_HELP_TEXT="Issue and install configured ACME certificates."
+export COMMON_STRICT=1
 parse_common_args "$@"
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+if [[ "$COMMON_NO_BACKUP" == "1" ]]; then
+  printf '%s\n' "Error: --no-backup is not supported by this script" >&2
+  exit 2
+fi
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  info "[DRY RUN] Would issue and install configured ACME certificates without changing certificates or services"
+  exit 0
+fi
 # shellcheck disable=SC1091
 source "$LIB_DIR/env.sh"
 

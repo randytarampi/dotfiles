@@ -3,16 +3,15 @@
 import argparse
 
 
-def add_common_args(parser):
+def add_common_args(parser, *, no_backup=False):
     parser.allow_abbrev = False
     parser.add_argument(
-        "--dry-run", action="store_true", help="preview without writing to filesystem"
+        "--dry-run", action="store_true", help="Show what would be done without writing"
     )
-    parser.add_argument(
-        "--no-backup",
-        action="store_true",
-        help="disable backup file creation (backup-on default)",
-    )
+    if no_backup:
+        parser.add_argument(
+            "--no-backup", action="store_true", help="Skip backup before modifying"
+        )
     return parser
 
 
@@ -23,6 +22,49 @@ def forward_common_args(args):
     if getattr(args, "no_backup", False):
         flags.append("--no-backup")
     return flags
+
+
+def add_skip_arg(parser, allowed_steps):
+    parser.add_argument(
+        "--skip",
+        default="",
+        help=f"Comma-separated steps to skip (allowed: {','.join(allowed_steps)})",
+    )
+    return parser
+
+
+def parse_skip(value, allowed_steps):
+    if not value:
+        return set()
+    steps = set(s.strip() for s in value.split(",") if s.strip())
+    unknown = steps - set(allowed_steps)
+    if unknown:
+        import sys
+
+        print(
+            f"Error: unknown skip step(s): {', '.join(sorted(unknown))}. "
+            f"Allowed: {', '.join(sorted(allowed_steps))}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return steps
+
+
+def add_min_reasoning_embedding_arg(parser):
+    parser.add_argument(
+        "--min-reasoning-embedding",
+        type=int,
+        default=None,
+        help="Minimum embedding length for reasoning models (0=disabled)",
+    )
+    return parser
+
+
+def forward_min_reasoning_embedding_arg(args):
+    result = []
+    if args.min_reasoning_embedding is not None:
+        result.extend(["--min-reasoning-embedding", str(args.min_reasoning_embedding)])
+    return result
 
 
 def add_local_fallback_args(parser):

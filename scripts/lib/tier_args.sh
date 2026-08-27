@@ -14,6 +14,9 @@
 
 build_tier_extra_args() {
   TIER_EXTRA_ARGS=()
+  if [[ -n "${DOTFILES_MIN_REASONING_EMBEDDING:-}" ]]; then
+    TIER_EXTRA_ARGS+=("--min-reasoning-embedding" "$DOTFILES_MIN_REASONING_EMBEDDING")
+  fi
   if [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then
     TIER_EXTRA_ARGS+=("--local-fallback-preset" "$DOTFILES_LOCAL_FALLBACK_PRESET")
   fi

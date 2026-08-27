@@ -15,13 +15,114 @@ source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0 [options]"
 export COMMON_HELP_TEXT="Run all AI tool configure scripts in dependency order.
 
-Available flags:
-  --help       Show this help message
-  --dry-run    Preview changes without writing to the filesystem
-  --no-backup  Disable backup file creation
+Each step is gated on its DOTFILES_RUN_*_SETUP environment variable.
 
-Each step is gated on its DOTFILES_RUN_*_SETUP environment variable."
-COMMON_STRICT=1 parse_common_args "$@"
+Available flags:
+  --help                          Show this help message
+  --dry-run                       Preview changes without writing to the filesystem
+  --skip STEP[,STEP,...]          Comma-separated steps to skip
+  --preset TIER                   Override the auto-detected tier
+  --mode MODE                     Configuration mode: global or project (default: global)
+  --local-fallback-placeholder C=model  Override _local:<category> resolution (e.g. code-gen=ollama/ornith-1.5:35b)
+  --local-fallback-role R=M       Override local model for a role (e.g. observer=ollama/model)
+  --local-fallback-preset TIER    Which local tier's placeholder pattern to use for local fallbacks
+  --min-reasoning-embedding N     Minimum embedding_length for reasoning models (0=disabled)"
+SKIP_STEPS=""
+FILTERED_ARGS=()
+USER_PRESET=""
+PRESET_CLI=0
+CONFIG_MODE="global"
+LOCAL_FALLBACK_ARGS=()
+LOCAL_FALLBACK_PLACEHOLDER_CLI=0
+LOCAL_FALLBACK_ROLE_CLI=0
+LOCAL_FALLBACK_PRESET_CLI=0
+MIN_REASONING_EMBEDDING=""
+MIN_REASONING_EMBEDDING_CLI=0
+_value_expected=""
+for arg in "$@"; do
+  if [[ -n "$_value_expected" ]]; then
+    case "$_value_expected" in
+    skip) SKIP_STEPS="$arg" ;;
+    preset)
+      USER_PRESET="$arg"
+      PRESET_CLI=1
+      ;;
+    mode) CONFIG_MODE="$arg" ;;
+    local-fallback-placeholder)
+      LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "$arg")
+      LOCAL_FALLBACK_PLACEHOLDER_CLI=1
+      ;;
+    local-fallback-role)
+      LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "$arg")
+      LOCAL_FALLBACK_ROLE_CLI=1
+      ;;
+    local-fallback-preset)
+      LOCAL_FALLBACK_ARGS+=("--local-fallback-preset" "$arg")
+      LOCAL_FALLBACK_PRESET_CLI=1
+      ;;
+    min-reasoning-embedding)
+      MIN_REASONING_EMBEDDING="$arg"
+      MIN_REASONING_EMBEDDING_CLI=1
+      ;;
+    esac
+    _value_expected=""
+  elif [[ "$arg" == --skip=* ]]; then
+    SKIP_STEPS="${arg#--skip=}"
+  elif [[ "$arg" == --preset=* ]]; then
+    USER_PRESET="${arg#--preset=}"
+    PRESET_CLI=1
+  elif [[ "$arg" == --mode=* ]]; then
+    CONFIG_MODE="${arg#--mode=}"
+  elif [[ "$arg" == --local-fallback-placeholder=* ]]; then
+    LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "${arg#--local-fallback-placeholder=}")
+    LOCAL_FALLBACK_PLACEHOLDER_CLI=1
+  elif [[ "$arg" == --local-fallback-role=* ]]; then
+    LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "${arg#--local-fallback-role=}")
+    LOCAL_FALLBACK_ROLE_CLI=1
+  elif [[ "$arg" == --local-fallback-preset=* ]]; then
+    LOCAL_FALLBACK_ARGS+=("--local-fallback-preset" "${arg#--local-fallback-preset=}")
+    LOCAL_FALLBACK_PRESET_CLI=1
+  elif [[ "$arg" == --min-reasoning-embedding=* ]]; then
+    MIN_REASONING_EMBEDDING="${arg#--min-reasoning-embedding=}"
+    MIN_REASONING_EMBEDDING_CLI=1
+  elif [[ "$arg" == "--skip" ]]; then
+    _value_expected="skip"
+  elif [[ "$arg" == "--preset" ]]; then
+    _value_expected="preset"
+  elif [[ "$arg" == "--mode" ]]; then
+    _value_expected="mode"
+  elif [[ "$arg" == "--local-fallback-placeholder" ]]; then
+    _value_expected="local-fallback-placeholder"
+  elif [[ "$arg" == "--local-fallback-role" ]]; then
+    _value_expected="local-fallback-role"
+  elif [[ "$arg" == "--local-fallback-preset" ]]; then
+    _value_expected="local-fallback-preset"
+  elif [[ "$arg" == "--min-reasoning-embedding" ]]; then
+    _value_expected="min-reasoning-embedding"
+  else
+    FILTERED_ARGS+=("$arg")
+  fi
+done
+if [[ -n "$_value_expected" ]]; then
+  printf 'Error: --%s requires a value\n' "${_value_expected}" >&2
+  exit 2
+fi
+if [[ "$CONFIG_MODE" != "global" && "$CONFIG_MODE" != "project" ]]; then
+  printf 'Error: --mode must be global or project\n' >&2
+  exit 2
+fi
+IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
+for _skip in "${_skip_list[@]}"; do
+  case "$_skip" in
+  cleanup | npm-packages | secrets | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | opencode-restart | "") ;;
+  *)
+    printf 'Error: unknown skip step: %s\n' "$_skip" >&2
+    exit 2
+    ;;
+  esac
+done
+step_skipped() { [[ ",${SKIP_STEPS}," == *",$1,"* ]]; }
+COMMON_STRICT=1 parse_common_args "${FILTERED_ARGS[@]}"
 
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
@@ -44,41 +145,65 @@ run_step() {
 # Load environment for API keys and gate vars
 load_env || warn "\$HOME/.env not found, skipping env load"
 
+# Command-line values take precedence over global environment defaults.
+if ((PRESET_CLI == 0)) && [[ -n "${DOTFILES_OPENCODE_TIER:-}" ]]; then
+  USER_PRESET="$DOTFILES_OPENCODE_TIER"
+fi
+if ((LOCAL_FALLBACK_PLACEHOLDER_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_PLACEHOLDER:-}" ]]; then
+  IFS=',' read -ra _placeholders <<<"$DOTFILES_LOCAL_FALLBACK_PLACEHOLDER"
+  for _placeholder in "${_placeholders[@]}"; do
+    [[ -n "$_placeholder" ]] && LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "$_placeholder")
+  done
+fi
+if ((LOCAL_FALLBACK_ROLE_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_ROLE:-}" ]]; then
+  IFS=',' read -ra _roles <<<"$DOTFILES_LOCAL_FALLBACK_ROLE"
+  for _role in "${_roles[@]}"; do
+    [[ -n "$_role" ]] && LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "$_role")
+  done
+fi
+if ((LOCAL_FALLBACK_PRESET_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then
+  LOCAL_FALLBACK_ARGS+=("--local-fallback-preset" "$DOTFILES_LOCAL_FALLBACK_PRESET")
+fi
+if ((MIN_REASONING_EMBEDDING_CLI == 0)) && [[ -n "${DOTFILES_MIN_REASONING_EMBEDDING:-}" ]]; then
+  MIN_REASONING_EMBEDDING="$DOTFILES_MIN_REASONING_EMBEDDING"
+fi
+
 # Clean up stale files from chezmoi renames.
 # When a chezmoi source file is renamed (e.g., dcp.json → dcp.jsonc),
 # chezmoi writes the new file but leaves the old one. Remove known orphans.
-info "Cleaning stale chezmoi targets..."
+if ! step_skipped cleanup; then
+  info "Cleaning stale chezmoi targets..."
 
-OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
+  OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
 
-# dcp.json was renamed to dcp.jsonc in the chezmoi source.
-# If both exist, dcp.jsonc takes precedence (DCP config.ts prefers .jsonc),
-# but the stale dcp.json causes verify-config.py to report a shadowing error.
-if [[ -f "$OPENCODE_CONFIG_DIR/dcp.json" && -f "$OPENCODE_CONFIG_DIR/dcp.jsonc" ]]; then
-  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-    info "Would remove stale $OPENCODE_CONFIG_DIR/dcp.json (dcp.jsonc exists)"
-  else
-    rm -f "$OPENCODE_CONFIG_DIR/dcp.json"
-    ok "Removed stale dcp.json (superseded by dcp.jsonc)"
+  # dcp.json was renamed to dcp.jsonc in the chezmoi source.
+  # If both exist, dcp.jsonc takes precedence (DCP config.ts prefers .jsonc),
+  # but the stale dcp.json causes verify-config.py to report a shadowing error.
+  if [[ -f "$OPENCODE_CONFIG_DIR/dcp.json" && -f "$OPENCODE_CONFIG_DIR/dcp.jsonc" ]]; then
+    if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+      info "Would remove stale $OPENCODE_CONFIG_DIR/dcp.json (dcp.jsonc exists)"
+    else
+      rm -f "$OPENCODE_CONFIG_DIR/dcp.json"
+      ok "Removed stale dcp.json (superseded by dcp.jsonc)"
+    fi
   fi
-fi
 
-# SmallCode was removed from the managed MCP registry. Remove its old config
-# directory and stale server entries left behind by merge-based MCP writers.
-SMALLCODE_CONFIG_DIR="$HOME/.config/smallcode"
-if [[ -d "$SMALLCODE_CONFIG_DIR" ]]; then
-  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-    info "Would remove stale $SMALLCODE_CONFIG_DIR"
-  else
-    rm -rf "$SMALLCODE_CONFIG_DIR"
-    ok "Removed stale SmallCode configuration directory"
+  # SmallCode was removed from the managed MCP registry. Remove its old config
+  # directory and stale server entries left behind by merge-based MCP writers.
+  SMALLCODE_CONFIG_DIR="$HOME/.config/smallcode"
+  if [[ -d "$SMALLCODE_CONFIG_DIR" ]]; then
+    if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+      info "Would remove stale $SMALLCODE_CONFIG_DIR"
+    else
+      rm -rf "$SMALLCODE_CONFIG_DIR"
+      ok "Removed stale SmallCode configuration directory"
+    fi
   fi
-fi
 
-if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-  info "Would remove stale SmallCode MCP entries from generated tool configs"
-else
-  python3 - "$HOME" <<'PY'
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "Would remove stale SmallCode MCP entries from generated tool configs"
+  else
+    python3 - "$HOME" <<'PY'
 import json
 import os
 import sys
@@ -125,21 +250,30 @@ for root in roots:
             except (OSError, ValueError):
                 continue
 PY
+  fi
 fi
 
 info "Running full configuration pass..."
 
 # Detect tiers (detect_tier sets $TIER, not the env var itself)
 detect_tier DOTFILES_OPENCODE_TIER
+if [[ -n "${USER_PRESET:-}" ]]; then TIER="$USER_PRESET"; fi
 OC_TIER="$TIER"
 build_tier_extra_args
-OC_ARGS=(${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"} ${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"})
+OC_ARGS=(--mode "$CONFIG_MODE" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"} ${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"} ${LOCAL_FALLBACK_ARGS[@]+"${LOCAL_FALLBACK_ARGS[@]}"})
+if [[ -n "$MIN_REASONING_EMBEDDING" ]]; then
+  OC_ARGS+=("--min-reasoning-embedding" "$MIN_REASONING_EMBEDDING")
+fi
+JETBRAINS_ARGS=("${LOCAL_FALLBACK_ARGS[@]+"${LOCAL_FALLBACK_ARGS[@]}"}")
+if [[ -n "$MIN_REASONING_EMBEDDING" ]]; then
+  JETBRAINS_ARGS+=("--min-reasoning-embedding" "$MIN_REASONING_EMBEDDING")
+fi
 
 # 0.5. Reconcile npm "..." entries from the base Brewfile into the active nvm node.
 #       Runs after chezmoi apply (nvm should be active on PATH here). warn-on-fail.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping npm package reconciliation (dry-run mode)"
-elif [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped npm-packages && [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" == "1" ]]; then
   info "Reconciling npm packages from base Brewfile into active node..."
   run_step "npm package reconciliation" bash "$SCRIPT_DIR/install-npm-brewfile-packages.sh" "$SCRIPT_DIR/../Brewfile"
 else
@@ -150,7 +284,7 @@ fi
 #    Bridges the gap left by run_onchange_14-configure-secrets (which can't hash ~/.env).
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping secrets distribution (dry-run mode)"
-elif [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped secrets && [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; then
   info "Configuring secrets and AI tool .env files..."
   run_step "Secrets configuration" python3 "$SCRIPT_DIR/configure-secrets.py"
 else
@@ -160,15 +294,15 @@ fi
 # 1.5. Refresh Junie model profiles (models-only; dir scaffolding handled by run_onchange_06)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Junie model refresh (dry-run mode)"
-elif [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
   info "Refreshing Junie model profiles (DOTFILES_RUN_JUNIE_CLI_SETUP=1)..."
-  run_step "Junie model profiles refreshed" python3 "$SCRIPT_DIR/configure-jetbrains-ai.py" --models
+  run_step "Junie model profiles refreshed" python3 "$SCRIPT_DIR/configure-jetbrains-ai.py" --skip dirs ${JETBRAINS_ARGS[@]+"${JETBRAINS_ARGS[@]}"}
 else
   info "DOTFILES_RUN_JUNIE_CLI_SETUP='${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}' — skipping junie models refresh"
 fi
 
 # 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
-if [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
+if ! step_skipped mcps && [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
   info "Configuring MCP servers..."
   run_step "MCP configuration" python3 "$SCRIPT_DIR/configure-mcps.py" --mode global ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 else
@@ -179,10 +313,10 @@ fi
 OC_SUCCESS=0
 
 # 3. OpenCode config (tier, models, voice — creates oh-my-opencode-slim.json)
-if [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
+if ! step_skipped opencode && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
   info "Configuring OpenCode (tier=$OC_TIER)..."
   _failures_before="$FAILURES"
-  run_step "OpenCode configuration" python3 "$SCRIPT_DIR/configure-opencode.py" --preset "$OC_TIER" "${OC_ARGS[@]}"
+  run_step "OpenCode configuration" python3 "$SCRIPT_DIR/configure-opencode.py" --preset "$OC_TIER" --skip mcps "${OC_ARGS[@]}"
   if [[ "$FAILURES" -eq "$_failures_before" ]]; then
     OC_SUCCESS=1
   fi
@@ -191,7 +325,7 @@ else
 fi
 
 # 3.1. Pi config (reads DOTFILES_PI_TIER if set, falls back to the OpenCode tier)
-if [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
+if ! step_skipped pi && [[ "${DOTFILES_RUN_PI_SETUP:-0}" == "1" ]]; then
   PI_TIER="${DOTFILES_PI_TIER:-$OC_TIER}"
   info "Configuring Pi (tier=$PI_TIER)..."
   run_step "Pi configuration" python3 "$SCRIPT_DIR/configure-pi.py" --preset "$PI_TIER" "${OC_ARGS[@]}"
@@ -200,7 +334,7 @@ else
 fi
 
 # 3.2. Cortex Code configuration (Snowflake specialist)
-if [[ "${DOTFILES_RUN_CORTEX_SETUP:-0}" == "1" ]]; then
+if ! step_skipped cortex && [[ "${DOTFILES_RUN_CORTEX_SETUP:-0}" == "1" ]]; then
   info "Configuring Cortex Code..."
   run_step "Cortex configuration" python3 "$SCRIPT_DIR/configure-cortex.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 else
@@ -210,7 +344,7 @@ fi
 # 3.5. Configure Meridian proxy plugin (must run after OpenCode; injects plugin into opencode.json)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Meridian configuration (dry-run mode)"
-elif [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped meridian && [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
   info "Configuring Meridian plugin (DOTFILES_RUN_MERIDIAN_SETUP=1)..."
   run_step "Meridian configuration" python3 "$SCRIPT_DIR/configure-meridian.py"
 else
@@ -220,7 +354,7 @@ fi
 # 3.6. Configure Codex CLI provider (must run after MCP config which also writes to config.toml)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Codex configuration (dry-run mode)"
-elif [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped codex && [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then
   info "Configuring Codex CLI provider (DOTFILES_RUN_MERIDIAN_SETUP=1)..."
   run_step "Codex configuration" python3 "$SCRIPT_DIR/configure-codex.py"
 else
@@ -230,7 +364,7 @@ fi
 # 4. Mozart router
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Mozart configuration (dry-run mode)"
-elif [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped mozart && [[ "${DOTFILES_RUN_MOZART_SETUP:-0}" == "1" ]]; then
   info "Configuring Mozart router..."
   run_step "Mozart configuration" python3 "$SCRIPT_DIR/configure-mozart-router.py"
 else
@@ -238,7 +372,7 @@ else
 fi
 
 # 7. Agent guidance distribution (writes ~/AGENTS.md and 6 other agent files)
-if [[ "${DOTFILES_RUN_AGENT_GUIDANCE_SETUP:-0}" == "1" ]]; then
+if ! step_skipped agent-guidance && [[ "${DOTFILES_RUN_AGENT_GUIDANCE_SETUP:-0}" == "1" ]]; then
   info "Distributing agent guidance..."
   if [[ "$COMMON_DRY_RUN" == "1" ]]; then
     run_step "Agent guidance" python3 "$SCRIPT_DIR/configure-agent-guidance.py" --dry-run
@@ -252,7 +386,7 @@ fi
 # 7.5. CodeGraph MCP config (modifies opencode.json — must run after OpenCode)
 #      Runs AFTER agent guidance (step 7) so that codegraph install's marker-fenced
 #      CODEGRAPH guidance block in agent files is not clobbered by configure-agent-guidance.py.
-if [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]; then
+if ! step_skipped codegraph && [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]; then
   if command -v codegraph >/dev/null 2>&1; then
     if [[ "$COMMON_DRY_RUN" == "1" ]]; then
       info "Skipping CodeGraph configuration (dry-run mode)"
@@ -270,7 +404,7 @@ fi
 # 7.6. CodeGraph per-project indexes (batch init .codegraph/ in git repos under ~/Development)
 #      Runs AFTER agent guidance (step 7) and codegraph install (step 7.5), so that
 #      the marker-fenced CODEGRAPH guidance block is already preserved in agent files.
-if [[ "${DOTFILES_RUN_CODEGRAPH_INDEX_SETUP:-0}" == "1" ]]; then
+if ! step_skipped codegraph-indexes && [[ "${DOTFILES_RUN_CODEGRAPH_INDEX_SETUP:-0}" == "1" ]]; then
   if command -v codegraph >/dev/null 2>&1; then
     info "Indexing CodeGraph for git repos..."
     if [[ "$COMMON_DRY_RUN" == "1" ]]; then
@@ -286,7 +420,7 @@ else
 fi
 
 # 7.7. Ollama daemon env config (launchctl/systemd/setx — applies OLLAMA_* tuning vars)
-if [[ "${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}" == "1" ]]; then
+if ! step_skipped ollama-daemon && [[ "${DOTFILES_RUN_OLLAMA_DAEMON_SETUP:-0}" == "1" ]]; then
   info "Configuring Ollama daemon env vars (DOTFILES_RUN_OLLAMA_DAEMON_SETUP=1)..."
   # This is a chezmoi script (run_onchange_27), not a Python configure script.
   # configure-all.sh doesn't re-run it — chezmoi apply handles it.
@@ -297,7 +431,7 @@ else
 fi
 
 # 7b. Skills distribution (manifest-driven reconcile via `skills` CLI + symlinks to all agent dirs)
-if [[ "${DOTFILES_RUN_SKILLS_SETUP:-0}" == "1" ]]; then
+if ! step_skipped skills && [[ "${DOTFILES_RUN_SKILLS_SETUP:-0}" == "1" ]]; then
   info "Distributing skills..."
   if [[ "$COMMON_DRY_RUN" == "1" ]]; then
     run_step "Skills distribution" python3 "$SCRIPT_DIR/configure-skills.py" --dry-run
@@ -311,7 +445,7 @@ fi
 # 8a. DDNS
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping DDNS configuration (dry-run mode)"
-elif [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" == "1" ]]; then
+elif ! step_skipped ddns && [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" == "1" ]]; then
   info "Configuring ddns-route53..."
   run_step "ddns-route53 configuration" python3 "$SCRIPT_DIR/configure-ddns.py"
 fi
@@ -319,7 +453,7 @@ fi
 # 8b. Caddy config (LAN exposure front door)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Caddy configuration (dry-run mode)"
-elif [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
+elif ! step_skipped caddy && [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   info "Configuring Caddy..."
   run_step "Caddy configuration" python3 "$SCRIPT_DIR/configure-caddy.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 fi
@@ -328,7 +462,7 @@ fi
 #     Only restart if the OpenCode config step succeeded.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping service restart (dry-run mode)"
-elif [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" && "$OC_SUCCESS" == "1" ]]; then
+elif ! step_skipped opencode-restart && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" && "$OC_SUCCESS" == "1" ]]; then
   info "Restarting OpenCode Web to pick up config changes..."
   if [[ "$(uname)" == "Darwin" ]]; then
     launchctl bootout "gui/$(id -u)/com.opencode.web" 2>/dev/null || true

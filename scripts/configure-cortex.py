@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure Snowflake Cortex Code CLI", allow_abbrev=False
     )
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     args = parser.parse_args()
     snowflake_home = Path(os.environ.get("SNOWFLAKE_HOME", "~/.snowflake")).expanduser()
     if not (snowflake_home / "connections.toml").exists() or not shutil.which("snow"):
@@ -40,7 +40,6 @@ def main():
         },
         cortex_dir
         / "permissions.json": {"defaultMode": "ask", "dangerouslyAllowAll": False},
-        cortex_dir / "mcp.json": {"mcpServers": {}},
     }
     for path, data in files.items():
         if args.dry_run:

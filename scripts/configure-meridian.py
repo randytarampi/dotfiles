@@ -27,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Cleanly appends the Meridian plugin path to the OpenCode configuration."
     )
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     args = parser.parse_args()
 
     opencode_dir = os.environ.get("OPENCODE_DIR")
@@ -98,6 +98,10 @@ def main():
             if args.dry_run:
                 logger.info(f"Would append Meridian plugin path to {config_path}")
             else:
+                if os.path.exists(config_path) and not args.no_backup:
+                    backup_path = backup_file(config_path, enabled=True)
+                    if backup_path:
+                        logger.info(f"Backed up opencode.json to {backup_path}")
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(config, f, indent=2)
                     f.write("\n")

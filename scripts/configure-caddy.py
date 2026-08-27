@@ -391,7 +391,7 @@ def build_caddyfile(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the Caddyfile.")
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     args = parser.parse_args()
 
     if not load_env():
