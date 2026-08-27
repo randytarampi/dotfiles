@@ -45,11 +45,11 @@ ROLE_TO_BUILTIN = {
 }
 
 
-# Cache of model_id -> native context window (tokens) discovered via `ollama show`.
+# Cache of model_id -> Ollama model details discovered via `ollama show`.
 # A model's native window can be smaller than the global OLLAMA_CONTEXT_LENGTH cap
 # (e.g. a 128K model under a 192K cap), so we cap the advertised window at the
 # model's own limit to avoid asking it for tokens it can never hold.
-_native_ctx_cache = {}
+_model_details_cache = {}
 
 
 def _ollama_context_cap():
@@ -64,9 +64,14 @@ def _native_context(model_id):
     Returns the model's own context length, or None when unknown/unavailable.
     Cached per model so the `ollama show` subprocess runs at most once each.
     """
-    if model_id not in _native_ctx_cache:
-        _native_ctx_cache[model_id] = get_model_details(model_id).get("context_length")
-    return _native_ctx_cache[model_id]
+    return _model_details(model_id).get("context_length")
+
+
+def _model_details(model_id):
+    """Return cached Ollama details for a model."""
+    if model_id not in _model_details_cache:
+        _model_details_cache[model_id] = get_model_details(model_id)
+    return _model_details_cache[model_id]
 
 
 def _model_context_window(model_id, local):
@@ -109,6 +114,16 @@ def model_entry(model_id, name=None, local=False):
     keeps pi in sync with the Ollama daemon's KV sizing without ever asking a
     model for a window it can't hold.
     """
+    compat: dict[str, object] = {}
+    if local:
+        compat = {
+            "supportsDeveloperRole": False,
+            "supportsReasoningEffort": "thinking"
+            in _model_details(model_id).get("capabilities", []),
+        }
+        if compat["supportsReasoningEffort"]:
+            compat["thinkingFormat"] = "openai"
+
     return {
         "id": model_id,
         "name": name or model_id,
@@ -117,16 +132,7 @@ def model_entry(model_id, name=None, local=False):
         "contextWindow": _model_context_window(model_id, local),
         "maxTokens": 32000,
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-        **(
-            {
-                "compat": {
-                    "supportsDeveloperRole": False,
-                    "supportsReasoningEffort": False,
-                }
-            }
-            if local
-            else {}
-        ),
+        **({"compat": compat} if local else {}),
     }
 
 
@@ -507,9 +513,14 @@ def main():
     # Preserve any user-added agentOverrides we do not manage (e.g. a custom
     # agent the user added by hand). The six built-in names are (re)set
     # from the preset above; everything else is carried over so it survives
-    # a regenerate.
+    # a regenerate. Legacy entries written by pre-ROLE_TO_BUILTIN versions
+    # (string-form overrides keyed by preset role name, e.g.
+    # "orchestrator": "ollama/old-model") are dropped: role names are now
+    # system-owned (pinned via builtins or falling through to
+    # subagents.defaultModel), so carrying them over would pin roles to
+    # models that may no longer exist locally.
     prev_settings = out / "settings.json"
-    managed = set(ROLE_TO_BUILTIN.values())
+    managed = set(ROLE_TO_BUILTIN.values()) | set(role_models)
     if prev_settings.exists():
         try:
             old_overrides = (
