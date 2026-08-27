@@ -191,7 +191,7 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry dry-run ## Full verification suite
+verify: lint drift check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
