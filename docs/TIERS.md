@@ -20,7 +20,7 @@ Eleven tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of t
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
-| **pro** | Ollama Cloud (glm-5.2 orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
+| **pro** | Ollama Cloud (glm-5.3-flash orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
@@ -35,7 +35,7 @@ Eleven tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of t
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.2`, `glm-5.1`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.2`, `glm-5.1`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
 ### Anthropic Tier (`anthropic`)
 
@@ -309,7 +309,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use models like `glm-5.2`, `glm-5.1`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
+Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.2`, `glm-5.1`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
 ## OpenAI Models (gpt-5.6 Family)
 
@@ -374,6 +374,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
 | `glm-5.1` | standard | none | Upstream uses no variant for orchestrator |
 | `glm-5.2` | standard | max | 1M context; supports High/Max thinking effort; orchestrator uses max, oracle fallback uses max, other fallbacks use standard |
+| `glm-5.3-flash` | standard | max | 320B/18B MoE, 1M context, vision (images+video), always-on tunable thinking; orchestrator uses max (replaces glm-5.2 as primary orchestrator in pro/pro-plus); glm-5.2 remains as secondary fallback |
 | `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
 | `kimi-k2.7-code` | standard | none | Code-focused; mandatory thinking (cannot disable); ~30% lower thinking tokens vs kimi-k2.6 |

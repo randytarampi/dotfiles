@@ -4,7 +4,7 @@
   "presets": {
     "pro": {
       "orchestrator": {
-        "model": "ollama-cloud/glm-5.2",
+        "model": "ollama-cloud/glm-5.3-flash",
         "variant": "max",
         "skills": [
           "*"
@@ -69,7 +69,7 @@
     },
     "pro-plus": {
       "orchestrator": {
-        "model": "ollama-cloud/glm-5.2",
+        "model": "ollama-cloud/glm-5.3-flash",
         "variant": "max",
         "skills": [
           "*"
@@ -873,14 +873,15 @@
       },
       "fallback": {
         "orchestrator": [
+          "ollama-cloud/glm-5.2",
           "ollama-cloud/glm-5.1",
           "ollama-cloud/deepseek-v4-pro",
-          "ollama-cloud/nemotron-3-ultra",
-          "ollama-cloud/kimi-k3"
+          "ollama-cloud/nemotron-3-ultra"
         ],
         "oracle": [
           "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/glm-5.2",
+          "ollama-cloud/glm-5.3-flash",
           "ollama-cloud/kimi-k3"
         ],
         "librarian": [
@@ -897,7 +898,7 @@
           "ollama-cloud/kimi-k2.7-code"
         ],
         "designer": [
-          "ollama-cloud/glm-5.2",
+          "ollama-cloud/glm-5.3-flash",
           "ollama-cloud/deepseek-v4-pro",
           "ollama-cloud/nemotron-3-ultra"
         ],
@@ -931,6 +932,7 @@
       },
       "fallback": {
         "orchestrator": [
+          "ollama-cloud/glm-5.2",
           "ollama-cloud/glm-5.1",
           "openai/gpt-5.5",
           "ollama-cloud/deepseek-v4-pro",
@@ -940,6 +942,7 @@
           "openai/gpt-5.5",
           "ollama-cloud/nemotron-3-ultra",
           "ollama-cloud/glm-5.2",
+          "ollama-cloud/glm-5.3-flash",
           "ollama-cloud/kimi-k3"
         ],
         "librarian": [
@@ -955,7 +958,7 @@
           "ollama-cloud/qwen3.5:397b"
         ],
         "designer": [
-          "ollama-cloud/glm-5.2",
+          "ollama-cloud/glm-5.3-flash",
           "ollama-cloud/deepseek-v4-pro"
         ],
         "observer": [
@@ -1013,7 +1016,7 @@
         "designer": [
           "openai/gpt-5.6-terra",
           "openai/gpt-5.4-mini",
-          "ollama-cloud/glm-5.2"
+          "ollama-cloud/glm-5.3-flash"
         ],
         "observer": [
           "openai/gpt-5.6-luna",

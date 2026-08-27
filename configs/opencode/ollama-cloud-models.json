@@ -15,6 +15,9 @@
     "glm-5.2": {
       "name": "glm-5.2"
     },
+    "glm-5.3-flash": {
+      "name": "glm-5.3-flash"
+    },
     "deepseek-v4-pro": {
       "name": "deepseek-v4-pro"
     },
