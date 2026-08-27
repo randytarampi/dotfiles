@@ -17,3 +17,10 @@ fi
 detect_tier DOTFILES_PI_TIER
 build_tier_extra_args
 python3 "{{ .chezmoi.sourceDir }}/scripts/configure-pi.py" --preset "$TIER" "${TIER_EXTRA_ARGS[@]+"${TIER_EXTRA_ARGS[@]}"}"
+if [[ "$TIER" == local-* ]]; then
+  info "Local tier active; removing stale ~/.pi-local fallback configuration"
+  rm -f "${HOME}/.pi-local/agent/settings.json" "${HOME}/.pi-local/agent/models.json" "${HOME}/.pi-local/agent/auth.json"
+  rmdir "${HOME}/.pi-local/agent" "${HOME}/.pi-local" 2>/dev/null || true
+else
+  PI_CODING_AGENT_DIR="${HOME}/.pi-local/agent" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-pi.py" --preset "${DOTFILES_LOCAL_FALLBACK_PRESET:-local}"
+fi

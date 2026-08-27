@@ -121,6 +121,15 @@ def local_model():
     return model.split("/", 1)[-1]
 
 
+def active_pi_tier():
+    """Return the configured Pi tier, falling back to the OpenCode tier."""
+    return (
+        os.environ.get("DOTFILES_PI_TIER")
+        or os.environ.get("DOTFILES_OPENCODE_TIER")
+        or ""
+    )
+
+
 def write_local_junie_config(model, dry_run):
     path = Path("~/.junie-local/model-groups.json").expanduser()
     config = {
@@ -159,25 +168,6 @@ def write_local_codex_config(model, dry_run):
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-
-
-def write_local_pi_config(model, dry_run):
-    path = Path("~/.pi-local/agent/models.json").expanduser()
-    config = {
-        "providers": {
-            "ollama": {
-                "baseUrl": get_ollama_local_base_url(),
-                "api": "openai-completions",
-                "apiKey": "ollama",
-                "models": [{"id": model, "name": model}],
-            }
-        }
-    }
-    if dry_run:
-        logger.info(f"Would write local Pi config to {path}")
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
 def build_local_agents(model):
@@ -257,6 +247,7 @@ def main():
             name.strip() for name in (args.agents or "").split(",") if name.strip()
         }
         model = local_model()
+        active_tier = active_pi_tier()
         local_entries = build_local_agents(model)
         for name, entry in ACP_AGENTS.items():
             include_base = not requested_agents or name in requested_agents
@@ -279,6 +270,12 @@ def main():
                 and local_entry
                 and (not requested_agents or local_name in requested_agents)
             ):
+                if local_name == "pi--local" and active_tier.startswith("local-"):
+                    logger.info(
+                        "Skipping ACP agent: pi--local (active tier is local-*; "
+                        "@pi already provides local models)"
+                    )
+                    continue
                 if shutil.which(local_entry["command"]):
                     logger.info(
                         f"Detected ACP agent: {local_name} ({local_entry['command']})"
@@ -293,13 +290,9 @@ def main():
                         f"Skipping ACP agent: {local_name} ({local_entry['command']}) not found"
                     )
 
-        if any(
-            name in detected_agents
-            for name in ("junie--local", "codex--local", "pi--local")
-        ):
+        if any(name in detected_agents for name in ("junie--local", "codex--local")):
             write_local_junie_config(model, args.dry_run)
             write_local_codex_config(model, args.dry_run)
-            write_local_pi_config(model, args.dry_run)
 
         output_path = os.path.abspath(os.path.expanduser(args.output))
         output_dir = os.path.dirname(output_path) or "."
