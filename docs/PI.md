@@ -16,7 +16,12 @@ extensible, and configured from the shared OpenCode tier registry.
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
 orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle.
 Local models use the shared tier resolver; providers include Ollama, Ollama
-Cloud, Meridian, and OpenAI.
+Cloud, Meridian, and OpenAI. For cloud tiers, the fallback ACP agent's full
+`~/.pi-local` configuration is materialized using
+`DOTFILES_LOCAL_FALLBACK_PRESET` (default: `local`) passed as `--preset`
+so the fallback is fully local. `local-*` tiers skip that duplicate
+configuration, omit `@pi--local` from the ACP registry, and clean stale
+fallback files on deploy.
 
 `pi-mcp-adapter` reads the generated MCP file and `pi-acp` exposes Pi to
 OpenCode's ACP registry. Packages include `pi-web-access`, `pi-subagents`,
