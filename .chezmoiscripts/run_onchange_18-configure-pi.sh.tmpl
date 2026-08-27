@@ -6,6 +6,8 @@ source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
 source "$LIB_DIR/tier_args.sh"
 # configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
+# scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
+# scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
 load_env || true
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then

@@ -8,6 +8,9 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when Junie integration changes):
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
 # scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
+# scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
+# configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
+# scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # configs/junie/model-groups.json: {{ include "configs/junie/model-groups.json" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_JUNIE_CLI_SETUP is in ~/.env)
