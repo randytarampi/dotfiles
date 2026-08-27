@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -191,7 +191,7 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 dry-run ## Full verification suite
+verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
@@ -207,6 +207,9 @@ symlinks: ## Create symlinks for repository scripts
 
 test: lint drift check-templates dry-run ## Run basic repository checks
 	@echo "All basic checks passed."
+
+test-tier-registry: ## Run tier registry unit tests
+	@PYTHONPATH=scripts/lib python3 -m unittest discover -s scripts/lib/tests -p 'test_tier_registry.py'
 
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
 	@bash scripts/migrate-acme-ddns.sh
