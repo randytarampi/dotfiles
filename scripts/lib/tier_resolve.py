@@ -91,19 +91,48 @@ def get_model_details(model_name: str) -> dict:
         context_length = None
         quantization = None
         in_capabilities = False
+        # `ollama show` emits multiple sections (Model, Capabilities, Projector,
+        # Adapter, etc.). Only the `Model` section holds the LLM's real metadata;
+        # `Projector`/`Adapter` sections have their own architecture/parameters
+        # (e.g. `clip`, 446.57M) that would overwrite the real values. Track the
+        # current section and ignore attribute lines from non-Model sections.
+        # Section headers and attributes may use different indentation styles.
+        current_section = None
+        section_indent = 0
 
         for line in result.stdout.splitlines():
             if not line.strip():
                 in_capabilities = False
                 continue
 
+            stripped = line.strip()
+            leading_whitespace = line[: len(line) - len(line.lstrip())]
+            leading_indent = len(leading_whitespace)
+
+            if in_capabilities and leading_indent > section_indent:
+                capability = stripped
+                if capability:
+                    capabilities.append(capability)
+                continue
+
+            # A header is a single word (optionally followed by a colon), not
+            # an attribute in either `key value` or `key: value` form. Track
+            # every such header so attributes cannot leak across sections.
+            key_value_match = re.match(r"^\S+(?::\s+|\s+)\S+", stripped)
+            header_match = re.fullmatch(r"([^\s:]+):?", stripped)
+            if header_match and not key_value_match:
+                header = header_match.group(1).lower()
+                current_section = header
+                section_indent = leading_indent
+                in_capabilities = header == "capabilities"
+                continue
+
             if in_capabilities:
-                if line[:1].isspace():
-                    capability = line.strip()
-                    if capability:
-                        capabilities.append(capability)
-                    continue
-                in_capabilities = False
+                continue
+
+            # Only parse attributes from the Model section; ignore Projector etc.
+            if current_section != "model":
+                continue
 
             if "parameters" in line:
                 match = re.search(
@@ -152,9 +181,6 @@ def get_model_details(model_name: str) -> dict:
                     quantization = match.group(1).strip()
                 continue
 
-            if line.strip().lower() == "capabilities":
-                in_capabilities = True
-
         is_moe = bool(architecture) and "moe" in architecture.lower()
 
         return {
@@ -178,7 +204,9 @@ def get_model_details(model_name: str) -> dict:
         }
 
 
-def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> dict:
+def resolve_roles_from_list(
+    models: list, min_reasoning_embedding: int = 0, moe_codegen_reuse: bool = False
+) -> dict:
     """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
 
     Args:
@@ -186,6 +214,8 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
       min_reasoning_embedding: if > 0, exclude models whose embedding_length is
         below this threshold from reasoning/solo roles (0 = disabled, default).
         Models with unknown embedding_length are not filtered out.
+      moe_codegen_reuse: when enabled, reuse a MoE code-gen model for lightweight
+        and vision roles to minimize the number of loaded local models.
     """
     classified = {
         "reasoning": [],
@@ -193,6 +223,7 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
         "_name_qualified_code_gen": [],
         "lightweight": [],
         "vision": [],
+        "audio": [],
         "all": [],
     }
     model_details_cache = {}
@@ -228,6 +259,7 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
                 "devstral",
                 "codestral",
                 "laguna",
+                "ornith",
             ]
         ):
             category = "code-gen"
@@ -306,15 +338,18 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
             else:
                 classified["reasoning"].extend(large_models)
 
-    # Sort each category by descending size to prefer the most capable model
-    def _effective_param_count(model):
-        """Best-effort parameter count for sorting: name tag > ollama show > size heuristic."""
+    # Sort each category by descending size to prefer the most capable model.
+    def _size_sort_key(model):
+        """Best-effort parameter count: name tag > ollama show > size heuristic."""
         name_count = extract_param_count(model.get("name", ""))
         if name_count > 0:
             return name_count
+        show_count = model.get("param_count")
+        if show_count is not None and show_count > 0:
+            return float(show_count)
         return model.get("size_gb", 0.0)
 
-    for cat in ["reasoning", "code-gen", "lightweight", "vision"]:
+    for cat in ["reasoning", "code-gen", "lightweight", "vision", "audio"]:
         # Enrich models without name-tag param counts via ollama show
         for model in classified[cat]:
             details = get_cached_model_details(model["name"])
@@ -328,17 +363,10 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
             model["quantization"] = details.get("quantization")
             model["is_moe"] = details.get("is_moe", False)
 
-        def _sort_key(m):
-            name_count = extract_param_count(m.get("name", ""))
-            if name_count > 0:
-                return name_count
-            show_count = m.get("param_count")
-            if show_count is not None and show_count > 0:
-                return float(show_count)
-            return m.get("size_gb", 0.0)
+        classified[cat].sort(key=_size_sort_key, reverse=True)
 
-        classified[cat].sort(key=_sort_key, reverse=True)
-
+    # Density sorting is intentionally separate: reasoning and solo prefer
+    # dense models over MoE models before considering embedding and size.
     def _density_sort_key(m):
         """Sort key for reasoning/solo roles: prefer dense > MoE, then higher
         embedding_length, then larger param count, with lightweight-origin
@@ -407,17 +435,23 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
         m for m in classified["lightweight"] if _has_required_capabilities(m, ["tools"])
     ]
     classified["vision"] = [
-        m
-        for m in classified["lightweight"]
-        if _has_required_capabilities(m, ["vision"])
+        m for m in classified["lightweight"] if "vision" in m.get("capabilities", [])
     ]
-    classified["vision"].sort(key=lambda m: _effective_param_count(m), reverse=True)
+    classified["vision"].sort(key=_size_sort_key, reverse=True)
 
-    if not classified["vision"] and classified["lightweight"]:
+    classified["audio"] = [
+        m for m in classified["lightweight"] if "audio" in m.get("capabilities", [])
+    ]
+    classified["audio"].sort(key=_size_sort_key, reverse=True)
+
+    if not classified["vision"]:
         logger.warning(
-            "No vision-capable local models found; falling back to lightweight"
+            "No vision-capable local models found; observer role will not have a local model"
         )
-        classified["vision"] = classified["lightweight"][:]
+    if not classified["audio"]:
+        logger.warning(
+            "No audio-capable local models found; audio role will not have a local model"
+        )
 
     if not classified["code-gen"] and classified["reasoning"]:
         classified["code-gen"] = classified["reasoning"][:]
@@ -452,9 +486,11 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
             src_fb = classified.get(fallback_category, [])
             if index < len(src_fb):
                 return src_fb[index]["name"]
+        else:
+            return None
         # Final fallback: scan all categories for the Nth available model
         all_models = []
-        for c in ["reasoning", "code-gen", "lightweight", "vision"]:
+        for c in ["reasoning", "code-gen", "lightweight", "vision", "audio"]:
             all_models.extend(classified.get(c, []))
         if index < len(all_models):
             return all_models[index]["name"]
@@ -468,7 +504,8 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
         "code-gen_2": pick("code-gen", "reasoning", index=1),
         "lightweight": pick("lightweight", "code-gen"),
         "lightweight_2": pick("lightweight", "code-gen", index=1),
-        "vision": pick("vision", "lightweight"),
+        "vision": pick("vision"),
+        "audio": pick("audio"),
         "solo": pick("solo", "code-gen"),
         "solo_2": pick("solo", "code-gen", index=1),
     }
@@ -477,5 +514,25 @@ def resolve_roles_from_list(models: list, min_reasoning_embedding: int = 0) -> d
     for role, model in role_map.items():
         if model:
             resolved[role] = "ollama/" + model
+
+    if moe_codegen_reuse:
+        code_gen_model = resolved.get("code-gen")
+        code_gen_name = (
+            code_gen_model.removeprefix("ollama/") if code_gen_model else None
+        )
+        code_gen_details = next(
+            (m for m in classified["code-gen"] if m["name"] == code_gen_name), None
+        )
+        if code_gen_details and code_gen_details.get("is_moe"):
+            resolved["lightweight"] = code_gen_model
+            resolved["lightweight_2"] = resolved.get("code-gen_2", code_gen_model)
+            reused_categories = ["lightweight"]
+            model_caps = code_gen_details.get("capabilities") or []
+            if "vision" in model_caps:
+                resolved["vision"] = code_gen_model
+                reused_categories.append("vision")
+            logger.info(
+                f"MoE code-gen reuse: {code_gen_name} serving {', '.join(reused_categories)}"
+            )
 
     return resolved

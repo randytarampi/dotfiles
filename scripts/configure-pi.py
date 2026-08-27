@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Generate Pi agent configuration from the shared OpenCode tier registry."""
 
-import argparse, json, os, subprocess, sys
+import argparse, copy, json, os, shutil, subprocess, sys
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
 import logger
-from cli_helpers import add_common_args, add_local_fallback_args
+from cli_helpers import (
+    add_common_args,
+    add_local_fallback_args,
+    add_min_reasoning_embedding_arg,
+)
 from constants import (
     BASE_URLS,
     check_ollama_daemon,
@@ -18,7 +22,8 @@ from constants import (
 from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
-from tier_resolve import resolve_roles_from_list, get_model_details
+from tier_resolve import get_model_details
+import tier_registry
 
 # Packages shipped with pi-core (not separate npm installs); skip `pi install`.
 _BUILTIN_PACKAGES = frozenset({"pi-skills"})
@@ -38,14 +43,6 @@ ROLE_TO_BUILTIN = {
     "fixer": "worker",
     "observer": "reviewer",
 }
-
-
-def pi_model(value, local):
-    if not isinstance(value, str):
-        return value
-    if value.startswith("_local:"):
-        return local.get(value[7:], local.get("code-gen", "ollama/qwen3-coder"))
-    return value
 
 
 # Cache of model_id -> native context window (tokens) discovered via `ollama show`.
@@ -137,6 +134,9 @@ def _install_package(pkg, dry_run, mode):
     """Install one pi package via `pi install`, prefixing npm: when needed."""
     if pkg in _BUILTIN_PACKAGES:
         return
+    if shutil.which("pi") is None:
+        logger.warning("`pi` CLI not found; skipping package install")
+        return
     source = f"npm:{pkg}"
     if dry_run:
         logger.info("Would install package: %s", source)
@@ -161,6 +161,9 @@ def _ensure_packages(packages, dry_run=False, mode="global"):
     skipped (they ship with pi-core and have no install step); in dry-run the
     install is logged, not executed.
     """
+    if shutil.which("pi") is None:
+        logger.warning("`pi` CLI not found; skipping package installation")
+        return
     try:
         result = subprocess.run(
             ["pi", "list", "--no-approve"],
@@ -271,39 +274,114 @@ def main():
     p = argparse.ArgumentParser(
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
     )
-    add_common_args(p)
+    add_common_args(p, no_backup=True)
     add_local_fallback_args(p)
+    add_min_reasoning_embedding_arg(p)
     p.add_argument("--mode", choices=["global", "project"], default="global")
-    p.add_argument("--preset", choices=get_available_tiers())
-    p.add_argument("--no-mcp", action="store_true")
+    p.add_argument("--preset", choices=get_available_tiers(), required=True)
+    p.add_argument(
+        "--skip",
+        default=None,
+        help="Comma-separated steps to skip (currently only: mcps)",
+    )
     p.add_argument("--no-local-fallbacks", action="store_true")
     p.add_argument("--ollama-base-url")
     args = p.parse_args()
-    with SLIM.open(encoding="utf-8") as f:
-        data = json.load(f)
-    preset = args.preset or data.get("preset", "pro-plus")
-    roles = data.get("presets", {}).get(preset, {})
-    local_models = list_local_ollama_models()
-    local = resolve_roles_from_list(local_models) if local_models else {}
-    if not local:
-        local = {
-            "code-gen": "ollama/qwen3-coder",
-            "reasoning": "ollama/qwen3-coder",
-            "lightweight": "ollama/qwen3-coder",
+    registry = copy.deepcopy(tier_registry.load_registry(SLIM))
+    preset = args.preset or registry.get("preset", "pro-plus")
+    roles = tier_registry.get_preset(registry, preset)
+    local_preset = tier_registry.uses_local_placeholders(registry, preset)
+    if args.local_fallback_preset:
+        resolution_preset = args.local_fallback_preset
+    elif local_preset:
+        resolution_preset = preset
+    else:
+        resolution_preset = "local"
+
+    if args.no_local_fallbacks and local_preset:
+        logger.warning("--no-local-fallbacks is ignored for local preset %s", preset)
+    discover_local = not args.no_local_fallbacks or local_preset
+    if discover_local:
+        local_models = list_local_ollama_models()
+    else:
+        logger.info(
+            "Skipping local Ollama model discovery for cloud preset %s "
+            "(--no-local-fallbacks)",
+            preset,
+        )
+        local_models = []
+    category_models = (
+        tier_registry.classify_models_for_preset(
+            local_models,
+            registry,
+            resolution_preset,
+            args.min_reasoning_embedding,
+        )
+        if local_models
+        else {}
+    )
+    if not category_models:
+        if not local_models:
+            logger.warning(
+                "No local Ollama models found; local model fallbacks are unavailable"
+            )
+    tier_registry.apply_placeholder_overrides(
+        category_models, args.local_fallback_placeholder
+    )
+    role_models = tier_registry.materialize_role_models(
+        registry,
+        resolution_preset if local_preset else preset,
+        category_models,
+        args.local_fallback_role,
+    )
+    unresolved = {
+        value
+        for value in role_models.values()
+        if isinstance(value, str) and value.startswith("_local:")
+    }
+    if unresolved:
+        logger.warning(
+            "Unresolved local model placeholders; using ollama/no-model-available: %s",
+            ", ".join(sorted(unresolved)),
+        )
+        role_models = {
+            role: ("ollama/no-model-available" if model in unresolved else model)
+            for role, model in role_models.items()
         }
+    if args.local_fallback_preset:
+        logger.info("Using local fallback preset: %s", args.local_fallback_preset)
+    if category_models:
+        logger.info(f"Classified local models: {json.dumps(category_models, indent=2)}")
+
+    skipped = {item.strip() for item in (args.skip or "").split(",") if item.strip()}
+    unknown_skip = skipped - {"mcps"}
+    if unknown_skip:
+        p.error(f"Unknown --skip step(s): {', '.join(sorted(unknown_skip))}")
+    if "mcps" in skipped:
+        logger.info("MCPs not configured by configure-pi.py — --skip mcps is a no-op")
 
     # Local model IDs (the part after "ollama/") + compaction reserve.
     # Computed early so settings["compaction"] and the provider model
     # entries share one set of `ollama show` lookups (cached in _native_ctx_cache).
-    local_ids = sorted({v.split("/", 1)[-1] for v in local.values()})
+    local_ids = sorted(
+        {
+            v.split("/", 1)[-1]
+            for v in category_models.values()
+            if not v.endswith("no-model-available")
+        }
+    )
     compaction_tokens = _compaction_tokens(local_ids)
 
-    def resolve(v):
-        return pi_model(v, local)
-
-    default = resolve(
-        roles.get("orchestrator", {}).get("model", "anthropic/claude-sonnet-4-20250514")
-    )
+    orchestrator_model = role_models["orchestrator"]
+    if orchestrator_model is None:
+        orchestrator_model = next(iter(category_models.values()), None)
+    if orchestrator_model is None:
+        logger.warning(
+            "No default model could be derived from the preset or local models"
+        )
+        default = "ollama/no-model-available"
+    else:
+        default = orchestrator_model
     provider, _, default_model = default.partition("/")
     settings = {
         "defaultProvider": provider,
@@ -347,14 +425,11 @@ def main():
     # `model` in frontmatter, so without this they inherit only
     # subagents.defaultModel. Model-only: each built-in keeps its native
     # thinking level. Roles with no built-in (designer, council) are skipped.
-    for role, spec in roles.items():
-        if not isinstance(spec, dict):
-            continue
-        builtin = ROLE_TO_BUILTIN.get(role)
-        if builtin is None:
+    for role, builtin in ROLE_TO_BUILTIN.items():
+        if role not in role_models:
             continue
         settings["subagents"]["agentOverrides"][builtin] = {
-            "model": resolve(spec.get("model", default)),
+            "model": role_models[role],
         }
     providers = {}
     local_base = args.ollama_base_url or get_ollama_local_base_url()
@@ -396,8 +471,7 @@ def main():
         "google": {"type": "api_key", "key": "$GOOGLE_API_KEY"},
     }
     # Derive enabledModels from actual provider model IDs instead of hardcoding
-    # patterns that may not match any available model (e.g. gpt-4o, qwen3-coder
-    # are meaningless in a local-solo tier with only ollama models).
+    # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [
         m["id"] for prov in providers.values() for m in prov.get("models", [])
     ]
@@ -417,7 +491,7 @@ def main():
                 prefixes.add(base)
         elif ":" in mid:
             # Local Ollama model — include the full ID
-            prefixes.add(mid)
+            prefixes.add(mid.rsplit("/", 1)[-1])
         else:
             parts = mid.split("-", 1)
             if len(parts) == 2:

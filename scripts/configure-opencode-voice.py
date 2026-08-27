@@ -50,10 +50,18 @@ from file_utils import backup_file, write_text_file
 from env import load_env
 from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
-from tier_resolve import resolve_roles_from_list, list_local_ollama_models
+from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
+from tier_resolve import list_local_ollama_models
+import tier_registry
 
 
-def get_voice_config(tier: str) -> dict:
+def get_voice_config(
+    tier: str,
+    local_fallback_preset=None,
+    local_fallback_roles=None,
+    local_fallback_placeholders=None,
+    min_reasoning_embedding=None,
+) -> dict:
     """Build the opencode-voice plugin config dict based on tier.
 
     Returns a dict suitable for the plugin entry in tui.json:
@@ -64,6 +72,10 @@ def get_voice_config(tier: str) -> dict:
     is_plus_tier = tier in ("plus", "plus-anthropic")
     is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
+    registry = tier_registry.load_registry()
+    resolution_preset = local_fallback_preset or (
+        tier if tier_registry.uses_local_placeholders(registry, tier) else "local"
+    )
 
     # Determine Meridian proxy usage for Anthropic tiers
     use_meridian = is_meridian_configured()
@@ -87,16 +99,30 @@ def get_voice_config(tier: str) -> dict:
             try:
                 local_models = list_local_ollama_models()
                 if local_models:
-                    min_emb = int(
-                        os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"
+                    min_emb = min_reasoning_embedding
+                    if min_emb is None:
+                        min_emb = int(
+                            os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0")
+                            or "0"
+                        )
+                    categories = tier_registry.classify_models_for_preset(
+                        local_models, registry, resolution_preset, min_emb
                     )
-                    resolved = resolve_roles_from_list(
-                        local_models, min_reasoning_embedding=min_emb
+                    tier_registry.apply_placeholder_overrides(
+                        categories, local_fallback_placeholders
+                    )
+                    resolved_roles = tier_registry.materialize_role_models(
+                        registry, resolution_preset, categories, local_fallback_roles
                     )
                     voice_model = (
-                        resolved.get("reasoning")
-                        or resolved.get("code-gen")
-                        or resolved.get("lightweight")
+                        categories.get("solo")
+                        if resolution_preset == "local-solo"
+                        else categories.get("audio")
+                    )
+                    voice_model = (
+                        voice_model
+                        or categories.get("lightweight")
+                        or resolved_roles.get("librarian")
                     )
                     if voice_model:
                         voice_config["model"] = strip_provider_prefix(voice_model)
@@ -142,20 +168,6 @@ def get_voice_config(tier: str) -> dict:
             "apiKeyEnv": "OPENAI_API_KEY",
         }
 
-    elif tier == "pro-plus-anthropic":
-        # pro-plus-anthropic: Ollama Cloud for LLM, OpenAI for STT
-        if can_proxy_cloud:
-            voice_config = {
-                "endpoint": get_ollama_local_base_url(),
-                "model": "gemma4:31b:cloud",
-            }
-        else:
-            voice_config = {
-                "endpoint": get_provider_base_url("ollama-cloud"),
-                "model": "gemma4:31b",
-                "apiKeyEnv": "OLLAMA_API_KEY",
-            }
-
     else:
         # Fallback: Ollama Cloud
         if can_proxy_cloud:
@@ -169,6 +181,35 @@ def get_voice_config(tier: str) -> dict:
                 "model": "gemma4:31b",
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }
+
+    if not is_local_tier and os.environ.get(
+        "DOTFILES_USE_LOCAL_OLLAMA", "true"
+    ).lower() in ("true", "1"):
+        try:
+            local_models = list_local_ollama_models()
+            if local_models:
+                min_emb = min_reasoning_embedding
+                if min_emb is None:
+                    min_emb = int(
+                        os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"
+                    )
+                categories = tier_registry.classify_models_for_preset(
+                    local_models, registry, resolution_preset, min_emb
+                )
+                tier_registry.apply_placeholder_overrides(
+                    categories, local_fallback_placeholders
+                )
+                resolved_roles = tier_registry.materialize_role_models(
+                    registry, resolution_preset, categories, local_fallback_roles
+                )
+                voice_model = resolved_roles.get("librarian")
+                if voice_model:
+                    voice_config = {
+                        "endpoint": get_ollama_local_base_url(),
+                        "model": strip_provider_prefix(voice_model),
+                    }
+        except Exception:
+            pass
 
     # ── STT config ──────────────────────────────────────────────────
     # Cloud tiers use OpenAI Whisper for STT when OPENAI_API_KEY is available.
@@ -227,6 +268,7 @@ def main():
         description="Configure OpenCode voice plugin (tui.json) based on active tier."
     )
     available_tiers = get_available_tiers()
+    add_local_fallback_args(parser)
     parser.add_argument(
         "--preset",
         default="pro-plus",
@@ -248,6 +290,7 @@ def main():
         action="store_true",
         help="Skip backup of existing tui.json",
     )
+    add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
 
     # Resolve config directory
@@ -265,7 +308,13 @@ def main():
         load_env(home_env)
 
     # Build voice config
-    voice_config = get_voice_config(args.preset)
+    voice_config = get_voice_config(
+        args.preset,
+        args.local_fallback_preset,
+        args.local_fallback_role,
+        args.local_fallback_placeholder,
+        args.min_reasoning_embedding,
+    )
 
     # Build full tui.json
     tui_config = {

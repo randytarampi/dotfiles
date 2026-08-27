@@ -112,9 +112,13 @@ def local_model():
     """Resolve the local-solo orchestrator model to a concrete Ollama ID."""
     models = list_local_ollama_models()
     resolved = resolve_roles_from_list(models) if models else {}
-    return (
-        resolved.get("solo") or resolved.get("code-gen") or "ollama/qwen3-coder"
-    ).split("/", 1)[-1]
+    model = resolved.get("solo") or resolved.get("code-gen")
+    if not model:
+        logger.warning(
+            "No local model available for ACP agent fallback; using sentinel"
+        )
+        model = "ollama/no-model-available"
+    return model.split("/", 1)[-1]
 
 
 def write_local_junie_config(model, dry_run):

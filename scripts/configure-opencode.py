@@ -44,9 +44,13 @@ from models_dev import (
 )
 from cli_helpers import (
     add_common_args,
+    add_skip_arg,
     add_local_fallback_args,
+    add_min_reasoning_embedding_arg,
     forward_common_args,
     forward_local_fallback_args,
+    forward_min_reasoning_embedding_arg,
+    parse_skip,
 )
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
@@ -96,8 +100,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure OpenCode json generator and orchestration."
     )
-    add_common_args(parser)
+    add_common_args(parser, no_backup=True)
     add_local_fallback_args(parser)
+    add_min_reasoning_embedding_arg(parser)
     available_tiers = get_available_tiers()
     parser.add_argument(
         "--preset",
@@ -105,12 +110,9 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
-    parser.add_argument(
-        "--skip-mcp",
-        action="store_true",
-        help="Skip embedding MCP server config into opencode.json (for project mode when mcps step is handled separately)",
-    )
+    add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
+    skipped = parse_skip(args.skip, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     failures = 0
 
     configs_dir_path = os.path.abspath(
@@ -159,7 +161,22 @@ def main():
 
     # Generate MCP Config (unless --skip-mcp was passed)
     mcp_config = {}
-    if not args.skip_mcp:
+    # When --skip mcps, preserve existing MCP config instead of erasing it
+    if args.mode == "global" and "mcps" in skipped:
+        _output_path = os.path.join(config_dir_path, "opencode.json")
+        if os.path.exists(_output_path):
+            try:
+                with open(_output_path, "r", encoding="utf-8") as _f:
+                    _existing = json.load(_f)
+                mcp_config = _existing.get("mcp", {})
+                logger.info(
+                    f"Preserving existing MCP config ({len(mcp_config)} servers) from {_output_path}"
+                )
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(
+                    f"Could not read existing MCP config from {_output_path}: {e}"
+                )
+    if "mcps" not in skipped:
         mcp_args = [
             sys.executable,
             os.path.join(SCRIPT_DIR, "configure-mcp-tool.py"),
@@ -258,7 +275,7 @@ def main():
     # Allow access to cross-platform temp directories (/tmp, macOS
     # $TMPDIR, Windows %TEMP%) without prompting. These are used by
     # subagent fanout, build tools, and the orchestrator's own
-    # configure-opencode-project.py (tempfile.mkdtemp).
+    # configure-project.py (tempfile.mkdtemp).
     _external_dir_permissions = {
         "/tmp/**": "allow",
         "/var/tmp/**": "allow",
@@ -496,6 +513,9 @@ def main():
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
 
+        if not config["mcp"]:
+            del config["mcp"]
+
     server_config = build_opencode_server_config()
     if server_config:
         existing_server = config.get("server")
@@ -577,8 +597,9 @@ def main():
     acp_agents_source_path = os.path.join(
         configs_dir_path, "opencode", "acp-agents.json"
     )
-    logger.info("Generating ACP agent wrappers...")
-    if args.dry_run:
+    if "acp-agents" in skipped:
+        logger.info("Skipping ACP agent wrappers")
+    elif args.dry_run:
         logger.info(
             "[dry-run] Would run configure-acp-agents.py (skipped: child has no --dry-run)"
         )
@@ -641,51 +662,77 @@ def main():
             failures += 1
 
     # 4. Set active tier
-    logger.info(f"Setting active tier to {args.preset}...")
+    if "tier" in skipped:
+        logger.info("Skipping active tier configuration")
+    else:
+        logger.info(f"Setting active tier to {args.preset}...")
     try:
-        tier_args_list = build_tier_args(
-            tier=args.preset,
-            no_local_fallbacks=not with_local_ollama,
-        ) + forward_local_fallback_args(args)
-        # configure-opencode-tier.py does not accept --dry-run or --no-backup; don't forward common args.
-        tier_args = [
-            sys.executable,
-            os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
-        ] + tier_args_list
-        subprocess.run(tier_args, check=True)
-        logger.info(f"Active tier set to {args.preset}")
+        if "tier" in skipped:
+            pass
+        else:
+            tier_args_list = (
+                build_tier_args(
+                    tier=args.preset,
+                    no_local_fallbacks=not with_local_ollama,
+                )
+                + forward_local_fallback_args(args)
+                + forward_min_reasoning_embedding_arg(args)
+            )
+            # configure-opencode-tier.py accepts --dry-run, but not --no-backup.
+            if args.dry_run:
+                tier_args_list.append("--dry-run")
+            tier_args = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
+            ] + tier_args_list
+            subprocess.run(tier_args, check=True)
+            logger.info(f"Active tier set to {args.preset}")
     except Exception as e:
         logger.error(f"Failed to set active tier: {e}")
         failures += 1
 
     # 5. Configure voice plugin (tui.json)
-    logger.info("Configuring voice plugin...")
+    if "voice" in skipped:
+        logger.info("Skipping voice plugin configuration")
+    else:
+        logger.info("Configuring voice plugin...")
     try:
-        voice_args = [
-            sys.executable,
-            os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),
-            "--preset",
-            args.preset,
-        ] + forward_common_args(args)
-        if args.no_backup:
-            voice_args.append("--no-backup")
-        subprocess.run(voice_args, check=True)
-        logger.info("Voice plugin configured")
+        if "voice" in skipped:
+            pass
+        else:
+            voice_args = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),
+                "--preset",
+                args.preset,
+            ] + forward_common_args(args)
+            voice_args += forward_local_fallback_args(args)
+            voice_args += forward_min_reasoning_embedding_arg(args)
+            if args.no_backup:
+                voice_args.append("--no-backup")
+            subprocess.run(voice_args, check=True)
+            logger.info("Voice plugin configured")
     except Exception as e:
         logger.error(f"Failed to configure voice plugin: {e}")
         failures += 1
 
     # 5b. Configure DCP TUI plugin (tui.json)
-    logger.info("Configuring DCP TUI plugin...")
+    if "dcp" in skipped:
+        logger.info("Skipping DCP TUI plugin configuration")
+    else:
+        logger.info("Configuring DCP TUI plugin...")
     try:
-        dcp_args = [
-            sys.executable,
-            os.path.join(SCRIPT_DIR, "configure-opencode-dcp.py"),
-        ] + forward_common_args(args)
-        if args.no_backup:
-            dcp_args.append("--no-backup")
-        subprocess.run(dcp_args, check=True)
-        logger.info("DCP TUI plugin configured")
+        if "dcp" in skipped:
+            pass
+        else:
+            dcp_args = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-opencode-dcp.py"),
+            ] + forward_common_args(args)
+            if args.no_backup:
+                dcp_args.append("--no-backup")
+            subprocess.run(dcp_args, check=True)
+            logger.info("DCP TUI plugin configured")
     except Exception as e:
         logger.error(f"Failed to configure DCP TUI plugin: {e}")
         failures += 1

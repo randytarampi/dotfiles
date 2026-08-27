@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate and synchronize JetBrains model profiles from model-groups.json."""
+"""Generate and synchronize JetBrains model profiles."""
 
 from __future__ import annotations
 
@@ -9,306 +9,247 @@ import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
+LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
+
 import logger
+import tier_registry
+from ai_models import resolve_model
+from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from discover_models import list_local_ollama_models
-from ai_models import resolve_model
-from tier_resolve import resolve_roles_from_list
 
 
 def build_provider_configs(cfg: dict) -> dict:
-    """Build provider config dicts from model-groups.json provider entries.
-
-    Override precedence: baseUrlEnv > hostEnvAlt > hostEnv/portEnv > baseUrl
-    baseUrlEnv and hostEnvAlt keys are stripped from output (not understood by Junie).
-    """
     provider_configs = {}
-
-    for provider_name, provider_def in cfg.get("providers", {}).items():
-        api_key_env = provider_def.get("apiKeyEnv", "")
-        api_key = os.environ.get(api_key_env, "") if api_key_env else ""
-        if api_key_env and not api_key:
-            logger.warning(
-                f"{api_key_env} not set — {provider_name} JetBrains AI profiles will have an empty apiKey"
+    for name, definition in cfg.get("providers", {}).items():
+        key_env = definition.get("apiKeyEnv", "")
+        api_key = os.environ.get(key_env, "") if key_env else ""
+        host_alt = definition.get("hostEnvAlt", "")
+        base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
+        if base_url:
+            if not base_url.endswith("/v1"):
+                base_url += "/v1"
+            if definition.get("apiType") == "OpenAIResponses":
+                base_url = base_url.replace("/v1", "/v1/responses")
+        if not base_url and (definition.get("hostEnv") or definition.get("portEnv")):
+            host = (
+                os.environ.get(definition.get("hostEnv", "")) or MERIDIAN_DEFAULT_HOST
             )
-
-        hostEnvAlt = provider_def.get("hostEnvAlt", "")
-        if hostEnvAlt:
-            alt_value = os.environ.get(hostEnvAlt, "").strip()
-            if alt_value:
-                # hostEnvAlt includes scheme+host[:port] (e.g. http://__VG_IPV4_62de5b598c15__:11434)
-                base_url = alt_value.rstrip("/")
-                if not base_url.endswith("/v1"):
-                    base_url = base_url + "/v1"
-                # For meridian-style /responses suffix, check apiType
-                if provider_def.get("apiType") == "OpenAIResponses":
-                    base_url = base_url.replace("/v1", "/v1/responses")
-            else:
-                base_url = ""
-        else:
-            base_url = ""
-
+            port = (
+                os.environ.get(definition.get("portEnv", "")) or MERIDIAN_DEFAULT_PORT
+            )
+            base_url = f"http://{host}:{port}/v1/responses"
         if not base_url:
-            host_env = provider_def.get("hostEnv", "")
-            port_env = provider_def.get("portEnv", "")
-            if host_env or port_env:
-                host = (
-                    (os.environ.get(host_env) or MERIDIAN_DEFAULT_HOST)
-                    if host_env
-                    else MERIDIAN_DEFAULT_HOST
-                )
-                port = (
-                    (os.environ.get(port_env) or MERIDIAN_DEFAULT_PORT)
-                    if port_env
-                    else MERIDIAN_DEFAULT_PORT
-                )
-                base_url = f"http://{host}:{port}/v1/responses"
-            else:
-                base_url = provider_def.get("baseUrl", "")
-
-        baseUrlEnv = provider_def.get("baseUrlEnv", "")
-        if baseUrlEnv and os.environ.get(baseUrlEnv, "").strip():
-            base_url = os.environ.get(baseUrlEnv, "").strip().rstrip("/")
-
-        provider_configs[provider_name] = {
+            base_url = definition.get("baseUrl", "")
+        base_env = definition.get("baseUrlEnv", "")
+        if base_env and os.environ.get(base_env, "").strip():
+            base_url = os.environ[base_env].strip().rstrip("/")
+        provider_configs[name] = {
             "baseUrl": base_url,
-            "apiType": provider_def.get("apiType", ""),
+            "apiType": definition.get("apiType", ""),
             "apiKey": api_key,
         }
-
     return provider_configs
 
 
-def resolve_local_placeholder(pattern: str, local_role_models: dict | None) -> str:
-    if not pattern.startswith("_local:"):
-        return pattern
-    category = pattern[len("_local:") :]
-    resolved = (local_role_models or {}).get(category, "")
-    if resolved.startswith("ollama/"):
-        return resolved[len("ollama/") :]
-    return resolved or pattern
+def model_provider(model_ref: str) -> str:
+    if model_ref.startswith("ollama-cloud/"):
+        return "ollama-cloud"
+    if model_ref.startswith("openai/"):
+        return "openai"
+    if model_ref.startswith("anthropic/"):
+        return "meridian"
+    if model_ref.startswith("ollama/"):
+        return "ollama"
+    return ""
 
 
-def resolve_group_model(
-    provider_name: str,
-    pattern: str,
-    local_models: list,
-    local_role_models: dict | None = None,
-) -> str:
-    if pattern.startswith("_local:"):
-        return resolve_local_placeholder(pattern, local_role_models)
-    if provider_name == "ollama":
-        return resolve_model(pattern, local_models)
-    return pattern
+def model_id(model_ref: str) -> str:
+    return model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
 
 
 def lookup_model_temperature(model_name: str, overrides: dict) -> float | None:
-    """Look up model-family temperature override by longest prefix match."""
-    if not overrides:
-        return None
-    best_prefix = ""
-    for prefix, temp in overrides.items():
-        if model_name.lower().startswith(prefix.lower()) and len(prefix) > len(
-            best_prefix
-        ):
-            best_prefix = prefix
-    return overrides[best_prefix] if best_prefix else None
+    matches = [p for p in overrides if model_name.lower().startswith(p.lower())]
+    return overrides[max(matches, key=len)] if matches else None
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generates and manages JetBrains AI model profiles."
+        description="Generate JetBrains AI model profiles."
     )
     parser.add_argument(
         "--groups-json", required=True, help="Path to model-groups.json"
     )
     parser.add_argument("--target-dir", required=True, help="Path to ~/.junie/models")
     parser.add_argument(
-        "--local-models", default="", help="Space-separated list of local Ollama models"
+        "--local-models", default="", help="Space-separated local Ollama models"
     )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without writing files"
+    )
+    add_local_fallback_args(parser)
+    add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
 
-    groups_json_path = os.path.abspath(os.path.expanduser(args.groups_json))
-    target_dir_path = os.path.abspath(os.path.expanduser(args.target_dir))
-
-    if not os.path.exists(groups_json_path):
-        logger.critical(f"Groups file does not exist: {groups_json_path}")
-        sys.exit(1)
-
+    groups_path = os.path.abspath(os.path.expanduser(args.groups_json))
+    target_dir = os.path.abspath(os.path.expanduser(args.target_dir))
+    if not os.path.isfile(groups_path):
+        logger.critical(f"Groups file does not exist: {groups_path}")
+        raise SystemExit(1)
     try:
-        with open(groups_json_path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-    except Exception as e:
-        logger.critical(f"Failed to read model groups: {e}")
-        sys.exit(1)
+        with open(groups_path, encoding="utf-8") as file:
+            cfg = json.load(file)
+        registry = tier_registry.load_registry()
+    except Exception as exc:
+        logger.critical(f"Failed to read model configuration: {exc}")
+        raise SystemExit(1)
 
-    os.makedirs(target_dir_path, exist_ok=True)
-    generated_files = set()
-
-    provider_configs = build_provider_configs(cfg)
-
-    local_models_list = args.local_models.split()
-    local_role_models = {}
-    has_local_groups = any(
-        g.get("provider") == "ollama" for g in cfg.get("groups", {}).values()
-    )
-    if has_local_groups:
-        discovered_local_models = list_local_ollama_models()
-        if discovered_local_models:
-            local_role_models = resolve_roles_from_list(discovered_local_models) or {}
-            resolved_lines = [
-                f"  {k} -> {v[len('ollama/') :] if v.startswith('ollama/') else v}"
-                for k, v in sorted(local_role_models.items())
-            ]
-            logger.info(
-                "Local model categories resolved:\n" + "\n".join(resolved_lines)
+    local_models = args.local_models.split()
+    if not local_models:
+        local_models = [
+            m["name"] if isinstance(m, dict) else str(m)
+            for m in list_local_ollama_models()
+        ]
+    tier_specs = []
+    for tier in registry.get("presets", {}):
+        if not tier_registry.uses_local_placeholders(registry, tier):
+            categories = {}
+            roles = tier_registry.materialize_role_models(
+                registry, tier, categories, args.local_fallback_role
             )
+        else:
+            tier_resolution_preset = args.local_fallback_preset or tier
+            categories = {}
+            if local_models:
+                categories = tier_registry.classify_models_for_preset(
+                    local_models,
+                    registry,
+                    tier_resolution_preset,
+                    args.min_reasoning_embedding,
+                )
+                tier_registry.apply_placeholder_overrides(
+                    categories, args.local_fallback_placeholder
+                )
+            roles = tier_registry.materialize_role_models(
+                registry, tier, categories, args.local_fallback_role
+            )
+        tier_specs.append(
+            (
+                tier,
+                roles.get("orchestrator", ""),
+                roles.get("librarian", ""),
+                None,
+                None,
+            )
+        )
+    if args.local_fallback_preset:
+        logger.info(f"Using local fallback preset: {args.local_fallback_preset}")
 
+    specs = tier_specs + [
+        (
+            name,
+            group.get("primaryModel", ""),
+            group.get("fasterModel", ""),
+            group.get("provider"),
+            group.get("fasterProvider"),
+        )
+        for name, group in cfg.get("groups", {}).items()
+    ]
+    providers = build_provider_configs(cfg)
+    temperatures = cfg.get("modelTemperatures", {})
+    generated = set()
+    if not args.dry_run:
+        os.makedirs(target_dir, exist_ok=True)
     logger.info("Generating JetBrains AI model profiles...")
 
-    groups = cfg.get("groups", {})
-    model_temperatures = cfg.get("modelTemperatures", {})
-
-    for group_name, group_def in groups.items():
-        provider = group_def.get("provider")
-        if not provider:
-            logger.warning(f"No provider configured for {group_name} — skipping")
+    for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
+        provider = explicit_provider or model_provider(primary_ref)
+        faster_provider = explicit_faster or (
+            model_provider(faster_ref) if faster_ref else provider
+        )
+        if not provider or provider not in providers:
+            logger.warning(f"Unknown provider for {name} — skipping")
             continue
-
+        if faster_provider not in providers:
+            logger.warning(
+                f"Unknown faster provider '{faster_provider}' for {name} — skipping"
+            )
+            continue
         if (
             provider == "github-copilot"
             and not os.environ.get("GITHUB_TOKEN", "").strip()
         ):
-            logger.info(
-                "GITHUB_TOKEN not set — skipping experimental %s group", group_name
-            )
+            logger.info(f"GITHUB_TOKEN not set — skipping experimental {name} group")
             continue
-
-        provider_cfg = provider_configs.get(provider)
-        if not provider_cfg:
-            logger.warning(f"Unknown provider '{provider}' for {group_name} — skipping")
-            continue
-
-        primary_pattern = group_def.get("primaryModel", "")
-        faster_pattern = group_def.get("fasterModel", "")
-        faster_provider = group_def.get("fasterProvider") or provider
-
         if (
             provider == "ollama"
-            and not local_models_list
-            and not primary_pattern.startswith("_local:")
+            and not local_models
+            and not primary_ref.startswith("_local:")
         ):
-            logger.info(f"No local Ollama models available — skipping {group_name}")
+            logger.info(f"No local Ollama models available — skipping {name}")
             continue
-
-        if (
-            faster_pattern
-            and faster_provider == "ollama"
-            and not local_models_list
-            and not faster_pattern.startswith("_local:")
-        ):
-            logger.info(f"No local Ollama models available — skipping {group_name}")
+        primary = model_id(primary_ref)
+        if provider == "ollama" and not primary_ref.startswith("_local:"):
+            primary = resolve_model(primary, local_models)
+        if primary_ref.startswith("_local:") or not primary:
+            logger.warning(f"Could not resolve primary model for {name} — skipping")
             continue
-
-        if faster_provider not in provider_configs:
-            logger.warning(
-                f"Unknown faster provider '{faster_provider}' for {group_name} — skipping"
-            )
-            continue
-
-        primary_id = resolve_group_model(
-            provider, primary_pattern, local_models_list, local_role_models
-        )
-        if primary_pattern.startswith("_local:") and primary_id == primary_pattern:
-            logger.warning(
-                f"Could not resolve {primary_pattern} for {group_name} — skipping"
-            )
-            continue
-
-        faster_id = (
-            resolve_group_model(
-                faster_provider, faster_pattern, local_models_list, local_role_models
-            )
-            if faster_pattern
-            else ""
-        )
-        if faster_pattern.startswith("_local:") and faster_id == faster_pattern:
-            logger.warning(
-                f"Could not resolve {faster_pattern} for {group_name} — using primary as faster"
-            )
-            faster_id = primary_id
-
-        faster_provider_cfg = provider_configs[faster_provider]
-
-        primary_effective_temp = lookup_model_temperature(
-            primary_id, model_temperatures
-        )
-        if primary_effective_temp is None:
-            primary_effective_temp = 0.7
-
-        profile_data = provider_cfg.copy()
-        profile_data["id"] = primary_id
-        profile_data["primaryModel"] = {
-            "id": primary_id,
-            "temperature": float(primary_effective_temp),
+        faster = model_id(faster_ref) if faster_ref else ""
+        if faster and faster_provider == "ollama":
+            faster = resolve_model(faster, local_models)
+        data = providers[provider].copy()
+        data["id"] = primary
+        primary_temperature = lookup_model_temperature(primary, temperatures)
+        data["primaryModel"] = {
+            "id": primary,
+            "temperature": float(
+                0.7 if primary_temperature is None else primary_temperature
+            ),
         }
-
-        if faster_id:
-            faster_effective_temp = lookup_model_temperature(
-                faster_id, model_temperatures
-            )
-            if faster_effective_temp is None:
-                faster_effective_temp = 0.7
-
+        if faster:
+            faster_temperature = lookup_model_temperature(faster, temperatures)
+            faster_data = {
+                "id": faster,
+                "temperature": float(
+                    0.7 if faster_temperature is None else faster_temperature
+                ),
+            }
             if faster_provider != provider:
-                profile_data["fasterModel"] = {
-                    "id": faster_id,
-                    "baseUrl": faster_provider_cfg["baseUrl"],
-                    "apiType": faster_provider_cfg["apiType"],
-                    "apiKey": faster_provider_cfg["apiKey"],
-                    "temperature": float(faster_effective_temp),
-                }
-            else:
-                profile_data["fasterModel"] = {
-                    "id": faster_id,
-                    "temperature": float(faster_effective_temp),
-                }
-
-        profile_json = json.dumps(profile_data, indent=2) + "\n"
-        profile_file = os.path.join(target_dir_path, f"{group_name}.json")
-        fname = os.path.basename(profile_file)
-
-        is_changed = True
-        if os.path.exists(profile_file):
-            with open(profile_file, "r", encoding="utf-8") as pf:
-                existing_content = pf.read()
-            if existing_content == profile_json:
-                is_changed = False
-                logger.info(f"Unchanged: {group_name} ({primary_id})")
-
-        if is_changed:
-            with open(profile_file, "w", encoding="utf-8") as pf:
-                pf.write(profile_json)
-            os.chmod(profile_file, 0o644)
+                faster_data.update(providers[faster_provider])
+            data["fasterModel"] = faster_data
+        output = json.dumps(data, indent=2) + "\n"
+        path = os.path.join(target_dir, f"{name}.json")
+        generated.add(os.path.basename(path))
+        if args.dry_run:
             logger.info(
-                f"Configured: {group_name} → primary={primary_id} faster={faster_id or 'none'}"
+                f"Would configure: {name} → primary={primary} faster={faster or 'none'}"
+            )
+        else:
+            existing_output = None
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as file:
+                    existing_output = file.read()
+            if existing_output == output:
+                logger.info(f"Unchanged: {name} ({primary})")
+                continue
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(output)
+            os.chmod(path, 0o644)
+            logger.info(
+                f"Configured: {name} → primary={primary} faster={faster or 'none'}"
             )
 
-        generated_files.add(fname)
-
-    for existing_file in os.listdir(target_dir_path):
-        if existing_file.endswith(".json") and existing_file not in generated_files:
-            full_stale_path = os.path.join(target_dir_path, existing_file)
-            try:
-                os.remove(full_stale_path)
-                logger.info(f"Removed stale: {existing_file}")
-            except Exception as e:
-                logger.warning(f"Failed to remove stale file {existing_file}: {e}")
-
-    logger.info(f"JetBrains AI models configured at {target_dir_path}")
+    if os.path.isdir(target_dir):
+        for existing in os.listdir(target_dir):
+            if existing.endswith(".json") and existing not in generated:
+                if args.dry_run:
+                    logger.info(f"Would remove stale: {existing}")
+                else:
+                    os.remove(os.path.join(target_dir, existing))
+                    logger.info(f"Removed stale: {existing}")
+    logger.info(f"JetBrains AI models configured at {target_dir}")
 
 
 if __name__ == "__main__":

@@ -19,8 +19,12 @@ from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_tar
 from opencode_config import build_tier_args
 from cli_helpers import (
     add_common_args,
+    add_skip_arg,
     forward_common_args,
+    forward_min_reasoning_embedding_arg,
     forward_local_fallback_args,
+    parse_skip,
+    add_min_reasoning_embedding_arg,
 )
 
 ALL_STEPS = [
@@ -84,6 +88,28 @@ def run(command, cwd, env=None):
 
 def env_or(args_value, env_name, default=""):
     return args_value if args_value is not None else os.environ.get(env_name, default)
+
+
+def load_project_env(opencode_dir):
+    """Load project env with project-local values taking priority over global ones."""
+    project_env = os.path.join(opencode_dir, ".env")
+    local_keys = set()
+    if os.path.exists(project_env):
+        with open(project_env, encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key = line.split("=", 1)[0].strip()
+                    if key.startswith("export "):
+                        key = key.split(None, 1)[1].strip()
+                    local_keys.add(key)
+        load_env(project_env)
+        local_values = {key: os.environ[key] for key in local_keys if key in os.environ}
+    else:
+        local_values = {}
+    load_env(os.path.expanduser("~/.env"))
+    os.environ.update(local_values)
+    load_env(os.path.join(opencode_dir, ".env.local"))
 
 
 def configure_skills(root, profiles, extras, skipped):
@@ -152,14 +178,8 @@ def main():
         default=None,
         help=f"Comma-separated steps (default: {','.join(DEFAULT_STEPS)})",
     )
-    parser.add_argument(
-        "--skip",
-        default=None,
-        help=(
-            "Comma-separated steps to remove from the resolved set "
-            f"(any of: {','.join(ALL_STEPS)})"
-        ),
-    )
+    add_skip_arg(parser, ALL_STEPS)
+    parser.set_defaults(skip=None)
     parser.add_argument("--workspace-root", default=os.getcwd())
     parser.add_argument("--skill-profiles", default=None)
     parser.add_argument("--skills", default=None)
@@ -167,28 +187,42 @@ def main():
     parser.add_argument("--mcps", default=None)
     parser.add_argument("--mcp-tools", default=None)
     parser.add_argument("--acp-agents", default=None)
-    parser.add_argument("--junie-dirs", action="store_true")
-    parser.add_argument("--junie-mcp", action="store_true")
     parser.add_argument("--local-fallback-preset", default=None)
-    parser.add_argument("--local-fallback-placeholder", action="append", default=[])
-    parser.add_argument("--local-fallback-role", action="append", default=[])
+    parser.add_argument("--local-fallback-placeholder", action="append", default=None)
+    parser.add_argument("--local-fallback-role", action="append", default=None)
+    add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
     root = os.path.abspath(args.workspace_root)
     opencode_dir = os.path.join(root, ".opencode")
-    load_env(os.path.expanduser("~/.env"))
-    load_env(os.path.join(opencode_dir, ".env"))
-    load_env(os.path.join(opencode_dir, ".env.local"))
+    load_project_env(opencode_dir)
+    if args.preset is None:
+        args.preset = os.environ.get("DOTFILES_PROJECT_PRESET")
+    if args.skip is None:
+        args.skip = os.environ.get("DOTFILES_PROJECT_SKIP")
+    if args.local_fallback_placeholder is None:
+        args.local_fallback_placeholder = (
+            csv(os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_PLACEHOLDER")) or None
+        )
+    if args.local_fallback_role is None:
+        args.local_fallback_role = (
+            csv(os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_ROLE")) or None
+        )
+    if args.local_fallback_preset is None:
+        args.local_fallback_preset = os.environ.get(
+            "DOTFILES_PROJECT_LOCAL_FALLBACK_PRESET"
+        )
+    if args.min_reasoning_embedding is None:
+        min_embedding = os.environ.get("DOTFILES_PROJECT_MIN_REASONING_EMBEDDING")
+        if min_embedding is not None:
+            args.min_reasoning_embedding = int(min_embedding)
     steps = resolve_steps(args)
-    skipped = csv(env_or(args.skip, "DOTFILES_PROJECT_SKIP"))
+    skipped = parse_skip(args.skip or "", ALL_STEPS)
     if skipped:
-        unknown_skip = set(skipped) - set(ALL_STEPS)
-        if unknown_skip:
-            parser.error(f"Unknown --skip step(s): {', '.join(sorted(unknown_skip))}")
-        steps = [s for s in steps if s not in set(skipped)]
+        steps = [s for s in steps if s not in skipped]
     unknown = set(steps) - set(ALL_STEPS)
     if unknown:
         parser.error(f"Unknown step(s): {', '.join(sorted(unknown))}")
-    preset = env_or(args.preset, "DOTFILES_PROJECT_PRESET", "pro-plus")
+    preset = args.preset or "pro-plus"
     child_env = os.environ.copy()
     if args.dry_run:
         logger.info(f"Would ensure project OpenCode directory exists: {opencode_dir}")
@@ -197,7 +231,8 @@ def main():
 
     if "opencode" in steps:
         temp = os.path.join(opencode_dir, ".tmp-opencode")
-        os.makedirs(temp, exist_ok=True)
+        if not args.dry_run:
+            os.makedirs(temp, exist_ok=True)
         env = child_env.copy()
         env["OPENCODE_DIR"] = temp
         opencode_cmd = [
@@ -208,9 +243,8 @@ def main():
             "--preset",
             preset,
         ]
-        # If mcps was explicitly skipped, don't embed MCP config in opencode.json
-        if "mcps" not in steps:
-            opencode_cmd.append("--skip-mcp")
+        # MCPs are written only by the explicit project-wide mcps step.
+        opencode_cmd += ["--skip", "mcps"]
         run(
             opencode_cmd
             + forward_common_args(args)
@@ -229,27 +263,29 @@ def main():
             shutil.copy(generated, os.path.join(root, "opencode.json"))
             shutil.rmtree(temp, ignore_errors=True)
     if "tier" in steps:
-        if args.dry_run:
-            logger.info("Would set project tier (skipped: child has no --dry-run)")
-        else:
-            env = child_env.copy()
-            env["OPENCODE_DIR"] = opencode_dir
-            run(
-                [sys.executable, os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")]
-                + build_tier_args(
-                    tier=preset,
-                    local_fallback_preset=args.local_fallback_preset,
-                    local_fallback_placeholders=args.local_fallback_placeholder or None,
-                    local_fallback_roles=args.local_fallback_role or None,
-                ),
-                root,
-                env,
+        env = child_env.copy()
+        env["OPENCODE_DIR"] = opencode_dir
+        run(
+            [sys.executable, os.path.join(SCRIPT_DIR, "configure-opencode-tier.py")]
+            + build_tier_args(
+                tier=preset,
+                local_fallback_preset=args.local_fallback_preset,
+                local_fallback_placeholders=args.local_fallback_placeholder or None,
+                local_fallback_roles=args.local_fallback_role or None,
             )
+            + forward_common_args(args)
+            + forward_min_reasoning_embedding_arg(args),
+            root,
+            env,
+        )
     if "codegraph" in steps:
         command = shutil.which("codegraph")
         if not command:
             raise RuntimeError("codegraph not found")
-        run([command, "init", "-i"], root, child_env)
+        if args.dry_run:
+            logger.info("Would initialize CodeGraph")
+        else:
+            run([command, "init", "-i"], root, child_env)
     if "mcps" in steps:
         command = [
             sys.executable,
@@ -291,7 +327,7 @@ def main():
                 [
                     sys.executable,
                     os.path.join(
-                        SCRIPT_DIR, "configure-jetbrains-workspace-project.py"
+                        SCRIPT_DIR, "_configure-jetbrains-workspace-project.py"
                     ),
                     "--workspace-root",
                     root,
@@ -306,14 +342,9 @@ def main():
             "--project-dir",
             root,
         ]
-        if args.junie_dirs:
-            command.append("--dirs")
-        if args.junie_mcp:
-            command.append("--mcp")
-        command.append("--all-tools")
         command += forward_common_args(args)
-        # TODO: Junie local-fallback support is deferred until
-        # generate-jetbrains-profiles.py accepts these arguments.
+        command += forward_local_fallback_args(args)
+        command += forward_min_reasoning_embedding_arg(args)
         run(command, root, child_env)
     if "acp-agents" in steps:
         agents = env_or(args.acp_agents, "DOTFILES_PROJECT_ACP_AGENTS")
@@ -327,30 +358,21 @@ def main():
         ]
         if agents:
             command += ["--agents", agents]
-        if args.dry_run:
-            logger.info(
-                "Would configure project ACP agents (skipped: child has no --dry-run)"
-            )
-        else:
-            run(command, root, child_env)
+        run(command + forward_common_args(args), root, child_env)
     if "secrets" in steps:
-        if args.dry_run:
-            logger.info(
-                "Would generate project secrets (skipped: child has no --dry-run)"
-            )
-        else:
-            run(
-                [
-                    sys.executable,
-                    os.path.join(SCRIPT_DIR, "configure-secrets.py"),
-                    "--mode",
-                    "project",
-                    "--output",
-                    os.path.join(opencode_dir, ".env.local"),
-                ],
-                root,
-                child_env,
-            )
+        run(
+            [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-secrets.py"),
+                "--mode",
+                "project",
+                "--output",
+                os.path.join(opencode_dir, ".env.local"),
+            ]
+            + forward_common_args(args),
+            root,
+            child_env,
+        )
 
 
 if __name__ == "__main__":
