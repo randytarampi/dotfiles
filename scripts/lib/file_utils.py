@@ -24,6 +24,16 @@ def backup_file(path, enabled=True):
         return None
     backup_path = f"{path}.bak"
     try:
+        # If an identical .bak already exists, the file has not changed since
+        # the last backup — skip the copy (avoids mtime churn on every run).
+        if os.path.exists(backup_path):
+            try:
+                if os.path.getsize(path) == os.path.getsize(backup_path):
+                    with open(path, "rb") as cur, open(backup_path, "rb") as old:
+                        if cur.read() == old.read():
+                            return backup_path
+            except OSError:
+                pass
         shutil.copy2(path, backup_path)
         return backup_path
     except Exception as exc:

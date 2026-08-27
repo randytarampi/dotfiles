@@ -282,6 +282,18 @@ def check_opencode_orphan_files():
             )
 
     for path in sorted(opencode_dir.glob("*.bak")):
+        live = opencode_dir / path.name[: -len(".bak")]
+        if not live.exists():
+            print(f"  \u26a0 Stale backup: {path.name} (live file gone)")
+            continue
+        try:
+            if path.read_bytes() == live.read_bytes():
+                # Backup identical to the live file: the config regenerated
+                # to the same content, so the backup adds nothing. Prune it.
+                path.unlink()
+                continue
+        except OSError:
+            pass
         print(f"  \u26a0 Stale backup: {path.name}")
 
     return exit_code
