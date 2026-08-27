@@ -127,11 +127,18 @@ def load_manifest(manifest_path: str) -> dict:
                 raise ValueError(f"Duplicate skills profile name: {profile_name}")
             merged["profiles"][profile_name] = profile_data
         for section in ("preinstalled", "repo_local"):
-            merged[section]["skills"] = list(
-                dict.fromkeys(
-                    merged[section]["skills"] + data.get(section, {}).get("skills", [])
-                )
+            combined = merged[section]["skills"] + data.get(section, {}).get(
+                "skills", []
             )
+            # Dedup by skill name (strings or dicts with "name" key)
+            seen = set()
+            deduped = []
+            for item in combined:
+                key = item if isinstance(item, str) else item.get("name", "")
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(item)
+            merged[section]["skills"] = deduped
 
     return merged
 

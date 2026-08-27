@@ -11,6 +11,8 @@
   },
   "repo_local": {
     "description": "Skills stored directly in this repo (not fetched from upstream)",
-    "skills": []
+    "skills": [
+      { "name": "dotfiles-verify", "source": "local" }
+    ]
   }
 }
