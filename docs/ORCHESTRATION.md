@@ -92,7 +92,7 @@ sequenceDiagram
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
-    Configure->>Configure: configure-jetbrains-ai.py --models (Junie profiles)
+    Configure->>Configure: configure-jetbrains-ai.py (Junie profiles via tier registry)
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
     Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
@@ -174,10 +174,9 @@ sequenceDiagram
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
 | 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work) | project `.opencode/.env` |
 
-`configure-opencode-project.py` and `configure-jetbrains-workspace-project.py` are
-permanent thin wrappers around `configure-project.py`. `configure-jetbrains-ai.py
---models` remains the global Junie-model path; project Junie work is delegated by
-the unified script.
+`configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py`
+remains the global Junie-model path; project Junie work is delegated by
+the unified script. Both consume the shared tier registry via `scripts/lib/tier_registry.py`.
 
 ### Skills catalog
 

@@ -6,17 +6,14 @@
 
 ## Adding a New Tier
 
-1. Edit `scripts/configure-opencode-tier.py` — add a new `case` block with the tier name, preset, council config, and fallback chains (leave empty `{}` for single-provider tiers)
-2. Add the preset definition to `configs/opencode/oh-my-opencode-slim.json` — define model, variant, skills, mcps, and council per agent role. For local-only tiers, use `_local:<category>` placeholders (reasoning/code-gen/lightweight/vision)
-3. Add the `_tiers.<name>` block to `oh-my-opencode-slim.json` — define council agent entries, default_preset, presets, and fallback chains
-4. Edit `scripts/configure-opencode.py` — add the tier to the preset validation case block, set `INCLUDE_ANTHROPIC`/`INCLUDE_OPENAI` flags as needed, configure provider generation
-5. Edit `.chezmoiscripts/run_onchange_16-configure-opencode.sh.tmpl` — add tier detection logic for auto-detection
-6. Update `AGENTS.md` tier table — add the new tier row
-7. Update `README.md` tier table — add the new tier row
-8. Update `configs/opencode/anthropic-models.json` if adding new Anthropic model IDs
-9. Test: `scripts/configure-opencode-tier.py <tier>`, then `/preset <name>` in OpenCode
+1. Add the tier's preset and `_tiers.<name>` block to `configs/opencode/oh-my-opencode-slim.json` — define roles, variants, skills, MCP references, council, and fallback chains. For local-only tiers, use `_local:<category>` placeholders (reasoning/code-gen/lightweight/vision)
+2. Update `scripts/lib/tier_registry.py` if the tier requires new shared resolution behavior. This registry is consumed by OpenCode, Junie, and Pi and is the single source of truth for tier → role → model mapping.
+3. Edit `scripts/configure-opencode.py` or `.chezmoiscripts/run_onchange_16-configure-opencode.sh.tmpl` only when provider generation or tier auto-detection needs an independent update
+4. Update `AGENTS.md` and `README.md` tier tables
+5. Update `configs/opencode/anthropic-models.json` if adding new Anthropic model IDs
+6. Test: `scripts/configure-opencode-tier.py --preset <tier>`, then `/preset <name>` in OpenCode
 
-`configure-opencode-tier.py` is the single source of truth for tier→preset mapping.
+Use the required `--preset <tier>` flag; positional tier arguments are not supported. Tier details belong in [docs/TIERS.md](TIERS.md).
 
 ---
 
@@ -62,9 +59,8 @@ Some tools cannot consume the full template set. Check the target app's document
 These scripts are useful when you want to refresh runtime-generated files without waiting for a full orchestration pass:
 
 - `scripts/configure-secrets.py` — resolves secrets and `.env`-derived paths; called by `configure-all.sh`, but also useful as a standalone refresh step
-- `scripts/configure-jetbrains-workspace-project.py` — updates JetBrains workspace module AI directories; manual-only and not wired into configure-all.sh because it needs explicit workspace/project paths
 - `scripts/configure-meridian.py` — refreshes Meridian proxy config for OpenCode
-- `scripts/configure-jetbrains-ai.py --all` / `--all-tools` — regenerates JetBrains AI models, dirs, symlinks, and MCP wiring
+- `scripts/configure-jetbrains-ai.py` — regenerates JetBrains AI model profiles, dirs, and symlinks (MCPs are generated separately by the `mcps` step)
 
 See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the three-layer architecture and when to use these helpers.
 
@@ -133,6 +129,12 @@ See [project-env.example](project-env.example) for the complete template.
 `configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`,
 `jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Use `--steps` to run any
 subset; JetBrains and Junie project work delegates to the existing scripts.
+
+All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable;
+use it to omit named steps such as `mcps`. `configure-all.sh` also accepts
+`--local-fallback-preset`, `--local-fallback-role`,
+`--local-fallback-placeholder`, `--preset`, `--mode`, and
+`--min-reasoning-embedding`.
 
 ## Adding a new agent tool
 

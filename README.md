@@ -135,7 +135,8 @@ make clean-backups       # Remove stale .bak files from ~/.config/opencode/
 make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
 make migrate             # Migrate deprecated gate names + append missing template keys to ~/.env
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
-scripts/configure-opencode-tier.py pro-plus   # Switch AI model tier
+scripts/configure-opencode-tier.py --preset pro-plus   # Switch AI model tier
+scripts/configure-all.sh [options]            # --preset, --mode, --skip, --local-fallback-*, --min-reasoning-embedding
 scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
 scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
@@ -291,7 +292,6 @@ Set in `~/.env` (0 = skip, 1 = run):
 │   └── opencode/
 │       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
 │       ├── anthropic-models.json     # Relocated
-│       ├── role-to-local-category.json # New
 │       ├── openai-models.json        # New
 │       └── ollama-cloud-models.json  # New
 │   ├── skills/                       # Skill source files (distributed to all agent dirs)
@@ -314,21 +314,19 @@ Set in `~/.env` (0 = skip, 1 = run):
     │   ├── tier_detect.sh         # Shared tier auto-detection (detect_tier)
     │   └── tier_args.sh           # Shared local fallback arg forwarding
     ├── configure-mcps.py       # Generate MCP configs for all AI tools
-    ├── configure-jetbrains-ai.py  # JetBrains AI: models, dirs, symlinks, MCP
-    ├── configure-opencode-project.py # Write project-specific OpenCode config overrides
+    ├── configure-jetbrains-ai.py  # JetBrains AI: model profiles, dirs, symlinks
     ├── configure-mozart-router.py # Configure Mozart AI router
     ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
     ├── configure-all.sh           # Full orchestration wrapper (rebuild configs)
     ├── configure-skills.py          # Distribute skills to all agent skill directories
     ├── verify-config.py           # Verify generated config presence and freshness
     ├── check-hashes.py            # Audit hash trigger coverage
-    ├── configure-jetbrains-workspace-project.py # Configure AI dirs in JB workspace modules
     ├── verify-brewfile-completeness.py # Verify Brewfile completeness
     ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
     ├── configure-mcp-tool.py      # Generate MCP config for a single tool
     ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
     ├── configure-opencode.py      # Write OpenCode config (local ollama default)
-    ├── configure-opencode-tier.py # Switch active preset tier (source of truth)
+    ├── configure-opencode-tier.py # Switch active preset tier (--preset required)
     ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
     ├── get-tools.py               # Get MCP tool registry keys
     ├── install-acp-adapters.sh    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
@@ -510,7 +508,7 @@ Packages available on both platforms by category:
 
 ### Model Tiers
 
-Eleven presets for AI agents, defined in `scripts/configure-opencode-tier.py` (source of truth) and documented in `AGENTS.md`:
+Eleven presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth) and documented in `AGENTS.md`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -530,7 +528,7 @@ Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. 
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
-Switch tier: `scripts/configure-opencode-tier.py <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
 Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 
@@ -615,7 +613,7 @@ JetBrains EAP CLI installed via the Junie CLI install script. Cross-platform: `c
 
 #### Junie Model Profiles
 
-Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `configs/junie/model-groups.json`:
+Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tier registry and `configs/junie/model-groups.json`:
 
 | Profile | Provider | Primary | Faster | Temp |
 |---------|----------|---------|--------|------|
@@ -635,7 +633,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py --models` from `conf
 | `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
 | `meridian-fable` | meridian | `claude-fable-5` | — | 1 |
 
-Local Ollama profiles resolve model IDs dynamically via `ollama ls` prefix matching. Cloud profiles use hardcoded IDs from `model-groups.json`. Temperatures follow Junie's recommendations.
+Local Ollama profiles resolve model IDs dynamically via the shared tier registry. For local tiers, an MoE code-gen model is also reused for lightweight and vision categories when applicable. Cloud profiles use registry-defined IDs. Temperatures follow Junie's recommendations.
 
 Homebrew-aware scripts now prefer `brew --prefix` so they stay Intel/ARM agnostic.
 
@@ -643,7 +641,7 @@ Select via: `junie --model custom:<profile>`
 
 ### MCP Configuration
 
-Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus the shared `codegraph` server template. `configure-mcps.py` generates per-tool config files.
+Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus the shared `codegraph` server template. The `mcps` step (`configure-mcps.py`) is the sole owner of MCP generation; JetBrains model configuration does not configure MCPs. Skip MCP generation with `--skip mcps` (not the removed `--no-mcp` flag).
 
 | Tool | Config Path | Format |
 |------|------------|--------|

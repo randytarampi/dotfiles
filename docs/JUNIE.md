@@ -2,7 +2,7 @@
 
 > Deep reference for Junie model profile definitions and their alignment with OpenCode presets.
 
-`configs/junie/model-groups.json` defines Junie model profiles that should stay aligned with `configs/opencode/oh-my-opencode-slim.json` presets. When changing one, update the other.
+The shared tier registry in `scripts/lib/tier_registry.py` is the single source of truth for tier → role → model mapping. OpenCode, Junie, and Pi consume the presets in `configs/opencode/oh-my-opencode-slim.json` through this registry. `configs/junie/model-groups.json` supplies Junie-specific profile metadata and temperature overrides.
 
 ### GitHub Copilot provider (experimental)
 
@@ -25,8 +25,8 @@ profile. The generator skips this group when the token is unavailable.
 
 | Junie field | oh-my-opencode-slim source | Notes |
 |-------------|---------------------------|-------|
-| `primaryModel` | `orchestrator` model | Strip provider prefix (e.g., `ollama-cloud/glm-5.2` → `glm-5.2`) |
-| `fasterModel` | `librarian` model | Strip provider prefix; add `fasterProvider` if different from `provider` |
+| `primaryModel` | Shared registry's `orchestrator` role | Strip provider prefix (e.g., `ollama-cloud/glm-5.2` → `glm-5.2`) |
+| `fasterModel` | Shared registry's `librarian` role | Strip provider prefix; add `fasterProvider` if different from `provider` |
 | `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama`: 0.6 |
 | `modelTemperatures` | — (Junie-specific) | Model-family temperature map; applied per-role at profile generation time |
 
@@ -49,7 +49,7 @@ When the librarian model uses a different provider than the orchestrator, add a 
 
 ## Local Tier Placeholders
 
-Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py`, which imports `resolve_roles_from_list()` from `scripts/configure-opencode-tier.py`:
+Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py` through `scripts/lib/tier_registry.py`:
 
 | Placeholder | Resolves to | Junie usage |
 |-------------|-------------|-------------|
@@ -60,6 +60,8 @@ Local groups use `_local:<category>` placeholders (not hardcoded model names). T
 | `_local:solo` | Best local solo model (all 4 caps) | `local-solo` primaryModel and fasterModel |
 
 If a placeholder cannot be resolved (no local models in that category), the profile generator skips the group with a warning.
+
+For local tiers, when the selected code-gen model is a mixture-of-experts (MoE) model, it is also reused for the lightweight and vision categories. This keeps Junie groups usable on local installations where one MoE model supplies multiple capabilities.
 
 ---
 
@@ -88,10 +90,17 @@ All generated profiles emit temperatures exclusively via per-role `primaryModel.
 
 ## Deployment
 
-After changing `model-groups.json`:
+After changing `model-groups.json` or the shared tier registry:
 
 ```bash
-python3 scripts/configure-jetbrains-ai.py --models
+python3 scripts/configure-jetbrains-ai.py
 ```
 
 This generates profiles in `~/.junie/models/` and cleans up stale files.
+
+`configure-jetbrains-ai.py` accepts `--local-fallback-preset`, repeated
+`--local-fallback-role`, repeated `--local-fallback-placeholder`, and
+`--min-reasoning-embedding`. Use `--skip models` or `--skip dirs` to omit an
+individual step. JetBrains configuration does not manage MCPs; MCP generation
+belongs exclusively to the `mcps` step (`scripts/configure-mcps.py` or
+`--skip mcps` on the umbrella orchestrator).

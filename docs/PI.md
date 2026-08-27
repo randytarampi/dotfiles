@@ -40,6 +40,29 @@ Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.
   Pi's generated `models.json`.
 - Delegate parallel work to the pi-subagents built-ins (scout, researcher,
   worker, reviewer, oracle, delegate); models are pinned from the preset.
+
+## Model resolution
+
+`configure-pi.py` derives every model from the preset — no hardcoded model
+names. The default model is the preset's `orchestrator` role; the
+`FAST`/`MEDIUM`/`STRONG` slots resolve through `ROLE_TO_BUILTIN` → the shared
+`resolve_roles_from_list()` tier resolver.
+
+For `local*` presets, `moe_codegen_reuse=True` is passed to the resolver. When
+the code-gen model is MoE and vision-capable (e.g. `ornith-1.5:35b`), it serves
+code-gen, lightweight, and vision roles — so `researcher`, `scout`, and
+`reviewer` built-ins all use the single loaded MoE model. See
+[docs/TIERS.md](TIERS.md) for the full reuse rules.
+
+`--local-fallback-placeholder`, `--local-fallback-role`, and
+`--local-fallback-preset` override resolved categories after classification;
+user overrides always win over MoE-reuse defaults. The resolver logs
+`Classified local models:` on every run, matching `configure-opencode-tier.py`
+and `generate-jetbrains-profiles.py`. All three consume the shared tier registry
+via `scripts/lib/tier_registry.py`.
+
+`--skip mcps` is accepted for CLI parity (Pi does not configure MCPs; the flag
+is a no-op with an info log).
 - Enable `pi-web-access` for web-backed research and use the Plannotator Pi
   extension for plan review.
 - From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP

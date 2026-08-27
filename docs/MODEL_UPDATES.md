@@ -9,7 +9,7 @@ Use this playbook when adding or changing models, switching tiers, or updating p
 ```mermaid
 flowchart LR
   A[Edit model JSONs: ollama-cloud-models.json / anthropic-models.json / openai-models.json] --> B[oh-my-opencode-slim.json: presets, _tiers, council]
-  B --> C[configure-opencode-tier.py: tier definitions, role/variant tables]
+  B --> C[scripts/lib/tier_registry.py: tier definitions, role/variant tables]
   C --> D[docs/TIERS.md: tier table, fallback chains, local classification]
   D --> E[README.md: tier table if present]
   E --> F[AGENTS.md: link to docs/TIERS.md, do NOT duplicate the table]
@@ -22,7 +22,8 @@ flowchart LR
 
 - [ ] Update the applicable model catalog(s): `configs/opencode/ollama-cloud-models.json`, `configs/opencode/anthropic-models.json`, and/or `configs/opencode/openai-models.json`.
 - [ ] Update `configs/opencode/oh-my-opencode-slim.json`: `presets`, `_tiers`, council entries, fallback chains, and the active preset as needed.
-- [ ] Update `scripts/configure-opencode-tier.py` for tier definitions, role mappings, variants, or local placeholder behavior.
+- [ ] Update `scripts/lib/tier_registry.py` for tier registry access, role mappings, variants, or local placeholder behavior.
+- [ ] Update `scripts/configure-opencode-tier.py` when tier switch logic, cloud proxy, or role assignment overrides change.
 - [ ] Update `scripts/configure-opencode.py` when provider inclusion, tier validation, or model catalog loading changes.
 - [ ] Update `docs/TIERS.md` with the tier table, role/variant details, fallback chains, and local classification rules.
 - [ ] Update `README.md` tier information, if a tier table or model summary is present.

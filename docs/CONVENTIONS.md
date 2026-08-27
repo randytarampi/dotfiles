@@ -15,7 +15,7 @@ Scripts declare capabilities in [`scripts/lib/cli-contract.json`](../scripts/lib
 | `public` | Must support `--help`, print usage, and exit 0. |
 | `mutates` | Must support `--dry-run` to preview without writing. |
 | `backups` | Must support `--no-backup`; backups are enabled by default. |
-| `tier_selector` | Must support canonical `--preset <TIER>`; a positional operand is a deprecated alias. |
+| `tier_selector` | Must require canonical `--preset <TIER>`; positional tier operands are rejected. |
 | `scope_selector` | Must support `--mode {global,project}`. |
 | `orchestrates` | Calls child scripts. Must declare `child_scripts` edges. |
 

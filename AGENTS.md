@@ -91,7 +91,7 @@ All scripts must conform to the [CLI Capability Contract](docs/CONVENTIONS.md). 
 - **Public scripts** must accept `--help` (exit 0, side-effect-free).
 - **Mutator scripts** must accept `--dry-run` (skip writes, log what would be done).
 - **Backup-capable scripts** must accept `--no-backup` (backup-on default; `--backup` is NOT used).
-- **Tier selectors** use `--preset` as canonical; positional operands are deprecated aliases.
+- **Tier selectors** require the canonical `--preset` flag; positional operands are rejected.
 - **Irrelevant flags must be rejected** with exit code 2 (usage error), not silently accepted.
 - **Exit codes**: 0 success, 1 runtime failure, 2 usage error.
 
@@ -194,7 +194,7 @@ To ensure clean, prefix-continuous, and readable logs:
 
 ## Model Tiers
 
-Eleven tiers are defined in `scripts/configure-opencode-tier.py` (source of truth). For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md). Switch with: `scripts/configure-opencode-tier.py <tier>`.
+Eleven tiers are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md). Switch with: `scripts/configure-opencode-tier.py --preset <tier>`.
 
 ---
 
@@ -224,7 +224,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 
 Run `make help` for the full command list. For task-specific guidance, see the relevant `docs/` reference.
 
-- Switch AI tier: `scripts/configure-opencode-tier.py <tier>`
+- Switch AI tier: `scripts/configure-opencode-tier.py --preset <tier>`
 - Apply all dotfiles: `make deploy`
 - Full verification: `make verify`
 - Check hash coverage: `make check-hashes`

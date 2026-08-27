@@ -29,6 +29,10 @@ These apply to every repo, every session.
 - If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
 - Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
 
+### Semantic ambiguity
+
+- **When a flag or option name is semantically ambiguous, ask before implementing.** For example, `--local-fallback-placeholder` could mean "replace the cloud model" or "replace the local fallback model." A wrong guess costs a full revert+refix cycle. Ask the user to clarify the intended semantics before dispatching implementation. Don't guess when the cost of being wrong is high.
+
 ### Delegation discipline
 
 For changes requiring exploration of unknown scope, delegate bounded discovery first. Use direct reads for files you expect to edit, reconcile, or verify. If scope is unclear after two discovery calls, or discovery spans multiple subsystems, delegate one bounded exploration task. Request concise file:line findings, avoid full file dumps in parent context.

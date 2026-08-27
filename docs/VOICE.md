@@ -37,7 +37,7 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 
 **Cloud STT upgrade**: When `OPENAI_API_KEY` is available, non-OpenAI tiers add `sttEndpoint`/`sttModel`/`sttApiKeyEnv` pointing to OpenAI's `/v1/audio/transcriptions`. Tiers already using OpenAI for the LLM use OpenAI STT by default.
 
-**Local Ollama model selection**: All `local-*` tiers reuse `configure-opencode-tier.py`'s model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models).
+**Local Ollama model selection**: All `local-*` tiers reuse the shared tier registry (`scripts/lib/tier_registry.py`) model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models). Cloud tiers respect `DOTFILES_USE_LOCAL_OLLAMA` (default: true) to control whether local models replace the cloud LLM endpoint.
 
 ---
 

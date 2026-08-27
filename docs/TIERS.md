@@ -16,7 +16,7 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ## Tier Definitions
 
-Eleven tiers defined in `scripts/configure-opencode-tier.py` (source of truth):
+Eleven tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -152,15 +152,34 @@ Council: α `_local:solo` max, β `_local:solo` high, γ `_local:solo` high. Div
 > [!NOTE]
 > Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use local-mini or local-nano.
 
+### MoE Code-Gen Reuse Across Tools
+
+For every `local*` tier, OpenCode (via `configure-opencode-tier.py`), Junie
+(via `generate-jetbrains-profiles.py`), and Pi (via `configure-pi.py`) pass
+`moe_codegen_reuse=True` to `resolve_roles_from_list`. When the selected
+code-gen model is MoE and vision-capable (for example,
+`ornith-1.5:35b`), one model serves code-gen, lightweight, and vision roles.
+Thus librarian, explorer, and observer — along with Pi's researcher, scout,
+and reviewer built-ins — use the same MoE model.
+
+In Junie's local groups, `fasterModel: _local:lightweight` consequently
+resolves to the code-gen model under reuse, so primary and faster model can be
+the same. This is intentional: it minimizes the number of loaded models.
+
+The optional `--min-reasoning-embedding N` filter is forwarded consistently to
+OpenCode, Junie, and Pi, excluding reasoning models with thinner embeddings
+than `N`. It can also be set with `DOTFILES_MIN_REASONING_EMBEDDING`.
+
 ---
 
 ## Local Model Classification
 
-Placeholders are resolved by `configure-opencode-tier.py` using model name heuristics, size rules, `ollama show` parameter counts, capability-aware classification, and density-aware sorting:
+Placeholders are resolved by `scripts/lib/tier_registry.py` (consuming `oh-my-opencode-slim.json` presets) using model name heuristics, size rules, `ollama show` parameter counts, capability-aware classification, and density-aware sorting:
 - **reasoning**: models containing `r1`, `reasoning`, `deep-think`, `think`, `qwq`, `reflection`
-- **code-gen**: models containing `coder`, `code`, `coding`, `devstral`, `codestral`, `deepseek-coder`, `qwen2.5-coder`, `qwen3-coder`, `codeqwen`
+- **code-gen**: models containing `coder`, `code`, `coding`, `devstral`, `codestral`, `deepseek-coder`, `qwen2.5-coder`, `qwen3-coder`, `codeqwen`, `ornith`
 - **lightweight**: models containing `mini`, `small`, `tiny`, `phi`, `gemma:2`, `gemma3`, `smol`
 - **vision**: subset of `lightweight` models that also have the `vision` capability (from `ollama show`)
+- **audio**: subset of `lightweight` models that also have the `audio` capability (from `ollama show`)
 - **solo**: models with all four capabilities (`completion` + `thinking` + `tools` + `vision`), purely capability-based (no name heuristics), sorted by density-aware key (dense > MoE, then embedding_length, then param count)
 
 Indexed placeholders (`_local:<category>_2`) resolve to the second-best model in a category, ensuring council diversity. For example, `_local:code-gen_2` gives a different model from `_local:code-gen` when multiple code-gen models are available, or falls back to the second-best reasoning model if code-gen only has one entry.
@@ -173,17 +192,19 @@ Additional classification rules (applied after name heuristics):
   - `code-gen`: name-heuristic-qualified models bypass capability checks; models classified via size/fallback rules require `thinking` + `completion`
   - `lightweight` requires `tools`
   - `vision` requires `tools` + `vision` (subset of lightweight)
+  - `audio` requires `tools` + `audio` (subset of lightweight)
   - `solo` requires `completion` + `thinking` + `tools` + `vision` (no name heuristics)
 - **Cross-category promotion**: models name-heuristically routed to `code-gen` but with `thinking` + `tools` capabilities are also added to the `reasoning` bucket. This lets dense coding/general models (e.g. `qwen3.6:27b-coding-nvfp4`) serve as `reasoning_2`/`reasoning_3` when their embedding and density justify it, without losing their primary category assignment. Lightweight models are **not** promoted — they are small by definition and should not serve as reasoning models when larger models are available.
 - **Density-aware sorting** (reasoning + solo only): after capability filtering, models are sorted by `(non_lightweight_first, dense_first, embedding_length, param_count)` descending. Lightweight-origin models sort last so a 9B lightweight model never outranks a 35B for deep reasoning. Among non-lightweight models, dense (non-MoE) models rank above MoE models of equal or larger parameter count, and higher embedding dimensions rank above lower. This prevents thin-embedding MoE models from outranking denser models for deep reasoning. `code-gen` and `lightweight` keep the param-count sort (MoE breadth helps code-gen diversity).
 - **Embedding hard filter** (optional): `--min-reasoning-embedding N` (or `DOTFILES_MIN_REASONING_EMBEDDING=N` env var) excludes models with `embedding_length < N` from reasoning roles entirely. Default `0` = disabled. Models with unknown embedding_length are never filtered out. Useful to hard-exclude MoE models with very thin embeddings (e.g. `--min-reasoning-embedding 3200`).
 - **Code-gen reuse**: if no code-gen model is found via name heuristic, the reasoning model is reused for code-gen roles
+- **MoE code-gen reuse**: when `moe_codegen_reuse` is enabled for local* presets and the chosen code-gen model is MoE, it also serves librarian, explorer, and (when vision-capable) observer roles to minimize loaded models
 - **Vision fallback**: if no vision-capable model exists, the best lightweight model is used with a warning
 - **Indexed placeholders**: `_local:<category>_2` resolves to the second-best model in a category (e.g., `_local:code-gen_2` for council gamma diversity)
 
-**Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories.
+**Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories. These warnings are generated from the shared tier registry via `scripts/lib/tier_registry.py`.
 
-Switch tier: `scripts/configure-opencode-tier.py` <tier> (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
 
 Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
 
@@ -194,9 +215,10 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 | Role Category | Name Patterns | Required Capabilities | Fallback Priority |
 |---------------|---------------------------------------------------------------|----------------------|-------------------|
 | reasoning | `r1`, `reasoning`, `deep-think`, `think`, `qwq`, `reflection` | `thinking` + `tools` | oracle |
-| code-gen | `coder`, `code`, `coding`, `devstral`, `codestral`, `laguna` | `thinking` + `completion` (name-qualified bypass) | orchestrator, fixer, designer |
+| code-gen | `coder`, `code`, `coding`, `devstral`, `codestral`, `laguna`, `ornith` | `thinking` + `completion` (name-qualified bypass) | orchestrator, fixer, designer |
 | lightweight | `mini`, `small`, `tiny`, `phi`, `smol` | `tools` | librarian, explorer |
 | vision | subset of lightweight with `vision` capability | `tools` + `vision` | observer |
+| audio | subset of lightweight with `audio` capability | `tools` + `audio` | — |
 
 > [!TIP]
 > `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
@@ -221,10 +243,10 @@ By default, non-local tiers use the `local` tier's placeholder definitions to de
 
 ```bash
 # Use local-pro placeholders for richer fallback diversity
-scripts/configure-opencode-tier.py --local-fallback-preset local-pro pro-plus
+scripts/configure-opencode-tier.py --local-fallback-preset local-pro --preset pro-plus
 
 # Use local-mini placeholders (fewer categories) for lighter fallbacks
-scripts/configure-opencode-tier.py --local-fallback-preset local-mini pro
+scripts/configure-opencode-tier.py --local-fallback-preset local-mini --preset pro
 ```
 
 For local tiers, `--local-fallback-preset` defaults to the current tier (so `local-pro` uses its own placeholders). For non-local tiers, it defaults to `local`.
@@ -235,10 +257,10 @@ Use `--local-fallback-placeholder` to override which model fills a specific plac
 
 ```bash
 # Use a specific model for the vision placeholder
-scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx pro-plus
+scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx --preset pro-plus
 
 # Multiple overrides
-scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx --local-fallback-placeholder reasoning=ollama/qwq:32b pro-plus
+scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx --local-fallback-placeholder reasoning=ollama/qwq:32b --preset pro-plus
 ```
 
 Format: `--local-fallback-placeholder <category>=<model>` where the left side is one of `reasoning`, `code-gen`, `lightweight`, `vision` and the right side is a model name (e.g., `ollama/qwen3.5:9b-mlx`).
@@ -248,7 +270,7 @@ Format: `--local-fallback-placeholder <category>=<model>` where the left side is
 Use `--local-fallback-role` to override which specific model fills a specific agent role. This is a role-level override applied after placeholder overrides:
 
 ```bash
-scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx pro-plus
+scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx --preset pro-plus
 ```
 
 Format: `--local-fallback-role <role>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`.
@@ -276,12 +298,12 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 ## Project Presets (Orthogonal to Global Tier)
 
-`configure-opencode-project.py --preset <tier>` writes a **self-sufficient** project `opencode.json`. It derives the set of providers the preset references (via `get_preset_providers()` in `scripts/lib/opencode_config.py`) and emits a `provider` block for each — `openai`, `anthropic`, `ollama-cloud`, and/or `ollama` — rather than relying on the global `~/.config/opencode/opencode.json` to define them.
+`configure-project.py --preset <tier>` writes a **self-sufficient** project `opencode.json`. It derives the set of providers the preset references (via `get_preset_providers()` in `scripts/lib/opencode_config.py`) and emits a `provider` block for each — `openai`, `anthropic`, `ollama-cloud`, and/or `ollama` — rather than relying on the global `~/.config/opencode/opencode.json` to define them.
 
 This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
 
 > [!IMPORTANT]
-> If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-opencode-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
+> If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
 
 ---
 
