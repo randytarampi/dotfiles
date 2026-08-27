@@ -140,7 +140,7 @@ When adding a new script:
 - Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with
   `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
 - Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
-- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns.
+- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and the Tokenscope plugin are documented in [docs/OPENCODE.md](docs/OPENCODE.md).
 
 ### Environment Gating
 
@@ -255,6 +255,7 @@ cache is `~/.local/share/dotfiles/skills/`. See
 | [docs/INSTALL.md](docs/INSTALL.md) | Full installation, upgrade, and verification instructions |
 | [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
 | [docs/PI.md](docs/PI.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
+| [docs/OPENCODE.md](docs/OPENCODE.md) | OpenCode configuration, ACP agent verification, Tokenscope plugin |
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 
