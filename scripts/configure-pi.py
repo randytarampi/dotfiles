@@ -25,8 +25,9 @@ from opencode_config import get_available_tiers
 from tier_resolve import get_model_details
 import tier_registry
 
-# Packages shipped with pi-core (not separate npm installs); skip `pi install`.
-_BUILTIN_PACKAGES = frozenset({"pi-skills"})
+# pi-skills is not an npm package; skills are provisioned through settings["skills"].
+# Keep this mechanism for future packages shipped with pi-core.
+_BUILTIN_PACKAGES = frozenset()
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
@@ -78,14 +79,18 @@ def _model_context_window(model_id, local):
     """Context window to advertise for a model.
 
     Local Ollama models are capped at min(OLLAMA_CONTEXT_LENGTH, native) so pi
-    never requests a window the model can't hold (e.g. 128K gemma under a 192K
-    cap). Cloud/API models use the OLLAMA_CONTEXT_LENGTH cap.
+    never requests a window the model can't hold. Ollama cloud models use their
+    native window when available; other cloud/API models use the cap.
     """
     cap = _ollama_context_cap()
     if local:
         native = _native_context(model_id)
         if native:
             return min(cap, native)
+    elif model_id.endswith(":cloud"):
+        native = _native_context(model_id)
+        if native:
+            return native
     return cap
 
 
@@ -132,7 +137,14 @@ def model_entry(model_id, name=None, local=False):
         "contextWindow": _model_context_window(model_id, local),
         "maxTokens": 32000,
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-        **({"compat": compat} if local else {}),
+        **(
+            {
+                "compat": compat,
+                "thinkingLevelMap": {"xhigh": "max"},
+            }
+            if local
+            else {}
+        ),
     }
 
 
@@ -143,7 +155,7 @@ def _install_package(pkg, dry_run, mode):
     if shutil.which("pi") is None:
         logger.warning("`pi` CLI not found; skipping package install")
         return
-    source = f"npm:{pkg}"
+    source = pkg if pkg.startswith("npm:") else f"npm:{pkg}"
     if dry_run:
         logger.info("Would install package: %s", source)
         return
@@ -163,9 +175,9 @@ def _ensure_packages(packages, dry_run=False, mode="global"):
     """Ensure all configured packages are installed (idempotent).
 
     Runs `pi list --no-approve` to discover what is already installed, then
-    installs only the missing ones. Builtin packages (e.g. pi-skills) are
-    skipped (they ship with pi-core and have no install step); in dry-run the
-    install is logged, not executed.
+    installs only the missing ones. Builtin packages are skipped (they ship with
+    pi-core and have no install step); in dry-run the install is logged, not
+    executed.
     """
     if shutil.which("pi") is None:
         logger.warning("`pi` CLI not found; skipping package installation")
@@ -201,7 +213,9 @@ def _ensure_packages(packages, dry_run=False, mode="global"):
         installed.add(name)
 
     to_install = [
-        pkg for pkg in packages if pkg not in _BUILTIN_PACKAGES and pkg not in installed
+        pkg
+        for pkg in packages
+        if pkg not in _BUILTIN_PACKAGES and pkg.removeprefix("npm:") not in installed
     ]
     if not to_install:
         logger.info("All %d packages already installed", len(packages))
@@ -413,15 +427,14 @@ def main():
         "enableAnalytics": False,
         "enabledModels": [],  # populated after providers are built
         "packages": [
-            "pi-skills",
-            "pi-mcp-adapter",
-            "pi-web-access",
-            "pi-subagents",
-            "@plannotator/pi-extension",
-            "@juicesharp/rpiv-todo",
-            "@juicesharp/rpiv-ask-user-question",
-            "@juicesharp/rpiv-voice",
-            "@juicesharp/rpiv-i18n",
+            "npm:pi-mcp-adapter",
+            "npm:pi-web-access",
+            "npm:pi-subagents",
+            "npm:@plannotator/pi-extension",
+            "npm:@juicesharp/rpiv-todo",
+            "npm:@juicesharp/rpiv-ask-user-question",
+            "npm:@juicesharp/rpiv-voice",
+            "npm:@juicesharp/rpiv-i18n",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],
@@ -434,9 +447,11 @@ def main():
     for role, builtin in ROLE_TO_BUILTIN.items():
         if role not in role_models:
             continue
-        settings["subagents"]["agentOverrides"][builtin] = {
-            "model": role_models[role],
-        }
+        override = {"model": role_models[role]}
+        role_config = roles.get(role, {})
+        if isinstance(role_config, dict) and role_config.get("variant"):
+            override["thinking"] = role_config["variant"]
+        settings["subagents"]["agentOverrides"][builtin] = override
     providers = {}
     local_base = args.ollama_base_url or get_ollama_local_base_url()
     providers["ollama"] = {

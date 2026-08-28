@@ -393,6 +393,7 @@
     "local-pro": {
       "orchestrator": {
         "model": "_local:code-gen",
+        "variant": "max",
         "skills": [
           "*"
         ],
@@ -403,7 +404,7 @@
       },
       "oracle": {
         "model": "_local:reasoning",
-        "variant": "high",
+        "variant": "max",
         "skills": [
           "simplify"
         ],
@@ -413,7 +414,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "*"
@@ -421,7 +422,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [
           "codemap"
         ],
@@ -431,7 +432,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "medium",
+        "variant": "max",
         "skills": [
           "agent-browser"
         ],
@@ -439,7 +440,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -447,16 +448,17 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "low"
+        "variant": "max"
       },
       "council": {
         "model": "_local:reasoning",
-        "variant": "high"
+        "variant": "max"
       }
     },
     "local": {
       "orchestrator": {
         "model": "_local:code-gen",
+        "variant": "max",
         "skills": [
           "*"
         ],
@@ -467,7 +469,7 @@
       },
       "oracle": {
         "model": "_local:reasoning",
-        "variant": "high",
+        "variant": "max",
         "skills": [
           "simplify"
         ],
@@ -477,7 +479,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "*"
@@ -485,7 +487,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [
           "codemap"
         ],
@@ -495,7 +497,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "medium",
+        "variant": "max",
         "skills": [
           "agent-browser"
         ],
@@ -503,7 +505,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -511,16 +513,17 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "low"
+        "variant": "max"
       },
       "council": {
         "model": "_local:reasoning",
-        "variant": "high"
+        "variant": "max"
       }
     },
     "local-mini": {
       "orchestrator": {
         "model": "_local:code-gen",
+        "variant": "max",
         "skills": [
           "*"
         ],
@@ -531,7 +534,7 @@
       },
       "oracle": {
         "model": "_local:code-gen",
-        "variant": "high",
+        "variant": "max",
         "skills": [
           "simplify"
         ],
@@ -541,7 +544,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "*"
@@ -549,7 +552,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "low",
+        "variant": "max",
         "skills": [
           "codemap"
         ],
@@ -559,7 +562,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "medium",
+        "variant": "max",
         "skills": [
           "agent-browser"
         ],
@@ -567,7 +570,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -575,16 +578,17 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "low"
+        "variant": "max"
       },
       "council": {
         "model": "_local:code-gen",
-        "variant": "high"
+        "variant": "max"
       }
     },
     "local-nano": {
       "orchestrator": {
         "model": "_local:code-gen",
+        "variant": "max",
         "skills": [
           "*"
         ],
@@ -595,7 +599,7 @@
       },
       "oracle": {
         "model": "_local:code-gen",
-        "variant": "high",
+        "variant": "max",
         "skills": [
           "simplify"
         ],
@@ -605,7 +609,7 @@
       },
       "librarian": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "*"
@@ -613,7 +617,7 @@
       },
       "explorer": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [
           "codemap"
         ],
@@ -623,7 +627,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "medium",
+        "variant": "max",
         "skills": [
           "agent-browser"
         ],
@@ -631,7 +635,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -639,16 +643,17 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "low"
+        "variant": "max"
       },
       "council": {
         "model": "_local:code-gen",
-        "variant": "high"
+        "variant": "max"
       }
     },
     "local-solo": {
       "orchestrator": {
         "model": "_local:solo",
+        "variant": "max",
         "skills": [
           "*"
         ],
@@ -669,7 +674,7 @@
       },
       "librarian": {
         "model": "_local:solo",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "*"
@@ -677,7 +682,7 @@
       },
       "explorer": {
         "model": "_local:solo",
-        "variant": "low",
+        "variant": "max",
         "skills": [
           "codemap"
         ],
@@ -687,7 +692,7 @@
       },
       "designer": {
         "model": "_local:solo",
-        "variant": "medium",
+        "variant": "max",
         "skills": [
           "agent-browser"
         ],
@@ -695,7 +700,7 @@
       },
       "fixer": {
         "model": "_local:solo",
-        "variant": "low",
+        "variant": "max",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -703,11 +708,11 @@
       },
       "observer": {
         "model": "_local:solo",
-        "variant": "low"
+        "variant": "max"
       },
       "council": {
         "model": "_local:solo",
-        "variant": "high"
+        "variant": "max"
       }
     }
   },
