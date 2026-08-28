@@ -78,7 +78,9 @@ node_modules
 *.swp
 *.swo
 *.tmp
+.agents
 .claude
+.cline
 .codex
 .copilot
 .cursor
@@ -98,11 +100,11 @@ node_modules
 ## CodeGraph
 .codegraph
 ## OpenCode
-opencode.json
-.opencode
-.slim
 .code-graph
 .memory
+.opencode
+opencode.json
+.slim
 ## Serverless
 .serverless-secrets.json
 
