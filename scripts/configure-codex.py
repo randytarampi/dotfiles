@@ -20,11 +20,14 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+import ai_models
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
+import tier_registry
 
 PROFILES_START = "# BEGIN DOTFILES MANAGED PROFILES"
 PROFILES_END = "# END DOTFILES MANAGED PROFILES"
+DEFAULT_OLLAMA_CLOUD_MODEL = "glm-5.3-flash"
 
 BASE_PROVIDER_CONFIG = """[model_providers.meridian]
 name = "Meridian"
@@ -40,14 +43,16 @@ wire_api = "responses"
 env_key = "OLLAMA_API_KEY"
 """
 
-PROFILES_CONFIG = """# BEGIN DOTFILES MANAGED PROFILES
+
+def build_profiles_config(ollama_model):
+    return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
 model = "claude-sonnet-5"
 model_provider = "meridian"
 model_reasoning_effort = "high"
 
 [profiles.ollama-cloud]
-model = "ollama-cloud/glm-5.2"
+model = "ollama-cloud/{ollama_model}"
 model_provider = "ollama-cloud"
 
 [profiles.ollama]
@@ -63,6 +68,38 @@ model = "copilot-model-id"
 model_provider = "github-copilot"
 # END DOTFILES MANAGED PROFILES
 """
+
+
+def resolve_ollama_cloud_model():
+    """Resolve the configured tier's Ollama Cloud model without failing setup."""
+    try:
+        slim_path = os.path.join(
+            SCRIPT_DIR, "..", "configs", "opencode", "oh-my-opencode-slim.json"
+        )
+        registry = tier_registry.load_registry(slim_path)
+        tier = os.environ.get("DOTFILES_OPENCODE_TIER") or registry["preset"]
+        preset = tier_registry.get_preset(registry, tier)
+        original_model = preset["orchestrator"]["model"]
+        if not isinstance(original_model, str) or not original_model.startswith(
+            "ollama-cloud/"
+        ):
+            note = (
+                f"orchestrator model for tier {tier} is not ollama-cloud "
+                f"({original_model}) — using default {DEFAULT_OLLAMA_CLOUD_MODEL}"
+            )
+            logger.warning(note)
+            return DEFAULT_OLLAMA_CLOUD_MODEL, note
+        model = ai_models.strip_provider_prefix(original_model)
+        note = f"derived from tier {tier} ({original_model})"
+        return model, note
+    except Exception as exc:
+        note = (
+            f"could not derive Ollama Cloud model ({exc}) — using default "
+            f"{DEFAULT_OLLAMA_CLOUD_MODEL}"
+        )
+        logger.warning(note)
+        return DEFAULT_OLLAMA_CLOUD_MODEL, note
+
 
 COPILOT_PROVIDER_CONFIG = """[model_providers.github-copilot]
 name = "GitHub Copilot"
@@ -119,6 +156,7 @@ def main():
     )
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
+    ollama_cloud_model, ollama_cloud_model_note = resolve_ollama_cloud_model()
 
     config_dir = os.path.expanduser("~/.codex")
     config_path = os.path.join(config_dir, "config.toml")
@@ -151,7 +189,7 @@ def main():
         if new_content:
             new_content += "\n\n"
         new_content += build_provider_config().rstrip()
-        new_content += "\n\n" + PROFILES_CONFIG.rstrip()
+        new_content += "\n\n" + build_profiles_config(ollama_cloud_model).rstrip()
 
         if new_content == original_content:
             logger.info(f"Providers already configured in {config_path}")
@@ -179,10 +217,11 @@ def main():
         "  • ollama: built-in (http://localhost:11434/v1 — responses)",
         "  • github-copilot: https://api.githubcopilot.com/v1 — responses (when GITHUB_TOKEN is set)",
         "  • profiles: meridian, ollama-cloud, ollama, local-solo, copilot",
+        f"  • ollama-cloud model: {ollama_cloud_model} ({ollama_cloud_model_note})",
         "",
         "Switch providers at runtime:",
         "  codex -c model_provider=meridian -m claude-sonnet-5",
-        "  codex -c model_provider=ollama-cloud -m glm-5.2",
+        f"  codex -c model_provider=ollama-cloud -m {ollama_cloud_model}",
         "  codex -c model_provider=ollama -m qwen2.5-coder",
         "",
         "Configure script complete!",
