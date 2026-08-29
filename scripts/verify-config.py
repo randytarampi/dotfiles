@@ -461,16 +461,36 @@ def main():
             print(f"  \u2717 OpenCode web LaunchAgent: MISSING {opencode_web_plist}")
             exit_code = 1
 
+        # The web port is pinned on the LaunchAgent command (serve --port
+        # "${OPENCODE_SERVER_PORT:-4096}"), not in the shared server config:
+        # a fixed server.port is inherited by every opencode process (acp,
+        # TUI) and collides with the web service.
+        plist_port_ok = False
+        if opencode_web_plist.exists():
+            try:
+                with open(opencode_web_plist) as f:
+                    plist_text = f.read()
+                plist_port_ok = (
+                    "serve" in plist_text and "OPENCODE_SERVER_PORT" in plist_text
+                )
+            except OSError:
+                plist_port_ok = False
+        if plist_port_ok:
+            print(
+                "  \u2713 OpenCode web LaunchAgent: serve pinned to OPENCODE_SERVER_PORT"
+            )
+        else:
+            print(
+                "  \u2717 OpenCode web LaunchAgent: serve command missing --port with OPENCODE_SERVER_PORT"
+            )
+            exit_code = 1
+
         if opencode_config is not None:
             server = opencode_config.get("server", {})
-            if isinstance(server, dict) and "port" in server and "cors" in server:
-                print(
-                    "  \u2713 OpenCode web server: port and cors configured in opencode.json"
-                )
+            if isinstance(server, dict) and "cors" in server:
+                print("  \u2713 OpenCode web server: cors configured in opencode.json")
             else:
-                print(
-                    "  \u2717 OpenCode web server: missing port and/or cors in opencode.json"
-                )
+                print("  \u2717 OpenCode web server: missing cors in opencode.json")
                 exit_code = 1
         elif opencode_json.exists():
             print("  \u2717 OpenCode web server: could not parse opencode.json")

@@ -67,7 +67,6 @@ def build_opencode_server_config() -> dict[str, object] | None:
     access_mode = (
         os.environ.get("CADDY_ACCESS", "localhost").strip().lower() or "localhost"
     )
-    port = int(os.environ.get("OPENCODE_SERVER_PORT", "4096") or "4096")
     zones_path = expand_path(DEFAULT_CADDY_ZONES_CONFIG)
     domains = load_domains(zones_path)
 
@@ -88,7 +87,6 @@ def build_opencode_server_config() -> dict[str, object] | None:
         mdns_domain = domains[0]
 
     return {
-        "port": port,
         "hostname": "127.0.0.1",
         "mdns": mdns_enabled,
         "mdnsDomain": mdns_domain,
