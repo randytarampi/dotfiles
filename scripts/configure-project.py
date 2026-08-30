@@ -38,7 +38,7 @@ ALL_STEPS = [
     "acp-agents",
     "secrets",
 ]
-DEFAULT_STEPS = ["opencode", "tier"]
+DEFAULT_STEPS = ["opencode", "codegraph", "skills", "jetbrains", "junie"]
 MANIFEST_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "configs", "skills")
 
 
@@ -58,24 +58,35 @@ def resolve_steps(args):
         return csv(os.environ["DOTFILES_PROJECT_STEPS"])
 
     steps = list(DEFAULT_STEPS)
-    if is_truthy(os.environ.get("DOTFILES_PROJECT_CODEGRAPH")):
-        steps.append("codegraph")
+    # Optional steps still join the defaults when their project env value is set.
     if os.environ.get("DOTFILES_PROJECT_MCPS") or os.environ.get(
         "DOTFILES_PROJECT_MCP_TOOLS"
     ):
         steps.append("mcps")
-    if os.environ.get("DOTFILES_PROJECT_SKILL_PROFILES") or os.environ.get(
-        "DOTFILES_PROJECT_SKILLS"
-    ):
-        steps.append("skills")
-    if is_truthy(os.environ.get("DOTFILES_PROJECT_JETBRAINS")):
-        steps.append("jetbrains")
-    if is_truthy(os.environ.get("DOTFILES_PROJECT_JUNIE")):
-        steps.append("junie")
     if os.environ.get("DOTFILES_PROJECT_ACP_AGENTS"):
         steps.append("acp-agents")
     if is_truthy(os.environ.get("DOTFILES_PROJECT_SECRETS")):
         steps.append("secrets")
+    # Explicit opt-outs remove a default step (negative gates).
+    # Absent vars mean default-on; only false-y or empty values disable.
+    _falsy = {"", "0", "false", "no", "off"}
+    if os.environ.get("DOTFILES_PROJECT_CODEGRAPH", "1").strip().lower() in _falsy:
+        steps.remove("codegraph")
+    skills_disabled = any(
+        os.environ.get(name, "1").strip().lower() in _falsy
+        for name in ("DOTFILES_PROJECT_SKILL_PROFILES", "DOTFILES_PROJECT_SKILLS")
+        if name in os.environ
+    )
+    if skills_disabled and "skills" in steps:
+        steps.remove("skills")
+    if "DOTFILES_PROJECT_JETBRAINS" in os.environ and not is_truthy(
+        os.environ.get("DOTFILES_PROJECT_JETBRAINS")
+    ):
+        steps.remove("jetbrains")
+    if "DOTFILES_PROJECT_JUNIE" in os.environ and not is_truthy(
+        os.environ.get("DOTFILES_PROJECT_JUNIE")
+    ):
+        steps.remove("junie")
     return steps
 
 
@@ -113,6 +124,14 @@ def load_project_env(opencode_dir):
 
 
 def configure_skills(root, profiles, extras, skipped):
+    # Skills default-on: with no profiles/extras/skips configured there is no
+    # authoritative desired set, so reconcile would wipe existing symlinks.
+    # No-op unless the project declares at least one skill input.
+    if not profiles and not extras and not skipped:
+        logger.info(
+            "No DOTFILES_PROJECT_SKILL_PROFILES/SKILLS/SKIP_SKILLS configured — skipping skills reconcile"
+        )
+        return
     manifest = load_manifest(MANIFEST_DIR)
     # Project mode bypasses profile gates — the project's .env declares which
     # profiles it wants via DOTFILES_PROJECT_SKILL_PROFILES, and we resolve them

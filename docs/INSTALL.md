@@ -61,6 +61,7 @@ For project-specific AI configuration, create `.opencode/.env` in the project
 
 ```bash
 scripts/configure-project.py
+# Default steps: opencode,codegraph,skills,jetbrains,junie.
 # Or only reconcile project skills:
 scripts/configure-project.py --steps skills
 ```

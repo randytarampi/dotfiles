@@ -127,8 +127,12 @@ Generated secrets go to `.opencode/.env.local` (gitignored), loaded after `.env`
 See [project-env.example](project-env.example) for the complete template.
 
 `configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`,
-`jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Use `--steps` to run any
-subset; JetBrains and Junie project work delegates to the existing scripts.
+`jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Defaults to
+`opencode,codegraph,skills,jetbrains,junie`; use `--steps` to run any subset,
+`DOTFILES_PROJECT_STEPS` to override the default set from `.opencode/.env`, or
+the per-step `DOTFILES_PROJECT_*` variables to opt individual default steps out
+(set them false-y, e.g. `DOTFILES_PROJECT_JUNIE=0`). JetBrains and Junie project
+work delegates to the existing scripts.
 
 All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable;
 use it to omit named steps such as `mcps`. `configure-all.sh` also accepts

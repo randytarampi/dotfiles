@@ -142,7 +142,7 @@ scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
 scripts/configure-skills.py                  # Distribute skills to all agent directories
-scripts/configure-project.py                 # Configure project-scoped AI tooling
+scripts/configure-project.py                 # Configure project-scoped AI tooling (default: opencode,codegraph,skills,jetbrains,junie)
 make opencode-restart                        # Restart OpenCode Web service
 make opencode-stop                           # Stop OpenCode Web service
 make opencode-start                          # Start OpenCode Web service
@@ -179,7 +179,8 @@ make ci-verify                               # CI verification (lint + drift + d
 ### Project-scoped configuration
 
 In a project, put user-authored project settings in `.opencode/.env`,
-then run `scripts/configure-project.py` (or `--steps skills` for skills only).
+then run `scripts/configure-project.py` (default steps:
+`opencode,codegraph,skills,jetbrains,junie`; use `--steps skills` for skills only).
 Select categories with `DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb`; use
 `DOTFILES_PROJECT_SKILLS` and `DOTFILES_PROJECT_SKIP_SKILLS` for individual
 overrides. Generated secrets go to `.opencode/.env.local`, leaving `.env` intact.

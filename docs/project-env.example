@@ -9,24 +9,29 @@
 # Model/tier selection
 DOTFILES_PROJECT_PRESET='pro-plus'
 
-# Optional explicit step selection (overrides automatic selection below)
-# DOTFILES_PROJECT_STEPS='opencode,tier,skills,acp-agents'
+# Optional explicit step selection (overrides defaults below).
+# Default steps: opencode,codegraph,skills,jetbrains,junie — mcps, tier, acp-agents,
+# and secrets are opt-in via the variables beneath.
+# DOTFILES_PROJECT_STEPS='opencode,codegraph,skills,jetbrains,junie'
 
 # Optional steps to exclude from the resolved set (applied after --steps/env resolution)
 # DOTFILES_PROJECT_SKIP='mcps,secrets'
 
-# Skills: category profiles plus individual additions/removals
+# Skills: category profiles plus individual additions/removals.
+# The skills step is on by default; it no-ops unless at least one of these is set
+# (or SKIP_SKILLS is non-empty). Set DOTFILES_PROJECT_SKILLS='0' to disable the step.
 DOTFILES_PROJECT_SKILL_PROFILES='core,aws,mongodb,prisma'
 DOTFILES_PROJECT_SKILLS=''
 DOTFILES_PROJECT_SKIP_SKILLS=''
 
-# MCP templates and target AI platforms
+# MCP templates and target AI platforms (opt-in step)
 DOTFILES_PROJECT_MCPS='github,sentry'
 DOTFILES_PROJECT_MCP_TOOLS='cursor,ai'
 
-# Optional project integrations
-DOTFILES_PROJECT_CODEGRAPH='true'
-DOTFILES_PROJECT_JETBRAINS='true'
-DOTFILES_PROJECT_JUNIE='true'
-DOTFILES_PROJECT_ACP_AGENTS='gemini,claude'
-DOTFILES_PROJECT_SECRETS='true'
+# Optional integrations: codegraph/jetbrains/junie are default-on; set '0'/'false'
+# to opt that step out for this project. acp-agents and secrets remain opt-in.
+# DOTFILES_PROJECT_CODEGRAPH='0'
+# DOTFILES_PROJECT_JETBRAINS='0'
+# DOTFILES_PROJECT_JUNIE='0'
+# DOTFILES_PROJECT_ACP_AGENTS='gemini,claude'
+# DOTFILES_PROJECT_SECRETS='true'
