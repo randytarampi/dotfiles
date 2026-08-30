@@ -437,6 +437,7 @@
         "configure-opencode-tier.py",
         "configure-mcps.py",
         "configure-jetbrains-ai.py",
+        "configure-pi.py",
         "configure-acp-agents.py",
         "configure-secrets.py"
       ]

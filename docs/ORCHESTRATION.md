@@ -172,7 +172,7 @@ sequenceDiagram
 | 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent | `DOTFILES_RUN_OPENCODE_WEB_SETUP` |
 | 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
-| 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work; default `opencode,codegraph,skills,jetbrains,junie`) | project `.opencode/.env` |
+| 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work; default `opencode,codegraph,skills,jetbrains,junie`; optional `pi` via `DOTFILES_PROJECT_PI`) | project `.opencode/.env` |
 
 `configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py`
 remains the global Junie-model path; project Junie work is delegated by

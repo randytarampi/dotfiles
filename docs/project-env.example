@@ -29,9 +29,10 @@ DOTFILES_PROJECT_MCPS='github,sentry'
 DOTFILES_PROJECT_MCP_TOOLS='cursor,ai'
 
 # Optional integrations: codegraph/jetbrains/junie are default-on; set '0'/'false'
-# to opt that step out for this project. acp-agents and secrets remain opt-in.
+# to opt that step out for this project. pi, acp-agents, and secrets remain opt-in.
 # DOTFILES_PROJECT_CODEGRAPH='0'
 # DOTFILES_PROJECT_JETBRAINS='0'
 # DOTFILES_PROJECT_JUNIE='0'
+# DOTFILES_PROJECT_PI='true' # Project-local .pi/agent/ config via configure-pi.py
 # DOTFILES_PROJECT_ACP_AGENTS='gemini,claude'
 # DOTFILES_PROJECT_SECRETS='true'

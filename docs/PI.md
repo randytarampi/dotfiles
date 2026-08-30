@@ -37,6 +37,18 @@ make verify
 Installation runs in phase 10 and configuration in phase 18, after OpenCode.
 Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.
 
+## Project-scoped configuration
+
+Run `scripts/configure-project.py --steps pi` or set `DOTFILES_PROJECT_PI=1` to
+run `configure-pi.py --mode project` in the project root. It writes
+`.pi/agent/settings.json`, `.pi/agent/models.json`, and `.pi/agent/auth.json`
+relative to the project; `auth.json` contains environment-variable references
+only, not secrets. Global plugin configuration seeding is skipped in project
+mode. These files are machine-specific, so projects may want `.pi/` in
+`.gitignore`. Regeneration re-syncs the tier snapshot, which can drift after a
+global tier switch until the project configuration is regenerated. See
+[docs/ORCHESTRATION.md](ORCHESTRATION.md) for the project configuration flow.
+
 ## Usage patterns
 
 - Use Pi as a lightweight, scriptable terminal agent when a full OpenCode

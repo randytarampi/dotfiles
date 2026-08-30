@@ -35,6 +35,7 @@ ALL_STEPS = [
     "skills",
     "jetbrains",
     "junie",
+    "pi",
     "acp-agents",
     "secrets",
 ]
@@ -65,6 +66,8 @@ def resolve_steps(args):
         steps.append("mcps")
     if os.environ.get("DOTFILES_PROJECT_ACP_AGENTS"):
         steps.append("acp-agents")
+    if is_truthy(os.environ.get("DOTFILES_PROJECT_PI")):
+        steps.append("pi")
     if is_truthy(os.environ.get("DOTFILES_PROJECT_SECRETS")):
         steps.append("secrets")
     # Explicit opt-outs remove a default step (negative gates).
@@ -360,6 +363,19 @@ def main():
             os.path.join(SCRIPT_DIR, "configure-jetbrains-ai.py"),
             "--project-dir",
             root,
+        ]
+        command += forward_common_args(args)
+        command += forward_local_fallback_args(args)
+        command += forward_min_reasoning_embedding_arg(args)
+        run(command, root, child_env)
+    if "pi" in steps:
+        command = [
+            sys.executable,
+            os.path.join(SCRIPT_DIR, "configure-pi.py"),
+            "--mode",
+            "project",
+            "--preset",
+            preset,
         ]
         command += forward_common_args(args)
         command += forward_local_fallback_args(args)
