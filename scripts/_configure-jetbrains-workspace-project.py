@@ -2,6 +2,10 @@
 """
 _configure-jetbrains-workspace-project.py — Configures JetBrains workspace modules.
 Writes .ai/mcp/mcp.json and creates .junie → .ai symlink.
+
+Linking is non-destructive: existing symlinks are repointed, real files are
+backed up to .bak before linking, and pre-existing real directories are
+left in place with a warning instead of being deleted.
 """
 
 # Manual-only: not wired into configure-all.sh because it operates on a specific
@@ -11,7 +15,6 @@ Writes .ai/mcp/mcp.json and creates .junie → .ai symlink.
 import sys
 import os
 import argparse
-import shutil
 import xml.etree.ElementTree as ET
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -20,6 +23,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from file_utils import backup_file
 
 
 def is_forbidden_root(d, workspace_root):
@@ -31,6 +35,46 @@ def is_forbidden_root(d, workspace_root):
         os.path.join(workspace_root, ".opencode"),
     }
     return d in forbidden
+
+
+def link_entity(source_path, target_path, link_target=None):
+    """Point target_path at source_path using non-destructive link semantics.
+
+    Semantics mirror ensure_symlink() in lib/ai_dirs.py:
+    - missing target: create the symlink
+    - symlink target: relink if it points elsewhere (e.g. stale absolute
+      links left behind by a directory move); no-op if already current
+    - real file target: back up to .bak, then replace with the symlink
+    - real directory target: warn and SKIP — never rmtree stateful
+      project directories (plans, memory, and MCP state live in these)
+
+    link_target defaults to source_path; pass a relative path when the
+    link itself should be relative (e.g. ../.ai/mcp/mcp.json for .air).
+    """
+    if link_target is None:
+        link_target = source_path
+
+    if os.path.islink(target_path):
+        current = os.readlink(target_path)
+        if current == link_target:
+            logger.info(f"Symlink already current: {target_path} -> {link_target}")
+            return
+        logger.warning(
+            f"Symlink {target_path} points to '{current}' (expected {link_target}) — relinking"
+        )
+        os.unlink(target_path)
+    elif os.path.isdir(target_path):
+        logger.warning(
+            f"{target_path} is a real directory (not a symlink) — skipping.\n"
+            f"  If you want it linked to {link_target}, remove it and re-run."
+        )
+        return
+    elif os.path.exists(target_path):
+        backup_file(target_path)
+        os.remove(target_path)
+
+    os.symlink(link_target, target_path)
+    logger.info(f"Linked {target_path} -> {link_target}")
 
 
 def resolve_iml_content_root(iml_path, workspace_root):
@@ -191,16 +235,8 @@ def main():
                 continue
 
             if os.path.exists(source_path):
-                logger.info(f"Linking {source_path} to {target_path}...")
                 try:
-                    if os.path.islink(target_path) or os.path.exists(target_path):
-                        if os.path.islink(target_path):
-                            os.unlink(target_path)
-                        elif os.path.isdir(target_path):
-                            shutil.rmtree(target_path)
-                        else:
-                            os.remove(target_path)
-                    os.symlink(source_path, target_path)
+                    link_entity(source_path, target_path)
                 except Exception as e:
                     logger.warning(
                         f"Failed to link {source_path} to {target_path}: {e}"
@@ -222,15 +258,7 @@ def main():
                         item_dst = os.path.join(opencode_dir_dst, item)
 
                         if os.path.exists(item_src):
-                            logger.info(f"Linking {item_src} to {item_dst}...")
-                            if os.path.islink(item_dst):
-                                os.unlink(item_dst)
-                            elif os.path.exists(item_dst):
-                                if os.path.isdir(item_dst):
-                                    shutil.rmtree(item_dst)
-                                else:
-                                    os.remove(item_dst)
-                            os.symlink(item_src, item_dst)
+                            link_entity(item_src, item_dst)
                 except Exception as e:
                     logger.warning(
                         f"Failed to configure .opencode under {abs_project_dir}: {e}"
@@ -253,12 +281,7 @@ def main():
                     air_mcp_dst = os.path.join(air_dir_dst, "mcp.json")
 
                     if os.path.exists(ai_mcp_src):
-                        logger.info(f"Linking {air_mcp_dst} -> ../.ai/mcp/mcp.json...")
-                        if os.path.islink(air_mcp_dst):
-                            os.unlink(air_mcp_dst)
-                        elif os.path.exists(air_mcp_dst):
-                            os.remove(air_mcp_dst)
-                        os.symlink("../.ai/mcp/mcp.json", air_mcp_dst)
+                        link_entity(ai_mcp_src, air_mcp_dst, "../.ai/mcp/mcp.json")
 
                     for item in [
                         "docker.json",
@@ -270,15 +293,7 @@ def main():
                         item_dst = os.path.join(air_dir_dst, item)
 
                         if os.path.exists(item_src):
-                            logger.info(f"Linking {item_src} to {item_dst}...")
-                            if os.path.islink(item_dst):
-                                os.unlink(item_dst)
-                            elif os.path.exists(item_dst):
-                                if os.path.isdir(item_dst):
-                                    shutil.rmtree(item_dst)
-                                else:
-                                    os.remove(item_dst)
-                            os.symlink(item_src, item_dst)
+                            link_entity(item_src, item_dst)
                 except Exception as e:
                     logger.warning(
                         f"Failed to configure .air under {abs_project_dir}: {e}"
@@ -299,12 +314,7 @@ def main():
                     item_dst = os.path.join(claude_dir_dst, "settings.local.json")
 
                     if os.path.exists(item_src):
-                        logger.info(f"Linking {item_src} to {item_dst}...")
-                        if os.path.islink(item_dst):
-                            os.unlink(item_dst)
-                        elif os.path.exists(item_dst):
-                            os.remove(item_dst)
-                        os.symlink(item_src, item_dst)
+                        link_entity(item_src, item_dst)
                 except Exception as e:
                     logger.warning(
                         f"Failed to configure .claude under {abs_project_dir}: {e}"
