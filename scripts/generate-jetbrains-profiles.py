@@ -17,8 +17,26 @@ import logger
 import tier_registry
 from ai_models import resolve_model
 from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
-from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
+from constants import (
+    MERIDIAN_DEFAULT_HOST,
+    MERIDIAN_DEFAULT_PORT,
+    get_ollama_local_base_url,
+)
 from discover_models import list_local_ollama_models
+
+
+def normalize_endpoint(base_url: str, api_type: str) -> str:
+    """Return the full Junie endpoint for an OpenAI-compatible API type."""
+    base_url = base_url.strip().rstrip("/")
+    for suffix in ("/v1/responses", "/v1/chat/completions", "/v1"):
+        if base_url.endswith(suffix):
+            base_url = base_url[: -len(suffix)]
+            break
+    endpoint = {
+        "OpenAIResponses": "/v1/responses",
+        "OpenAICompletion": "/v1/chat/completions",
+    }.get(api_type)
+    return f"{base_url}{endpoint}" if endpoint else base_url
 
 
 def build_provider_configs(cfg: dict) -> dict:
@@ -28,24 +46,25 @@ def build_provider_configs(cfg: dict) -> dict:
         api_key = os.environ.get(key_env, "") if key_env else ""
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
-        if base_url:
-            if not base_url.endswith("/v1"):
-                base_url += "/v1"
-            if definition.get("apiType") == "OpenAIResponses":
-                base_url = base_url.replace("/v1", "/v1/responses")
         if not base_url and (definition.get("hostEnv") or definition.get("portEnv")):
-            host = (
-                os.environ.get(definition.get("hostEnv", "")) or MERIDIAN_DEFAULT_HOST
-            )
-            port = (
-                os.environ.get(definition.get("portEnv", "")) or MERIDIAN_DEFAULT_PORT
-            )
-            base_url = f"http://{host}:{port}/v1/responses"
+            if name == "ollama":
+                base_url = get_ollama_local_base_url()
+            elif name == "meridian":
+                host = (
+                    os.environ.get(definition.get("hostEnv", ""))
+                    or MERIDIAN_DEFAULT_HOST
+                )
+                port = (
+                    os.environ.get(definition.get("portEnv", ""))
+                    or MERIDIAN_DEFAULT_PORT
+                )
+                base_url = f"http://{host}:{port}/v1"
         if not base_url:
             base_url = definition.get("baseUrl", "")
         base_env = definition.get("baseUrlEnv", "")
         if base_env and os.environ.get(base_env, "").strip():
             base_url = os.environ[base_env].strip().rstrip("/")
+        base_url = normalize_endpoint(base_url, definition.get("apiType", ""))
         provider_configs[name] = {
             "baseUrl": base_url,
             "apiType": definition.get("apiType", ""),
@@ -64,6 +83,16 @@ def model_provider(model_ref: str) -> str:
     if model_ref.startswith("ollama/"):
         return "ollama"
     return ""
+
+
+# Providers that exist in OpenCode presets but have no Junie equivalent; tiers
+# that depend on them cannot be materialized for Junie and must be skipped
+# explicitly rather than mis-mapped onto another provider.
+UNMAPPABLE_PROVIDERS = ("opencode", "github-copilot")
+
+
+def model_ref_provider(model_ref: str) -> str:
+    return model_ref.split("/", 1)[0] if "/" in model_ref else ""
 
 
 def model_id(model_ref: str) -> str:
@@ -135,11 +164,26 @@ def main():
             roles = tier_registry.materialize_role_models(
                 registry, tier, categories, args.local_fallback_role
             )
+        orchestrator_ref = roles.get("orchestrator", "")
+        librarian_ref = roles.get("librarian", "")
+        unmappable = sorted(
+            {
+                model_ref_provider(ref)
+                for ref in (orchestrator_ref, librarian_ref)
+                if model_ref_provider(ref) in UNMAPPABLE_PROVIDERS
+            }
+        )
+        if unmappable:
+            logger.info(
+                f"Tier {tier} requires provider(s) {', '.join(unmappable)} "
+                f"— not available in Junie, skipping"
+            )
+            continue
         tier_specs.append(
             (
                 tier,
-                roles.get("orchestrator", ""),
-                roles.get("librarian", ""),
+                orchestrator_ref,
+                librarian_ref,
                 None,
                 None,
             )
@@ -250,6 +294,14 @@ def main():
                     os.remove(os.path.join(target_dir, existing))
                     logger.info(f"Removed stale: {existing}")
     logger.info(f"JetBrains AI models configured at {target_dir}")
+    if not args.dry_run:
+        try:
+            from model_stamp import write_stamp
+
+            # Stamp marks last model sync for check-model-drift staleness warning.
+            write_stamp()
+        except Exception as exc:
+            logger.warning(f"Could not write model sync stamp: {exc}")
 
 
 if __name__ == "__main__":

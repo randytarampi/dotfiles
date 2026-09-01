@@ -135,7 +135,8 @@ def write_local_junie_config(model, dry_run):
     config = {
         "providers": {
             "ollama": {
-                "baseUrl": get_ollama_local_base_url(),
+                "baseUrl": get_ollama_local_base_url().rstrip("/")
+                + "/chat/completions",
                 "apiType": "OpenAICompletion",
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }

@@ -8,10 +8,16 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when Junie integration changes):
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
 # scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
+# scripts/check-model-drift.py: {{ include "scripts/check-model-drift.py" | sha256sum }}
 # scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
 # configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # configs/junie/model-groups.json: {{ include "configs/junie/model-groups.json" | sha256sum }}
+# junie-channel: {{ env "DOTFILES_JUNIE_CHANNEL" | default "release" }}
+# junie-version: {{ env "DOTFILES_JUNIE_VERSION" }}
+# junie-local-model: {{ env "DOTFILES_JUNIE_LOCAL_MODEL" | default "0" }}
+# scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
+# scripts/lib/model_stamp.py: {{ include "scripts/lib/model_stamp.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_JUNIE_CLI_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -22,16 +28,56 @@ if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" != "1" ]]; then
   exit 0
 fi
 
-info "Installing/updating Junie CLI EAP..."
+JUNIE_CHANNEL="${DOTFILES_JUNIE_CHANNEL:-release}"
+if [[ "$JUNIE_CHANNEL" != "release" && "$JUNIE_CHANNEL" != "eap" ]]; then
+  warn "Unsupported DOTFILES_JUNIE_CHANNEL='$JUNIE_CHANNEL' — using release"
+  JUNIE_CHANNEL="release"
+fi
+if [[ -n "${DOTFILES_JUNIE_VERSION:-}" ]]; then
+  export JUNIE_VERSION="$DOTFILES_JUNIE_VERSION"
+fi
+
+INSTALL_ARGS=()
+if [[ "${DOTFILES_JUNIE_LOCAL_MODEL:-0}" == "1" ]]; then
+  LOCAL_MODEL_SUPPORTED=0
+  if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+    MACOS_MAJOR="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+    MEMORY_BYTES="$(sysctl -n hw.memsize 2>/dev/null || true)"
+    CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
+    if [[ "$CPU_BRAND" =~ Apple[[:space:]]M([0-9]+) ]]; then
+      M_GENERATION="${BASH_REMATCH[1]}"
+      if [[ "$MACOS_MAJOR" =~ ^[0-9]+$ && "$MACOS_MAJOR" -ge 26 && "$M_GENERATION" -ge 5 && "$MEMORY_BYTES" =~ ^[0-9]+$ && "$MEMORY_BYTES" -ge 68719476736 ]]; then
+        LOCAL_MODEL_SUPPORTED=1
+      fi
+    else
+      warn "Could not identify Apple M-series generation — Junie Local requires M5+; installing without --local-model"
+    fi
+  fi
+  if [[ "$LOCAL_MODEL_SUPPORTED" == "1" ]]; then
+    INSTALL_ARGS+=(--local-model)
+  else
+    warn "Junie Local requires Apple M5+, macOS 26+, and at least 64 GB RAM — installing without --local-model"
+  fi
+fi
+
+if [[ "$JUNIE_CHANNEL" == "eap" ]]; then
+  INSTALL_SH_URL="https://junie.jetbrains.com/install-eap.sh"
+  INSTALL_PS_URL="https://junie.jetbrains.com/install-eap.ps1"
+else
+  INSTALL_SH_URL="https://junie.jetbrains.com/install.sh"
+  INSTALL_PS_URL="https://junie.jetbrains.com/install.ps1"
+fi
+
+info "Installing/updating Junie CLI ($JUNIE_CHANNEL channel)..."
 
 # Cross-platform install per https://junie.jetbrains.com/docs/junie-cli-eap.html#install-eap
 # Network failures are caught — warn and continue rather than blocking chezmoi apply
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-  if ! curl -fsSL https://junie.jetbrains.com/install-eap.sh | bash 2>&1; then
-    warn "Junie CLI install fetch failed (network error?) — try again with: curl -fsSL https://junie.jetbrains.com/install-eap.sh | bash"
+  if ! curl -fsSL "$INSTALL_SH_URL" | bash -s -- ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"} 2>&1; then
+    warn "Junie CLI install fetch failed (network error?) — try again with: curl -fsSL $INSTALL_SH_URL | bash"
   fi
 elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
-  if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://junie.jetbrains.com/install-eap.ps1')" 2>&1; then
+  if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm '$INSTALL_PS_URL')" 2>&1; then
     warn "Junie CLI install fetch failed (network error?) — try again manually"
   fi
 else
