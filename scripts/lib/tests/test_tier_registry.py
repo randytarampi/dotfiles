@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 import unittest
@@ -6,6 +7,33 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import tier_registry
 import tier_resolve
+
+VERIFY_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "verify-slim-invariants.py"
+)
+verify_spec = importlib.util.spec_from_file_location(
+    "verify_slim_invariants", VERIFY_PATH
+)
+assert verify_spec is not None
+assert verify_spec.loader is not None
+verify_slim_invariants = importlib.util.module_from_spec(verify_spec)
+verify_spec.loader.exec_module(verify_slim_invariants)
+
+
+def load_script_module(name, filename):
+    path = os.path.join(os.path.dirname(__file__), "..", "..", filename)
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+configure_pi = load_script_module("configure_pi", "configure-pi.py")
+configure_voice = load_script_module(
+    "configure_opencode_voice", "configure-opencode-voice.py"
+)
 
 
 def registry():
@@ -23,6 +51,51 @@ def registry():
 
 
 class TierRegistryTests(unittest.TestCase):
+    def test_pi_excludes_opencode_only_presets(self):
+        tiers = set(configure_pi.get_pi_available_tiers())
+        self.assertNotIn("openai", tiers)
+        self.assertNotIn("thirtydollars", tiers)
+        self.assertNotIn("opencode-zen-free", tiers)
+
+    def test_voice_mapping_for_opencode_only_presets_uses_openai_defaults(self):
+        with patch.object(
+            configure_voice, "check_ollama_daemon", return_value=(None, False)
+        ), patch.object(
+            configure_voice, "list_local_ollama_models", return_value=[]
+        ), patch.dict(
+            "os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}
+        ):
+            for tier in ("openai", "thirtydollars", "opencode-zen-free"):
+                config = configure_voice.get_voice_config(tier)
+                self.assertEqual(config["model"], "gpt-5.4-mini")
+
+    def test_materialize_role_models_tolerates_absent_observer(self):
+        data = registry()
+        self.assertNotIn("observer", data["presets"]["pro-plus"])
+        roles = tier_registry.materialize_role_models(data, "pro-plus", {})
+        self.assertNotIn("observer", roles)
+        self.assertIn("orchestrator", roles)
+
+    def test_provider_dedupe_flags_duplicate_provider(self):
+        violations = verify_slim_invariants._provider_dedupe_violations(
+            ["openai/first", "openai/second"], "fallback.role"
+        )
+        self.assertEqual(len(violations), 1)
+
+    def test_provider_dedupe_accepts_distinct_providers(self):
+        self.assertEqual(
+            verify_slim_invariants._provider_dedupe_violations(
+                ["openai/model", "anthropic/model"]
+            ),
+            [],
+        )
+
+    def test_provider_dedupe_allows_primary_provider_overlap(self):
+        self.assertEqual(
+            verify_slim_invariants._provider_dedupe_violations(["openai/fallback"]),
+            [],
+        )
+
     def test_role_override_does_not_change_category(self):
         roles = tier_registry.materialize_role_models(
             registry(),

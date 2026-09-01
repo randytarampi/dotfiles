@@ -16,6 +16,7 @@ Invariants enforced:
      tier definitions.
   5. Top-level council alpha/beta/gamma models match each tier definition.
   6. Every configured model is present in its provider's model allowlist.
+  7. Fallback entries within an array use distinct provider prefixes.
 
 The fallback arrays live at `_tiers.<tier>.fallback.<role>`. Role primaries live
 at `presets.<preset>.<role>.model` (the council synth primary is
@@ -37,6 +38,8 @@ MODEL_ALLOWLIST_PATHS = {
     "openai": REPO_ROOT / "configs" / "opencode" / "openai-models.json",
     "anthropic": REPO_ROOT / "configs" / "opencode" / "anthropic-models.json",
     "ollama-cloud": REPO_ROOT / "configs" / "opencode" / "ollama-cloud-models.json",
+    "opencode": REPO_ROOT / "configs" / "opencode" / "opencode-models.json",
+    "github-copilot": REPO_ROOT / "configs" / "opencode" / "github-copilot-models.json",
 }
 
 
@@ -120,6 +123,22 @@ def _model_allowlist_violations(data):
             violations.append(
                 f"{path} = {model!r} is not in {provider} model allowlist"
             )
+    return violations
+
+
+def _provider_dedupe_violations(arr, path="fallback"):
+    """Return violations for repeated providers within one fallback array."""
+    seen = {}
+    violations = []
+    for idx, entry in enumerate(arr):
+        provider = entry.split("/", 1)[0]
+        if provider in seen:
+            violations.append(
+                f"{path}[{idx}] = {entry!r} repeats provider '{provider}' "
+                f"from earlier index {seen[provider]}"
+            )
+        else:
+            seen[provider] = idx
     return violations
 
 
@@ -223,6 +242,11 @@ def main():
                     )
                 else:
                     seen[entry] = idx
+
+            # 7: fallback alternatives must be provider-diverse.
+            violations.extend(
+                _provider_dedupe_violations(arr, f"_tiers.{tier}.fallback.{role}")
+            )
 
     print("oh-my-opencode-slim invariants")
     print("=" * 60)
