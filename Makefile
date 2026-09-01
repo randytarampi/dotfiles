@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-plugin-consistency verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -132,6 +132,7 @@ dry-run: ## Preview chezmoi changes without applying them
 deploy: ## Apply dotfiles and run all configuration scripts
 	@$(LOAD_ENV); $(CHEZMOI) --source "$(CHEZMOI_SOURCE)" apply --force
 	@$(LOAD_ENV); bash scripts/configure-all.sh
+	@python3 -c "import sys; sys.path.insert(0,'scripts/lib'); from model_stamp import notice_message; message = notice_message(); print(message) if message else None"
 
 configure: ## Run all AI tool configure scripts (without chezmoi apply)
 	@$(LOAD_ENV); bash scripts/configure-all.sh
@@ -159,6 +160,9 @@ check-categories: ## Verify Brewfile/wingetfile category registries are in sync
 
 check-slim-invariants: ## Verify oh-my-opencode-slim fallback arrays have no dupes
 	@python3 scripts/verify-slim-invariants.py
+
+check-model-drift: ## Check deployed model configs against live catalogs
+	@python3 scripts/check-model-drift.py
 
 check-templates: ## Render JSON chezmoi templates and validate output (catches Go template errors that lint misses)
 	@echo "Rendering and validating JSON templates..."
@@ -191,7 +195,7 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
