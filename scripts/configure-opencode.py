@@ -221,10 +221,18 @@ def main():
     anthropic_models_path = os.path.join(
         configs_dir_path, "opencode", "anthropic-models.json"
     )
+    opencode_models_path = os.path.join(
+        configs_dir_path, "opencode", "opencode-models.json"
+    )
+    github_copilot_models_path = os.path.join(
+        configs_dir_path, "opencode", "github-copilot-models.json"
+    )
 
     openai_models = {}
     ollama_cloud_models = {}
     anthropic_models = {}
+    opencode_models = {}
+    github_copilot_models = {}
 
     if os.path.exists(openai_models_path):
         with open(openai_models_path, "r", encoding="utf-8") as f:
@@ -235,6 +243,12 @@ def main():
     if os.path.exists(anthropic_models_path):
         with open(anthropic_models_path, "r", encoding="utf-8") as f:
             anthropic_models = json.load(f).get("models", {})
+    if os.path.exists(opencode_models_path):
+        with open(opencode_models_path, "r", encoding="utf-8") as f:
+            opencode_models = json.load(f).get("models", {})
+    if os.path.exists(github_copilot_models_path):
+        with open(github_copilot_models_path, "r", encoding="utf-8") as f:
+            github_copilot_models = json.load(f).get("models", {})
 
     # Fetch model metadata from models.dev (24h-cached, graceful degradation)
     models_dev_data = fetch_models_dev()
@@ -341,6 +355,29 @@ def main():
             }
         if "ollama" in needed_providers and local_ollama:
             config["provider"]["ollama"] = local_ollama
+        if "opencode" in needed_providers and opencode_models:
+            config["provider"]["opencode"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "opencode")
+                    for mid in opencode_models
+                },
+                "options": {
+                    "baseURL": "https://opencode.ai/zen/v1",
+                    **(
+                        {"apiKey": "{env:OPENCODE_API_KEY}"}
+                        if os.environ.get("OPENCODE_API_KEY")
+                        else {}
+                    ),
+                },
+            }
+        if "github-copilot" in needed_providers and github_copilot_models:
+            config["provider"]["github-copilot"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "github-copilot")
+                    for mid in github_copilot_models
+                },
+                "options": {"baseURL": "https://api.githubcopilot.com"},
+            }
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
@@ -365,6 +402,16 @@ def main():
         # so it overrides (clears) any inherited global disabled_providers.
 
     else:
+        try:
+            global_needed_providers = get_preset_providers(
+                args.preset, get_slim_config_path()
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not derive required providers for preset "
+                f"'{args.preset}' ({e}); using legacy global provider rules."
+            )
+            global_needed_providers = set()
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
@@ -414,6 +461,69 @@ def main():
             if local_ollama:
                 config["provider"]["ollama"] = local_ollama
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
+        elif args.preset in ("openai", "thirtydollars"):
+            if openai_models:
+                config["provider"]["openai"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "openai")
+                        for mid in openai_models
+                    }
+                }
+            if opencode_models:
+                config["provider"]["opencode"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "opencode")
+                        for mid in opencode_models
+                    },
+                    "options": {
+                        "baseURL": "https://opencode.ai/zen/v1",
+                        **(
+                            {"apiKey": "{env:OPENCODE_API_KEY}"}
+                            if os.environ.get("OPENCODE_API_KEY")
+                            else {}
+                        ),
+                    },
+                }
+            if args.preset == "thirtydollars" and github_copilot_models:
+                config["provider"]["github-copilot"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "github-copilot")
+                        for mid in github_copilot_models
+                    },
+                    "options": {"baseURL": "https://api.githubcopilot.com"},
+                }
+            config["disabled_providers"].extend(["anthropic", "ollama-cloud", "ollama"])
+        elif args.preset == "opencode-zen-free":
+            if "openai" in global_needed_providers and openai_models:
+                config["provider"]["openai"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "openai")
+                        for mid in openai_models
+                    }
+                }
+            if opencode_models:
+                config["provider"]["opencode"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "opencode")
+                        for mid in opencode_models
+                    },
+                    "options": {
+                        "baseURL": "https://opencode.ai/zen/v1",
+                        **(
+                            {"apiKey": "{env:OPENCODE_API_KEY}"}
+                            if os.environ.get("OPENCODE_API_KEY")
+                            else {}
+                        ),
+                    },
+                }
+            config["disabled_providers"].extend(
+                ["openai", "anthropic", "ollama-cloud", "ollama", "github-copilot"]
+            )
+            config["disabled_providers"] = [
+                provider
+                for provider in config["disabled_providers"]
+                if provider not in global_needed_providers
+            ]
         elif args.preset == "anthropic":
             if include_anthropic and anthropic_models:
                 enriched_anthropic = {
@@ -751,6 +861,9 @@ def main():
         "     configure-opencode-tier.py --preset pro-plus-anthropic",
         "     configure-opencode-tier.py --preset plus",
         "     configure-opencode-tier.py --preset anthropic",
+        "     configure-opencode-tier.py --preset openai",
+        "     configure-opencode-tier.py --preset thirtydollars",
+        "     configure-opencode-tier.py --preset opencode-zen-free",
         "     configure-opencode-tier.py --preset local-pro",
         "     configure-opencode-tier.py --preset local",
         "     configure-opencode-tier.py --preset local-mini",

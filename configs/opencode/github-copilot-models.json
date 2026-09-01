@@ -1,0 +1,5 @@
+{
+  "models": {
+    "gemini-3.5-flash": {"name": "gemini-3.5-flash"}
+  }
+}

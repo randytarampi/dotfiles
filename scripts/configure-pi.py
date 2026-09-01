@@ -44,6 +44,12 @@ ROLE_TO_BUILTIN = {
     "fixer": "worker",
     "observer": "reviewer",
 }
+OPENCODE_ONLY_PRESETS = frozenset({"openai", "thirtydollars", "opencode-zen-free"})
+
+
+def get_pi_available_tiers():
+    """Return registry tiers supported by Pi's available providers."""
+    return [tier for tier in get_available_tiers() if tier not in OPENCODE_ONLY_PRESETS]
 
 
 # Cache of model_id -> Ollama model details discovered via `ollama show`.
@@ -298,7 +304,14 @@ def main():
     add_local_fallback_args(p)
     add_min_reasoning_embedding_arg(p)
     p.add_argument("--mode", choices=["global", "project"], default="global")
-    p.add_argument("--preset", choices=get_available_tiers(), required=True)
+    available_tiers = get_pi_available_tiers()
+    unsupported_tiers = sorted(set(get_available_tiers()) - set(available_tiers))
+    if unsupported_tiers:
+        logger.warning(
+            "Skipping %s: OpenCode-only preset (requires opencode/github-copilot providers)",
+            ", ".join(unsupported_tiers),
+        )
+    p.add_argument("--preset", choices=available_tiers, required=True)
     p.add_argument(
         "--skip",
         default=None,

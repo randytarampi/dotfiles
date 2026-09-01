@@ -1,0 +1,11 @@
+{
+  "models": {
+    "big-pickle": {"name": "big-pickle"},
+    "nemotron-3-ultra-free": {"name": "nemotron-3-ultra-free"},
+    "nemotron-3.5-lightning-free": {"name": "nemotron-3.5-lightning-free"},
+    "mimo-v2.5-free": {"name": "mimo-v2.5-free"},
+    "gpt-5.6-terra": {"name": "gpt-5.6-terra"},
+    "gpt-5.6-luna": {"name": "gpt-5.6-luna"},
+    "gemini-3.5-flash": {"name": "gemini-3.5-flash"}
+  }
+}

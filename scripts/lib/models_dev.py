@@ -28,7 +28,13 @@ CACHE_TTL_SECONDS = 24 * 60 * 60  # 24 hours
 
 # models.dev providers that map to OpenCode provider keys.
 # Note: models.dev has `ollama-cloud` (not bare `ollama`) for cloud models.
-SUPPORTED_PROVIDERS = ("openai", "anthropic", "ollama-cloud")
+SUPPORTED_PROVIDERS = (
+    "openai",
+    "anthropic",
+    "ollama-cloud",
+    "opencode",
+    "github-copilot",
+)
 
 
 def fetch_models_dev(force_refresh=False):

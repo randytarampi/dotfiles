@@ -69,7 +69,13 @@ def get_voice_config(
        optional "sttEndpoint": ..., optional "sttModel": ..., optional "sttApiKeyEnv": ...}
     """
     is_anthropic_tier = tier in ("anthropic", "pro-plus-anthropic")
-    is_plus_tier = tier in ("plus", "plus-anthropic")
+    is_plus_tier = tier in (
+        "plus",
+        "plus-anthropic",
+        "openai",
+        "thirtydollars",
+        "opencode-zen-free",
+    )
     is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
     registry = tier_registry.load_registry()

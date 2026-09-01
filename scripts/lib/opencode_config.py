@@ -12,11 +12,18 @@ import re
 
 # Recognized provider prefixes that map to opencode.json provider blocks.
 # `ollama-cloud` is matched before `ollama` to avoid mis-parsing "ollama-cloud/...".
-_PROVIDER_PREFIXES = ("openai", "anthropic", "ollama-cloud", "ollama")
+_PROVIDER_PREFIXES = (
+    "openai",
+    "anthropic",
+    "ollama-cloud",
+    "ollama",
+    "opencode",
+    "github-copilot",
+)
 
 # Matches "<provider>/<model>" model strings used throughout presets.
 _PROVIDER_MODEL_RE = re.compile(
-    r"^(ollama-cloud|ollama|openai|anthropic)/[A-Za-z0-9._:\-]+$"
+    r"^(ollama-cloud|ollama|openai|anthropic|opencode|github-copilot)/[A-Za-z0-9._:\-]+$"
 )
 
 # Path to the project configs directory (relative to this lib module)
