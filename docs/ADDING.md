@@ -6,7 +6,7 @@
 
 ## Adding a New Tier
 
-1. Add the tier's preset and `_tiers.<name>` block to `configs/opencode/oh-my-opencode-slim.json` — define roles, variants, skills, MCP references, council, and fallback chains. For local-only tiers, use `_local:<category>` placeholders (reasoning/code-gen/lightweight/vision)
+1. Add the tier's preset and `_tiers.<name>` block to `configs/opencode/oh-my-opencode-slim.json` — define roles, variants, skills, MCP references, council, and fallback chains. Add provider model IDs to the matching `configs/opencode/*-models.json` allowlist. For local-only tiers, use `_local:<category>` placeholders (reasoning/code-gen/lightweight/vision)
 2. Update `scripts/lib/tier_registry.py` if the tier requires new shared resolution behavior. This registry is consumed by OpenCode, Junie, and Pi and is the single source of truth for tier → role → model mapping.
 3. Edit `scripts/configure-opencode.py` or `.chezmoiscripts/run_onchange_16-configure-opencode.sh.tmpl` only when provider generation or tier auto-detection needs an independent update
 4. Update `AGENTS.md` and `README.md` tier tables

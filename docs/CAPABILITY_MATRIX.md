@@ -6,7 +6,7 @@ bridge or compatibility layer is used.
 
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| opencode | OpenAI, Anthropic, Ollama/Ollama Cloud, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, 11 tiers | yes | yes | native tiers | not collected | full (STT+TTS) | env-vars |
+| opencode | OpenAI, Anthropic, Ollama/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, 14 tiers | yes | yes | native tiers | not collected | full (STT+TTS) | env-vars |
 | codex | OpenAI and Ollama via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | profiles | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
 | junie | JetBrains/cloud, OpenAI, Meridian, Ollama | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
 | pi | OpenAI, Anthropic, Ollama/Ollama Cloud, Meridian | `pi-mcp-adapter`, generated Pi config | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin |

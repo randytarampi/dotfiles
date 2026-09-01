@@ -16,16 +16,19 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ## Tier Definitions
 
-Eleven tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
+Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
-| **pro** | Ollama Cloud (glm-5.3-flash orchestrator, nemotron-3-ultra council) | Daily coding, budget mode |
+| **pro** | Ollama Cloud (glm-5.3-flash orchestrator, glm-5.3 council) | Daily coding, budget mode |
 | **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
+| **openai** | OpenAI only | OpenAI-first workflow |
+| **thirtydollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
+| **opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
 | **local-pro** | Local Ollama (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
@@ -35,7 +38,25 @@ Eleven tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of t
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+
+The `openai` and `thirtydollars` presets omit observer because their GPT-5.6-Terra orchestrators are vision-capable. `opencode-zen-free` retains its upstream observer because its free-tier orchestrator has no verified vision capability; its current catalog substitution is `nemotron-3-ultra-free`.
+
+### Pro Tier (`pro`)
+
+Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tier alignment:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator | `glm-5.3-flash` | max |
+| oracle | `kimi-k3` | max |
+| librarian | `gemma4:31b` | low |
+| explorer | `gemma4:31b` | low |
+| designer | `glm-5.3-flash` | medium |
+| fixer | `deepseek-v4-flash` | high |
+| council | `glm-5.3` | max |
+
+Fallbacks are provider-deduplicated and retain one best alternative per role.
 
 ### Anthropic Tier (`anthropic`)
 
@@ -204,7 +225,7 @@ Additional classification rules (applied after name heuristics):
 
 **Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories. These warnings are generated from the shared tier registry via `scripts/lib/tier_registry.py`.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, openai, thirtydollars, opencode-zen-free, local-pro, local, local-mini, local-nano, local-solo)
 
 Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
 
@@ -227,7 +248,7 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 
 ## Fallback Chains
 
-Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` and all `local-*` tiers have **empty fallback chains by default** — they rely on their single-provider model hierarchy instead. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains.
+Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains.
 
 Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models. All indexed models matching a role's category are appended (not just the single best model).
 
@@ -298,7 +319,7 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 ## Project Presets (Orthogonal to Global Tier)
 
-`configure-project.py --preset <tier>` writes a **self-sufficient** project `opencode.json`. It derives the set of providers the preset references (via `get_preset_providers()` in `scripts/lib/opencode_config.py`) and emits a `provider` block for each — `openai`, `anthropic`, `ollama-cloud`, and/or `ollama` — rather than relying on the global `~/.config/opencode/opencode.json` to define them.
+`configure-project.py --preset <tier>` writes a **self-sufficient** project `opencode.json`. It derives the set of providers the preset references (via `get_preset_providers()` in `scripts/lib/opencode_config.py`) and emits a `provider` block for each — `openai`, `anthropic`, `ollama-cloud`, `ollama`, `opencode`, and/or `github-copilot` — rather than relying on the global `~/.config/opencode/opencode.json` to define them.
 
 This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
 
@@ -309,7 +330,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `kimi-k2.7-code`, `deepseek-v4-pro`, `deepseek-v4-flash` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
+Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4-flash`, and `gemma4:31b` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
 ## OpenAI Models (gpt-5.6 Family)
 
@@ -327,7 +348,7 @@ The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI mod
 
 The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` defines councillor presets and the council synthesizer model per tier. There is no separate council fallback key — synthesizer availability follows the provider:
 
-- **pro**: synthesizer `nemotron-3-ultra` (max variant)
+- **pro**: synthesizer `glm-5.3` (max variant)
 - **pro-plus**: synthesizer `gpt-5.6-sol` (high variant)
 - **pro-plus-anthropic**: synthesizer `gpt-5.6-sol` (high variant)
 - **plus**: synthesizer `gpt-5.6-sol` (high variant)
@@ -368,7 +389,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-fable-5` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
-| `deepseek-v4-pro` | standard | `max` | Upstream opencode-go uses max for oracle |
+| `deepseek-v4-pro` | standard | `max` | Catalog-only legacy model; no active tier role |
 | `gpt-5.6-terra` | standard | `high` | Primary balanced model; orchestrator default, oracle uses high |
 | `gpt-5.6-sol` | standard | `high` | Primary flagship model; oracle uses high, council uses high |
 | `gpt-5.6-luna` | standard | `high` | Primary lightweight model; librarian/explorer use low, fixer uses high |
@@ -378,7 +399,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `glm-5.3` | standard | max | 753B MoE flagship, 1M context, text-only; strictly dominates glm-5.2 on all 13 shared benchmarks; leads nemotron-3-ultra on GDPval-AA v2 (1769 vs 1448, NVIDIA vendor-reported); orchestrator/oracle fallbacks use max |
 | `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
-| `kimi-k2.7-code` | standard | none | Code-focused; mandatory thinking (cannot disable); ~30% lower thinking tokens vs kimi-k2.6 |
+| `kimi-k2.7-code` | standard | none | Catalog-only legacy code-focused model; mandatory thinking (cannot disable) |
 | `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
 | `gpt-5.4-mini` | standard | `high` | Legacy lightweight; now a degraded fallback when gpt-5.6-luna is unavailable |
 | `gpt-5.4-nano` | standard | `high` | Legacy nano; now a degraded fallback when gpt-5.6-luna is unavailable |

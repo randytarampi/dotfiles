@@ -8,7 +8,7 @@ Use this playbook when adding or changing models, switching tiers, or updating p
 
 ```mermaid
 flowchart LR
-  A[Edit model JSONs: ollama-cloud-models.json / anthropic-models.json / openai-models.json] --> B[oh-my-opencode-slim.json: presets, _tiers, council]
+  A[Edit model JSONs: ollama-cloud-models.json / anthropic-models.json / openai-models.json / opencode-models.json / github-copilot-models.json] --> B[oh-my-opencode-slim.json: presets, _tiers, council]
   B --> C[scripts/lib/tier_registry.py: tier definitions, role/variant tables]
   C --> D[docs/TIERS.md: tier table, fallback chains, local classification]
   D --> E[README.md: tier table if present]
@@ -20,7 +20,7 @@ flowchart LR
 
 ## Checklist
 
-- [ ] Update the applicable model catalog(s): `configs/opencode/ollama-cloud-models.json`, `configs/opencode/anthropic-models.json`, and/or `configs/opencode/openai-models.json`. `make check-slim-invariants` fails if any model referenced in `oh-my-opencode-slim.json` is missing from its catalog — run it directly for fast feedback when adding models.
+- [ ] Update the applicable model catalog(s): `configs/opencode/ollama-cloud-models.json`, `configs/opencode/anthropic-models.json`, `configs/opencode/openai-models.json`, `configs/opencode/opencode-models.json`, and/or `configs/opencode/github-copilot-models.json`. `make check-slim-invariants` fails if any model referenced in `oh-my-opencode-slim.json` is missing from its catalog — run it directly for fast feedback when adding models.
 - [ ] Update `configs/opencode/oh-my-opencode-slim.json`: `presets`, `_tiers`, council entries, fallback chains, and the active preset as needed.
 - [ ] Update `scripts/lib/tier_registry.py` for tier registry access, role mappings, variants, or local placeholder behavior.
 - [ ] Update `scripts/configure-opencode-tier.py` when tier switch logic, cloud proxy, or role assignment overrides change.
@@ -45,3 +45,39 @@ flowchart LR
 1. Run `make verify` (lint, drift, doctor, hash checks, and dry-run).
 2. Run `make deploy` to rebuild generated configurations.
 3. Restart OpenCode if a preset changed; runtime-safe model fields alone may not require a restart.
+
+## 2026-09-01: Anthropic/Ollama Cloud Equivalence Alignment
+
+The approved cost-tier alignment maps Anthropic model families to Ollama Cloud
+IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
+
+| Anthropic | Ollama Cloud | Use |
+|-----------|--------------|-----|
+| `claude-fable-5` | `kimi-k3` | Oracle |
+| `claude-opus-5` | `glm-5.3` | Council |
+| `claude-sonnet-5` | `glm-5.3-flash` | Orchestrator |
+| `claude-haiku-4.5` | `gemma4:31b` | Librarian, explorer, fixer |
+| `claude-sonnet-4.6` | `deepseek-v4-flash` | Utility |
+
+The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer,
+`kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4-flash`
+for fixer, and `glm-5.3` for council synthesis. This is cost-tier alignment,
+not proven capability parity. GLM-5.3-Flash and Gemma4 benchmark claims are
+vendor-reported. The pricing basis used was OpenRouter per-million-token
+pricing: GLM-5.3 `$1.40/$4.40`, Kimi K3 `$3/$15`, GLM-5.3-Flash
+`$0.075/$0.25`, and DeepSeek V4 Flash approximately `$0.05/$0.10`, compared
+with Opus 5 at `$5/$25` (input/output).
+
+## Drift check & sync reminder
+
+`make check-model-drift` validates checked-in model allowlists, live local
+Ollama models, and deployed Junie profile endpoints and model IDs. It warns
+when a live endpoint is unavailable, but reports catalog or deployed-profile
+model mismatches as drift.
+
+Successful profile generation by `scripts/generate-jetbrains-profiles.py`
+writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`.
+The stamp is considered stale after 14 days. Re-run `make deploy` after any
+model announcement that affects your presets; `make verify` warns when the
+14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
+for the automated check.

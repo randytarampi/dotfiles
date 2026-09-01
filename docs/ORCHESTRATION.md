@@ -111,6 +111,7 @@ sequenceDiagram
 | `make deploy` | `chezmoi apply` + `configure-all.sh` | After pulling changes, first setup |
 | `make configure` | `configure-all.sh` only (no chezmoi apply) | Changed API keys, pulled new Ollama models |
 | `make verify` | lint + drift + doctor + check-hashes + dry-run | Before committing |
+| `make check-model-drift` | Check deployed model configs against live catalogs | After model updates or before deployment |
 | `make ci-verify` | lint + drift + doctor + check-hashes (no dry-run) | CI pipeline |
 | `make doctor` | Read-only drift checks (verify generated configs exist) | Diagnosing issues |
 | `make check-hashes` | Hash trigger coverage audit | After adding config inputs |
@@ -173,6 +174,8 @@ sequenceDiagram
 | 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
 | 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work; default `opencode,codegraph,skills,jetbrains,junie`; optional `pi` via `DOTFILES_PROJECT_PI`) | project `.opencode/.env` |
+| — | check-model-drift | verification | Checked-in and live model catalog/profile drift check | — |
+| lib | model_stamp.py | library | Records model synchronization age for staleness reminders | — |
 
 `configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py`
 remains the global Junie-model path; project Junie work is delegated by
