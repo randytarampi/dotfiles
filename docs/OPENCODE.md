@@ -23,9 +23,7 @@ with local deviations noted in [docs/TIERS.md](TIERS.md):
 OpenCode Zen uses the standard `OPENCODE_API_KEY` environment variable. The
 alternative is `/connect`, which stores authentication in OpenCode's
 `auth.json`; a key is not required for the generated provider block. GitHub
-Copilot authentication uses the documented `/connect` GitHub device flow only.
-Do not assume that `GH_TOKEN` alone grants access to the OpenCode Copilot
-provider; use `/connect`.
+Copilot authentication uses the `/connect` GitHub device flow.
 
 The Zen free preset uses the currently listed `muse-spark-1.2-contributor-free`
 for its multimodal orchestrator and `nemotron-3.5-lightning-free` for fixer;

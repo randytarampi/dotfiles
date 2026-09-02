@@ -73,7 +73,7 @@ Same OpenAI anchors as `openai`, with the Copilot Gemini designer — adopted fr
 | fixer | `openai/gpt-5.6-luna` | medium |
 | council | `openai/gpt-5.6-sol` | high (α sol, β terra, γ luna) |
 
-Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). Observer omitted — terra is vision-capable. Requires `/connect` GitHub Copilot auth; whether `GH_TOKEN` alone grants Copilot access is indeterminate (undocumented) — use `/connect`.
+Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). Observer omitted — terra is vision-capable. Requires GitHub Copilot auth via `/connect`.
 
 ### OpenCode Zen Free Tier (`opencode-zen-free`)
 
