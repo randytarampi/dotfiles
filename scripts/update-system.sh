@@ -72,8 +72,8 @@ MINGW* | MSYS* | CYGWIN*) is_windows=1 ;;
 esac
 
 if [[ "$platform" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
-  run_update "brew update" brew update --yes
-  run_update "brew upgrade" brew upgrade
+  run_update "brew update" brew update
+  run_update "brew upgrade" brew upgrade --yes
   run_update "brew cleanup" brew cleanup
   if brew doctor >/dev/null 2>&1; then
     info "brew doctor passed"
