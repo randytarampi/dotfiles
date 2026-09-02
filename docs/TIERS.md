@@ -26,9 +26,9 @@ Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of
 | **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
-| **openai** | OpenAI only | OpenAI-first workflow |
-| **thirtydollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
-| **opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
+| **openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
+| **thirtydollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
+| **opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
 | **local-pro** | Local Ollama (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
@@ -43,6 +43,51 @@ Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models includ
 The `openai`, `thirtydollars`, and `opencode-zen-free` presets omit observer
 because their orchestrators are vision-capable. Zen free uses the multimodal
 `muse-spark-1.2-contributor-free` orchestrator.
+
+### OpenAI Tier (`openai`)
+
+OpenAI-only preset from the upstream oh-my-opencode-slim definition:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator | `gpt-5.6-terra` | high |
+| oracle | `gpt-5.6-sol` | high |
+| librarian | `gpt-5.6-luna` | low |
+| explorer | `gpt-5.6-luna` | low |
+| designer | `gpt-5.6-luna` | medium |
+| fixer | `gpt-5.6-luna` | high |
+| council | `gpt-5.6-sol` | high (α sol, β terra, γ luna) |
+
+Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. Observer omitted — terra is vision-capable.
+
+### Thirtydollars Tier (`thirtydollars`)
+
+Same OpenAI anchors as `openai`, with the Copilot Gemini designer:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator | `openai/gpt-5.6-terra` | medium |
+| oracle | `openai/gpt-5.6-sol` | high |
+| librarian / explorer | `openai/gpt-5.6-luna` | low |
+| designer | `github-copilot/gemini-3.5-flash` | — |
+| fixer | `openai/gpt-5.6-luna` | medium |
+| council | `openai/gpt-5.6-sol` | high (α sol, β terra, γ luna) |
+
+Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). Observer omitted — terra is vision-capable. Requires `/connect` GitHub Copilot auth; whether `GH_TOKEN` alone grants Copilot access is indeterminate (undocumented) — use `/connect`.
+
+### OpenCode Zen Free Tier (`opencode-zen-free`)
+
+Zero-cost preset on OpenCode Zen's free catalog. Requires `OPENCODE_API_KEY` (or `/connect`):
+
+| Role | Model | Variant / Temp |
+|------|-------|----------------|
+| orchestrator | `muse-spark-1.2-contributor-free` | high, temp 0.4 |
+| oracle | `big-pickle` | max, temp 0.4 |
+| librarian / explorer / fixer | `nemotron-3.5-lightning-free` | low — / high (fixer), temp 0.2 |
+| designer | `mimo-v2.5-free` | medium, temp 0.3 |
+| council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free) |
+
+Fallbacks point at OpenAI paid models (terra/luna) — free-tier failures degrade to paid capacity. Observer omitted — the Muse orchestrator accepts image/video/pdf/audio input. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Pro Tier (`pro`)
 
@@ -250,7 +295,7 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 
 ## Fallback Chains
 
-Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains.
+Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains. The `openai`/`thirtydollars` tiers fall back to OpenCode Zen, and `opencode-zen-free` falls back to OpenAI paid models — cross-provider fallbacks by design, one entry per provider per role (invariant 7 in [scripts/verify-slim-invariants.py](../scripts/verify-slim-invariants.py)).
 
 Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models. All indexed models matching a role's category are appended (not just the single best model).
 
@@ -346,6 +391,41 @@ The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI mod
 
 **Fallback chain**: When gpt-5.6 models are unavailable, the tier falls back to gpt-5.5 (flagship) → gpt-5.4-mini → gpt-5.4-nano in degraded mode. The `plus` and `plus-anthropic` presets define these fallback chains per role in `oh-my-opencode-slim.json`.
 
+## Catalog Churn Management
+
+Model catalogs are not stable. Two churn classes have bitten this repo already:
+
+- **Free-tier churn** (fast): OpenCode Zen removed `x-preview-f-free` and `hy3-free` from its free catalog between 2026-08 and 2026-09, mid-changeset. Free IDs are promotional and disappear without notice — treat every `-free` reference as having a short expected lifespan.
+- **Paid-generation churn**: model families get replaced (gpt-5.5 → gpt-5.6, glm-5.2 → glm-5.3). Anchored tiers survive because the replacement follows the same role profile; the danger is referencing a removed ID directly.
+
+### Detection
+
+1. `make check-model-drift` — validates slim.json references against checked-in allowlists, probes live local Ollama and deployed Junie profile endpoints, and warns when the sync stamp is >14 days old (run as part of `make verify`; excluded from `ci-verify` because it needs live endpoints).
+2. `opencode models <provider> --refresh` — the only authoritative view of a provider's *current* catalog (models.dev pages and OpenCode's local cache lag; both have shown stale IDs).
+3. `make deploy` prints a staleness notice when the model-sync stamp is missing or old (written by `generate-jetbrains-profiles.py` on real runs).
+
+### Replacement procedure (when a referenced ID disappears)
+
+1. Confirm against the live catalog (`opencode models <provider> --refresh`); do not substitute from memory or docs.
+2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (e.g. `ling-3.0-flash-fin-free` looks like an orchestrator candidate but its 32K output cap and text-only input disqualify it; `muse-spark-1.2-contributor-free`'s multimodality is what allowed dropping the Zen observer.)
+3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, tier-registry tests, and the tier docs — the same 6-way sync rule as [docs/MODEL_UPDATES.md](MODEL_UPDATES.md).
+4. Re-run: `make check-slim-invariants test-tier-registry check-model-drift` and a `configure-opencode.py` dry-run for the affected preset.
+5. Record the churn event in [docs/MODEL_UPDATES.md](MODEL_UPDATES.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
+
+### Stability expectations by tier class
+
+| Class | Tiers | Churn exposure | Policy |
+|-------|-------|----------------|--------|
+| Paid anchored | anthropic, openai, plus, plus-anthropic, pro-plus*, thirtydollars | Low — generations replace each other, IDs persist | Re-anchor only on announced deprecations |
+| Ollama Cloud | pro, pro-plus (ollama-cloud roles) | Medium — library tags evolve (`:cloud` aliases, dated variants) | Prefer stable aliases over dated tags; `check-model-drift` catches removals |
+| Free/promotional | opencode-zen-free | High — IDs vanish without notice | Expect periodic re-anchoring; cross-provider fallbacks (OpenAI paid) keep the tier usable when free IDs die; re-verify with `opencode models opencode --refresh` before relying on it |
+
+**Design rules that keep churn survivable** (already enforced):
+
+- Every preset's fallbacks cross to a *different* provider than its primaries (invariant 7 caps same-provider fallbacks at one), so a single provider's catalog change never leaves a role with zero alternatives.
+- Free-tier roles degrade to paid capacity rather than breaking.
+- `muse-spark-1.2-contributor-free` and other contributor tiers may train on prompts/completions upstream — documented in the tier section above and [docs/OPENCODE.md](OPENCODE.md); treat free-tier presets as non-confidential workflows.
+
 ## Council Synthesizers
 
 The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` defines councillor presets and the council synthesizer model per tier. There is no separate council fallback key — synthesizer availability follows the provider:
@@ -356,6 +436,8 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **plus**: synthesizer `gpt-5.6-sol` (high variant)
 - **plus-anthropic**: synthesizer `claude-opus-5` (xhigh variant)
 - **anthropic**: synthesizer `claude-opus-5` (xhigh variant)
+- **openai / thirtydollars**: synthesizer `gpt-5.6-sol` (high variant; councillors α sol, β terra, γ luna)
+- **opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
 
