@@ -46,7 +46,7 @@ because their orchestrators are vision-capable. Zen free uses the multimodal
 
 ### OpenAI Tier (`openai`)
 
-OpenAI-only preset from the upstream oh-my-opencode-slim definition:
+OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md), with local deviations (cross-provider fallbacks, observer removal):
 
 | Role | Model | Variant |
 |------|-------|---------|
@@ -62,7 +62,7 @@ Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle 
 
 ### Thirtydollars Tier (`thirtydollars`)
 
-Same OpenAI anchors as `openai`, with the Copilot Gemini designer:
+Same OpenAI anchors as `openai`, with the Copilot Gemini designer — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), with local deviations (cross-provider fallbacks, observer removal):
 
 | Role | Model | Variant |
 |------|-------|---------|
@@ -77,7 +77,7 @@ Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copi
 
 ### OpenCode Zen Free Tier (`opencode-zen-free`)
 
-Zero-cost preset on OpenCode Zen's free catalog. Requires `OPENCODE_API_KEY` (or `/connect`):
+Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator re-anchored to `muse-spark-1.2-contributor-free` after upstream's `x-preview-f-free` left the catalog; observer removed — the upstream-documented orchestrator is gone and ours is vision-capable). Requires `OPENCODE_API_KEY` (or `/connect`):
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|

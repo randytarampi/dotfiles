@@ -7,7 +7,12 @@ the full tier reference.
 
 ## Provider Presets
 
-Three upstream presets are available in the shared registry:
+Three upstream presets are available in the shared registry. Definitions are
+adopted from the upstream oh-my-opencode-slim docs —
+[openai-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md),
+[thirty-dollars-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), and
+[opencode-zen-free-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md) —
+with local deviations noted in [docs/TIERS.md](TIERS.md):
 
 | Preset | Providers | Observer | Fallback policy |
 |--------|-----------|----------|------------------|
