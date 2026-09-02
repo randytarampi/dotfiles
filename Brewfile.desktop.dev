@@ -34,3 +34,5 @@ cask "mx-power-gadget"
 
 # --- Other ---
 cask "ungoogled-chromium"
+
+tap "steipete/tap", trusted: true
