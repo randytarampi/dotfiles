@@ -568,6 +568,39 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/update-system.sh",
+      "capabilities": [
+        "public",
+        "mutates",
+        "orchestrates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "aggregate",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": [
+        "update-nvm-globals.sh",
+        "sync-brewfiles.py"
+      ]
+    },
+    {
+      "path": "scripts/update-plannotator.sh",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/install-skills.sh",
       "capabilities": [
         "public",
