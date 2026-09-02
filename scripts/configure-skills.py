@@ -9,7 +9,6 @@ Agent target dirs (symlink targets):
   - ~/.agents/skills/<skill-name>/          (canonical store, not symlinked to itself)
   - ~/.config/opencode/skills/<skill-name>/  (OpenCode)
   - ~/.claude/skills/<skill-name>/           (Claude Code)
-  - ~/.gemini/skills/<skill-name>/           (Gemini)
   - ~/.codex/skills/<skill-name>/            (Codex)
   - ~/.cursor/skills/<skill-name>/           (Cursor)
   - ~/.ai/skills/<skill-name>/               (general AI / Junie via symlink)

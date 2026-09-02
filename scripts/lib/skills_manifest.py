@@ -28,9 +28,12 @@ JUNIE_DIR = os.path.realpath(os.path.join(HOME, ".junie"))
 
 SKILL_TARGET_DIRS = [
     os.path.join(HOME, ".agents", "skills"),
+    # NOTE: ~/.gemini/skills is intentionally NOT a symlink target. Gemini CLI
+    # discovers both ~/.agents/skills and ~/.gemini/skills, so symlinking into
+    # both triggers "Skill conflict detected" warnings for every shared skill.
+    # Gemini resolves conflicts to ~/.agents/skills, which stays authoritative.
     os.path.join(HOME, ".config", "opencode", "skills"),
     os.path.join(HOME, ".claude", "skills"),
-    os.path.join(HOME, ".gemini", "skills"),
     os.path.join(HOME, ".codex", "skills"),
     os.path.join(HOME, ".cursor", "skills"),
     os.path.join(JUNIE_DIR, "skills"),
