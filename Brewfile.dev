@@ -186,5 +186,6 @@ npm "@agentclientprotocol/claude-agent-acp"
 npm "@agentclientprotocol/codex-acp"
 npm "@google/gemini-cli"
 
-# Pi terminal coding agent
+# Pi terminal coding agent + ACP bridge
 npm "@earendil-works/pi-coding-agent"
+npm "pi-acp"
