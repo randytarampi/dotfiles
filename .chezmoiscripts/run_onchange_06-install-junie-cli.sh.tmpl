@@ -37,51 +37,63 @@ if [[ -n "${DOTFILES_JUNIE_VERSION:-}" ]]; then
   export JUNIE_VERSION="$DOTFILES_JUNIE_VERSION"
 fi
 
-INSTALL_ARGS=()
-if [[ "${DOTFILES_JUNIE_LOCAL_MODEL:-0}" == "1" ]]; then
-  LOCAL_MODEL_SUPPORTED=0
-  if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
-    MACOS_MAJOR="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
-    MEMORY_BYTES="$(sysctl -n hw.memsize 2>/dev/null || true)"
-    CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
-    if [[ "$CPU_BRAND" =~ Apple[[:space:]]M([0-9]+) ]]; then
-      M_GENERATION="${BASH_REMATCH[1]}"
-      if [[ "$MACOS_MAJOR" =~ ^[0-9]+$ && "$MACOS_MAJOR" -ge 26 && "$M_GENERATION" -ge 5 && "$MEMORY_BYTES" =~ ^[0-9]+$ && "$MEMORY_BYTES" -ge 68719476736 ]]; then
-        LOCAL_MODEL_SUPPORTED=1
+USED_NATIVE_UPDATE=0
+if command -v junie >/dev/null 2>&1 && [[ -z "${DOTFILES_JUNIE_VERSION:-}" ]]; then
+  if junie update --channel="$JUNIE_CHANNEL" 2>&1; then
+    ok "Junie CLI is already up to date — skipping installer"
+    USED_NATIVE_UPDATE=1
+  else
+    warn "Junie CLI native update failed — falling back to channel installer"
+  fi
+fi
+
+if [[ "$USED_NATIVE_UPDATE" == "0" ]]; then
+  INSTALL_ARGS=()
+  if [[ "${DOTFILES_JUNIE_LOCAL_MODEL:-0}" == "1" ]]; then
+    LOCAL_MODEL_SUPPORTED=0
+    if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+      MACOS_MAJOR="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+      MEMORY_BYTES="$(sysctl -n hw.memsize 2>/dev/null || true)"
+      CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
+      if [[ "$CPU_BRAND" =~ Apple[[:space:]]M([0-9]+) ]]; then
+        M_GENERATION="${BASH_REMATCH[1]}"
+        if [[ "$MACOS_MAJOR" =~ ^[0-9]+$ && "$MACOS_MAJOR" -ge 26 && "$M_GENERATION" -ge 5 && "$MEMORY_BYTES" =~ ^[0-9]+$ && "$MEMORY_BYTES" -ge 68719476736 ]]; then
+          LOCAL_MODEL_SUPPORTED=1
+        fi
+      else
+        warn "Could not identify Apple M-series generation — Junie Local requires M5+; installing without --local-model"
       fi
+    fi
+    if [[ "$LOCAL_MODEL_SUPPORTED" == "1" ]]; then
+      INSTALL_ARGS+=(--local-model)
     else
-      warn "Could not identify Apple M-series generation — Junie Local requires M5+; installing without --local-model"
+      warn "Junie Local requires Apple M5+, macOS 26+, and at least 64 GB RAM — installing without --local-model"
     fi
   fi
-  if [[ "$LOCAL_MODEL_SUPPORTED" == "1" ]]; then
-    INSTALL_ARGS+=(--local-model)
+
+  if [[ "$JUNIE_CHANNEL" == "eap" ]]; then
+    INSTALL_SH_URL="https://junie.jetbrains.com/install-eap.sh"
+    INSTALL_PS_URL="https://junie.jetbrains.com/install-eap.ps1"
   else
-    warn "Junie Local requires Apple M5+, macOS 26+, and at least 64 GB RAM — installing without --local-model"
+    INSTALL_SH_URL="https://junie.jetbrains.com/install.sh"
+    INSTALL_PS_URL="https://junie.jetbrains.com/install.ps1"
   fi
-fi
 
-if [[ "$JUNIE_CHANNEL" == "eap" ]]; then
-  INSTALL_SH_URL="https://junie.jetbrains.com/install-eap.sh"
-  INSTALL_PS_URL="https://junie.jetbrains.com/install-eap.ps1"
-else
-  INSTALL_SH_URL="https://junie.jetbrains.com/install.sh"
-  INSTALL_PS_URL="https://junie.jetbrains.com/install.ps1"
-fi
+  info "Installing/updating Junie CLI ($JUNIE_CHANNEL channel)..."
 
-info "Installing/updating Junie CLI ($JUNIE_CHANNEL channel)..."
-
-# Cross-platform install per https://junie.jetbrains.com/docs/junie-cli-eap.html#install-eap
-# Network failures are caught — warn and continue rather than blocking chezmoi apply
-if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-  if ! curl -fsSL "$INSTALL_SH_URL" | bash -s -- ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"} 2>&1; then
-    warn "Junie CLI install fetch failed (network error?) — try again with: curl -fsSL $INSTALL_SH_URL | bash"
+  # Cross-platform install per https://junie.jetbrains.com/docs/junie-cli-eap.html#install-eap
+  # Network failures are caught — warn and continue rather than blocking chezmoi apply
+  if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
+    if ! curl -fsSL "$INSTALL_SH_URL" | bash -s -- ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"} 2>&1; then
+      warn "Junie CLI install fetch failed (network error?) — try again with: curl -fsSL $INSTALL_SH_URL | bash"
+    fi
+  elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
+    if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm '$INSTALL_PS_URL')" 2>&1; then
+      warn "Junie CLI install fetch failed (network error?) — try again manually"
+    fi
+  else
+    warn "Unsupported OS for Junie CLI: $(uname -s)"
   fi
-elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
-  if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm '$INSTALL_PS_URL')" 2>&1; then
-    warn "Junie CLI install fetch failed (network error?) — try again manually"
-  fi
-else
-  warn "Unsupported OS for Junie CLI: $(uname -s)"
 fi
 
 # Verify installation

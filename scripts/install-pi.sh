@@ -17,7 +17,12 @@ if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
 fi
 
 if command -v pi >/dev/null 2>&1; then
-  ok "Pi already installed: $(pi --version 2>/dev/null || true)"
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "[DRY RUN] Would update pi via pi update --self"
+    exit 0
+  fi
+  pi update --self || warn "pi update failed — pi remains at $(pi --version 2>/dev/null || true)"
+  ok "Pi installed: $(pi --version 2>/dev/null || true)"
   exit 0
 fi
 
