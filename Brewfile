@@ -13,6 +13,7 @@ tap "wix/brew", "https://github.com/wix-incubator/homebrew-brew.git", trusted: t
 
 # --- Core CLI (dev_cli category) ---
 brew "bash"
+brew "bun"
 brew "coreutils"
 brew "curl"
 brew "chezmoi"
