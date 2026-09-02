@@ -724,7 +724,6 @@
     "layout": "main-vertical",
     "main_pane_size": 60
   },
-  "disabled_agents": [],
   "council": {
     "timeout": 360000,
     "councillor_retries": 1,
