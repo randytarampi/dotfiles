@@ -710,13 +710,12 @@
       "council": {"model": "openai/gpt-5.6-sol", "variant": "high"}
     },
     "opencode-zen-free": {
-      "orchestrator": {"model": "opencode/nemotron-3-ultra-free", "variant": "high", "temperature": 0.4, "skills": ["*"], "mcps": ["*", "!context7"]},
+      "orchestrator": {"model": "opencode/muse-spark-1.2-contributor-free", "variant": "high", "temperature": 0.4, "skills": ["*"], "mcps": ["*", "!context7"]},
       "oracle": {"model": "opencode/big-pickle", "variant": "max", "temperature": 0.4, "skills": ["simplify"]},
       "librarian": {"model": "opencode/nemotron-3.5-lightning-free", "temperature": 0.2, "mcps": ["context7", "gh_grep"]},
       "explorer": {"model": "opencode/nemotron-3.5-lightning-free", "temperature": 0.2},
       "designer": {"model": "opencode/mimo-v2.5-free", "variant": "medium", "temperature": 0.3},
       "fixer": {"model": "opencode/nemotron-3.5-lightning-free", "variant": "high", "temperature": 0.2},
-      "observer": {"model": "opencode/mimo-v2.5-free", "variant": "low", "temperature": 0.2},
       "council": {"model": "opencode/big-pickle", "variant": "max"}
     }
   },
@@ -1308,7 +1307,6 @@
         "explorer": ["openai/gpt-5.6-luna"],
         "designer": ["openai/gpt-5.6-luna"],
         "fixer": ["openai/gpt-5.6-luna"],
-        "observer": ["openai/gpt-5.6-luna"],
         "council": []
       }
     }

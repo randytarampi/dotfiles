@@ -76,6 +76,16 @@ class TierRegistryTests(unittest.TestCase):
         self.assertNotIn("observer", roles)
         self.assertIn("orchestrator", roles)
 
+    def test_zen_free_uses_current_multimodal_orchestrator_without_observer(self):
+        data = registry()
+        preset = data["presets"]["opencode-zen-free"]
+        self.assertEqual(
+            preset["orchestrator"]["model"],
+            "opencode/muse-spark-1.2-contributor-free",
+        )
+        self.assertNotIn("observer", preset)
+        self.assertNotIn("observer", data["_tiers"]["opencode-zen-free"]["fallback"])
+
     def test_provider_dedupe_flags_duplicate_provider(self):
         violations = verify_slim_invariants._provider_dedupe_violations(
             ["openai/first", "openai/second"], "fallback.role"

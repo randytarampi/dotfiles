@@ -13,7 +13,7 @@ Three upstream presets are available in the shared registry:
 |--------|-----------|----------|------------------|
 | `openai` | OpenAI, with OpenCode Zen fallbacks | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback |
 | `thirtydollars` | OpenAI + GitHub Copilot | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback; Copilot designer falls back to OpenCode Zen Gemini |
-| `opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Retained; vision is not verified for its orchestrator | OpenAI GPT-5.6 models |
+| `opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Omitted; Muse Spark is multimodal | OpenAI GPT-5.6 models |
 
 OpenCode Zen uses the standard `OPENCODE_API_KEY` environment variable. The
 alternative is `/connect`, which stores authentication in OpenCode's
@@ -22,9 +22,13 @@ Copilot authentication uses the documented `/connect` GitHub device flow only.
 Do not assume that `GH_TOKEN` alone grants access to the OpenCode Copilot
 provider; use `/connect`.
 
-The Zen free preset uses the currently listed `nemotron-3-ultra-free` for its
-orchestrator and `nemotron-3.5-lightning-free` for fixer; these replace
-upstream names that are not present in the local Zen catalog.
+The Zen free preset uses the currently listed `muse-spark-1.2-contributor-free`
+for its multimodal orchestrator and `nemotron-3.5-lightning-free` for fixer;
+these replace upstream names that are not present in the local Zen catalog.
+The contributor-free tier means the upstream provider (Meta) may train on
+prompts and completions, so use caution for privacy-sensitive work. Free-tier
+IDs churn: `x-preview-f-free` and `hy3-free` were removed between 2026-08 and
+2026-09.
 
 ## ACP Agent Verification
 

@@ -40,7 +40,9 @@ Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
-The `openai` and `thirtydollars` presets omit observer because their GPT-5.6-Terra orchestrators are vision-capable. `opencode-zen-free` retains its upstream observer because its free-tier orchestrator has no verified vision capability; its current catalog substitution is `nemotron-3-ultra-free`.
+The `openai`, `thirtydollars`, and `opencode-zen-free` presets omit observer
+because their orchestrators are vision-capable. Zen free uses the multimodal
+`muse-spark-1.2-contributor-free` orchestrator.
 
 ### Pro Tier (`pro`)
 
