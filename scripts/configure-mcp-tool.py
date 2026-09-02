@@ -278,7 +278,9 @@ def format_configs_to_str(fmt, defs):
             name = d["name"]
             entry = {}
             if d.get("type") == "url":
-                entry["type"] = "streamable-http"
+                # Gemini CLI settings.json only accepts stdio|sse|http; "http"
+                # uses the Streamable HTTP transport.
+                entry["type"] = "http"
                 entry["url"] = d["url"]
             else:
                 entry["command"] = d["command"]
