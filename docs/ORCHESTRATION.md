@@ -153,7 +153,7 @@ sequenceDiagram
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
 | 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: openspec, codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
-| 09 | install-plannotator | run_onchange | Plannotator CLI | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
+| 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 11 | install-meridian-launchd | run_onchange | Meridian launchd plist (macOS) | `DOTFILES_RUN_MERIDIAN_SETUP` |
 | 12 | configure-macos-defaults | run_onchange | macOS user preferences | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` |
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
@@ -174,6 +174,8 @@ sequenceDiagram
 | 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
 | 29 | configure-project | manual/project | Unified project-scoped configuration (`--steps` selects work; default `opencode,codegraph,skills,jetbrains,junie`; optional `pi` via `DOTFILES_PROJECT_PI`) | project `.opencode/.env` |
+| — | update-system | manual (`_dot--update-system`) | Cross-platform system/package updater: brew (macOS), apt/dnf/pacman (Linux), winget (Windows), npm globals, uv, pipx, pi, opencode, junie, ollama models; Brewfile sync via sync-brewfiles.py | `DOTFILES_RUN_UPDATE_SYSTEM_SETUP` |
+| — | update-plannotator | invoked by Script 09, manual | Plannotator CLI version check + update (skips when current) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | — | check-model-drift | verification | Checked-in and live model catalog/profile drift check | — |
 | lib | model_stamp.py | library | Records model synchronization age for staleness reminders | — |
 
@@ -220,6 +222,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
 | `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
+| `DOTFILES_RUN_UPDATE_SYSTEM_SETUP` | 0 | `update-system.sh` (manual cross-platform system/package updater) |
 | `DOTFILES_RUN_SKILLS_AWS_SETUP` | 0 | Activate the AWS skills category globally |
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |

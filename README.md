@@ -121,6 +121,7 @@ To verify files and run offline/local check suites using the project's central `
 ## Commands
 
 ```bash
+_dot--update-system     # Cross-platform daily update: brew/winget/apt, npm, uv, pipx, pi, opencode, junie, ollama
 make deploy             # Apply all dotfiles and regenerate runtime configs
 make configure          # Rebuild runtime configs only
 make dry-run            # Dry-run apply with ~/.env loaded
