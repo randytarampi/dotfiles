@@ -22,6 +22,7 @@ from constants import (
 from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
+from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from tier_resolve import get_model_details
 import tier_registry
 
@@ -44,14 +45,6 @@ ROLE_TO_BUILTIN = {
     "fixer": "worker",
     "observer": "reviewer",
 }
-OPENCODE_ONLY_PRESETS = frozenset({"openai", "thirtydollars", "opencode-zen-free"})
-
-
-def get_pi_available_tiers():
-    """Return registry tiers supported by Pi's available providers."""
-    return [tier for tier in get_available_tiers() if tier not in OPENCODE_ONLY_PRESETS]
-
-
 # Cache of model_id -> Ollama model details discovered via `ollama show`.
 # A model's native window can be smaller than the global OLLAMA_CONTEXT_LENGTH cap
 # (e.g. a 128K model under a 192K cap), so we cap the advertised window at the
@@ -304,13 +297,7 @@ def main():
     add_local_fallback_args(p)
     add_min_reasoning_embedding_arg(p)
     p.add_argument("--mode", choices=["global", "project"], default="global")
-    available_tiers = get_pi_available_tiers()
-    unsupported_tiers = sorted(set(get_available_tiers()) - set(available_tiers))
-    if unsupported_tiers:
-        logger.warning(
-            "Skipping %s: OpenCode-only preset (requires opencode/github-copilot providers)",
-            ", ".join(unsupported_tiers),
-        )
+    available_tiers = get_available_tiers()
     p.add_argument("--preset", choices=available_tiers, required=True)
     p.add_argument(
         "--skip",
@@ -367,6 +354,26 @@ def main():
         category_models,
         args.local_fallback_role,
     )
+    if any(
+        isinstance(model, str) and model.startswith("github-copilot/")
+        for model in role_models.values()
+    ):
+        native_auth = (
+            Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
+            / "auth.json"
+        )
+        copilot_auth_detected = False
+        try:
+            auth_data = json.loads(native_auth.read_text(encoding="utf-8"))
+            copilot_auth_detected = any(
+                key in auth_data for key in ("copilot", "github-copilot")
+            )
+        except (OSError, json.JSONDecodeError):
+            pass
+        if not copilot_auth_detected:
+            logger.warning(
+                "Preset references github-copilot models — complete Pi's native Copilot /login"
+            )
     unresolved = {
         value
         for value in role_models.values()
@@ -499,11 +506,75 @@ def main():
         "apiKey": "$OPENAI_API_KEY",
         "models": [],
     }
+    skipped_providers = []
+    skipped_provider_names = []
+    emitted_providers = []
+    for provider, endpoint in PROVIDER_ENDPOINTS.items():
+        key_env = endpoint["apiKeyEnv"]
+        if not os.environ.get(key_env, "").strip():
+            skipped_providers.append(f"{provider} ({key_env})")
+            skipped_provider_names.append(provider)
+            continue
+        providers[provider] = {
+            "baseUrl": endpoint["baseUrl"],
+            "api": endpoint["api"],
+            "apiKey": f"${key_env}",
+            "models": [model_entry(model_id) for model_id in provider_models(provider)],
+        }
+        emitted_providers.append(provider)
+    if emitted_providers:
+        logger.info(
+            "Providers emitted with configured API keys: %s",
+            ", ".join(emitted_providers),
+        )
+    if skipped_providers:
+        logger.warning(
+            "Providers skipped because API keys are unavailable: %s",
+            ", ".join(skipped_providers),
+        )
+    skipped_role_overrides = {}
+    builtin_roles = {builtin: role for role, builtin in ROLE_TO_BUILTIN.items()}
+    for builtin, override in list(settings["subagents"]["agentOverrides"].items()):
+        model_ref = override.get("model", "")
+        provider = model_ref.split("/", 1)[0] if "/" in model_ref else ""
+        if provider in skipped_provider_names:
+            skipped_role_overrides.setdefault(provider, []).append(
+                builtin_roles.get(builtin, builtin)
+            )
+            del settings["subagents"]["agentOverrides"][builtin]
+    if skipped_role_overrides:
+        logger.warning(
+            "Omitted Pi agent overrides for unavailable providers: %s",
+            "; ".join(
+                f"{provider} ({', '.join(sorted(roles))})"
+                for provider, roles in sorted(skipped_role_overrides.items())
+            ),
+        )
+    default_provider = default.split("/", 1)[0] if "/" in default else ""
+    if default_provider in skipped_provider_names:
+        available_model = next(
+            (
+                f"{provider}/{entry['id']}"
+                for provider, provider_config in providers.items()
+                for entry in provider_config.get("models", [])
+                if entry.get("id")
+            ),
+            "",
+        )
+        default = available_model or "ollama/no-model-available"
+        settings["defaultProvider"], _, settings["defaultModel"] = default.partition(
+            "/"
+        )
+        settings["subagents"]["defaultModel"] = default
     auth = {
         "anthropic": {"type": "api_key", "key": "$ANTHROPIC_API_KEY"},
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},
-        "google": {"type": "api_key", "key": "$GOOGLE_API_KEY"},
     }
+    for provider, endpoint in PROVIDER_ENDPOINTS.items():
+        auth[provider] = {
+            "type": "api_key",
+            "key": f"${endpoint['apiKeyEnv']}",
+        }
     # Derive enabledModels from actual provider model IDs instead of hardcoding
     # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [

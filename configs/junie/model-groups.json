@@ -32,6 +32,21 @@
       "baseUrl": "https://api.githubcopilot.com/v1",
       "apiKeyEnv": "GITHUB_TOKEN",
       "apiType": "OpenAIResponses"
+    },
+    "google": {
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "GEMINI_API_KEY"
+    },
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "OPENROUTER_API_KEY"
+    },
+    "opencode": {
+      "baseUrl": "https://opencode.ai/zen/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "OPENCODE_API_KEY"
     }
   },
   "modelTemperatures": {
@@ -62,6 +77,22 @@
     "meridian-fable": {
       "provider": "meridian",
       "primaryModel": "claude-fable-5"
+    },
+    "google-gemini-flash": {
+      "provider": "google",
+      "primaryModel": "gemini-3.8-flash",
+      "fasterModel": "gemini-3.5-flash-lite",
+      "fasterProvider": "google"
+    },
+    "openrouter-glm": {
+      "provider": "openrouter",
+      "primaryModel": "z-ai/glm-5.2:free"
+    },
+    "openrouter-nemotron": {
+      "provider": "openrouter",
+      "primaryModel": "nvidia/nemotron-3.5-lightning:free",
+      "fasterModel": "minimax/minimax-m2.7:free",
+      "fasterProvider": "openrouter"
     },
     "copilot": {
       "provider": "github-copilot",

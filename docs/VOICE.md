@@ -32,12 +32,19 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 | **plus** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
 | **plus-anthropic** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
 | **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
+| **free** | OpenAI-compatible remote endpoint; no Ollama requirement | whisper-cli (local) |
+| **omo-slim-openai** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
+| **omo-slim-thirty-dollars** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
+| **omo-slim-opencode-zen-free** | OpenCode Zen | whisper-cli (local), OpenAI STT if key available |
 
 **Meridian detection**: `is_meridian_configured()` from `constants.py` controls Meridian routing for voice. If it returns true, the Anthropic tier uses Meridian as the voice LLM endpoint. Otherwise it falls back to direct Anthropic API.
 
 **Cloud STT upgrade**: When `OPENAI_API_KEY` is available, non-OpenAI tiers add `sttEndpoint`/`sttModel`/`sttApiKeyEnv` pointing to OpenAI's `/v1/audio/transcriptions`. Tiers already using OpenAI for the LLM use OpenAI STT by default.
 
 **Local Ollama model selection**: All `local-*` tiers reuse the shared tier registry (`scripts/lib/tier_registry.py`) model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models). Cloud tiers respect `DOTFILES_USE_LOCAL_OLLAMA` (default: true) to control whether local models replace the cloud LLM endpoint.
+
+The `free` tier is explicitly excluded from Ollama Cloud fallback handling; it
+does not require `OLLAMA_API_KEY` or a local Ollama daemon for voice.
 
 ---
 

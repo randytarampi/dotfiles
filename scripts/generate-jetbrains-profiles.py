@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -28,6 +29,12 @@ from discover_models import list_local_ollama_models
 def normalize_endpoint(base_url: str, api_type: str) -> str:
     """Return the full Junie endpoint for an OpenAI-compatible API type."""
     base_url = base_url.strip().rstrip("/")
+    if re.search(r"/v\d+[A-Za-z0-9.-]+(?:/.*)?$", base_url):
+        suffix = {
+            "OpenAIResponses": "/responses",
+            "OpenAICompletion": "/chat/completions",
+        }.get(api_type)
+        return f"{base_url}{suffix}" if suffix else base_url
     for suffix in ("/v1/responses", "/v1/chat/completions", "/v1"):
         if base_url.endswith(suffix):
             base_url = base_url[: -len(suffix)]
@@ -82,20 +89,16 @@ def model_provider(model_ref: str) -> str:
         return "meridian"
     if model_ref.startswith("ollama/"):
         return "ollama"
-    return ""
-
-
-# Providers that exist in OpenCode presets but have no Junie equivalent; tiers
-# that depend on them cannot be materialized for Junie and must be skipped
-# explicitly rather than mis-mapped onto another provider.
-UNMAPPABLE_PROVIDERS = ("opencode", "github-copilot")
+    return model_ref_provider(model_ref)
 
 
 def model_ref_provider(model_ref: str) -> str:
     return model_ref.split("/", 1)[0] if "/" in model_ref else ""
 
 
-def model_id(model_ref: str) -> str:
+def model_id(model_ref: str, provider_hint: str = "") -> str:
+    if provider_hint and not model_ref.startswith(f"{provider_hint}/"):
+        return model_ref
     return model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
 
 
@@ -166,19 +169,6 @@ def main():
             )
         orchestrator_ref = roles.get("orchestrator", "")
         librarian_ref = roles.get("librarian", "")
-        unmappable = sorted(
-            {
-                model_ref_provider(ref)
-                for ref in (orchestrator_ref, librarian_ref)
-                if model_ref_provider(ref) in UNMAPPABLE_PROVIDERS
-            }
-        )
-        if unmappable:
-            logger.info(
-                f"Tier {tier} requires provider(s) {', '.join(unmappable)} "
-                f"— not available in Junie, skipping"
-            )
-            continue
         tier_specs.append(
             (
                 tier,
@@ -234,13 +224,13 @@ def main():
         ):
             logger.info(f"No local Ollama models available — skipping {name}")
             continue
-        primary = model_id(primary_ref)
+        primary = model_id(primary_ref, provider)
         if provider == "ollama" and not primary_ref.startswith("_local:"):
             primary = resolve_model(primary, local_models)
         if primary_ref.startswith("_local:") or not primary:
             logger.warning(f"Could not resolve primary model for {name} — skipping")
             continue
-        faster = model_id(faster_ref) if faster_ref else ""
+        faster = model_id(faster_ref, faster_provider) if faster_ref else ""
         if faster and faster_provider == "ollama":
             faster = resolve_model(faster, local_models)
         data = providers[provider].copy()
