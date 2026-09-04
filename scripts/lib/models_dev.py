@@ -34,6 +34,8 @@ SUPPORTED_PROVIDERS = (
     "ollama-cloud",
     "opencode",
     "github-copilot",
+    "google",
+    "openrouter",
 )
 
 

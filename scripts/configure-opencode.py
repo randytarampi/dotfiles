@@ -52,6 +52,7 @@ from cli_helpers import (
     forward_min_reasoning_embedding_arg,
     parse_skip,
 )
+from provider_endpoints import PROVIDER_ENDPOINTS
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -227,12 +228,20 @@ def main():
     github_copilot_models_path = os.path.join(
         configs_dir_path, "opencode", "github-copilot-models.json"
     )
+    google_models_path = os.path.join(
+        configs_dir_path, "opencode", "google-models.json"
+    )
+    openrouter_models_path = os.path.join(
+        configs_dir_path, "opencode", "openrouter-models.json"
+    )
 
     openai_models = {}
     ollama_cloud_models = {}
     anthropic_models = {}
     opencode_models = {}
     github_copilot_models = {}
+    google_models = {}
+    openrouter_models = {}
 
     if os.path.exists(openai_models_path):
         with open(openai_models_path, "r", encoding="utf-8") as f:
@@ -249,6 +258,12 @@ def main():
     if os.path.exists(github_copilot_models_path):
         with open(github_copilot_models_path, "r", encoding="utf-8") as f:
             github_copilot_models = json.load(f).get("models", {})
+    if os.path.exists(google_models_path):
+        with open(google_models_path, "r", encoding="utf-8") as f:
+            google_models = json.load(f).get("models", {})
+    if os.path.exists(openrouter_models_path):
+        with open(openrouter_models_path, "r", encoding="utf-8") as f:
+            openrouter_models = json.load(f).get("models", {})
 
     # Fetch model metadata from models.dev (24h-cached, graceful degradation)
     models_dev_data = fetch_models_dev()
@@ -461,7 +476,7 @@ def main():
             if local_ollama:
                 config["provider"]["ollama"] = local_ollama
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
-        elif args.preset in ("openai", "thirtydollars"):
+        elif args.preset in ("omo-slim-openai", "omo-slim-thirty-dollars"):
             if openai_models:
                 config["provider"]["openai"] = {
                     "models": {
@@ -484,7 +499,7 @@ def main():
                         ),
                     },
                 }
-            if args.preset == "thirtydollars" and github_copilot_models:
+            if args.preset == "omo-slim-thirty-dollars" and github_copilot_models:
                 config["provider"]["github-copilot"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "github-copilot")
@@ -493,7 +508,7 @@ def main():
                     "options": {"baseURL": "https://api.githubcopilot.com"},
                 }
             config["disabled_providers"].extend(["anthropic", "ollama-cloud", "ollama"])
-        elif args.preset == "opencode-zen-free":
+        elif args.preset == "omo-slim-opencode-zen-free":
             if "openai" in global_needed_providers and openai_models:
                 config["provider"]["openai"] = {
                     "models": {
@@ -514,6 +529,38 @@ def main():
                             if os.environ.get("OPENCODE_API_KEY")
                             else {}
                         ),
+                    },
+                }
+            config["disabled_providers"].extend(
+                ["openai", "anthropic", "ollama-cloud", "ollama", "github-copilot"]
+            )
+            config["disabled_providers"] = [
+                provider
+                for provider in config["disabled_providers"]
+                if provider not in global_needed_providers
+            ]
+        elif args.preset == "free":
+            for provider, models in (
+                ("opencode", opencode_models),
+                ("google", google_models),
+                ("openrouter", openrouter_models),
+            ):
+                endpoint = PROVIDER_ENDPOINTS[provider]
+                if not os.environ.get(endpoint["apiKeyEnv"]):
+                    logger.warning(
+                        "%s key unavailable — skipping %s provider",
+                        endpoint["apiKeyEnv"],
+                        provider,
+                    )
+                    continue
+                config["provider"][provider] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, provider)
+                        for mid in models
+                    },
+                    "options": {
+                        "baseURL": endpoint["baseUrl"],
+                        "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
                     },
                 }
             config["disabled_providers"].extend(
@@ -861,9 +908,9 @@ def main():
         "     configure-opencode-tier.py --preset pro-plus-anthropic",
         "     configure-opencode-tier.py --preset plus",
         "     configure-opencode-tier.py --preset anthropic",
-        "     configure-opencode-tier.py --preset openai",
-        "     configure-opencode-tier.py --preset thirtydollars",
-        "     configure-opencode-tier.py --preset opencode-zen-free",
+        "     configure-opencode-tier.py --preset omo-slim-openai",
+        "     configure-opencode-tier.py --preset omo-slim-thirty-dollars",
+        "     configure-opencode-tier.py --preset omo-slim-opencode-zen-free",
         "     configure-opencode-tier.py --preset local-pro",
         "     configure-opencode-tier.py --preset local",
         "     configure-opencode-tier.py --preset local-mini",

@@ -34,6 +34,9 @@ configure_pi = load_script_module("configure_pi", "configure-pi.py")
 configure_voice = load_script_module(
     "configure_opencode_voice", "configure-opencode-voice.py"
 )
+generate_profiles = load_script_module(
+    "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
+)
 
 
 def registry():
@@ -51,13 +54,13 @@ def registry():
 
 
 class TierRegistryTests(unittest.TestCase):
-    def test_pi_excludes_opencode_only_presets(self):
-        tiers = set(configure_pi.get_pi_available_tiers())
-        self.assertNotIn("openai", tiers)
-        self.assertNotIn("thirtydollars", tiers)
-        self.assertNotIn("opencode-zen-free", tiers)
+    def test_pi_includes_renamed_omo_slim_presets(self):
+        tiers = set(configure_pi.get_available_tiers())
+        self.assertIn("omo-slim-openai", tiers)
+        self.assertIn("omo-slim-thirty-dollars", tiers)
+        self.assertIn("omo-slim-opencode-zen-free", tiers)
 
-    def test_voice_mapping_for_opencode_only_presets_uses_openai_defaults(self):
+    def test_voice_mapping_for_remote_presets_uses_openai_defaults(self):
         with patch.object(
             configure_voice, "check_ollama_daemon", return_value=(None, False)
         ), patch.object(
@@ -65,9 +68,35 @@ class TierRegistryTests(unittest.TestCase):
         ), patch.dict(
             "os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}
         ):
-            for tier in ("openai", "thirtydollars", "opencode-zen-free"):
+            for tier in (
+                "omo-slim-openai",
+                "omo-slim-thirty-dollars",
+                "omo-slim-opencode-zen-free",
+            ):
                 config = configure_voice.get_voice_config(tier)
-                self.assertEqual(config["model"], "gpt-5.4-mini")
+                expected_model = (
+                    "muse-spark-1.2-contributor-free"
+                    if tier == "omo-slim-opencode-zen-free"
+                    else "gpt-5.4-mini"
+                )
+                self.assertEqual(config["model"], expected_model)
+
+    def test_google_provider_endpoint_uses_v1beta_compat_path(self):
+        providers = generate_profiles.build_provider_configs(
+            {
+                "providers": {
+                    "google": {
+                        "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+                        "apiType": "OpenAICompletion",
+                        "apiKeyEnv": "GEMINI_API_KEY",
+                    }
+                }
+            }
+        )
+        self.assertEqual(
+            providers["google"]["baseUrl"],
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        )
 
     def test_materialize_role_models_tolerates_absent_observer(self):
         data = registry()
@@ -78,13 +107,15 @@ class TierRegistryTests(unittest.TestCase):
 
     def test_zen_free_uses_current_multimodal_orchestrator_without_observer(self):
         data = registry()
-        preset = data["presets"]["opencode-zen-free"]
+        preset = data["presets"]["omo-slim-opencode-zen-free"]
         self.assertEqual(
             preset["orchestrator"]["model"],
             "opencode/muse-spark-1.2-contributor-free",
         )
         self.assertNotIn("observer", preset)
-        self.assertNotIn("observer", data["_tiers"]["opencode-zen-free"]["fallback"])
+        self.assertNotIn(
+            "observer", data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]
+        )
 
     def test_provider_dedupe_flags_duplicate_provider(self):
         violations = verify_slim_invariants._provider_dedupe_violations(

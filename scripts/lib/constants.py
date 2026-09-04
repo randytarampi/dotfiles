@@ -37,6 +37,8 @@ BASE_URLS = {
     "ollama-cloud": "https://ollama.com/v1",
     "openai": "https://api.openai.com/v1",
     "anthropic": "https://api.anthropic.com/v1",
+    "google": "https://generativelanguage.googleapis.com/v1beta",
+    "openrouter": "https://openrouter.ai/api/v1",
 }
 
 PROVIDER_BASE_URL_ENVS = {

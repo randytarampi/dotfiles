@@ -40,6 +40,8 @@ MODEL_ALLOWLIST_PATHS = {
     "ollama-cloud": REPO_ROOT / "configs" / "opencode" / "ollama-cloud-models.json",
     "opencode": REPO_ROOT / "configs" / "opencode" / "opencode-models.json",
     "github-copilot": REPO_ROOT / "configs" / "opencode" / "github-copilot-models.json",
+    "google": REPO_ROOT / "configs" / "opencode" / "google-models.json",
+    "openrouter": REPO_ROOT / "configs" / "opencode" / "openrouter-models.json",
 }
 
 

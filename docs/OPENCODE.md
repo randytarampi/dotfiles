@@ -16,9 +16,9 @@ with local deviations noted in [docs/TIERS.md](TIERS.md):
 
 | Preset | Providers | Observer | Fallback policy |
 |--------|-----------|----------|------------------|
-| `openai` | OpenAI, with OpenCode Zen fallbacks | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback |
-| `thirtydollars` | OpenAI + GitHub Copilot | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback; Copilot designer falls back to OpenCode Zen Gemini |
-| `opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Omitted; Muse Spark is multimodal | OpenAI GPT-5.6 models |
+| `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback |
+| `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Omitted; GPT-5.6-Terra is vision-capable | OpenCode Zen, including paid GPT-5.6-Terra fallback; Copilot designer falls back to OpenCode Zen Gemini |
+| `omo-slim-opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Omitted; Muse Spark is multimodal | OpenAI GPT-5.6 models |
 
 OpenCode Zen uses the standard `OPENCODE_API_KEY` environment variable. The
 alternative is `/connect`, which stores authentication in OpenCode's

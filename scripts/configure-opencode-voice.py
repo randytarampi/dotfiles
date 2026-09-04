@@ -52,6 +52,7 @@ from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
 from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
 from tier_resolve import list_local_ollama_models
+from provider_endpoints import PROVIDER_ENDPOINTS
 import tier_registry
 
 
@@ -72,9 +73,8 @@ def get_voice_config(
     is_plus_tier = tier in (
         "plus",
         "plus-anthropic",
-        "openai",
-        "thirtydollars",
-        "opencode-zen-free",
+        "omo-slim-openai",
+        "omo-slim-thirty-dollars",
     )
     is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
@@ -151,6 +151,18 @@ def get_voice_config(
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }
 
+    elif tier in ("omo-slim-opencode-zen-free", "free"):
+        # These tiers use configured remote providers, never Ollama.
+        provider = PROVIDER_ENDPOINTS["opencode"]
+        orchestrator = tier_registry.materialize_role_models(
+            registry, tier, {}, None
+        ).get("orchestrator", "opencode/muse-spark-1.3-contributor-free")
+        voice_config = {
+            "endpoint": provider["baseUrl"],
+            "model": strip_provider_prefix(orchestrator),
+            "apiKeyEnv": provider["apiKeyEnv"],
+        }
+
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
         if use_meridian:
@@ -188,9 +200,11 @@ def get_voice_config(
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }
 
-    if not is_local_tier and os.environ.get(
-        "DOTFILES_USE_LOCAL_OLLAMA", "true"
-    ).lower() in ("true", "1"):
+    if (
+        not is_local_tier
+        and tier not in ("omo-slim-opencode-zen-free", "free")
+        and os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "true").lower() in ("true", "1")
+    ):
         try:
             local_models = list_local_ollama_models()
             if local_models:

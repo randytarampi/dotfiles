@@ -19,6 +19,8 @@ from model_stamp import is_stale
 
 REPO_ROOT = SCRIPT_DIR.parent
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
+# Google/OpenRouter entries are checked for internal allowlist membership only;
+# they are not queried against live catalogs. Refresh via free-preset skill.
 ALLOWLISTS = {
     provider: REPO_ROOT / "configs" / "opencode" / f"{provider}-models.json"
     for provider in (
@@ -27,6 +29,8 @@ ALLOWLISTS = {
         "ollama-cloud",
         "github-copilot",
         "opencode",
+        "google",
+        "openrouter",
     )
 }
 
@@ -169,8 +173,13 @@ def check_junie_profiles() -> list[str]:
         models = get_models(endpoint_models_url(base_url), api_key)
         if models is None:
             continue
+        # Catalog ID shapes vary by provider (Meridian serves bare ids, Google's
+        # OpenAI-compat catalog prefixes with "models/", profiles may carry
+        # provider prefixes like "anthropic/..."). Compare on the last segment.
+        catalog_ids = {m.rsplit("/", 1)[-1] for m in models}
         for path, profile_ids, _ in profiles:
-            for model in sorted(profile_ids - models):
+            normalized = {m.rsplit("/", 1)[-1] for m in profile_ids}
+            for model in sorted(normalized - catalog_ids):
                 violations.append(
                     f"{path} points to missing model {model} at {base_url}"
                 )

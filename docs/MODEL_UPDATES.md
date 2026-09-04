@@ -81,3 +81,25 @@ The stamp is considered stale after 14 days. Re-run `make deploy` after any
 model announcement that affects your presets; `make verify` warns when the
 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
 for the automated check.
+
+## free preset (cross-provider free tier)
+
+The `free` preset distributes work across free offerings from three
+providers: OpenCode Zen free contributor models, the Google Gemini free tier,
+and OpenRouter models with the `:free` suffix. It is intended for
+cross-provider resilience and cost-free operation, not guaranteed capability
+parity.
+
+Free access has practical limits. OpenRouter allows 50 requests/day with less
+than $10 in credits or 1,000 requests/day with at least $10 in credits, with a
+20 RPM limit reported by `GET /api/v1/key`. Gemini limits are per project and
+there is no universal RPM/RPD table; daily quotas reset at midnight Pacific
+Time. OpenCode Zen contributor models should be reviewed for the applicable
+privacy caveat before use.
+
+When refreshing the preset, update the Google and OpenRouter allowlist files
+first, then update `presets`, `council.presets`, and `_tiers` together. These
+three locations must contain the same preset name. Keep fallback arrays
+provider-deduplicated, avoid the role primary in its fallback, and leave the
+council fallback empty. The repeatable workflow is in
+[`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md).

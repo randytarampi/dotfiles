@@ -19,11 +19,13 @@ _PROVIDER_PREFIXES = (
     "ollama",
     "opencode",
     "github-copilot",
+    "google",
+    "openrouter",
 )
 
 # Matches "<provider>/<model>" model strings used throughout presets.
 _PROVIDER_MODEL_RE = re.compile(
-    r"^(ollama-cloud|ollama|openai|anthropic|opencode|github-copilot)/[A-Za-z0-9._:\-]+$"
+    r"^(ollama-cloud|ollama|openai|anthropic|opencode|github-copilot|google|openrouter)/[A-Za-z0-9._:/\-]+$"
 )
 
 # Path to the project configs directory (relative to this lib module)
