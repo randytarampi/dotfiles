@@ -15,6 +15,7 @@ sys.path.insert(0, LIB_DIR)
 
 import logger
 from env import load_env
+from preset_migration import migrate_preset_value
 from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_targets
 from opencode_config import build_tier_args
 from cli_helpers import (
@@ -233,6 +234,15 @@ def main():
         args.local_fallback_preset = os.environ.get(
             "DOTFILES_PROJECT_LOCAL_FALLBACK_PRESET"
         )
+    for argument_name, environment_name in (
+        ("preset", "DOTFILES_PROJECT_PRESET"),
+        ("local_fallback_preset", "DOTFILES_PROJECT_LOCAL_FALLBACK_PRESET"),
+    ):
+        value = getattr(args, argument_name)
+        migrated = migrate_preset_value(value) if value else value
+        if value and migrated != value:
+            logger.warning("migrated legacy preset value %r → %r", value, migrated)
+            setattr(args, argument_name, migrated)
     if args.min_reasoning_embedding is None:
         min_embedding = os.environ.get("DOTFILES_PROJECT_MIN_REASONING_EMBEDDING")
         if min_embedding is not None:

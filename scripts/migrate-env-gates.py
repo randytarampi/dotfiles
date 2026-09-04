@@ -41,6 +41,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from preset_migration import TIER_VALUE_MIGRATIONS, migrate_preset_value
+
 # --- Migration definitions ---------------------------------------------------
 # Each entry: (old_key, new_key, inherit_from)
 # - old_key is removed (renamed to new_key if new_key absent)
@@ -106,6 +109,16 @@ MIGRATIONS = [
     ),
 ]
 
+# Tier value renames. These are value migrations rather than environment-key
+# migrations, so the existing key and quoting are preserved.
+# Project `.opencode/.env` files are intentionally outside this script's
+# ~/.env-only migration scope; configure-project.py normalizes them at read time.
+TIER_VALUE_KEYS = {
+    "DOTFILES_OPENCODE_TIER",
+    "DOTFILES_PI_TIER",
+    "DOTFILES_LOCAL_FALLBACK_PRESET",
+}
+
 # Removed integrations are deleted from ~/.env rather than retained as
 # commented-out settings, so they cannot be rediscovered by future tooling.
 REMOVED_ENV_VARS = {"DOTFILES_RUN_SMALLCODE_SETUP", "DOTFILES_SMALLCODE_TIER"}
@@ -153,6 +166,19 @@ def normalize_env_value(value):
     if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
         return stripped[1:-1]
     return stripped
+
+
+def split_inline_comment(value):
+    """Return an assignment value token and its preserved inline comment."""
+    stripped = value.strip()
+    if stripped.startswith(("'", '"')):
+        quote_end = stripped.find(stripped[0], 1)
+        if quote_end != -1:
+            return stripped[: quote_end + 1], stripped[quote_end + 1 :]
+    comment = re.search(r"\s+#", stripped)
+    if comment:
+        return stripped[: comment.start()], stripped[comment.start() :]
+    return stripped, ""
 
 
 def get_active_value(lines, key):
@@ -220,6 +246,24 @@ def migrate_env(lines, dry_run=False):
 
         indent, comment_prefix, key, value = parsed
         is_commented = comment_prefix.strip().startswith("#")
+
+        if (
+            key in TIER_VALUE_KEYS
+            and not is_commented
+            and normalize_env_value(split_inline_comment(value)[0])
+            in TIER_VALUE_MIGRATIONS
+        ):
+            value_token, inline_comment = split_inline_comment(value)
+            old_value = normalize_env_value(value_token)
+            new_value = migrate_preset_value(old_value)
+            if value_token.startswith(("'", '"')):
+                quote = value_token[0]
+                value = f"{quote}{new_value}{quote}"
+            else:
+                value = new_value
+            value += inline_comment
+            line = f"{indent}{comment_prefix}{key}={value}\n"
+            changes.append(f"Updated: {key} tier value {old_value} → {new_value}")
 
         if key in REMOVED_ENV_VARS or key.startswith(REMOVED_ENV_PREFIXES):
             changes.append(f"Removed obsolete SmallCode setting: {key}")
