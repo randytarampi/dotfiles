@@ -12,7 +12,9 @@
   "repo_local": {
     "description": "Skills stored directly in this repo (not fetched from upstream)",
     "skills": [
-      { "name": "dotfiles-verify", "source": "local" }
+      { "name": "dotfiles-verify", "source": "local" },
+      { "name": "free-preset", "source": "local" },
+      { "name": "randy-review", "source": "local" }
     ]
   }
 }

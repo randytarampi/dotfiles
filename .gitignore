@@ -14,3 +14,11 @@ configs/opencode/acp-agents.json
 
 # Deepwork progress state (kept git-local; OpenCode-readable via .ignore)
 .slim/deepwork/
+
+# Gemini CLI GitHub Action runtime state (gha-creds are OAuth artifacts)
+.gemini/
+gha-creds-*.json
+
+# Tracked CI config (global opencode.json ignore must not hide it)
+!configs/opencode/ci/
+!configs/opencode/ci/opencode.json

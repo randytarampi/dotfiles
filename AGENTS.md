@@ -124,6 +124,7 @@ One canonical name per concept. Deprecated aliases migrated one-way via `migrate
 - `make check-cli-contract` — validates CLI surfaces against the manifest (smoke-tests `--help`, checks required flags by capability, verifies invalid flags are rejected)
 - `make check-env-coverage` — validates env vars are documented in `.env.example`, tracks deprecated aliases and known alias pairs
 - `make check-hashes` — validates hash trigger coverage in `run_onchange` scripts
+- `make check-ci-assets` — validates hashes of CI/local-only review assets; when editing any file listed in `configs/review/assets-manifest.json`, run `make update-ci-assets` in the same step as the edit, before running verify
 
 When adding a new script:
 1. Define its capabilities in `scripts/lib/cli-contract.json`
@@ -236,6 +237,21 @@ cache is `~/.local/share/dotfiles/skills/`. See
 
 ---
 
+## Deepwork Progress Files
+
+Deepwork sessions keep progress state in `.slim/deepwork/<topic>.md` (git-local, OpenCode-readable via `.ignore`). Conventions:
+
+- Keep **one mutable Status line** at the top of the file; update it in place instead of appending duplicate status lines.
+- Phase logs are append-only history; when a session closes, the Status line is the single source of truth for "where did this leave off."
+- `.slim/deepwork/` is strictly progress state — deliverables go to project paths.
+
+## Tone and Style
+
+Reply in the language and register the conversation is using. English prose
+uses Canadian English spelling; formal reports and reviews follow Canadian
+Press style (casual conversation stays casual). Full guidance lives in
+`configs/agents/home-agents.md` (distributed by `configure-agent-guidance.py`).
+
 ## Reference Docs Index
 
 | Doc | Content |
@@ -256,6 +272,7 @@ cache is `~/.local/share/dotfiles/skills/`. See
 | [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
 | [docs/PI.md](docs/PI.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
 | [docs/OPENCODE.md](docs/OPENCODE.md) | OpenCode configuration, ACP agent verification, Tokenscope plugin |
+| [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 

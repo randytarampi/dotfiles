@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
+.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -143,6 +143,13 @@ doctor: ## Read-only drift checks: verify generated configs exist
 check-hashes: ## Verify hash trigger coverage in run_onchange scripts
 	@python3 scripts/check-hashes.py
 
+check-ci-assets: ## Verify CI/local-only asset hashes
+	@python3 scripts/verify-ci-assets.py
+
+update-ci-assets: ## Regenerate configs/review/assets-manifest.json after editing CI/local-only assets
+	@python3 -c "import json, hashlib; from pathlib import Path; root = Path('.'); assets = ['configs/review/code-review-prompt.md', 'scripts/run-local-review.sh', 'scripts/ci-codegraph.sh', 'configs/opencode/ci/opencode.json', 'scripts/onboard-agentic-review.py']; manifest = {'assets': {a: hashlib.sha256((root / a).read_bytes()).hexdigest() for a in assets}}; Path('configs/review/assets-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')"
+	@python3 scripts/verify-ci-assets.py
+
 check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
 	@python3 scripts/check-env-coverage.py
 
@@ -195,7 +202,7 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 test-tier-registry doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
@@ -213,7 +220,11 @@ test: lint drift check-templates dry-run ## Run basic repository checks
 	@echo "All basic checks passed."
 
 test-tier-registry: ## Run tier registry unit tests
-	@PYTHONPATH=scripts/lib python3 -m unittest discover -s scripts/lib/tests -p 'test_tier_registry.py'
+	@PYTHONPATH=scripts/lib python3 -m unittest discover -s scripts/lib/tests
+
+check-actionlint: ## Lint all GitHub Actions workflows
+	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint not installed (brew install actionlint)"; exit 1; }
+	@actionlint .github/workflows/*.yml
 
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
 	@bash scripts/migrate-acme-ddns.sh
