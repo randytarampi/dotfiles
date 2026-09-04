@@ -1,15 +1,1 @@
-{
-    "version": "0.1.0",
-    "id": "e26308a5-b7ba-4f8c-a052-cbc6bfb2dbe5",
-    "timestamp": "2026-09-04T20:55:29.952384Z",
-    "vcs": {
-        "type": "git",
-        "revision": "77e641294bc2a549095fd8572648f1e8599cc8ce",
-        "origin": "github",
-        "repository": "git@github.com:randytarampi/dotfiles.git"
-    },
-    "tool": {
-        "name": "chatter-cli"
-    },
-    "files": []
-}
+chatter:gzip:H4sIAAAAAAAA/3WS0Y6CMBBF3/0Kw/PWLbVF8Dv2aTfGlHbAbqCQUkyM4d+3LYuKSt+Ynjv3dpjrau1OdAbTqUZH+3WEN3H0MVaV9AWeMKACKJJJnCKaUo7yQkqEc4YFSAnb+KawqobO8rr1QoJJgnCGMP0ieM/YnuINS8iObL8n/iw6R17Dx9jg0oLXlsr+M6Fs4KymgLsdJDQmGc0F4YxmOGOFTNmOJDQtYkhZlgmRCoiCfJiSNU01t9K8DlbixK0F82j3NI5Zo0JV4EP/3PB7zwC03J68shNGtbb7FI0uVNkbQE0LWjQSNu3lwS2IHORNuXW28+7vXW7C3lTBDDqfGJEEsy1G2I0+xqhr+uLJ6SbkJWjrpb+9VrBEuVzWqLy3jZlN7wWcfhxXC60CVbvXV8dxr8rWIrqJUa20Qm5XmFsUFNPorXpYyGe4LuH9wKazHDp0cOtq7LFS2sdnjC2nDzho+QAvssPbm8NLdc7d78f6YTX8AbZiXuKhAwAA
