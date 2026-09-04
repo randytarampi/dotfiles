@@ -28,6 +28,12 @@ These apply to every repo, every session.
 - If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
 - Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
 
+### Tone and style
+
+- **Mirror the conversation.** Nominally reply in the language and register the engagement is using; don't force a switch.
+- **Canadian English for English prose.** Use Canadian spellings and usage (colour, centre, labelled, analytics-style -ize) in everything you write in English.
+- **Canadian Press style for formal artifacts.** Reports, reviews, PR summaries, and other formal documents follow Canadian Press style (spelling, numerals, capitalization, punctuation). Casual conversation stays casual — don't formalize chat.
+
 ### Semantic ambiguity
 
 - **When a flag or option name is semantically ambiguous, ask before implementing.** For example, `--local-fallback-placeholder` could mean "replace the cloud model" or "replace the local fallback model." A wrong guess costs a full revert+refix cycle. Ask the user to clarify the intended semantics before dispatching implementation. Don't guess when the cost of being wrong is high.
