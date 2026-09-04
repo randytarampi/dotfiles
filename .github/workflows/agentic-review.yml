@@ -1,0 +1,262 @@
+# Reusable agentic review workflow.
+#
+# Caller example:
+#   jobs:
+#     review:
+#       uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
+#       secrets: inherit
+#
+# Labels: review-opencode, review-junie, review-gemini, review-copilot, and
+# review-all request the corresponding reviewer(s). Mention triggers are parsed
+# by caller dispatch workflows; this reusable workflow only accepts workflow_call.
+
+name: Agentic review
+
+on:
+  workflow_call:
+    inputs:
+      agents:
+        description: "Comma-separated subset of: opencode,junie,gemini,copilot"
+        required: false
+        type: string
+        default: "opencode,junie,gemini"
+      prompt:
+        description: "Extra prompt context for reviewers"
+        required: false
+        type: string
+        default: ""
+      pr_number:
+        description: "PR number to review"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      OPENCODE_API_KEY:
+        required: false
+      JUNIE_API_KEY:
+        required: false
+      GEMINI_API_KEY:
+        required: false
+      OPENROUTER_API_KEY:
+        required: false
+
+concurrency:
+  group: agentic-review-${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Review job runs untrusted PR content. The dispatcher gates triggers to
+  # trusted repo actors; keep provider keys minimal and never add write
+  # permissions beyond pull-requests/issues here.
+  opencode:
+    if: contains(format(',{0},', inputs.agents), ',opencode,')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ (inputs.pr_number != '' && format('refs/pull/{0}/merge', inputs.pr_number)) || '' }}
+      # Downstream callers need this trusted checkout for shared review assets.
+      - name: Checkout trusted review assets
+        uses: actions/checkout@v7
+        with:
+          repository: randytarampi/dotfiles
+          ref: main
+          path: dotfiles-review
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Cache codegraph index
+        uses: actions/cache@v4
+        with:
+          path: .codegraph
+          key: codegraph-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
+          restore-keys: |
+            codegraph-${{ runner.os }}-${{ github.repository }}-
+      - name: Install codegraph + build index
+        run: bash dotfiles-review/scripts/ci-codegraph.sh
+      - name: Install code-review skill
+        run: mkdir -p .opencode/skills/code-review && cp dotfiles-review/.github/skills/code-review/SKILL.md .opencode/skills/code-review/SKILL.md
+      - name: Load review prompt
+        run: |
+          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          delim=""
+          for _ in {1..5}; do
+            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
+            if ! grep -Fq -- "$delim" "$prompt_file"; then
+              break
+            fi
+            delim=""
+          done
+          if [[ -z "$delim" ]]; then
+            echo "Unable to select a safe review prompt delimiter." >&2
+            exit 1
+          fi
+          {
+            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
+            cat "$prompt_file"
+            printf '%s\n' "$delim"
+          } >> "$GITHUB_ENV"
+      - name: Run OpenCode review
+        uses: anomalyco/opencode/github@4b7e19e315cca414121ba1d61523fef74bb3ae8b # v1.18.27
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENCODE_CONFIG: ${{ github.workspace }}/dotfiles-review/configs/opencode/ci/opencode.json
+        with:
+          model: opencode/muse-spark-1.3-contributor-free
+          use_github_token: "true"
+          prompt: |
+            ${{ inputs.prompt != '' && format('{0}
+
+            ---
+
+            {1}', inputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+
+  junie:
+    if: contains(format(',{0},', inputs.agents), ',junie,')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      # Junie runs on JetBrains' backend and sees no local files; the shared
+      # review method is loaded here and passed as the prompt text instead.
+      - name: Checkout trusted review assets
+        uses: actions/checkout@v7
+        with:
+          repository: randytarampi/dotfiles
+          ref: main
+          path: dotfiles-review
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Load review prompt
+        run: |
+          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          delim=""
+          for _ in {1..5}; do
+            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
+            if ! grep -Fq -- "$delim" "$prompt_file"; then
+              break
+            fi
+            delim=""
+          done
+          if [[ -z "$delim" ]]; then
+            echo "Unable to select a safe review prompt delimiter." >&2
+            exit 1
+          fi
+          {
+            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
+            cat "$prompt_file"
+            printf '%s\n' "$delim"
+          } >> "$GITHUB_ENV"
+      - uses: JetBrains/junie-github-action@v1
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          prompt: ${{ inputs.prompt != '' && inputs.prompt || env.CODE_REVIEW_PROMPT }}
+          attach_github_context_to_custom_prompt: "true"
+          use_single_comment: "true"
+
+  gemini:
+    if: contains(format(',{0},', inputs.agents), ',gemini,')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ (inputs.pr_number != '' && format('refs/pull/{0}/merge', inputs.pr_number)) || '' }}
+      # Downstream callers need this trusted checkout for shared review assets.
+      - name: Checkout trusted review assets
+        uses: actions/checkout@v7
+        with:
+          repository: randytarampi/dotfiles
+          ref: main
+          path: dotfiles-review
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Load review prompt
+        run: |
+          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          delim=""
+          for _ in {1..5}; do
+            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
+            if ! grep -Fq -- "$delim" "$prompt_file"; then
+              break
+            fi
+            delim=""
+          done
+          if [[ -z "$delim" ]]; then
+            echo "Unable to select a safe review prompt delimiter." >&2
+            exit 1
+          fi
+          {
+            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
+            cat "$prompt_file"
+            printf '%s\n' "$delim"
+          } >> "$GITHUB_ENV"
+      - id: gemini
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            ${{ inputs.prompt != '' && format('{0}
+
+            ---
+
+            {1}', inputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+      - name: Post Gemini review
+        if: steps.gemini.outputs.summary != '' && (inputs.pr_number != '' || github.event.pull_request.number != '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          GEMINI_SUMMARY: ${{ steps.gemini.outputs.summary }}
+        run: |
+          review_file="${RUNNER_TEMP}/gemini-review.md"
+          printf '%s' "${GEMINI_SUMMARY}" > "${review_file}"
+          gh pr comment "${PR_NUMBER}" --body-file "${review_file}"
+
+  copilot:
+    if: contains(format(',{0},', inputs.agents), ',copilot,')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Request Copilot review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PR_NUMBER}" ]]; then
+            echo "Cannot request Copilot review: PR number is empty." >&2
+            exit 1
+          fi
+          response_file="${RUNNER_TEMP}/copilot-review-response.txt"
+          if ! gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f 'reviewers[]=copilot-pull-request-reviewer[bot]' >"${response_file}" 2>&1; then
+            response="$(<"${response_file}")"
+            if grep -Eiq 'already[[:space:]]+(been[[:space:]]+)?requested|reviewer[^[:cntrl:]]*already' <<<"${response}"; then
+              echo "Copilot review was already requested; continuing."
+            else
+              printf '%s\n' "${response}" >&2
+              exit 1
+            fi
+          fi
