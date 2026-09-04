@@ -145,6 +145,14 @@ def validate_manifest(manifest):
         path = REPO_ROOT / label if label != "<missing path>" else None
         if path and not path.exists():
             violations.append(f"{label}: script does not exist")
+        elif path and "public" in caps:
+            try:
+                has_shebang = path.read_bytes().startswith(b"#!")
+            except OSError as error:
+                violations.append(f"{label}: could not inspect script ({error})")
+                has_shebang = False
+            if has_shebang and not os.access(path, os.X_OK):
+                violations.append(f"{label}: public shebang script is not executable")
 
     return violations
 

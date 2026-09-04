@@ -1,0 +1,9 @@
+{
+  "assets": {
+    "configs/review/code-review-prompt.md": "5fe7df98407285cf472f801822d40027d74410c0379daf3393440b8becae099e",
+    "scripts/run-local-review.sh": "f9e0d4cfc36ceabfc06766d3faf835f8b674cc4124596260de3381b749174cb0",
+    "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
+    "configs/opencode/ci/opencode.json": "c8bbe9c69606264775fcd5e7f4a1dfd42f2d7f0211a42ea622049e18e0e843cb",
+    "scripts/onboard-agentic-review.py": "3a2392c2adaa9e033d20f95e60480cd3e08c0c75c6fe830af6f23f8bc3047334"
+  }
+}

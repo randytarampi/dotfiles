@@ -81,6 +81,16 @@ Add hash triggers whenever a configure script depends on:
 
 If a generated artifact is stale after a pull, check the relevant hash trigger first. Then run `make check-hashes` and, if needed, `make reset && make deploy`.
 
+### CI/local-only review assets
+
+Review/CI-only assets (`.github/workflows/` helpers, `scripts/ci-*.sh`,
+`scripts/run-local-review.sh`, `configs/review/*`, `configs/opencode/ci/*`,
+`scripts/onboard-agentic-review.py`) must **not** get `run_onchange_16` hash
+triggers — they don't affect local OpenCode configuration, and attaching them
+causes false local re-runs. Track them in `configs/review/assets-manifest.json`
+instead (checked by `make check-ci-assets`; regenerate with
+`make update-ci-assets` after editing any listed asset).
+
 See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger policy.
 
 ---

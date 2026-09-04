@@ -601,6 +601,43 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/ci-codegraph.sh",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/run-local-review.sh",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--staged",
+        "--model",
+        "--base"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/onboard-agentic-review.py",
+      "capabilities": ["public", "mutates", "backups"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--repo",
+        "--ref",
+        "--workflows-only"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/install-skills.sh",
       "capabilities": [
         "public",

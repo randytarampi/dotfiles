@@ -19,6 +19,9 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 CHEZMOI_SCRIPTS = REPO_ROOT / ".chezmoiscripts"
 NON_TRACKED_CONFIGS = {
     "configs/opencode/acp-agents.json",
+    "configs/opencode/ci/opencode.json",
+    "configs/review/code-review-prompt.md",
+    "configs/review/assets-manifest.json",
 }
 # Scripts that are verification/audit tools, not config inputs — no hash trigger needed
 NON_TRACKED_SCRIPTS = {
@@ -30,6 +33,10 @@ NON_TRACKED_SCRIPTS = {
     "scripts/verify-iterm2.py",  # Makefile-only verification tool
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/check-model-drift.py",  # Makefile-only verification tool
+    "scripts/ci-codegraph.sh",  # CI-only asset verified by check-ci-assets
+    "scripts/run-local-review.sh",  # local-only asset verified by check-ci-assets
+    "scripts/onboard-agentic-review.py",  # CI-only asset verified by check-ci-assets
+    "scripts/verify-ci-assets.py",  # self-verifying manifest checker
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
@@ -71,7 +78,9 @@ def find_trackable_files():
 
     # All shell scripts in scripts/
     for f in SCRIPTS_DIR.glob("*.sh"):
-        trackable.add(f"scripts/{f.name}")
+        rel = f"scripts/{f.name}"
+        if rel not in NON_TRACKED_SCRIPTS:
+            trackable.add(rel)
 
     # All config files in configs/ (recursive)
     if CONFIGS_DIR.exists():
