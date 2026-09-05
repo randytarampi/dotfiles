@@ -105,7 +105,8 @@
         "--source",
         "--dry-run",
         "--force",
-        "--check"
+        "--check",
+        "--repo"
       ],
       "positional_operand": null,
       "child_scripts": []

@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -101,6 +101,14 @@ env: ## Load ~/.env for this make recipe only
 
 drift: ## Check ~/.env drift against .env.example (read-only)
 	@python3 scripts/sync-env.py --example "$(ENV_EXAMPLE)" --env "$(ENV_FILE)" --check
+
+stamp-repo-guidance: ## Stamp shared guidance into REPO_PATH/AGENTS.md
+	@test -n "$(REPO_PATH)" || { echo "REPO_PATH is required"; exit 2; }
+	@python3 scripts/configure-agent-guidance.py --repo "$(REPO_PATH)"
+
+check-repo-guidance: ## Check shared guidance drift in REPO_PATH/AGENTS.md
+	@test -n "$(REPO_PATH)" || { echo "REPO_PATH is required"; exit 2; }
+	@python3 scripts/configure-agent-guidance.py --repo "$(REPO_PATH)" --check
 
 migrate: ## Migrate deprecated DOTFILES_RUN_* gate names in ~/.env to current names, then sync new keys
 	@python3 scripts/migrate-env-gates.py --env "$(ENV_FILE)"

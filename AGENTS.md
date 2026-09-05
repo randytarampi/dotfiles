@@ -214,10 +214,10 @@ Key template files: `dot_gitconfig.tmpl` (GIT_AUTHOR_*, GPG_SIGNING_KEY, GITHUB_
 ## AI Agent Guidance Files
 
 - `AGENTS.md` (this file) is repo-level guidance for agents working on the dotfiles repo itself. It is in `.chezmoiignore` and is NOT deployed to `~/AGENTS.md`.
-- `configs/agents/home-agents.md` is the source of truth for home-level agent guidance. The script `configure-agent-guidance.py` distributes it to `~/AGENTS.md` and all configured agent locations: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.cursor/AGENTS.md`, `~/.ai/AGENTS.md` (resolving `~/.junie` symlink), `~/.copilot/copilot-instructions.md`, `~/.pi/agent/AGENTS.md`, `~/.snowflake/cortex/AGENTS.md`, and `~/Documents/Cline/Rules/AGENTS.md`.
+- `configs/agents/home-agents.md` is the source of truth for home-level agent guidance. The script `configure-agent-guidance.py` distributes it to `~/AGENTS.md` and all configured agent locations: `~/.claude/CLAUDE.md`, `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.cursor/AGENTS.md`, `~/.ai/AGENTS.md` (resolving `~/.junie` symlink), `~/.copilot/copilot-instructions.md`, `~/.pi/agent/AGENTS.md`, `~/.snowflake/cortex/AGENTS.md`, and `~/Documents/Cline/Rules/AGENTS.md`. `configs/agents/repo-agents-shared.md` is stamped into opted-in repository `AGENTS.md` files with `--repo PATH`.
 - Deep reference material lives in `docs/` (linked throughout this file).
 
-When editing home-level agent guidance, edit `configs/agents/home-agents.md` first, then run `scripts/configure-agent-guidance.py` to distribute. For repo-level guidance (this file), edit `AGENTS.md` directly. All cross-references should link to `docs/` files.
+When editing home-level agent guidance, edit `configs/agents/home-agents.md` first, then run `scripts/configure-agent-guidance.py` to distribute. For shared repo-level guidance, edit `configs/agents/repo-agents-shared.md` first, then run `make stamp-repo-guidance REPO_PATH=/path/to/repo`; keep repository-specific guidance below its markers. All cross-references should link to `docs/` files.
 
 ---
 

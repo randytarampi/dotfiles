@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Distribute home-level agent guidance to all AI agent instruction files.
+"""Distribute home- and repo-level agent guidance.
 
 Reads configs/agents/home-agents.md from the dotfiles repo and distributes its
 AGENT_GUIDANCE_START/END section to each agent instruction file. Also writes
@@ -7,6 +7,7 @@ AGENT_GUIDANCE_START/END section to each agent instruction file. Also writes
 
 Usage:
     configure-agent-guidance.py [--source PATH] [--dry-run] [--force] [--check]
+    configure-agent-guidance.py --repo PATH [--source PATH] [--dry-run] [--check]
 
 Options:
     --source PATH   Path to home-agents.md (default: configs/agents/home-agents.md in dotfiles repo)
@@ -54,6 +55,9 @@ AGENT_FILES = [
 MARKER_START = "<!-- AGENT_GUIDANCE_START -->"
 MARKER_END = "<!-- AGENT_GUIDANCE_END -->"
 HEADER_COMMENT = "<!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->"
+REPO_MARKER_START = "<!-- DOTFILES_REPO_GUIDANCE_START -->"
+REPO_MARKER_END = "<!-- DOTFILES_REPO_GUIDANCE_END -->"
+REPO_HEADER_COMMENT = "<!-- Managed by configure-agent-guidance.py — do not edit between DOTFILES_REPO_GUIDANCE markers -->"
 
 
 def extract_guidance(source_path):
@@ -202,14 +206,69 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
     return False
 
 
+def stamp_repo_guidance(repo_path, source_path=None, dry_run=False, check=False):
+    """Stamp shared repo guidance into ``repo_path/AGENTS.md``."""
+    source_path = source_path or os.path.join(
+        DOTFILES_DIR, "configs", "agents", "repo-agents-shared.md"
+    )
+    with open(source_path, encoding="utf-8") as f:
+        guidance = f.read().rstrip("\n")
+
+    new_block = (
+        f"{REPO_HEADER_COMMENT}\n{REPO_MARKER_START}\n{guidance}\n" f"{REPO_MARKER_END}"
+    )
+    agent_path = os.path.join(repo_path, "AGENTS.md")
+    pointer = (
+        "\n\n<!-- Add repository-specific guidance below this shared section. -->\n"
+    )
+
+    if os.path.exists(agent_path):
+        with open(agent_path, encoding="utf-8") as f:
+            content = f.read()
+    else:
+        content = ""
+
+    start = content.find(REPO_MARKER_START)
+    end_marker = content.find(REPO_MARKER_END, start if start != -1 else 0)
+    if start != -1 and end_marker != -1:
+        start_idx = start
+        prefix = REPO_HEADER_COMMENT + "\n"
+        if start >= len(prefix) and content[start - len(prefix) : start] == prefix:
+            start_idx -= len(prefix)
+        end_idx = end_marker + len(REPO_MARKER_END)
+        new_content = content[:start_idx] + new_block + content[end_idx:]
+    elif content:
+        new_content = content.rstrip("\n") + "\n\n" + new_block + "\n"
+    else:
+        new_content = new_block + pointer
+
+    if new_content == content:
+        logger.info(f"Already up to date: {agent_path}")
+        return True
+    if check:
+        logger.error(f"DRIFT: {agent_path}")
+        return False
+    if dry_run:
+        logger.info(f"[DRY RUN] Would update: {agent_path}")
+        return True
+    if os.path.exists(agent_path):
+        backup_file(agent_path, enabled=True)
+    write_text_file(agent_path, new_content, backup=False)
+    logger.info(f"Updated: {agent_path}")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Distribute home-level agent guidance to all AI agent instruction files"
     )
     parser.add_argument(
+        "--repo",
+        help="Stamp shared repository guidance into PATH/AGENTS.md instead of home guidance",
+    )
+    parser.add_argument(
         "--source",
-        default=os.path.join(DOTFILES_DIR, "configs", "agents", "home-agents.md"),
-        help="Path to home-agents.md (default: configs/agents/home-agents.md in dotfiles repo)",
+        help="Path to the guidance source (defaults to the mode's shared source)",
     )
     parser.add_argument(
         "--dry-run",
@@ -228,7 +287,20 @@ def main():
     )
     args = parser.parse_args()
 
-    source_path = args.source
+    if args.repo:
+        source_path = args.source or os.path.join(
+            DOTFILES_DIR, "configs", "agents", "repo-agents-shared.md"
+        )
+        if not os.path.exists(source_path):
+            logger.error(f"Source file not found: {source_path}")
+            sys.exit(1)
+        if stamp_repo_guidance(args.repo, source_path, args.dry_run, args.check):
+            return
+        sys.exit(1)
+
+    source_path = args.source or os.path.join(
+        DOTFILES_DIR, "configs", "agents", "home-agents.md"
+    )
     if not os.path.exists(source_path):
         logger.error(f"Source file not found: {source_path}")
         logger.error("Expected configs/agents/home-agents.md in the dotfiles repo")
