@@ -105,6 +105,19 @@ default MCP set, minus local-only servers:
 | `idea` | excluded | local IDE only |
 | `sentry` | excluded | no secret in CI scope |
 
+For the repo **Settings → Copilot → MCP servers** UI (no API for this — manual, per repo), the
+config blocks need explicit `type` fields; Copilot's schema accepts `local`/`stdio`/`http`/`sse`
+and rejects typos like `sdio` (verified live 2026-09-05):
+
+```json
+{
+  "codegraph": { "type": "stdio", "command": "codegraph serve --mcp", "tools": ["*"] },
+  "context7": { "type": "http", "url": "https://mcp.context7.com/mcp", "tools": ["resolve-library-id", "get-library-docs"] },
+  "grep": { "type": "http", "url": "https://mcp.grep.app", "tools": ["*"] },
+  "github": { "type": "http", "url": "https://api.githubcopilot.com/mcp", "tools": ["*"] }
+}
+```
+
 `scripts/ci-codegraph.sh` installs `@colbymchenry/codegraph` (npm), skips if
 `codegraph` is already on `PATH`, then runs `codegraph sync` (falling back to
 `codegraph index`). The `.codegraph/` index is cached with `actions/cache`,
