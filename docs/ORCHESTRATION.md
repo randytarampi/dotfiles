@@ -329,14 +329,3 @@ The `MIGRATIONS` list is the single source of truth for gate rename history.
 | `make deploy` is slow (30+ seconds) | All configure scripts running | This is expected for full rebuild. Use `make diff` to preview |
 | `configure-all.sh` fails on tier detection | `tier_detect.sh` needs `common.sh` | `configure-all.sh` sources both — if error, check lib paths |
 | `make doctor` reports missing files | Gate enabled but configure script didn't run | Run `make configure` to regenerate, then `make doctor` again |
-
-### GitHub and third-party API verification notes
-
-Verified live 2026-09-05; check each of these before burning a debug round on them again:
-
-- **GitHub Actions `startup_failure` runs produce no API artifacts** — no check runs, no jobs, no annotations; every probe of the run's sub-resources 404s. The failure reason is only visible in the Actions UI run page. Don't script against the run API to diagnose one.
-- **GitHub environments REST GET does not reliably expose required reviewers** — an environment with a working reviewer gate (a release run observed sitting in `waiting` for the configured user) still reads `reviewers: []` from `GET /repos/{owner}/{repo}/environments/{name}`. Treat the release run's `waiting` state, or the Settings → Environments UI, as the source of truth. GitHub's GraphQL `Environment.protectionRules` exists but its node types are not the obvious ones — verify against the schema before writing fragments.
-- **GitHub Actions allowlists match the full `owner/repo/path@ref` identity** — a pattern like `vendor/action@*` does not authorize the subpath action `vendor/action/coverage@v2`. When a repo uses a specific-actions allowlist, sweep every `uses:` (including subpaths and `actions/cache/save`-style aliases) against `patterns_allowed` before assuming a permissions defect.
-- **AppVeyor's build-job log endpoint returns raw text**, not JSON: `curl https://ci.appveyor.com/api/buildjobs/<jobId>/log` (jobId from the project API's `build.jobs[0].jobId`). Parsing it as JSON fails silently.
-- **Coveralls badges are S3/CDN-cached** — `https://coveralls.io/repos/github/<owner>/<repo>/badge.svg` can serve a stale score long after a newer build is ingested. Trust the project page's build JSON for current coverage.
-- **Unpublished npm versions are burned permanently** — a republish of the same version is rejected; the next release must be a higher version.

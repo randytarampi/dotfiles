@@ -28,6 +28,16 @@ These policies apply to work in every repository.
 - Dispatch discipline: never dispatch onto a repo another lane may own. When a background signal contradicts the Job Board, or the board shows `error`/unknown for a session, verify the repository's tip and dirty state directly before re-dispatching — a stale or ambiguous board signal is not proof a session is gone.
 - Never run long `sleep`/poll loops in the orchestrator shell; dispatch a read-only watcher lane and end the turn.
 
+### API verification notes
+
+- Verified live 2026-09-05; recheck these facts before debugging around them.
+- GitHub Actions `startup_failure` runs expose no check-run, job or annotation API artifacts; use the Actions UI.
+- GitHub environment REST responses may omit required reviewers; trust a release run's `waiting` state or the Settings UI, and verify GraphQL types against the schema.
+- GitHub Actions allowlists match the full `owner/repo/path@ref`; audit every `uses:` entry, including subpaths and aliases.
+- AppVeyor build-job logs are raw text, not JSON.
+- Coveralls badges can be stale; use project build JSON for current coverage.
+- Unpublished npm versions cannot be republished; release a higher version.
+
 ### Communication
 
 - Image and screenshot inputs are not supported in agent lanes; ask for text, a description, or a probed artifact (`pdftotext`, `xxd`) instead of accepting an unreadable file.
