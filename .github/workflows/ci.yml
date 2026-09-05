@@ -10,16 +10,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    runs-on: macos-latest
+  verify:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install shell tooling
-        run: brew install shellcheck shfmt
-      - name: Lint
-        run: make lint
-      - name: CLI contract
-        run: make check-cli-contract
+      - name: Install macOS tooling
+        if: runner.os == 'macOS'
+        run: brew install shellcheck shfmt chezmoi
+      - name: Install Ubuntu tooling
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck shfmt
+          curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Prepare empty environment
+        run: cp dot_dotfiles/shell/.env.example "$HOME/.env"
+      - name: CI verification
+        run: make ci-verify
+      - name: Deploy smoke
+        run: make deploy
