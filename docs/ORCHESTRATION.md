@@ -104,6 +104,24 @@ sequenceDiagram
     Configure->>Configure: configure-skills.py
 ```
 
+## Repository agent guidance
+
+`configs/agents/repo-agents-shared.md` is the source for the common policy
+section stamped into repository `AGENTS.md` files. The generated section is
+bounded by `DOTFILES_REPO_GUIDANCE_START` and `DOTFILES_REPO_GUIDANCE_END`.
+Everything outside those markers is repository-owned and is preserved.
+
+Opt a repository in by running:
+
+```sh
+make stamp-repo-guidance REPO_PATH=/path/to/repository
+```
+
+The script creates a missing `AGENTS.md`, or appends/replaces only the marked
+section in an existing file. Keep repository-specific guidance below the
+shared section. Use `make check-repo-guidance REPO_PATH=/path/to/repository`
+to detect drift, and `--dry-run` to preview a stamp.
+
 ## Makefile Targets
 
 | Target | What it does | When to use |
@@ -115,6 +133,8 @@ sequenceDiagram
 | `make ci-verify` | lint + drift + doctor + check-hashes (no dry-run) | CI pipeline |
 | `make doctor` | Read-only drift checks (verify generated configs exist) | Diagnosing issues |
 | `make check-hashes` | Hash trigger coverage audit | After adding config inputs |
+| `make stamp-repo-guidance REPO_PATH=...` | Stamp shared policy into a repo's `AGENTS.md` | Opting a repo in or updating policy |
+| `make check-repo-guidance REPO_PATH=...` | Check a repo's shared guidance for drift | Before committing repo guidance changes |
 | `make reset` | Clear chezmoi script state | Force full re-run |
 | `make diff` | Preview chezmoi changes | Before deploying |
 | `make dry-run` | Dry-run chezmoi apply | Before deploying |
