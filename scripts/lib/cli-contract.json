@@ -771,6 +771,23 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/cleanup-project.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--workspace-root",
+        "--steps",
+        "--skip",
+        "--force"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
+
   ]
 }
