@@ -378,6 +378,9 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
 
+> [!NOTE]
+> A project `opencode.json` is written only when the project actually overrides global defaults: a preset that differs from the active global tier (`preset` key in `~/.config/opencode/oh-my-opencode-slim.json`), or any `--local-fallback-*` inputs. Runs with no preset (or a same-tier preset) skip the file entirely and inherit the global config as-is. Per-key overrides (a single `model`, plugin, or permission) remain available as hand-authored minimal `opencode.json` files, which OpenCode merges over global.
+
 > [!IMPORTANT]
 > If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
 

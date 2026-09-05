@@ -6,8 +6,10 @@
 # (symlinked from the repo root as .env.example). This file covers project-scoped
 # vars only.
 
-# Model/tier selection
-DOTFILES_PROJECT_PRESET='pro-plus'
+# Model/tier selection. Leave unset to inherit the global tier as-is (no project
+# opencode.json is written). Set it only when this project needs a different tier;
+# setting it to the global tier value is also treated as no override.
+# DOTFILES_PROJECT_PRESET='pro-plus'
 
 # Optional explicit step selection (overrides defaults below).
 # Default steps: opencode,codegraph,skills,jetbrains,junie — mcps, tier, acp-agents,

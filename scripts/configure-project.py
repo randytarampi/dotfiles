@@ -94,6 +94,46 @@ def resolve_steps(args):
     return steps
 
 
+def _global_tier():
+    """Return the active global tier, or None when it cannot be determined.
+
+    Reads the `preset` key from the global oh-my-opencode-slim.json. Any
+    failure (missing file, unreadable JSON, absent key) yields None so
+    callers fall back to the conservative write path.
+    """
+    slim_path = os.path.join(
+        os.path.expanduser("~"),
+        ".config",
+        "opencode",
+        "oh-my-opencode-slim.json",
+    )
+    try:
+        with open(slim_path, encoding="utf-8") as handle:
+            return json.load(handle).get("preset") or None
+    except (OSError, ValueError):
+        return None
+
+
+def project_opencode_overrides_global(args):
+    """Whether the project declares inputs that require a root opencode.json.
+
+    OpenCode merges the global config with project config, so a project
+    file is only needed when the project actually overrides global
+    defaults: a different tier, or any local-fallback materialization
+    inputs. Same-tier runs inherit the global config as-is.
+    """
+    if (
+        args.local_fallback_preset
+        or args.local_fallback_placeholder
+        or args.local_fallback_role
+    ):
+        return True
+    preset = args.preset
+    if not preset:
+        return False
+    return preset != _global_tier()
+
+
 def run(command, cwd, env=None):
     logger.info("Running: " + " ".join(command))
     result = subprocess.run(command, cwd=cwd, env=env)
@@ -262,38 +302,52 @@ def main():
         os.makedirs(opencode_dir, exist_ok=True)
 
     if "opencode" in steps:
-        temp = os.path.join(opencode_dir, ".tmp-opencode")
-        if not args.dry_run:
-            os.makedirs(temp, exist_ok=True)
-        env = child_env.copy()
-        env["OPENCODE_DIR"] = temp
-        opencode_cmd = [
-            sys.executable,
-            os.path.join(SCRIPT_DIR, "configure-opencode.py"),
-            "--mode",
-            "project",
-            "--preset",
-            preset,
-        ]
-        # MCPs are written only by the explicit project-wide mcps step.
-        opencode_cmd += ["--skip", "mcps"]
-        run(
-            opencode_cmd
-            + forward_common_args(args)
-            + forward_local_fallback_args(args),
-            root,
-            env,
-        )
-        if args.dry_run:
-            logger.info(f"Would copy generated project config to {root}/opencode.json")
-        else:
-            generated = os.path.join(temp, "opencode.json")
-            if not os.path.isfile(generated):
-                raise RuntimeError(
-                    "configure-opencode.py did not generate opencode.json"
+        if not project_opencode_overrides_global(args):
+            global_tier = _global_tier() or "unknown"
+            if args.dry_run:
+                logger.info(
+                    "[dry-run] no project overrides for tier "
+                    f"'{global_tier}' — would skip root opencode.json"
                 )
-            shutil.copy(generated, os.path.join(root, "opencode.json"))
-            shutil.rmtree(temp, ignore_errors=True)
+            else:
+                logger.info(
+                    f"no project overrides for tier '{global_tier}' — skipping root opencode.json"
+                )
+        else:
+            temp = os.path.join(opencode_dir, ".tmp-opencode")
+            if not args.dry_run:
+                os.makedirs(temp, exist_ok=True)
+            env = child_env.copy()
+            env["OPENCODE_DIR"] = temp
+            opencode_cmd = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-opencode.py"),
+                "--mode",
+                "project",
+                "--preset",
+                preset,
+            ]
+            # MCPs are written only by the explicit project-wide mcps step.
+            opencode_cmd += ["--skip", "mcps"]
+            run(
+                opencode_cmd
+                + forward_common_args(args)
+                + forward_local_fallback_args(args),
+                root,
+                env,
+            )
+            if args.dry_run:
+                logger.info(
+                    f"Would copy generated project config to {root}/opencode.json"
+                )
+            else:
+                generated = os.path.join(temp, "opencode.json")
+                if not os.path.isfile(generated):
+                    raise RuntimeError(
+                        "configure-opencode.py did not generate opencode.json"
+                    )
+                shutil.copy(generated, os.path.join(root, "opencode.json"))
+                shutil.rmtree(temp, ignore_errors=True)
     if "tier" in steps:
         env = child_env.copy()
         env["OPENCODE_DIR"] = opencode_dir
