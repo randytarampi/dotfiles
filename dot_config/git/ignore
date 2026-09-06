@@ -14,6 +14,7 @@
 .cursor/
 .codex/
 .opencode/
+.smallcode/
 
 # Dependencies
 node_modules/
