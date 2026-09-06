@@ -206,7 +206,9 @@ def inject(agent_path, guidance, dry_run=False, force=False, check=False):
     return False
 
 
-def stamp_repo_guidance(repo_path, source_path=None, dry_run=False, check=False):
+def stamp_repo_guidance(
+    repo_path, source_path=None, dry_run=False, force=False, check=False
+):
     """Stamp shared repo guidance into ``repo_path/AGENTS.md``."""
     source_path = source_path or os.path.join(
         DOTFILES_DIR, "configs", "agents", "repo-agents-shared.md"
@@ -237,6 +239,25 @@ def stamp_repo_guidance(repo_path, source_path=None, dry_run=False, check=False)
             start_idx -= len(prefix)
         end_idx = end_marker + len(REPO_MARKER_END)
         new_content = content[:start_idx] + new_block + content[end_idx:]
+    elif start != -1 or end_marker != -1:
+        marker_name = REPO_MARKER_START if start != -1 else REPO_MARKER_END
+        message = f"UNMATCHED: {agent_path} ({marker_name} has no pair)"
+        if check:
+            logger.error(message)
+            return False
+        if not force:
+            logger.error(f"{message}; refusing to stamp without --force")
+            return False
+
+        if start != -1:
+            start_idx = start
+            prefix = REPO_HEADER_COMMENT + "\n"
+            if start >= len(prefix) and content[start - len(prefix) : start] == prefix:
+                start_idx -= len(prefix)
+            new_content = content[:start_idx] + new_block + "\n"
+        else:
+            end_idx = end_marker + len(REPO_MARKER_END)
+            new_content = new_block + content[end_idx:]
     elif content:
         new_content = content.rstrip("\n") + "\n\n" + new_block + "\n"
     else:
@@ -294,7 +315,13 @@ def main():
         if not os.path.exists(source_path):
             logger.error(f"Source file not found: {source_path}")
             sys.exit(1)
-        if stamp_repo_guidance(args.repo, source_path, args.dry_run, args.check):
+        if stamp_repo_guidance(
+            args.repo,
+            source_path,
+            dry_run=args.dry_run,
+            force=args.force,
+            check=args.check,
+        ):
             return
         sys.exit(1)
 
