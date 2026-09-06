@@ -77,8 +77,11 @@ repository instructions.
 - Security posture: minimal `permissions` per job, `sender.type != 'Bot'`
   filter, per-PR `concurrency` cancel-in-progress, actions pinned to moving
   major tags (OpenCode pinned to its release SHA — it publishes no major tag),
-  `persist-credentials: false`, read-only MCP tool allowlists, no
-  `pull_request_target`.
+  read-only MCP tool allowlists, no `pull_request_target`. Push-capable lanes
+  (OpenCode, Junie, Gemini) run with token checkout, persisted credentials,
+  and `contents: write` so mentioned agents can push requested fixes; the
+  Copilot lane stays orchestration-only — Copilot's own write-back is governed
+  by repo Settings → Copilot → Agent permissions, not by this workflow.
 
 ## Secrets
 

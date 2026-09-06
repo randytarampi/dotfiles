@@ -185,14 +185,16 @@ jobs:
   gemini:
     if: contains(format(',{0},', inputs.agents), ',gemini,')
     runs-on: ubuntu-latest
+    # Gemini may push a requested fix like the OpenCode/Junie lanes.
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
+          token: ${{ github.token }}
+          persist-credentials: true
           fetch-depth: 1
           ref: ${{ (inputs.pr_number != '' && format('refs/pull/{0}/merge', inputs.pr_number)) || '' }}
       # Downstream callers need this trusted checkout for shared review assets.
@@ -225,6 +227,12 @@ jobs:
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
+      # Gemini may push a requested fix; strip the trusted checkout's git
+      # include config so submodule scanning does not error on its directory.
+      - name: Remove trusted checkout git include config
+        run: |
+          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
+            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - id: gemini
         uses: google-github-actions/run-gemini-cli@v0
         env:
