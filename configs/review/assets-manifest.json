@@ -1,9 +1,10 @@
 {
   "assets": {
+    "configs/review/dispatcher-stub.yml": "545d1d0529387a4a15a0adbb8d9e32ad7fbff2ecea33bb65a32916b1bc274d01",
     "configs/review/code-review-prompt.md": "0d8b95e69b09290b283bc4af8340c0ff97e5f8eff3da7c317a650062dbe21719",
     "scripts/run-local-review.sh": "f9e0d4cfc36ceabfc06766d3faf835f8b674cc4124596260de3381b749174cb0",
     "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
     "configs/opencode/ci/opencode.json": "42a296f6d79a6c24dd81048ce268523ad949b9499dcf2b65034172aabb6c4326",
-    "scripts/onboard-agentic-review.py": "eeda1a3eac825574c03dbb041a9e14568251429c8e88b9ad98ab5daaad2d2e30"
+    "scripts/onboard-agentic-review.py": "3fc6dde486457bf6a384bf71c3aacf755a7a8ed342a21f662c43f9d139fced80"
   }
 }

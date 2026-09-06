@@ -1,5 +1,5 @@
 # Stable dispatcher stub: trigger parsing lives in the reusable workflow
-# (randytarampi/dotfiles) so improvements land automatically via @main.
+# (randytarampi/dotfiles) so improvements land automatically via @__REF__.
 # Only touch this file to add trigger events or change permissions.
 name: Agent review dispatcher
 
@@ -19,7 +19,7 @@ permissions:
 jobs:
   review:
     if: github.event.sender.type != 'Bot'
-    uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
+    uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@__REF__
     with:
       event_json: ${{ toJson(github.event) }}
     secrets: inherit

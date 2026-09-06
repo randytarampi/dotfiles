@@ -48,14 +48,15 @@ repository instructions.
 
 ## How it works
 
-- `.github/workflows/agent-review.yml` — dispatcher for this repo. Listens for
-  `issue_comment` / `pull_request_review_comment` (mention triggers) and
-  `pull_request[labeled]` (label triggers). Filters bot senders, parses the
-  request with `jq` into workflow outputs (comment content is never
-  interpolated into shell), and calls the reusable workflow with
-  `secrets: inherit`.
+- `.github/workflows/agent-review.yml` — stable dispatcher stub for this repo.
+  It declares trigger events and permissions, forwards raw event JSON, and
+  filters bot senders in defence in depth. Trigger parsing is centralized in
+  the reusable workflow, so parser improvements arrive through the dotfiles
+  ref without downstream workflow changes.
 - `.github/workflows/agentic-review.yml` — reusable `workflow_call` workflow.
-  Downstream repos call it with:
+  Its first `parse` job handles dispatcher-mode event JSON and direct
+  passthrough calls. Downstream repos carry only the stable stub installed from
+  `configs/review/dispatcher-stub.yml`:
 
   ```yaml
   jobs:
@@ -66,8 +67,9 @@ repository instructions.
       secrets: inherit
   ```
 
-  To adopt elsewhere, copy `agent-review.yml` and point its `uses:` at
-  `randytarampi/dotfiles@main` (or pin a release tag for reproducibility).
+  To adopt elsewhere, run `scripts/onboard-agentic-review.py`. It installs the
+  stable stub and points its `uses:` reference at the selected dotfiles ref.
+  Re-onboarding is only needed when trigger events or permissions change.
   The CI OpenCode lane runs the explicitly selected model with all three
   provider keys available. The repo's local fallback policy is a runtime
   plugin concern and is not part of the CI config.
@@ -220,8 +222,8 @@ For an explicitly local review, use for example:
 
 ## Onboard another repo
 
-Run `scripts/onboard-agentic-review.py --repo <path> [--ref <ref>]` to copy the
-dispatcher and Copilot setup workflow. The helper is idempotent, creates backups
+Run `scripts/onboard-agentic-review.py --repo <path> [--ref <ref>]` to install the
+stable dispatcher stub and Copilot setup workflow. The helper is idempotent, creates backups
 when replacing existing workflows (disable with `--no-backup`), and supports
 `--dry-run` and `--workflows-only`. The shared prompt and skills are checked out
 automatically from `randytarampi/dotfiles`; manually create secrets and labels,

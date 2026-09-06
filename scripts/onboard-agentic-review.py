@@ -2,7 +2,6 @@
 """Install the reusable agentic-review dispatcher in another repository."""
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -13,28 +12,14 @@ import logger
 from cli_helpers import add_common_args
 from file_utils import backup_file
 
-SOURCE = SCRIPT_DIR.parent / ".github" / "workflows" / "agent-review.yml"
+SOURCE = SCRIPT_DIR.parent / "configs" / "review" / "dispatcher-stub.yml"
 COPILOT_SOURCE = SCRIPT_DIR.parent / ".github" / "workflows" / "copilot-setup-steps.yml"
 SKILL_SOURCE = SCRIPT_DIR.parent / ".github" / "skills" / "code-review" / "SKILL.md"
-LOCAL_WORKFLOW = "uses: ./.github/workflows/agentic-review.yml"
 
 
 def build_workflow(ref):
     content = SOURCE.read_text(encoding="utf-8")
-    replacement = (
-        "uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@" f"{ref}"
-    )
-    updated, count = re.subn(
-        rf"^([ \t]*){re.escape(LOCAL_WORKFLOW)}\s*$",
-        rf"\1{replacement}",
-        content,
-        flags=re.MULTILINE,
-    )
-    if count != 1:
-        raise RuntimeError(
-            f"Expected exactly one local reusable-workflow reference, found {count}"
-        )
-    return updated
+    return content.replace("__REF__", ref)
 
 
 def checklist():
@@ -54,6 +39,10 @@ Shared assets:
   out automatically by the reusable workflow; nothing extra is needed locally.
   The code-review skill is installed to .github/skills/ (read natively by
   Copilot code review; copied into .opencode/skills/ for the OpenCode lane).
+Dispatcher:
+  The installed dispatcher is a stable stub; trigger parsing and improvements
+  arrive automatically through the configured dotfiles ref. Re-onboarding is
+  only needed when trigger events or permissions change.
 Usage:
   Mention plus text requests an ad-hoc task; review labels request the standard review.
   Supported mentions: /oc, /opencode, @oc, @opencode, @junie-agent, @junie,
