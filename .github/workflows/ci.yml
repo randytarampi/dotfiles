@@ -32,7 +32,11 @@ jobs:
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Prepare empty environment
         run: cp dot_dotfiles/shell/.env.example "$HOME/.env"
+      - name: Install Python test dependencies
+        run: python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt
       - name: CI verification
         run: make ci-verify
+      - name: Python tests
+        run: make test
       - name: Deploy smoke
         run: make deploy
