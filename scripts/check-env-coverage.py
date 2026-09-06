@@ -22,6 +22,10 @@ IGNORED_VARS = {
     "DOTFILES_DIR",
     "DOTFILES_RUN_",
     "DOTFILES_SCRIPTS",
+    # HTML comment marker names in configure-agent-guidance.py, not env vars.
+    "DOTFILES_REPO_GUIDANCE",
+    "DOTFILES_REPO_GUIDANCE_END",
+    "DOTFILES_REPO_GUIDANCE_START",
 }
 
 DEPRECATED_VARS = {
