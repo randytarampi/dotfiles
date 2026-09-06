@@ -1,4 +1,6 @@
 import importlib.util
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,6 +54,62 @@ class RepoGuidanceTests(unittest.TestCase):
         self.assertFalse((self.repo / "AGENTS.md").exists())
         module.stamp_repo_guidance(self.repo, self.source)
         self.assertTrue(module.stamp_repo_guidance(self.repo, self.source, check=True))
+
+    def test_partial_start_marker_is_reported_and_force_repaired(self):
+        path = self.repo / "AGENTS.md"
+        path.write_text(
+            "# Before\n\n"
+            + module.REPO_MARKER_START
+            + "\nold shared content\n"
+            + "# After\n"
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "configure-agent-guidance.py"),
+                "--repo",
+                str(self.repo),
+                "--source",
+                str(self.source),
+                "--check",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("UNMATCHED", result.stderr + result.stdout)
+        self.assertFalse(module.stamp_repo_guidance(self.repo, self.source))
+        self.assertTrue(module.stamp_repo_guidance(self.repo, self.source, force=True))
+        text = path.read_text()
+        self.assertTrue(text.startswith("# Before\n\n"))
+        self.assertIn("Shared policy.", text)
+        self.assertTrue(text.endswith("\n"))
+
+    def test_partial_end_marker_is_reported_and_force_repaired(self):
+        path = self.repo / "AGENTS.md"
+        path.write_text(
+            "# Before\nold shared content\n" + module.REPO_MARKER_END + "\n\n# After\n"
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "configure-agent-guidance.py"),
+                "--repo",
+                str(self.repo),
+                "--source",
+                str(self.source),
+                "--check",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("UNMATCHED", result.stderr + result.stdout)
+        self.assertFalse(module.stamp_repo_guidance(self.repo, self.source))
+        self.assertTrue(module.stamp_repo_guidance(self.repo, self.source, force=True))
+        text = path.read_text()
+        self.assertIn("Shared policy.", text)
+        self.assertTrue(text.endswith("\n\n# After\n"))
 
 
 if __name__ == "__main__":
