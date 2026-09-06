@@ -35,6 +35,13 @@ Use this repeatable procedure to refresh the preset with high confidence.
 
 6. If a model retires, replace it in the role, fallback, and allowlist in the
    same change.
+7. Verify each candidate model with a real chat-completions probe, not just
+   the catalog listing — a model can be listed (HTTP 200 on `/models`) yet
+   fail on every request (HTTP 500). Note that OpenCode Zen returns a
+   misleading `CreditsError: No payment method` for some contributor-free
+   models; the free tier itself is free (`"cost": "0"` in live responses),
+   so a payment-method error on a `*-free` model means the model is broken
+   upstream, not that billing is needed.
 
 OpenCode Zen contributor models may have privacy considerations; review the
 current Zen terms before relying on them.

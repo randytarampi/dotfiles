@@ -57,14 +57,16 @@ jobs:
   opencode:
     if: contains(format(',{0},', inputs.agents), ',opencode,')
     runs-on: ubuntu-latest
+    # OpenCode may push a requested fix; reviewer-only lanes remain read-only.
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
+          token: ${{ github.token }}
+          persist-credentials: true
           fetch-depth: 1
           ref: ${{ (inputs.pr_number != '' && format('refs/pull/{0}/merge', inputs.pr_number)) || '' }}
       # Downstream callers need this trusted checkout for shared review assets.
@@ -107,6 +109,12 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
+      # OpenCode may push a requested fix; strip the trusted checkout's git
+      # include config so submodule scanning does not error on its directory.
+      - name: Remove trusted checkout git include config
+        run: |
+          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
+            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - name: Run OpenCode review
         uses: anomalyco/opencode/github@4b7e19e315cca414121ba1d61523fef74bb3ae8b # v1.18.27
         env:
