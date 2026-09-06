@@ -719,7 +719,7 @@
       "council": {"model": "opencode/big-pickle", "variant": "max"}
     },
     "free": {
-      "orchestrator": {"model": "opencode/muse-spark-1.3-contributor-free", "variant": "high", "temperature": 0.4, "skills": ["*"], "mcps": ["*", "!context7"]},
+      "orchestrator": {"model": "opencode/big-pickle", "variant": "high", "temperature": 0.4, "skills": ["*"], "mcps": ["*", "!context7"]},
       "oracle": {"model": "opencode/big-pickle", "variant": "max", "temperature": 0.4, "skills": ["simplify"]},
       "librarian": {"model": "google/gemini-3.5-flash-lite", "temperature": 0.2, "mcps": ["context7", "gh_grep"]},
       "explorer": {"model": "openrouter/cohere/north-mini-code:free", "temperature": 0.2},
@@ -1271,7 +1271,7 @@
       },
       "fallback": {
         "orchestrator": ["opencode/gpt-5.6-terra"],
-        "oracle": ["opencode/big-pickle"],
+        "oracle": ["google/gemini-3.8-flash"],
         "librarian": ["opencode/nemotron-3.5-lightning-free"],
         "explorer": ["opencode/nemotron-3.5-lightning-free"],
         "designer": ["opencode/nemotron-3.5-lightning-free"],
@@ -1293,7 +1293,7 @@
       },
       "fallback": {
         "orchestrator": ["opencode/gpt-5.6-terra"],
-        "oracle": ["opencode/big-pickle"],
+        "oracle": ["google/gemini-3.8-flash"],
         "librarian": ["opencode/nemotron-3.5-lightning-free"],
         "explorer": ["opencode/nemotron-3.5-lightning-free"],
         "designer": ["opencode/gemini-3.5-flash"],
@@ -1337,11 +1337,11 @@
       },
       "fallback": {
         "orchestrator": ["google/gemini-3.8-flash"],
-        "oracle": ["google/gemini-2.5-pro"],
-        "librarian": ["openrouter/cohere/north-mini-code:free"],
-        "explorer": ["google/gemini-3.5-flash-lite"],
-        "designer": ["openrouter/z-ai/glm-5.2:free"],
-        "fixer": ["google/gemini-3.5-flash-lite"],
+        "oracle": ["google/gemini-3.8-flash"],
+        "librarian": ["google/gemini-3.8-flash"],
+        "explorer": ["opencode/big-pickle"],
+        "designer": ["opencode/big-pickle"],
+        "fixer": ["opencode/mimo-v2.5-free"],
         "council": []
       }
     }

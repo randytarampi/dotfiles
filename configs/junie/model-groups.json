@@ -86,7 +86,7 @@
     },
     "openrouter-glm": {
       "provider": "openrouter",
-      "primaryModel": "z-ai/glm-5.2:free"
+      "primaryModel": "nvidia/nemotron-3-super-120b-a12b:free"
     },
     "openrouter-nemotron": {
       "provider": "openrouter",
