@@ -155,7 +155,7 @@ their rubric from.
 
 `configs/opencode/oh-my-opencode-slim.json` gained a cross-provider free tier:
 
-- orchestrator `opencode/muse-spark-1.3-contributor-free`
+- orchestrator `opencode/big-pickle`
 - oracle `opencode/big-pickle`
 - librarian `google/gemini-3.5-flash-lite`
 - explorer `openrouter/cohere/north-mini-code:free`

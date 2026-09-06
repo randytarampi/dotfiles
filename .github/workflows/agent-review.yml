@@ -4,6 +4,8 @@
 # and review-all. To adopt this dispatcher elsewhere, copy this file and point
 # the reusable-workflow `uses:` reference at randytarampi/dotfiles@main.
 # Mention plus text requests an ad-hoc agent task; labels request the standard review.
+# Mentions: @junie-agent/@junie, /opencode/@opencode//oc/@oc, @gemini-cli/@gemini,
+# and @copilot. Longer tokens are checked before their shorter aliases.
 
 name: Agent review dispatcher
 
@@ -28,6 +30,7 @@ jobs:
       agents: ${{ steps.parse.outputs.agents }}
       prompt: ${{ steps.parse.outputs.prompt }}
       pr_number: ${{ steps.parse.outputs.pr_number }}
+      trigger_tokens: ${{ steps.parse.outputs.trigger_tokens }}
     steps:
       - name: Parse review request
         id: parse
@@ -54,29 +57,42 @@ jobs:
             pr_number="$(jq -r '.pull_request.number' <<<"${EVENT_JSON}")"
           else
             agents="$(jq -r '
-              if (.issue.pull_request != null) and (.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) then
+              if (.issue.pull_request != null) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                 .comment.body as $body |
                 [
-                  (if ($body | test("(^|[[:space:]])/oc[[:space:]]")) or ($body | test("(^|[[:space:]])/opencode[[:space:]]")) then "opencode" else empty end),
-                  (if $body | contains("@junie-agent") then "junie" else empty end),
-                  (if $body | contains("@gemini-cli") then "gemini" else empty end)
+                  (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)")) then "junie" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)")) then "gemini" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)")) then "junie" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@gemini([^[:alnum:]_]|$)")) then "gemini" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@copilot([^[:alnum:]_]|$)")) then "copilot" else empty end)
                 ] | unique | join(",")
-              elif (.issue == null) and (.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) then
+              elif (.issue == null) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                 .comment.body as $body |
                 [
-                  (if ($body | test("(^|[[:space:]])/oc[[:space:]]")) or ($body | test("(^|[[:space:]])/opencode[[:space:]]")) then "opencode" else empty end),
-                  (if $body | contains("@junie-agent") then "junie" else empty end),
-                  (if $body | contains("@gemini-cli") then "gemini" else empty end)
+                  (if ($body | test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)")) or ($body | test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)")) then "opencode" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)")) then "junie" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)")) then "gemini" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)")) then "junie" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@gemini([^[:alnum:]_]|$)")) then "gemini" else empty end),
+                  (if ($body | test("(^|[^[:alnum:]_])@copilot([^[:alnum:]_]|$)")) then "copilot" else empty end)
                 ] | unique | join(",")
               else "" end
             ' <<<"${EVENT_JSON}")"
             prompt="$(jq -r '
-              if ((.issue.pull_request != null) and (.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))) or ((.issue == null) and (.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))) then
+              if ((.issue.pull_request != null) or (.issue == null)) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                 .comment.body
-                | sub("(^|[[:space:]])/opencode[[:space:]]"; "")
-                | sub("(^|[[:space:]])/oc[[:space:]]"; "")
-                | sub("@junie-agent"; "")
-                | sub("@gemini-cli"; "")
+                | sub("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@gemini([^[:alnum:]_]|$)"; "\\1\\2")
+                | sub("(^|[^[:alnum:]_])@copilot([^[:alnum:]_]|$)"; "\\1\\2")
               else "" end
             ' <<<"${EVENT_JSON}")"
             pr_number="$(jq -r '(.issue.number // .pull_request.number)' <<<"${EVENT_JSON}")"
@@ -96,6 +112,24 @@ jobs:
           {
             printf 'agents=%s\n' "${agents}"
             printf 'pr_number=%s\n' "${pr_number}"
+            if [[ "${EVENT_NAME}" == "issue_comment" || "${EVENT_NAME}" == "pull_request_review_comment" ]]; then
+              tokens="$(jq -r '
+                .comment.body | [
+                  (if test("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)") then "@junie-agent" else empty end),
+                  (if test("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)") then "@junie" else empty end),
+                  (if test("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)") then "/opencode" else empty end),
+                  (if test("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)") then "@opencode" else empty end),
+                  (if test("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)") then "/oc" else empty end),
+                  (if test("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)") then "@oc" else empty end),
+                  (if test("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)") then "@gemini-cli" else empty end),
+                  (if test("(^|[^[:alnum:]_])@gemini([^[:alnum:]_]|$)") then "@gemini" else empty end),
+                  (if test("(^|[^[:alnum:]_])@copilot([^[:alnum:]_]|$)") then "@copilot" else empty end)
+                ] | unique | join(",")
+              ' <<<"${EVENT_JSON}")"
+            else
+              tokens=""
+            fi
+            printf 'trigger_tokens=%s\n' "${tokens}"
             printf 'prompt<<%s\n%s\n%s\n' "${delim}" "${prompt}" "${delim}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -107,4 +141,5 @@ jobs:
       agents: ${{ needs.parse.outputs.agents }}
       prompt: ${{ needs.parse.outputs.prompt }}
       pr_number: ${{ needs.parse.outputs.pr_number }}
+      trigger_tokens: ${{ needs.parse.outputs.trigger_tokens }}
     secrets: inherit

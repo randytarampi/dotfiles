@@ -9,6 +9,7 @@
 # Labels: review-opencode, review-junie, review-gemini, review-copilot, and
 # review-all request the corresponding reviewer(s). Mention triggers are parsed
 # by caller dispatch workflows; this reusable workflow only accepts workflow_call.
+# trigger_tokens is comma-separated and aligned with agents for standardized messaging.
 
 name: Agentic review
 
@@ -27,6 +28,11 @@ on:
         default: ""
       pr_number:
         description: "PR number to review"
+        required: false
+        type: string
+        default: ""
+      trigger_tokens:
+        description: "Comma-separated trigger tokens aligned with agents"
         required: false
         type: string
         default: ""
@@ -67,7 +73,7 @@ jobs:
         with:
           repository: randytarampi/dotfiles
           ref: main
-          path: dotfiles-review
+          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
       - name: Cache codegraph index
@@ -78,12 +84,12 @@ jobs:
           restore-keys: |
             codegraph-${{ runner.os }}-${{ github.repository }}-
       - name: Install codegraph + build index
-        run: bash dotfiles-review/scripts/ci-codegraph.sh
+        run: bash __TRUSTED_DOTFILES__/scripts/ci-codegraph.sh
       - name: Install code-review skill
-        run: mkdir -p .opencode/skills/code-review && cp dotfiles-review/.github/skills/code-review/SKILL.md .opencode/skills/code-review/SKILL.md
+        run: mkdir -p .opencode/skills/code-review && cp __TRUSTED_DOTFILES__/.github/skills/code-review/SKILL.md .opencode/skills/code-review/SKILL.md
       - name: Load review prompt
         run: |
-          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
@@ -108,9 +114,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
-          OPENCODE_CONFIG: ${{ github.workspace }}/dotfiles-review/configs/opencode/ci/opencode.json
+          OPENCODE_CONFIG: ${{ github.workspace }}/__TRUSTED_DOTFILES__/configs/opencode/ci/opencode.json
         with:
-          model: opencode/muse-spark-1.3-contributor-free
+          model: opencode/big-pickle
           use_github_token: "true"
           prompt: |
             ${{ inputs.prompt != '' && format('{0}
@@ -122,51 +128,51 @@ jobs:
   junie:
     if: contains(format(',{0},', inputs.agents), ',junie,')
     runs-on: ubuntu-latest
+    # Junie may push a requested fix; reviewer-only lanes remain read-only.
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
+          token: ${{ github.token }}
+          persist-credentials: true
           fetch-depth: 1
-      # Junie runs on JetBrains' backend and sees no local files; the shared
-      # review method is loaded here and passed as the prompt text instead.
       - name: Checkout trusted review assets
         uses: actions/checkout@v7
         with:
           repository: randytarampi/dotfiles
           ref: main
-          path: dotfiles-review
+          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
       - name: Load review prompt
         run: |
-          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
-            if ! grep -Fq -- "$delim" "$prompt_file"; then
-              break
-            fi
+            if ! grep -Fq -- "$delim" "$prompt_file"; then break; fi
             delim=""
           done
-          if [[ -z "$delim" ]]; then
-            echo "Unable to select a safe review prompt delimiter." >&2
-            exit 1
-          fi
+          if [[ -z "$delim" ]]; then exit 1; fi
           {
             printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
+      - name: Remove trusted checkout git include config
+        run: |
+          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
+            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - uses: JetBrains/junie-github-action@v1
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           prompt: ${{ inputs.prompt != '' && inputs.prompt || env.CODE_REVIEW_PROMPT }}
           attach_github_context_to_custom_prompt: "true"
           use_single_comment: "true"
+          silent_mode: "true"
 
   gemini:
     if: contains(format(',{0},', inputs.agents), ',gemini,')
@@ -187,12 +193,12 @@ jobs:
         with:
           repository: randytarampi/dotfiles
           ref: main
-          path: dotfiles-review
+          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
       - name: Load review prompt
         run: |
-          prompt_file="dotfiles-review/configs/review/code-review-prompt.md"
+          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
@@ -210,8 +216,11 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
+      # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
       - id: gemini
         uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: |
@@ -260,3 +269,59 @@ jobs:
               exit 1
             fi
           fi
+
+  notify:
+    if: always() && (inputs.pr_number != '' || github.event.pull_request.number != '' || github.event.issue.number != '')
+    needs: [opencode, junie, gemini, copilot]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Update standardized agent status comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+          AGENTS: ${{ inputs.agents }}
+          TOKENS: ${{ inputs.trigger_tokens }}
+          OPCODE_RESULT: ${{ needs.opencode.result }}
+          JUNIE_RESULT: ${{ needs.junie.result }}
+          GEMINI_RESULT: ${{ needs.gemini.result }}
+          COPILOT_RESULT: ${{ needs.copilot.result }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra agents <<<"${AGENTS}"
+          IFS=',' read -ra tokens <<<"${TOKENS:-}"
+          for i in "${!agents[@]}"; do
+            agent="${agents[$i]}"
+            token=""
+            case "${agent}" in
+              junie) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^@junie(-agent)?$' | sort -r | head -n 1 || true)" ;;
+              opencode) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^(/opencode|@opencode|/oc|@oc)$' | head -n 1 || true)" ;;
+              gemini) token="$(printf '%s\n' "${tokens[@]}" | grep -E '^@gemini(-cli)?$' | sort -r | head -n 1 || true)" ;;
+              copilot) token="$(printf '%s\n' "${tokens[@]}" | grep '^@copilot$' | head -n 1 || true)" ;;
+            esac
+            token="${token:-@${agent}}"
+            case "${agent}" in
+              opencode) result="${OPCODE_RESULT}" ;;
+              junie) result="${JUNIE_RESULT}" ;;
+              gemini) result="${GEMINI_RESULT}" ;;
+              copilot) result="${COPILOT_RESULT}" ;;
+              *) continue ;;
+            esac
+            marker="<!-- agent-review:${agent} -->"
+            if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
+              status="requested Copilot review"
+            elif [[ "${result}" == "success" ]]; then
+              status="review completed"
+            else
+              status="review FAILED"
+            fi
+            body="${marker}\n${token} ${status} — see the [workflow logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            comment_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
+            if [[ -n "${comment_id}" ]]; then
+              gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
+            else
+              gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+            fi
+          done
