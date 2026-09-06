@@ -5,6 +5,12 @@ Reads configs/skills/skills.json and category files, fetches missing skills via
 the `skills` CLI into ~/.local/share/dotfiles/skills/ (canonical store), symlinks them to all agent skill dirs,
 and removes stale skills not in the active manifest.
 
+Ownership invariant: this reconciler only removes what it created. In agent
+target dirs that means symlinks into the canonical store (or fallback copies of
+canonical-store entries). Real directories with no canonical-store counterpart
+are externally owned (plugins/installers that manage their own lifecycle, e.g.
+oh-my-opencode-slim skill-sync or the Plannotator installer) and are left alone.
+
 Agent target dirs (symlink targets):
   - ~/.agents/skills/<skill-name>/          (canonical store, not symlinked to itself)
   - ~/.config/opencode/skills/<skill-name>/  (OpenCode)
@@ -268,6 +274,13 @@ def main():
                 if os.path.islink(os.path.join(target_dir, name))
                 and not os.path.exists(os.path.join(target_dir, name))
             }
+    # Externally-owned skills (real directories with no canonical-store
+    # counterpart) belong to plugins/installers that manage their own lifecycle
+    # (e.g. oh-my-opencode-slim skill-sync, Plannotator installer). They are not
+    # ours to delete — deleting them makes those plugins mark the skill as
+    # user-deleted and permanently stop reinstalling it. Remove only symlinks
+    # and fallback copies that reconcile itself created.
+    stale_targets = {name for name in stale_targets if name in installed_names}
     legacy_real_stale = {
         name
         for name in stale_targets
