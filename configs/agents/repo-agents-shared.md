@@ -26,6 +26,8 @@ These policies apply to work in every repository.
 - When changing AI tooling, assess every configured tool up front and enumerate the full tool fleet.
 - Keep repository-specific facts and implementation details in the repository's own guidance and documentation.
 - Dispatch discipline: never dispatch onto a repo another lane may own. When a background signal contradicts the Job Board, or the board shows `error`/unknown for a session, verify the repository's tip and dirty state directly before re-dispatching — a stale or ambiguous board signal is not proof a session is gone.
+- Brief lanes with the repository's expected dirty state at dispatch time (pre-existing modifications to preserve, intentional uncommitted files), so preflight stops are reserved for genuine drift.
+- Run lanes under the repository's pinned Node version (check `.nvmrc`); never the machine default.
 - Never run long `sleep`/poll loops in the orchestrator shell; dispatch a read-only watcher lane and end the turn.
 
 ### API verification notes
