@@ -56,7 +56,8 @@ Shared assets:
   Copilot code review; copied into .opencode/skills/ for the OpenCode lane).
 Usage:
   Mention plus text requests an ad-hoc task; review labels request the standard review.
-  Supported mentions: /oc, /opencode, @junie-agent, and @gemini-cli.
+  Supported mentions: /oc, /opencode, @oc, @opencode, @junie-agent, @junie,
+  @gemini-cli, @gemini, and @copilot.
 """
 
 
