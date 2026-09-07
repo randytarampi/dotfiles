@@ -223,6 +223,28 @@ jobs:
 Reviewer jobs execute with default tool permissions. A stricter CI permission
 profile is follow-up work; dispatcher gating is the primary control.
 
+## Predictability
+
+Push-capable agent lanes configure a per-lane git identity before running the
+agent: `opencode-agent[bot]`, `junie-agent[bot]`, or `gemini-agent[bot]`. This
+makes commits attributable and avoids runner failures caused by an unset git
+identity. Downstream repositories may override the local git identity when
+needed. Junie keeps its bundled commit-and-push behaviour (`silent_mode` is
+unset — it gates the bundled commit steps); `skip_feedback` suppresses the
+action's own status comments so the notify job's standardized messaging stands
+alone.
+
+## Copilot lane prerequisites
+
+The Copilot lane only requests `copilot-pull-request-reviewer[bot]` via the
+REST API — it does not (and cannot) enable Copilot review for a repo. If
+mentions or labels produce no Copilot activity: enable **Settings → Copilot →
+Code review** in the repository (and check org-level Copilot policy/plan
+gates), then try `gh pr edit --add-reviewer @copilot` manually. If that
+no-ops, the blocker is plan or enablement, not this workflow. Note that a
+plain `@copilot` issue comment is not a documented native Copilot trigger —
+native triggers are reviewer assignment, PR labels, and in-PR comments.
+
 ## Local pre-push review
 
 Run the same trusted prompt locally before pushing:
