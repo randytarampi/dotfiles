@@ -86,12 +86,12 @@
     },
     "openrouter-glm": {
       "provider": "openrouter",
-      "primaryModel": "nvidia/nemotron-3-super-120b-a12b:free"
+      "primaryModel": "inclusionai/ling-3.0-flash-fin:free"
     },
     "openrouter-nemotron": {
       "provider": "openrouter",
-      "primaryModel": "nvidia/nemotron-3.5-lightning:free",
-      "fasterModel": "minimax/minimax-m2.7:free",
+      "primaryModel": "inclusionai/ling-3.0-flash-fin:free",
+      "fasterModel": "inclusionai/ling-3.0-flash-sante:free",
       "fasterProvider": "openrouter"
     },
     "copilot": {

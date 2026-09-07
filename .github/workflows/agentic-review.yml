@@ -213,6 +213,12 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
           ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+      # Attribute agent commits and avoid runners' missing git identity failure.
+      # Downstream repositories may override this with their preferred identity.
+      - name: Configure git identity for agent commits
+        run: |
+          git config --local user.name "opencode-agent[bot]"
+          git config --local user.email "opencode-agent[bot]@users.noreply.github.com"
       # Downstream callers need this trusted checkout for shared review assets.
       - name: Checkout trusted review assets
         uses: actions/checkout@v7
@@ -292,6 +298,12 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: true
           fetch-depth: 1
+      # Attribute agent commits and avoid runners' missing git identity failure.
+      # Downstream repositories may override this with their preferred identity.
+      - name: Configure git identity for agent commits
+        run: |
+          git config --local user.name "junie-agent[bot]"
+          git config --local user.email "junie-agent[bot]@users.noreply.github.com"
       - name: Checkout trusted review assets
         uses: actions/checkout@v7
         with:
@@ -325,7 +337,11 @@ jobs:
           prompt: ${{ needs.parse.outputs.prompt != '' && needs.parse.outputs.prompt || env.CODE_REVIEW_PROMPT }}
           attach_github_context_to_custom_prompt: "true"
           use_single_comment: "true"
-          silent_mode: "true"
+          # silent_mode gates Junie's bundled commit/push steps (action.yml:407-426),
+          # so it stays unset to keep the commit-and-push capability.
+          # skip_feedback suppresses only the action's own status comments
+          # (action.yml:441,469); the notify job posts our standardized ones.
+          skip_feedback: "true"
 
   gemini:
     needs: parse
@@ -343,6 +359,13 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
           ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+      # Attribute agent commits and avoid runners' missing git identity failure.
+      # Downstream repositories may override this with their preferred identity.
+      - name: Configure git identity for agent commits
+        run: |
+          git config --local user.name "gemini-agent[bot]"
+          git config --local user.email "gemini-agent[bot]@users.noreply.github.com"
+
       # Downstream callers need this trusted checkout for shared review assets.
       - name: Checkout trusted review assets
         uses: actions/checkout@v7
