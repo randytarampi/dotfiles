@@ -237,13 +237,24 @@ alone.
 ## Copilot lane prerequisites
 
 The Copilot lane only requests `copilot-pull-request-reviewer[bot]` via the
-REST API — it does not (and cannot) enable Copilot review for a repo. If
-mentions or labels produce no Copilot activity: enable **Settings → Copilot →
-Code review** in the repository (and check org-level Copilot policy/plan
-gates), then try `gh pr edit --add-reviewer @copilot` manually. If that
-no-ops, the blocker is plan or enablement, not this workflow. Note that a
-plain `@copilot` issue comment is not a documented native Copilot trigger —
-native triggers are reviewer assignment, PR labels, and in-PR comments.
+REST API — it does not (and cannot) enable Copilot review for a repo. The
+mechanism is officially documented and works in eligible repositories (GitHub's
+own `awesome-copilot` uses it), but it can return 200 while silently leaving
+`requested_reviewers` empty. Verified causes, in order of likelihood:
+
+1. **Plan gate** — Copilot Code review requires Copilot Pro, Pro+, or Max.
+   **Copilot Free does not include code review** for personal repositories
+   ("Copilot is enabled" is a different control from having code review).
+2. Reviewer spelling — the raw REST field needs exactly
+   `copilot-pull-request-reviewer[bot]` (not `@copilot`, `Copilot`, or the
+   un-suffixed form, which succeed while dropping the reviewer).
+3. Org policy/plan gates for organisation repositories; native triggers are
+   reviewer assignment, PR labels, and in-PR comments — a plain `@copilot`
+   issue comment is not a documented trigger.
+
+Diagnostic: run the request with an eligible personal token
+(`gh pr edit <pr> --add-reviewer @copilot`), then poll `requested_reviewers`
+— a 200 with an empty result means eligibility, not the workflow.
 
 ## Local pre-push review
 
