@@ -10,6 +10,8 @@
 # review-all request the corresponding reviewer(s). Mention triggers are parsed
 # by caller dispatch workflows; dispatcher-mode parsing is centralized here.
 # trigger_tokens is comma-separated and aligned with agents for standardized messaging.
+# Optional *_BOT_TOKEN secrets let each lane post as a distinct GitHub user; without
+# them, notifications use github-actions[bot].
 
 name: Agentic review
 
@@ -49,6 +51,12 @@ on:
       GEMINI_API_KEY:
         required: false
       OPENROUTER_API_KEY:
+        required: false
+      JUNIE_BOT_TOKEN:
+        required: false
+      OPENCODE_BOT_TOKEN:
+        required: false
+      GEMINI_BOT_TOKEN:
         required: false
 
 concurrency:
@@ -122,15 +130,17 @@ jobs:
               prompt="$(jq -r '
                 if ((.issue.pull_request != null) or (.issue == null)) and ((.comment.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) or (.repository.owner.login == .comment.user.login) or (.repository.owner.login == .sender.login)) then
                   .comment.body
-                  | sub("(^|[^[:alnum:]_])/opencode([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@opencode([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])/oc([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@oc([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@junie-agent([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@gemini-cli([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@junie([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@gemini([^[:alnum:]_]|$)"; "\\1\\2")
-                  | sub("(^|[^[:alnum:]_])@copilot([^[:alnum:]_]|$)"; "\\1\\2")
+                  | gsub("(^|[[:space:]])@junie-agent(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@gemini-cli(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])/opencode(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@opencode(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@junie(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@gemini(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@copilot(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])/oc(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("(^|[[:space:]])@oc(,[[:space:]]*|[[:space:]]+|$)"; " ")
+                  | gsub("^[[:space:]]+|[[:space:]]+$"; "")
+                  | gsub("[[:space:]]{2,}"; " ")
                 else "" end
               ' <<<"${EVENT_JSON}")"
               pr_number="$(jq -r '(.issue.number // .pull_request.number)' <<<"${EVENT_JSON}")"
@@ -418,6 +428,10 @@ jobs:
       - name: Update standardized agent status comments
         env:
           GH_TOKEN: ${{ github.token }}
+          FALLBACK_TOKEN: ${{ github.token }}
+          JUNIE_BOT_TOKEN: ${{ secrets.JUNIE_BOT_TOKEN }}
+          OPENCODE_BOT_TOKEN: ${{ secrets.OPENCODE_BOT_TOKEN }}
+          GEMINI_BOT_TOKEN: ${{ secrets.GEMINI_BOT_TOKEN }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           AGENTS: ${{ needs.parse.outputs.agents }}
           TOKENS: ${{ needs.parse.outputs.tokens }}
@@ -447,18 +461,31 @@ jobs:
               *) continue ;;
             esac
             marker="<!-- agent-review:${agent} -->"
+            case "${agent}" in
+              junie) poster_token="${JUNIE_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
+              opencode) poster_token="${OPENCODE_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
+              gemini) poster_token="${GEMINI_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
+              *) poster_token="${FALLBACK_TOKEN}" ;;
+            esac
             if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
-              status="requested Copilot review"
+              status="Copilot review requested."
             elif [[ "${result}" == "success" ]]; then
-              status="review completed"
+              case "${agent}" in
+                opencode) status="OpenCode review completed — see the agent's review comment above." ;;
+                junie) status="Junie review completed — see the agent's comment above." ;;
+                gemini) status="Gemini review completed — see the agent's comment above." ;;
+                *) status="${agent} review completed." ;;
+              esac
             else
-              status="review FAILED"
+              status="${token} review FAILED."
             fi
-            body="${marker}\n${token} ${status} — see the [workflow logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
-            comment_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
+            body="$(printf '%s\n\n%s\n\n%s' \
+              "${marker}" "${status}" \
+              "See the [workflow logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}).")"
+            comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
             if [[ -n "${comment_id}" ]]; then
-              gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
+              GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
             else
-              gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+              GH_TOKEN="${poster_token}" gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
             fi
           done

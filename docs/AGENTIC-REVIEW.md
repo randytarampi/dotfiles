@@ -96,6 +96,16 @@ Set per repo (Settings → Secrets and variables → Actions):
 - `OPENROUTER_API_KEY` — OpenRouter (consumed by OpenCode's `free`
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
+Optional poster identities:
+
+- `JUNIE_BOT_TOKEN`, `OPENCODE_BOT_TOKEN`, `GEMINI_BOT_TOKEN` — fine-grained
+  PATs or GitHub App installation tokens with `pull_requests: write` and
+  `issues: write`, allowing standardized status comments to be posted as the
+  corresponding agent user. Without these, comments use `github-actions[bot]`.
+  A poster account should not manually issue trigger comments: unlike
+  `github-actions[bot]`, a PAT-backed user is not filtered as a bot and could
+  retrigger the dispatcher.
+
 ## MCP servers in CI
 
 The OpenCode CI config `configs/opencode/ci/opencode.json` mirrors the local
