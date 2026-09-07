@@ -99,9 +99,19 @@ Set per repo (Settings → Secrets and variables → Actions):
 Optional poster identities:
 
 - `JUNIE_BOT_TOKEN`, `OPENCODE_BOT_TOKEN`, `GEMINI_BOT_TOKEN` — fine-grained
-  PATs or GitHub App installation tokens with `pull_requests: write` and
-  `issues: write`, allowing standardized status comments to be posted as the
-  corresponding agent user. Without these, comments use `github-actions[bot]`.
+  PATs or GitHub App installation tokens, allowing standardized status comments
+  to be posted as the corresponding agent user.
+- Per-agent GitHub Apps: `JUNIE_APP_ID` + `JUNIE_APP_PRIVATE_KEY`,
+  `OPENCODE_APP_ID` + `OPENCODE_APP_PRIVATE_KEY`, and `GEMINI_APP_ID` +
+  `GEMINI_APP_PRIVATE_KEY`. These mirror the manual App setup described by
+  `anthropics/claude-code-action` Option 2 and post as `<app-slug>[bot]`.
+- Fallback GitHub App: `APP_ID` + `APP_PRIVATE_KEY`. When a per-agent pair is
+  absent, this App is used for that lane, overriding `github-actions[bot]` for
+  the whole review action.
+- App tokens are minted per notify job with a one-hour expiry. Each App must be
+  installed on the consuming repository with Issues: write and Pull requests:
+  write permissions. Without any optional identity secret, comments use
+  `github-actions[bot]`.
   A poster account should not manually issue trigger comments: unlike
   `github-actions[bot]`, a PAT-backed user is not filtered as a bot and could
   retrigger the dispatcher.

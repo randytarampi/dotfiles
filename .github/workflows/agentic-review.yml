@@ -58,6 +58,22 @@ on:
         required: false
       GEMINI_BOT_TOKEN:
         required: false
+      JUNIE_APP_ID:
+        required: false
+      JUNIE_APP_PRIVATE_KEY:
+        required: false
+      OPENCODE_APP_ID:
+        required: false
+      OPENCODE_APP_PRIVATE_KEY:
+        required: false
+      GEMINI_APP_ID:
+        required: false
+      GEMINI_APP_PRIVATE_KEY:
+        required: false
+      APP_ID:
+        required: false
+      APP_PRIVATE_KEY:
+        required: false
 
 concurrency:
   group: agentic-review-${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number || github.run_id }}
@@ -425,6 +441,50 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      - id: junie_app_token
+        if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v3
+        env:
+          JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
+          JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
+        with:
+          app-id: ${{ secrets.JUNIE_APP_ID }}
+          private-key: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - id: opencode_app_token
+        if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v3
+        env:
+          OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
+          OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+        with:
+          app-id: ${{ secrets.OPENCODE_APP_ID }}
+          private-key: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - id: gemini_app_token
+        if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v3
+        env:
+          GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
+          GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
+        with:
+          app-id: ${{ secrets.GEMINI_APP_ID }}
+          private-key: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - id: fallback_app_token
+        if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v3
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
       - name: Update standardized agent status comments
         env:
           GH_TOKEN: ${{ github.token }}
@@ -432,6 +492,10 @@ jobs:
           JUNIE_BOT_TOKEN: ${{ secrets.JUNIE_BOT_TOKEN }}
           OPENCODE_BOT_TOKEN: ${{ secrets.OPENCODE_BOT_TOKEN }}
           GEMINI_BOT_TOKEN: ${{ secrets.GEMINI_BOT_TOKEN }}
+          JUNIE_APP_TOKEN: ${{ steps.junie_app_token.outputs.token }}
+          OPENCODE_APP_TOKEN: ${{ steps.opencode_app_token.outputs.token }}
+          GEMINI_APP_TOKEN: ${{ steps.gemini_app_token.outputs.token }}
+          FALLBACK_APP_TOKEN: ${{ steps.fallback_app_token.outputs.token }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           AGENTS: ${{ needs.parse.outputs.agents }}
           TOKENS: ${{ needs.parse.outputs.tokens }}
@@ -462,9 +526,9 @@ jobs:
             esac
             marker="<!-- agent-review:${agent} -->"
             case "${agent}" in
-              junie) poster_token="${JUNIE_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
-              opencode) poster_token="${OPENCODE_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
-              gemini) poster_token="${GEMINI_BOT_TOKEN:-${FALLBACK_TOKEN}}" ;;
+              junie) poster_token="${JUNIE_BOT_TOKEN:-${JUNIE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
+              opencode) poster_token="${OPENCODE_BOT_TOKEN:-${OPENCODE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
+              gemini) poster_token="${GEMINI_BOT_TOKEN:-${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
               *) poster_token="${FALLBACK_TOKEN}" ;;
             esac
             if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
