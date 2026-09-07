@@ -29,6 +29,8 @@ These policies apply to work in every repository.
 - Brief lanes with the repository's expected dirty state at dispatch time (pre-existing modifications to preserve, intentional uncommitted files), so preflight stops are reserved for genuine drift.
 - Run lanes under the repository's pinned Node version (check `.nvmrc`); never the machine default.
 - Never run long `sleep`/poll loops in the orchestrator shell; dispatch a read-only watcher lane and end the turn.
+- Watcher lanes run to terminal state and report conclusions; don't return on a first in-progress poll.
+- Specialist sessions cannot load skills — inline the relevant skill's workflow in the dispatch prompt.
 
 ### API verification notes
 
