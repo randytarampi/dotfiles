@@ -449,7 +449,7 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **anthropic**: synthesizer `claude-opus-5` (xhigh variant)
 - **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-5.6-sol` (high variant; councillors α sol, β terra, γ luna)
 - **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free)
-- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ north-mini-code:free)
+- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-fin:free)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
 
