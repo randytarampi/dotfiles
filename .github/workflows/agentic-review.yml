@@ -337,11 +337,8 @@ jobs:
           prompt: ${{ needs.parse.outputs.prompt != '' && needs.parse.outputs.prompt || env.CODE_REVIEW_PROMPT }}
           attach_github_context_to_custom_prompt: "true"
           use_single_comment: "true"
-          # silent_mode gates Junie's bundled commit/push steps (action.yml:407-426),
-          # so it stays unset to keep the commit-and-push capability.
-          # skip_feedback suppresses only the action's own status comments
-          # (action.yml:441,469); the notify job posts our standardized ones.
-          skip_feedback: "true"
+          # Keep feedback enabled: Junie's give-feedback steps are the mechanism
+          # that posts review content. The notify job adds the standardized status.
 
   gemini:
     needs: parse
@@ -556,6 +553,8 @@ jobs:
             esac
             if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
               status="Copilot review requested."
+            elif [[ "${agent}" == "junie" && -n "${TOKENS}" && "${result}" == "success" ]]; then
+              status="Junie work completed and was pushed — see the workflow logs."
             elif [[ "${result}" == "success" ]]; then
               case "${agent}" in
                 opencode) status="OpenCode review completed — see the agent's review comment above." ;;
