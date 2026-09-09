@@ -2,15 +2,11 @@
 """Tests for Ollama capability/metadata parsing in models_dev.py.
 
 Covers get_ollama_show_info (context length + capabilities parsing),
-get_ollama_modalities (OpenCode modalities resolution), and the
-Ollama Cloud modality suppression in build_model_entry.
+get_ollama_modalities (OpenCode modalities resolution), and model entry
+modality passthrough.
 
-Policy context: OpenCode rejects image attachments client-side for
-provider entries without declared `modalities`, even when the backend
-accepts images. Ollama Cloud models are deliberately declared text-only
-(user decision 2026-09-09): accumulated image payloads through the
-cloud gateway can kill the conversation (anomalyco/opencode #43119),
-so catalog-advertised vision is suppressed for cloud-served models.
+OpenCode rejects image attachments client-side for provider entries without
+declared `modalities`, so catalog-advertised cloud modalities are preserved.
 """
 
 import subprocess as models_dev_subprocess
@@ -108,10 +104,7 @@ class GetOllamaShowInfoTest(unittest.TestCase):
 
 
 class GetOllamaModalitiesTest(unittest.TestCase):
-    def test_cloud_id_is_text_only_even_when_catalog_advertises_vision(self):
-        # Policy: Ollama Cloud gateway image payloads are unreliable at
-        # scale (#43119) — :cloud IDs are text-only by declaration,
-        # regardless of what the catalog or `ollama show` report.
+    def test_cloud_id_uses_models_dev_catalog(self):
         catalog = {
             "ollama-cloud": {
                 "models": {
@@ -126,8 +119,8 @@ class GetOllamaModalitiesTest(unittest.TestCase):
             "run",
             side_effect=_run_with(SHOW_OUTPUT_FLASH),
         ):
-            result = models_dev.get_ollama_modalities("glm-5.3-flash:cloud")
-        self.assertIsNone(result)
+            result = models_dev.get_ollama_modalities("glm-5.3-flash:cloud", catalog)
+        self.assertEqual(result, {"input": ["text", "image"], "output": ["text"]})
 
     def test_local_vision_model_from_ollama_show(self):
         with patch.object(
@@ -135,7 +128,7 @@ class GetOllamaModalitiesTest(unittest.TestCase):
             "run",
             side_effect=_run_with(SHOW_OUTPUT_VISION_AUDIO),
         ):
-            result = models_dev.get_ollama_modalities("gemma4:12b")
+            result = models_dev.get_ollama_modalities("gemma4:12b", {})
         self.assertEqual(
             result, {"input": ["text", "image", "audio"], "output": ["text"]}
         )
@@ -146,7 +139,7 @@ class GetOllamaModalitiesTest(unittest.TestCase):
             "run",
             side_effect=_run_with(SHOW_OUTPUT_TEXT_ONLY),
         ):
-            self.assertIsNone(models_dev.get_ollama_modalities("qwen3.5:9b"))
+            self.assertIsNone(models_dev.get_ollama_modalities("qwen3.5:9b", {}))
 
 
 class BuildModelEntryModalityTest(unittest.TestCase):
@@ -167,18 +160,9 @@ class BuildModelEntryModalityTest(unittest.TestCase):
         },
     }
 
-    def test_ollama_cloud_provider_suppresses_catalog_modalities(self):
+    def test_ollama_cloud_provider_keeps_catalog_modalities(self):
         entry = models_dev.build_model_entry(
             "glm-5.3-flash", self.CATALOG, "ollama-cloud"
-        )
-        self.assertNotIn("modalities", entry)
-
-    def test_explicit_override_beats_cloud_suppression(self):
-        entry = models_dev.build_model_entry(
-            "glm-5.3-flash",
-            self.CATALOG,
-            "ollama-cloud",
-            modalities={"input": ["text", "image"], "output": ["text"]},
         )
         self.assertEqual(
             entry["modalities"], {"input": ["text", "image"], "output": ["text"]}

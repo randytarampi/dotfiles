@@ -59,7 +59,7 @@
         ]
       },
       "observer": {
-        "model": "ollama/ornith-1.5:35b",
+        "model": "ollama-cloud/gemma4:31b",
         "variant": "low"
       },
       "council": {
@@ -124,7 +124,7 @@
         ]
       },
       "observer": {
-        "model": "ollama/ornith-1.5:35b",
+        "model": "openai/gpt-5.6-luna",
         "variant": "low"
       },
       "council": {
@@ -762,6 +762,7 @@
     "main_pane_size": 60
   },
   "disabled_agents": [],
+  "image_routing": "auto",
   "council": {
     "timeout": 360000,
     "councillor_retries": 1,
@@ -955,7 +956,7 @@
         "designer": [
           "ollama-cloud/glm-5.3"
         ],
-        "observer": [],
+        "observer": ["ollama-cloud/deepseek-v4-flash"],
         "council": []
       }
     },
@@ -1000,7 +1001,7 @@
         "designer": [
           "ollama-cloud/glm-5.3-flash"
         ],
-        "observer": [],
+        "observer": ["ollama-cloud/gemma4:31b"],
         "council": []
       }
     },
@@ -1049,9 +1050,7 @@
           "openai/gpt-5.6-terra",
           "ollama-cloud/glm-5.3-flash"
         ],
-        "observer": [
-          "ollama/ornith-1.5:35b"
-        ],
+        "observer": ["openai/gpt-5.6-luna"],
         "council": []
       }
     },
@@ -1083,9 +1082,7 @@
         "oracle": [
           "anthropic/claude-opus-4-8"
         ],
-        "observer": [
-          "ollama/ornith-1.5:35b"
-        ],
+        "observer": [],
         "council": []
       }
     },
@@ -1129,9 +1126,7 @@
         "designer": [
           "openai/gpt-5.5"
         ],
-        "observer": [
-          "ollama/ornith-1.5:35b"
-        ],
+        "observer": ["openai/gpt-5.4-mini"],
         "council": []
       }
     },
@@ -1180,9 +1175,7 @@
         "council": [
           "anthropic/claude-sonnet-5"
         ],
-        "observer": [
-          "ollama/ornith-1.5:35b"
-        ]
+        "observer": ["openai/gpt-5.6-luna"]
       }
     },
     "local-pro": {
@@ -1319,7 +1312,7 @@
         "explorer": ["opencode/nemotron-3.5-lightning-free"],
         "designer": ["opencode/nemotron-3.5-lightning-free"],
         "fixer": ["opencode/nemotron-3.5-lightning-free"],
-        "observer": ["ollama/ornith-1.5:35b"],
+        "observer": ["openai/gpt-5.4-mini"],
         "council": []
       }
     },
@@ -1342,7 +1335,7 @@
         "explorer": ["opencode/nemotron-3.5-lightning-free"],
         "designer": ["opencode/gemini-3.5-flash"],
         "fixer": ["opencode/nemotron-3.5-lightning-free"],
-        "observer": ["ollama/ornith-1.5:35b"],
+        "observer": ["openai/gpt-5.4-mini"],
         "council": []
       }
     },

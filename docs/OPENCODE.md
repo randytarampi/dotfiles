@@ -20,6 +20,10 @@ with local deviations noted in [docs/TIERS.md](TIERS.md):
 | `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Explicit (`openai/gpt-5.6-luna`) | OpenCode Zen, including paid GPT-5.6-Terra fallback; Copilot designer falls back to OpenCode Zen Gemini |
 | `omo-slim-opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Explicit (`opencode/mimo-v2.5-free`) | OpenAI GPT-5.6 models |
 
+All presets define an explicit observer. `image_routing: "auto"` routes image
+attachments to the observer; the hook strips them from the main conversation
+and saves them to disk, so orchestrators never receive image bytes.
+
 OpenCode Zen uses the standard `OPENCODE_API_KEY` environment variable. The
 alternative is `/connect`, which stores authentication in OpenCode's
 `auth.json`; a key is not required for the generated provider block. GitHub

@@ -41,15 +41,16 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
-Every preset defines an explicit observer. Cloud-preset observers use local
-vision-capable Ollama models because Ollama Cloud models are text-only by
-policy; provider-native observers are used where the tier already requires a
-vision-capable provider. Zen free uses `opencode/mimo-v2.5-free` as its
-observer, while OpenAI-family presets use their explicit OpenAI observer.
+Every preset defines an explicit observer. `image_routing: "auto"` routes image
+attachments to the observer: the hook strips images from the main conversation
+and saves them to disk, so orchestrators never receive image bytes and
+accumulated-image payloads stay out of the main conversation (mitigating
+[anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)).
+Observers may be Ollama Cloud models.
 
 ### OpenAI Tier (`omo-slim-openai`)
 
-OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md), with local deviations (cross-provider fallbacks, observer removal):
+OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md), with local cross-provider fallbacks:
 
 | Role | Model | Variant |
 |------|-------|---------|
@@ -66,7 +67,7 @@ Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle 
 
 ### Thirtydollars Tier (`omo-slim-thirty-dollars`)
 
-Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), with local deviations (cross-provider fallbacks, observer removal):
+Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), with local cross-provider fallbacks:
 
 | Role | Model | Variant |
 |------|-------|---------|
@@ -117,11 +118,12 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
 | fixer | `deepseek-v4-flash` | high |
-| observer | `ollama/ornith-1.5:35b` | low |
+| observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
 
 Fallbacks are provider-deduplicated and retain one best alternative per role.
-The `pro-plus` observer is also `ollama/ornith-1.5:35b` with low variant.
+The `pro` observer is `gemma4:31b`; the `pro-plus` observer is
+`openai/gpt-5.6-luna`, both with low variant.
 
 ### Anthropic Tier (`anthropic`)
 
@@ -401,7 +403,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4-flash`, and `gemma4:31b` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
 > [!IMPORTANT]
-> **Ollama Cloud models are declared text-only in OpenCode configs** (no `modalities` key), even when their catalogs advertise image/video/pdf input. While single-image probes succeed, accumulated image payloads through the Ollama Cloud gateway can kill the conversation (`failed to read request body`, [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). The suppression lives in `scripts/lib/models_dev.py` (`get_ollama_modalities` / `build_model_entry`), applies to both the `ollama-cloud` provider and `:cloud`-suffixed entries under `ollama`, and overrides docs-documented vision claims — so image work belongs on **local** Ollama vision models (declared from `ollama show`) or non-Ollama providers. Revisit when the gateway handles large multimodal bodies reliably.
+> All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
 
 ## OpenAI Models (gpt-5.6 Family)
 

@@ -102,7 +102,7 @@ class TierRegistryTests(unittest.TestCase):
         data = registry()
         self.assertEqual(
             data["presets"]["pro-plus"]["observer"]["model"],
-            "ollama/ornith-1.5:35b",
+            "openai/gpt-5.6-luna",
         )
         roles = tier_registry.materialize_role_models(data, "pro-plus", {})
         self.assertIn("observer", roles)
@@ -120,16 +120,6 @@ class TierRegistryTests(unittest.TestCase):
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["observer"],
             ["openai/gpt-5.6-luna"],
         )
-
-    def test_non_local_observers_are_not_ollama_cloud_models(self):
-        data = registry()
-        for tier, preset in data["presets"].items():
-            observer = preset.get("observer", {}).get("model")
-            if observer and not observer.startswith("_local:"):
-                self.assertFalse(
-                    observer.startswith("ollama-cloud/"),
-                    f"{tier} observer must not use Ollama Cloud: {observer}",
-                )
 
     def test_provider_dedupe_flags_duplicate_provider(self):
         violations = verify_slim_invariants._provider_dedupe_violations(
