@@ -156,7 +156,74 @@ def get_model_metadata(provider_key, model_id, models_dev_data):
     cost = _strip_cost(model.get("cost"))
     if cost:
         result["cost"] = cost
+    modalities = model.get("modalities")
+    if isinstance(modalities, dict) and modalities.get("input"):
+        result["modalities"] = modalities
     return result
+
+
+def get_ollama_show_info(model_name):
+    """Run `ollama show <model_name>` and parse context length + capabilities.
+
+    Args:
+      model_name: e.g. "glm-5.2:cloud" or "qwen3.5:9b-mlx".
+
+    Returns:
+      Dict {"context_length": int|None, "capabilities": set[str]}.
+      capabilities may include: completion, thinking, tools, vision, audio.
+    """
+    try:
+        result = subprocess.run(
+            ["ollama", "show", model_name],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return {"context_length": None, "capabilities": set()}
+        # Output looks like:
+        #     Model
+        #       architecture     glm4
+        #     Capabilities
+        #       completion
+        #       thinking
+        #       tools
+        #     ...
+        #     context length      1000000
+        capability_tokens = {"completion", "thinking", "tools", "vision", "audio"}
+        context_length = None
+        capabilities = set()
+        in_capabilities = False
+        for raw_line in result.stdout.splitlines():
+            stripped = raw_line.strip()
+            if not stripped:
+                in_capabilities = False
+                continue
+            if in_capabilities:
+                if stripped in capability_tokens:
+                    capabilities.add(stripped)
+                    continue
+                # First non-capability line ends the Capabilities block
+                # (section headers, context length, etc.).
+                in_capabilities = False
+            if stripped.startswith("context length"):
+                # "context length      1000000" or "context length    1000000"
+                parts = stripped.split()
+                if len(parts) >= 2:
+                    try:
+                        context_length = int(parts[-1])
+                    except ValueError:
+                        continue
+                continue
+            if stripped == "Capabilities":
+                in_capabilities = True
+        return {"context_length": context_length, "capabilities": capabilities}
+    except FileNotFoundError:
+        # ollama binary not on PATH
+        return {"context_length": None, "capabilities": set()}
+    except Exception as exc:
+        logger.debug(f"ollama show {model_name} failed: {exc}")
+        return {"context_length": None, "capabilities": set()}
 
 
 def get_ollama_context_length(model_name):
@@ -168,39 +235,47 @@ def get_ollama_context_length(model_name):
     Returns:
       int context length, or None if unavailable/parse failure.
     """
-    try:
-        result = subprocess.run(
-            ["ollama", "show", model_name],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            return None
-        # Output looks like:
-        #   ...
-        #   context length      1000000
-        #   ...
-        for line in result.stdout.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("context length"):
-                # "context length      1000000" or "context length    1000000"
-                parts = stripped.split()
-                if len(parts) >= 2:
-                    try:
-                        return int(parts[-1])
-                    except ValueError:
-                        continue
-        return None
-    except FileNotFoundError:
-        # ollama binary not on PATH
-        return None
-    except Exception as exc:
-        logger.debug(f"ollama show {model_name} failed: {exc}")
-        return None
+    return get_ollama_show_info(model_name)["context_length"]
 
 
-def build_model_entry(name, models_dev_data, provider_key, ollama_context=None):
+def get_ollama_modalities(model_name, models_dev_data):
+    """Resolve OpenCode `modalities` metadata for an Ollama model.
+
+    OpenCode gates image/PDF attachments on the model's declared
+    `modalities.input`; custom provider entries without the key are treated
+    as text-only client-side (before any API call), even when the backend
+    accepts images.
+
+    Resolution order:
+    1. `:cloud`-suffixed IDs look up the models.dev `ollama-cloud` catalog
+       entry for the base name — `ollama show` capability metadata for cloud
+       stubs under-reports (e.g. it omits vision for glm-5.3-flash:cloud even
+       though the cloud backend accepts images).
+    2. Otherwise map `ollama show` capabilities (vision → image, audio →
+       audio) to declared modalities.
+
+    Returns:
+      {"input": [...], "output": ["text"]} or None when text-only/unknown.
+    """
+    if model_name.endswith(":cloud"):
+        base = model_name[: -len(":cloud")]
+        meta = get_model_metadata("ollama-cloud", base, models_dev_data)
+        if meta.get("modalities"):
+            return meta["modalities"]
+    info = get_ollama_show_info(model_name)
+    input_modalities = ["text"]
+    if "vision" in info["capabilities"]:
+        input_modalities.append("image")
+    if "audio" in info["capabilities"]:
+        input_modalities.append("audio")
+    if len(input_modalities) > 1:
+        return {"input": input_modalities, "output": ["text"]}
+    return None
+
+
+def build_model_entry(
+    name, models_dev_data, provider_key, ollama_context=None, modalities=None
+):
     """Assemble an OpenCode v2 model entry with metadata.
 
     Args:
@@ -210,6 +285,10 @@ def build_model_entry(name, models_dev_data, provider_key, ollama_context=None):
         ("openai", "anthropic", "ollama-cloud").
       ollama_context: Optional int from `ollama show` to override
         limit.context (ground truth for Ollama models).
+      modalities: Optional {"input": [...], "output": [...]} override.
+        When omitted, falls back to the models.dev catalog entry's
+        modalities. OpenCode gates image/PDF attachments on this key;
+        omitting it makes the model text-only client-side.
 
     Returns:
       Dict like {"name": name, "limit": {...}, "cost": {...}}
@@ -234,5 +313,11 @@ def build_model_entry(name, models_dev_data, provider_key, ollama_context=None):
     cost = meta.get("cost")
     if cost:
         entry["cost"] = cost
+
+    resolved_modalities = (
+        modalities if modalities is not None else meta.get("modalities")
+    )
+    if resolved_modalities:
+        entry["modalities"] = resolved_modalities
 
     return entry

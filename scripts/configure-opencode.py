@@ -40,6 +40,7 @@ from tier_resolve import list_local_ollama_models
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
+    get_ollama_modalities,
     build_model_entry,
 )
 from cli_helpers import (
@@ -281,7 +282,14 @@ def main():
         for name in model_names:
             ctx = get_ollama_context_length(name)
             models_obj[name] = build_model_entry(
-                name, models_dev_data, "ollama-cloud", ollama_context=ctx
+                name,
+                models_dev_data,
+                "ollama-cloud",
+                ollama_context=ctx,
+                # Without declared modalities, OpenCode treats the model as
+                # text-only client-side and rejects image attachments before
+                # any API call — even when the backend accepts them.
+                modalities=get_ollama_modalities(name, models_dev_data),
             )
         local_ollama = {
             "models": models_obj,
@@ -620,6 +628,10 @@ def main():
                         models_dev_data,
                         "ollama-cloud",
                         ollama_context=ctx,
+                        # Cloud stubs under-report capabilities in `ollama
+                        # show`; modalities come from the models.dev catalog
+                        # via get_ollama_modalities' :cloud lookup.
+                        modalities=get_ollama_modalities(cloud_name, models_dev_data),
                     )
                 if combined_models:
                     config["provider"]["ollama"] = {
