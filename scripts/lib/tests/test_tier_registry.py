@@ -98,24 +98,38 @@ class TierRegistryTests(unittest.TestCase):
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         )
 
-    def test_materialize_role_models_tolerates_absent_observer(self):
+    def test_materialize_role_models_includes_explicit_observer(self):
         data = registry()
-        self.assertNotIn("observer", data["presets"]["pro-plus"])
+        self.assertEqual(
+            data["presets"]["pro-plus"]["observer"]["model"],
+            "ollama/ornith-1.5:35b",
+        )
         roles = tier_registry.materialize_role_models(data, "pro-plus", {})
-        self.assertNotIn("observer", roles)
+        self.assertIn("observer", roles)
         self.assertIn("orchestrator", roles)
 
-    def test_zen_free_uses_current_multimodal_orchestrator_without_observer(self):
+    def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
         data = registry()
         preset = data["presets"]["omo-slim-opencode-zen-free"]
         self.assertEqual(
             preset["orchestrator"]["model"],
             "opencode/muse-spark-1.2-contributor-free",
         )
-        self.assertNotIn("observer", preset)
-        self.assertNotIn(
-            "observer", data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]
+        self.assertEqual(preset["observer"]["model"], "opencode/mimo-v2.5-free")
+        self.assertEqual(
+            data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["observer"],
+            ["openai/gpt-5.6-luna"],
         )
+
+    def test_non_local_observers_are_not_ollama_cloud_models(self):
+        data = registry()
+        for tier, preset in data["presets"].items():
+            observer = preset.get("observer", {}).get("model")
+            if observer and not observer.startswith("_local:"):
+                self.assertFalse(
+                    observer.startswith("ollama-cloud/"),
+                    f"{tier} observer must not use Ollama Cloud: {observer}",
+                )
 
     def test_provider_dedupe_flags_duplicate_provider(self):
         violations = verify_slim_invariants._provider_dedupe_violations(

@@ -41,9 +41,11 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
-The `omo-slim-openai`, `omo-slim-thirty-dollars`, and `omo-slim-opencode-zen-free` presets omit observer
-because their orchestrators are vision-capable. Zen free uses the multimodal
-`muse-spark-1.2-contributor-free` orchestrator.
+Every preset defines an explicit observer. Cloud-preset observers use local
+vision-capable Ollama models because Ollama Cloud models are text-only by
+policy; provider-native observers are used where the tier already requires a
+vision-capable provider. Zen free uses `opencode/mimo-v2.5-free` as its
+observer, while OpenAI-family presets use their explicit OpenAI observer.
 
 ### OpenAI Tier (`omo-slim-openai`)
 
@@ -57,9 +59,10 @@ OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.co
 | explorer | `gpt-5.6-luna` | low |
 | designer | `gpt-5.6-luna` | medium |
 | fixer | `gpt-5.6-luna` | high |
+| observer | `openai/gpt-5.6-luna` | low |
 | council | `gpt-5.6-sol` | high (α sol, β terra, γ luna) |
 
-Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. Observer omitted — terra is vision-capable.
+Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. The explicit observer uses `openai/gpt-5.6-luna`.
 
 ### Thirtydollars Tier (`omo-slim-thirty-dollars`)
 
@@ -72,13 +75,14 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 | librarian / explorer | `openai/gpt-5.6-luna` | low |
 | designer | `github-copilot/gemini-3.5-flash` | — |
 | fixer | `openai/gpt-5.6-luna` | medium |
+| observer | `openai/gpt-5.6-luna` | low |
 | council | `openai/gpt-5.6-sol` | high (α sol, β terra, γ luna) |
 
-Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). Observer omitted — terra is vision-capable. Requires GitHub Copilot auth via `/connect`.
+Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-5.6-luna`. Requires GitHub Copilot auth via `/connect`.
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
-Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator re-anchored to `muse-spark-1.2-contributor-free` after upstream's `x-preview-f-free` left the catalog; observer removed — the upstream-documented orchestrator is gone and ours is vision-capable). Requires `OPENCODE_API_KEY` (or `/connect`):
+Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator re-anchored to `muse-spark-1.2-contributor-free` after upstream's `x-preview-f-free` left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`):
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -86,9 +90,10 @@ Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my
 | oracle | `big-pickle` | max, temp 0.4 |
 | librarian / explorer / fixer | `nemotron-3.5-lightning-free` | low — / high (fixer), temp 0.2 |
 | designer | `mimo-v2.5-free` | medium, temp 0.3 |
+| observer | `mimo-v2.5-free` | low, temp 0.2 |
 | council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free) |
 
-Fallbacks point at OpenAI paid models (terra/luna) — free-tier failures degrade to paid capacity. Observer omitted — the Muse orchestrator accepts image/video/pdf/audio input. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
+Fallbacks point at OpenAI paid models (terra/luna) — free-tier failures degrade to paid capacity. The explicit observer uses `mimo-v2.5-free`; the Muse orchestrator is also multimodal. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -96,6 +101,9 @@ The `free` preset combines OpenCode Zen, Google Gemini, and the verified
 OpenRouter `:free` catalog. North Mini Code serves exploration and council
 gamma, with provider-deduplicated cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
+
+Its explicit observer is `google/gemini-3.8-flash`, with
+`opencode/mimo-v2.5-free` as the image-capable fallback.
 
 ### Pro Tier (`pro`)
 
@@ -109,9 +117,11 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
 | fixer | `deepseek-v4-flash` | high |
+| observer | `ollama/ornith-1.5:35b` | low |
 | council | `glm-5.3` | max |
 
 Fallbacks are provider-deduplicated and retain one best alternative per role.
+The `pro-plus` observer is also `ollama/ornith-1.5:35b` with low variant.
 
 ### Anthropic Tier (`anthropic`)
 
