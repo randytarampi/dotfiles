@@ -390,6 +390,9 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4-flash`, and `gemma4:31b` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
+> [!IMPORTANT]
+> **Ollama Cloud models are declared text-only in OpenCode configs** (no `modalities` key), even when their catalogs advertise image/video/pdf input. While single-image probes succeed, accumulated image payloads through the Ollama Cloud gateway can kill the conversation (`failed to read request body`, [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). The suppression lives in `scripts/lib/models_dev.py` (`get_ollama_modalities` / `build_model_entry`), applies to both the `ollama-cloud` provider and `:cloud`-suffixed entries under `ollama`, and overrides docs-documented vision claims — so image work belongs on **local** Ollama vision models (declared from `ollama show`) or non-Ollama providers. Revisit when the gateway handles large multimodal bodies reliably.
+
 ## OpenAI Models (gpt-5.6 Family)
 
 The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI model line:

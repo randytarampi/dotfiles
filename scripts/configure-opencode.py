@@ -289,7 +289,7 @@ def main():
                 # Without declared modalities, OpenCode treats the model as
                 # text-only client-side and rejects image attachments before
                 # any API call — even when the backend accepts them.
-                modalities=get_ollama_modalities(name, models_dev_data),
+                modalities=get_ollama_modalities(name),
             )
         local_ollama = {
             "models": models_obj,
@@ -623,15 +623,16 @@ def main():
                         else model_name
                     )
                     ctx = get_ollama_context_length(cloud_name)
+                    # get_ollama_modalities returns None for :cloud IDs
+                    # (text-only by declaration — Ollama Cloud gateway image
+                    # payloads are unreliable at scale, #43119). Explicit
+                    # None override also suppresses catalog modalities.
                     combined_models[cloud_name] = build_model_entry(
                         cloud_name,
                         models_dev_data,
                         "ollama-cloud",
                         ollama_context=ctx,
-                        # Cloud stubs under-report capabilities in `ollama
-                        # show`; modalities come from the models.dev catalog
-                        # via get_ollama_modalities' :cloud lookup.
-                        modalities=get_ollama_modalities(cloud_name, models_dev_data),
+                        modalities=get_ollama_modalities(cloud_name),
                     )
                 if combined_models:
                     config["provider"]["ollama"] = {

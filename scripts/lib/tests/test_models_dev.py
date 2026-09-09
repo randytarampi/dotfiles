@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Tests for Ollama capability/metadata parsing in models_dev.py.
 
-Covers get_ollama_show_info (context length + capabilities parsing) and
-get_ollama_modalities (OpenCode modalities resolution for local and
-:cloud-stub models). Regression context: OpenCode rejects image
-attachments client-side for provider entries without declared
-`modalities`, even when the backend accepts images.
+Covers get_ollama_show_info (context length + capabilities parsing),
+get_ollama_modalities (OpenCode modalities resolution), and the
+Ollama Cloud modality suppression in build_model_entry.
+
+Policy context: OpenCode rejects image attachments client-side for
+provider entries without declared `modalities`, even when the backend
+accepts images. Ollama Cloud models are deliberately declared text-only
+(user decision 2026-09-09): accumulated image payloads through the
+cloud gateway can kill the conversation (anomalyco/opencode #43119),
+so catalog-advertised vision is suppressed for cloud-served models.
 """
 
+import subprocess as models_dev_subprocess
 import unittest
 from unittest.mock import patch
 
@@ -32,7 +38,6 @@ Model
 Capabilities
   completion
   thinking
-  tools
 context length      1000000
 """
 
@@ -48,18 +53,19 @@ context length      262144
 """
 
 
+def _run_with(stdout):
+    def fake_run(cmd, capture_output, text, timeout):
+        return type("R", (), {"returncode": 0, "stdout": stdout})()
+
+    return fake_run
+
+
 class GetOllamaShowInfoTest(unittest.TestCase):
-    def _run_with(self, stdout):
-        def fake_run(cmd, capture_output, text, timeout):
-            return type("R", (), {"returncode": 0, "stdout": stdout})()
-
-        return fake_run
-
     def test_parses_context_length_and_capabilities(self):
         with patch.object(
             models_dev_subprocess,
             "run",
-            side_effect=self._run_with(SHOW_OUTPUT_FLASH),
+            side_effect=_run_with(SHOW_OUTPUT_FLASH),
         ):
             info = models_dev.get_ollama_show_info("glm-5.3-flash:cloud")
         self.assertEqual(info["context_length"], 1048576)
@@ -71,7 +77,7 @@ class GetOllamaShowInfoTest(unittest.TestCase):
         with patch.object(
             models_dev_subprocess,
             "run",
-            side_effect=self._run_with(SHOW_OUTPUT_TEXT_ONLY),
+            side_effect=_run_with(SHOW_OUTPUT_TEXT_ONLY),
         ):
             info = models_dev.get_ollama_show_info("glm-5.3:cloud")
         self.assertEqual(info["context_length"], 1000000)
@@ -86,9 +92,7 @@ class GetOllamaShowInfoTest(unittest.TestCase):
             "context length      1000000",
             "context length      1000000\ntools",
         )
-        with patch.object(
-            models_dev_subprocess, "run", side_effect=self._run_with(output)
-        ):
+        with patch.object(models_dev_subprocess, "run", side_effect=_run_with(output)):
             info = models_dev.get_ollama_show_info("m:cloud")
         self.assertNotIn("tools", info["capabilities"])
         self.assertEqual(info["capabilities"], {"completion", "thinking"})
@@ -104,7 +108,10 @@ class GetOllamaShowInfoTest(unittest.TestCase):
 
 
 class GetOllamaModalitiesTest(unittest.TestCase):
-    def test_cloud_stub_uses_models_dev_catalog(self):
+    def test_cloud_id_is_text_only_even_when_catalog_advertises_vision(self):
+        # Policy: Ollama Cloud gateway image payloads are unreliable at
+        # scale (#43119) — :cloud IDs are text-only by declaration,
+        # regardless of what the catalog or `ollama show` report.
         catalog = {
             "ollama-cloud": {
                 "models": {
@@ -114,23 +121,21 @@ class GetOllamaModalitiesTest(unittest.TestCase):
                 }
             }
         }
-        # Even if `ollama show` omits vision (under-reporting for cloud stubs),
-        # the catalog lookup wins for :cloud-suffixed IDs.
         with patch.object(
             models_dev_subprocess,
             "run",
-            side_effect=self._empty_run(),
+            side_effect=_run_with(SHOW_OUTPUT_FLASH),
         ):
-            result = models_dev.get_ollama_modalities("glm-5.3-flash:cloud", catalog)
-        self.assertEqual(result, {"input": ["text", "image"], "output": ["text"]})
+            result = models_dev.get_ollama_modalities("glm-5.3-flash:cloud")
+        self.assertIsNone(result)
 
     def test_local_vision_model_from_ollama_show(self):
         with patch.object(
             models_dev_subprocess,
             "run",
-            side_effect=self._empty_run(SHOW_OUTPUT_VISION_AUDIO),
+            side_effect=_run_with(SHOW_OUTPUT_VISION_AUDIO),
         ):
-            result = models_dev.get_ollama_modalities("gemma4:12b", {})
+            result = models_dev.get_ollama_modalities("gemma4:12b")
         self.assertEqual(
             result, {"input": ["text", "image", "audio"], "output": ["text"]}
         )
@@ -139,29 +144,53 @@ class GetOllamaModalitiesTest(unittest.TestCase):
         with patch.object(
             models_dev_subprocess,
             "run",
-            side_effect=self._empty_run(SHOW_OUTPUT_TEXT_ONLY),
+            side_effect=_run_with(SHOW_OUTPUT_TEXT_ONLY),
         ):
-            self.assertIsNone(models_dev.get_ollama_modalities("m:cloud", {}))
-
-    def test_cloud_stub_without_catalog_falls_back_to_show(self):
-        with patch.object(
-            models_dev_subprocess,
-            "run",
-            side_effect=self._empty_run(SHOW_OUTPUT_FLASH),
-        ):
-            result = models_dev.get_ollama_modalities("unknown:cloud", {})
-        self.assertEqual(result, {"input": ["text", "image"], "output": ["text"]})
-
-    def _empty_run(self, stdout=""):
-        def fake_run(cmd, capture_output, text, timeout):
-            return type("R", (), {"returncode": 0, "stdout": stdout})()
-
-        return fake_run
+            self.assertIsNone(models_dev.get_ollama_modalities("qwen3.5:9b"))
 
 
-import subprocess as models_dev_subprocess  # noqa: E402
+class BuildModelEntryModalityTest(unittest.TestCase):
+    CATALOG = {
+        "ollama-cloud": {
+            "models": {
+                "glm-5.3-flash": {
+                    "modalities": {"input": ["text", "image"], "output": ["text"]}
+                }
+            }
+        },
+        "openai": {
+            "models": {
+                "gpt-test": {
+                    "modalities": {"input": ["text", "image"], "output": ["text"]}
+                }
+            }
+        },
+    }
 
-import models_dev  # noqa: E402
+    def test_ollama_cloud_provider_suppresses_catalog_modalities(self):
+        entry = models_dev.build_model_entry(
+            "glm-5.3-flash", self.CATALOG, "ollama-cloud"
+        )
+        self.assertNotIn("modalities", entry)
+
+    def test_explicit_override_beats_cloud_suppression(self):
+        entry = models_dev.build_model_entry(
+            "glm-5.3-flash",
+            self.CATALOG,
+            "ollama-cloud",
+            modalities={"input": ["text", "image"], "output": ["text"]},
+        )
+        self.assertEqual(
+            entry["modalities"], {"input": ["text", "image"], "output": ["text"]}
+        )
+
+    def test_other_providers_keep_catalog_modalities(self):
+        entry = models_dev.build_model_entry("gpt-test", self.CATALOG, "openai")
+        # Non-ollama-cloud provider keys pass catalog modalities through.
+        self.assertEqual(
+            entry["modalities"], {"input": ["text", "image"], "output": ["text"]}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

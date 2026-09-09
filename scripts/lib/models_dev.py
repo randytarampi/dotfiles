@@ -238,7 +238,7 @@ def get_ollama_context_length(model_name):
     return get_ollama_show_info(model_name)["context_length"]
 
 
-def get_ollama_modalities(model_name, models_dev_data):
+def get_ollama_modalities(model_name):
     """Resolve OpenCode `modalities` metadata for an Ollama model.
 
     OpenCode gates image/PDF attachments on the model's declared
@@ -246,11 +246,16 @@ def get_ollama_modalities(model_name, models_dev_data):
     as text-only client-side (before any API call), even when the backend
     accepts images.
 
-    Resolution order:
-    1. `:cloud`-suffixed IDs look up the models.dev `ollama-cloud` catalog
-       entry for the base name — `ollama show` capability metadata for cloud
-       stubs under-reports (e.g. it omits vision for glm-5.3-flash:cloud even
-       though the cloud backend accepts images).
+    Policy (user decision 2026-09-09): Ollama **Cloud** models are declared
+    text-only even when their catalogs advertise image/video/pdf input.
+    While single-image probes succeed, accumulated image payloads through
+    the Ollama Cloud gateway can kill the conversation (anomalyco/opencode
+    #43119: "failed to read request body" on kimi-k2.7-code), so we do not
+    advertise vision for cloud-served models. Local Ollama models keep
+    `ollama show`-derived modalities (no gateway in the path).
+
+    Resolution:
+    1. `:cloud`-suffixed IDs return None (text-only by declaration).
     2. Otherwise map `ollama show` capabilities (vision → image, audio →
        audio) to declared modalities.
 
@@ -258,10 +263,7 @@ def get_ollama_modalities(model_name, models_dev_data):
       {"input": [...], "output": ["text"]} or None when text-only/unknown.
     """
     if model_name.endswith(":cloud"):
-        base = model_name[: -len(":cloud")]
-        meta = get_model_metadata("ollama-cloud", base, models_dev_data)
-        if meta.get("modalities"):
-            return meta["modalities"]
+        return None
     info = get_ollama_show_info(model_name)
     input_modalities = ["text"]
     if "vision" in info["capabilities"]:
@@ -317,6 +319,12 @@ def build_model_entry(
     resolved_modalities = (
         modalities if modalities is not None else meta.get("modalities")
     )
+    # Policy (user decision 2026-09-09, see get_ollama_modalities): never
+    # advertise image input for Ollama Cloud-served models — accumulated
+    # image payloads can kill the conversation at the gateway
+    # (anomalyco/opencode #43119). Only an explicit override wins.
+    if provider_key == "ollama-cloud" and modalities is None:
+        resolved_modalities = None
     if resolved_modalities:
         entry["modalities"] = resolved_modalities
 
