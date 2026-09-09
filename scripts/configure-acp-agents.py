@@ -309,8 +309,16 @@ def main():
 
         if args.slim_file:
             slim_path = os.path.abspath(os.path.expanduser(args.slim_file))
-            with open(slim_path, "r", encoding="utf-8") as f:
-                slim_data = json.load(f)
+            if os.path.exists(slim_path):
+                with open(slim_path, "r", encoding="utf-8") as f:
+                    slim_data = json.load(f)
+            else:
+                # Seed a minimal project-local layer containing only
+                # acpAgents. The plugin loader deep-merges it over the
+                # global config (~/.config/opencode), which remains the
+                # single source of truth for models/presets — so this
+                # layer can't go stale the way full copies did.
+                slim_data = {"acpAgents": {}}
             slim_data["acpAgents"] = detected_agents
             if args.dry_run:
                 logger.info(f"Would merge acpAgents into {slim_path}")
