@@ -36,7 +36,7 @@ These apply to every repo, every session.
 
 ### Semantic ambiguity
 
-- **When a flag or option name is semantically ambiguous, ask before implementing.** For example, `--local-fallback-placeholder` could mean "replace the cloud model" or "replace the local fallback model." A wrong guess costs a full revert+refix cycle. Ask the user to clarify the intended semantics before dispatching implementation. Don't guess when the cost of being wrong is high.
+- **When a flag or option name is semantically ambiguous, ask before implementing.** A wrong guess costs a full revert+refix cycle. Ask the user to clarify the intended semantics before dispatching implementation. Don't guess when the cost of being wrong is high.
 
 ### Delegation discipline
 

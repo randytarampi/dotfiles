@@ -99,7 +99,7 @@ python3 scripts/configure-jetbrains-ai.py
 This generates profiles in `~/.junie/models/` and cleans up stale files.
 
 `configure-jetbrains-ai.py` accepts `--local-fallback-preset`, repeated
-`--local-fallback-role`, repeated `--local-fallback-placeholder`, and
+`--role-model`, repeated `--category-model`, and
 `--min-reasoning-embedding`. Use `--skip models` or `--skip dirs` to omit an
 individual step. JetBrains configuration does not manage MCPs; MCP generation
 belongs exclusively to the `mcps` step (`scripts/configure-mcps.py` or

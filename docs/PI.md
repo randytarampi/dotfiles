@@ -73,7 +73,7 @@ code-gen, lightweight, and vision roles — so `researcher`, `scout`, and
 `reviewer` built-ins all use the single loaded MoE model. See
 [docs/TIERS.md](TIERS.md) for the full reuse rules.
 
-`--local-fallback-placeholder`, `--local-fallback-role`, and
+`--category-model`, `--role-model`, and
 `--local-fallback-preset` override resolved categories after classification;
 user overrides always win over MoE-reuse defaults. The resolver logs
 `Classified local models:` on every run, matching `configure-opencode-tier.py`

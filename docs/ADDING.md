@@ -146,8 +146,7 @@ work delegates to the existing scripts.
 
 All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable;
 use it to omit named steps such as `mcps`. `configure-all.sh` also accepts
-`--local-fallback-preset`, `--local-fallback-role`,
-`--local-fallback-placeholder`, `--preset`, `--mode`, and
+`--local-fallback-preset`, `--role-model`, `--category-model`, `--preset`, `--mode`, and
 `--min-reasoning-embedding`.
 
 ## Adding a new agent tool
