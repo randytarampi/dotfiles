@@ -17,7 +17,7 @@ if LIB_DIR not in sys.path:
 import logger
 import tier_registry
 from ai_models import resolve_model
-from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
+from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
@@ -121,7 +121,7 @@ def main():
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview without writing files"
     )
-    add_local_fallback_args(parser)
+    add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
 
@@ -149,7 +149,7 @@ def main():
         if not tier_registry.uses_local_placeholders(registry, tier):
             categories = {}
             roles = tier_registry.materialize_role_models(
-                registry, tier, categories, args.local_fallback_role
+                registry, tier, categories, args.role_models
             )
         else:
             tier_resolution_preset = args.local_fallback_preset or tier
@@ -162,10 +162,10 @@ def main():
                     args.min_reasoning_embedding,
                 )
                 tier_registry.apply_placeholder_overrides(
-                    categories, args.local_fallback_placeholder
+                    categories, args.category_models
                 )
             roles = tier_registry.materialize_role_models(
-                registry, tier, categories, args.local_fallback_role
+                registry, tier, categories, args.role_models
             )
         orchestrator_ref = roles.get("orchestrator", "")
         librarian_ref = roles.get("librarian", "")

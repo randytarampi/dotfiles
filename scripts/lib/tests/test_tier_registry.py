@@ -1,3 +1,4 @@
+import argparse
 import importlib.util
 import os
 import sys
@@ -7,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import tier_registry
 import tier_resolve
+import cli_helpers
 
 VERIFY_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "verify-slim-invariants.py"
@@ -54,6 +56,20 @@ def registry():
 
 
 class TierRegistryTests(unittest.TestCase):
+    def test_deprecated_model_override_flags_parse_as_new_destinations(self):
+        parser = argparse.ArgumentParser()
+        cli_helpers.add_model_override_args(parser)
+        args = parser.parse_args(
+            [
+                "--local-fallback-role",
+                "observer=ollama/vision",
+                "--local-fallback-placeholder",
+                "vision=ollama/vision",
+            ]
+        )
+        self.assertEqual(args.role_models, ["observer=ollama/vision"])
+        self.assertEqual(args.category_models, ["vision=ollama/vision"])
+
     def test_pi_includes_renamed_omo_slim_presets(self):
         tiers = set(configure_pi.get_available_tiers())
         self.assertIn("omo-slim-openai", tiers)

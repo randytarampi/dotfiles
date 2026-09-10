@@ -20,10 +20,10 @@ from discover_models import list_local_ollama_models
 from cli_helpers import (
     add_common_args,
     add_skip_arg,
-    add_local_fallback_args,
+    add_model_override_args,
     add_min_reasoning_embedding_arg,
     forward_min_reasoning_embedding_arg,
-    forward_local_fallback_args,
+    forward_model_override_args,
     parse_skip,
 )
 
@@ -38,7 +38,7 @@ def main():
     parser.add_argument(
         "--project-dir", default=os.getcwd(), help="Project directory (default: cwd)"
     )
-    add_local_fallback_args(parser)
+    add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
     failures = 0
@@ -69,7 +69,7 @@ def main():
             ensure_ai_dirs(project_root)
 
     if do_models:
-        local_fallback_args = forward_local_fallback_args(args)
+        local_fallback_args = forward_model_override_args(args)
         if args.dry_run:
             logger.info(f"Would generate JetBrains model profiles in {target_dir}")
             if local_fallback_args:

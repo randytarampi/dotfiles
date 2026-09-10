@@ -20,7 +20,7 @@ import logger
 from opencode_config import get_available_tiers, get_slim_config_path
 from constants import check_ollama_daemon
 from tier_resolve import resolve_roles_from_list, list_local_ollama_models
-from cli_helpers import add_common_args
+from cli_helpers import add_common_args, add_model_override_args
 import tier_registry
 
 
@@ -34,6 +34,12 @@ def proxied_ollama_cloud_model(model_name: str) -> str:
     if not stripped.endswith(":cloud"):
         stripped = f"{stripped}:cloud"
     return f"ollama/{stripped}"
+
+
+def _csv_env(name):
+    return [
+        value.strip() for value in os.environ.get(name, "").split(",") if value.strip()
+    ]
 
 
 def rewrite_ollama_cloud_models_for_proxy(value):
@@ -53,9 +59,9 @@ def rewrite_ollama_cloud_models_for_proxy(value):
 def orchestrate_tier_switch(
     tier: str,
     no_local_fallbacks: bool,
-    local_fallback_roles: list,
+    role_models: list,
     local_fallback_preset: Optional[str] = None,
-    local_fallback_placeholders: Optional[list] = None,
+    category_models: Optional[list] = None,
     min_reasoning_embedding: int = 0,
     dry_run: bool = False,
 ):
@@ -141,12 +147,10 @@ def orchestrate_tier_switch(
         except Exception as e:
             logger.warning(f"Failed to discover cloud models via local proxy: {e}")
 
-    tier_registry.apply_placeholder_overrides(
-        local_role_models, local_fallback_placeholders
-    )
+    tier_registry.apply_placeholder_overrides(local_role_models, category_models)
     fallback_role_models = local_role_models or cloud_role_models
-    role_models = tier_registry.materialize_role_models(
-        registry, tier, fallback_role_models, local_fallback_roles
+    resolved_role_models = tier_registry.materialize_role_models(
+        registry, tier, fallback_role_models, role_models
     )
     if not fallback_role_models:
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
@@ -161,7 +165,7 @@ def orchestrate_tier_switch(
         # Log local role assignments (from the resolution preset's role mapping)
         if local_role_models:
             local_role_models_logged = tier_registry.materialize_role_models(
-                registry, resolution_preset, local_role_models, local_fallback_roles
+                registry, resolution_preset, local_role_models, role_models
             )
             local_assignments = []
             for role, model in sorted(local_role_models_logged.items()):
@@ -171,7 +175,7 @@ def orchestrate_tier_switch(
                 logger.info("Local role assignments:\n" + "\n".join(local_assignments))
         # Log the active tier's role assignments (cloud for cloud tiers, local for local tiers)
         role_assignments = []
-        for role, model in sorted(role_models.items()):
+        for role, model in sorted(resolved_role_models.items()):
             if model:
                 role_assignments.append(f"  {role} → {model}")
         if role_assignments:
@@ -226,7 +230,7 @@ def orchestrate_tier_switch(
             )
             # Show full role→model assignments for local tiers
             local_role_lines = []
-            for role, model in sorted(role_models.items()):
+            for role, model in sorted(resolved_role_models.items()):
                 if model:
                     local_role_lines.append(f"  {role} → {model}")
             if local_role_lines:
@@ -248,7 +252,7 @@ def orchestrate_tier_switch(
     source_presets_data = registry.get("presets", {})
     if tier in source_presets_data:
         source_preset = json.loads(json.dumps(preset))
-        for role, model in role_models.items():
+        for role, model in resolved_role_models.items():
             if role in source_preset and isinstance(source_preset[role], dict):
                 if model is None:
                     del source_preset[role]
@@ -340,25 +344,8 @@ def main():
         action="store_true",
         help="Omit local Ollama models from fallback chains",
     )
-    parser.add_argument(
-        "--local-fallback-role",
-        action="append",
-        default=[],
-        help="Override local model for a role (e.g. observer=ollama/qwen3.5:9b-mlx)",
-    )
     available_tiers = get_available_tiers()
-    parser.add_argument(
-        "--local-fallback-preset",
-        default=None,
-        choices=available_tiers,
-        help="Which local tier's placeholder pattern to use for local fallbacks (default: local)",
-    )
-    parser.add_argument(
-        "--local-fallback-placeholder",
-        action="append",
-        default=[],
-        help="Override _local:<category> resolution (e.g. vision=ollama/gemma4:e4b)",
-    )
+    add_model_override_args(parser, preset_choices=available_tiers)
     parser.add_argument(
         "--min-reasoning-embedding",
         type=int,
@@ -374,13 +361,29 @@ def main():
         help="Preferred interface: active OpenCode tier to set",
     )
     args = parser.parse_args()
+    if args.role_models is None:
+        args.role_models = _csv_env("DOTFILES_ROLE_MODELS")
+        if not args.role_models and os.environ.get("DOTFILES_LOCAL_FALLBACK_ROLES"):
+            logger.warning(
+                "Deprecated DOTFILES_LOCAL_FALLBACK_ROLES; use DOTFILES_ROLE_MODELS instead"
+            )
+            args.role_models = _csv_env("DOTFILES_LOCAL_FALLBACK_ROLES")
+    if args.category_models is None:
+        args.category_models = _csv_env("DOTFILES_CATEGORY_MODELS")
+        if not args.category_models and os.environ.get(
+            "DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS"
+        ):
+            logger.warning(
+                "Deprecated DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS; use DOTFILES_CATEGORY_MODELS instead"
+            )
+            args.category_models = _csv_env("DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS")
 
     orchestrate_tier_switch(
         args.preset,
         args.no_local_fallbacks,
-        args.local_fallback_role,
+        args.role_models,
         local_fallback_preset=args.local_fallback_preset,
-        local_fallback_placeholders=args.local_fallback_placeholder,
+        category_models=args.category_models,
         min_reasoning_embedding=args.min_reasoning_embedding,
         dry_run=args.dry_run,
     )

@@ -23,9 +23,10 @@ from cli_helpers import (
     add_skip_arg,
     forward_common_args,
     forward_min_reasoning_embedding_arg,
-    forward_local_fallback_args,
+    forward_model_override_args,
     parse_skip,
     add_min_reasoning_embedding_arg,
+    add_model_override_args,
 )
 
 ALL_STEPS = [
@@ -122,11 +123,7 @@ def project_opencode_overrides_global(args):
     defaults: a different tier, or any local-fallback materialization
     inputs. Same-tier runs inherit the global config as-is.
     """
-    if (
-        args.local_fallback_preset
-        or args.local_fallback_placeholder
-        or args.local_fallback_role
-    ):
+    if args.local_fallback_preset or args.category_models or args.role_models:
         return True
     preset = args.preset
     if not preset:
@@ -250,9 +247,7 @@ def main():
     parser.add_argument("--mcps", default=None)
     parser.add_argument("--mcp-tools", default=None)
     parser.add_argument("--acp-agents", default=None)
-    parser.add_argument("--local-fallback-preset", default=None)
-    parser.add_argument("--local-fallback-placeholder", action="append", default=None)
-    parser.add_argument("--local-fallback-role", action="append", default=None)
+    add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
     root = os.path.abspath(args.workspace_root)
@@ -262,14 +257,32 @@ def main():
         args.preset = os.environ.get("DOTFILES_PROJECT_PRESET")
     if args.skip is None:
         args.skip = os.environ.get("DOTFILES_PROJECT_SKIP")
-    if args.local_fallback_placeholder is None:
-        args.local_fallback_placeholder = (
-            csv(os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_PLACEHOLDER")) or None
+    if args.category_models is None:
+        args.category_models = (
+            csv(os.environ.get("DOTFILES_PROJECT_CATEGORY_MODELS")) or None
         )
-    if args.local_fallback_role is None:
-        args.local_fallback_role = (
-            csv(os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_ROLE")) or None
-        )
+        if args.category_models is None and os.environ.get(
+            "DOTFILES_PROJECT_LOCAL_FALLBACK_PLACEHOLDER"
+        ):
+            logger.warning(
+                "Deprecated DOTFILES_PROJECT_LOCAL_FALLBACK_PLACEHOLDER; use "
+                "DOTFILES_PROJECT_CATEGORY_MODELS instead"
+            )
+            args.category_models = csv(
+                os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_PLACEHOLDER")
+            )
+    if args.role_models is None:
+        args.role_models = csv(os.environ.get("DOTFILES_PROJECT_ROLE_MODELS")) or None
+        if args.role_models is None and os.environ.get(
+            "DOTFILES_PROJECT_LOCAL_FALLBACK_ROLE"
+        ):
+            logger.warning(
+                "Deprecated DOTFILES_PROJECT_LOCAL_FALLBACK_ROLE; use "
+                "DOTFILES_PROJECT_ROLE_MODELS instead"
+            )
+            args.role_models = csv(
+                os.environ.get("DOTFILES_PROJECT_LOCAL_FALLBACK_ROLE")
+            )
     if args.local_fallback_preset is None:
         args.local_fallback_preset = os.environ.get(
             "DOTFILES_PROJECT_LOCAL_FALLBACK_PRESET"
@@ -332,7 +345,7 @@ def main():
             run(
                 opencode_cmd
                 + forward_common_args(args)
-                + forward_local_fallback_args(args),
+                + forward_model_override_args(args),
                 root,
                 env,
             )
@@ -356,8 +369,8 @@ def main():
             + build_tier_args(
                 tier=preset,
                 local_fallback_preset=args.local_fallback_preset,
-                local_fallback_placeholders=args.local_fallback_placeholder or None,
-                local_fallback_roles=args.local_fallback_role or None,
+                category_models=args.category_models or None,
+                role_models=args.role_models or None,
             )
             + forward_common_args(args)
             + forward_min_reasoning_embedding_arg(args),
@@ -429,7 +442,7 @@ def main():
             root,
         ]
         command += forward_common_args(args)
-        command += forward_local_fallback_args(args)
+        command += forward_model_override_args(args)
         command += forward_min_reasoning_embedding_arg(args)
         run(command, root, child_env)
     if "pi" in steps:
@@ -442,7 +455,7 @@ def main():
             preset,
         ]
         command += forward_common_args(args)
-        command += forward_local_fallback_args(args)
+        command += forward_model_override_args(args)
         command += forward_min_reasoning_embedding_arg(args)
         run(command, root, child_env)
     if "acp-agents" in steps:

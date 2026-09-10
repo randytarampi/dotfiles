@@ -68,6 +68,22 @@
       "repeatable": true
     }
   },
+  "model_override_flags": {
+    "role": {
+      "flag": "--role-model",
+      "deprecated_alias": "--local-fallback-role",
+      "type": "string",
+      "metavar": "ROLE=MODEL",
+      "repeatable": true
+    },
+    "category": {
+      "flag": "--category-model",
+      "deprecated_alias": "--local-fallback-placeholder",
+      "type": "string",
+      "metavar": "CATEGORY=MODEL",
+      "repeatable": true
+    }
+  },
   "exit_codes": {
     "success": 0,
     "runtime_failure": 1,
@@ -123,7 +139,15 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--skip"
+        "--skip",
+        "--category-model",
+        "--local-fallback-placeholder",
+        "--role-model",
+        "--local-fallback-role",
+        "--local-fallback-preset",
+        "--preset",
+        "--mode",
+        "--min-reasoning-embedding"
       ],
       "positional_operand": null,
       "child_scripts": [
@@ -209,7 +233,9 @@
         "--skip",
         "--project-dir",
         "--local-fallback-preset",
+        "--role-model",
         "--local-fallback-role",
+        "--category-model",
         "--local-fallback-placeholder"
       ],
       "positional_operand": null,
@@ -345,8 +371,10 @@
         "--dry-run",
         "--preset",
         "--no-local-fallbacks",
+        "--role-model",
         "--local-fallback-role",
         "--local-fallback-preset",
+        "--category-model",
         "--local-fallback-placeholder",
         "--min-reasoning-embedding"
       ],
@@ -367,6 +395,10 @@
         "--dry-run",
         "--show-secrets",
         "--no-backup",
+        "--role-model",
+        "--local-fallback-role",
+        "--category-model",
+        "--local-fallback-placeholder",
         "--min-reasoning-embedding"
       ],
       "positional_operand": null,
@@ -390,7 +422,9 @@
         "--preset",
         "--mode",
         "--local-fallback-preset",
+        "--role-model",
         "--local-fallback-role",
+        "--category-model",
         "--local-fallback-placeholder",
         "--min-reasoning-embedding",
         "--skip"
@@ -428,7 +462,9 @@
         "--mcp-tools",
         "--acp-agents",
         "--local-fallback-preset",
+        "--category-model",
         "--local-fallback-placeholder",
+        "--role-model",
         "--local-fallback-role",
         "--min-reasoning-embedding"
       ],

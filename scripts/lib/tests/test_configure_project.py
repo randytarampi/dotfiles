@@ -20,14 +20,14 @@ PROJECT_SPEC.loader.exec_module(configure_project)
 def make_args(
     preset=None,
     local_fallback_preset=None,
-    local_fallback_placeholder=None,
-    local_fallback_role=None,
+    category_models=None,
+    role_models=None,
 ):
     args = argparse.Namespace()
     args.preset = preset
     args.local_fallback_preset = local_fallback_preset
-    args.local_fallback_placeholder = local_fallback_placeholder
-    args.local_fallback_role = local_fallback_role
+    args.category_models = category_models
+    args.role_models = role_models
     return args
 
 
@@ -119,17 +119,17 @@ class ProjectOverridesGlobalTests(unittest.TestCase):
             )
         )
 
-    def test_local_fallback_placeholder_writes(self):
+    def test_category_models_write(self):
         self.assertTrue(
             configure_project.project_opencode_overrides_global(
-                make_args(preset="pro-plus", local_fallback_placeholder=["code-gen=x"])
+                make_args(preset="pro-plus", category_models=["code-gen=x"])
             )
         )
 
-    def test_local_fallback_role_writes(self):
+    def test_role_models_write(self):
         self.assertTrue(
             configure_project.project_opencode_overrides_global(
-                make_args(preset="pro-plus", local_fallback_role=["fixer=y"])
+                make_args(preset="pro-plus", role_models=["fixer=y"])
             )
         )
 

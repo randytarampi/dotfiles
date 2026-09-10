@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
 import logger
 from cli_helpers import (
     add_common_args,
-    add_local_fallback_args,
+    add_model_override_args,
     add_min_reasoning_embedding_arg,
 )
 from constants import (
@@ -294,7 +294,7 @@ def main():
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
     )
     add_common_args(p, no_backup=True)
-    add_local_fallback_args(p)
+    add_model_override_args(p)
     add_min_reasoning_embedding_arg(p)
     p.add_argument("--mode", choices=["global", "project"], default="global")
     available_tiers = get_available_tiers()
@@ -345,14 +345,12 @@ def main():
             logger.warning(
                 "No local Ollama models found; local model fallbacks are unavailable"
             )
-    tier_registry.apply_placeholder_overrides(
-        category_models, args.local_fallback_placeholder
-    )
+    tier_registry.apply_placeholder_overrides(category_models, args.category_models)
     role_models = tier_registry.materialize_role_models(
         registry,
         resolution_preset if local_preset else preset,
         category_models,
-        args.local_fallback_role,
+        args.role_models,
     )
     if any(
         isinstance(model, str) and model.startswith("github-copilot/")

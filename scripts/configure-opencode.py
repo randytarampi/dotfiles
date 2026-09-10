@@ -46,10 +46,10 @@ from models_dev import (
 from cli_helpers import (
     add_common_args,
     add_skip_arg,
-    add_local_fallback_args,
+    add_model_override_args,
     add_min_reasoning_embedding_arg,
     forward_common_args,
-    forward_local_fallback_args,
+    forward_model_override_args,
     forward_min_reasoning_embedding_arg,
     parse_skip,
 )
@@ -101,7 +101,7 @@ def main():
         description="Configure OpenCode json generator and orchestration."
     )
     add_common_args(parser, no_backup=True)
-    add_local_fallback_args(parser)
+    add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     available_tiers = get_available_tiers()
     parser.add_argument(
@@ -840,7 +840,7 @@ def main():
                     tier=args.preset,
                     no_local_fallbacks=not with_local_ollama,
                 )
-                + forward_local_fallback_args(args)
+                + forward_model_override_args(args)
                 + forward_min_reasoning_embedding_arg(args)
             )
             # configure-opencode-tier.py accepts --dry-run, but not --no-backup.
@@ -871,7 +871,7 @@ def main():
                 "--preset",
                 args.preset,
             ] + forward_common_args(args)
-            voice_args += forward_local_fallback_args(args)
+            voice_args += forward_model_override_args(args)
             voice_args += forward_min_reasoning_embedding_arg(args)
             if args.no_backup:
                 voice_args.append("--no-backup")

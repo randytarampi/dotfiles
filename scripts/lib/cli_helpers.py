@@ -2,6 +2,8 @@
 
 import argparse
 
+import logger
+
 
 def add_common_args(parser, *, no_backup=False):
     parser.allow_abbrev = False
@@ -67,24 +69,63 @@ def forward_min_reasoning_embedding_arg(args):
     return result
 
 
-def add_local_fallback_args(parser):
-    parser.add_argument("--local-fallback-preset", metavar="PRESET")
-    parser.add_argument("--local-fallback-role", metavar="ROLE", action="append")
+class _DeprecatedModelOverrideAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string in ("--local-fallback-role", "--local-fallback-placeholder"):
+            replacement = (
+                "--role-model"
+                if option_string == "--local-fallback-role"
+                else "--category-model"
+            )
+            logger.warning("Deprecated %s; use %s instead", option_string, replacement)
+        current = getattr(namespace, self.dest, None) or []
+        current.append(values)
+        setattr(namespace, self.dest, current)
+
+
+def add_model_override_args(parser, preset_choices=None):
     parser.add_argument(
-        "--local-fallback-placeholder", metavar="PLACEHOLDER", action="append"
+        "--local-fallback-preset", metavar="PRESET", choices=preset_choices
+    )
+    parser.add_argument(
+        "--role-model",
+        "--local-fallback-role",
+        dest="role_models",
+        metavar="ROLE=MODEL",
+        action=_DeprecatedModelOverrideAction,
+        default=None,
+    )
+    parser.add_argument(
+        "--category-model",
+        "--local-fallback-placeholder",
+        dest="category_models",
+        metavar="CATEGORY=MODEL",
+        action=_DeprecatedModelOverrideAction,
+        default=None,
     )
     return parser
 
 
+def add_local_fallback_args(parser):
+    """Deprecated compatibility alias for add_model_override_args."""
+    return add_model_override_args(parser)
+
+
 def forward_local_fallback_args(args):
+    """Deprecated compatibility wrapper using the new override destinations."""
     flags = []
     preset = getattr(args, "local_fallback_preset", None)
     if preset:
         flags.extend(["--local-fallback-preset", preset])
-    for role in getattr(args, "local_fallback_role", None) or []:
+    for role in getattr(args, "role_models", None) or []:
         if role:
-            flags.extend(["--local-fallback-role", role])
-    for placeholder in getattr(args, "local_fallback_placeholder", None) or []:
+            flags.extend(["--role-model", role])
+    for placeholder in getattr(args, "category_models", None) or []:
         if placeholder:
-            flags.extend(["--local-fallback-placeholder", placeholder])
+            flags.extend(["--category-model", placeholder])
     return flags
+
+
+def forward_model_override_args(args):
+    """Forward model overrides using their canonical option names."""
+    return forward_local_fallback_args(args)

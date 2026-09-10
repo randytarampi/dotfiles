@@ -50,7 +50,7 @@ from file_utils import backup_file, write_text_file
 from env import load_env
 from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
-from cli_helpers import add_local_fallback_args, add_min_reasoning_embedding_arg
+from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from tier_resolve import list_local_ollama_models
 from provider_endpoints import PROVIDER_ENDPOINTS
 import tier_registry
@@ -59,8 +59,8 @@ import tier_registry
 def get_voice_config(
     tier: str,
     local_fallback_preset=None,
-    local_fallback_roles=None,
-    local_fallback_placeholders=None,
+    role_models=None,
+    category_models=None,
     min_reasoning_embedding=None,
 ) -> dict:
     """Build the opencode-voice plugin config dict based on tier.
@@ -115,10 +115,10 @@ def get_voice_config(
                         local_models, registry, resolution_preset, min_emb
                     )
                     tier_registry.apply_placeholder_overrides(
-                        categories, local_fallback_placeholders
+                        categories, category_models
                     )
                     resolved_roles = tier_registry.materialize_role_models(
-                        registry, resolution_preset, categories, local_fallback_roles
+                        registry, resolution_preset, categories, role_models
                     )
                     voice_model = (
                         categories.get("solo")
@@ -216,11 +216,9 @@ def get_voice_config(
                 categories = tier_registry.classify_models_for_preset(
                     local_models, registry, resolution_preset, min_emb
                 )
-                tier_registry.apply_placeholder_overrides(
-                    categories, local_fallback_placeholders
-                )
+                tier_registry.apply_placeholder_overrides(categories, category_models)
                 resolved_roles = tier_registry.materialize_role_models(
-                    registry, resolution_preset, categories, local_fallback_roles
+                    registry, resolution_preset, categories, role_models
                 )
                 voice_model = resolved_roles.get("librarian")
                 if voice_model:
@@ -288,7 +286,7 @@ def main():
         description="Configure OpenCode voice plugin (tui.json) based on active tier."
     )
     available_tiers = get_available_tiers()
-    add_local_fallback_args(parser)
+    add_model_override_args(parser)
     parser.add_argument(
         "--preset",
         default="pro-plus",
@@ -331,8 +329,8 @@ def main():
     voice_config = get_voice_config(
         args.preset,
         args.local_fallback_preset,
-        args.local_fallback_role,
-        args.local_fallback_placeholder,
+        args.role_models,
+        args.category_models,
         args.min_reasoning_embedding,
     )
 

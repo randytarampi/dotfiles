@@ -23,8 +23,10 @@ Available flags:
   --skip STEP[,STEP,...]          Comma-separated steps to skip
   --preset TIER                   Override the auto-detected tier
   --mode MODE                     Configuration mode: global or project (default: global)
-  --local-fallback-placeholder C=model  Override _local:<category> resolution (e.g. code-gen=ollama/ornith-1.5:35b)
-  --local-fallback-role R=M       Override local model for a role (e.g. observer=ollama/model)
+  --category-model C=model        Set the model for a category (e.g. code-gen=ollama/ornith-1.5:35b)
+  --role-model R=M                 Set the primary model for a role (e.g. observer=ollama/model)
+  --local-fallback-placeholder C=model  Deprecated alias for --category-model
+  --local-fallback-role R=M       Deprecated alias for --role-model
   --local-fallback-preset TIER    Which local tier's placeholder pattern to use for local fallbacks
   --min-reasoning-embedding N     Minimum embedding_length for reasoning models (0=disabled)"
 SKIP_STEPS=""
@@ -48,12 +50,14 @@ for arg in "$@"; do
       PRESET_CLI=1
       ;;
     mode) CONFIG_MODE="$arg" ;;
-    local-fallback-placeholder)
-      LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "$arg")
+    category-model | local-fallback-placeholder)
+      [[ "$_value_expected" == "local-fallback-placeholder" ]] && warn "Deprecated --local-fallback-placeholder; use --category-model instead"
+      LOCAL_FALLBACK_ARGS+=("--category-model" "$arg")
       LOCAL_FALLBACK_PLACEHOLDER_CLI=1
       ;;
-    local-fallback-role)
-      LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "$arg")
+    role-model | local-fallback-role)
+      [[ "$_value_expected" == "local-fallback-role" ]] && warn "Deprecated --local-fallback-role; use --role-model instead"
+      LOCAL_FALLBACK_ARGS+=("--role-model" "$arg")
       LOCAL_FALLBACK_ROLE_CLI=1
       ;;
     local-fallback-preset)
@@ -73,11 +77,13 @@ for arg in "$@"; do
     PRESET_CLI=1
   elif [[ "$arg" == --mode=* ]]; then
     CONFIG_MODE="${arg#--mode=}"
-  elif [[ "$arg" == --local-fallback-placeholder=* ]]; then
-    LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "${arg#--local-fallback-placeholder=}")
+  elif [[ "$arg" == --category-model=* || "$arg" == --local-fallback-placeholder=* ]]; then
+    [[ "$arg" == --local-fallback-placeholder=* ]] && warn "Deprecated --local-fallback-placeholder; use --category-model instead"
+    LOCAL_FALLBACK_ARGS+=("--category-model" "${arg#*=}")
     LOCAL_FALLBACK_PLACEHOLDER_CLI=1
-  elif [[ "$arg" == --local-fallback-role=* ]]; then
-    LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "${arg#--local-fallback-role=}")
+  elif [[ "$arg" == --role-model=* || "$arg" == --local-fallback-role=* ]]; then
+    [[ "$arg" == --local-fallback-role=* ]] && warn "Deprecated --local-fallback-role; use --role-model instead"
+    LOCAL_FALLBACK_ARGS+=("--role-model" "${arg#*=}")
     LOCAL_FALLBACK_ROLE_CLI=1
   elif [[ "$arg" == --local-fallback-preset=* ]]; then
     LOCAL_FALLBACK_ARGS+=("--local-fallback-preset" "${arg#--local-fallback-preset=}")
@@ -91,10 +97,10 @@ for arg in "$@"; do
     _value_expected="preset"
   elif [[ "$arg" == "--mode" ]]; then
     _value_expected="mode"
-  elif [[ "$arg" == "--local-fallback-placeholder" ]]; then
-    _value_expected="local-fallback-placeholder"
-  elif [[ "$arg" == "--local-fallback-role" ]]; then
-    _value_expected="local-fallback-role"
+  elif [[ "$arg" == "--category-model" || "$arg" == "--local-fallback-placeholder" ]]; then
+    _value_expected="$([[ "$arg" == "--category-model" ]] && printf category-model || printf local-fallback-placeholder)"
+  elif [[ "$arg" == "--role-model" || "$arg" == "--local-fallback-role" ]]; then
+    _value_expected="$([[ "$arg" == "--role-model" ]] && printf role-model || printf local-fallback-role)"
   elif [[ "$arg" == "--local-fallback-preset" ]]; then
     _value_expected="local-fallback-preset"
   elif [[ "$arg" == "--min-reasoning-embedding" ]]; then
@@ -149,16 +155,20 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 if ((PRESET_CLI == 0)) && [[ -n "${DOTFILES_OPENCODE_TIER:-}" ]]; then
   USER_PRESET="$DOTFILES_OPENCODE_TIER"
 fi
-if ((LOCAL_FALLBACK_PLACEHOLDER_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_PLACEHOLDER:-}" ]]; then
-  IFS=',' read -ra _placeholders <<<"$DOTFILES_LOCAL_FALLBACK_PLACEHOLDER"
+_category_models="${DOTFILES_CATEGORY_MODELS:-${DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS:-}}"
+if ((LOCAL_FALLBACK_PLACEHOLDER_CLI == 0)) && [[ -n "${_category_models}" ]]; then
+  [[ -z "${DOTFILES_CATEGORY_MODELS:-}" ]] && warn "Deprecated DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS; use DOTFILES_CATEGORY_MODELS instead"
+  IFS=',' read -ra _placeholders <<<"$_category_models"
   for _placeholder in "${_placeholders[@]}"; do
-    [[ -n "$_placeholder" ]] && LOCAL_FALLBACK_ARGS+=("--local-fallback-placeholder" "$_placeholder")
+    [[ -n "$_placeholder" ]] && LOCAL_FALLBACK_ARGS+=("--category-model" "$_placeholder")
   done
 fi
-if ((LOCAL_FALLBACK_ROLE_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_ROLE:-}" ]]; then
-  IFS=',' read -ra _roles <<<"$DOTFILES_LOCAL_FALLBACK_ROLE"
+_role_models="${DOTFILES_ROLE_MODELS:-${DOTFILES_LOCAL_FALLBACK_ROLES:-}}"
+if ((LOCAL_FALLBACK_ROLE_CLI == 0)) && [[ -n "${_role_models}" ]]; then
+  [[ -z "${DOTFILES_ROLE_MODELS:-}" ]] && warn "Deprecated DOTFILES_LOCAL_FALLBACK_ROLES; use DOTFILES_ROLE_MODELS instead"
+  IFS=',' read -ra _roles <<<"$_role_models"
   for _role in "${_roles[@]}"; do
-    [[ -n "$_role" ]] && LOCAL_FALLBACK_ARGS+=("--local-fallback-role" "$_role")
+    [[ -n "$_role" ]] && LOCAL_FALLBACK_ARGS+=("--role-model" "$_role")
   done
 fi
 if ((LOCAL_FALLBACK_PRESET_CLI == 0)) && [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# tier_args.sh — Shared local fallback argument forwarding for chezmoi scripts.
+# tier_args.sh — Shared model override argument forwarding for chezmoi scripts.
 #
 # Usage:
 #   source "${LIB_DIR}/tier_args.sh"
@@ -9,8 +9,8 @@
 #
 # Reads from environment:
 #   DOTFILES_LOCAL_FALLBACK_PRESET
-#   DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS
-#   DOTFILES_LOCAL_FALLBACK_ROLES
+#   DOTFILES_CATEGORY_MODELS (deprecated: DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS)
+#   DOTFILES_ROLE_MODELS (deprecated: DOTFILES_LOCAL_FALLBACK_ROLES)
 
 build_tier_extra_args() {
   TIER_EXTRA_ARGS=()
@@ -20,20 +20,28 @@ build_tier_extra_args() {
   if [[ -n "${DOTFILES_LOCAL_FALLBACK_PRESET:-}" ]]; then
     TIER_EXTRA_ARGS+=("--local-fallback-preset" "$DOTFILES_LOCAL_FALLBACK_PRESET")
   fi
-  if [[ -n "${DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS:-}" ]]; then
+  local category_models="${DOTFILES_CATEGORY_MODELS:-${DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS:-}}"
+  if [[ -n "${category_models}" ]]; then
+    if [[ -z "${DOTFILES_CATEGORY_MODELS:-}" ]]; then
+      warn "Deprecated DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS; use DOTFILES_CATEGORY_MODELS instead"
+    fi
     local IFS=','
     local -a pholder_overrides
-    read -ra pholder_overrides <<<"$DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS"
+    read -ra pholder_overrides <<<"$category_models"
     for override in "${pholder_overrides[@]}"; do
-      [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-placeholder" "$override")
+      [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--category-model" "$override")
     done
   fi
-  if [[ -n "${DOTFILES_LOCAL_FALLBACK_ROLES:-}" ]]; then
+  local role_models="${DOTFILES_ROLE_MODELS:-${DOTFILES_LOCAL_FALLBACK_ROLES:-}}"
+  if [[ -n "${role_models}" ]]; then
+    if [[ -z "${DOTFILES_ROLE_MODELS:-}" ]]; then
+      warn "Deprecated DOTFILES_LOCAL_FALLBACK_ROLES; use DOTFILES_ROLE_MODELS instead"
+    fi
     local IFS=','
     local -a role_overrides
-    read -ra role_overrides <<<"$DOTFILES_LOCAL_FALLBACK_ROLES"
+    read -ra role_overrides <<<"$role_models"
     for override in "${role_overrides[@]}"; do
-      [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--local-fallback-role" "$override")
+      [[ -n "$override" ]] && TIER_EXTRA_ARGS+=("--role-model" "$override")
     done
   fi
 }

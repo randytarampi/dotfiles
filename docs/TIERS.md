@@ -339,36 +339,38 @@ scripts/configure-opencode-tier.py --local-fallback-preset local-mini --preset p
 
 For local tiers, `--local-fallback-preset` defaults to the current tier (so `local-pro` uses its own placeholders). For non-local tiers, it defaults to `local`.
 
-### Placeholder Overrides (`--local-fallback-placeholder`)
+### Category Overrides (`--category-model`)
 
-Use `--local-fallback-placeholder` to override which model fills a specific placeholder category slot, without changing the entire preset. This is a category→model override applied before role-level overrides:
+Use `--category-model` to override which model fills a specific placeholder category slot, without changing the entire preset. This is a category→model override applied before role-level overrides:
 
 ```bash
 # Use a specific model for the vision placeholder
-scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx --preset pro-plus
+scripts/configure-opencode-tier.py --category-model vision=ollama/qwen3.5:9b-mlx --preset pro-plus
 
 # Multiple overrides
-scripts/configure-opencode-tier.py --local-fallback-placeholder vision=ollama/qwen3.5:9b-mlx --local-fallback-placeholder reasoning=ollama/qwq:32b --preset pro-plus
+scripts/configure-opencode-tier.py --category-model vision=ollama/qwen3.5:9b-mlx --category-model reasoning=ollama/qwq:32b --preset pro-plus
 ```
 
-Format: `--local-fallback-placeholder <category>=<model>` where the left side is one of `reasoning`, `code-gen`, `lightweight`, `vision` and the right side is a model name (e.g., `ollama/qwen3.5:9b-mlx`).
+Format: `--category-model <category>=<model>` where the left side is one of `reasoning`, `code-gen`, `lightweight`, `vision` and the right side is a model name (e.g., `ollama/qwen3.5:9b-mlx`).
 
-### Role Overrides (`--local-fallback-role`)
+### Role Model Overrides (`--role-model`)
 
-Use `--local-fallback-role` to override which specific model fills a specific agent role. This is a role-level override applied after placeholder overrides:
+Use `--role-model` to replace the primary model for a specific agent role. This is a role-level override applied after category overrides:
 
 ```bash
-scripts/configure-opencode-tier.py --local-fallback-role observer=ollama/qwen3.5:9b-mlx --preset pro-plus
+scripts/configure-opencode-tier.py --role-model observer=ollama/qwen3.5:9b-mlx --preset pro-plus
 ```
 
-Format: `--local-fallback-role <role>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`.
+Format: `--role-model <role>=<model>` where role is one of `orchestrator`, `oracle`, `librarian`, `explorer`, `fixer`, `designer`, `observer`.
+
+Role and category overrides set the role's primary model; local fallback appending then adds alternatives.
 
 ### Override Order
 
 Overrides are applied in this order:
 1. **Discovery**: local Ollama models are discovered and classified
-2. **Placeholder overrides** (`--local-fallback-placeholder`): remap which category fills each placeholder slot
-3. **Role overrides** (`--local-fallback-role`): remap which model fills each role
+2. **Category overrides** (`--category-model`): remap which category fills each placeholder slot
+3. **Role model overrides** (`--role-model`): replace which model fills each role's primary slot
 4. **Fallback chain append**: all indexed models matching the (possibly overridden) placeholder keys are appended per role
 
 ### Multi-Model Fallback Appending
@@ -379,8 +381,8 @@ When local models are appended to fallback chains, all indexed variants matching
 
 The OpenCode configure script forwards these env vars to `configure-opencode.py`:
 - `DOTFILES_LOCAL_FALLBACK_PRESET` → `--local-fallback-preset`
-- `DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS` → comma-separated `--local-fallback-placeholder` args (e.g. `reasoning=code-gen,vision=lightweight`)
-- `DOTFILES_LOCAL_FALLBACK_ROLES` → comma-separated `--local-fallback-role` args (e.g. `observer=ollama/qwen3.5:9b-mlx`)
+- `DOTFILES_CATEGORY_MODELS` → comma-separated `--category-model` args (e.g. `reasoning=code-gen,vision=lightweight`)
+- `DOTFILES_ROLE_MODELS` → comma-separated `--role-model` args (e.g. `observer=ollama/qwen3.5:9b-mlx`)
 
 ---
 
