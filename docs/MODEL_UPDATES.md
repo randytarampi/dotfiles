@@ -53,7 +53,7 @@ IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
 
 | Anthropic | Ollama Cloud | Use |
 |-----------|--------------|-----|
-| `claude-fable-5` | `kimi-k3` | Oracle |
+| `claude-fable-5-1` | `kimi-k3` | Oracle |
 | `claude-opus-5` | `glm-5.3` | Council |
 | `claude-sonnet-5` | `glm-5.3-flash` | Orchestrator |
 | `claude-haiku-4.5` | `gemma4:31b` | Librarian, explorer, fixer |

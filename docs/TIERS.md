@@ -132,14 +132,14 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `claude-sonnet-5` | — |
-| oracle | `claude-fable-5` | xhigh |
+| oracle | `claude-fable-5-1` | xhigh |
 | librarian | `claude-haiku-4-5` | low |
 | explorer | `claude-haiku-4-5` | low |
 | designer | `claude-sonnet-5` | medium |
 | fixer | `claude-haiku-4-5` | high |
 | observer | `claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5`, beta `claude-sonnet-5`, gamma `claude-opus-5`. Council synthesizer uses `claude-opus-5` with xhigh variant. Orchestrator now uses `claude-sonnet-5` (swapped from opus-5 for cost optimization). Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `claude-sonnet-5`, gamma `claude-opus-5`. Council synthesizer uses `claude-opus-5` with xhigh variant. Orchestrator now uses `claude-sonnet-5` (swapped from opus-5 for cost optimization). Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Plus-Anthropic Tier (`plus-anthropic`)
 
@@ -148,14 +148,14 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `openai/gpt-5.6-terra` | — |
-| oracle | `anthropic/claude-fable-5` | xhigh |
+| oracle | `anthropic/claude-fable-5-1` | xhigh |
 | librarian | `openai/gpt-5.6-luna` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
 | designer | `anthropic/claude-sonnet-5` | medium |
 | fixer | `anthropic/claude-haiku-4-5` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5`, beta `gpt-5.6-terra`, gamma `gpt-5.6-luna`. Council synthesizer uses `claude-opus-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-5.6-terra`, gamma `gpt-5.6-luna`. Council synthesizer uses `claude-opus-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Local-Pro Tier (`local-pro`)
 
@@ -499,7 +499,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-opus-4-8` | `high` | `xhigh` | Legacy model retained as a degraded fallback |
 | `claude-opus-4-6` | standard | — | Legacy model retained in registry only; no active Anthropic preset roles |
 | `claude-sonnet-5` | standard | — | Used for orchestrator (no variant), designer (medium), council beta (no variant), plus-anthropic council fallback; no synth role (opus-5) |
-| `claude-fable-5` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
+| `claude-fable-5-1` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Catalog-only legacy model; no active tier role |

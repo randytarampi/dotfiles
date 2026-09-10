@@ -144,7 +144,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-fable-5",
+        "model": "anthropic/claude-fable-5-1",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -208,7 +208,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-fable-5",
+        "model": "anthropic/claude-fable-5-1",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -338,7 +338,7 @@
         ]
       },
       "oracle": {
-        "model": "anthropic/claude-fable-5",
+        "model": "anthropic/claude-fable-5-1",
         "variant": "xhigh",
         "skills": [
           "simplify"
@@ -792,7 +792,7 @@
       },
       "pro-plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-fable-5"
+          "model": "anthropic/claude-fable-5-1"
         },
         "beta": {
           "model": "ollama-cloud/glm-5.3"
@@ -814,7 +814,7 @@
       },
       "plus-anthropic": {
         "alpha": {
-          "model": "anthropic/claude-fable-5"
+          "model": "anthropic/claude-fable-5-1"
         },
         "beta": {
           "model": "openai/gpt-5.6-sol"
@@ -825,7 +825,7 @@
       },
       "anthropic": {
         "alpha": {
-          "model": "anthropic/claude-fable-5"
+          "model": "anthropic/claude-fable-5-1"
         },
         "beta": {
           "model": "anthropic/claude-sonnet-5"
@@ -1011,7 +1011,7 @@
         "presets": {
           "pro-plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-fable-5"
+              "model": "anthropic/claude-fable-5-1"
             },
             "beta": {
               "model": "ollama-cloud/glm-5.3"
@@ -1060,7 +1060,7 @@
         "presets": {
           "anthropic": {
             "alpha": {
-              "model": "anthropic/claude-fable-5"
+              "model": "anthropic/claude-fable-5-1"
             },
             "beta": {
               "model": "anthropic/claude-sonnet-5"
@@ -1136,7 +1136,7 @@
         "presets": {
           "plus-anthropic": {
             "alpha": {
-              "model": "anthropic/claude-fable-5"
+              "model": "anthropic/claude-fable-5-1"
             },
             "beta": {
               "model": "openai/gpt-5.6-sol"

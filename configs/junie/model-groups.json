@@ -76,7 +76,7 @@
     },
     "meridian-fable": {
       "provider": "meridian",
-      "primaryModel": "claude-fable-5"
+      "primaryModel": "claude-fable-5-1"
     },
     "google-gemini-flash": {
       "provider": "google",

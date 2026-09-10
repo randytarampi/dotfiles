@@ -529,7 +529,7 @@ Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
 | **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only (`sonnet-5`, `fable-5`, `haiku-4-5`, `opus-5`) | Anthropic-first workflow |
+| **anthropic** | Anthropic only (`sonnet-5`, `fable-5-1`, `haiku-4-5`, `opus-5`) | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI only | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
@@ -542,7 +542,7 @@ Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-opencode-zen-free` uses OpenCode Zen with OpenAI fallbacks; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.
 
-**Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
+**Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5-1`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
 Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local, local-mini, local-nano, local-solo)
 
@@ -647,7 +647,7 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `meridian-opus` | meridian | `claude-opus-5` | — | 1 |
 | `meridian-sonnet` | meridian | `claude-sonnet-5` | — | 1 |
 | `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
-| `meridian-fable` | meridian | `claude-fable-5` | — | 1 |
+| `meridian-fable` | meridian | `claude-fable-5-1` | — | 1 |
 
 Local Ollama profiles resolve model IDs dynamically via the shared tier registry. For local tiers, an MoE code-gen model is also reused for lightweight and vision categories when applicable. Cloud profiles use registry-defined IDs. Temperatures follow Junie's recommendations.
 
