@@ -9,6 +9,7 @@
 | Ollama Cloud | GenericOpenAI | `OLLAMA_API_KEY` | `DOTFILES_USE_OLLAMA_CLOUD_PROXY` | Cloud-hosted Ollama models; routes through local daemon when proxy enabled and available |
 | openai | GenericOpenAI | `OPENAI_API_KEY` | — | OpenAI GPT models |
 | anthropic-meridian | GenericOpenAI | `MERIDIAN_API_KEY` | — | Meridian proxy for Anthropic models. Host/port configurable via `MERIDIAN_HOST`/`MERIDIAN_PORT` env vars (defaults: `127.0.0.1:3456`) |
+| *(local engines)* | GenericOpenAI | *(engine's `api_key_env`)* | — | Gate-active, reachable engines from `LOCAL_ENGINES` are appended by `configure-mozart-router.py` (registry-driven; e.g. `omlx` at `http://127.0.0.1:11427/v1` with `OMLX_API_KEY`). Deduped by base URL — a template gateway pointing at the same daemon takes precedence |
 
 Gateways support `baseUrlEnv` keys (resolved by `configure-mozart-router.py`, stripped from output). When the named env var is set, it overrides the hardcoded `baseUrl`.
 

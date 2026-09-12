@@ -21,6 +21,53 @@ from constants import check_ollama_daemon, get_ollama_local_base_url
 from cli_helpers import add_common_args
 
 
+def inject_local_engine_gateways(gateways):
+    """Append gate-active, reachable local engines as Mozart gateways.
+
+    Registry-driven (N-engine contract): no engine names appear here.
+    Dedupe by resolved base URL so template gateways that already point
+    at the same daemon (e.g. ollama-cloud proxied through the local
+    daemon) take precedence.
+    """
+    from local_engines import active_engines, local_endpoint_for, resolve_engine
+
+    for provider in active_engines():
+        if provider in gateways:
+            continue
+        engine = resolve_engine(provider)
+        health_check = engine.get("health_check") if engine else None
+        if health_check and not health_check()[0]:
+            logger.info(
+                f"Local engine '{provider}' unreachable; skipping Mozart gateway"
+            )
+            continue
+        endpoint = local_endpoint_for(provider, "openai")
+        if not endpoint:
+            continue
+        base_url, api_key_env = endpoint
+        if any(
+            str(gw_def.get("baseUrl", "")).rstrip("/") == base_url
+            for gw_def in gateways.values()
+            if isinstance(gw_def, dict)
+        ):
+            logger.info(
+                f"Skipping Mozart gateway '{provider}': {base_url} is already "
+                f"registered by another gateway"
+            )
+            continue
+        gateway = {
+            "adapter": "generic-openai",
+            "baseUrl": base_url,
+            "enabled": True,
+        }
+        if api_key_env and os.environ.get(api_key_env, "").strip():
+            gateway["apiKeyEnv"] = api_key_env
+        gateways[provider] = gateway
+        logger.info(
+            f"Registered local engine '{provider}' as Mozart gateway at {base_url}"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Configure Mozart AI router.")
     add_common_args(parser)
@@ -100,6 +147,10 @@ def main():
                             f"Ollama daemon not cloud-capable; '{gw_name}' "
                             f"uses direct cloud URL"
                         )
+
+        # N-engine contract: append gate-active, reachable local engines
+        # as gateways (registry-driven; deduped by base URL).
+        inject_local_engine_gateways(gateways)
 
         if args.dry_run:
             logger.info(f"Would write Mozart router config to {config_dst}")

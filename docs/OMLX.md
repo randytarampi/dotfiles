@@ -107,6 +107,7 @@ endpoint needs its own base URL.
 | ACP agents | `claude--local` and `codex--local` are pool-driven; the winning engine supplies the endpoint and a harmless local token is used without a key. |
 | Codex | Gated pool-driven local profile; the winning engine supplies the endpoint. Pin an app with the engine's own launcher. |
 | Voice | oMLX `audio_stt` is selected below explicit OpenAI STT tiers; `DOTFILES_USE_LOCAL_OMLX=false` opts out. TTS remains Piper and Pi voice is unchanged. |
+| Mozart router | Gate-active, reachable engines are appended as `generic-openai` gateways by `configure-mozart-router.py` (deduped by base URL; API key via the engine's `api_key_env`). With oMLX running, the deployed `mozart.json` carries an `omlx` gateway. |
 
 ## Caddy
 
