@@ -30,11 +30,11 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
 | **free** | OpenCode Zen + Google + OpenRouter | Free cross-provider workflow with cross-provider fallbacks |
-| **local-pro** | Local Ollama (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
-| **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
-| **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
-| **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
-| **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
+| **local-pro** | Local Ollama + oMLX under the gate (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
+| **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
+| **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
+| **local-nano** | Local Ollama + oMLX under the gate (single code-gen model + vision) | Single-model systems |
+| **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
@@ -296,7 +296,7 @@ Additional classification rules (applied after name heuristics):
 
 Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local, local-mini, local-nano, local-solo)
 
-Local Ollama models are appended to fallback chains by default. Use `--no-local-fallbacks` to omit them.
+Local Ollama and, when enabled, oMLX models form the multi-provider local pool; Ollama wins bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
 
 Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 

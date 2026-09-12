@@ -15,7 +15,7 @@ extensible, and configured from the shared OpenCode tier registry.
 
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
 orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle.
-Local models use the shared tier resolver; providers include Ollama, Ollama
+Local models use the shared tier resolver; providers include Ollama, oMLX, Ollama
 Cloud, Meridian, OpenAI, Google, OpenRouter, and OpenCode Zen. Provider models
 are emitted only when their API key is configured; missing providers are warned
 about and skipped. For cloud tiers, the fallback ACP agent's full

@@ -92,6 +92,7 @@ for the automated check.
 - Local variant calibration (2026-09-12): the five local tiers' uniform `max` variants were replaced with policy-conformant per-role variants (librarian/explorer/observer low, designer medium, fixer high, orchestrator medium, oracle/council max retained); Qwen3.8 reasoning stays enabled.
 - Voice LLM model refresh (fleet sweep): `configure-opencode-voice.py` plus-tier OpenAI voice LLM model gpt-5.4-mini → `gpt-5.6-luna` (mini retired 2026-08-31; OpenAI-directed replacement; STT remains `whisper-1`), with test expectation updated.
 - pro-plus-anthropic librarian fallback: removed `openai/gpt-5.4-mini` (retired 2026-08-31) — OpenAI's mapped replacement (`gpt-5.6-luna`) is already that role's primary, so the entry was redundant; `ollama-cloud/deepseek-v4-flash` fallback retained. Only remaining active slim-config `gpt-5.4-mini` references are the documented omo-slim-* observer chains.
+- oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.
 
 ## free preset (cross-provider free tier)
 

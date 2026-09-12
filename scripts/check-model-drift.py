@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -16,6 +17,9 @@ sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 import logger
 from model_stamp import is_stale
+from constants import check_omlx_daemon
+import omlx
+from omlx import list_omlx_models
 
 REPO_ROOT = SCRIPT_DIR.parent
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
@@ -98,7 +102,7 @@ def check_slim(data: dict) -> list[str]:
     violations = []
     allowlists = load_allowlists()
     for model in set(iter_models(data)):
-        if model.startswith("_local:") or model.startswith("ollama/"):
+        if model.startswith("_local:") or model.startswith(("ollama/", "omlx/")):
             continue
         if "/" not in model:
             continue
@@ -108,6 +112,76 @@ def check_slim(data: dict) -> list[str]:
         elif model_id not in allowlists[provider]:
             violations.append(f"{model} is not in the {provider} model allowlist")
     return violations
+
+
+def deployed_omlx_references() -> set[str]:
+    """Collect concrete oMLX model IDs from deployed consumer configs."""
+    paths = [
+        Path("~/.config/opencode/oh-my-opencode-slim.json").expanduser(),
+        Path("~/.pi/agent/models.json").expanduser(),
+        Path("~/.junie-local/model-groups.json").expanduser(),
+    ]
+    paths.extend(Path("~/.junie/models").expanduser().glob("*.json"))
+    references = set()
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            references.update(re.findall(r"omlx/([^\"\s,}\]]+)", text))
+            document = json.loads(text)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(document, dict):
+            continue
+        providers = document.get("providers", {})
+        if isinstance(providers, dict) and isinstance(providers.get("omlx"), dict):
+            for model in providers["omlx"].get("models", []):
+                if isinstance(model, dict) and model.get("id"):
+                    references.add(model["id"])
+        groups = document.get("groups", {})
+        if isinstance(groups, dict):
+            for group in groups.values():
+                if isinstance(group, dict) and group.get("provider") == "omlx":
+                    for key in ("primaryModel", "fasterModel"):
+                        if isinstance(group.get(key), str):
+                            references.add(group[key].split("/", 1)[-1])
+    return references
+
+
+def check_omlx_models() -> list[str]:
+    """Check referenced oMLX models when the opt-in daemon is available."""
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
+        return []
+    references = deployed_omlx_references()
+    if not references:
+        return []
+    reachable, info = check_omlx_daemon()
+    if not reachable:
+        logger.warning(
+            "Could not reach oMLX daemon — skipping live model drift (%s)", info
+        )
+        return []
+    live_models_list = list_omlx_models()
+    if live_models_list:
+        live_models = {model["name"] for model in live_models_list}
+    else:
+        try:
+            payload = omlx._get_json("/v1/models")
+            live_models = {
+                str(model["id"])
+                for model in payload.get("data", [])
+                if isinstance(model, dict) and model.get("id")
+            }
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch authoritative oMLX catalogue — skipping (%s)", exc
+            )
+            return []
+    return [
+        f"oMLX model {model} is not present in the live /v1/models catalog"
+        for model in sorted(references - live_models)
+    ]
 
 
 def profile_models(path: Path) -> list[tuple[str, set[str], str]] | None:
@@ -199,6 +273,7 @@ def main() -> int:
         data = json.loads(SLIM_PATH.read_text(encoding="utf-8"))
         violations = check_slim(data)
         results["violations"].extend(violations)
+        results["violations"].extend(check_omlx_models())
         # Local placeholders are intentionally not self-validated against the
         # same live set; deployed Junie profile checks validate concrete IDs.
     except (OSError, json.JSONDecodeError) as exc:

@@ -226,10 +226,14 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | Global MongoDB skills category | 0 |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | Global Prisma skills category | 0 |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | Ollama daemon env config | 0 |
+| `DOTFILES_RUN_OMLX_SETUP` | oMLX service, settings, and provider wiring (macOS Apple Silicon only) | 0 |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
 | `DO_NOT_TRACK` | Global telemetry opt-out | 1 |
+
+See [docs/OMLX.md](docs/OMLX.md) for oMLX installation, settings, provider
+integration, model management, and platform-gating details.
 
 ## Structure
 
@@ -480,6 +484,7 @@ Packages available on both platforms by category:
 | Session Manager | `session-manager-plugin` | `Amazon.SessionManagerPlugin` |
 | Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
 | Ollama | `ollama-app` (cask) | `Ollama.Ollama` |
+| oMLX | `jundot/omlx/omlx` (Apple Silicon/macOS only) | — |
 | OpenCode | `opencode-desktop` (cask) / `anomalyco/tap/opencode` | `SST.OpenCodeDesktop` / `SST.opencode` |
 | Codex | `codex` (cask) | `OpenAI.Codex` |
 | VS Code | `visual-studio-code` (cask) | `Microsoft.VisualStudioCode` |

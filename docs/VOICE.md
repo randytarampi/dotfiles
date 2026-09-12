@@ -21,11 +21,11 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
-| **local-pro** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-mini** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-nano** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
+| **local-pro** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
+| **local** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
+| **local-mini** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
+| **local-nano** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
+| **local-solo** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
@@ -42,6 +42,11 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 **Cloud STT upgrade**: When `OPENAI_API_KEY` is available, non-OpenAI tiers add `sttEndpoint`/`sttModel`/`sttApiKeyEnv` pointing to OpenAI's `/v1/audio/transcriptions`. Tiers already using OpenAI for the LLM use OpenAI STT by default.
 
 **Local Ollama model selection**: All `local-*` tiers reuse the shared tier registry (`scripts/lib/tier_registry.py`) model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models). Cloud tiers respect `DOTFILES_USE_LOCAL_OLLAMA` (default: true) to control whether local models replace the cloud LLM endpoint.
+
+When enabled and reachable, the shared local pool may select an oMLX LLM or
+`audio_stt` model. This changes the voice normalization LLM endpoint and the
+STT backend; TTS remains Piper, and
+`DOTFILES_USE_LOCAL_OMLX=false` opts out of the oMLX STT path.
 
 The `free` tier is explicitly excluded from Ollama Cloud fallback handling; it
 does not require `OLLAMA_API_KEY` or a local Ollama daemon for voice.

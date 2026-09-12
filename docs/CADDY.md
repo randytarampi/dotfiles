@@ -125,6 +125,7 @@ manually if you prefer to manage Keychain trust yourself.
 | Service | Path | Upstream | Notes |
 |---------|------|----------|-------|
 | Ollama | `/ollama/*` | `http://127.0.0.1:11434` | Read-only proxy; write endpoints are blocked. |
+| oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative and write endpoints are blocked. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
 | OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; Caddy `basic_auth` is the only external auth layer. |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |

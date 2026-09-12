@@ -49,7 +49,7 @@ When the librarian model uses a different provider than the orchestrator, add a 
 
 ## Local Tier Placeholders
 
-Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py` through `scripts/lib/tier_registry.py`:
+Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py` through `scripts/lib/tier_registry.py`. oMLX provider metadata is preserved through the wrapper's JSON model argument; oMLX groups use an OpenAI-compatible endpoint and `omlx/<model>` references.
 
 | Placeholder | Resolves to | Junie usage |
 |-------------|-------------|-------------|

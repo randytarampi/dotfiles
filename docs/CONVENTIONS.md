@@ -59,7 +59,7 @@ Environment variables have three ownership tiers:
 | Owner | Examples |
 | --- | --- |
 | `DOTFILES_*` (repo-owned) | `DOTFILES_RUN_OPENCODE_SETUP`, `DOTFILES_PROJECT_PRESET` |
-| Upstream-native | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID`, `OLLAMA_HOST` |
+| Upstream-native | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID`, `OLLAMA_HOST`, `OMLX_HOST` |
 | `DOTFILES_<TOOL>_*` (adapter layer) | Tool-specific configuration wrapping an upstream concept |
 
 There is one canonical name per concept. Deprecated aliases are migrated

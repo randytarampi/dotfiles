@@ -1,0 +1,138 @@
+# oMLX Integration
+
+oMLX is an Apple-Silicon MLX model server for macOS. It exposes OpenAI-compatible
+and Anthropic-compatible APIs, including `/v1/chat/completions`, `/v1/responses`,
+`/v1/messages`, embeddings, reranking, and audio endpoints. It is **not** an
+Ollama-wire-compatible server: it has no `/api/*` routes and no `pull` CLI.
+Models are MLX-converted safetensors directories under `~/.omlx/models`, managed
+through the Hugging Face admin UI.
+
+## Platform and gate
+
+The local oMLX service is supported on macOS 15 or newer with Apple Silicon only;
+script 29 skips other platforms. The Homebrew formula builds from source and is
+declared unconditionally in `Brewfile.dev`, alongside other development tools.
+The gate controls settings/service setup and consumer/provider generation. A
+configured remote oMLX endpoint may be consumed on other platforms when gated;
+that is an intentional, platform-agnostic remote-server path.
+
+The integration gate is:
+
+```sh
+DOTFILES_RUN_OMLX_SETUP=1
+```
+
+The default is `0`. With the gate off there are no oMLX providers, routes,
+discovery results, or generated consumer entries; installation itself remains
+managed by the unconditional Brewfile entry.
+
+## Installation and service
+
+The formula is declared in `Brewfile.dev`:
+
+```ruby
+tap "jundot/omlx", "https://github.com/jundot/omlx"
+brew "jundot/omlx/omlx"
+```
+
+`run_onchange_29-configure-omlx.sh.tmpl` writes and merges
+`~/.omlx/settings.json`, then starts the service with `brew services`. The
+persisted settings use the nested oMLX schema:
+`server`, `model`, `memory`, `scheduler`, `cache`, `auth`, and `huggingface`.
+The Homebrew service plist does not inherit `~/.env`, so API authentication is
+persisted as `auth.api_key` when configured. The settings file and backups use
+0600 permissions.
+
+```sh
+make omlx-restart
+make services-restart
+```
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DOTFILES_RUN_OMLX_SETUP` | `0` | Enable oMLX installation wiring, service, and consumers. |
+| `OMLX_HOST` | `127.0.0.1` | Bind host for the server. |
+| `OMLX_PORT` | `8000` | Bind port for the server. |
+| `OMLX_BASE_URL` | — | Endpoint override; origin only, without `/v1`. |
+| `OMLX_MODEL_DIR` | `$HOME/.omlx/models` | MLX model directory. |
+| `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. |
+| `OMLX_SSD_CACHE_DIR` | `$HOME/.omlx/cache` | Persistent SSD KV-cache directory. |
+| `OMLX_MAX_CONCURRENT_REQUESTS` | `8` | Scheduler concurrency. |
+| `OMLX_API_KEY` | — | Optional Bearer/API key; persisted as `auth.api_key` when set. |
+| `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
+| `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
+
+`OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
+origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
+
+## Provider integration
+
+| Tool | oMLX integration |
+|------|------------------|
+| OpenCode | Gated, reachable provider for all tier classes; uses `omlx/<id>` references. |
+| Tier resolution | Merged `_local` pool; Ollama wins bare-name collisions. |
+| Junie | Local groups preserve provider metadata through the wrapper JSON boundary and use an OpenAI-compatible endpoint. |
+| Pi | oMLX provider alongside Ollama; native `max_model_len` context is used. |
+| ACP agents | `claude--omlx` uses Anthropic `/v1/messages`; `codex--omlx` uses OpenAI `/v1`; a harmless local token is used without a key. |
+| Codex | Gated provider/profile; `DOTFILES_OMLX_CODEX_MODEL` overrides model selection. |
+| Voice | oMLX `audio_stt` is selected below explicit OpenAI STT tiers; `DOTFILES_USE_LOCAL_OMLX=false` opts out. TTS remains Piper and Pi voice is unchanged. |
+
+## Caddy
+
+When enabled, `/omlx/*` is a read-only reverse proxy to the local oMLX service.
+Administrative and mutating endpoints are blocked. The route is gated by
+`DOTFILES_RUN_OMLX_SETUP=1`.
+
+## Capability mapping
+
+| oMLX metadata | Repository capability |
+|---------------|-----------------------|
+| `model_type=llm` or `vlm` | `completion` and optimistic `tools` |
+| `thinking_default` or `enable_thinking` | `thinking` |
+| `model_type=vlm` | `vision` |
+| `model_type=audio_stt/audio_tts/audio_sts` | `audio` |
+| `embedding`, `reranker`, or unknown type | Fail-closed: excluded from chat role pools |
+| Missing `is_moe` metadata | Unknown-safe density ranking; never assumed MoE. |
+
+Tool support is optimistic for language and vision models because their served
+API is tool-capable; this has a documented false-positive risk when upstream
+metadata does not expose an override field.
+
+## oMLX and Ollama parity
+
+| Capability | oMLX | Ollama |
+|------------|------|--------|
+| SSD-persistent KV cache | Yes | Not this integration's default |
+| Continuous batching | Yes | Yes |
+| Anthropic API | Yes | No direct `/v1/messages` surface |
+| Audio endpoints | Yes | Not assumed by this integration |
+| Admin UI | Yes | No equivalent used here |
+| Pull CLI | No; use HF/admin management | Yes |
+| `/api/*` routes | No | Yes |
+| GGUF ecosystem / Modelfile | No | Yes |
+| Windows and Linux | No | Yes |
+
+## Model management
+
+Keep oMLX and Ollama model sets **disjoint**. Both services can coexist under
+the oMLX gate, but duplicating large models increases memory contention on a
+128 GB workstation. oMLX models are MLX safetensors directories, not GGUF files:
+
+```text
+~/.omlx/models/<model>/config.json
+~/.omlx/models/<model>/*.safetensors
+```
+
+Download and manage models through the admin UI at
+`http://<OMLX_HOST>:<OMLX_PORT>/admin` or the supported Hugging Face workflow.
+The repository does not pull models or manage model directories.
+
+## Not managed
+
+- The oMLX menu-bar app and native app lifecycle.
+- Cluster or multi-Mac mode (experimental).
+- Custom Metal kernels, which require full Xcode tooling.
+- `omlx launch <tool>` integrations; repository configure scripts supersede them.
+- The embeddings API: it is documented and exposed, but has no repository consumer today.
