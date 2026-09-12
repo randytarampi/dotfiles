@@ -420,7 +420,7 @@ The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI mod
 | `gpt-5.6-sol` | Flagship | Primary oracle and deep reasoning model. Replaces gpt-5.5 (flagship) for oracle, council, and complex analysis. |
 | `gpt-5.6-luna` | Lightweight | Primary lightweight model for librarian, explorer, and fixer roles. Replaces gpt-5.4-mini and gpt-5.4-nano. |
 
-**Fallback chain**: When gpt-5.6 models are unavailable, `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; remaining chain entries (e.g. `gpt-5.5`, Anthropic models in `plus-anthropic`) follow each role's definition in `oh-my-opencode-slim.json`. The `plus` librarian/explorer/observer `gpt-5.4-mini` entries were removed because OpenAI's mapped replacement (`gpt-5.6-luna`) is already those roles' primary; `gpt-5.4-mini` remains in the `omo-slim-*` observer chains.
+**Fallback chain**: When gpt-5.6 models are unavailable, `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; remaining chain entries (e.g. `gpt-5.5`, Anthropic models in `plus-anthropic`) follow each role's definition in `oh-my-opencode-slim.json`. The `plus` librarian/explorer/observer and `pro-plus-anthropic` librarian `gpt-5.4-mini` entries were removed because OpenAI's mapped replacement (`gpt-5.6-luna`) is already those roles' primary; `gpt-5.4-mini` remains in the `omo-slim-*` observer chains.
 
 gpt-5.4 and gpt-5.4-mini were retired from Codex with ChatGPT sign-in on 2026-08-31 (OpenAI-directed replacement: gpt-5.4→gpt-5.6-terra, gpt-5.4-mini→gpt-5.6-luna). OpenAI API-key authentication is unaffected; `gpt-5.6` is an alias for `gpt-5.6-sol`.
 
@@ -524,5 +524,5 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `glm-5.1` | standard | — | Catalogue-only addition; agentic-engineering family sibling of glm-5.2/5.3 |
 | `nemotron-3-super` | standard | — | 120B total/12B active MoE; catalogue-only addition |
 | `gpt-5.4` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; plus council γ re-anchored to gpt-5.6-terra per OpenAI guidance; API-key use unaffected |
-| `gpt-5.4-mini` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; removed from plus librarian/explorer/observer chains (OpenAI's mapped replacement gpt-5.6-luna is already those roles' primary); remains in omo-slim-* observer chains; API-key use unaffected |
+| `gpt-5.4-mini` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; removed from plus librarian/explorer/observer chains and pro-plus-anthropic librarian fallback (OpenAI's mapped replacement gpt-5.6-luna is already those roles' primary); remains in omo-slim-* observer chains; API-key use unaffected |
 | `gpt-5.4-nano` | standard | `high` | Legacy nano; now a degraded fallback when gpt-5.6-luna is unavailable |

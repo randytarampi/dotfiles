@@ -182,7 +182,7 @@ def get_voice_config(
         # OpenAI or Ollama Cloud + OpenAI STT
         voice_config = {
             "endpoint": get_provider_base_url("openai"),
-            "model": "gpt-5.4-mini",
+            "model": "gpt-5.6-luna",
             "apiKeyEnv": "OPENAI_API_KEY",
         }
 

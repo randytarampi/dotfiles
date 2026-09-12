@@ -1036,7 +1036,6 @@
           "ollama-cloud/kimi-k3"
         ],
         "librarian": [
-          "openai/gpt-5.4-mini",
           "ollama-cloud/deepseek-v4-flash"
         ],
         "explorer": [

@@ -93,7 +93,7 @@ class TierRegistryTests(unittest.TestCase):
                 expected_model = (
                     "muse-spark-1.2-contributor-free"
                     if tier == "omo-slim-opencode-zen-free"
-                    else "gpt-5.4-mini"
+                    else "gpt-5.6-luna"
                 )
                 self.assertEqual(config["model"], expected_model)
 
