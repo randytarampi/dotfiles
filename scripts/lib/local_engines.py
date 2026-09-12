@@ -265,82 +265,105 @@ def local_caddy_target(provider):
 
 
 def merge_omlx_settings(existing, environ=None):
-    """Merge the managed oMLX settings schema, including cache controls."""
+    """Merge the managed oMLX settings schema, including cache controls.
+
+    Managed keys override the on-disk file only when their environment
+    variable is set; unset env preserves the file value (admin-UI tuning
+    such as port or cache sizes wins), falling back to upstream defaults
+    only on first run when the file has no value yet.
+    """
     environ = environ or os.environ
     import copy
 
+    def _env(env_name):
+        value = environ.get(env_name)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def _bool(value):
+        return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+    def _bool_strict(value):
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _int(value):
+        return int(str(value).strip())
+
     settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}
-    server = settings.setdefault("server", {})
-    if not isinstance(server, dict):
-        server = {}
-        settings["server"] = server
-    server.update(
-        {
-            "host": environ.get("OMLX_HOST", "127.0.0.1"),
-            "port": int(environ.get("OMLX_PORT", "8000")),
-            "log_level": environ.get("OMLX_LOG_LEVEL", "info"),
-        }
-    )
-    model = settings.setdefault("model", {})
-    if not isinstance(model, dict):
-        model = {}
-        settings["model"] = model
-    model["model_dirs"] = [
-        os.path.expanduser(environ.get("OMLX_MODEL_DIR", "~/.omlx/models"))
-    ]
-    memory = settings.setdefault("memory", {})
-    if not isinstance(memory, dict):
-        memory = {}
-        settings["memory"] = memory
-    guard = environ.get("OMLX_MEMORY_GUARD", "balanced")
-    if guard == "off":
-        memory.pop("memory_guard_tier", None)
-        memory["prefill_memory_guard"] = False
-    else:
-        memory["memory_guard_tier"] = guard
+
+    def _section(name):
+        section = settings.setdefault(name, {})
+        if not isinstance(section, dict):
+            section = {}
+            settings[name] = section
+        return section
+
+    def _override(section, key, env_name, cast, default):
+        """Env-set → cast and write; unset → keep existing, else default."""
+        raw = _env(env_name)
+        if raw:
+            section[key] = cast(raw)
+        elif key not in section:
+            section[key] = cast(default)
+
+    server = _section("server")
+    _override(server, "host", "OMLX_HOST", str, "127.0.0.1")
+    _override(server, "port", "OMLX_PORT", _int, "8000")
+    _override(server, "log_level", "OMLX_LOG_LEVEL", str, "info")
+
+    model = _section("model")
+    model_dir_env = _env("OMLX_MODEL_DIR")
+    if model_dir_env:
+        model["model_dirs"] = [os.path.expanduser(model_dir_env)]
+    elif "model_dirs" not in model:
+        model["model_dirs"] = [os.path.expanduser("~/.omlx/models")]
+
+    memory = _section("memory")
+    guard = _env("OMLX_MEMORY_GUARD")
+    if guard:
+        if guard == "off":
+            memory.pop("memory_guard_tier", None)
+            memory["prefill_memory_guard"] = False
+        else:
+            memory["memory_guard_tier"] = guard
+            memory["prefill_memory_guard"] = True
+    elif "memory_guard_tier" not in memory:
+        # Fresh file without admin-UI tuning: upstream default tier.
+        memory["memory_guard_tier"] = "balanced"
         memory["prefill_memory_guard"] = True
-    scheduler = settings.setdefault("scheduler", {})
-    if not isinstance(scheduler, dict):
-        scheduler = {}
-        settings["scheduler"] = scheduler
-    scheduler["max_concurrent_requests"] = int(
-        environ.get("OMLX_MAX_CONCURRENT_REQUESTS", "8")
+    # Env unset + existing tier → preserve both values as-is.
+
+    scheduler = _section("scheduler")
+    _override(
+        scheduler, "max_concurrent_requests", "OMLX_MAX_CONCURRENT_REQUESTS", _int, "8"
     )
-    cache = settings.setdefault("cache", {})
-    if not isinstance(cache, dict):
-        cache = {}
-        settings["cache"] = cache
-    cache.update(
-        {
-            "enabled": environ.get("OMLX_CACHE_ENABLED", "true").lower()
-            not in {"0", "false", "no", "off"},
-            "ssd_cache_dir": os.path.expanduser(
-                environ.get("OMLX_SSD_CACHE_DIR", "~/.omlx/cache")
-            ),
-            "ssd_cache_max_size": environ.get("OMLX_SSD_CACHE_MAX_SIZE", "auto"),
-            "hot_cache_max_size": environ.get("OMLX_HOT_CACHE_MAX_SIZE", "0"),
-            "hot_cache_write_through": environ.get(
-                "OMLX_HOT_CACHE_WRITE_THROUGH", "false"
-            ).lower()
-            in {"1", "true", "yes", "on"},
-            "initial_cache_blocks": int(
-                environ.get("OMLX_INITIAL_CACHE_BLOCKS", "256")
-            ),
-        }
+
+    cache = _section("cache")
+    _override(cache, "enabled", "OMLX_CACHE_ENABLED", _bool, "true")
+    _override(
+        cache,
+        "ssd_cache_dir",
+        "OMLX_SSD_CACHE_DIR",
+        os.path.expanduser,
+        "~/.omlx/cache",
     )
+    _override(cache, "ssd_cache_max_size", "OMLX_SSD_CACHE_MAX_SIZE", str, "auto")
+    _override(cache, "hot_cache_max_size", "OMLX_HOT_CACHE_MAX_SIZE", str, "0")
+    _override(
+        cache,
+        "hot_cache_write_through",
+        "OMLX_HOT_CACHE_WRITE_THROUGH",
+        _bool_strict,
+        "false",
+    )
+    _override(cache, "initial_cache_blocks", "OMLX_INITIAL_CACHE_BLOCKS", _int, "256")
+
     for section_name, key, env_name in (
         ("auth", "api_key", "OMLX_API_KEY"),
         ("huggingface", "endpoint", "OMLX_HF_ENDPOINT"),
     ):
-        value = environ.get(env_name, "").strip()
-        section = settings.get(section_name)
+        value = _env(env_name)
         if value:
-            if not isinstance(section, dict):
-                section = {}
-                settings[section_name] = section
-            section[key] = value
-        elif isinstance(section, dict):
-            section.pop(key, None)
-            if not section:
-                settings.pop(section_name, None)
+            _section(section_name)[key] = value
+        # Env unset → preserve the on-disk value (admin-UI-managed).
+
     return settings

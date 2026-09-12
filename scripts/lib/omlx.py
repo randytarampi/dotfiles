@@ -130,7 +130,10 @@ def list_omlx_models():
                     "size_gb": 0.0,
                     "provider": "omlx",
                     "model_type": merged.get("model_type") or model_type,
-                    "capabilities": map_omlx_capabilities(merged),
+                    # Sorted list (not set): model dicts cross process
+                    # boundaries as JSON (configure-jetbrains-ai.py wrapper)
+                    # and sets are not JSON-serializable.
+                    "capabilities": sorted(map_omlx_capabilities(merged)),
                     "primary_category": effective_type,
                     "is_moe": merged.get("is_moe", merged.get("is_moe_model")),
                     "object": merged.get("object"),
