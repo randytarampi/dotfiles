@@ -189,3 +189,6 @@ npm "@google/gemini-cli"
 # Pi terminal coding agent + ACP bridge
 npm "@earendil-works/pi-coding-agent"
 npm "pi-acp"
+
+tap "jundot/omlx", "https://github.com/jundot/omlx"
+brew "jundot/omlx/omlx"

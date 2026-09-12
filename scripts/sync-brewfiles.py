@@ -183,6 +183,7 @@ DEV_FORMULA_EXACT = {
     "nnn",
     "nss",
     "numpy",
+    "omlx",
     "opencv",
     "openrtsp",
     "parallel",

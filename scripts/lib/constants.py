@@ -29,6 +29,9 @@ MERIDIAN_DEFAULT_HOST = "127.0.0.1"
 MERIDIAN_DEFAULT_PORT = "3456"
 OLLAMA_HOST_ENV = "OLLAMA_HOST"
 OLLAMA_CLOUD_PROXY_ENV = "DOTFILES_USE_OLLAMA_CLOUD_PROXY"
+OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
+OMLX_HOST_ENV = "OMLX_HOST"
+OMLX_PORT_ENV = "OMLX_PORT"
 
 # ── Provider base URLs ──────────────────────────────────────────────────
 # Single source of truth for all configure scripts.
@@ -87,6 +90,19 @@ def get_ollama_local_base_url():
     return f"http://{host}:{port}/v1"
 
 
+def get_omlx_base_url():
+    """Build the local oMLX base URL from env vars with defaults."""
+    import os
+
+    override = os.environ.get(OMLX_BASE_URL_ENV, "").strip()
+    if override:
+        return override.rstrip("/")
+
+    host = os.environ.get(OMLX_HOST_ENV, "127.0.0.1")
+    port = os.environ.get(OMLX_PORT_ENV, "8000")
+    return f"http://{host}:{port}"
+
+
 def get_provider_base_url(provider):
     """Return the base URL for a provider, respecting env var overrides.
 
@@ -122,6 +138,30 @@ def is_meridian_configured():
         os.environ.get("MERIDIAN_API_KEY", "").strip()
         or os.environ.get("ANTHROPIC_BASE_URL", "").strip()
     )
+
+
+def is_omlx_configured():
+    """Return whether an oMLX endpoint override has been configured."""
+    import os
+
+    return bool(
+        os.environ.get(OMLX_BASE_URL_ENV, "").strip()
+        or os.environ.get(OMLX_HOST_ENV, "").strip()
+        or os.environ.get(OMLX_PORT_ENV, "").strip()
+    )
+
+
+def check_omlx_daemon():
+    """Check whether the local oMLX health endpoint is reachable."""
+    try:
+        import urllib.request
+
+        request = urllib.request.Request(f"{get_omlx_base_url()}/health", method="GET")
+        with urllib.request.urlopen(request, timeout=3) as response:
+            return (True, f"HTTP {response.status}")
+    except Exception as err:
+        _log.info("oMLX daemon check failed: %s", err)
+        return (False, str(err))
 
 
 def should_use_ollama_cloud_proxy():

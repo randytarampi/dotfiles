@@ -12,6 +12,10 @@ import subprocess
 import shutil
 import re
 
+import logger
+from constants import check_omlx_daemon, is_omlx_configured
+from omlx import list_omlx_models
+
 
 def find_ollama() -> str:
     ollama_path = shutil.which("ollama")
@@ -53,32 +57,57 @@ def is_ollama_cloud_model(name: str) -> bool:
 
 
 def list_local_ollama_models(include_cloud=False) -> list:
+    """List Ollama models and reachable oMLX models as one local pool.
+
+    When names collide, the Ollama entry wins so existing local behaviour is
+    stable. oMLX discovery is additive and skipped when its daemon is down.
+    """
     ollama_bin = find_ollama()
-    if not ollama_bin:
-        return []
+    models = []
     try:
-        result = subprocess.run(
-            [ollama_bin, "list"], capture_output=True, text=True, timeout=5
-        )
-        lines = result.stdout.splitlines()
+        if ollama_bin:
+            result = subprocess.run(
+                [ollama_bin, "list"], capture_output=True, text=True, timeout=5
+            )
+            lines = result.stdout.splitlines()
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) >= 3:
+                    name = parts[0]
+                    if not include_cloud and is_ollama_cloud_model(name):
+                        continue
+                    models.append(
+                        {
+                            "name": name,
+                            "size_gb": parse_size_gb(" ".join(parts[2:4])),
+                        }
+                    )
+                elif parts:
+                    name = parts[0]
+                    if not include_cloud and is_ollama_cloud_model(name):
+                        continue
+                    models.append({"name": name, "size_gb": 0.0})
+    except Exception:
         models = []
-        for line in lines[1:]:
-            parts = line.split()
-            if len(parts) >= 3:
-                name = parts[0]
-                if not include_cloud and is_ollama_cloud_model(name):
-                    continue
-                models.append(
-                    {"name": name, "size_gb": parse_size_gb(" ".join(parts[2:4]))}
-                )
-            elif parts:
-                name = parts[0]
-                if not include_cloud and is_ollama_cloud_model(name):
-                    continue
-                models.append({"name": name, "size_gb": 0.0})
+
+    try:
+        for model in models:
+            model["provider"] = "ollama"
+        if is_omlx_configured() or os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+            reachable, _ = check_omlx_daemon()
+            if reachable:
+                ollama_names = {model["name"] for model in models}
+                for model in list_omlx_models():
+                    if model["name"] in ollama_names:
+                        logger.info(
+                            f"oMLX model collision for {model['name']}; keeping Ollama entry"
+                        )
+                    else:
+                        models.append(model)
         return models
     except Exception:
-        return []
+        logger.info("oMLX discovery merge failed; keeping Ollama model pool")
+        return models
 
 
 def list_cloud_ollama_models() -> list:

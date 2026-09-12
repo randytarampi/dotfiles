@@ -12,6 +12,7 @@ Exit codes:
 import os
 import sys
 import json
+import platform
 import re
 import shutil
 import subprocess
@@ -155,6 +156,11 @@ CHECKS = [
         [
             HOME / "Library/LaunchAgents/com.dotfiles.ollama-env.plist",
         ],
+    ),
+    (
+        "DOTFILES_RUN_OMLX_SETUP",
+        "oMLX settings",
+        [HOME / ".omlx/settings.json"],
     ),
 ]
 
@@ -316,9 +322,23 @@ def main():
             print(f"  \u2298 {description} (non-macOS, skipped)")
             continue
 
+        if gate == "DOTFILES_RUN_OMLX_SETUP" and (
+            sys.platform != "darwin" or platform.machine() != "arm64"
+        ):
+            # oMLX is Apple-Silicon/macOS only (mirrors script 29's check).
+            print(f"  \u2298 {description} (unsupported platform for oMLX, skipped)")
+            continue
+
         all_exist = True
         for path in paths:
             if path.exists():
+                if gate == "DOTFILES_RUN_OMLX_SETUP":
+                    try:
+                        json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        print(f"  \u2717 {description}: INVALID JSON {path}")
+                        all_exist = False
+                        continue
                 print(f"  \u2713 {description}: {path}")
             else:
                 print(f"  \u2717 {description}: MISSING {path}")

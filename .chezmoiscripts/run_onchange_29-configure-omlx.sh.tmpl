@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# .chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl: {{ include ".chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl" | sha256sum }}
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+load_env || warn "$HOME/.env not found, skipping env load"
+
+if [[ "${DOTFILES_RUN_OMLX_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OMLX_SETUP='${DOTFILES_RUN_OMLX_SETUP:-0}' — skipping oMLX setup"
+  exit 0
+fi
+
+if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
+  info "oMLX is Apple-Silicon/macOS only — skipping"
+  exit 0
+fi
+
+OMLX_DIR="$HOME/.omlx"
+SETTINGS_PATH="$OMLX_DIR/settings.json"
+mkdir -p "$OMLX_DIR"
+
+export OMLX_SETTINGS_PATH="$SETTINGS_PATH"
+PYTHONPATH="$LIB_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+import json
+import os
+import tempfile
+from pathlib import Path
+
+from omlx import merge_omlx_settings
+
+path = Path(os.environ["OMLX_SETTINGS_PATH"])
+try:
+    existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+except (OSError, json.JSONDecodeError):
+    existing = {}
+rendered = json.dumps(merge_omlx_settings(existing), indent=2) + "\n"
+current = path.read_text(encoding="utf-8") if path.exists() else None
+if current != rendered:
+    if current is not None:
+        bak = path.with_suffix(path.suffix + ".bak")
+        bak.write_text(current, encoding="utf-8")
+        bak.chmod(0o600)
+    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=".settings.", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(rendered)
+    os.chmod(temp_name, 0o600)
+    os.replace(temp_name, path)
+# auth.api_key may be persisted; enforce 0600 even when nothing changed.
+path.chmod(0o600)
+PY
+ok "oMLX settings written to $SETTINGS_PATH"
+# The Homebrew service plist does not inherit ~/.env; persisted settings are authoritative.
+
+if ! command -v brew >/dev/null 2>&1; then
+  warn "Homebrew not found — cannot manage oMLX service"
+elif brew services info omlx 2>/dev/null | grep -Eqi 'running: (false|none)|not started'; then
+  brew services start omlx
+  ok "oMLX service started"
+else
+  info "oMLX service already running or unavailable — leaving lifecycle unchanged"
+fi
+
+ok "oMLX setup complete"

@@ -18,6 +18,7 @@ import subprocess
 
 import logger
 from discover_models import find_ollama, list_local_ollama_models
+from omlx import get_omlx_model_status, map_omlx_capabilities
 
 
 def extract_param_count(model_name: str) -> int:
@@ -39,7 +40,7 @@ def extract_param_count(model_name: str) -> int:
         return int(size)
 
 
-def get_model_details(model_name: str) -> dict:
+def get_model_details(model_name: str, provider: str = "ollama") -> dict:
     """Run ollama show <model> and parse parameters, capabilities, and architecture metadata.
 
     Returns a dict with keys:
@@ -54,6 +55,25 @@ def get_model_details(model_name: str) -> dict:
     Returns defaults (param_count=None, capabilities=[], others None/False)
     if ollama show fails or no parameters found.
     """
+    if provider == "omlx" or model_name.startswith("omlx/"):
+        bare_name = model_name.split("/", 1)[-1]
+        status = get_omlx_model_status(bare_name)
+        model_type = status.get("model_type", "llm")
+        context_length = status.get("max_context_window") or status.get("max_model_len")
+        is_moe = status.get("is_moe")
+        if is_moe is None:
+            is_moe = status.get("is_moe_model")
+        return {
+            "param_count": extract_param_count(bare_name) or None,
+            "capabilities": list(map_omlx_capabilities(status)),
+            "architecture": None,
+            "embedding_length": None,
+            "context_length": context_length,
+            "quantization": None,
+            "is_moe": is_moe,
+            "model_type": model_type,
+        }
+
     ollama_bin = find_ollama()
     if not ollama_bin:
         return {
@@ -228,29 +248,50 @@ def resolve_roles_from_list(
     }
     model_details_cache = {}
 
-    def get_cached_model_details(model_name: str) -> dict:
-        if model_name not in model_details_cache:
-            model_details_cache[model_name] = get_model_details(model_name)
-        return model_details_cache[model_name]
+    def get_cached_model_details(model_name: str, provider: str = "ollama") -> dict:
+        cache_key = (provider, model_name)
+        if cache_key not in model_details_cache:
+            if provider == "omlx":
+                model_details_cache[cache_key] = get_model_details(model_name, provider)
+            else:
+                model_details_cache[cache_key] = get_model_details(model_name)
+        return model_details_cache[cache_key]
 
     for model in models:
         if isinstance(model, dict):
             model_name = model.get("name", "")
             size_gb = float(model.get("size_gb", 0.0) or 0.0)
+            provider = model.get("provider", "ollama")
         else:
             model_name = str(model)
             size_gb = 0.0
+            provider = "ollama"
 
         if not model_name:
             continue
 
+        if isinstance(model, dict) and model.get("model_type") in {
+            "embedding",
+            "reranker",
+            "unknown",
+        }:
+            continue
+
+        if isinstance(model, dict) and (
+            model.get("model_type") in {"audio_stt", "audio_tts", "audio_sts"}
+            or "audio" in model.get("capabilities", [])
+        ):
+            category = "audio"
+        else:
+            category = None
+
         name_lower = model_name.lower()
-        if any(
+        if category is None and any(
             p in name_lower
             for p in ["r1", "reasoning", "deep-think", "think", "qwq", "reflection"]
         ):
             category = "reasoning"
-        elif any(
+        elif category is None and any(
             p in name_lower
             for p in [
                 "coder",
@@ -264,16 +305,18 @@ def resolve_roles_from_list(
         ):
             category = "code-gen"
             classified["_name_qualified_code_gen"].append(
-                {"name": model_name, "size_gb": size_gb}
+                {"name": model_name, "size_gb": size_gb, "provider": provider}
             )
-        elif any(p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]):
+        elif category is None and any(
+            p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]
+        ):
             category = "lightweight"
-        else:
+        elif category is None:
             # Prefer parameter count from `ollama show` over disk size — disk size
             # varies by quantization (q8_0 vs q4_K_M) and doesn't reflect the
             # model's intrinsic capability class. Fall back to disk size only
             # when ollama show is unavailable.
-            details = get_cached_model_details(model_name)
+            details = get_cached_model_details(model_name, provider)
             param_count = details.get("param_count")
             if param_count is not None:
                 category = "lightweight" if param_count <= 12 else "all"
@@ -281,7 +324,12 @@ def resolve_roles_from_list(
                 category = "lightweight" if size_gb <= 12 else "all"
 
         classified[category].append(
-            {"name": model_name, "size_gb": size_gb, "primary_category": category}
+            {
+                "name": model_name,
+                "size_gb": size_gb,
+                "primary_category": category,
+                "provider": provider,
+            }
         )
 
     # Cross-category promotion: add capability-qualified code-gen models to
@@ -297,7 +345,9 @@ def resolve_roles_from_list(
     for model in classified["code-gen"]:
         if model["name"] in existing_reasoning_names:
             continue
-        details = get_cached_model_details(model["name"])
+        details = get_cached_model_details(
+            model["name"], model.get("provider", "ollama")
+        )
         caps = set(details.get("capabilities", []))
         if {"thinking", "tools"}.issubset(caps):
             classified["reasoning"].append(
@@ -305,6 +355,7 @@ def resolve_roles_from_list(
                     "name": model["name"],
                     "size_gb": model.get("size_gb", 0.0),
                     "primary_category": "code-gen",
+                    "provider": model.get("provider", "ollama"),
                 }
             )
             existing_reasoning_names.add(model["name"])
@@ -318,7 +369,9 @@ def resolve_roles_from_list(
         )
         large_models = []
         for model in remaining_sorted:
-            details = get_cached_model_details(model["name"])
+            details = get_cached_model_details(
+                model["name"], model.get("provider", "ollama")
+            )
             param_count = details.get("param_count")
             if param_count is None:
                 large_models.append(model)
@@ -352,7 +405,9 @@ def resolve_roles_from_list(
     for cat in ["reasoning", "code-gen", "lightweight", "vision", "audio"]:
         # Enrich models without name-tag param counts via ollama show
         for model in classified[cat]:
-            details = get_cached_model_details(model["name"])
+            details = get_cached_model_details(
+                model["name"], model.get("provider", "ollama")
+            )
             param_count = details.get("param_count")
             if param_count is not None:
                 model["param_count"] = param_count
@@ -381,8 +436,8 @@ def resolve_roles_from_list(
         """
         primary_cat = m.get("primary_category", "")
         non_lightweight_first = 0 if primary_cat == "lightweight" else 1
-        is_moe = m.get("is_moe", False)
-        dense_first = 0 if is_moe else 1
+        is_moe = m.get("is_moe")
+        dense_first = 1 if is_moe is False else 0
         embedding = m.get("embedding_length") or 0
         name_count = extract_param_count(m.get("name", ""))
         if name_count > 0:
@@ -439,9 +494,10 @@ def resolve_roles_from_list(
     ]
     classified["vision"].sort(key=_size_sort_key, reverse=True)
 
-    classified["audio"] = [
+    audio_models = classified["audio"] + [
         m for m in classified["lightweight"] if "audio" in m.get("capabilities", [])
     ]
+    classified["audio"] = list({m["name"]: m for m in audio_models}.values())
     classified["audio"].sort(key=_size_sort_key, reverse=True)
 
     if not classified["vision"]:
@@ -510,16 +566,19 @@ def resolve_roles_from_list(
         "solo_2": pick("solo", "code-gen", index=1),
     }
 
+    model_providers = {
+        model["name"]: model.get("provider", "ollama")
+        for cat in ["reasoning", "code-gen", "lightweight", "vision", "audio"]
+        for model in classified[cat]
+    }
     resolved = {}
     for role, model in role_map.items():
         if model:
-            resolved[role] = "ollama/" + model
+            resolved[role] = f"{model_providers.get(model, 'ollama')}/{model}"
 
     if moe_codegen_reuse:
         code_gen_model = resolved.get("code-gen")
-        code_gen_name = (
-            code_gen_model.removeprefix("ollama/") if code_gen_model else None
-        )
+        code_gen_name = code_gen_model.split("/", 1)[-1] if code_gen_model else None
         code_gen_details = next(
             (m for m in classified["code-gen"] if m["name"] == code_gen_name), None
         )

@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -327,6 +327,13 @@ ollama-env-restart: ## Re-apply Ollama daemon environment variables
 	fi
 	@echo "Ollama env re-applied."
 
+omlx-restart: ## Restart the oMLX Homebrew service
+	@if brew services list 2>/dev/null | grep -qE '^omlx[[:space:]]'; then \
+		brew services restart omlx; \
+	else \
+		echo "omlx not installed or not a brew service — skipping"; \
+	fi
+
 # Plannotator uses a fixed port (19432 for portal, 19433 for paste backend).
 # Multiple OpenCode sessions can conflict on the same port. This target
 # clears the paste backend port so a fresh session can bind.
@@ -344,7 +351,7 @@ plannotator-restart: ## Restart Plannotator paste service
 	fi
 	@echo "Plannotator restarted."
 
-services-restart: opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart ## Restart all services
+services-restart: opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
 
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update
