@@ -9,12 +9,12 @@ INVARIANTS = module_from_spec(SPEC)
 SPEC.loader.exec_module(INVARIANTS)
 
 
-def _fixtures(nested_synth="synth"):
+def _fixtures(nested_synth="synth", top_variant=None, nested_variant=None):
     tier = "test"
     presets = {
         tier: {
             "orchestrator": {"model": "primary"},
-            "council": {"model": "synth"},
+            "council": {"model": "synth", **_optional_variant(top_variant)},
         }
     }
     council_presets = {
@@ -32,13 +32,20 @@ def _fixtures(nested_synth="synth"):
                         "alpha": {"model": "alpha"},
                         "beta": {"model": "beta"},
                         "gamma": {"model": "gamma"},
-                        "council": {"model": nested_synth},
+                        "council": {
+                            "model": nested_synth,
+                            **_optional_variant(nested_variant),
+                        },
                     }
                 }
             }
         }
     }
     return presets, council_presets, tiers
+
+
+def _optional_variant(variant):
+    return {"variant": variant} if variant is not None else {}
 
 
 def test_primary_chain_violations_flags_primary_and_ignores_absent_or_none():
@@ -61,6 +68,19 @@ def test_preset_violations_flags_nested_synthesizer_drift():
 
 def test_preset_violations_accepts_matching_synthesizer_and_members():
     presets, council_presets, tiers = _fixtures()
+    assert INVARIANTS._preset_violations(presets, council_presets, tiers) == []
+
+
+def test_preset_violations_flags_nested_synthesizer_variant_drift():
+    presets, council_presets, tiers = _fixtures(
+        top_variant="max", nested_variant="high"
+    )
+    violations = INVARIANTS._preset_violations(presets, council_presets, tiers)
+    assert any("council.variant" in violation for violation in violations)
+
+
+def test_preset_violations_accepts_matching_synthesizer_variant():
+    presets, council_presets, tiers = _fixtures(top_variant="max", nested_variant="max")
     assert INVARIANTS._preset_violations(presets, council_presets, tiers) == []
 
 

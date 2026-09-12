@@ -89,6 +89,7 @@ for the automated check.
 - plus council γ: gpt-5.4 → gpt-5.6-terra. plus/plus-anthropic gpt-5.4-mini chain entries removed where OpenAI's mapped replacement (gpt-5.6-luna) equals the role primary; gpt-6-astra added as plus/plus-anthropic orchestrator/oracle fallback head. gpt-5.4-mini remains in omo-slim-* observer chains.
 - Dedup invariants enforced in `scripts/verify-slim-invariants.py`: primary-not-in-own-chain, no-repeat-in-chain.
 - Ollama pricing facts for the tier-alignment record: Pro $20/mo, $60 monthly credits, 3 concurrent requests; Max $100/mo, $300 monthly credits, 10 concurrent (ollama.com/pricing, verified 2026-09-12; peak pricing 12:00–18:00 UTC Mon–Fri).
+- Local variant calibration (2026-09-12): the five local tiers' uniform `max` variants were replaced with policy-conformant per-role variants (librarian/explorer/observer low, designer medium, fixer high, orchestrator medium, oracle/council max retained); Qwen3.8 reasoning stays enabled.
 
 ## free preset (cross-provider free tier)
 

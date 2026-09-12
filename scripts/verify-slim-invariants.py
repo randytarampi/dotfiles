@@ -15,7 +15,7 @@ Invariants enforced:
   3. No within-array duplicates in any fallback array (enforced by
      `_model_dedupe_violations`).
   4. Preset names are consistent across the role presets, council presets, and
-     tier definitions.
+     tier definitions; council synthesizer models and variants are synchronized.
   5. Top-level council alpha/beta/gamma models match each tier definition.
   6. Every configured model is present in its provider's model allowlist.
   7. Fallback entries within an array use distinct provider prefixes.
@@ -49,6 +49,10 @@ MODEL_ALLOWLIST_PATHS = {
 
 def _model(cfg):
     return cfg.get("model") if isinstance(cfg, dict) else None
+
+
+def _variant(cfg):
+    return cfg.get("variant") if isinstance(cfg, dict) else None
 
 
 def _role_primary(presets, council_presets, tier, role):
@@ -217,6 +221,17 @@ def _preset_violations(presets, council_presets, tiers):
                 f"presets.{tier}.council.model = {top_synth!r} "
                 f"does not match _tiers.{tier}.council.presets.{tier}."
                 f"council.model = {nested_synth!r}"
+            )
+
+        top_variant = _variant(presets.get(tier, {}).get("council"))
+        nested_variant = _variant(nested_preset.get("council"))
+        if (top_variant is None) != (nested_variant is None) or (
+            top_variant is not None and top_variant != nested_variant
+        ):
+            violations.append(
+                f"presets.{tier}.council.variant = {top_variant!r} "
+                f"does not match _tiers.{tier}.council.presets.{tier}."
+                f"council.variant = {nested_variant!r}"
             )
     return violations
 

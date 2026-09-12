@@ -161,81 +161,83 @@ Council agent is defined inside each preset's agent list; alpha `claude-fable-5-
 
 Fully offline preset using all four `_local:<category>` placeholders:
 
-| Role | Placeholder | Resolves to |
-|------|------------|-------------|
-| orchestrator | `_local:code-gen` | Best local code-gen model |
-| oracle | `_local:reasoning` | Best local reasoning model |
-| librarian | `_local:lightweight` | Best local lightweight model |
-| explorer | `_local:lightweight` | Best local lightweight model |
-| designer | `_local:code-gen` | Best local code-gen model |
-| fixer | `_local:code-gen` | Best local code-gen model |
-| observer | `_local:vision` | Best local vision-capable lightweight model |
+| Role | Placeholder | Variant | Resolves to |
+|------|-------------|---------|-------------|
+| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
+| oracle | `_local:reasoning` | max | Best local reasoning model |
+| librarian | `_local:lightweight` | low | Best local lightweight model |
+| explorer | `_local:lightweight` | low | Best local lightweight model |
+| designer | `_local:code-gen` | medium | Best local code-gen model |
+| fixer | `_local:code-gen` | high | Best local code-gen model |
+| observer | `_local:vision` | low | Best local vision-capable lightweight model |
 
-Council: α `_local:reasoning` high, β `_local:reasoning_2` high, γ `_local:reasoning_3` high. Best for power users with diverse local models spanning all four categories.
+Council synthesizer: `_local:reasoning`, max. Individual councillors α `_local:reasoning`, β `_local:reasoning_2`, γ `_local:reasoning_3`: no variant override (model default). Best for power users with diverse local models spanning all four categories.
+
+Local-tier variants follow the repo-wide variant policy (TIERS.md:479-490), calibrated 2026-09-12; oracle/council retain max. Local Qwen3.8 reasoning remains enabled (mandatory for Qwen3.8 — JetBrains evidence, [blog.jetbrains.com/junie/2026/08/qwen-for-junie/](https://blog.jetbrains.com/junie/2026/08/qwen-for-junie/)).
 
 ### Local Tier (`local`)
 
 Balanced offline preset using reasoning + code-gen + lightweight + vision:
 
-| Role | Placeholder | Resolves to |
-|------|------------|-------------|
-| orchestrator | `_local:code-gen` | Best local code-gen model |
-| oracle | `_local:reasoning` | Best local reasoning model |
-| librarian | `_local:lightweight` | Best local lightweight model |
-| explorer | `_local:lightweight` | Best local lightweight model |
-| designer | `_local:code-gen` | Best local code-gen model |
-| fixer | `_local:code-gen` | Best local code-gen model |
-| observer | `_local:vision` | Best local vision-capable lightweight model |
+| Role | Placeholder | Variant | Resolves to |
+|------|-------------|---------|-------------|
+| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
+| oracle | `_local:reasoning` | max | Best local reasoning model |
+| librarian | `_local:lightweight` | low | Best local lightweight model |
+| explorer | `_local:lightweight` | low | Best local lightweight model |
+| designer | `_local:code-gen` | medium | Best local code-gen model |
+| fixer | `_local:code-gen` | high | Best local code-gen model |
+| observer | `_local:vision` | low | Best local vision-capable lightweight model |
 
-Council: α `_local:reasoning` high, β `_local:code-gen` high, γ `_local:lightweight` high. Best for balanced offline use with 3-party council diversity across model categories.
+Council synthesizer: `_local:reasoning`, max. Individual councillors α `_local:reasoning`, β `_local:code-gen`, γ `_local:lightweight`: no variant override (model default). Best for balanced offline use with 3-party council diversity across model categories.
 
 ### Local-Mini Tier (`local-mini`)
 
 Minimal-diversity preset using code-gen + lightweight + vision:
 
-| Role | Placeholder | Resolves to |
-|------|------------|-------------|
-| orchestrator | `_local:code-gen` | Best local code-gen model |
-| oracle | `_local:code-gen` | Best local code-gen model |
-| librarian | `_local:lightweight` | Best local lightweight model |
-| explorer | `_local:lightweight` | Best local lightweight model |
-| designer | `_local:code-gen` | Best local code-gen model |
-| fixer | `_local:code-gen` | Best local code-gen model |
-| observer | `_local:vision` | Best local vision-capable lightweight model |
+| Role | Placeholder | Variant | Resolves to |
+|------|-------------|---------|-------------|
+| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
+| oracle | `_local:code-gen` | max | Best local code-gen model |
+| librarian | `_local:lightweight` | low | Best local lightweight model |
+| explorer | `_local:lightweight` | low | Best local lightweight model |
+| designer | `_local:code-gen` | medium | Best local code-gen model |
+| fixer | `_local:code-gen` | high | Best local code-gen model |
+| observer | `_local:vision` | low | Best local vision-capable lightweight model |
 
-Council: α `_local:code-gen` high, β `_local:lightweight` high, γ `_local:vision` high. Best for systems with only code-gen and lightweight models available.
+Council synthesizer: `_local:code-gen`, max. Individual councillors α `_local:code-gen`, β `_local:lightweight`, γ `_local:vision`: no variant override (model default). Best for systems with only code-gen and lightweight models available.
 
 ### Local-Nano Tier (`local-nano`)
 
 Single-model preset using one code-gen model for all roles (except vision):
 
-| Role | Placeholder | Resolves to |
-|------|------------|-------------|
-| orchestrator | `_local:code-gen` | Best local code-gen model |
-| oracle | `_local:code-gen` | Best local code-gen model |
-| librarian | `_local:code-gen` | Best local code-gen model |
-| explorer | `_local:code-gen` | Best local code-gen model |
-| designer | `_local:code-gen` | Best local code-gen model |
-| fixer | `_local:code-gen` | Best local code-gen model |
-| observer | `_local:vision` | Best local vision-capable lightweight model |
+| Role | Placeholder | Variant | Resolves to |
+|------|-------------|---------|-------------|
+| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
+| oracle | `_local:code-gen` | max | Best local code-gen model |
+| librarian | `_local:code-gen` | low | Best local code-gen model |
+| explorer | `_local:code-gen` | low | Best local code-gen model |
+| designer | `_local:code-gen` | medium | Best local code-gen model |
+| fixer | `_local:code-gen` | high | Best local code-gen model |
+| observer | `_local:vision` | low | Best local vision-capable lightweight model |
 
-Council: α `_local:code-gen` high, β `_local:lightweight` high, γ `_local:vision` high. Best for single-model systems — council uses the code-gen model plus lightweight and vision for diversity.
+Council synthesizer: `_local:code-gen`, max. Individual councillors α `_local:code-gen`, β `_local:lightweight`, γ `_local:vision`: no variant override (model default). Best for single-model systems — the council uses the code-gen model plus lightweight and vision.
 
 ### Local-Solo Tier (`local-solo`)
 
 Single-model preset using one omnicapable model for all roles:
 
-| Role | Placeholder | Resolves to |
-|------|------------|-------------|
-| orchestrator | `_local:solo` | Best local solo model |
-| oracle | `_local:solo` | Best local solo model |
-| librarian | `_local:solo` | Best local solo model |
-| explorer | `_local:solo` | Best local solo model |
-| designer | `_local:solo` | Best local solo model |
-| fixer | `_local:solo` | Best local solo model |
-| observer | `_local:solo` | Best local solo model |
+| Role | Placeholder | Variant | Resolves to |
+|------|-------------|---------|-------------|
+| orchestrator | `_local:solo` | medium | Best local solo model |
+| oracle | `_local:solo` | max | Best local solo model |
+| librarian | `_local:solo` | low | Best local solo model |
+| explorer | `_local:solo` | low | Best local solo model |
+| designer | `_local:solo` | medium | Best local solo model |
+| fixer | `_local:solo` | high | Best local solo model |
+| observer | `_local:solo` | low | Best local solo model |
 
-Council: α `_local:solo` max, β `_local:solo` high, γ `_local:solo` high. Diversity comes from variants, not different models. If no solo model exists, falls back to code-gen + vision (local-nano behavior).
+Council synthesizer: `_local:solo`, max. Individual councillors α `_local:solo`, β `_local:solo`, γ `_local:solo`: no variant override (model default). If no solo model exists, falls back to code-gen + vision (local-nano behavior).
 
 > [!NOTE]
 > Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use local-mini or local-nano.
@@ -483,7 +485,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 
 | Role | Variant | Rationale |
 |------|---------|-----------|
-| orchestrator | none (default) | Coordination, doesn't need boosted reasoning |
+| orchestrator | `none` for cloud; `medium` for local code-gen/solo | Coordination, doesn't need boosted reasoning |
 | oracle | `max` or `xhigh` | Strategic advisor, needs deepest reasoning |
 | council | same as oracle | Configured as a preset agent; drives multi-model consensus |
 | librarian | `low` | Lookup/search, lightweight |

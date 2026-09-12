@@ -393,7 +393,7 @@
     "local-pro": {
       "orchestrator": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -414,7 +414,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [],
         "mcps": [
           "*"
@@ -422,7 +422,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [
           "codemap"
         ],
@@ -432,7 +432,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "agent-browser"
         ],
@@ -440,7 +440,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "high",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -448,7 +448,7 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "max"
+        "variant": "low"
       },
       "council": {
         "model": "_local:reasoning",
@@ -458,7 +458,7 @@
     "local": {
       "orchestrator": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -479,7 +479,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [],
         "mcps": [
           "*"
@@ -487,7 +487,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [
           "codemap"
         ],
@@ -497,7 +497,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "agent-browser"
         ],
@@ -505,7 +505,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "high",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -513,7 +513,7 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "max"
+        "variant": "low"
       },
       "council": {
         "model": "_local:reasoning",
@@ -523,7 +523,7 @@
     "local-mini": {
       "orchestrator": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -544,7 +544,7 @@
       },
       "librarian": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [],
         "mcps": [
           "*"
@@ -552,7 +552,7 @@
       },
       "explorer": {
         "model": "_local:lightweight",
-        "variant": "max",
+        "variant": "low",
         "skills": [
           "codemap"
         ],
@@ -562,7 +562,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "agent-browser"
         ],
@@ -570,7 +570,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "high",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -578,7 +578,7 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "max"
+        "variant": "low"
       },
       "council": {
         "model": "_local:code-gen",
@@ -588,7 +588,7 @@
     "local-nano": {
       "orchestrator": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -609,7 +609,7 @@
       },
       "librarian": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "low",
         "skills": [],
         "mcps": [
           "*"
@@ -617,7 +617,7 @@
       },
       "explorer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "low",
         "skills": [
           "codemap"
         ],
@@ -627,7 +627,7 @@
       },
       "designer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "agent-browser"
         ],
@@ -635,7 +635,7 @@
       },
       "fixer": {
         "model": "_local:code-gen",
-        "variant": "max",
+        "variant": "high",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -643,7 +643,7 @@
       },
       "observer": {
         "model": "_local:vision",
-        "variant": "max"
+        "variant": "low"
       },
       "council": {
         "model": "_local:code-gen",
@@ -653,7 +653,7 @@
     "local-solo": {
       "orchestrator": {
         "model": "_local:solo",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -674,7 +674,7 @@
       },
       "librarian": {
         "model": "_local:solo",
-        "variant": "max",
+        "variant": "low",
         "skills": [],
         "mcps": [
           "*"
@@ -682,7 +682,7 @@
       },
       "explorer": {
         "model": "_local:solo",
-        "variant": "max",
+        "variant": "low",
         "skills": [
           "codemap"
         ],
@@ -692,7 +692,7 @@
       },
       "designer": {
         "model": "_local:solo",
-        "variant": "max",
+        "variant": "medium",
         "skills": [
           "agent-browser"
         ],
@@ -700,7 +700,7 @@
       },
       "fixer": {
         "model": "_local:solo",
-        "variant": "max",
+        "variant": "high",
         "skills": [],
         "mcps": [
           "codegraph"
@@ -708,7 +708,7 @@
       },
       "observer": {
         "model": "_local:solo",
-        "variant": "max"
+        "variant": "low"
       },
       "council": {
         "model": "_local:solo",
@@ -1190,7 +1190,7 @@
             },
             "council": {
               "model": "_local:reasoning",
-              "variant": "high"
+              "variant": "max"
             }
           }
         }
@@ -1213,7 +1213,7 @@
             },
             "council": {
               "model": "_local:reasoning",
-              "variant": "high"
+              "variant": "max"
             }
           }
         }
@@ -1236,7 +1236,7 @@
             },
             "council": {
               "model": "_local:code-gen",
-              "variant": "high"
+              "variant": "max"
             }
           }
         }
@@ -1259,7 +1259,7 @@
             },
             "council": {
               "model": "_local:code-gen",
-              "variant": "high"
+              "variant": "max"
             }
           }
         }
@@ -1282,7 +1282,7 @@
             },
             "council": {
               "model": "_local:solo",
-              "variant": "high"
+              "variant": "max"
             }
           }
         }
