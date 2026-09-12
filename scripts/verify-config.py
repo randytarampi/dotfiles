@@ -176,6 +176,53 @@ def check_acp_agents(config):
             )
 
 
+def validate_omlx_settings(data):
+    """Return schema violations for managed oMLX settings values."""
+    errors = []
+    server = data.get("server", {})
+    if not isinstance(server.get("host"), str):
+        errors.append("server.host must be a string")
+    if not isinstance(server.get("port"), int) or not 1 <= server["port"] <= 65535:
+        errors.append("server.port must be an integer from 1 to 65535")
+    model_dirs = data.get("model", {}).get("model_dirs")
+    if not isinstance(model_dirs, list) or not all(
+        isinstance(value, str) for value in model_dirs
+    ):
+        errors.append("model.model_dirs must be a list of strings")
+    memory = data.get("memory", {})
+    if memory.get("prefill_memory_guard") is not False and memory.get(
+        "memory_guard_tier"
+    ) not in {"safe", "balanced", "aggressive"}:
+        errors.append(
+            "memory.memory_guard_tier must be safe, balanced, aggressive, or absent when prefill is false"
+        )
+    scheduler = data.get("scheduler", {})
+    if (
+        not isinstance(scheduler.get("max_concurrent_requests"), int)
+        or scheduler["max_concurrent_requests"] < 1
+    ):
+        errors.append("scheduler.max_concurrent_requests must be an integer >= 1")
+    cache = data.get("cache", {})
+    if cache.get("ssd_cache_dir") is not None and not isinstance(
+        cache.get("ssd_cache_dir"), str
+    ):
+        errors.append("cache.ssd_cache_dir must be a string or null")
+    if not isinstance(cache.get("enabled"), bool):
+        errors.append("cache.enabled must be a boolean")
+    if not isinstance(cache.get("ssd_cache_max_size"), str):
+        errors.append("cache.ssd_cache_max_size must be a string")
+    if not isinstance(cache.get("hot_cache_max_size"), str):
+        errors.append("cache.hot_cache_max_size must be a string")
+    if not isinstance(cache.get("hot_cache_write_through"), bool):
+        errors.append("cache.hot_cache_write_through must be a boolean")
+    if (
+        not isinstance(cache.get("initial_cache_blocks"), int)
+        or cache["initial_cache_blocks"] < 0
+    ):
+        errors.append("cache.initial_cache_blocks must be an integer >= 0")
+    return errors
+
+
 def check_ssh_permissions():
     """Warn if SSH config or private keys have wrong permissions."""
     ssh_dir = HOME / ".ssh"
@@ -334,7 +381,10 @@ def main():
             if path.exists():
                 if gate == "DOTFILES_RUN_OMLX_SETUP":
                     try:
-                        json.loads(path.read_text(encoding="utf-8"))
+                        settings = json.loads(path.read_text(encoding="utf-8"))
+                        for error in validate_omlx_settings(settings):
+                            print(f"  \u2717 {description}: {error}")
+                            all_exist = False
                     except (OSError, json.JSONDecodeError):
                         print(f"  \u2717 {description}: INVALID JSON {path}")
                         all_exist = False

@@ -67,6 +67,23 @@ make services-restart
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
 
+### Cache parity
+
+The oMLX `CacheSettings` block is the MLX equivalent of Ollama cache tuning:
+there is no MLX quantization knob corresponding to `OLLAMA_KV_CACHE_TYPE`.
+Persistent SSD and optional hot-cache settings provide the comparable residency
+and reuse controls. The service plist does not inherit `~/.env`, so these values
+are persisted in `~/.omlx/settings.json`.
+
+| Environment variable | Settings key | Default |
+|----------------------|--------------|---------|
+| `OMLX_CACHE_ENABLED` | `cache.enabled` | `true` |
+| `OMLX_SSD_CACHE_DIR` | `cache.ssd_cache_dir` | `~/.omlx/cache` |
+| `OMLX_SSD_CACHE_MAX_SIZE` | `cache.ssd_cache_max_size` | `auto` |
+| `OMLX_HOT_CACHE_MAX_SIZE` | `cache.hot_cache_max_size` | `0` (disabled) |
+| `OMLX_HOT_CACHE_WRITE_THROUGH` | `cache.hot_cache_write_through` | `false` |
+| `OMLX_INITIAL_CACHE_BLOCKS` | `cache.initial_cache_blocks` | `256` |
+
 ## Provider integration
 
 ### Engine-agnostic local pool

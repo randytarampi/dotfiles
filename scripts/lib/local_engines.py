@@ -262,3 +262,85 @@ def local_caddy_target(provider):
     if engine is None:
         return None
     return engine["caddy_path"], f"127.0.0.1:{engine['default_port']}"
+
+
+def merge_omlx_settings(existing, environ=None):
+    """Merge the managed oMLX settings schema, including cache controls."""
+    environ = environ or os.environ
+    import copy
+
+    settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}
+    server = settings.setdefault("server", {})
+    if not isinstance(server, dict):
+        server = {}
+        settings["server"] = server
+    server.update(
+        {
+            "host": environ.get("OMLX_HOST", "127.0.0.1"),
+            "port": int(environ.get("OMLX_PORT", "8000")),
+            "log_level": environ.get("OMLX_LOG_LEVEL", "info"),
+        }
+    )
+    model = settings.setdefault("model", {})
+    if not isinstance(model, dict):
+        model = {}
+        settings["model"] = model
+    model["model_dirs"] = [
+        os.path.expanduser(environ.get("OMLX_MODEL_DIR", "~/.omlx/models"))
+    ]
+    memory = settings.setdefault("memory", {})
+    if not isinstance(memory, dict):
+        memory = {}
+        settings["memory"] = memory
+    guard = environ.get("OMLX_MEMORY_GUARD", "balanced")
+    if guard == "off":
+        memory.pop("memory_guard_tier", None)
+        memory["prefill_memory_guard"] = False
+    else:
+        memory["memory_guard_tier"] = guard
+        memory["prefill_memory_guard"] = True
+    scheduler = settings.setdefault("scheduler", {})
+    if not isinstance(scheduler, dict):
+        scheduler = {}
+        settings["scheduler"] = scheduler
+    scheduler["max_concurrent_requests"] = int(
+        environ.get("OMLX_MAX_CONCURRENT_REQUESTS", "8")
+    )
+    cache = settings.setdefault("cache", {})
+    if not isinstance(cache, dict):
+        cache = {}
+        settings["cache"] = cache
+    cache.update(
+        {
+            "enabled": environ.get("OMLX_CACHE_ENABLED", "true").lower()
+            not in {"0", "false", "no", "off"},
+            "ssd_cache_dir": os.path.expanduser(
+                environ.get("OMLX_SSD_CACHE_DIR", "~/.omlx/cache")
+            ),
+            "ssd_cache_max_size": environ.get("OMLX_SSD_CACHE_MAX_SIZE", "auto"),
+            "hot_cache_max_size": environ.get("OMLX_HOT_CACHE_MAX_SIZE", "0"),
+            "hot_cache_write_through": environ.get(
+                "OMLX_HOT_CACHE_WRITE_THROUGH", "false"
+            ).lower()
+            in {"1", "true", "yes", "on"},
+            "initial_cache_blocks": int(
+                environ.get("OMLX_INITIAL_CACHE_BLOCKS", "256")
+            ),
+        }
+    )
+    for section_name, key, env_name in (
+        ("auth", "api_key", "OMLX_API_KEY"),
+        ("huggingface", "endpoint", "OMLX_HF_ENDPOINT"),
+    ):
+        value = environ.get(env_name, "").strip()
+        section = settings.get(section_name)
+        if value:
+            if not isinstance(section, dict):
+                section = {}
+                settings[section_name] = section
+            section[key] = value
+        elif isinstance(section, dict):
+            section.pop(key, None)
+            if not section:
+                settings.pop(section_name, None)
+    return settings

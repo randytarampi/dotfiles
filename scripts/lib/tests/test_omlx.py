@@ -91,7 +91,7 @@ def test_status_failure_does_not_cache_empty_result_or_admit_unknown_models():
 
 
 def test_merge_omlx_settings_uses_nested_schema_and_preserves_unmanaged_keys():
-    settings = omlx.merge_omlx_settings(
+    settings = local_engines.merge_omlx_settings(
         {"server": {"log_level": "debug"}, "custom": {"keep": True}},
         {
             "OMLX_HOST": "0.0.0.0",
@@ -115,13 +115,18 @@ def test_merge_omlx_settings_uses_nested_schema_and_preserves_unmanaged_keys():
     assert settings["memory"]["prefill_memory_guard"] is True
     assert settings["scheduler"]["max_concurrent_requests"] == 4
     assert settings["cache"]["ssd_cache_dir"] == "/tmp/omlx-cache"
+    assert settings["cache"]["enabled"] is True
+    assert settings["cache"]["ssd_cache_max_size"] == "auto"
+    assert settings["cache"]["hot_cache_max_size"] == "0"
+    assert settings["cache"]["hot_cache_write_through"] is False
+    assert settings["cache"]["initial_cache_blocks"] == 256
     assert settings["auth"]["api_key"] == "secret"
     assert settings["huggingface"]["endpoint"] == "https://hf.example"
     assert settings["custom"] == {"keep": True}
 
 
 def test_merge_omlx_settings_off_disables_prefill_guard():
-    settings = omlx.merge_omlx_settings(
+    settings = local_engines.merge_omlx_settings(
         {"memory": {"memory_guard_tier": "safe", "custom": True}},
         {"OMLX_MEMORY_GUARD": "off"},
     )
@@ -130,6 +135,21 @@ def test_merge_omlx_settings_off_disables_prefill_guard():
     assert settings["memory"]["custom"] is True
     assert "auth" not in settings
     assert "huggingface" not in settings
+
+
+def test_verify_omlx_settings_accepts_valid_nested_cache_schema():
+    verify = _load_script("verify_config", "verify-config.py")
+    settings = local_engines.merge_omlx_settings({})
+    assert verify.validate_omlx_settings(settings) == []
+
+
+def test_verify_omlx_settings_reports_invalid_memory_guard():
+    verify = _load_script("verify_config", "verify-config.py")
+    settings = local_engines.merge_omlx_settings({})
+    settings["memory"]["memory_guard_tier"] = "weird"
+    assert "memory.memory_guard_tier" in " ".join(
+        verify.validate_omlx_settings(settings)
+    )
 
 
 def test_discovery_merges_omlx_and_ollama_with_ollama_collision_wins():

@@ -29,7 +29,7 @@ if [[ "${DOTFILES_RUN_UPDATE_SYSTEM_SETUP:-0}" != "1" ]]; then
 fi
 
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-  info "[DRY RUN] Would update: brew (macOS), apt/dnf/pacman (Linux), winget (Windows), npm globals, uv tools, pipx tools, pi, opencode, junie, ollama models"
+  info "[DRY RUN] Would update: brew (macOS), apt/dnf/pacman (Linux), winget (Windows), npm globals, uv tools, pipx tools, pi, opencode, junie, ollama models, omlx models"
   exit 0
 fi
 
@@ -163,6 +163,36 @@ if command -v ollama >/dev/null 2>&1; then
   fi
 else
   skipped_lanes+=("ollama models")
+fi
+
+verify_omlx_models() {
+  local base_url="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
+  local auth_args=()
+  if [[ -n "${OMLX_API_KEY:-}" ]]; then
+    auth_args=(-H "Authorization: Bearer ${OMLX_API_KEY}")
+  fi
+  if ! curl -fsS --max-time 3 "${base_url%/}/health" "${auth_args[@]}" >/dev/null; then
+    warn "omlx daemon unreachable — skipping model verification"
+    skipped_lanes+=("omlx models")
+    return 0
+  fi
+  if ! curl -fsS --max-time 3 "${base_url%/}/v1/models" "${auth_args[@]}" >/dev/null; then
+    warn "omlx model catalogue unavailable — skipping model verification"
+    skipped_lanes+=("omlx models")
+    return 0
+  fi
+  if python3 "$SCRIPT_DIR/check-model-drift.py"; then
+    ok "omlx models verified"
+  else
+    warn "omlx model drift found; re-download missing models at ${base_url%/}/admin"
+  fi
+  return 0
+}
+
+if [[ "${DOTFILES_RUN_OMLX_SETUP:-0}" == "1" ]]; then
+  verify_omlx_models
+else
+  skipped_lanes+=("omlx models")
 fi
 
 summary="System update complete.\n\nRan: ${ran_lanes[*]:-none}\nSkipped: ${skipped_lanes[*]:-none}\nWarned (${warnings}): ${warned_lanes[*]:-none}\nFailed (${failures}): ${failed_lanes[*]:-none}"
