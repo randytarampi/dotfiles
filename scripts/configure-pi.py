@@ -16,7 +16,9 @@ from cli_helpers import (
 from constants import (
     BASE_URLS,
     check_ollama_daemon,
+    check_omlx_daemon,
     get_meridian_base_url,
+    get_omlx_base_url,
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
@@ -58,23 +60,27 @@ def _ollama_context_cap():
     return int(env_ctx) if env_ctx.isdigit() else 128000
 
 
-def _native_context(model_id):
+def _native_context(model_id, provider="ollama"):
     """Best-effort native context window for a model via `ollama show`.
 
     Returns the model's own context length, or None when unknown/unavailable.
     Cached per model so the `ollama show` subprocess runs at most once each.
     """
-    return _model_details(model_id).get("context_length")
+    return _model_details(model_id, provider).get("context_length")
 
 
-def _model_details(model_id):
-    """Return cached Ollama details for a model."""
-    if model_id not in _model_details_cache:
-        _model_details_cache[model_id] = get_model_details(model_id)
-    return _model_details_cache[model_id]
+def _model_details(model_id, provider="ollama"):
+    """Return cached local-model details for a provider/model pair."""
+    cache_key = (provider, model_id)
+    if cache_key not in _model_details_cache:
+        if provider == "omlx":
+            _model_details_cache[cache_key] = get_model_details(model_id, provider)
+        else:
+            _model_details_cache[cache_key] = get_model_details(model_id)
+    return _model_details_cache[cache_key]
 
 
-def _model_context_window(model_id, local):
+def _model_context_window(model_id, local, provider="ollama"):
     """Context window to advertise for a model.
 
     Local Ollama models are capped at min(OLLAMA_CONTEXT_LENGTH, native) so pi
@@ -83,7 +89,9 @@ def _model_context_window(model_id, local):
     """
     cap = _ollama_context_cap()
     if local:
-        native = _native_context(model_id)
+        native = _native_context(model_id, provider)
+        if provider == "omlx":
+            return native or 32768
         if native:
             return min(cap, native)
     elif model_id.endswith(":cloud"):
@@ -93,7 +101,7 @@ def _model_context_window(model_id, local):
     return cap
 
 
-def _compaction_tokens(local_ids):
+def _compaction_tokens(local_refs):
     """Compaction reserve/keep as 33% of the tightest usable local context.
 
     Pi's compaction is a single global block, so one reserve value yields
@@ -105,12 +113,20 @@ def _compaction_tokens(local_ids):
     local model exposes a native context.
     """
     cap = _ollama_context_cap()
-    natives = [n for n in (_native_context(m) for m in local_ids) if n]
+    natives = []
+    for ref in local_refs:
+        if "/" in ref:
+            provider, model = ref.split("/", 1)
+        else:
+            provider, model = "ollama", ref
+        native = _native_context(model, provider)
+        if native:
+            natives.append(native)
     base = min(natives + [cap])  # tightest window; never above the OLLAMA cap
     return max(8192, round(0.33 * base))
 
 
-def model_entry(model_id, name=None, local=False):
+def model_entry(model_id, name=None, local=False, provider="ollama"):
     """Build a pi model entry.
 
     Context window is the OLLAMA_CONTEXT_LENGTH cap, further capped at the model's
@@ -123,7 +139,7 @@ def model_entry(model_id, name=None, local=False):
         compat = {
             "supportsDeveloperRole": False,
             "supportsReasoningEffort": "thinking"
-            in _model_details(model_id).get("capabilities", []),
+            in _model_details(model_id, provider).get("capabilities", []),
         }
         if compat["supportsReasoningEffort"]:
             compat["thinkingFormat"] = "openai"
@@ -133,7 +149,7 @@ def model_entry(model_id, name=None, local=False):
         "name": name or model_id,
         "reasoning": True,
         "input": ["text"],
-        "contextWindow": _model_context_window(model_id, local),
+        "contextWindow": _model_context_window(model_id, local, provider),
         "maxTokens": 32000,
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
         **(
@@ -145,6 +161,38 @@ def model_entry(model_id, name=None, local=False):
             else {}
         ),
     }
+
+
+def build_omlx_provider(model_ids):
+    """Build the gated oMLX Pi provider, or return None when unavailable."""
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
+        return None
+    reachable, _ = check_omlx_daemon()
+    if not reachable:
+        return None
+    provider = {
+        "baseUrl": f"{get_omlx_base_url().rstrip('/')}/v1",
+        "api": "openai-completions",
+        "models": [
+            model_entry(model_id, local=True, provider="omlx") for model_id in model_ids
+        ],
+    }
+    if os.environ.get("OMLX_API_KEY", "").strip():
+        provider["apiKey"] = "$OMLX_API_KEY"
+    return provider
+
+
+def omlx_chat_model_ids(models):
+    """Return only discovered oMLX llm/vlm IDs for Pi's chat provider."""
+    return sorted(
+        {
+            model["name"]
+            for model in models
+            if isinstance(model, dict)
+            and model.get("provider") == "omlx"
+            and model.get("model_type") in {"llm", "vlm"}
+        }
+    )
 
 
 def _install_package(pkg, dry_run, mode):
@@ -401,14 +449,14 @@ def main():
     # Local model IDs (the part after "ollama/") + compaction reserve.
     # Computed early so settings["compaction"] and the provider model
     # entries share one set of `ollama show` lookups (cached in _native_ctx_cache).
-    local_ids = sorted(
-        {
-            v.split("/", 1)[-1]
-            for v in category_models.values()
-            if not v.endswith("no-model-available")
-        }
+    local_refs = sorted(
+        {v for v in category_models.values() if not v.endswith("no-model-available")}
     )
-    compaction_tokens = _compaction_tokens(local_ids)
+    ollama_ids = sorted(
+        {ref.split("/", 1)[-1] for ref in local_refs if not ref.startswith("omlx/")}
+    )
+    omlx_ids = omlx_chat_model_ids(local_models)
+    compaction_tokens = _compaction_tokens(local_refs)
 
     orchestrator_model = role_models["orchestrator"]
     if orchestrator_model is None:
@@ -476,8 +524,11 @@ def main():
         "baseUrl": local_base,
         "api": "openai-completions",
         "apiKey": "ollama",
-        "models": [model_entry(x, local=True) for x in local_ids],
+        "models": [model_entry(x, local=True) for x in ollama_ids],
     }
+    omlx_provider = build_omlx_provider(omlx_ids)
+    if omlx_provider:
+        providers["omlx"] = omlx_provider
     cloud_path = ROOT / "configs/opencode/ollama-cloud-models.json"
     with cloud_path.open(encoding="utf-8") as f:
         cloud = json.load(f).get("models", {})

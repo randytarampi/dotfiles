@@ -151,21 +151,42 @@ def build_auth_block(users: list[tuple[str, str]]) -> str:
 
 
 def build_route_block(plannotator_portal_dir: str) -> str:
-    return "\n".join(
+    lines = [
+        "  # Ollama inference — READ-ONLY (write endpoints blocked per oracle warning 1)",
+        "  handle_path /ollama/* {",
+        "    @blocked path /api/pull /api/delete /api/create /api/push /api/copy",
+        "    respond @blocked 403",
+        "",
+        "    @ollama_read path /api/generate /api/chat /api/tags /api/show /api/version /v1/*",
+        "    reverse_proxy @ollama_read 127.0.0.1:11434 {",
+        "      flush_interval -1",
+        "    }",
+        "",
+        "    respond 404",
+        "  }",
+        "",
+    ]
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+        port = os.environ.get("OMLX_PORT", "8000").strip() or "8000"
+        lines.extend(
+            [
+                "  # oMLX inference — READ-ONLY (write endpoints blocked)",
+                "  handle_path /omlx/* {",
+                "    @omlx_blocked path /admin* /v1/mcp/* /v1/config* /v1/delete* /v1/push*",
+                "    respond @omlx_blocked 403",
+                "",
+                "    @omlx_read path /v1/chat/completions /v1/completions /v1/responses /v1/messages /v1/embeddings /v1/rerank /v1/models /v1/models/status /v1/audio/* /health",
+                f"    reverse_proxy @omlx_read 127.0.0.1:{port} {{",
+                "      flush_interval -1",
+                "    }",
+                "",
+                "    respond 404",
+                "  }",
+                "",
+            ]
+        )
+    lines.extend(
         [
-            "  # Ollama inference — READ-ONLY (write endpoints blocked per oracle warning 1)",
-            "  handle_path /ollama/* {",
-            "    @blocked path /api/pull /api/delete /api/create /api/push /api/copy",
-            "    respond @blocked 403",
-            "",
-            "    @ollama_read path /api/generate /api/chat /api/tags /api/show /api/version /v1/*",
-            "    reverse_proxy @ollama_read 127.0.0.1:11434 {",
-            "      flush_interval -1",
-            "    }",
-            "",
-            "    respond 404",
-            "  }",
-            "",
             "  # Meridian /v1 (OpenAI-compatible inference)",
             "  handle_path /meridian/v1/* {",
             "    reverse_proxy 127.0.0.1:3456 {",
@@ -188,6 +209,7 @@ def build_route_block(plannotator_portal_dir: str) -> str:
             "  }",
         ]
     )
+    return "\n".join(lines)
 
 
 def build_site_block(

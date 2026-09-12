@@ -21,6 +21,7 @@ from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
+    get_omlx_base_url,
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
@@ -53,7 +54,9 @@ def build_provider_configs(cfg: dict) -> dict:
         api_key = os.environ.get(key_env, "") if key_env else ""
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
-        if not base_url and (definition.get("hostEnv") or definition.get("portEnv")):
+        if not base_url and name == "omlx":
+            base_url = f"{get_omlx_base_url().rstrip('/')}/v1"
+        elif not base_url and (definition.get("hostEnv") or definition.get("portEnv")):
             if name == "ollama":
                 base_url = get_ollama_local_base_url()
             elif name == "meridian":
@@ -72,11 +75,14 @@ def build_provider_configs(cfg: dict) -> dict:
         if base_env and os.environ.get(base_env, "").strip():
             base_url = os.environ[base_env].strip().rstrip("/")
         base_url = normalize_endpoint(base_url, definition.get("apiType", ""))
-        provider_configs[name] = {
+        provider_config = {
             "baseUrl": base_url,
             "apiType": definition.get("apiType", ""),
             "apiKey": api_key,
         }
+        if name == "omlx" and not api_key:
+            provider_config.pop("apiKey")
+        provider_configs[name] = provider_config
     return provider_configs
 
 
@@ -89,6 +95,8 @@ def model_provider(model_ref: str) -> str:
         return "meridian"
     if model_ref.startswith("ollama/"):
         return "ollama"
+    if model_ref.startswith("omlx/"):
+        return "omlx"
     return model_ref_provider(model_ref)
 
 
@@ -105,6 +113,19 @@ def model_id(model_ref: str, provider_hint: str = "") -> str:
 def lookup_model_temperature(model_name: str, overrides: dict) -> float | None:
     matches = [p for p in overrides if model_name.lower().startswith(p.lower())]
     return overrides[max(matches, key=len)] if matches else None
+
+
+def parse_local_models(value: str):
+    """Parse JSON model entries from the wrapper, retaining bare-name compatibility."""
+    value = value.strip()
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    return value.split()
 
 
 def main():
@@ -138,12 +159,20 @@ def main():
         logger.critical(f"Failed to read model configuration: {exc}")
         raise SystemExit(1)
 
-    local_models = args.local_models.split()
+    local_models = parse_local_models(args.local_models)
     if not local_models:
         local_models = [
-            m["name"] if isinstance(m, dict) else str(m)
-            for m in list_local_ollama_models()
+            m if isinstance(m, dict) else str(m) for m in list_local_ollama_models()
         ]
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and any(
+        isinstance(model, dict) and model.get("provider") == "omlx"
+        for model in local_models
+    ):
+        cfg.setdefault("providers", {})["omlx"] = {
+            "baseUrl": f"{get_omlx_base_url().rstrip('/')}/v1",
+            "apiType": "OpenAICompletion",
+            "apiKeyEnv": "OMLX_API_KEY",
+        }
     tier_specs = []
     for tier in registry.get("presets", {}):
         if not tier_registry.uses_local_placeholders(registry, tier):
@@ -192,6 +221,11 @@ def main():
         for name, group in cfg.get("groups", {}).items()
     ]
     providers = build_provider_configs(cfg)
+    ollama_model_names = [
+        model["name"] if isinstance(model, dict) else str(model)
+        for model in local_models
+        if not isinstance(model, dict) or model.get("provider", "ollama") == "ollama"
+    ]
     temperatures = cfg.get("modelTemperatures", {})
     generated = set()
     if not args.dry_run:
@@ -226,13 +260,13 @@ def main():
             continue
         primary = model_id(primary_ref, provider)
         if provider == "ollama" and not primary_ref.startswith("_local:"):
-            primary = resolve_model(primary, local_models)
+            primary = resolve_model(primary, ollama_model_names)
         if primary_ref.startswith("_local:") or not primary:
             logger.warning(f"Could not resolve primary model for {name} — skipping")
             continue
         faster = model_id(faster_ref, faster_provider) if faster_ref else ""
         if faster and faster_provider == "ollama":
-            faster = resolve_model(faster, local_models)
+            faster = resolve_model(faster, ollama_model_names)
         data = providers[provider].copy()
         data["id"] = primary
         primary_temperature = lookup_model_temperature(primary, temperatures)

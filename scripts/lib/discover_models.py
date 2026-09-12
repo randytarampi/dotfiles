@@ -13,7 +13,7 @@ import shutil
 import re
 
 import logger
-from constants import check_omlx_daemon, is_omlx_configured
+from constants import check_omlx_daemon
 from omlx import list_omlx_models
 
 
@@ -93,7 +93,7 @@ def list_local_ollama_models(include_cloud=False) -> list:
     try:
         for model in models:
             model["provider"] = "ollama"
-        if is_omlx_configured() or os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+        if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
             reachable, _ = check_omlx_daemon()
             if reachable:
                 ollama_names = {model["name"] for model in models}

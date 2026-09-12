@@ -27,6 +27,8 @@ from constants import (
     get_ollama_local_base_url,
     get_provider_base_url,
     check_ollama_daemon,
+    check_omlx_daemon,
+    get_omlx_base_url,
 )
 from opencode_config import (
     get_available_tiers,
@@ -94,6 +96,33 @@ def build_opencode_server_config() -> dict[str, object] | None:
         "mdnsDomain": mdns_domain,
         "cors": cors,
     }
+
+
+def build_omlx_provider(models: list[dict]) -> dict[str, object] | None:
+    """Build the OpenCode oMLX provider when its gated daemon is reachable."""
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
+        return None
+    reachable, _ = check_omlx_daemon()
+    if not reachable:
+        return None
+    models = [model for model in models if model.get("model_type") in {"llm", "vlm"}]
+    if not models:
+        return None
+    provider = {
+        "models": {model["name"]: {"name": model["name"]} for model in models},
+        "name": "oMLX",
+        "npm": "@ai-sdk/openai-compatible",
+        "options": {"baseURL": f"{get_omlx_base_url().rstrip('/')}/v1"},
+    }
+    if os.environ.get("OMLX_API_KEY", "").strip():
+        provider["options"]["apiKey"] = "{env:OMLX_API_KEY}"
+    return provider
+
+
+def register_omlx_provider(config: dict, provider: dict[str, object] | None) -> None:
+    """Register a reachable oMLX provider in any generated config branch."""
+    if provider:
+        config["provider"]["omlx"] = provider
 
 
 def main():
@@ -271,9 +300,20 @@ def main():
 
     # Decode local ollama
     local_ollama = {}
-    if local_ollama_models:
+    omlx_models = [
+        model
+        for model in local_ollama_models
+        if isinstance(model, dict) and model.get("provider") == "omlx"
+    ]
+    omlx_provider = build_omlx_provider(omlx_models)
+    ollama_models = [
+        model
+        for model in local_ollama_models
+        if not isinstance(model, dict) or model.get("provider", "ollama") != "omlx"
+    ]
+    if ollama_models:
         model_names = sorted(
-            m["name"] if isinstance(m, dict) else str(m) for m in local_ollama_models
+            m["name"] if isinstance(m, dict) else str(m) for m in ollama_models
         )
         # Enrich local Ollama models with context_length from `ollama show`
         # (ground truth — models.dev has no bare `ollama` provider). Local
@@ -377,6 +417,7 @@ def main():
             }
         if "ollama" in needed_providers and local_ollama:
             config["provider"]["ollama"] = local_ollama
+        register_omlx_provider(config, omlx_provider)
         if "opencode" in needed_providers and opencode_models:
             config["provider"]["opencode"] = {
                 "models": {
@@ -482,6 +523,7 @@ def main():
         if args.preset.startswith("local"):
             if local_ollama:
                 config["provider"]["ollama"] = local_ollama
+
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
         elif args.preset in ("omo-slim-openai", "omo-slim-thirty-dollars"):
             if openai_models:
@@ -674,6 +716,10 @@ def main():
                 config["disabled_providers"].extend(
                     ["anthropic", "ollama-cloud", "ollama"]
                 )
+
+        # Gated oMLX registration for every global tier class (one hoisted
+        # call after the tier chain so omlx/ fallbacks always resolve).
+        register_omlx_provider(config, omlx_provider)
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)

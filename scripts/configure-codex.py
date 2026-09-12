@@ -24,6 +24,8 @@ import ai_models
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
 import tier_registry
+import omlx
+from constants import check_omlx_daemon, get_omlx_base_url
 
 PROFILES_START = "# BEGIN DOTFILES MANAGED PROFILES"
 PROFILES_END = "# END DOTFILES MANAGED PROFILES"
@@ -44,7 +46,12 @@ env_key = "OLLAMA_API_KEY"
 """
 
 
-def build_profiles_config(ollama_model):
+def build_profiles_config(ollama_model, omlx_model=None):
+    omlx_profile = (
+        f'\n[profiles.omlx]\nmodel = "{omlx_model}"\nmodel_provider = "omlx"\n'
+        if omlx_model
+        else ""
+    )
     return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
 model = "claude-sonnet-5"
@@ -66,7 +73,7 @@ model_provider = "ollama"
 [profiles.copilot]
 model = "copilot-model-id"
 model_provider = "github-copilot"
-# END DOTFILES MANAGED PROFILES
+{omlx_profile}# END DOTFILES MANAGED PROFILES
 """
 
 
@@ -109,8 +116,15 @@ wire_api = "responses"
 """
 
 
-def build_provider_config():
+def build_provider_config(omlx_enabled=False):
     config = BASE_PROVIDER_CONFIG
+    if omlx_enabled:
+        config += (
+            '\n[model_providers.omlx]\nname = "oMLX Local"\n'
+            f'base_url = "{get_omlx_base_url().rstrip("/")}/v1"\nwire_api = "responses"\n'
+        )
+        if os.environ.get("OMLX_API_KEY", "").strip():
+            config += 'env_key = "OMLX_API_KEY"\n'
     if os.environ.get("GITHUB_TOKEN", "").strip():
         config += "\n" + COPILOT_PROVIDER_CONFIG
     return config
@@ -134,6 +148,7 @@ def strip_managed_profiles(content):
         "ollama",
         "local-solo",
         "copilot",
+        "omlx",
     ):
         content = re.sub(
             r"\n*\[profiles\.%s\].*?(?=\n\[|\Z)" % re.escape(profile),
@@ -157,6 +172,16 @@ def main():
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
     ollama_cloud_model, ollama_cloud_model_note = resolve_ollama_cloud_model()
+    omlx_model = None
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and check_omlx_daemon()[0]:
+        override = os.environ.get("DOTFILES_OMLX_CODEX_MODEL", "").strip()
+        candidates = [
+            m for m in omlx.list_omlx_models() if m.get("model_type") in {"llm", "vlm"}
+        ]
+        if override:
+            omlx_model = override.split("/", 1)[-1]
+        elif candidates:
+            omlx_model = sorted(candidates, key=lambda m: m.get("name", ""))[0]["name"]
 
     config_dir = os.path.expanduser("~/.codex")
     config_path = os.path.join(config_dir, "config.toml")
@@ -177,6 +202,7 @@ def main():
             "ollama-local",
             "ollama",
             "github-copilot",
+            "omlx",
         ):
             content = re.sub(
                 r"\n*\[model_providers\.%s\].*?(?=\n\[|\Z)" % re.escape(provider),
@@ -188,8 +214,10 @@ def main():
         new_content = content.rstrip()
         if new_content:
             new_content += "\n\n"
-        new_content += build_provider_config().rstrip()
-        new_content += "\n\n" + build_profiles_config(ollama_cloud_model).rstrip()
+        new_content += build_provider_config(omlx_model is not None).rstrip()
+        new_content += (
+            "\n\n" + build_profiles_config(ollama_cloud_model, omlx_model).rstrip()
+        )
 
         if new_content == original_content:
             logger.info(f"Providers already configured in {config_path}")

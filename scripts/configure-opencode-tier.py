@@ -56,6 +56,17 @@ def rewrite_ollama_cloud_models_for_proxy(value):
     return value
 
 
+def filter_omlx_models_for_gate(models):
+    """Exclude oMLX entries when its opt-in gate is disabled."""
+    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+        return models
+    return [
+        model
+        for model in models
+        if not isinstance(model, dict) or model.get("provider") != "omlx"
+    ]
+
+
 def orchestrate_tier_switch(
     tier: str,
     no_local_fallbacks: bool,
@@ -121,6 +132,7 @@ def orchestrate_tier_switch(
     local_role_models = {}
     if not no_local_fallbacks or local_preset:
         models_list = list_local_ollama_models()
+        models_list = filter_omlx_models_for_gate(models_list)
         if models_list:
             local_role_models = tier_registry.classify_models_for_preset(
                 models_list,

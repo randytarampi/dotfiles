@@ -7,6 +7,7 @@ import sys
 import os
 import argparse
 import subprocess
+import json
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -83,10 +84,7 @@ def main():
             continue_models = True
         if continue_models:
             local_models = list_local_ollama_models()
-            local_model_names = [
-                m["name"] if isinstance(m, dict) else str(m) for m in local_models
-            ]
-            local_models_str = " ".join(local_model_names)
+            local_models_str = json.dumps(local_models)
 
             generate_profiles_py = os.path.join(
                 SCRIPT_DIR, "generate-jetbrains-profiles.py"

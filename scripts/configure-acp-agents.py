@@ -20,9 +20,10 @@ DEFAULT_OUTPUT_PATH = os.path.join(REPO_ROOT, "configs", "opencode", "acp-agents
 
 import logger
 from cli_helpers import add_common_args
-from constants import get_ollama_local_base_url
+from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
 from discover_models import list_local_ollama_models
 from tier_resolve import resolve_roles_from_list
+import omlx
 
 # Internal-only metadata keys that must not leak into the generated
 # acp-agents.json / oh-my-opencode-slim.json — OpenCode's schema rejects
@@ -109,8 +110,12 @@ ACP_AGENTS = {
 
 
 def local_model():
-    """Resolve the local-solo orchestrator model to a concrete Ollama ID."""
-    models = list_local_ollama_models()
+    """Resolve the legacy local-solo model from Ollama entries only."""
+    models = [
+        model
+        for model in list_local_ollama_models()
+        if not isinstance(model, dict) or model.get("provider", "ollama") != "omlx"
+    ]
     resolved = resolve_roles_from_list(models) if models else {}
     model = resolved.get("solo") or resolved.get("code-gen")
     if not model:
@@ -156,7 +161,7 @@ def write_local_junie_config(model, dry_run):
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
-def write_local_codex_config(model, dry_run):
+def write_local_codex_config(model, dry_run, omlx_model=None):
     path = Path("~/.codex-local/config.toml").expanduser()
     content = (
         '[model_providers.ollama-local]\nname = "Ollama Local"\n'
@@ -164,6 +169,17 @@ def write_local_codex_config(model, dry_run):
         "[profiles.ollama-local]\n"
         f'model = "{model}"\nmodel_provider = "ollama-local"\n'
     )
+    if omlx_model and os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+        content += (
+            '\n[model_providers.omlx-local]\nname = "oMLX Local"\n'
+            f'base_url = "{get_omlx_base_url().rstrip("/")}/v1"\nwire_api = "responses"\n'
+        )
+        if os.environ.get("OMLX_API_KEY", "").strip():
+            content += 'env_key = "OMLX_API_KEY"\n'
+        content += (
+            "\n[profiles.omlx-local]\n"
+            f'model = "{omlx_model}"\nmodel_provider = "omlx-local"\n'
+        )
     if dry_run:
         logger.info(f"Would write local Codex config to {path}")
         return
@@ -171,8 +187,8 @@ def write_local_codex_config(model, dry_run):
     path.write_text(content, encoding="utf-8")
 
 
-def build_local_agents(model):
-    return {
+def build_local_agents(model, omlx_model=None):
+    agents = {
         "gemini--local": {
             "command": "gemini",
             "args": [],
@@ -216,6 +232,36 @@ def build_local_agents(model):
             },
         },
     }
+    if omlx_model:
+        auth = {
+            "ANTHROPIC_AUTH_TOKEN": (
+                "${OMLX_API_KEY}"
+                if os.environ.get("OMLX_API_KEY", "").strip()
+                else "omlx"
+            )
+        }
+        agents.update(
+            {
+                "claude--omlx": {
+                    "command": "claude-agent-acp",
+                    "args": ["--model", omlx_model],
+                    "description": "Claude Code (local oMLX)",
+                    "local_fallback": True,
+                    "env": {
+                        "ANTHROPIC_BASE_URL": get_omlx_base_url().rstrip("/") + "/v1",
+                        **auth,
+                    },
+                },
+                "codex--omlx": {
+                    "command": "codex-acp",
+                    "args": ["--profile", "omlx-local", "--model", omlx_model],
+                    "description": "Codex CLI (local oMLX)",
+                    "local_fallback": True,
+                    "env": {"CODEX_HOME": "${HOME}/.codex-local"},
+                },
+            }
+        )
+    return agents
 
 
 def main():
@@ -249,7 +295,18 @@ def main():
         }
         model = local_model()
         active_tier = active_pi_tier()
-        local_entries = build_local_agents(model)
+        omlx_model = None
+        if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and check_omlx_daemon()[0]:
+            candidates = [
+                m
+                for m in omlx.list_omlx_models()
+                if m.get("model_type") in {"llm", "vlm"}
+            ]
+            if candidates:
+                omlx_model = sorted(candidates, key=lambda m: m.get("name", ""))[0][
+                    "name"
+                ]
+        local_entries = build_local_agents(model, omlx_model)
         for name, entry in ACP_AGENTS.items():
             include_base = not requested_agents or name in requested_agents
             if include_base and shutil.which(entry["command"]):
@@ -291,9 +348,30 @@ def main():
                         f"Skipping ACP agent: {local_name} ({local_entry['command']}) not found"
                     )
 
-        if any(name in detected_agents for name in ("junie--local", "codex--local")):
+            omlx_name = f"{name}--omlx"
+            omlx_entry = local_entries.get(omlx_name)
+            if (
+                omlx_entry
+                and (not requested_agents or omlx_name in requested_agents)
+                and shutil.which(omlx_entry["command"])
+            ):
+                logger.info(
+                    f"Detected ACP agent: {omlx_name} ({omlx_entry['command']})"
+                )
+                omlx_entry = _strip_internal(omlx_entry)
+                omlx_entry["permissionMode"] = "ask"
+                omlx_entry["timeoutMs"] = 900000
+                detected_agents[omlx_name] = omlx_entry
+                detected_names.append(omlx_name)
+            elif omlx_entry and (not requested_agents or omlx_name in requested_agents):
+                logger.info(f"Skipping {omlx_name} ({omlx_entry['command']}) not found")
+
+        if any(
+            name in detected_agents
+            for name in ("junie--local", "codex--local", "junie--omlx", "codex--omlx")
+        ):
             write_local_junie_config(model, args.dry_run)
-            write_local_codex_config(model, args.dry_run)
+            write_local_codex_config(model, args.dry_run, omlx_model)
 
         output_path = os.path.abspath(os.path.expanduser(args.output))
         output_dir = os.path.dirname(output_path) or "."
