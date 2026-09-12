@@ -10,40 +10,40 @@ DRIFT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DRIFT)
 
 
-def test_omlx_drift_is_skipped_when_gate_is_off(monkeypatch):
+def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
-    with patch.object(DRIFT, "check_omlx_daemon") as check_daemon:
-        assert DRIFT.check_omlx_models() == []
-    check_daemon.assert_not_called()
+    assert DRIFT.check_local_engine_models() == []
 
 
-def test_omlx_drift_skips_when_daemon_is_unreachable(monkeypatch):
+def test_local_engine_drift_skips_when_engine_is_unreachable(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     with (
-        patch.object(DRIFT, "deployed_omlx_references", return_value={"missing"}),
-        patch.object(DRIFT, "check_omlx_daemon", return_value=(False, "down")),
+        patch.object(DRIFT, "deployed_engine_references", return_value={"missing"}),
+        patch.object(DRIFT, "active_engines", return_value=["omlx"]),
+        patch.object(DRIFT, "iter_engine_models_strict", return_value=None),
     ):
-        assert DRIFT.check_omlx_models() == []
+        assert DRIFT.check_local_engine_models() == []
 
 
-def test_omlx_drift_skips_catalogue_error_without_false_missing(monkeypatch):
+def test_local_engine_drift_skips_catalogue_error_without_false_missing(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     with (
-        patch.object(DRIFT, "deployed_omlx_references", return_value={"missing"}),
-        patch.object(DRIFT, "check_omlx_daemon", return_value=(True, "ok")),
-        patch.object(DRIFT, "list_omlx_models", return_value=[]),
-        patch.object(DRIFT.omlx, "_get_json", side_effect=RuntimeError("HTTP error")),
+        patch.object(DRIFT, "deployed_engine_references", return_value={"missing"}),
+        patch.object(DRIFT, "active_engines", return_value=["omlx"]),
+        patch.object(DRIFT, "iter_engine_models_strict", return_value=None),
     ):
-        assert DRIFT.check_omlx_models() == []
+        assert DRIFT.check_local_engine_models() == []
 
 
-def test_omlx_drift_reports_missing_deployed_model(monkeypatch):
+def test_local_engine_drift_reports_missing_deployed_model(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     with (
-        patch.object(DRIFT, "deployed_omlx_references", return_value={"missing"}),
-        patch.object(DRIFT, "check_omlx_daemon", return_value=(True, "ok")),
-        patch.object(DRIFT, "list_omlx_models", return_value=[{"name": "present"}]),
+        patch.object(DRIFT, "deployed_engine_references", return_value={"missing"}),
+        patch.object(DRIFT, "active_engines", return_value=["omlx"]),
+        patch.object(
+            DRIFT, "iter_engine_models_strict", return_value=[{"name": "present"}]
+        ),
     ):
-        assert DRIFT.check_omlx_models() == [
-            "oMLX model missing is not present in the live /v1/models catalog"
+        assert DRIFT.check_local_engine_models() == [
+            "omlx model missing is not present in the live catalogue"
         ]

@@ -19,6 +19,7 @@ if LIB_DIR not in sys.path:
 import logger
 from opencode_config import get_available_tiers, get_slim_config_path
 from constants import check_ollama_daemon
+from local_engines import engine_gate_active, resolve_engine
 from tier_resolve import resolve_roles_from_list, list_local_ollama_models
 from cli_helpers import add_common_args, add_model_override_args
 import tier_registry
@@ -58,12 +59,20 @@ def rewrite_ollama_cloud_models_for_proxy(value):
 
 def filter_omlx_models_for_gate(models):
     """Exclude oMLX entries when its opt-in gate is disabled."""
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
+    if all(
+        engine_gate_active(model.get("provider", ""))
+        for model in models
+        if isinstance(model, dict)
+    ):
         return models
     return [
         model
         for model in models
-        if not isinstance(model, dict) or model.get("provider") != "omlx"
+        if not isinstance(model, dict)
+        or not (
+            (engine := resolve_engine(model.get("provider", "")))
+            and engine.get("gate_required")
+        )
     ]
 
 

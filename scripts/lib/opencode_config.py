@@ -9,6 +9,7 @@ shared logic used by multiple configure scripts.
 import json
 import os
 import re
+from local_engines import LOCAL_ENGINES
 
 # Recognized provider prefixes that map to opencode.json provider blocks.
 # `ollama-cloud` is matched before `ollama` to avoid mis-parsing "ollama-cloud/...".
@@ -16,8 +17,7 @@ _PROVIDER_PREFIXES = (
     "openai",
     "anthropic",
     "ollama-cloud",
-    "omlx",
-    "ollama",
+    *sorted(LOCAL_ENGINES, key=len, reverse=True),
     "opencode",
     "github-copilot",
     "google",
@@ -26,7 +26,11 @@ _PROVIDER_PREFIXES = (
 
 # Matches "<provider>/<model>" model strings used throughout presets.
 _PROVIDER_MODEL_RE = re.compile(
-    r"^(ollama-cloud|omlx|ollama|openai|anthropic|opencode|github-copilot|google|openrouter)/[A-Za-z0-9._:/\-]+$"
+    r"^(?:ollama-cloud|openai|anthropic|opencode|github-copilot|google|openrouter|"
+    + "|".join(
+        re.escape(provider) for provider in sorted(LOCAL_ENGINES, key=len, reverse=True)
+    )
+    + r")/[A-Za-z0-9._:/\-]+$"
 )
 
 # Path to the project configs directory (relative to this lib module)

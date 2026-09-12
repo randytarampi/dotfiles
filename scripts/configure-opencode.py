@@ -24,11 +24,9 @@ if LIB_DIR not in sys.path:
 
 import logger
 from constants import (
-    get_ollama_local_base_url,
     get_provider_base_url,
     check_ollama_daemon,
-    check_omlx_daemon,
-    get_omlx_base_url,
+    get_ollama_local_base_url,
 )
 from opencode_config import (
     get_available_tiers,
@@ -39,6 +37,7 @@ from opencode_config import (
 from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
+from local_engines import engine_gate_active, local_provider_block, resolve_engine
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
@@ -98,31 +97,26 @@ def build_opencode_server_config() -> dict[str, object] | None:
     }
 
 
-def build_omlx_provider(models: list[dict]) -> dict[str, object] | None:
-    """Build the OpenCode oMLX provider when its gated daemon is reachable."""
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
+def build_local_provider(provider: str, models: list[dict]) -> dict[str, object] | None:
+    """Build an OpenCode local-engine provider from the shared registry."""
+    if not engine_gate_active(provider):
         return None
-    reachable, _ = check_omlx_daemon()
-    if not reachable:
-        return None
-    models = [model for model in models if model.get("model_type") in {"llm", "vlm"}]
+    engine = resolve_engine(provider)
+    chat_types = engine.get("chat_model_types") if engine else None
+    if chat_types:
+        models = [model for model in models if model.get("model_type") in chat_types]
     if not models:
         return None
-    provider = {
-        "models": {model["name"]: {"name": model["name"]} for model in models},
-        "name": "oMLX",
-        "npm": "@ai-sdk/openai-compatible",
-        "options": {"baseURL": f"{get_omlx_base_url().rstrip('/')}/v1"},
-    }
-    if os.environ.get("OMLX_API_KEY", "").strip():
-        provider["options"]["apiKey"] = "{env:OMLX_API_KEY}"
-    return provider
+    return local_provider_block(
+        provider,
+        {model["name"]: {"name": model["name"]} for model in models},
+    )
 
 
-def register_omlx_provider(config: dict, provider: dict[str, object] | None) -> None:
-    """Register a reachable oMLX provider in any generated config branch."""
-    if provider:
-        config["provider"]["omlx"] = provider
+def register_local_provider(config: dict, provider: str, block: dict | None) -> None:
+    """Register a local-engine provider in any generated config branch."""
+    if block:
+        config["provider"][provider] = block
 
 
 def main():
@@ -300,16 +294,23 @@ def main():
 
     # Decode local ollama
     local_ollama = {}
-    omlx_models = [
-        model
-        for model in local_ollama_models
-        if isinstance(model, dict) and model.get("provider") == "omlx"
-    ]
-    omlx_provider = build_omlx_provider(omlx_models)
+    local_engine_models = {}
+    for model in local_ollama_models:
+        if isinstance(model, dict) and model.get("provider") != "ollama":
+            local_engine_models.setdefault(model.get("provider"), []).append(model)
+    local_engine_providers = {
+        provider: block
+        for provider, models in local_engine_models.items()
+        if (block := build_local_provider(provider, models))
+    }
     ollama_models = [
         model
         for model in local_ollama_models
-        if not isinstance(model, dict) or model.get("provider", "ollama") != "omlx"
+        if not isinstance(model, dict)
+        or not (
+            (engine := resolve_engine(model.get("provider", "ollama")))
+            and engine.get("provider_config")
+        )
     ]
     if ollama_models:
         model_names = sorted(
@@ -330,12 +331,7 @@ def main():
                 # or ollama show; the image hook routes attachments to the observer.
                 modalities=get_ollama_modalities(name, models_dev_data),
             )
-        local_ollama = {
-            "models": models_obj,
-            "name": "Ollama",
-            "npm": "@ai-sdk/openai-compatible",
-            "options": {"baseURL": get_ollama_local_base_url()},
-        }
+        local_ollama = local_provider_block("ollama", models_obj)
 
     meridian_plugin_path = os.environ.get("MERIDIAN_PLUGIN_PATH", "")
     # include_anthropic governs the anthropic provider block in global mode.
@@ -417,7 +413,8 @@ def main():
             }
         if "ollama" in needed_providers and local_ollama:
             config["provider"]["ollama"] = local_ollama
-        register_omlx_provider(config, omlx_provider)
+        for provider, block in local_engine_providers.items():
+            register_local_provider(config, provider, block)
         if "opencode" in needed_providers and opencode_models:
             config["provider"]["opencode"] = {
                 "models": {
@@ -719,7 +716,8 @@ def main():
 
         # Gated oMLX registration for every global tier class (one hoisted
         # call after the tier chain so omlx/ fallbacks always resolve).
-        register_omlx_provider(config, omlx_provider)
+        for provider, block in local_engine_providers.items():
+            register_local_provider(config, provider, block)
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)

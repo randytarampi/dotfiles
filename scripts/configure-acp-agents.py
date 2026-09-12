@@ -20,10 +20,9 @@ DEFAULT_OUTPUT_PATH = os.path.join(REPO_ROOT, "configs", "opencode", "acp-agents
 
 import logger
 from cli_helpers import add_common_args
-from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
+from constants import get_ollama_local_base_url
 from discover_models import list_local_ollama_models
-from tier_resolve import resolve_roles_from_list
-import omlx
+from local_engines import local_endpoint_for, resolve_engine, resolve_local_winner
 
 # Internal-only metadata keys that must not leak into the generated
 # acp-agents.json / oh-my-opencode-slim.json — OpenCode's schema rejects
@@ -110,20 +109,19 @@ ACP_AGENTS = {
 
 
 def local_model():
-    """Resolve the legacy local-solo model from Ollama entries only."""
-    models = [
-        model
-        for model in list_local_ollama_models()
-        if not isinstance(model, dict) or model.get("provider", "ollama") != "omlx"
-    ]
-    resolved = resolve_roles_from_list(models) if models else {}
-    model = resolved.get("solo") or resolved.get("code-gen")
+    """Resolve the best chat-capable model from the combined local pool."""
+    models = list_local_ollama_models()
+    model = resolve_local_winner(models, "anthropic")
     if not model:
         logger.warning(
             "No local model available for ACP agent fallback; using sentinel"
         )
-        model = "ollama/no-model-available"
-    return model.split("/", 1)[-1]
+        model = ""
+    return model
+
+
+def _model_parts(model_ref):
+    return model_ref.split("/", 1) if "/" in model_ref else ("ollama", model_ref)
 
 
 def active_pi_tier():
@@ -135,20 +133,26 @@ def active_pi_tier():
     )
 
 
-def write_local_junie_config(model, dry_run):
+def write_local_junie_config(model_ref, dry_run):
     path = Path("~/.junie-local/model-groups.json").expanduser()
+    provider, model = _model_parts(model_ref)
+    endpoint = local_endpoint_for(provider, "openai")
+    if endpoint is None:
+        provider = "ollama"
+        model = _model_parts(model_ref)[1]
+        endpoint = local_endpoint_for(provider, "openai")
+    base_url, api_key_env = endpoint
+    provider_config = {
+        "baseUrl": base_url + "/chat/completions",
+        "apiType": "OpenAICompletion",
+    }
+    if api_key_env and os.environ.get(api_key_env, "").strip():
+        provider_config["apiKeyEnv"] = api_key_env
     config = {
-        "providers": {
-            "ollama": {
-                "baseUrl": get_ollama_local_base_url().rstrip("/")
-                + "/chat/completions",
-                "apiType": "OpenAICompletion",
-                "apiKeyEnv": "OLLAMA_API_KEY",
-            }
-        },
+        "providers": {provider: provider_config},
         "groups": {
             "local-solo": {
-                "provider": "ollama",
+                "provider": provider,
                 "primaryModel": model,
                 "fasterModel": model,
             }
@@ -161,25 +165,32 @@ def write_local_junie_config(model, dry_run):
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
-def write_local_codex_config(model, dry_run, omlx_model=None):
+def write_local_codex_config(model_ref, dry_run):
     path = Path("~/.codex-local/config.toml").expanduser()
+    provider, model = _model_parts(model_ref)
+    engine = resolve_engine(provider)
+    endpoint = local_endpoint_for(provider, "openai")
+    if engine is None or endpoint is None:
+        provider = "ollama"
+        model = _model_parts(model_ref)[1]
+        engine = resolve_engine(provider)
+        endpoint = local_endpoint_for(provider, "openai")
+    base_url, api_key_env = endpoint
+    profile_provider = engine["profile_provider"]
+    if engine["provider_config"]:
+        provider_block = (
+            f'[model_providers.{profile_provider}]\nname = "{provider.title()} Local"\n'
+            f'base_url = "{base_url}"\nwire_api = "responses"\n'
+        )
+        if api_key_env and os.environ.get(api_key_env, "").strip():
+            provider_block += f'env_key = "{api_key_env}"\n'
+    else:
+        provider_block = ""
     content = (
-        '[model_providers.ollama-local]\nname = "Ollama Local"\n'
-        f'base_url = "{get_ollama_local_base_url()}"\nwire_api = "responses"\n\n'
-        "[profiles.ollama-local]\n"
-        f'model = "{model}"\nmodel_provider = "ollama-local"\n'
+        provider_block
+        + "\n[profiles.local]\n"
+        + f'model = "{model}"\nmodel_provider = "{profile_provider}"\n'
     )
-    if omlx_model and os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
-        content += (
-            '\n[model_providers.omlx-local]\nname = "oMLX Local"\n'
-            f'base_url = "{get_omlx_base_url().rstrip("/")}/v1"\nwire_api = "responses"\n'
-        )
-        if os.environ.get("OMLX_API_KEY", "").strip():
-            content += 'env_key = "OMLX_API_KEY"\n'
-        content += (
-            "\n[profiles.omlx-local]\n"
-            f'model = "{omlx_model}"\nmodel_provider = "omlx-local"\n'
-        )
     if dry_run:
         logger.info(f"Would write local Codex config to {path}")
         return
@@ -187,80 +198,74 @@ def write_local_codex_config(model, dry_run, omlx_model=None):
     path.write_text(content, encoding="utf-8")
 
 
-def build_local_agents(model, omlx_model=None):
-    agents = {
-        "gemini--local": {
+def build_local_agents(model_ref):
+    provider, model = _model_parts(model_ref)
+    engine = resolve_engine(provider)
+    anthropic_endpoint = local_endpoint_for(provider, "anthropic")
+    if anthropic_endpoint and engine:
+        base_url, api_key_env = anthropic_endpoint
+        claude_env = {
+            "ANTHROPIC_BASE_URL": base_url,
+            "ANTHROPIC_AUTH_TOKEN": (
+                "${%s}" % api_key_env
+                if api_key_env and os.environ.get(api_key_env, "").strip()
+                else "local"
+            ),
+        }
+    else:
+        claude_env = {
+            "ANTHROPIC_BASE_URL": get_ollama_local_base_url(),
+            "ANTHROPIC_AUTH_TOKEN": "ollama",
+        }
+    agents = {}
+    if engine and engine.get("gemini_support"):
+        agents["gemini--local"] = {
             "command": "gemini",
             "args": [],
             "description": "Gemini CLI (local Ollama fallback) - EXPERIMENTAL",
             "experimental": True,
             "local_fallback": True,
             "env": {"OLLAMA_LOCAL_MODEL": model},
-        },
-        "claude--local": {
-            "command": "claude-agent-acp",
-            "args": ["--model", model],
-            "description": "Claude Code (local Ollama fallback)",
-            "local_fallback": True,
-            "env": {
-                "ANTHROPIC_BASE_URL": get_ollama_local_base_url(),
-                "ANTHROPIC_AUTH_TOKEN": "ollama",
-            },
-        },
-        "codex--local": {
-            "command": "codex-acp",
-            "args": ["--profile", "ollama", "--model", model],
-            "description": "Codex CLI (local Ollama fallback)",
-            "local_fallback": True,
-            "env": {"CODEX_HOME": "${HOME}/.codex-local"},
-        },
-        "junie--local": {
-            "command": "junie",
-            "args": ["--acp", "true"],
-            "description": "Junie (local Ollama fallback)",
-            "local_fallback": True,
-            "env": {"JUNIE_MODEL_GROUPS": "${HOME}/.junie-local/model-groups.json"},
-        },
-        "pi--local": {
-            "command": "npx",
-            "args": ["-y", "pi-acp"],
-            "description": "Pi coding agent (local Ollama fallback)",
-            "local_fallback": True,
-            "env": {
-                "PI_CODING_AGENT_DIR": "${HOME}/.pi-local/agent",
-                "PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true",
-            },
-        },
-    }
-    if omlx_model:
-        auth = {
-            "ANTHROPIC_AUTH_TOKEN": (
-                "${OMLX_API_KEY}"
-                if os.environ.get("OMLX_API_KEY", "").strip()
-                else "omlx"
-            )
         }
-        agents.update(
-            {
-                "claude--omlx": {
-                    "command": "claude-agent-acp",
-                    "args": ["--model", omlx_model],
-                    "description": "Claude Code (local oMLX)",
-                    "local_fallback": True,
-                    "env": {
-                        "ANTHROPIC_BASE_URL": get_omlx_base_url().rstrip("/") + "/v1",
-                        **auth,
-                    },
-                },
-                "codex--omlx": {
-                    "command": "codex-acp",
-                    "args": ["--profile", "omlx-local", "--model", omlx_model],
-                    "description": "Codex CLI (local oMLX)",
-                    "local_fallback": True,
-                    "env": {"CODEX_HOME": "${HOME}/.codex-local"},
-                },
-            }
+    else:
+        logger.info(
+            "Skipping gemini--local: winning local engine is not Gemini-compatible"
         )
+    agents.update(
+        {
+            "claude--local": {
+                "command": "claude-agent-acp",
+                "args": ["--model", model],
+                "description": "Claude Code (combined local pool fallback)",
+                "local_fallback": True,
+                "env": claude_env,
+            },
+            "codex--local": {
+                "command": "codex-acp",
+                "args": ["--profile", "local", "--model", model],
+                "description": "Codex CLI (combined local pool fallback)",
+                "local_fallback": True,
+                "env": {"CODEX_HOME": "${HOME}/.codex-local"},
+            },
+            "junie--local": {
+                "command": "junie",
+                "args": ["--acp", "true"],
+                "description": "Junie (local Ollama fallback)",
+                "local_fallback": True,
+                "env": {"JUNIE_MODEL_GROUPS": "${HOME}/.junie-local/model-groups.json"},
+            },
+            "pi--local": {
+                "command": "npx",
+                "args": ["-y", "pi-acp"],
+                "description": "Pi coding agent (local Ollama fallback)",
+                "local_fallback": True,
+                "env": {
+                    "PI_CODING_AGENT_DIR": "${HOME}/.pi-local/agent",
+                    "PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true",
+                },
+            },
+        }
+    )
     return agents
 
 
@@ -295,18 +300,7 @@ def main():
         }
         model = local_model()
         active_tier = active_pi_tier()
-        omlx_model = None
-        if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and check_omlx_daemon()[0]:
-            candidates = [
-                m
-                for m in omlx.list_omlx_models()
-                if m.get("model_type") in {"llm", "vlm"}
-            ]
-            if candidates:
-                omlx_model = sorted(candidates, key=lambda m: m.get("name", ""))[0][
-                    "name"
-                ]
-        local_entries = build_local_agents(model, omlx_model)
+        local_entries = build_local_agents(model) if model else {}
         for name, entry in ACP_AGENTS.items():
             include_base = not requested_agents or name in requested_agents
             if include_base and shutil.which(entry["command"]):
@@ -348,30 +342,9 @@ def main():
                         f"Skipping ACP agent: {local_name} ({local_entry['command']}) not found"
                     )
 
-            omlx_name = f"{name}--omlx"
-            omlx_entry = local_entries.get(omlx_name)
-            if (
-                omlx_entry
-                and (not requested_agents or omlx_name in requested_agents)
-                and shutil.which(omlx_entry["command"])
-            ):
-                logger.info(
-                    f"Detected ACP agent: {omlx_name} ({omlx_entry['command']})"
-                )
-                omlx_entry = _strip_internal(omlx_entry)
-                omlx_entry["permissionMode"] = "ask"
-                omlx_entry["timeoutMs"] = 900000
-                detected_agents[omlx_name] = omlx_entry
-                detected_names.append(omlx_name)
-            elif omlx_entry and (not requested_agents or omlx_name in requested_agents):
-                logger.info(f"Skipping {omlx_name} ({omlx_entry['command']}) not found")
-
-        if any(
-            name in detected_agents
-            for name in ("junie--local", "codex--local", "junie--omlx", "codex--omlx")
-        ):
+        if any(name in detected_agents for name in ("junie--local", "codex--local")):
             write_local_junie_config(model, args.dry_run)
-            write_local_codex_config(model, args.dry_run, omlx_model)
+            write_local_codex_config(model, args.dry_run)
 
         output_path = os.path.abspath(os.path.expanduser(args.output))
         output_dir = os.path.dirname(output_path) or "."

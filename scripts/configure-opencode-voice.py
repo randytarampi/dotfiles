@@ -43,8 +43,6 @@ from constants import (
     get_meridian_base_url,
     get_ollama_local_base_url,
     check_ollama_daemon,
-    check_omlx_daemon,
-    get_omlx_base_url,
     get_provider_base_url,
     is_meridian_configured,
 )
@@ -55,24 +53,27 @@ from opencode_config import get_available_tiers
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from tier_resolve import list_local_ollama_models
 from provider_endpoints import PROVIDER_ENDPOINTS
-import omlx
+from local_engines import (
+    active_engines,
+    audio_models,
+    local_endpoint_for,
+    resolve_engine,
+)
 import tier_registry
 
 
 def local_voice_provider(model_ref):
     """Return the provider-aware voice config for a local model reference."""
-    if model_ref.startswith("omlx/"):
-        config = {
-            "endpoint": get_omlx_base_url().rstrip("/") + "/v1",
-            "model": strip_provider_prefix(model_ref),
-        }
-        if os.environ.get("OMLX_API_KEY", "").strip():
-            config["apiKeyEnv"] = "OMLX_API_KEY"
-        return config
-    return {
-        "endpoint": get_ollama_local_base_url(),
-        "model": strip_provider_prefix(model_ref),
-    }
+    provider = model_ref.split("/", 1)[0] if "/" in model_ref else "ollama"
+    endpoint = local_endpoint_for(provider, "openai")
+    if endpoint is None:
+        provider = "ollama"
+        endpoint = local_endpoint_for(provider, "openai")
+    base_url, api_key_env = endpoint
+    config = {"endpoint": base_url, "model": strip_provider_prefix(model_ref)}
+    if api_key_env and os.environ.get(api_key_env, "").strip():
+        config["apiKeyEnv"] = api_key_env
+    return config
 
 
 def get_voice_config(
@@ -252,26 +253,27 @@ def get_voice_config(
 
     has_openai_key = bool(os.environ.get("OPENAI_API_KEY", ""))
 
-    def configure_omlx_stt():
-        if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
-            return False
-        if os.environ.get("DOTFILES_USE_LOCAL_OMLX", "true").lower() not in (
-            "true",
-            "1",
-        ):
-            return False
-        if not check_omlx_daemon()[0]:
-            return False
-        models = [
-            m for m in omlx.list_omlx_models() if m.get("model_type") == "audio_stt"
-        ]
-        if not models:
-            return False
-        voice_config["sttEndpoint"] = get_omlx_base_url().rstrip("/") + "/v1"
-        voice_config["sttModel"] = strip_provider_prefix(models[0]["name"])
-        if os.environ.get("OMLX_API_KEY", "").strip():
-            voice_config["sttApiKeyEnv"] = "OMLX_API_KEY"
-        return True
+    def configure_local_stt():
+        for provider in active_engines():
+            engine = resolve_engine(provider)
+            opt_out_env = engine.get("audio_opt_out_env") if engine else None
+            if opt_out_env and os.environ.get(opt_out_env, "true").lower() not in (
+                "true",
+                "1",
+            ):
+                continue
+            models = [
+                m for m in audio_models(provider) if m.get("model_type") == "audio_stt"
+            ]
+            endpoint = local_endpoint_for(provider, "openai")
+            if not models or endpoint is None:
+                continue
+            voice_config["sttEndpoint"] = endpoint[0]
+            voice_config["sttModel"] = strip_provider_prefix(models[0]["name"])
+            if endpoint[1] and os.environ.get(endpoint[1], "").strip():
+                voice_config["sttApiKeyEnv"] = endpoint[1]
+            return True
+        return False
 
     if is_plus_tier:
         # OpenAI tiers — use OpenAI for STT too
@@ -293,7 +295,7 @@ def get_voice_config(
         voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif configure_omlx_stt():
+    elif configure_local_stt():
         pass
     # else: local/pro use whisper-cli (no stt config needed — plugin auto-detects)
 

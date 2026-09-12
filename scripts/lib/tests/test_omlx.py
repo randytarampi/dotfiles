@@ -2,9 +2,10 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import discover_models
+import local_engines
 import omlx
 import tier_resolve
 
@@ -143,10 +144,13 @@ def test_discovery_merges_omlx_and_ollama_with_ollama_collision_wins():
         patch.object(discover_models, "find_ollama", return_value="ollama"),
         patch.object(discover_models.subprocess, "run") as run,
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            discover_models, "check_omlx_daemon", return_value=(True, "HTTP 200")
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "HTTP 200"),
+                "list_models": lambda include_cloud=False: omlx_models,
+            },
         ),
-        patch.object(discover_models, "list_omlx_models", return_value=omlx_models),
     ):
         run.return_value.stdout = ollama_output
         models = discover_models.list_local_ollama_models()
@@ -157,17 +161,32 @@ def test_discovery_merges_omlx_and_ollama_with_ollama_collision_wins():
     ]
 
 
+def test_merged_discovery_forwards_include_cloud_to_ollama():
+    with (
+        patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "0"}, clear=False),
+        patch.dict(
+            local_engines.LOCAL_ENGINES["ollama"],
+            {"list_models": lambda include_cloud=False: [{"name": "model:cloud"}]},
+        ),
+    ):
+        models = discover_models.list_local_ollama_models(include_cloud=True)
+    assert models == [{"name": "model:cloud"}]
+
+
 def test_discovery_keeps_ollama_models_when_omlx_merge_fails():
     ollama_output = "NAME ID SIZE MODIFIED\nollama-only abc 1 GB now\n"
     with (
         patch.object(discover_models, "find_ollama", return_value="ollama"),
         patch.object(discover_models.subprocess, "run") as run,
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            discover_models, "check_omlx_daemon", return_value=(True, "HTTP 200")
-        ),
-        patch.object(
-            discover_models, "list_omlx_models", side_effect=RuntimeError("omlx down")
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "HTTP 200"),
+                "list_models": lambda include_cloud=False: (_ for _ in ()).throw(
+                    RuntimeError("omlx down")
+                ),
+            },
         ),
     ):
         run.return_value.stdout = ollama_output
@@ -224,43 +243,46 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
     models = [{"name": "qwen", "provider": "omlx", "model_type": "llm"}]
     with (
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            configure_opencode, "check_omlx_daemon", return_value=(True, "ok")
-        ),
-        patch.object(
-            configure_opencode, "get_omlx_base_url", return_value="http://omlx:8000"
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "ok"),
+                "base_url": lambda: "http://omlx:8000",
+            },
         ),
     ):
-        provider = configure_opencode.build_omlx_provider(models)
+        provider = configure_opencode.build_local_provider("omlx", models)
     assert provider["options"]["baseURL"] == "http://omlx:8000/v1"
     assert provider["models"] == {"qwen": {"name": "qwen"}}
 
     with (patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "0"}, clear=False),):
-        assert configure_opencode.build_omlx_provider(models) is None
+        assert configure_opencode.build_local_provider("omlx", models) is None
 
 
 def test_configure_opencode_omlx_provider_is_absent_when_daemon_is_down():
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     with (
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            configure_opencode, "check_omlx_daemon", return_value=(False, "down")
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {"health_check": lambda: (False, "down")},
         ),
     ):
-        assert configure_opencode.build_omlx_provider([]) is None
+        assert configure_opencode.build_local_provider("omlx", []) is None
 
 
 def test_configure_opencode_omlx_provider_excludes_audio_only_models():
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     with (
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            configure_opencode, "check_omlx_daemon", return_value=(True, "ok")
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"], {"health_check": lambda: (True, "ok")}
         ),
     ):
         assert (
-            configure_opencode.build_omlx_provider(
-                [{"name": "speech", "provider": "omlx", "model_type": "audio_stt"}]
+            configure_opencode.build_local_provider(
+                "omlx",
+                [{"name": "speech", "provider": "omlx", "model_type": "audio_stt"}],
             )
             is None
         )
@@ -271,13 +293,13 @@ def test_configure_opencode_global_cloud_tier_registers_omlx_provider():
     models = [{"name": "chat", "provider": "omlx", "model_type": "llm"}]
     with (
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(
-            configure_opencode, "check_omlx_daemon", return_value=(True, "ok")
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"], {"health_check": lambda: (True, "ok")}
         ),
     ):
-        provider = configure_opencode.build_omlx_provider(models)
+        provider = configure_opencode.build_local_provider("omlx", models)
         config = {"provider": {}}
-        configure_opencode.register_omlx_provider(config, provider)
+        configure_opencode.register_local_provider(config, "omlx", provider)
     assert config["provider"]["omlx"] is provider
 
 
@@ -298,15 +320,16 @@ def test_merged_discovery_ignores_omlx_endpoint_env_when_gate_is_off(monkeypatch
     monkeypatch.setenv("OMLX_HOST", "omlx.example")
     monkeypatch.setenv("OMLX_PORT", "8000")
     monkeypatch.setenv("OMLX_BASE_URL", "http://omlx.example:8000")
+    health_check = MagicMock(return_value=(True, "ok"))
     with (
         patch.object(discover_models, "find_ollama", return_value="ollama"),
         patch.object(discover_models.subprocess, "run") as run,
-        patch.object(discover_models, "check_omlx_daemon") as check_daemon,
+        patch.dict(local_engines.LOCAL_ENGINES["omlx"], {"health_check": health_check}),
     ):
         run.return_value.stdout = "NAME ID SIZE MODIFIED\nollama-only abc 1 GB now\n"
         models = discover_models.list_local_ollama_models()
     assert [model["name"] for model in models] == ["ollama-only"]
-    check_daemon.assert_not_called()
+    health_check.assert_not_called()
 
 
 def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
@@ -323,8 +346,9 @@ def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
         }
     }
     with (
-        patch.object(
-            generate_profiles, "get_omlx_base_url", return_value="http://omlx:8000"
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {"base_url": lambda: "http://omlx:8000"},
         ),
         patch.dict(os.environ, {}, clear=True),
     ):
@@ -366,9 +390,12 @@ def test_pi_omlx_provider_is_emitted_alongside_local_ollama_provider():
     configure_pi = _load_script("configure_pi", "configure-pi.py")
     with (
         patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
-        patch.object(configure_pi, "check_omlx_daemon", return_value=(True, "ok")),
-        patch.object(
-            configure_pi, "get_omlx_base_url", return_value="http://omlx:8000"
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "ok"),
+                "base_url": lambda: "http://omlx:8000",
+            },
         ),
         patch.object(
             configure_pi,
@@ -377,7 +404,7 @@ def test_pi_omlx_provider_is_emitted_alongside_local_ollama_provider():
         ),
     ):
         providers = {"ollama": {"models": [{"id": "ollama-model"}]}}
-        providers["omlx"] = configure_pi.build_omlx_provider(["qwen"])
+        providers["omlx"] = configure_pi.build_local_provider("omlx", ["qwen"])
     assert "ollama" in providers and "omlx" in providers
     assert providers["omlx"]["baseUrl"] == "http://omlx:8000/v1"
 
@@ -389,7 +416,7 @@ def test_pi_omlx_provider_filters_non_chat_models():
         {"name": "speech", "provider": "omlx", "model_type": "audio_stt"},
         {"name": "embed", "provider": "omlx", "model_type": "embedding"},
     ]
-    assert configure_pi.omlx_chat_model_ids(models) == ["chat"]
+    assert configure_pi.local_chat_model_ids(models, "omlx") == ["chat"]
 
 
 def test_pi_omlx_context_ignores_ollama_cap():
@@ -406,7 +433,10 @@ def test_pi_omlx_context_ignores_ollama_cap():
 def test_voice_omlx_llm_endpoint_and_api_key_are_conditional():
     voice = _load_script("configure_opencode_voice", "configure-opencode-voice.py")
     with (
-        patch.object(voice, "get_omlx_base_url", return_value="http://omlx:8000"),
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {"base_url": lambda: "http://omlx:8000"},
+        ),
         patch.dict(os.environ, {"OMLX_API_KEY": "secret"}, clear=False),
     ):
         configured = voice.local_voice_provider("omlx/chat")
@@ -420,13 +450,13 @@ def test_voice_omlx_llm_endpoint_and_api_key_are_conditional():
     assert "apiKeyEnv" not in unconfigured
 
 
-def test_acp_legacy_local_model_ignores_omlx_entries():
+def test_acp_local_model_uses_combined_pool():
     acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
     seen = []
 
     def resolve(models):
         seen.extend(models)
-        return {"solo": "ollama/legacy"}
+        return {"solo": "omlx/winner"}
 
     with (
         patch.object(
@@ -437,13 +467,219 @@ def test_acp_legacy_local_model_ignores_omlx_entries():
                 {"name": "winner", "provider": "omlx"},
             ],
         ),
-        patch.object(acp, "resolve_roles_from_list", side_effect=resolve),
+        patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
     ):
-        assert acp.local_model() == "legacy"
-    assert [model["name"] for model in seen] == ["legacy"]
+        assert acp.local_model() == "omlx/winner"
+    assert [model["name"] for model in seen] == ["legacy", "winner"]
+
+
+def test_local_engine_registry_routes_a_third_engine_without_consumer_branch(
+    monkeypatch,
+):
+    codex = _load_script("configure_codex", "configure-codex.py")
+    fake = {
+        "api": "openai",
+        "base_url": lambda: "http://lmstudio:1234",
+        "api_key_env": None,
+        "anthropic_support": False,
+        "gemini_support": False,
+        "profile_provider": "lmstudio-local",
+        "provider_config": True,
+    }
+    monkeypatch.setitem(local_engines.LOCAL_ENGINES, "lmstudio", fake)
+    config = codex.build_provider_config("lmstudio/chat")
+    assert "[model_providers.lmstudio-local]" in config
+    assert 'base_url = "http://lmstudio:1234/v1"' in config
+
+
+def _fake_lmstudio_engine():
+    """A synthetic third engine satisfying the registry contract.
+
+    This is the N-engine contract proof: every consumer below materializes
+    its output through registry dispatch with NO consumer-side engine branch.
+    """
+    return {
+        "gate_env": None,
+        "api": "openai",
+        "base_url": lambda: "http://lmstudio:1234",
+        "api_key_env": None,
+        "anthropic_support": False,
+        "gemini_support": False,
+        "profile_provider": "lmstudio-local",
+        "provider_config": True,
+        "health_check": None,
+        "display_name": "LM Studio",
+        "npm": "@ai-sdk/openai-compatible",
+        "resolve_model": False,
+        "context_fallback": 32768,
+        "default_port": "1234",
+        "chat_model_types": {"llm"},
+        "gate_required": False,
+        "drift_check": True,
+        "details_provider_arg": False,
+        "caddy_path": "/lmstudio/*",
+        "port_env": "LMSTUDIO_PORT",
+        "caddy_route": {"blocked": "/admin*", "allowed": "/v1/*"},
+        "list_models": lambda include_cloud=False: [
+            {
+                "name": "lmchat",
+                "provider": "lmstudio",
+                "model_type": "llm",
+                "capabilities": {"completion", "tools"},
+                "primary_category": "llm",
+                "size_gb": 0.0,
+            }
+        ],
+        "audio_discovery": lambda: [
+            {"name": "lmvoice", "provider": "lmstudio", "model_type": "audio_stt"}
+        ],
+        "metadata_lookup": None,
+    }
+
+
+def test_fleet_synthetic_engine_materializes_across_consumers(monkeypatch, tmp_path):
+    """The N-engine contract: a registered engine materializes every
+    consumer's output with no consumer-side engine branch."""
+    fake = _fake_lmstudio_engine()
+    monkeypatch.setitem(local_engines.LOCAL_ENGINES, "lmstudio", fake)
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("DOTFILES_USE_LOCAL_OMLX", None)
+
+        # 1. Registry activation + merged discovery
+        assert local_engines.engine_gate_active("lmstudio") is True
+        assert "lmstudio" in local_engines.active_engines()
+        pool = local_engines.merged_local_pool()
+        assert any(m["name"] == "lmchat" and m["provider"] == "lmstudio" for m in pool)
+
+        # 2. OpenCode provider block via the shared registry builder
+        block = local_engines.local_provider_block("lmstudio", ["lmchat"])
+        assert block["options"]["baseURL"] == "http://lmstudio:1234/v1"
+        assert block["name"] == "LM Studio"
+        assert "apiKey" not in block["options"]
+
+        # 3. Pi provider via the registry-driven consumer
+        configure_pi = _load_script("configure_pi", "configure-pi.py")
+        pi_provider = configure_pi.build_local_provider("lmstudio", ["lmchat"])
+        assert pi_provider["baseUrl"] == "http://lmstudio:1234/v1"
+
+        # 4. Junie endpoint via the registry-driven consumer
+        # (empty apiType → origin per Junie contract; the script appends
+        # per-apiType paths, so also verify the OpenAICompletion emission)
+        generate_profiles = _load_script(
+            "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
+        )
+        junie = generate_profiles.build_provider_configs(
+            {"providers": {"lmstudio": {}}}
+        )
+        assert junie["lmstudio"]["baseUrl"] == "http://lmstudio:1234"
+        junie_openai = generate_profiles.build_provider_configs(
+            {
+                "providers": {
+                    "lmstudio": {
+                        "apiType": "OpenAICompletion",
+                        "baseUrl": "http://lmstudio:1234/v1",
+                    }
+                }
+            }
+        )
+        assert (
+            junie_openai["lmstudio"]["baseUrl"]
+            == "http://lmstudio:1234/v1/chat/completions"
+        )
+
+        # 5. Voice audio via the registry audio contract
+        audio = local_engines.audio_models("lmstudio")
+        assert [m["name"] for m in audio] == ["lmvoice"]
+        voice = _load_script("configure_opencode_voice", "configure-opencode-voice.py")
+        configured = voice.local_voice_provider("lmstudio/lmvoice")
+        assert configured == {"endpoint": "http://lmstudio:1234/v1", "model": "lmvoice"}
+
+        # 6. Caddy route via the registry caddy contract
+        configure_caddy = _load_script("configure_caddy", "configure-caddy.py")
+        route_block = configure_caddy.build_route_block(str(tmp_path))
+        assert "handle_path /lmstudio/*" in route_block
+        assert "reverse_proxy @lmstudio_read 127.0.0.1:1234" in route_block
+
+        # 7. Tier filtering accepts the engine's models
+        resolved = tier_resolve.resolve_roles_from_list(
+            [{"name": "lmchat", "provider": "lmstudio", "size_gb": 0.0}]
+        )
+        assert resolved["code-gen"] == "lmstudio/lmchat"
+
+        # 8. Provider-prefix validation derives from the registry
+        assert local_engines.resolve_engine("lmstudio") is fake
+
+        # 9. ACP winner routing through the shared resolver
+        winner = local_engines.resolve_local_winner(
+            [
+                {"name": "lmchat", "provider": "lmstudio", "size_gb": 0.0},
+                {"name": "ollama-chat", "provider": "ollama", "size_gb": 0.0},
+            ]
+        )
+        assert winner == "lmstudio/lmchat"
+
+        # 10. Codex profile via the registry (covered in detail by the
+        # dedicated third-engine test above; assert the winner resolves here)
+        assert local_engines.local_endpoint_for("lmstudio", "openai") == (
+            "http://lmstudio:1234/v1",
+            None,
+        )
+
+        # 11. Drift: deployed reference validated against the fake catalogue
+        # (provider-aware patch returning BARE model ids, matching the real
+        # deployed_engine_references contract which strips the provider prefix)
+        drift = _load_script("check_model_drift", "check-model-drift.py")
+        with patch.object(
+            drift,
+            "deployed_engine_references",
+            side_effect=lambda provider: (
+                {"lmchat"} if provider == "lmstudio" else set()
+            ),
+        ):
+            violations = drift.check_local_engine_models()
+        assert violations == []
+
+    # Gate off → engine inactive everywhere
+    fake["gate_env"] = "LMSTUDIO_GATE"
+    with patch.dict(os.environ, {"LMSTUDIO_GATE": "0"}, clear=False):
+        assert local_engines.engine_gate_active("lmstudio") is False
+        assert "lmstudio" not in local_engines.active_engines()
+        assert local_engines.iter_engine_models("lmstudio") == []
+
+
+def test_unknown_engine_winner_falls_back_to_ollama(monkeypatch):
+    acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
+    calls = []
+
+    def resolve(models):
+        calls.append(models)
+        return (
+            {"solo": "unknown/model"} if len(calls) == 1 else {"solo": "ollama/legacy"}
+        )
+
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
+    with (
+        patch.object(
+            acp,
+            "list_local_ollama_models",
+            return_value=[
+                {"name": "unknown/model", "provider": "lmstudio"},
+                {"name": "legacy", "provider": "ollama"},
+            ],
+        ),
+        patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
+    ):
+        assert acp.local_model() == "ollama/legacy"
+    assert len(calls) == 2
+
+
+def test_gemini_local_is_ollama_only():
+    acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
+    assert "gemini--local" in acp.build_local_agents("ollama/chat")
+    assert "gemini--local" not in acp.build_local_agents("omlx/chat")
 
 
 def test_pi_omlx_provider_is_absent_when_gate_is_off():
     configure_pi = _load_script("configure_pi", "configure-pi.py")
     with patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "0"}, clear=False):
-        assert configure_pi.build_omlx_provider(["chat"]) is None
+        assert configure_pi.build_local_provider("omlx", ["chat"]) is None

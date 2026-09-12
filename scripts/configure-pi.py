@@ -18,7 +18,6 @@ from constants import (
     check_ollama_daemon,
     check_omlx_daemon,
     get_meridian_base_url,
-    get_omlx_base_url,
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
@@ -26,6 +25,7 @@ from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from tier_resolve import get_model_details
+from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
 import tier_registry
 
 # pi-skills is not an npm package; skills are provisioned through settings["skills"].
@@ -73,7 +73,8 @@ def _model_details(model_id, provider="ollama"):
     """Return cached local-model details for a provider/model pair."""
     cache_key = (provider, model_id)
     if cache_key not in _model_details_cache:
-        if provider == "omlx":
+        engine = resolve_engine(provider)
+        if engine and engine.get("details_provider_arg"):
             _model_details_cache[cache_key] = get_model_details(model_id, provider)
         else:
             _model_details_cache[cache_key] = get_model_details(model_id)
@@ -90,8 +91,9 @@ def _model_context_window(model_id, local, provider="ollama"):
     cap = _ollama_context_cap()
     if local:
         native = _native_context(model_id, provider)
-        if provider == "omlx":
-            return native or 32768
+        engine = resolve_engine(provider)
+        if engine and engine.get("context_fallback") is not None:
+            return native or engine["context_fallback"]
         if native:
             return min(cap, native)
     elif model_id.endswith(":cloud"):
@@ -163,34 +165,42 @@ def model_entry(model_id, name=None, local=False, provider="ollama"):
     }
 
 
-def build_omlx_provider(model_ids):
-    """Build the gated oMLX Pi provider, or return None when unavailable."""
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") != "1":
+def build_local_provider(provider, model_ids):
+    """Build a gated local-engine Pi provider, or return None when unavailable."""
+    if not engine_gate_active(provider):
         return None
-    reachable, _ = check_omlx_daemon()
-    if not reachable:
+    engine = resolve_engine(provider)
+    endpoint = local_endpoint_for(provider, "openai")
+    if engine is None or endpoint is None:
         return None
-    provider = {
-        "baseUrl": f"{get_omlx_base_url().rstrip('/')}/v1",
+    health_check = engine.get("health_check")
+    if health_check and not health_check()[0]:
+        return None
+    base_url, api_key_env = endpoint
+    provider_config = {
+        "baseUrl": base_url,
         "api": "openai-completions",
         "models": [
-            model_entry(model_id, local=True, provider="omlx") for model_id in model_ids
+            model_entry(model_id, local=True, provider=provider)
+            for model_id in model_ids
         ],
     }
-    if os.environ.get("OMLX_API_KEY", "").strip():
-        provider["apiKey"] = "$OMLX_API_KEY"
-    return provider
+    if api_key_env and os.environ.get(api_key_env, "").strip():
+        provider_config["apiKey"] = f"${api_key_env}"
+    return provider_config
 
 
-def omlx_chat_model_ids(models):
-    """Return only discovered oMLX llm/vlm IDs for Pi's chat provider."""
+def local_chat_model_ids(models, provider):
+    """Return chat-capable IDs for a registered local provider."""
+    engine = resolve_engine(provider)
+    chat_types = engine.get("chat_model_types") if engine else None
     return sorted(
         {
             model["name"]
             for model in models
             if isinstance(model, dict)
-            and model.get("provider") == "omlx"
-            and model.get("model_type") in {"llm", "vlm"}
+            and model.get("provider") == provider
+            and (not chat_types or model.get("model_type") in chat_types)
         }
     )
 
@@ -453,9 +463,28 @@ def main():
         {v for v in category_models.values() if not v.endswith("no-model-available")}
     )
     ollama_ids = sorted(
-        {ref.split("/", 1)[-1] for ref in local_refs if not ref.startswith("omlx/")}
+        {
+            ref.split("/", 1)[-1]
+            for ref in local_refs
+            if not (
+                (
+                    engine := resolve_engine(
+                        ref.split("/", 1)[0] if "/" in ref else "ollama"
+                    )
+                )
+                and engine.get("provider_config")
+            )
+        }
     )
-    omlx_ids = omlx_chat_model_ids(local_models)
+    local_engine_ids = {
+        provider: local_chat_model_ids(local_models, provider)
+        for provider in {
+            model.get("provider")
+            for model in local_models
+            if isinstance(model, dict) and model.get("provider")
+        }
+        if (engine := resolve_engine(provider)) and engine.get("provider_config")
+    }
     compaction_tokens = _compaction_tokens(local_refs)
 
     orchestrator_model = role_models["orchestrator"]
@@ -526,9 +555,10 @@ def main():
         "apiKey": "ollama",
         "models": [model_entry(x, local=True) for x in ollama_ids],
     }
-    omlx_provider = build_omlx_provider(omlx_ids)
-    if omlx_provider:
-        providers["omlx"] = omlx_provider
+    for provider, model_ids in local_engine_ids.items():
+        provider_config = build_local_provider(provider, model_ids)
+        if provider_config:
+            providers[provider] = provider_config
     cloud_path = ROOT / "configs/opencode/ollama-cloud-models.json"
     with cloud_path.open(encoding="utf-8") as f:
         cloud = json.load(f).get("models", {})

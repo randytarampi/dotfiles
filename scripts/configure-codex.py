@@ -24,8 +24,8 @@ import ai_models
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
 import tier_registry
-import omlx
-from constants import check_omlx_daemon, get_omlx_base_url
+from discover_models import list_local_ollama_models
+from local_engines import local_endpoint_for, resolve_engine, resolve_local_winner
 
 PROFILES_START = "# BEGIN DOTFILES MANAGED PROFILES"
 PROFILES_END = "# END DOTFILES MANAGED PROFILES"
@@ -46,11 +46,23 @@ env_key = "OLLAMA_API_KEY"
 """
 
 
-def build_profiles_config(ollama_model, omlx_model=None):
-    omlx_profile = (
-        f'\n[profiles.omlx]\nmodel = "{omlx_model}"\nmodel_provider = "omlx"\n'
-        if omlx_model
-        else ""
+def _model_parts(model_ref):
+    return model_ref.split("/", 1) if "/" in model_ref else ("ollama", model_ref)
+
+
+def resolve_local_model():
+    """Resolve the best chat-capable model from the combined local pool."""
+    models = list_local_ollama_models()
+    return resolve_local_winner(models, "openai") or ""
+
+
+def build_profiles_config(ollama_model, local_model=""):
+    provider, model = _model_parts(local_model) if local_model else ("ollama", "local")
+    engine = resolve_engine(provider)
+    profile_provider = engine["profile_provider"] if engine else "ollama"
+    local_profile = (
+        f'\n[profiles.local]\nmodel = "{model}"\n'
+        f'model_provider = "{profile_provider}"\n'
     )
     return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
@@ -73,7 +85,7 @@ model_provider = "ollama"
 [profiles.copilot]
 model = "copilot-model-id"
 model_provider = "github-copilot"
-{omlx_profile}# END DOTFILES MANAGED PROFILES
+{local_profile}# END DOTFILES MANAGED PROFILES
 """
 
 
@@ -116,15 +128,20 @@ wire_api = "responses"
 """
 
 
-def build_provider_config(omlx_enabled=False):
+def build_provider_config(local_model=""):
     config = BASE_PROVIDER_CONFIG
-    if omlx_enabled:
+    provider, _ = _model_parts(local_model) if local_model else ("", "")
+    engine = resolve_engine(provider) if provider else None
+    endpoint = local_endpoint_for(provider, "openai") if engine else None
+    if engine and endpoint and engine["provider_config"]:
+        base_url, api_key_env = endpoint
+        profile_provider = engine["profile_provider"]
         config += (
-            '\n[model_providers.omlx]\nname = "oMLX Local"\n'
-            f'base_url = "{get_omlx_base_url().rstrip("/")}/v1"\nwire_api = "responses"\n'
+            f'\n[model_providers.{profile_provider}]\nname = "Local {provider}"\n'
+            f'base_url = "{base_url}"\nwire_api = "responses"\n'
         )
-        if os.environ.get("OMLX_API_KEY", "").strip():
-            config += 'env_key = "OMLX_API_KEY"\n'
+        if api_key_env and os.environ.get(api_key_env, "").strip():
+            config += f'env_key = "{api_key_env}"\n'
     if os.environ.get("GITHUB_TOKEN", "").strip():
         config += "\n" + COPILOT_PROVIDER_CONFIG
     return config
@@ -172,16 +189,7 @@ def main():
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
     ollama_cloud_model, ollama_cloud_model_note = resolve_ollama_cloud_model()
-    omlx_model = None
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and check_omlx_daemon()[0]:
-        override = os.environ.get("DOTFILES_OMLX_CODEX_MODEL", "").strip()
-        candidates = [
-            m for m in omlx.list_omlx_models() if m.get("model_type") in {"llm", "vlm"}
-        ]
-        if override:
-            omlx_model = override.split("/", 1)[-1]
-        elif candidates:
-            omlx_model = sorted(candidates, key=lambda m: m.get("name", ""))[0]["name"]
+    local_model = resolve_local_model()
 
     config_dir = os.path.expanduser("~/.codex")
     config_path = os.path.join(config_dir, "config.toml")
@@ -214,9 +222,9 @@ def main():
         new_content = content.rstrip()
         if new_content:
             new_content += "\n\n"
-        new_content += build_provider_config(omlx_model is not None).rstrip()
+        new_content += build_provider_config(local_model).rstrip()
         new_content += (
-            "\n\n" + build_profiles_config(ollama_cloud_model, omlx_model).rstrip()
+            "\n\n" + build_profiles_config(ollama_cloud_model, local_model).rstrip()
         )
 
         if new_content == original_content:

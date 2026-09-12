@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import local_engines
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -17,21 +19,19 @@ def load_script(name):
     return module
 
 
-def test_voice_omlx_stt_selection_and_opt_out(monkeypatch):
+def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
     voice = load_script("configure-opencode-voice.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "true")
     monkeypatch.setenv("OMLX_API_KEY", "secret")
-    with patch.object(
-        voice, "check_omlx_daemon", return_value=(True, "HTTP 200")
-    ), patch.object(
-        voice, "check_ollama_daemon", return_value=(False, False)
-    ), patch.object(
-        voice, "list_local_ollama_models", return_value=[]
-    ), patch.object(
-        voice.omlx,
-        "list_omlx_models",
-        return_value=[{"name": "omlx/whisper", "model_type": "audio_stt"}],
+    with patch.dict(
+        local_engines.LOCAL_ENGINES["omlx"],
+        {
+            "health_check": lambda: (True, "HTTP 200"),
+            "audio_discovery": lambda: [
+                {"name": "omlx/whisper", "model_type": "audio_stt"}
+            ],
+        },
     ), patch.object(
         voice.tier_registry,
         "load_registry",
@@ -47,27 +47,17 @@ def test_voice_omlx_stt_selection_and_opt_out(monkeypatch):
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "false")
     monkeypatch.delenv("OMLX_API_KEY", raising=False)
     with patch.object(
-        voice, "check_omlx_daemon", return_value=(True, "HTTP 200")
-    ), patch.object(
-        voice, "check_ollama_daemon", return_value=(False, False)
-    ), patch.object(
-        voice, "list_local_ollama_models", return_value=[]
-    ), patch.object(
-        voice.omlx,
-        "list_omlx_models",
-        return_value=[{"name": "whisper", "model_type": "audio_stt"}],
-    ), patch.object(
         voice.tier_registry, "uses_local_placeholders", return_value=False
     ):
         assert "sttEndpoint" not in voice.get_voice_config("local")
 
 
-def test_voice_omlx_stt_absent_falls_back(monkeypatch):
+def test_voice_local_stt_absent_falls_back(monkeypatch):
     voice = load_script("configure-opencode-voice.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    with patch.object(
-        voice, "check_omlx_daemon", return_value=(True, "HTTP 200")
-    ), patch.object(voice.omlx, "list_omlx_models", return_value=[]):
+    with patch.dict(
+        local_engines.LOCAL_ENGINES["omlx"], {"audio_discovery": lambda: []}
+    ):
         assert "sttEndpoint" not in voice.get_voice_config("local")
 
 
@@ -82,52 +72,46 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
     assert "/omlx/*" not in caddy.build_route_block("/tmp/portal")
 
 
-def test_codex_omlx_provider_and_profile_are_conditional(monkeypatch):
+def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
     codex = load_script("configure-codex.py")
     monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
-    enabled = codex.build_provider_config(True) + codex.build_profiles_config(
-        "cloud", "chat"
+    enabled = codex.build_provider_config("omlx/chat") + codex.build_profiles_config(
+        "cloud", "omlx/chat"
     )
-    assert "model_providers.omlx" in enabled
-    assert "profiles.omlx" in enabled
-    disabled = codex.build_provider_config(False) + codex.build_profiles_config("cloud")
-    assert "model_providers.omlx" not in disabled
-    assert "profiles.omlx" not in disabled
+    assert "model_providers.omlx-local" in enabled
+    assert "profiles.local" in enabled
+    assert 'model = "chat"' in enabled
+    ollama = codex.build_provider_config("ollama/chat") + codex.build_profiles_config(
+        "cloud", "ollama/chat"
+    )
+    assert "model_providers.omlx-local" not in ollama
+    assert 'model_provider = "ollama"' in ollama
 
 
-def test_acp_omlx_variants_are_reachable_only(monkeypatch):
+def test_acp_local_agent_follows_pool_winner_engine(monkeypatch):
     acp = load_script("configure-acp-agents.py")
     monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
-    with patch.object(acp, "check_omlx_daemon", return_value=(True, "HTTP 200")):
-        with patch.object(
-            acp.omlx,
-            "list_omlx_models",
-            return_value=[{"name": "chat", "model_type": "llm"}],
-        ):
-            agents = acp.build_local_agents("ollama-model", "chat")
-    assert agents["claude--omlx"]["env"]["ANTHROPIC_BASE_URL"].endswith("/v1")
-    assert "codex--omlx" in agents
-    assert not any(
-        name.endswith("--omlx") for name in acp.build_local_agents("ollama-model")
+    agents = acp.build_local_agents("omlx/chat")
+    assert agents["claude--local"]["env"]["ANTHROPIC_BASE_URL"].endswith("/v1")
+    assert agents["codex--local"]["args"][:2] == ["--profile", "local"]
+    assert not any(name.endswith("--omlx") for name in agents)
+    assert (
+        acp.build_local_agents("ollama-model")["claude--local"]["env"][
+            "ANTHROPIC_AUTH_TOKEN"
+        ]
+        == "ollama"
     )
 
 
-def test_acp_main_emits_omlx_agents_and_keeps_legacy_ollama_model(
-    tmp_path, monkeypatch
-):
+def test_acp_main_emits_pool_driven_local_agents(tmp_path, monkeypatch):
     acp = load_script("configure-acp-agents.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.delenv("OMLX_API_KEY", raising=False)
     output = tmp_path / "acp-agents.json"
+    output.write_text(json.dumps({"acpAgents": {"claude--omlx": {}}}))
     with (
-        patch.object(acp, "local_model", return_value="ollama-model"),
+        patch.object(acp, "local_model", return_value="omlx/omlx-chat"),
         patch.object(acp, "active_pi_tier", return_value="pro"),
-        patch.object(acp, "check_omlx_daemon", return_value=(True, "HTTP 200")),
-        patch.object(
-            acp.omlx,
-            "list_omlx_models",
-            return_value=[{"name": "omlx-chat", "model_type": "llm"}],
-        ),
         patch.object(acp.shutil, "which", return_value="/usr/bin/fake"),
         patch.object(acp, "write_local_junie_config"),
         patch.object(acp, "write_local_codex_config"),
@@ -139,12 +123,12 @@ def test_acp_main_emits_omlx_agents_and_keeps_legacy_ollama_model(
                 "--output",
                 str(output),
                 "--agents",
-                "claude--omlx,codex--omlx",
+                "claude--local,codex--local",
             ],
         ),
     ):
         acp.main()
     agents = json.loads(output.read_text())["acpAgents"]
-    assert "claude--omlx" in agents
-    assert "codex--omlx" in agents
-    assert agents["claude--omlx"]["env"]["ANTHROPIC_AUTH_TOKEN"] == "omlx"
+    assert "claude--local" in agents
+    assert "codex--local" in agents
+    assert not any(name.endswith("--omlx") for name in agents)

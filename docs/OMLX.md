@@ -69,14 +69,26 @@ origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
 
 ## Provider integration
 
+### Engine-agnostic local pool
+
+“Local” means the combined pool of all models served by configured local engines;
+selection does not distinguish Ollama from oMLX. Adding another engine such as
+LM Studio requires a discovery module plus one `LOCAL_ENGINES` registry entry
+covering its endpoint, metadata, audio, and Caddy contracts; consumers iterate
+those registry contracts and remain unchanged. Model drift checking is also
+automatically covered by the registry dispatch. Per-engine app pinning belongs
+to that engine's launcher, for example `omlx launch codex`, `omlx launch claude`,
+or `omlx launch hermes`. Generated provider blocks remain separate because each
+endpoint needs its own base URL.
+
 | Tool | oMLX integration |
 |------|------------------|
 | OpenCode | Gated, reachable provider for all tier classes; uses `omlx/<id>` references. |
 | Tier resolution | Merged `_local` pool; Ollama wins bare-name collisions. |
 | Junie | Local groups preserve provider metadata through the wrapper JSON boundary and use an OpenAI-compatible endpoint. |
 | Pi | oMLX provider alongside Ollama; native `max_model_len` context is used. |
-| ACP agents | `claude--omlx` uses Anthropic `/v1/messages`; `codex--omlx` uses OpenAI `/v1`; a harmless local token is used without a key. |
-| Codex | Gated provider/profile; `DOTFILES_OMLX_CODEX_MODEL` overrides model selection. |
+| ACP agents | `claude--local` and `codex--local` are pool-driven; the winning engine supplies the endpoint and a harmless local token is used without a key. |
+| Codex | Gated pool-driven local profile; the winning engine supplies the endpoint. Pin an app with the engine's own launcher. |
 | Voice | oMLX `audio_stt` is selected below explicit OpenAI STT tiers; `DOTFILES_USE_LOCAL_OMLX=false` opts out. TTS remains Piper and Pi voice is unchanged. |
 
 ## Caddy

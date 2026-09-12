@@ -21,10 +21,10 @@ from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
-    get_omlx_base_url,
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
+from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
 
 
 def normalize_endpoint(base_url: str, api_type: str) -> str:
@@ -54,8 +54,11 @@ def build_provider_configs(cfg: dict) -> dict:
         api_key = os.environ.get(key_env, "") if key_env else ""
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
-        if not base_url and name == "omlx":
-            base_url = f"{get_omlx_base_url().rstrip('/')}/v1"
+        engine = resolve_engine(name)
+        if not base_url and engine:
+            endpoint = local_endpoint_for(name, "openai")
+            if endpoint:
+                base_url = endpoint[0]
         elif not base_url and (definition.get("hostEnv") or definition.get("portEnv")):
             if name == "ollama":
                 base_url = get_ollama_local_base_url()
@@ -80,7 +83,7 @@ def build_provider_configs(cfg: dict) -> dict:
             "apiType": definition.get("apiType", ""),
             "apiKey": api_key,
         }
-        if name == "omlx" and not api_key:
+        if engine and engine.get("provider_config") and not api_key:
             provider_config.pop("apiKey")
         provider_configs[name] = provider_config
     return provider_configs
@@ -164,15 +167,30 @@ def main():
         local_models = [
             m if isinstance(m, dict) else str(m) for m in list_local_ollama_models()
         ]
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1" and any(
-        isinstance(model, dict) and model.get("provider") == "omlx"
-        for model in local_models
-    ):
-        cfg.setdefault("providers", {})["omlx"] = {
-            "baseUrl": f"{get_omlx_base_url().rstrip('/')}/v1",
-            "apiType": "OpenAICompletion",
-            "apiKeyEnv": "OMLX_API_KEY",
+    if any(
+        engine_gate_active(provider)
+        for provider in {
+            model.get("provider")
+            for model in local_models
+            if isinstance(model, dict) and model.get("provider")
         }
+    ):
+        for provider_name in {
+            model.get("provider")
+            for model in local_models
+            if isinstance(model, dict) and model.get("provider")
+        }:
+            engine = resolve_engine(provider_name)
+            if (
+                engine
+                and engine_gate_active(provider_name)
+                and engine.get("provider_config")
+            ):
+                cfg.setdefault("providers", {})[provider_name] = {
+                    "baseUrl": f"{engine['base_url']().rstrip('/')}/v1",
+                    "apiType": "OpenAICompletion",
+                    "apiKeyEnv": engine["api_key_env"],
+                }
     tier_specs = []
     for tier in registry.get("presets", {}):
         if not tier_registry.uses_local_placeholders(registry, tier):
@@ -251,21 +269,23 @@ def main():
         ):
             logger.info(f"GITHUB_TOKEN not set — skipping experimental {name} group")
             continue
-        if (
-            provider == "ollama"
-            and not local_models
-            and not primary_ref.startswith("_local:")
-        ):
+        engine = resolve_engine(provider)
+        if engine and not local_models and not primary_ref.startswith("_local:"):
             logger.info(f"No local Ollama models available — skipping {name}")
             continue
         primary = model_id(primary_ref, provider)
-        if provider == "ollama" and not primary_ref.startswith("_local:"):
+        if (
+            engine
+            and engine.get("resolve_model")
+            and not primary_ref.startswith("_local:")
+        ):
             primary = resolve_model(primary, ollama_model_names)
         if primary_ref.startswith("_local:") or not primary:
             logger.warning(f"Could not resolve primary model for {name} — skipping")
             continue
         faster = model_id(faster_ref, faster_provider) if faster_ref else ""
-        if faster and faster_provider == "ollama":
+        faster_engine = resolve_engine(faster_provider)
+        if faster and faster_engine and faster_engine.get("resolve_model"):
             faster = resolve_model(faster, ollama_model_names)
         data = providers[provider].copy()
         data["id"] = primary

@@ -21,6 +21,12 @@ from env import load_env
 from file_utils import write_text_file
 from caddy_domains import load_domains
 from cli_helpers import add_common_args
+from local_engines import (
+    active_engines,
+    engine_gate_active,
+    local_caddy_target,
+    resolve_engine,
+)
 
 DEFAULT_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 DEFAULT_AUTH_CONF = "~/.config/caddy/caddy-auth.conf"
@@ -166,17 +172,23 @@ def build_route_block(plannotator_portal_dir: str) -> str:
         "  }",
         "",
     ]
-    if os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "1":
-        port = os.environ.get("OMLX_PORT", "8000").strip() or "8000"
+    for provider in active_engines():
+        engine = resolve_engine(provider)
+        route = engine.get("caddy_route") if engine else None
+        if not route:
+            continue
+        default_port = engine["default_port"]
+        port = os.environ.get(engine["port_env"], default_port).strip() or default_port
+        route_path, _ = local_caddy_target(provider)
         lines.extend(
             [
-                "  # oMLX inference — READ-ONLY (write endpoints blocked)",
-                "  handle_path /omlx/* {",
-                "    @omlx_blocked path /admin* /v1/mcp/* /v1/config* /v1/delete* /v1/push*",
-                "    respond @omlx_blocked 403",
+                f"  # {engine['display_name']} inference — READ-ONLY (write endpoints blocked)",
+                f"  handle_path {route_path} {{",
+                f"    @{provider}_blocked path {route['blocked']}",
+                f"    respond @{provider}_blocked 403",
                 "",
-                "    @omlx_read path /v1/chat/completions /v1/completions /v1/responses /v1/messages /v1/embeddings /v1/rerank /v1/models /v1/models/status /v1/audio/* /health",
-                f"    reverse_proxy @omlx_read 127.0.0.1:{port} {{",
+                f"    @{provider}_read path {route['allowed']}",
+                f"    reverse_proxy @{provider}_read 127.0.0.1:{port} {{",
                 "      flush_interval -1",
                 "    }",
                 "",

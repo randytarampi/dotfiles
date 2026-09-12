@@ -18,7 +18,7 @@ import subprocess
 
 import logger
 from discover_models import find_ollama, list_local_ollama_models
-from omlx import get_omlx_model_status, map_omlx_capabilities
+from local_engines import resolve_engine
 
 
 def extract_param_count(model_name: str) -> int:
@@ -55,9 +55,11 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
     Returns defaults (param_count=None, capabilities=[], others None/False)
     if ollama show fails or no parameters found.
     """
-    if provider == "omlx" or model_name.startswith("omlx/"):
+    engine = resolve_engine(provider)
+    if engine and engine.get("metadata_lookup"):
         bare_name = model_name.split("/", 1)[-1]
-        status = get_omlx_model_status(bare_name)
+        status = engine["metadata_lookup"](bare_name)
+        capabilities = list(engine["metadata_capabilities"](status)) if status else []
         model_type = status.get("model_type", "llm")
         context_length = status.get("max_context_window") or status.get("max_model_len")
         is_moe = status.get("is_moe")
@@ -65,7 +67,7 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
             is_moe = status.get("is_moe_model")
         return {
             "param_count": extract_param_count(bare_name) or None,
-            "capabilities": list(map_omlx_capabilities(status)),
+            "capabilities": capabilities,
             "architecture": None,
             "embedding_length": None,
             "context_length": context_length,
