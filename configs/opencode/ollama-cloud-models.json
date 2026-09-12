@@ -18,17 +18,26 @@
     "glm-5.3-flash": {
       "name": "glm-5.3-flash"
     },
+    "glm-5.1": {
+      "name": "glm-5.1"
+    },
     "deepseek-v4-pro": {
       "name": "deepseek-v4-pro"
     },
     "deepseek-v4-flash": {
       "name": "deepseek-v4-flash"
     },
+    "deepseek-v4.1-flash": {
+      "name": "deepseek-v4.1-flash"
+    },
     "gemma4:31b": {
       "name": "gemma4:31b"
     },
     "nemotron-3-ultra": {
       "name": "nemotron-3-ultra"
+    },
+    "nemotron-3-super": {
+      "name": "nemotron-3-super"
     },
     "minimax-m3": {
       "name": "minimax-m3"

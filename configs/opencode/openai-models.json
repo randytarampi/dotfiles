@@ -1,5 +1,8 @@
 {
   "models": {
+    "gpt-6-astra": {
+      "name": "gpt-6-astra"
+    },
     "gpt-5.5": {
       "name": "gpt-5.5"
     },

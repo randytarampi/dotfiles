@@ -82,6 +82,14 @@ model announcement that affects your presets; `make verify` warns when the
 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
 for the automated check.
 
+## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
+
+- Added to ollama-cloud allowlist: `deepseek-v4.1-flash`, `glm-5.1`, `nemotron-3-super` (catalogue verified 2026-09-12 vs ollama.com/search?c=cloud).
+- Added `gpt-6-astra` to openai allowlist (flagship, 1.05M ctx/128K output, per developers.openai.com/api/docs/models).
+- plus council γ: gpt-5.4 → gpt-5.6-terra. plus/plus-anthropic gpt-5.4-mini chain entries removed where OpenAI's mapped replacement (gpt-5.6-luna) equals the role primary; gpt-6-astra added as plus/plus-anthropic orchestrator/oracle fallback head. gpt-5.4-mini remains in omo-slim-* observer chains.
+- Dedup invariants enforced in `scripts/verify-slim-invariants.py`: primary-not-in-own-chain, no-repeat-in-chain.
+- Ollama pricing facts for the tier-alignment record: Pro $20/mo, $60 monthly credits, 3 concurrent requests; Max $100/mo, $300 monthly credits, 10 concurrent (ollama.com/pricing, verified 2026-09-12; peak pricing 12:00–18:00 UTC Mon–Fri).
+
 ## free preset (cross-provider free tier)
 
 The `free` preset distributes work across free offerings from three

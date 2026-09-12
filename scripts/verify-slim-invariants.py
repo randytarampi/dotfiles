@@ -8,10 +8,12 @@ alpha/beta/gamma/synth member, or within-array duplicates. These waste fallback
 slots and mask the real alternative order. This check catches them at `make verify`.
 
 Invariants enforced:
-  1. No role's primary model appears in that role's own fallback array.
+  1. No role's primary model appears in that role's own fallback array
+     (enforced by `_primary_chain_violations`).
   2. No council fallback entry mirrors an alpha/beta/gamma/synth member of the
      same tier's council preset.
-  3. No within-array duplicates in any fallback array.
+  3. No within-array duplicates in any fallback array (enforced by
+     `_model_dedupe_violations`).
   4. Preset names are consistent across the role presets, council presets, and
      tier definitions.
   5. Top-level council alpha/beta/gamma models match each tier definition.
@@ -144,8 +146,33 @@ def _provider_dedupe_violations(arr, path="fallback"):
     return violations
 
 
+def _primary_chain_violations(arr, primary, path):
+    """Return violations when a role's primary appears in its fallback chain."""
+    if primary is None:
+        return []
+    return [
+        f"{path}[{idx}] = {entry!r} duplicates role primary"
+        for idx, entry in enumerate(arr)
+        if entry == primary
+    ]
+
+
+def _model_dedupe_violations(arr, path):
+    """Return violations for repeated models within one fallback array."""
+    seen = {}
+    violations = []
+    for idx, entry in enumerate(arr):
+        if entry in seen:
+            violations.append(
+                f"{path}[{idx}] = {entry!r} duplicates earlier index {seen[entry]}"
+            )
+        else:
+            seen[entry] = idx
+    return violations
+
+
 def _preset_violations(presets, council_presets, tiers):
-    """Validate preset names and council model synchronization."""
+    """Validate preset names and council model/synthesizer synchronization."""
     violations = []
     preset_names = set(presets)
     council_names = set(council_presets)
@@ -180,6 +207,17 @@ def _preset_violations(presets, council_presets, tiers):
                     f"does not match _tiers.{tier}.council.presets.{tier}."
                     f"{member}.model = {nested_model!r}"
                 )
+
+        top_synth = _model(presets.get(tier, {}).get("council"))
+        nested_synth = _model(nested_preset.get("council"))
+        if (top_synth is None) != (nested_synth is None) or (
+            top_synth is not None and top_synth != nested_synth
+        ):
+            violations.append(
+                f"presets.{tier}.council.model = {top_synth!r} "
+                f"does not match _tiers.{tier}.council.presets.{tier}."
+                f"council.model = {nested_synth!r}"
+            )
     return violations
 
 
@@ -223,9 +261,16 @@ def main():
             else:
                 forbidden = {primary} if primary else set()
 
-            # 1 & 2: forbidden entries (primary in own fallback, or mirrored members)
+            # 1: role primary must not appear in its fallback chain.
+            violations.extend(
+                _primary_chain_violations(
+                    arr, primary, f"_tiers.{tier}.fallback.{role}"
+                )
+            )
+
+            # 2: council fallback entries must not mirror council members/synth.
             for idx, entry in enumerate(arr):
-                if entry in forbidden:
+                if entry in forbidden and entry != primary:
                     label = (
                         "council member/synth" if role == "council" else "role primary"
                     )
@@ -234,16 +279,10 @@ def main():
                         f"duplicates {label} for tier '{tier}'"
                     )
 
-            # 3: within-array duplicates
-            seen = {}
-            for idx, entry in enumerate(arr):
-                if entry in seen:
-                    violations.append(
-                        f"_tiers.{tier}.fallback.{role}[{idx}] = {entry!r} "
-                        f"duplicates earlier index {seen[entry]}"
-                    )
-                else:
-                    seen[entry] = idx
+            # 3: no model may repeat within one fallback chain.
+            violations.extend(
+                _model_dedupe_violations(arr, f"_tiers.{tier}.fallback.{role}")
+            )
 
             # 7: fallback alternatives must be provider-diverse.
             violations.extend(

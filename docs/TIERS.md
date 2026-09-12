@@ -39,7 +39,7 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models including `nemotron-3-ultra`, `minimax-m3`, `glm-5.3-flash`, `glm-5.3`, `glm-5.2`, `kimi-k3`, `kimi-k2.6` (legacy/degraded fallback), `deepseek-v4-flash`, and `gemma4:31b`. The ollama-cloud allowlist additionally carries catalogue-only entries `deepseek-v4.1-flash`, `glm-5.1`, and `nemotron-3-super` (allowlist complete as of 2026-09-12 vs ollama.com/search?c=cloud). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
 Every preset defines an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer: the hook strips images from the main conversation
@@ -407,17 +407,20 @@ Ollama Cloud presets use models like `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `dee
 > [!IMPORTANT]
 > All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
 
-## OpenAI Models (gpt-5.6 Family)
+## OpenAI Models (gpt-6-astra / gpt-5.6 Family)
 
 The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI model line:
 
 | Model | Role | Description |
 |-------|------|-------------|
+| `gpt-6-astra` | Flagship | Highest-capability reasoning/coding model (1.05M context, 128K max output); degraded-fallback head for orchestrator/oracle where chains exist. |
 | `gpt-5.6-terra` | Balanced | Primary orchestrator and general-purpose model. Replaces gpt-5.5 (balanced) as the default for orchestrator, librarian, and general roles. |
 | `gpt-5.6-sol` | Flagship | Primary oracle and deep reasoning model. Replaces gpt-5.5 (flagship) for oracle, council, and complex analysis. |
 | `gpt-5.6-luna` | Lightweight | Primary lightweight model for librarian, explorer, and fixer roles. Replaces gpt-5.4-mini and gpt-5.4-nano. |
 
-**Fallback chain**: When gpt-5.6 models are unavailable, the tier falls back to gpt-5.5 (flagship) → gpt-5.4-mini → gpt-5.4-nano in degraded mode. The `plus` and `plus-anthropic` presets define these fallback chains per role in `oh-my-opencode-slim.json`.
+**Fallback chain**: When gpt-5.6 models are unavailable, `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; remaining chain entries (e.g. `gpt-5.5`, Anthropic models in `plus-anthropic`) follow each role's definition in `oh-my-opencode-slim.json`. The `plus` librarian/explorer/observer `gpt-5.4-mini` entries were removed because OpenAI's mapped replacement (`gpt-5.6-luna`) is already those roles' primary; `gpt-5.4-mini` remains in the `omo-slim-*` observer chains.
+
+gpt-5.4 and gpt-5.4-mini were retired from Codex with ChatGPT sign-in on 2026-08-31 (OpenAI-directed replacement: gpt-5.4→gpt-5.6-terra, gpt-5.4-mini→gpt-5.6-luna). OpenAI API-key authentication is unaffected; `gpt-5.6` is an alias for `gpt-5.6-sol`.
 
 ## Catalog Churn Management
 
@@ -450,7 +453,7 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 
 **Design rules that keep churn survivable** (already enforced):
 
-- Every preset's fallbacks cross to a *different* provider than its primaries (invariant 7 caps same-provider fallbacks at one), so a single provider's catalog change never leaves a role with zero alternatives.
+- Invariant 1 keeps a primary out of its own chain, invariant 3 prevents repeats within a chain, and invariant 7 permits at most one fallback entry per provider. Chains may be empty, in which case static degraded mode is unavailable without local fallbacks; runtime local alternatives are appended by default.
 - Free-tier roles degrade to paid capacity rather than breaking.
 - `muse-spark-1.2-contributor-free` and other contributor tiers may train on prompts/completions upstream — documented in the tier section above and [docs/OPENCODE.md](OPENCODE.md); treat free-tier presets as non-confidential workflows.
 
@@ -514,5 +517,10 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
 | `kimi-k2.7-code` | standard | none | Catalog-only legacy code-focused model; mandatory thinking (cannot disable) |
 | `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
-| `gpt-5.4-mini` | standard | `high` | Legacy lightweight; now a degraded fallback when gpt-5.6-luna is unavailable |
+| `gpt-6-astra` | standard | — | Flagship degraded-fallback head for plus orchestrator/oracle chains; not a primary anchor; no model-specific variant policy (inherits each role's configured variant) |
+| `deepseek-v4.1-flash` | standard | — | Catalogue-only addition, no active tier role |
+| `glm-5.1` | standard | — | Catalogue-only addition; agentic-engineering family sibling of glm-5.2/5.3 |
+| `nemotron-3-super` | standard | — | 120B total/12B active MoE; catalogue-only addition |
+| `gpt-5.4` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; plus council γ re-anchored to gpt-5.6-terra per OpenAI guidance; API-key use unaffected |
+| `gpt-5.4-mini` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; removed from plus librarian/explorer/observer chains (OpenAI's mapped replacement gpt-5.6-luna is already those roles' primary); remains in omo-slim-* observer chains; API-key use unaffected |
 | `gpt-5.4-nano` | standard | `high` | Legacy nano; now a degraded fallback when gpt-5.6-luna is unavailable |
