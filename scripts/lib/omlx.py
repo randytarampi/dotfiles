@@ -100,7 +100,7 @@ def map_omlx_capabilities(model_entry):
     return capabilities
 
 
-def list_omlx_models():
+def list_omlx_models(strict=False):
     """List oMLX models in the local discovery shape.
 
     Embedding, reranker, and unknown-type models carry a separate
@@ -145,6 +145,8 @@ def list_omlx_models():
         return models
     except Exception as err:
         logger.info(f"oMLX model discovery unavailable: {err}")
+        if strict:
+            raise
         return []
 
 

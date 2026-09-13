@@ -88,6 +88,12 @@ def _list_omlx_models(include_cloud=False):
     return list_omlx_models()
 
 
+def _list_omlx_models_strict(include_cloud=False):
+    from omlx import list_omlx_models
+
+    return list_omlx_models(strict=True)
+
+
 def _omlx_metadata(model_name):
     from omlx import get_omlx_model_status
 
@@ -111,6 +117,7 @@ def _omlx_capabilities(metadata):
 
 LOCAL_ENGINES["ollama"]["list_models"] = _list_ollama_models
 LOCAL_ENGINES["omlx"]["list_models"] = _list_omlx_models
+LOCAL_ENGINES["omlx"]["list_models_strict"] = _list_omlx_models_strict
 LOCAL_ENGINES["omlx"]["metadata_lookup"] = _omlx_metadata
 LOCAL_ENGINES["omlx"]["metadata_capabilities"] = _omlx_capabilities
 LOCAL_ENGINES["ollama"]["metadata_lookup"] = None
@@ -121,8 +128,19 @@ LOCAL_ENGINES["omlx"]["audio_opt_out_env"] = "DOTFILES_USE_LOCAL_OMLX"
 
 def iter_engine_models(provider, include_cloud=False):
     """Yield model entries from one active registered engine."""
-    models = iter_engine_models_strict(provider, include_cloud)
-    return models if models is not None else []
+    if not engine_gate_active(provider):
+        return []
+    engine = resolve_engine(provider)
+    if engine is None:
+        return []
+    health_check = engine.get("health_check")
+    if health_check and not health_check()[0]:
+        return []
+    try:
+        return engine["list_models"](include_cloud)
+    except Exception as err:
+        logger.info("Local engine %s listing failed: %s", provider, err)
+        return []
 
 
 def iter_engine_models_strict(provider, include_cloud=False):
@@ -136,7 +154,7 @@ def iter_engine_models_strict(provider, include_cloud=False):
     if health_check and not health_check()[0]:
         return None
     try:
-        return engine["list_models"](include_cloud)
+        return engine.get("list_models_strict", engine["list_models"])(include_cloud)
     except Exception as err:
         logger.info("Local engine %s listing failed: %s", provider, err)
         return None
