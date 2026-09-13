@@ -243,6 +243,91 @@ def test_resolve_roles_preserves_mixed_local_providers():
     assert resolved["code-gen"].startswith("omlx/")
 
 
+def test_merged_pool_records_equivalent_ollama_names():
+    ollama_output = "NAME ID SIZE MODIFIED\ngemma4:12b-mxfp8 abc 8 GB now\nollama-only def 2 GB now\n"
+    omlx_models = [
+        {"name": "gemma-4-12B-it-MLX-8bit", "size_gb": 6.3, "provider": "omlx"},
+        {"name": "omlx-only", "size_gb": 0.0, "provider": "omlx"},
+    ]
+    with (
+        patch.object(discover_models, "find_ollama", return_value="ollama"),
+        patch.object(discover_models.subprocess, "run") as run,
+        patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "HTTP 200"),
+                "list_models": lambda include_cloud=False: omlx_models,
+            },
+        ),
+    ):
+        run.return_value.stdout = ollama_output
+        models = discover_models.list_local_ollama_models()
+    by_name = {model["name"]: model for model in models}
+    assert set(by_name) == {
+        "gemma-4-12B-it-MLX-8bit",
+        "omlx-only",
+        "ollama-only",
+    }
+    assert by_name["gemma-4-12B-it-MLX-8bit"]["provider"] == "omlx"
+    assert by_name["gemma-4-12B-it-MLX-8bit"]["equivalent_ollama_names"] == [
+        "gemma4:12b-mxfp8"
+    ]
+    assert "equivalent_ollama_names" not in by_name["omlx-only"]
+    assert "equivalent_ollama_names" not in by_name["ollama-only"]
+
+
+def test_resolve_roles_unions_equivalent_ollama_capabilities():
+    """Classification must bridge capabilities only Ollama reports (audio)."""
+    models = [
+        {
+            "name": "gemma-4-12B-it-MLX-8bit",
+            "size_gb": 6.3,
+            "provider": "omlx",
+            "equivalent_ollama_names": ["gemma4:12b-mxfp8"],
+        }
+    ]
+
+    def details(model_name, provider="ollama"):
+        if provider == "omlx":
+            return {
+                "param_count": 12,
+                "capabilities": ["completion", "tools", "vision"],
+                "is_moe": False,
+            }
+        return {
+            "param_count": 12,
+            "capabilities": ["completion", "vision", "audio"],
+            "is_moe": False,
+        }
+
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        resolved = tier_resolve.resolve_roles_from_list(models)
+    assert resolved["audio"] == "omlx/gemma-4-12B-it-MLX-8bit"
+    assert resolved["lightweight"] == "omlx/gemma-4-12B-it-MLX-8bit"
+
+
+def test_resolve_roles_does_not_union_without_equivalents():
+    models = [{"name": "gemma-4-12B-it-MLX-8bit", "size_gb": 6.3, "provider": "omlx"}]
+
+    def details(model_name, provider="ollama"):
+        if provider == "omlx":
+            return {
+                "param_count": 12,
+                "capabilities": ["completion", "tools", "vision"],
+                "is_moe": False,
+            }
+        return {
+            "param_count": 12,
+            "capabilities": ["completion", "vision", "audio"],
+            "is_moe": False,
+        }
+
+    with patch.object(tier_resolve, "get_model_details", side_effect=details):
+        resolved = tier_resolve.resolve_roles_from_list(models)
+    assert resolved.get("audio") is None
+
+
 def test_resolve_roles_keeps_audio_only_omlx_models_in_audio_category():
     models = [
         {

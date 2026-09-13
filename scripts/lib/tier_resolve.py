@@ -341,6 +341,11 @@ def resolve_roles_from_list(
                 "size_gb": size_gb,
                 "primary_category": category,
                 "provider": provider,
+                **(
+                    {"equivalent_ollama_names": list(model["equivalent_ollama_names"])}
+                    if isinstance(model, dict) and model.get("equivalent_ollama_names")
+                    else {}
+                ),
             }
         )
 
@@ -362,14 +367,18 @@ def resolve_roles_from_list(
         )
         caps = set(details.get("capabilities", []))
         if {"thinking", "tools"}.issubset(caps):
-            classified["reasoning"].append(
-                {
-                    "name": model["name"],
-                    "size_gb": model.get("size_gb", 0.0),
-                    "primary_category": "code-gen",
-                    "provider": model.get("provider", "ollama"),
-                }
-            )
+            promoted = {
+                "name": model["name"],
+                "size_gb": model.get("size_gb", 0.0),
+                "primary_category": "code-gen",
+                "provider": model.get("provider", "ollama"),
+                **(
+                    {"equivalent_ollama_names": list(model["equivalent_ollama_names"])}
+                    if model.get("equivalent_ollama_names")
+                    else {}
+                ),
+            }
+            classified["reasoning"].append(promoted)
             existing_reasoning_names.add(model["name"])
 
     remaining = classified["all"]
@@ -423,7 +432,15 @@ def resolve_roles_from_list(
             param_count = details.get("param_count")
             if param_count is not None:
                 model["param_count"] = param_count
-            model["capabilities"] = details.get("capabilities", [])
+            capabilities = set(details.get("capabilities", []))
+            # Engine-equivalence bridge: union capability metadata that only
+            # the replaced Ollama entry reports (e.g. `audio` from
+            # `ollama show` that oMLX discovery does not expose). Must run
+            # before category composition below reads capabilities.
+            for equivalent_name in model.get("equivalent_ollama_names", []):
+                equivalent_details = get_cached_model_details(equivalent_name)
+                capabilities |= set(equivalent_details.get("capabilities", []))
+            model["capabilities"] = sorted(capabilities)
             model["architecture"] = details.get("architecture")
             model["embedding_length"] = details.get("embedding_length")
             model["context_length"] = details.get("context_length")

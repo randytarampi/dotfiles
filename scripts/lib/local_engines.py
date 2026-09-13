@@ -191,7 +191,11 @@ def merged_local_pool(include_cloud=False):
     When an oMLX model is equivalent to an Ollama model — same normalized
     (family, params) identity, or the exact same name — the oMLX entry
     replaces the Ollama entry (oMLX serves MLX-quantized weights natively
-    on Apple Silicon). Distinct models are all kept.
+    on Apple Silicon). Distinct models are all kept. The dropped Ollama
+    name is recorded on the kept entry as ``equivalent_ollama_names`` so
+    classification (tier_resolve) can union capability metadata that only
+    Ollama reports (e.g. ``audio`` via ``ollama show``); engine pool
+    entries themselves carry no capabilities at merge time.
     """
     models = iter_engine_models("ollama", include_cloud)
     ollama_identities = {
@@ -210,15 +214,39 @@ def merged_local_pool(include_cloud=False):
             if model.get("name") in ollama_identities.values() or (
                 identity[1] and identity in ollama_identities
             ):
+                ollama_match = next(
+                    (
+                        item
+                        for item in models
+                        if item.get("name") in ollama_identities.values()
+                        and (
+                            item.get("name") == model.get("name")
+                            or _model_identity(item.get("name", "")) == identity
+                        )
+                    ),
+                    None,
+                )
+                if ollama_match is not None:
+                    equivalent_name = ollama_match["name"]
+                elif model.get("name") in ollama_identities.values():
+                    equivalent_name = model["name"]
+                else:
+                    equivalent_name = ollama_identities.get(identity)
                 models[:] = [
                     item
                     for item in models
                     if _model_identity(item.get("name", "")) != identity
                 ]
+                if equivalent_name:
+                    equivalents = model.setdefault("equivalent_ollama_names", [])
+                    if equivalent_name not in equivalents:
+                        equivalents.append(equivalent_name)
                 models.append(model)
                 logger.info(
-                    "Local model equivalent for %s; keeping oMLX entry",
+                    "Local model equivalent for %s; keeping %s entry (ollama equivalent: %s)",
                     model["name"],
+                    provider,
+                    equivalent_name or model["name"],
                 )
             else:
                 models.append(model)
