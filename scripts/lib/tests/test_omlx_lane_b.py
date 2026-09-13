@@ -5,9 +5,31 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 import local_engines
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# Ambient OMLX_*/gate vars from a developer's sourced ~/.env leak into tests
+# that assume an env-free ambient (default ports, no live daemon, gates off).
+# Strip them so results are hermetic regardless of the invoking shell; tests
+# that need them set them explicitly via monkeypatch.setenv.
+HERMETIC_ENV_VARS = (
+    "OMLX_BASE_URL",
+    "OMLX_HOST",
+    "OMLX_PORT",
+    "OMLX_API_KEY",
+    "OMLX_MCP_EXPOSE_TOOLS",
+    "DOTFILES_RUN_OMLX_SETUP",
+    "DOTFILES_USE_LOCAL_OMLX",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_omlx_env(monkeypatch):
+    for name in HERMETIC_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
 
 
 def load_script(name):
