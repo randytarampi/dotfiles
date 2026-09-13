@@ -59,7 +59,7 @@ Voice requires local STT/TTS tooling regardless of tier:
 
 | Component | Install | Purpose |
 |-----------|---------|---------|
-| `whisper-cpp` | `brew install whisper-cpp` | Local speech-to-text |
+| `whisper.cpp` | `brew install whisper.cpp` | Local speech-to-text |
 | `sox` | `brew install sox` | Audio format conversion (required by whisper-cli) |
 | `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model file |

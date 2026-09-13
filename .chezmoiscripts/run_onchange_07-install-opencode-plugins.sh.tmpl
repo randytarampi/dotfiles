@@ -70,7 +70,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Voice dependencies (whisper-cpp, sox, piper-tts) + models
+# Voice dependencies (whisper.cpp, sox, piper-tts) + models
 #   Controlled by DOTFILES_RUN_VOICE_SETUP (default: 0 — skip)
 #   Models: DOTFILES_WHISPER_MODEL (default: ggml-large-v3-turbo.bin)
 #          DOTFILES_PIPER_VOICE (default: en_US-lessac-high)
@@ -78,13 +78,13 @@ fi
 VOICE_SETUP="${DOTFILES_RUN_VOICE_SETUP:-0}"
 if [[ "$VOICE_SETUP" != "1" ]]; then
   info "DOTFILES_RUN_VOICE_SETUP='${VOICE_SETUP}' — skipping voice deps & models"
-  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to install whisper-cpp, sox, piper-tts, and models"
+  info "  Set DOTFILES_RUN_VOICE_SETUP=1 to install whisper.cpp, sox, piper-tts, and models"
 else
   info "Installing voice dependencies..."
 
-  # ── whisper-cpp + sox (STT) ──────────────────────────────────────
+  # ── whisper.cpp + sox (STT) ──────────────────────────────────────
   if command -v brew &>/dev/null; then
-    for pkg in whisper-cpp sox; do
+    for pkg in whisper.cpp sox; do
       if brew list "$pkg" &>/dev/null 2>&1; then
         ok "$pkg already installed"
       else
@@ -96,7 +96,7 @@ else
       fi
     done
   else
-    warn "brew not found; skipping whisper-cpp/sox install"
+    warn "brew not found; skipping whisper.cpp/sox install"
   fi
 
   # ── Piper TTS ─────────────────────────────────────────────────────

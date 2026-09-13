@@ -213,7 +213,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_CADDY_SETUP` | Caddy LAN exposure + Plannotator | 0 |
 | `DOTFILES_RUN_OPENCODE_WEB_SETUP` | Optional OpenCode web LaunchAgent | 0 |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | OpenCode plugins + CLI tools | 0 |
-| `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper-cpp, sox, piper, models) | 0 |
+| `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper.cpp, sox, piper, models) | 0 |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 0 |
 | `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP` | antigravity-acp bridge (agy-acp) install | 0 |
@@ -591,7 +591,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 
 | Component | Install | Purpose |
 |-----------|---------|---------|
-| `whisper-cpp` | `brew install whisper-cpp` | Local speech-to-text |
+| `whisper.cpp` | `brew install whisper.cpp` | Local speech-to-text |
 | `sox` | `brew install sox` | Audio format conversion |
 | `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model (default: `ggml-large-v3-turbo.bin`) |

@@ -223,7 +223,7 @@ DEV_FORMULA_EXACT = {
     "vale",
     "vtk",
     "watchman",
-    "whisper-cpp",
+    "whisper.cpp",
     "wimlib",
     "zlib",
 }

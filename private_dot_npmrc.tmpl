@@ -1,4 +1,5 @@
 registry=https://registry.npmjs.com/
+# pi's pkg.pr.new dependencies are fetched remotely; npm 12 defaults allow-remote=none.
 allow-remote=all
 //registry.npmjs.org/:_authToken={{ env "NPM_TOKEN" }}
 //registry.npmjs.com/:_authToken={{ env "NPM_TOKEN" }}
