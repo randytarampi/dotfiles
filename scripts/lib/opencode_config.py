@@ -26,7 +26,7 @@ _PROVIDER_PREFIXES = (
 
 # Matches "<provider>/<model>" model strings used throughout presets.
 _PROVIDER_MODEL_RE = re.compile(
-    r"^(?:ollama-cloud|openai|anthropic|opencode|github-copilot|google|openrouter|"
+    r"^(ollama-cloud|openai|anthropic|opencode|github-copilot|google|openrouter|"
     + "|".join(
         re.escape(provider) for provider in sorted(LOCAL_ENGINES, key=len, reverse=True)
     )

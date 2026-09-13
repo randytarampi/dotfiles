@@ -8,7 +8,17 @@ from unittest.mock import MagicMock, patch
 import discover_models
 import local_engines
 import omlx
+import opencode_config
 import tier_resolve
+
+
+def test_get_preset_providers_extracts_provider_prefixes():
+    assert opencode_config.get_preset_providers("pro-plus") == {
+        "openai",
+        "ollama-cloud",
+    }
+    assert "anthropic" in opencode_config.get_preset_providers("pro-plus-anthropic")
+    assert opencode_config.get_preset_providers("plus") == {"openai"}
 
 
 def _load_script(name, filename):
