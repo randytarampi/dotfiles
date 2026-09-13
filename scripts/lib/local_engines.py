@@ -367,3 +367,76 @@ def merge_omlx_settings(existing, environ=None):
         # Env unset → preserve the on-disk value (admin-UI-managed).
 
     return settings
+
+
+def sync_turboquant_kv(model_settings_path, environ=None):
+    """Apply OLLAMA_KV_CACHE_TYPE to oMLX per-model TurboQuant KV settings.
+
+    oMLX has no global KV-type knob — TurboQuant is per-model
+    (model_settings.json, engine-construction field, reload to apply).
+    This keeps ONE canonical env name for "KV cache type" across both
+    daemons: OLLAMA_KV_CACHE_TYPE.
+
+      q8_0 → TurboQuant 8-bit enabled
+      q4_0 → TurboQuant 4-bit enabled
+      f16 / unset / anything else → per-model settings untouched
+      (admin-UI tuning wins; disabling happens in the admin UI)
+
+    The per-model files keep every unmanaged key. Returns the number of
+    models whose TurboQuant entries changed.
+    """
+    if environ is None:
+        environ = os.environ
+    kv_type = (environ.get("OLLAMA_KV_CACHE_TYPE") or "").strip().lower()
+    bit_map = {"q8_0": 8, "q4_0": 4}
+    if kv_type not in bit_map:
+        return 0
+
+    import json
+    import tempfile
+    from pathlib import Path
+
+    path = Path(model_settings_path)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        document = {}
+    if not isinstance(document, dict):
+        document = {}
+    models = document.setdefault("models", {})
+    if not isinstance(models, dict):
+        models = {}
+        document["models"] = models
+
+    bits = bit_map[kv_type]
+    changed = 0
+    for model_id, profile in models.items():
+        if not isinstance(profile, dict):
+            continue
+        wanted = (
+            True,
+            bits,
+            profile.get("turboquant_skip_last", True),
+        )
+        current = (
+            profile.get("turboquant_kv_enabled", False),
+            profile.get("turboquant_kv_bits", 4),
+            profile.get("turboquant_skip_last", True),
+        )
+        if current != wanted:
+            profile["turboquant_kv_enabled"] = wanted[0]
+            profile["turboquant_kv_bits"] = wanted[1]
+            profile["turboquant_skip_last"] = wanted[2]
+            changed += 1
+
+    if not changed:
+        return 0
+
+    rendered = json.dumps(document, indent=2) + "\n"
+    fd, temp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=".modelsettings.", text=True
+    )
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(rendered)
+    os.replace(temp_name, path)
+    return changed

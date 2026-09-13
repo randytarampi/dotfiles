@@ -51,7 +51,6 @@ if current != rendered:
     os.replace(temp_name, path)
 # auth.api_key may be persisted; enforce 0600 even when nothing changed.
 path.chmod(0o600)
-PY
 ok "oMLX settings written to $SETTINGS_PATH"
 # The Homebrew service plist does not inherit ~/.env; persisted settings are authoritative.
 
@@ -62,6 +61,32 @@ elif brew services info omlx 2>/dev/null | grep -Eqi 'running: (false|none)|not 
   ok "oMLX service started"
 else
   info "oMLX service already running or unavailable — leaving lifecycle unchanged"
+fi
+
+# OLLAMA_KV_CACHE_TYPE → oMLX per-model TurboQuant KV: one canonical env
+# name for KV cache type across both daemons (q8_0 → 8-bit, q4_0 → 4-bit;
+# unset/f16 leaves per-model settings untouched — admin-UI managed).
+export OMLX_MODEL_SETTINGS_PATH="$OMLX_DIR/model_settings.json"
+export OMLX_TQ_FILE="$OMLX_DIR/.tq-changed"
+PYTHONPATH="$LIB_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+import os
+from pathlib import Path
+
+from local_engines import sync_turboquant_kv
+
+changed = sync_turboquant_kv(Path(os.environ["OMLX_MODEL_SETTINGS_PATH"]))
+with open(os.environ["OMLX_TQ_FILE"], "w") as handle:
+    handle.write(str(changed))
+PY
+TQ_CHANGED="$(cat "$OMLX_TQ_FILE" 2>/dev/null || echo 0)"
+rm -f "$OMLX_TQ_FILE"
+if [[ "$TQ_CHANGED" != "0" ]]; then
+  ok "OLLAMA_KV_CACHE_TYPE applied to $TQ_CHANGED oMLX model(s)"
+  if command -v brew >/dev/null 2>&1; then
+    brew services restart omlx || warn "brew services restart omlx failed — reload manually to apply TurboQuant"
+  fi
+else
+  info "OLLAMA_KV_CACHE_TYPE: no oMLX per-model changes needed"
 fi
 
 ok "oMLX setup complete"

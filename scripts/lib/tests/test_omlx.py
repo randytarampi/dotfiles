@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -747,3 +748,65 @@ def test_mozart_injects_local_engine_gateways(monkeypatch):
         gateways3 = {}
         mozart.inject_local_engine_gateways(gateways3)
     assert "unreachable" not in gateways3
+
+
+def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
+    """OLLAMA_KV_CACHE_TYPE drives oMLX per-model TurboQuant (q8_0→8, q4_0→4)."""
+    settings_file = tmp_path / "model_settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": {
+                    "m1": {
+                        "turboquant_kv_enabled": False,
+                        "turboquant_kv_bits": 4,
+                        "turboquant_skip_last": True,
+                        "unmanaged_key": "keep-me",
+                    },
+                    "m2": {"force_sampling": False},
+                },
+            }
+        )
+    )
+    # q8_0 → 8-bit enabled; profiles without TurboQuant keys gain them;
+    # unmanaged keys preserved
+    env = {"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+    changed = local_engines.sync_turboquant_kv(settings_file, env)
+    assert changed == 2
+    document = json.loads(settings_file.read_text())
+    m1 = document["models"]["m1"]
+    assert m1["turboquant_kv_enabled"] is True
+    assert m1["turboquant_kv_bits"] == 8
+    assert m1["turboquant_skip_last"] is True
+    assert m1["unmanaged_key"] == "keep-me"
+    assert document["models"]["m2"]["turboquant_kv_enabled"] is True
+    assert document["models"]["m2"]["turboquant_kv_bits"] == 8
+    # Idempotent: re-run with the same env → no changes
+    assert local_engines.sync_turboquant_kv(settings_file, env) == 0
+    # q4_0 → 4-bit (both models flip)
+    assert (
+        local_engines.sync_turboquant_kv(
+            settings_file, {"OLLAMA_KV_CACHE_TYPE": "q4_0"}
+        )
+        == 2
+    )
+    assert (
+        json.loads(settings_file.read_text())["models"]["m1"]["turboquant_kv_bits"] == 4
+    )
+
+
+def test_sync_turboquant_kv_untouched_without_kv_type(tmp_path):
+    """Unset or f16 OLLAMA_KV_CACHE_TYPE leaves per-model settings alone."""
+    settings_file = tmp_path / "model_settings.json"
+    original = {
+        "version": 1,
+        "models": {"m1": {"turboquant_kv_enabled": False, "custom": 1}},
+    }
+    settings_file.write_text(json.dumps(original))
+    assert local_engines.sync_turboquant_kv(settings_file, {}) == 0
+    assert (
+        local_engines.sync_turboquant_kv(settings_file, {"OLLAMA_KV_CACHE_TYPE": "f16"})
+        == 0
+    )
+    assert json.loads(settings_file.read_text()) == original

@@ -69,11 +69,16 @@ origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
 
 ### Cache parity
 
-The oMLX `CacheSettings` block is the MLX equivalent of Ollama cache tuning:
-there is no MLX quantization knob corresponding to `OLLAMA_KV_CACHE_TYPE`.
-Persistent SSD and optional hot-cache settings provide the comparable residency
-and reuse controls. The service plist does not inherit `~/.env`, so these values
-are persisted in `~/.omlx/settings.json`.
+The oMLX `CacheSettings` block is the MLX equivalent of Ollama cache tuning.
+MLX has no global KV-cache quantization knob, but TurboQuant KV is per-model
+(`~/.omlx/model_settings.json`, engine-construction field — reload/restart to
+apply). `OLLAMA_KV_CACHE_TYPE` drives both daemons from one canonical name:
+`q8_0` enables TurboQuant at 8 bits, `q4_0` at 4 bits, and `f16`/unset leaves
+per-model settings untouched (admin-UI managed). Script 29 applies the mapping
+and restarts the service when models change. Persistent SSD and optional
+hot-cache settings provide the comparable residency and reuse controls. The
+service plist does not inherit `~/.env`, so these values are persisted in
+`~/.omlx/settings.json`.
 
 | Environment variable | Settings key | Default |
 |----------------------|--------------|---------|
