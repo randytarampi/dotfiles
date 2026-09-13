@@ -277,6 +277,7 @@ Indexed placeholders (`_local:<category>_2`) resolve to the second-best model in
 Additional classification rules (applied after name heuristics):
 - **Size rule**: models with `ollama list` SIZE < 12 GB are classified as `lightweight`
 - **`ollama show` parameter-based**: unclassified models (≥ 12 GB, no name heuristic match) are classified via `ollama show` parameter count — parameters ≥ 7B → reasoning, parameters < 7B → code-gen (not lightweight)
+- **oMLX parity**: oMLX-served models classify on the same basis as Ollama models — discovery carries real `size_gb` (from the server's `estimated_size`), MLX-style names (`Qwen3.8-27B-MLX-4bit`) parse through the same first-size-token rule as colon tags (`qwen3.8:27b-mlx` → 27; quant suffixes like `4bit`/`8bit` never match), and MoE status is inferred from `A<n>B` markers (e.g. `Ornith-1.5-35B-A3B`) when server metadata omits it, so density-aware sorting works identically. The merged local pool prefers the oMLX entry for engine-equivalent models — same normalized `(family, params)` identity, e.g. `omlx/gemma-4-12B-it-MLX-8bit` over `ollama/gemma4:12b-mxfp8` — while distinct models from both engines are kept.
 - **Capability filtering**: after initial classification, each category is filtered by required capabilities parsed from `ollama show`:
   - `reasoning` requires `thinking` + `tools`
   - `code-gen`: name-heuristic-qualified models bypass capability checks; models classified via size/fallback rules require `thinking` + `completion`
