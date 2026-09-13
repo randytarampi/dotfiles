@@ -191,6 +191,17 @@ To ensure clean, prefix-continuous, and readable logs:
 - **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*` for script gates
 - **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`
 
+### Verification gotchas
+
+Recurring validation quirks — check these before diagnosing failures:
+
+- **Tests:** `make test` (or `PYTHONPATH=scripts/lib $(.venv/bin/python || python3) -m pytest scripts/lib/tests/ -q`). A bare `.venv/bin/python -m pytest` fails on imports — the Makefile sets `PYTHONPATH`; replicate it for direct runs.
+- **Formatting:** black lives at `/opt/homebrew/bin/black` (bare `python3` has no `black` module). Run it on touched `.py` files **before** `git commit` — the pre-commit hook reformats and aborts the first commit otherwise.
+- **LSP noise:** import-resolution errors in `scripts/*.py` under the IDE are pre-existing runtime `PYTHONPATH` artifacts, not introduced breakage. Use `python3 -m py_compile <file>` for ground truth.
+- **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
+- **Deploy aborts:** `make deploy` runs chezmoi scripts sequentially; one failure (e.g. the Caddy script's `sudo` password prompt in non-interactive shells) aborts before later `run_onchange` scripts. To run a specific script standalone: `bash -n <(chezmoi execute-template < .chezmoiscripts/run_onchange_XX-*.sh.tmpl)` to check syntax, then pipe the same render to `bash` to execute.
+- **Drift lane:** `make check-model-drift` loads `~/.env` and reports checked/skipped provider endpoints; auth failures (401/403/404) are skipped, never silent zeros.
+
 ---
 
 ## Model Tiers
