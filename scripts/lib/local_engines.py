@@ -433,6 +433,11 @@ def merge_omlx_settings(existing, environ=None):
 
     memory = _section("memory")
     guard = _env("OMLX_MEMORY_GUARD")
+    if guard not in {None, "off", "safe", "balanced", "aggressive"}:
+        logger.warning(
+            "Invalid OMLX_MEMORY_GUARD=%r; preserving existing setting", guard
+        )
+        guard = None
     if guard:
         if guard == "off":
             memory.pop("memory_guard_tier", None)
