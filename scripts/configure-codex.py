@@ -136,10 +136,14 @@ wire_api = "responses"
 
 def build_provider_config(local_model=""):
     config = BASE_PROVIDER_CONFIG
-    provider, _ = _model_parts(local_model) if local_model else ("", "")
-    engine = resolve_engine(provider) if provider else None
-    endpoint = local_endpoint_for(provider, "openai") if engine else None
-    if engine and endpoint and engine["provider_config"]:
+    providers = set(active_engine_pools())
+    if local_model:
+        providers.add(_model_parts(local_model)[0])
+    for provider in sorted(providers):
+        engine = resolve_engine(provider)
+        endpoint = local_endpoint_for(provider, "openai") if engine else None
+        if not engine or not endpoint or not engine["provider_config"]:
+            continue
         base_url, api_key_env = endpoint
         profile_provider = engine["profile_provider"]
         config += (
@@ -186,6 +190,38 @@ def strip_managed_profiles(content):
         content,
     )
     return content
+
+
+def build_summary_lines(config, config_path, ollama_cloud_model, note, local_model):
+    """Summarize the provider/profile configuration that was actually written."""
+    lines = ["Codex providers configured!", "", f"Configuration: {config_path}"]
+    for match in re.finditer(
+        r"\[model_providers\.([^\]]+)\]\n(.*?)(?=\n\[|\Z)", config, re.DOTALL
+    ):
+        section = match.group(2)
+        base_url = re.search(r'^base_url = "([^"]+)"', section, re.MULTILINE)
+        wire_api = re.search(r'^wire_api = "([^"]+)"', section, re.MULTILINE)
+        lines.append(
+            f"  • {match.group(1)}: {base_url.group(1) if base_url else 'built-in'}"
+            f" — {wire_api.group(1) if wire_api else 'native'}"
+        )
+    profiles = re.findall(r"\[profiles\.([^\]]+)\]", config)
+    lines.append(f"  • profiles: {', '.join(profiles)}")
+    provider, model = _model_parts(local_model) if local_model else ("ollama", "none")
+    lines.append(f"  • local profile: {model} via {provider}")
+    lines.extend(
+        [
+            f"  • ollama-cloud model: {ollama_cloud_model} ({note})",
+            "",
+            "Switch providers at runtime:",
+            "  codex -c model_provider=meridian -m claude-sonnet-5",
+            f"  codex -c model_provider=ollama-cloud -m {ollama_cloud_model}",
+            f"  codex -c model_provider={provider} -m {model}",
+            "",
+            "Configure script complete!",
+        ]
+    )
+    return lines
 
 
 def main():
@@ -255,25 +291,13 @@ def main():
         logger.critical(f"Failed to update Codex configuration: {exc}")
         sys.exit(1)
 
-    summary_lines = [
-        "Codex providers configured!",
-        "",
-        f"Configuration: {config_path}",
-        "  • Default: OpenAI (unchanged)",
-        "  • meridian: http://127.0.0.1:3456/v1 — responses",
-        "  • ollama-cloud: https://ollama.com/v1 — responses",
-        "  • ollama: built-in (http://localhost:11434/v1 — responses)",
-        "  • github-copilot: https://api.githubcopilot.com/v1 — responses (when GITHUB_TOKEN is set)",
-        "  • profiles: meridian, ollama-cloud, ollama, local-solo, copilot",
-        f"  • ollama-cloud model: {ollama_cloud_model} ({ollama_cloud_model_note})",
-        "",
-        "Switch providers at runtime:",
-        "  codex -c model_provider=meridian -m claude-sonnet-5",
-        f"  codex -c model_provider=ollama-cloud -m {ollama_cloud_model}",
-        "  codex -c model_provider=ollama -m qwen2.5-coder",
-        "",
-        "Configure script complete!",
-    ]
+    summary_lines = build_summary_lines(
+        new_content,
+        config_path,
+        ollama_cloud_model,
+        ollama_cloud_model_note,
+        local_model,
+    )
     logger.info("\n".join(summary_lines))
 
 
