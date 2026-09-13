@@ -89,6 +89,31 @@ service plist does not inherit `~/.env`, so these values are persisted in
 | `OMLX_HOT_CACHE_WRITE_THROUGH` | `cache.hot_cache_write_through` | `false` |
 | `OMLX_INITIAL_CACHE_BLOCKS` | `cache.initial_cache_blocks` | `256` |
 
+### MCP
+
+oMLX can act as an MCP aggregator: it loads MCP servers from an `mcp.json`
+(configured in the dashboard under Settings → MCP, persisted as
+`mcp.config_path`) and serves them at `/v1/mcp/tools`, `/v1/mcp/servers`, and
+`/v1/mcp/execute`. There are two independent consumers of that backend:
+
+- The dashboard Chat UI is its own MCP client: it fetches `/v1/mcp/tools` and
+  executes calls via `/v1/mcp/execute` directly. It does **not** depend on the
+  expose toggle, so configuring the Config Path gives Chat UI tools without
+  exposing anything to API clients.
+- API clients receive backend MCP tools merged into completions only when
+  `mcp.expose_tools` is true (the upstream default is `true`).
+
+The repository pins `mcp.expose_tools = false` in the managed settings writer
+(unconditional — a first-run file or an admin flip converges back to off):
+every fleet consumer (OpenCode, Codex, ACP, Junie, Pi, Gemini) already runs
+its own MCP client, and backend-merged tools would duplicate entries and
+muddle tool selection on every completion. Escape hatch:
+`OMLX_MCP_EXPOSE_TOOLS=1`. `mcp.config_path` stays admin-UI-managed — set it
+in the dashboard to a file such as `~/.omlx/mcp.json` (format: `{"servers":
+{...}}`, Claude Desktop `mcpServers` also accepted; requires a server
+restart). Security: the Caddy LAN route blocks `/admin*` and `/v1/mcp/*`
+(`scripts/lib/local_engines.py`), so MCP execution stays loopback-only.
+
 ## Provider integration
 
 ### Engine-agnostic local pool
