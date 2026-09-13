@@ -6,7 +6,6 @@
 """
 
 import json
-import copy
 import os
 import urllib.error
 import urllib.parse
@@ -148,78 +147,3 @@ def list_omlx_models(strict=False):
         if strict:
             raise
         return []
-
-
-def merge_omlx_settings(existing, environ=None):
-    """Deep-merge managed oMLX settings while preserving unrelated keys."""
-    environ = environ or os.environ
-    settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}
-    for key in (
-        "host",
-        "port",
-        "model_dir",
-        "memory_guard",
-        "max_concurrent_requests",
-        "ssd_cache_dir",
-        "log_level",
-    ):
-        settings.pop(key, None)
-    server = settings.setdefault("server", {})
-    if not isinstance(server, dict):
-        server = {}
-        settings["server"] = server
-    server.update(
-        {
-            "host": environ.get("OMLX_HOST", "127.0.0.1"),
-            "port": int(environ.get("OMLX_PORT", "8000")),
-            "log_level": environ.get("OMLX_LOG_LEVEL", "info"),
-        }
-    )
-    model = settings.setdefault("model", {})
-    if not isinstance(model, dict):
-        model = {}
-        settings["model"] = model
-    model["model_dirs"] = [
-        os.path.expanduser(environ.get("OMLX_MODEL_DIR", "~/.omlx/models"))
-    ]
-    memory = settings.setdefault("memory", {})
-    if not isinstance(memory, dict):
-        memory = {}
-        settings["memory"] = memory
-    guard = environ.get("OMLX_MEMORY_GUARD", "balanced")
-    if guard == "off":
-        memory.pop("memory_guard_tier", None)
-        memory["prefill_memory_guard"] = False
-    else:
-        memory["memory_guard_tier"] = guard
-        memory["prefill_memory_guard"] = True
-    scheduler = settings.setdefault("scheduler", {})
-    if not isinstance(scheduler, dict):
-        scheduler = {}
-        settings["scheduler"] = scheduler
-    scheduler["max_concurrent_requests"] = int(
-        environ.get("OMLX_MAX_CONCURRENT_REQUESTS", "8")
-    )
-    cache = settings.setdefault("cache", {})
-    if not isinstance(cache, dict):
-        cache = {}
-        settings["cache"] = cache
-    cache["ssd_cache_dir"] = os.path.expanduser(
-        environ.get("OMLX_SSD_CACHE_DIR", "~/.omlx/cache")
-    )
-    for section_name, key, env_name in (
-        ("auth", "api_key", "OMLX_API_KEY"),
-        ("huggingface", "endpoint", "OMLX_HF_ENDPOINT"),
-    ):
-        value = environ.get(env_name, "").strip()
-        section = settings.get(section_name)
-        if value:
-            if not isinstance(section, dict):
-                section = {}
-                settings[section_name] = section
-            section[key] = value
-        elif isinstance(section, dict):
-            section.pop(key, None)
-            if not section:
-                settings.pop(section_name, None)
-    return settings
