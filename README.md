@@ -283,7 +283,7 @@ integration, model management, and platform-gating details.
 ├── private_dot_gnupg/
 │   ├── gpg.conf.tmpl              # GPG config (default-key from env)
 │   └── gpg-agent.conf             # GPG agent config
-├── private_dot_npmrc.tmpl        # npm auth tokens
+├── private_dot_npmrc.tmpl        # npm auth tokens and remote-fetch policy
 ├── private_dot_ssh/config        # SSH config
 ├── private_dot_vuescanrc.tmpl    # VueScan license
 ├── Brewfile*                     # 16 composable Brewfiles (macOS/Linux)
@@ -375,7 +375,7 @@ Old sourced credentials files used shell exports such as `export GH_TOKEN=...`. 
 
 **Key template files:**
 - `dot_gitconfig.tmpl` — `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GPG_SIGNING_KEY`, `GITHUB_USER`, `GH_TOKEN`
-- `private_dot_npmrc.tmpl` — `NPM_TOKEN`, `GH_TOKEN`
+- `private_dot_npmrc.tmpl` — `NPM_TOKEN`, `GH_TOKEN`, `allow-remote=all`
 - `private_dot_aws/credentials.tmpl` — `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - `private_dot_vuescanrc.tmpl` — `VUESCAN_USER_ID`, `VUESCAN_LICENSE`, `VUESCAN_CUSTOMER`, `VUESCAN_EMAIL`
 - `private_dot_gnupg/gpg.conf.tmpl` — `GPG_SIGNING_KEY`
