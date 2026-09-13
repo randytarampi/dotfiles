@@ -377,6 +377,8 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
             {
                 "health_check": lambda: (True, "ok"),
                 "base_url": lambda: "http://omlx:8000",
+                "metadata_lookup": None,
+                "metadata_capabilities": None,
             },
         ),
     ):
@@ -386,6 +388,42 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
 
     with (patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "0"}, clear=False),):
         assert configure_opencode.build_local_provider("omlx", models) is None
+
+
+def test_configure_opencode_local_provider_emits_modalities():
+    """Vision-capable engine models must declare image input so OpenCode's
+    client-side attachment gating accepts screenshots (registry-generic)."""
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    models = [
+        {"name": "vlm-model", "provider": "omlx", "model_type": "vlm"},
+        {"name": "text-model", "provider": "omlx", "model_type": "llm"},
+    ]
+    with (
+        patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "1"}, clear=False),
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"],
+            {
+                "health_check": lambda: (True, "ok"),
+                "base_url": lambda: "http://omlx:8000",
+                "metadata_lookup": lambda name: (
+                    {"model_type": "vlm"}
+                    if name == "vlm-model"
+                    else {"model_type": "llm"}
+                ),
+                "metadata_capabilities": lambda metadata: (
+                    {"completion", "vision"}
+                    if metadata.get("model_type") == "vlm"
+                    else {"completion"}
+                ),
+            },
+        ),
+    ):
+        provider = configure_opencode.build_local_provider("omlx", models)
+    assert provider["models"]["vlm-model"]["modalities"] == {
+        "input": ["text", "image"],
+        "output": ["text"],
+    }
+    assert "modalities" not in provider["models"]["text-model"]
 
 
 def test_configure_opencode_omlx_provider_is_absent_when_daemon_is_down():

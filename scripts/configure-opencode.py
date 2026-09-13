@@ -107,9 +107,36 @@ def build_local_provider(provider: str, models: list[dict]) -> dict[str, object]
         models = [model for model in models if model.get("model_type") in chat_types]
     if not models:
         return None
+
+    def _model_entry(model: dict) -> dict[str, object]:
+        # Enrich modalities from the engine's own metadata so OpenCode's
+        # client-side attachment gating accepts images for vision-capable
+        # models (same mapping the Ollama path uses: vision → image).
+        # OpenCode treats custom provider entries without `modalities` as
+        # text-only before any API call, even when the backend accepts them.
+        entry: dict[str, object] = {"name": model["name"]}
+        lookup = engine.get("metadata_lookup") if engine else None
+        caps_fn = engine.get("metadata_capabilities") if engine else None
+        if lookup and caps_fn:
+            try:
+                capabilities = set(caps_fn(lookup(model["name"])) or [])
+            except Exception:
+                capabilities = set()
+            input_modalities = ["text"]
+            if "vision" in capabilities:
+                input_modalities.append("image")
+            if "audio" in capabilities:
+                input_modalities.append("audio")
+            if len(input_modalities) > 1:
+                entry["modalities"] = {
+                    "input": input_modalities,
+                    "output": ["text"],
+                }
+        return entry
+
     return local_provider_block(
         provider,
-        {model["name"]: {"name": model["name"]} for model in models},
+        {model["name"]: _model_entry(model) for model in models},
     )
 
 
