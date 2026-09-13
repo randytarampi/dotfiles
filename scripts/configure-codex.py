@@ -174,6 +174,7 @@ def strip_managed_profiles(content):
         "ollama-local",
         "ollama",
         "local-solo",
+        "local",
         "copilot",
         "omlx",
     ):
