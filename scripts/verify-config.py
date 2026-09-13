@@ -194,7 +194,7 @@ def validate_omlx_settings(data):
         "memory_guard_tier"
     ) not in {"safe", "balanced", "aggressive"}:
         errors.append(
-            "memory.memory_guard_tier must be safe, balanced, aggressive, or absent when prefill is false"
+            "memory.memory_guard_tier must be safe, balanced, aggressive, or absent when prefill is false (OMLX_MEMORY_GUARD)"
         )
     scheduler = data.get("scheduler", {})
     if (
@@ -223,6 +223,8 @@ def validate_omlx_settings(data):
     mcp = data.get("mcp", {})
     if not isinstance(mcp.get("expose_tools"), bool):
         errors.append("mcp.expose_tools must be a boolean")
+    elif mcp["expose_tools"] and os.environ.get("OMLX_MCP_EXPOSE_TOOLS") != "1":
+        errors.append("mcp.expose_tools must be false unless OMLX_MCP_EXPOSE_TOOLS=1")
     if mcp.get("config_path") is not None and not isinstance(
         mcp.get("config_path"), str
     ):
