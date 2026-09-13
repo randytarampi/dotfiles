@@ -80,14 +80,6 @@ model_reasoning_effort = "high"
 model = "ollama-cloud/{ollama_model}"
 model_provider = "ollama-cloud"
 
-[profiles.ollama]
-model = "local"
-model_provider = "ollama"
-
-[profiles.local-solo]
-model = "local-solo"
-model_provider = "ollama"
-
 [profiles.copilot]
 model = "copilot-model-id"
 model_provider = "github-copilot"
