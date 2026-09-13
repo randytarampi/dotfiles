@@ -374,6 +374,20 @@ def _role_models_from_env():
     return None
 
 
+def apply_preserved_preferences(settings, prev):
+    """Preserve user Pi preferences while codified defaults seed fresh installs."""
+    for key in ("tuiMode", "followUpMode", "steeringMode", "showHardwareCursor"):
+        if prev.get(key) is not None:
+            settings[key] = prev[key]
+    for key in ("markdown", "terminal"):
+        if isinstance(prev.get(key), dict):
+            settings[key] = {**settings.get(key, {}), **prev[key]}
+    if "lastChangelogVersion" in prev:
+        settings["lastChangelogVersion"] = prev["lastChangelogVersion"]
+    else:
+        settings.pop("lastChangelogVersion", None)
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
@@ -554,7 +568,13 @@ def main():
         "defaultProvider": provider,
         "defaultModel": default_model or default,
         "defaultThinkingLevel": roles.get("orchestrator", {}).get("variant", "medium"),
-        "theme": os.environ.get("PI_THEME", "dark"),
+        "theme": "light/dark",
+        "tuiMode": "fullscreen",
+        "markdown": {"mermaid": "final"},
+        "followUpMode": "all",
+        "steeringMode": "all",
+        "terminal": {"showTerminalProgress": True},
+        "showHardwareCursor": True,
         "compaction": {
             "enabled": True,
             "reserveTokens": compaction_tokens,
@@ -750,20 +770,23 @@ def main():
     # subagents.defaultModel), so carrying them over would pin roles to
     # models that may no longer exist locally.
     prev_settings = out / "settings.json"
+    previous = {}
     managed = set(ROLE_TO_BUILTIN.values()) | set(role_models)
     if prev_settings.exists():
         try:
+            previous = json.loads(prev_settings.read_text(encoding="utf-8"))
             old_overrides = (
-                json.loads(prev_settings.read_text(encoding="utf-8"))
-                .get("subagents", {})
-                .get("agentOverrides", {})
-                or {}
+                previous.get("subagents", {}).get("agentOverrides", {}) or {}
             )
             for name, val in old_overrides.items():
                 if name not in managed:
                     settings["subagents"]["agentOverrides"][name] = val
+            apply_preserved_preferences(settings, previous)
         except Exception:  # pylint: disable=broad-exception-caught
             pass
+    settings["theme"] = os.environ.get("PI_THEME", "").strip() or previous.get(
+        "theme", "light/dark"
+    )
 
     files = {
         out / "settings.json": settings,

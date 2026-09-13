@@ -87,6 +87,27 @@ is a no-op with an info log).
 - From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
   entry.
 
+## Managed preference defaults
+
+`configure-pi.py` codifies defaults for these `~/.pi/agent/settings.json` keys:
+
+| Key | Codified default |
+|---|---|
+| `theme` | `light/dark` |
+| `tuiMode` | `fullscreen` |
+| `markdown.mermaid` | `final` |
+| `followUpMode` | `all` |
+| `steeringMode` | `all` |
+| `terminal.showTerminalProgress` | `true` |
+| `showHardwareCursor` | `true` |
+
+Precedence on regeneration: env `PI_THEME` (when non-empty) > the theme
+previously written in `settings.json` > the codified default. All other
+codified keys: a value you set in the Pi TUI wins over the codified default
+(so `make deploy` never reverts TUI edits), and fresh installs are seeded
+with the codified defaults. `lastChangelogVersion` is pi's own bookkeeping —
+carried over when present, never written by the repo.
+
 ## Local model timeouts
 
 Pi has three timeout layers that affect local Ollama inference:
