@@ -51,6 +51,7 @@ if current != rendered:
     os.replace(temp_name, path)
 # auth.api_key may be persisted; enforce 0600 even when nothing changed.
 path.chmod(0o600)
+PY
 ok "oMLX settings written to $SETTINGS_PATH"
 # The Homebrew service plist does not inherit ~/.env; persisted settings are authoritative.
 
