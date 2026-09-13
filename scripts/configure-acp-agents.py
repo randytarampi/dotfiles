@@ -22,7 +22,13 @@ import logger
 from cli_helpers import add_common_args
 from constants import get_ollama_local_base_url
 from discover_models import list_local_ollama_models
-from local_engines import local_endpoint_for, resolve_engine, resolve_local_winner
+from env import load_env
+from local_engines import (
+    active_engine_pools,
+    local_endpoint_for,
+    resolve_engine,
+    resolve_local_winner,
+)
 
 # Internal-only metadata keys that must not leak into the generated
 # acp-agents.json / oh-my-opencode-slim.json — OpenCode's schema rejects
@@ -110,7 +116,7 @@ ACP_AGENTS = {
 
 def local_model():
     """Resolve the best chat-capable model from the combined local pool."""
-    models = list_local_ollama_models()
+    models = [model for pool in active_engine_pools().values() for model in pool]
     model = resolve_local_winner(models, "anthropic")
     if not model:
         logger.warning(
@@ -291,6 +297,10 @@ def main():
         help="Comma-separated ACP agent names to include (default: all detected)",
     )
     args = parser.parse_args()
+
+    # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
+    # inside make deploy the parent environment already carries them.
+    load_env()
 
     try:
         detected_agents = {}

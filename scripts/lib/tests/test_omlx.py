@@ -482,11 +482,11 @@ def test_acp_local_model_uses_combined_pool():
     with (
         patch.object(
             acp,
-            "list_local_ollama_models",
-            return_value=[
-                {"name": "legacy", "provider": "ollama"},
-                {"name": "winner", "provider": "omlx"},
-            ],
+            "active_engine_pools",
+            return_value={
+                "ollama": [{"name": "legacy", "provider": "ollama"}],
+                "omlx": [{"name": "winner", "provider": "omlx"}],
+            },
         ),
         patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
     ):
@@ -682,11 +682,11 @@ def test_unknown_engine_winner_falls_back_to_ollama(monkeypatch):
     with (
         patch.object(
             acp,
-            "list_local_ollama_models",
-            return_value=[
-                {"name": "unknown/model", "provider": "lmstudio"},
-                {"name": "legacy", "provider": "ollama"},
-            ],
+            "active_engine_pools",
+            return_value={
+                "ollama": [{"name": "legacy", "provider": "ollama"}],
+                "lmstudio": [{"name": "unknown/model", "provider": "lmstudio"}],
+            },
         ),
         patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
     ):
@@ -810,3 +810,54 @@ def test_sync_turboquant_kv_untouched_without_kv_type(tmp_path):
         == 0
     )
     assert json.loads(settings_file.read_text()) == original
+
+
+def test_junie_pool_profile_specs_gate_off_unchanged(monkeypatch):
+    """Gate-off equivalence: no pool profile specs when no engine is active."""
+    gen = _load_script("gen_profiles", "generate-jetbrains-profiles.py")
+    specs = [("local", "ollama/m", "", "ollama", "ollama")]
+    gen.append_pool_profile_specs(specs, pools={})
+    assert len(specs) == 1
+
+
+def test_junie_pool_profile_specs_one_per_model(monkeypatch):
+    """N-engine contract: every chat-capable pool model becomes a spec."""
+    gen = _load_script("gen_profiles", "generate-jetbrains-profiles.py")
+    pools = {
+        "lmstudio": [
+            {
+                "name": "chat-a",
+                "provider": "lmstudio",
+                "model_type": "llm",
+                "primary_category": "llm",
+            },
+            {
+                "name": "chat-b",
+                "provider": "lmstudio",
+                "model_type": "vlm",
+                "primary_category": "vlm",
+            },
+            {
+                "name": "embed-x",
+                "provider": "lmstudio",
+                "model_type": "embedding",
+                "primary_category": "embedding",
+            },
+        ],
+        "ollama": [{"name": "legacy", "provider": "ollama"}],
+    }
+    fake = {"resolve_model": False}
+    monkeypatch.setitem(local_engines.LOCAL_ENGINES, "lmstudio", fake)
+    monkeypatch.setitem(local_engines.LOCAL_ENGINES, "ollama", {"resolve_model": True})
+    specs = []
+    gen.append_pool_profile_specs(specs, pools=pools)
+    names = [s[0] for s in specs]
+    assert "local-lmstudio-chat-a" in names
+    assert "local-lmstudio-chat-b" in names
+    assert "local-ollama-legacy" not in names  # legacy pool skipped
+    chat_a = next(s for s in specs if s[0] == "local-lmstudio-chat-a")
+    assert chat_a[1] == "lmstudio/chat-a"
+    assert chat_a[2] == "lmstudio/chat-b"
+    chat_b = next(s for s in specs if s[0] == "local-lmstudio-chat-b")
+    assert chat_b[2] == ""  # last chat model: no faster
+    assert not any("embed" in n for n in names)  # embedding excluded

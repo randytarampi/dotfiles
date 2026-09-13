@@ -25,7 +25,13 @@ from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
 import tier_registry
 from discover_models import list_local_ollama_models
-from local_engines import local_endpoint_for, resolve_engine, resolve_local_winner
+from env import load_env
+from local_engines import (
+    active_engine_pools,
+    local_endpoint_for,
+    resolve_engine,
+    resolve_local_winner,
+)
 
 PROFILES_START = "# BEGIN DOTFILES MANAGED PROFILES"
 PROFILES_END = "# END DOTFILES MANAGED PROFILES"
@@ -52,7 +58,7 @@ def _model_parts(model_ref):
 
 def resolve_local_model():
     """Resolve the best chat-capable model from the combined local pool."""
-    models = list_local_ollama_models()
+    models = [model for pool in active_engine_pools().values() for model in pool]
     return resolve_local_winner(models, "openai") or ""
 
 
@@ -188,6 +194,11 @@ def main():
     )
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
+
+    # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
+    # inside make deploy the parent environment already carries them.
+    load_env()
+
     ollama_cloud_model, ollama_cloud_model_note = resolve_ollama_cloud_model()
     local_model = resolve_local_model()
 

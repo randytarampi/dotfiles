@@ -24,7 +24,13 @@ from constants import (
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
-from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
+from env import load_env
+from local_engines import (
+    active_engine_pools,
+    engine_gate_active,
+    local_endpoint_for,
+    resolve_engine,
+)
 
 
 def normalize_endpoint(base_url: str, api_type: str) -> str:
@@ -131,6 +137,48 @@ def parse_local_models(value: str):
     return value.split()
 
 
+def append_pool_profile_specs(specs, pools=None):
+    """Append one profile spec per chat-capable pool model (registry-driven).
+
+    Selection parity, N-engine contract: every gate-active engine's
+    chat-capable models become selectable Junie profiles named
+    ``local-<provider>-<slug>.json``; ``fasterModel`` is the second-ranked
+    compatible model from the SAME engine when one exists. Legacy
+    Ollama-name-resolution pools keep group-driven specs (skipped here).
+    """
+    if pools is None:
+        pools = active_engine_pools()
+    spec_names = {name for name, *_ in specs}
+    for provider, pool in pools.items():
+        engine = resolve_engine(provider)
+        if not engine or engine.get("resolve_model"):
+            continue  # legacy Ollama-name resolution pools keep group-driven specs
+        chat_models = []
+        for model in pool:
+            if not isinstance(model, dict):
+                continue
+            if model.get("primary_category") in {"embedding", "reranker", "unknown"}:
+                continue
+            if model.get("model_type") not in (None, "llm", "vlm"):
+                continue
+            chat_models.append(model["name"])
+        for index, model_name in enumerate(chat_models):
+            slug = re.sub(r"[^a-z0-9]+", "-", model_name.lower()).strip("-")
+            profile_name = f"local-{provider}-{slug}"
+            if profile_name in spec_names:
+                continue
+            faster_ref = chat_models[index + 1] if index + 1 < len(chat_models) else ""
+            specs.append(
+                (
+                    profile_name,
+                    f"{provider}/{model_name}",
+                    f"{provider}/{faster_ref}" if faster_ref else "",
+                    provider,
+                    provider,
+                )
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate JetBrains AI model profiles."
@@ -148,6 +196,11 @@ def main():
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
+
+    # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
+    # inside make deploy / configure-jetbrains-ai.py the parent already
+    # carries them.
+    load_env()
 
     groups_path = os.path.abspath(os.path.expanduser(args.groups_json))
     target_dir = os.path.abspath(os.path.expanduser(args.target_dir))
@@ -238,6 +291,9 @@ def main():
         )
         for name, group in cfg.get("groups", {}).items()
     ]
+    # Selection parity: one spec per chat-capable pool model (registry-driven,
+    # N-engine contract) so every local model is selectable in JetBrains AI.
+    append_pool_profile_specs(specs)
     providers = build_provider_configs(cfg)
     ollama_model_names = [
         model["name"] if isinstance(model, dict) else str(model)

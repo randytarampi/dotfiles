@@ -51,6 +51,8 @@ When the librarian model uses a different provider than the orchestrator, add a 
 
 Local groups use `_local:<category>` placeholders (not hardcoded model names). These are resolved at profile generation time by `scripts/generate-jetbrains-profiles.py` through `scripts/lib/tier_registry.py`. oMLX provider metadata is preserved through the wrapper's JSON model argument; oMLX groups use an OpenAI-compatible endpoint and `omlx/<model>` references.
 
+Beyond the tier-driven groups, the generator appends one selectable profile per chat-capable pool model (`local-<provider>-<slug>.json`) from every gate-active engine in `scripts/lib/local_engines.py` — the N-engine contract: a newly registered engine's models become selectable in JetBrains AI with no consumer change. `fasterModel` chains to the same engine's next-ranked chat model when one exists.
+
 | Placeholder | Resolves to | Junie usage |
 |-------------|-------------|-------------|
 | `_local:reasoning` | Best local reasoning model | `local-pro` primaryModel |
