@@ -59,6 +59,8 @@ lint: ## Run repository lint and syntax checks
 	@for f in scripts/*.py scripts/lib/*.py; do [ -f "$$f" ] && python3 -m py_compile "$$f" >/dev/null || exit 1; done
 	@echo "Checking PEP 604 type hint compatibility..."
 	@python3 scripts/check-pep604.py
+	@echo "Checking heredocs in .chezmoiscripts..."
+	@python3 scripts/check-heredocs.py
 	@echo "Checking Python formatting with black (dry-run)..."
 	@if command -v black >/dev/null 2>&1; then \
 		black --check scripts/ scripts/lib/; \
