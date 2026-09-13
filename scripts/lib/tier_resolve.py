@@ -35,7 +35,9 @@ def extract_param_count(model_name: str) -> int:
     Parses patterns like :27b, :480b, :1t from model tags.
     Returns 0 if no size pattern is found.
     """
-    match = re.search(r":(\d+(?:\.\d+)?)([bmt])", model_name, re.IGNORECASE)
+    match = re.search(
+        r"(?<![0-9a-zA-Z])(\d+(?:\.\d+)?)([bmt])(?![0-9a-z])", model_name, re.IGNORECASE
+    )
     if not match:
         return 0
     size = float(match.group(1))
@@ -80,7 +82,7 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
             "embedding_length": None,
             "context_length": context_length,
             "quantization": None,
-            "is_moe": is_moe,
+            "is_moe": bool(re.search(r"A\d+(?:\.\d+)?B", bare_name, re.IGNORECASE)),
             "model_type": model_type,
         }
 

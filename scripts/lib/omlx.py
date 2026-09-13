@@ -127,7 +127,7 @@ def list_omlx_models(strict=False):
             models.append(
                 {
                     "name": entry["id"],
-                    "size_gb": 0.0,
+                    "size_gb": round((merged.get("estimated_size") or 0) / 1e9, 2),
                     "provider": "omlx",
                     "model_type": merged.get("model_type") or model_type,
                     # Sorted list (not set): model dicts cross process

@@ -871,3 +871,91 @@ def test_junie_pool_profile_specs_one_per_model(monkeypatch):
     chat_b = next(s for s in specs if s[0] == "local-lmstudio-chat-b")
     assert chat_b[2] == ""  # last chat model: no faster
     assert not any("embed" in n for n in names)  # embedding excluded
+
+
+def test_extract_param_count_mlx_style_names():
+    """First size token wins; quant suffixes and decimals never match."""
+    from tier_resolve import extract_param_count
+
+    cases = {
+        "Qwen3.8-27B-MLX-4bit": 27,
+        "Ornith-1.5-35B-A3B-MLX-4bit": 35,
+        "gemma-4-12B-it-MLX-8bit": 12,
+        "qwen3.8:27b-mlx": 27,
+        "gemma4:12b-mxfp8": 12,
+        "qwen2.5-coder:7b": 7,
+        "gpt-oss:20b": 20,
+        "Qwen3.8": 0,  # no size token
+    }
+    for name, expected in cases.items():
+        assert extract_param_count(name) == expected, f"{name} -> {expected}"
+
+
+def test_omlx_metadata_infers_moe_from_name(monkeypatch):
+    """A3B-style MoE markers set is_moe; dense names get explicit False."""
+    import omlx
+
+    monkeypatch.setattr(
+        omlx,
+        "get_omlx_model_status",
+        lambda name: {"model_type": "llm", "estimated_size": 1},
+    )
+    details = tier_resolve.get_model_details("Ornith-1.5-35B-A3B-MLX-4bit", "omlx")
+    assert details["is_moe"] is True
+    details = tier_resolve.get_model_details("Qwen3.8-27B-MLX-4bit", "omlx")
+    assert details["is_moe"] is False
+
+
+def test_classification_live_omlx_pool_shape():
+    """Live-pool fixture: reasoning=Qwen, lightweight/vision=gemma, solo=Qwen."""
+    models = [
+        {
+            "name": "Qwen3.8-27B-MLX-4bit",
+            "size_gb": 16.86,
+            "provider": "omlx",
+            "model_type": "vlm",
+            "capabilities": ["completion", "thinking", "tools", "vision"],
+        },
+        {
+            "name": "gemma-4-12B-it-MLX-8bit",
+            "size_gb": 13.35,
+            "provider": "omlx",
+            "model_type": "vlm",
+            "capabilities": ["completion", "tools", "vision"],
+        },
+        {
+            "name": "Ornith-1.5-35B-A3B-MLX-4bit",
+            "size_gb": 20.48,
+            "provider": "omlx",
+            "model_type": "llm",
+            "capabilities": ["completion", "thinking", "tools"],
+        },
+        {
+            "name": "Ornith-1.5-9B-MLX-8bit",
+            "size_gb": 9.5,
+            "provider": "omlx",
+            "model_type": "llm",
+            "capabilities": ["completion", "thinking", "tools"],
+        },
+    ]
+
+    def fake_details(model_name, provider="ollama"):
+        caps = next(m["capabilities"] for m in models if m["name"] == model_name)
+        moe = "A3B" in model_name
+        return {
+            "param_count": tier_resolve.extract_param_count(model_name) or None,
+            "capabilities": caps,
+            "architecture": None,
+            "embedding_length": None,
+            "context_length": None,
+            "quantization": None,
+            "is_moe": moe,
+            "model_type": "llm",
+        }
+
+    with patch.object(tier_resolve, "get_model_details", side_effect=fake_details):
+        resolved = tier_resolve.resolve_roles_from_list(models)
+    assert resolved["reasoning"] == "omlx/Qwen3.8-27B-MLX-4bit"
+    assert resolved["lightweight"] == "omlx/gemma-4-12B-it-MLX-8bit"
+    assert resolved["vision"] == "omlx/gemma-4-12B-it-MLX-8bit"
+    assert resolved["solo"] == "omlx/Qwen3.8-27B-MLX-4bit"
