@@ -16,10 +16,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 import logger
+from env import load_env
 from model_stamp import is_stale
 from local_engines import active_engines, iter_engine_models_strict, resolve_engine
 
 REPO_ROOT = SCRIPT_DIR.parent
+DRIFT_STATS = {"checked": 0, "skipped": 0}
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 # Google/OpenRouter entries are checked for internal allowlist membership only;
 # they are not queried against live catalogs. Refresh via free-preset skill.
@@ -63,13 +65,28 @@ def resolve_profile_api_key(value: object) -> str | None:
 
 
 def get_models(url: str, api_key: str = "") -> set[str] | None:
+    DRIFT_STATS["checked"] += 1
     try:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         request = urllib.request.Request(url, headers=headers, method="GET")
         with urllib.request.urlopen(request, timeout=3) as response:
             data = json.loads(response.read().decode("utf-8"))
         return {str(item.get("id")) for item in data.get("data", []) if item.get("id")}
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403, 404}:
+            DRIFT_STATS["checked"] -= 1
+            DRIFT_STATS["skipped"] += 1
+            logger.warning(
+                "Could not authenticate to %s (HTTP %s) — skipping", url, exc.code
+            )
+        else:
+            DRIFT_STATS["checked"] -= 1
+            DRIFT_STATS["skipped"] += 1
+            logger.warning("Could not reach %s — skipping (%s)", url, exc)
+        return None
     except Exception as exc:
+        DRIFT_STATS["checked"] -= 1
+        DRIFT_STATS["skipped"] += 1
         logger.warning("Could not reach %s — skipping (%s)", url, exc)
         return None
 
@@ -266,6 +283,12 @@ def check_junie_profiles() -> list[str]:
         if not base_url:
             logger.warning("Junie profile group has no baseUrl — skipping")
             continue
+        if any(api_key is None for _, _, api_key in profiles):
+            DRIFT_STATS["skipped"] += 1
+            logger.warning(
+                "Junie profile at %s references an unset API key — skipping", base_url
+            )
+            continue
         api_key = next((entry[2] for entry in profiles if entry[2]), "")
         models = get_models(endpoint_models_url(base_url), api_key)
         if models is None:
@@ -284,6 +307,7 @@ def check_junie_profiles() -> list[str]:
 
 
 def main() -> int:
+    load_env()
     parser = argparse.ArgumentParser(
         description="Check model assignments for catalog drift."
     )
@@ -317,7 +341,10 @@ def main() -> int:
         for violation in results["violations"]:
             logger.error("Model drift: %s", violation)
         logger.info(
-            "Model drift check complete: %d violation(s)", len(results["violations"])
+            "Model drift check complete: %d violation(s); checked %d provider endpoint(s), skipped %d",
+            len(results["violations"]),
+            DRIFT_STATS["checked"],
+            DRIFT_STATS["skipped"],
         )
     return 1 if results["violations"] else 0
 

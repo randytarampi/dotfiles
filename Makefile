@@ -183,7 +183,7 @@ check-slim-invariants: ## Verify oh-my-opencode-slim fallback arrays have no dup
 	@python3 scripts/verify-slim-invariants.py
 
 check-model-drift: ## Check deployed model configs against live catalogs
-	@python3 scripts/check-model-drift.py
+	@$(LOAD_ENV); python3 scripts/check-model-drift.py
 
 check-templates: ## Render JSON chezmoi templates and validate output (catches Go template errors that lint misses)
 	@echo "Rendering and validating JSON templates..."
