@@ -155,7 +155,7 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | fixer | `anthropic/claude-haiku-4-5` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-5.6-terra`, gamma `gpt-5.6-luna`. Council synthesizer uses `claude-opus-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-5.6-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Local-Pro Tier (`local-pro`)
 
@@ -297,7 +297,7 @@ Additional classification rules (applied after name heuristics):
 
 Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local, local-mini, local-nano, local-solo)
 
-Local Ollama and, when enabled, oMLX models form the multi-provider local pool; Ollama wins bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
+Local Ollama and, when enabled, oMLX models form the multi-provider local pool; oMLX wins engine-equivalent bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
 
 Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 

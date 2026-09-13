@@ -9,8 +9,8 @@ through the Hugging Face admin UI.
 
 ## Platform and gate
 
-The local oMLX service is supported on macOS 15 or newer with Apple Silicon only;
-script 29 skips other platforms. The Homebrew formula builds from source and is
+The local oMLX service is supported when script 29's actual gate passes: Darwin
+on arm64 (Apple Silicon); script 29 skips other platforms. The Homebrew formula builds from source and is
 declared unconditionally in `Brewfile.dev`, alongside other development tools.
 The gate controls settings/service setup and consumer/provider generation. A
 configured remote oMLX endpoint may be consumed on other platforms when gated;
@@ -121,7 +121,8 @@ restart). Security: the Caddy LAN route blocks `/admin*` and `/v1/mcp/*`
 “Local” means the combined pool of all models served by configured local engines;
 selection does not distinguish Ollama from oMLX. Adding another engine such as
 LM Studio requires a discovery module plus one `LOCAL_ENGINES` registry entry
-covering its endpoint, metadata, audio, and Caddy contracts; consumers iterate
+covering its endpoint, metadata, audio, and Caddy contracts, plus hash triggers,
+tests, and any relevant allowlists; consumers iterate
 those registry contracts and remain unchanged. Model drift checking is also
 automatically covered by the registry dispatch. Per-engine app pinning belongs
 to that engine's launcher, for example `omlx launch codex`, `omlx launch claude`,
@@ -131,10 +132,10 @@ endpoint needs its own base URL.
 | Tool | oMLX integration |
 |------|------------------|
 | OpenCode | Gated, reachable provider for all tier classes; uses `omlx/<id>` references. |
-| Tier resolution | Merged `_local` pool; Ollama wins bare-name collisions. |
+| Tier resolution | Merged `_local` pool; oMLX wins engine-equivalent bare-name collisions. |
 | Junie | One selectable profile per chat-capable pool model (`local-<provider>-<slug>.json`), generated registry-driven with an OpenAI-compatible endpoint; `fasterModel` chains to the same engine's next-ranked model. |
 | Pi | oMLX provider alongside Ollama; native `max_model_len` context is used. |
-| ACP agents | `claude--local` and `codex--local` are pool-driven; the winning engine supplies the endpoint and a harmless local token is used without a key. |
+| ACP agents | `claude--local` and `codex--local` are pool-driven; the winning engine supplies the endpoint and authentication follows that engine's configuration. |
 | Codex | Pool-driven winner per profile plus one provider per gate-active engine — `codex --model <any-id>` resolves against the engine's `base_url`, so every pool model is selectable without re-configuring. Pin an app with the engine's own launcher. |
 | Voice | oMLX `audio_stt` is selected below explicit OpenAI STT tiers; `DOTFILES_USE_LOCAL_OMLX=false` opts out. TTS remains Piper and Pi voice is unchanged. |
 | Mozart router | Gate-active, reachable engines are appended as `generic-openai` gateways by `configure-mozart-router.py` (deduped by base URL; API key via the engine's `api_key_env`). With oMLX running, the deployed `mozart.json` carries an `omlx` gateway. |
@@ -154,7 +155,7 @@ Administrative and mutating endpoints are blocked. The route is gated by
 | `model_type=vlm` | `vision` |
 | `model_type=audio_stt/audio_tts/audio_sts` | `audio` |
 | `embedding`, `reranker`, or unknown type | Fail-closed: excluded from chat role pools |
-| Missing `is_moe` metadata | Unknown-safe density ranking; never assumed MoE. |
+| Missing `is_moe` metadata | Unknown-safe density ranking; names with an `A#B` marker are treated as MoE, otherwise dense. |
 
 Tool support is optimistic for language and vision models because their served
 API is tool-capable; this has a documented false-positive risk when upstream
