@@ -8,6 +8,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
 import logger
+from env import load_env
 from cli_helpers import (
     add_common_args,
     add_model_override_args,
@@ -347,6 +348,32 @@ def seed_plugin_configs(dry_run=False, mode="global"):
         logger.info("Seeded plugin config: %s", target)
 
 
+def _role_models_from_env():
+    """Bridge DOTFILES_ROLE_MODELS into role overrides (flag form wins).
+
+    Mirrors configure-opencode-tier.py: the deprecated
+    DOTFILES_LOCAL_FALLBACK_ROLES alias warns and is honoured only when
+    the canonical env var is unset.
+    """
+    values = [
+        value.strip()
+        for value in os.environ.get("DOTFILES_ROLE_MODELS", "").split(",")
+        if value.strip()
+    ]
+    if values:
+        return values
+    if os.environ.get("DOTFILES_LOCAL_FALLBACK_ROLES"):
+        logger.warning(
+            "Deprecated DOTFILES_LOCAL_FALLBACK_ROLES; use DOTFILES_ROLE_MODELS instead"
+        )
+        return [
+            value.strip()
+            for value in os.environ.get("DOTFILES_LOCAL_FALLBACK_ROLES", "").split(",")
+            if value.strip()
+        ]
+    return None
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
@@ -365,6 +392,15 @@ def main():
     p.add_argument("--no-local-fallbacks", action="store_true")
     p.add_argument("--ollama-base-url")
     args = p.parse_args()
+
+    # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
+    # inside make deploy the parent environment already carries them.
+    load_env()
+
+    # Env bridge mirroring configure-opencode-tier.py: DOTFILES_ROLE_MODELS
+    # feeds --role-model so role overrides work without flags.
+    if args.role_models is None:
+        args.role_models = _role_models_from_env()
     registry = copy.deepcopy(tier_registry.load_registry(SLIM))
     preset = args.preset or registry.get("preset", "pro-plus")
     roles = tier_registry.get_preset(registry, preset)
@@ -448,6 +484,22 @@ def main():
         logger.info("Using local fallback preset: %s", args.local_fallback_preset)
     if category_models:
         logger.info(f"Classified local models: {json.dumps(category_models, indent=2)}")
+    if args.role_models:
+        overrides = {}
+        for item in args.role_models:
+            if "=" in item:
+                role, model = item.split("=", 1)
+                overrides[role] = model
+        applied = {
+            role: model
+            for role, model in overrides.items()
+            if role_models.get(role) == model
+        }
+        if applied:
+            logger.info(
+                "Applied role-model overrides: %s",
+                json.dumps(applied, sort_keys=True),
+            )
 
     skipped = {item.strip() for item in (args.skip or "").split(",") if item.strip()}
     unknown_skip = skipped - {"mcps"}

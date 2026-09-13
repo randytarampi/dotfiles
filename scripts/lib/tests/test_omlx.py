@@ -984,3 +984,20 @@ def test_merged_local_pool_prefers_omlx_equivalents(monkeypatch):
     assert "gemma-4-12B-it-MLX-8bit" in names
     assert "qwen2.5-coder:7b" in names
     assert "Qwen3.8-27B-MLX-4bit" in names
+
+
+def test_pi_role_models_env_bridge(monkeypatch):
+    """DOTFILES_ROLE_MODELS bridges into role overrides like the flag form."""
+    pi = _load_script("pi_cfg", "configure-pi.py")
+    monkeypatch.setenv("DOTFILES_ROLE_MODELS", "observer=omlx/gemma-4-12B-it-MLX-8bit")
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_ROLES", raising=False)
+    assert pi._role_models_from_env() == ["observer=omlx/gemma-4-12B-it-MLX-8bit"]
+
+    monkeypatch.delenv("DOTFILES_ROLE_MODELS", raising=False)
+    monkeypatch.setenv(
+        "DOTFILES_LOCAL_FALLBACK_ROLES", "observer=ollama/gemma4:12b-mxfp8"
+    )
+    assert pi._role_models_from_env() == ["observer=ollama/gemma4:12b-mxfp8"]
+
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_ROLES", raising=False)
+    assert pi._role_models_from_env() is None
