@@ -38,12 +38,10 @@ nvm use default >/dev/null 2>&1
 npm update -g 2>&1 || warn "npm update -g on $DEFAULT_VERSION had failures"
 
 # Step 2: Get all other installed versions (sorted newest-first, deduplicated, excluding default)
-# Filter lines containing "->" first: nvm ls marks the in-use version and alias
-# summaries with pointers (e.g. "-> system * (-> v26.8.2)"), and versions on
-# pointer lines are not necessarily installed — extracting them causes
-# "nvm use" failures. Only bare installed-version lines remain.
+# Filter only alias/pointer lines; retain the active/current arrow line because
+# it identifies an installed version that should receive the propagation.
 OTHER_VERSIONS=$(nvm ls --no-colors 2>/dev/null |
-  grep -v -e '->' |
+  grep -v -E '(^|[[:space:]])default ->|v[0-9]+\.[0-9]+\.[0-9]+ -> system' |
   grep -v 'N/A' |
   grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' |
   grep -v "^$DEFAULT_VERSION$" |

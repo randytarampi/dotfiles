@@ -171,20 +171,22 @@ verify_omlx_models() {
   if [[ -n "${OMLX_API_KEY:-}" ]]; then
     auth_args=(-H "Authorization: Bearer ${OMLX_API_KEY}")
   fi
-  if ! curl -fsS --max-time 3 "${base_url%/}/health" "${auth_args[@]}" >/dev/null; then
+  if ! curl -fsS --max-time 3 "${base_url%/}/health" "${auth_args[@]+${auth_args[@]}}" >/dev/null; then
     warn "omlx daemon unreachable — skipping model verification"
     skipped_lanes+=("omlx models")
     return 0
   fi
-  if ! curl -fsS --max-time 3 "${base_url%/}/v1/models" "${auth_args[@]}" >/dev/null; then
+  if ! curl -fsS --max-time 3 "${base_url%/}/v1/models" "${auth_args[@]+${auth_args[@]}}" >/dev/null; then
     warn "omlx model catalogue unavailable — skipping model verification"
     skipped_lanes+=("omlx models")
     return 0
   fi
   if python3 "$SCRIPT_DIR/check-model-drift.py"; then
     ok "omlx models verified"
+    ran_lanes+=("omlx models")
   else
     warn "omlx model drift found; re-download missing models at ${base_url%/}/admin"
+    warned_lanes+=("omlx models")
   fi
   return 0
 }

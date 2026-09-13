@@ -47,14 +47,14 @@ detect_tier() {
   # Check for local Ollama. The opt-in toggle controls whether discovered local
   # models are included, but it should not pretend Ollama exists when the binary
   # is unavailable.
-  if command -v ollama >/dev/null 2>&1; then
+  if [[ "${DOTFILES_USE_LOCAL_OLLAMA:-1}" == "1" ]] && command -v ollama >/dev/null 2>&1 && ollama list >/dev/null 2>&1; then
     _has_ollama=true
   fi
   if [[ "${DOTFILES_RUN_OMLX_SETUP:-0}" == "1" ]] && command -v curl >/dev/null 2>&1; then
     _omlx_base="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
     _omlx_auth=()
     [[ -n "${OMLX_API_KEY:-}" ]] && _omlx_auth=(-H "Authorization: Bearer ${OMLX_API_KEY}")
-    if curl -fsS --max-time 2 "${_omlx_base%/}/health" "${_omlx_auth[@]}" >/dev/null 2>&1; then
+    if curl -fsS --max-time 2 "${_omlx_base%/}/health" "${_omlx_auth[@]+${_omlx_auth[@]}}" >/dev/null 2>&1; then
       _has_omlx=true
     fi
   fi
@@ -78,7 +78,7 @@ detect_tier() {
     TIER="plus"
   elif [[ "$_has_anthropic" == true ]]; then
     TIER="anthropic"
-  elif [[ "$_has_ollama" == true ]]; then
+  elif { [[ "$_has_ollama" == true ]] && [[ "${DOTFILES_USE_LOCAL_OLLAMA:-1}" =~ ^(1|true)$ ]]; } || { [[ "$_has_omlx" == true ]] && [[ "${DOTFILES_USE_LOCAL_OMLX:-1}" =~ ^(1|true)$ ]]; }; then
     TIER="local"
   fi
 
