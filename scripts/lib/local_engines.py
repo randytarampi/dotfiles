@@ -1,6 +1,8 @@
 """Contracts for engines contributing to the unified local model pool."""
 
 import os
+import re
+
 import logger
 from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
 
@@ -167,10 +169,34 @@ def active_engine_pools(include_cloud=False):
     }
 
 
+def _model_identity(model_name):
+    """Return a normalized ``(family, params)`` identity for a model name.
+
+    Family is the leading alpha run of the lowercased name with separators
+    stripped (``gemma-4`` → ``gemma``, ``Qwen3.8`` → ``qwen``); params is
+    the first size token via :func:`tier_resolve.extract_param_count`
+    (``gemma-4-12B-it-MLX-8bit`` → 12, ``qwen3.8:27b-mlx`` → 27). Used to
+    detect engine-equivalent models across Ollama and oMLX, which name the
+    same weights differently.
+    """
+    from tier_resolve import extract_param_count
+
+    family = re.match(r"[a-z]+", model_name.lower())
+    return family.group(0) if family else "", extract_param_count(model_name)
+
+
 def merged_local_pool(include_cloud=False):
-    """Merge active engine pools with Ollama-first name collision precedence."""
+    """Merge active engine pools with oMLX-first equivalence preference.
+
+    When an oMLX model is equivalent to an Ollama model — same normalized
+    (family, params) identity, or the exact same name — the oMLX entry
+    replaces the Ollama entry (oMLX serves MLX-quantized weights natively
+    on Apple Silicon). Distinct models are all kept.
+    """
     models = iter_engine_models("ollama", include_cloud)
-    ollama_names = {model["name"] for model in models}
+    ollama_identities = {
+        _model_identity(model["name"]): model["name"] for model in models
+    }
     for provider in active_engines():
         if provider == "ollama":
             continue
@@ -180,9 +206,19 @@ def merged_local_pool(include_cloud=False):
             logger.info("Local engine %s discovery failed: %s", provider, err)
             continue
         for model in engine_models:
-            if model.get("name") in ollama_names:
+            identity = _model_identity(model.get("name", ""))
+            if model.get("name") in ollama_identities.values() or (
+                identity[1] and identity in ollama_identities
+            ):
+                models[:] = [
+                    item
+                    for item in models
+                    if _model_identity(item.get("name", "")) != identity
+                ]
+                models.append(model)
                 logger.info(
-                    "Local model collision for %s; keeping Ollama entry", model["name"]
+                    "Local model equivalent for %s; keeping oMLX entry",
+                    model["name"],
                 )
             else:
                 models.append(model)

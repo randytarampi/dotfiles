@@ -163,7 +163,7 @@ def test_verify_omlx_settings_reports_invalid_memory_guard():
     )
 
 
-def test_discovery_merges_omlx_and_ollama_with_ollama_collision_wins():
+def test_discovery_merges_omlx_and_ollama_with_omlx_collision_wins():
     ollama_output = (
         "NAME ID SIZE MODIFIED\nshared abc 1 GB now\nollama-only def 2 GB now\n"
     )
@@ -186,8 +186,8 @@ def test_discovery_merges_omlx_and_ollama_with_ollama_collision_wins():
         run.return_value.stdout = ollama_output
         models = discover_models.list_local_ollama_models()
     assert [(model["name"], model["provider"]) for model in models] == [
-        ("shared", "ollama"),
         ("ollama-only", "ollama"),
+        ("shared", "omlx"),
         ("omlx-only", "omlx"),
     ]
 
@@ -959,3 +959,28 @@ def test_classification_live_omlx_pool_shape():
     assert resolved["lightweight"] == "omlx/gemma-4-12B-it-MLX-8bit"
     assert resolved["vision"] == "omlx/gemma-4-12B-it-MLX-8bit"
     assert resolved["solo"] == "omlx/Qwen3.8-27B-MLX-4bit"
+
+
+def test_merged_local_pool_prefers_omlx_equivalents(monkeypatch):
+    """Same (family, params) identity: omlx entry replaces ollama; distinct kept."""
+    fake_ollama = [
+        {"name": "gemma4:12b-mxfp8", "size_gb": 8.1, "provider": "ollama"},
+        {"name": "qwen2.5-coder:7b", "size_gb": 4.7, "provider": "ollama"},
+    ]
+    fake_omlx = [
+        {"name": "gemma-4-12B-it-MLX-8bit", "size_gb": 13.35, "provider": "omlx"},
+        {"name": "Qwen3.8-27B-MLX-4bit", "size_gb": 16.86, "provider": "omlx"},
+    ]
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models",
+        lambda p, ic=False: fake_ollama if p == "ollama" else fake_omlx,
+    )
+    monkeypatch.setattr(local_engines, "active_engines", lambda: ["ollama", "omlx"])
+    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: True)
+    pool = local_engines.merged_local_pool()
+    names = [m["name"] for m in pool]
+    assert "gemma4:12b-mxfp8" not in names
+    assert "gemma-4-12B-it-MLX-8bit" in names
+    assert "qwen2.5-coder:7b" in names
+    assert "Qwen3.8-27B-MLX-4bit" in names
