@@ -37,7 +37,7 @@ LOCAL_ENGINES = {
         "api_key_env": "OMLX_API_KEY",
         "anthropic_support": True,
         "gemini_support": False,
-        "profile_provider": "omlx-local",
+        "profile_provider": "omlx",
         "provider_config": True,
         "health_check": check_omlx_daemon,
         "display_name": "oMLX",

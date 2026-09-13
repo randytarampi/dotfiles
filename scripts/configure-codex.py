@@ -219,6 +219,7 @@ def main():
             "meridian",
             "ollama-cloud",
             "ollama-local",
+            "omlx-local",
             "ollama",
             "github-copilot",
             "omlx",

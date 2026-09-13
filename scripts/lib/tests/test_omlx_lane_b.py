@@ -78,13 +78,13 @@ def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
     enabled = codex.build_provider_config("omlx/chat") + codex.build_profiles_config(
         "cloud", "omlx/chat"
     )
-    assert "model_providers.omlx-local" in enabled
+    assert "model_providers.omlx" in enabled
     assert "profiles.local" in enabled
     assert 'model = "chat"' in enabled
     ollama = codex.build_provider_config("ollama/chat") + codex.build_profiles_config(
         "cloud", "ollama/chat"
     )
-    assert "model_providers.omlx-local" not in ollama
+    assert "model_providers.omlx" not in ollama
     assert 'model_provider = "ollama"' in ollama
 
 
