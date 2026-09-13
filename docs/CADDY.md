@@ -108,7 +108,7 @@ Caddy exposure is layered:
 
 1. **TLS** — acme.sh obtains real certificates with Route 53 DNS-01.
 2. **LAN allowlist** — `remote_ip private_ranges` limits requests to private networks.
-3. **Basic auth** — `basic_auth` hard-fails unauthenticated requests.
+3. **Basic auth** — `basic_auth` hard-fails unauthenticated requests. When `OMLX_API_KEY` is set, the LAN oMLX route is excluded from Caddy basic auth because the single `Authorization` header must be forwarded as the oMLX Bearer key; other routes retain basic auth.
 
 ## Localhost access
 
@@ -125,7 +125,7 @@ manually if you prefer to manage Keychain trust yourself.
 | Service | Path | Upstream | Notes |
 |---------|------|----------|-------|
 | Ollama | `/ollama/*` | `http://127.0.0.1:11434` | Read-only proxy; write endpoints are blocked. |
-| oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative and write endpoints are blocked. |
+| oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative, write, and non-local `/v1/models/status` endpoints are blocked. With `OMLX_API_KEY`, the Bearer key is the route's auth layer instead of basic auth. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
 | OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; Caddy `basic_auth` is the only external auth layer. |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |

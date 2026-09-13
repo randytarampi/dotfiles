@@ -156,7 +156,9 @@ def build_auth_block(users: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def build_route_block(plannotator_portal_dir: str) -> str:
+def build_route_block(
+    plannotator_portal_dir: str, block_omlx_status: bool = False
+) -> str:
     lines = [
         "  # Ollama inference — READ-ONLY (write endpoints blocked per oracle warning 1)",
         "  handle_path /ollama/* {",
@@ -175,11 +177,20 @@ def build_route_block(plannotator_portal_dir: str) -> str:
     for provider in active_engines():
         engine = resolve_engine(provider)
         route = engine.get("caddy_route") if engine else None
-        if not route:
+        if not engine or not route:
             continue
         default_port = engine["default_port"]
         port = os.environ.get(engine["port_env"], default_port).strip() or default_port
         route_path, _ = local_caddy_target(provider)
+        status_block = (
+            [
+                "    @omlx_status path /v1/models/status",
+                "    respond @omlx_status 404",
+                "",
+            ]
+            if provider == "omlx" and block_omlx_status
+            else []
+        )
         lines.extend(
             [
                 f"  # {engine['display_name']} inference — READ-ONLY (write endpoints blocked)",
@@ -187,6 +198,7 @@ def build_route_block(plannotator_portal_dir: str) -> str:
                 f"    @{provider}_blocked path {route['blocked']}",
                 f"    respond @{provider}_blocked 403",
                 "",
+                *status_block,
                 f"    @{provider}_read path {route['allowed']}",
                 f"    reverse_proxy @{provider}_read 127.0.0.1:{port} {{",
                 "      flush_interval -1",
@@ -247,6 +259,8 @@ def build_site_block(
         lines.extend(
             ["  @not_lan not remote_ip private_ranges", "  abort @not_lan", ""]
         )
+    if "basic_auth @not_omlx" in auth_block:
+        lines.extend(["  @not_omlx not path /omlx/*", ""])
     lines.extend([auth_block, "", route_block, "}"])
     return "\n".join(lines)
 
@@ -352,7 +366,16 @@ def build_caddyfile(
     plannotator_portal_dir: str,
     https_port: str,
 ) -> str:
-    route_block = build_route_block(plannotator_portal_dir)
+    route_block = build_route_block(
+        plannotator_portal_dir, block_omlx_status=access_mode != "localhost"
+    )
+    external_auth_block = auth_block
+    if os.environ.get("OMLX_API_KEY") and access_mode != "localhost":
+        # The Bearer token is forwarded to oMLX; one Authorization header cannot
+        # satisfy both Caddy basic_auth and oMLX authentication.
+        external_auth_block = auth_block.replace(
+            "basic_auth {", "basic_auth @not_omlx {", 1
+        )
 
     domain_blocks: list[str] = []
     if access_mode in {"lan", "public"}:
@@ -362,7 +385,7 @@ def build_caddyfile(
                     build_site_label(domain, https_port),
                     bind_ip,
                     f"tls {cert_fullchain} {cert_key}",
-                    auth_block,
+                    external_auth_block,
                     route_block,
                     opencode_redirect=f"{build_site_label(f'opencode.{domain}', https_port)}/",
                     lan_only=access_mode == "lan",
@@ -399,7 +422,7 @@ def build_caddyfile(
     opencode_sites = build_opencode_site_blocks(
         domains=domains,
         access_mode=access_mode,
-        auth_block=auth_block,
+        auth_block=external_auth_block,
         bind_ip=bind_ip,
         cert_fullchain=cert_fullchain,
         cert_key=cert_key,
