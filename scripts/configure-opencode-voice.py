@@ -51,7 +51,11 @@ from env import load_env
 from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
-from tier_resolve import list_local_ollama_models, resolve_roles_from_list
+from tier_resolve import (
+    get_model_details,
+    list_local_ollama_models,
+    resolve_roles_from_list,
+)
 from provider_endpoints import PROVIDER_ENDPOINTS
 from local_engines import (
     active_engines,
@@ -142,15 +146,40 @@ def get_voice_config(
                     resolved_roles = tier_registry.materialize_role_models(
                         registry, resolution_preset, categories, role_models
                     )
-                    voice_model = (
-                        categories.get("solo")
-                        if resolution_preset == "local-solo"
-                        else categories.get("audio")
-                    )
-                    voice_model = (
-                        voice_model
-                        or categories.get("lightweight")
-                        or resolved_roles.get("librarian")
+
+                    def _voice_llm_capable(model_ref):
+                        """STT-only models transcribe but cannot serve as the
+                        voice LLM. Capability lookup is fail-open: an unknown
+                        capability set keeps the pre-existing selection."""
+                        provider, _, name = model_ref.partition("/")
+                        engine_provider = (
+                            provider if provider in ("ollama", "omlx") else "ollama"
+                        )
+                        try:
+                            details = get_model_details(name, engine_provider)
+                        except Exception:
+                            return True
+                        caps = details.get("capabilities") or []
+                        if not caps or "completion" in caps:
+                            return True
+                        logger.info(
+                            "Voice LLM: skipping STT-only audio winner %s "
+                            "(no completion capability)",
+                            model_ref,
+                        )
+                        return False
+
+                    candidates = [
+                        (
+                            categories.get("solo")
+                            if resolution_preset == "local-solo"
+                            else categories.get("audio")
+                        ),
+                        categories.get("lightweight"),
+                        resolved_roles.get("librarian"),
+                    ]
+                    voice_model = next(
+                        (c for c in candidates if c and _voice_llm_capable(c)), None
                     )
                     if voice_model:
                         voice_config = local_voice_provider(voice_model)
@@ -466,13 +495,10 @@ def main():
     if "apiKeyEnv" in voice_config:
         summary_lines.append(f"  • LLM API key env: {voice_config['apiKeyEnv']}")
     if has_stt:
-        summary_lines.extend(
-            [
-                f"  • STT endpoint: {voice_config['sttEndpoint']}",
-                f"  • STT model: {voice_config['sttModel']}",
-                f"  • STT API key env: {voice_config['sttApiKeyEnv']}",
-            ]
-        )
+        summary_lines.append(f"  • STT endpoint: {voice_config['sttEndpoint']}")
+        summary_lines.append(f"  • STT model: {voice_config['sttModel']}")
+        if "sttApiKeyEnv" in voice_config:
+            summary_lines.append(f"  • STT API key env: {voice_config['sttApiKeyEnv']}")
     else:
         summary_lines.extend(
             [
