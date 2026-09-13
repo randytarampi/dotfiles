@@ -57,7 +57,16 @@ def build_provider_configs(cfg: dict) -> dict:
     provider_configs = {}
     for name, definition in cfg.get("providers", {}).items():
         key_env = definition.get("apiKeyEnv", "")
-        api_key = os.environ.get(key_env, "") if key_env else ""
+        if key_env and not os.environ.get(key_env):
+            logger.warning(
+                f"Provider {name}: {key_env} is unset — Junie refuses to load "
+                "profiles referencing an undefined variable"
+            )
+        # Junie expands ${VAR_NAME} in apiKey at profile load; never embed
+        # the literal secret (profile files were world-readable). When the
+        # variable is unset, omit apiKey entirely — Junie refuses to load
+        # profiles referencing an undefined variable.
+        api_key = f"${{{key_env}}}" if key_env and os.environ.get(key_env) else ""
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
         engine = resolve_engine(name)
@@ -380,7 +389,7 @@ def main():
                 continue
             with open(path, "w", encoding="utf-8") as file:
                 file.write(output)
-            os.chmod(path, 0o644)
+            os.chmod(path, 0o600)
             logger.info(
                 f"Configured: {name} → primary={primary} faster={faster or 'none'}"
             )

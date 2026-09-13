@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -49,6 +50,16 @@ def iter_models(value):
                 yield child
             else:
                 yield from iter_models(child)
+
+
+def resolve_profile_api_key(value: object) -> str | None:
+    """Resolve Junie-native ${VAR} references without treating them literally."""
+    if not isinstance(value, str):
+        return ""
+    match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value)
+    if match:
+        return os.environ.get(match.group(1))
+    return value
 
 
 def get_models(url: str, api_key: str = "") -> set[str] | None:
@@ -182,7 +193,7 @@ def check_local_engine_models() -> list[str]:
     return violations
 
 
-def profile_models(path: Path) -> list[tuple[str, set[str], str]] | None:
+def profile_models(path: Path) -> list[tuple[str, set[str], str | None]] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data.get("providers"), dict) and isinstance(
@@ -199,21 +210,35 @@ def profile_models(path: Path) -> list[tuple[str, set[str], str]] | None:
                     if isinstance(group.get(key), str)
                 }
                 if isinstance(provider, dict):
-                    api_key = os.environ.get(provider.get("apiKeyEnv", ""), "")
+                    api_key = resolve_profile_api_key(provider.get("apiKey", ""))
+                    if api_key is None:
+                        api_key = os.environ.get(provider.get("apiKeyEnv", ""), "")
                     entries.append((provider.get("baseUrl", ""), ids, api_key))
             return entries
         models = set()
         primary = data.get("primaryModel")
         if isinstance(primary, dict) and primary.get("id"):
             models.add(primary["id"])
-        entries = [(data.get("baseUrl", ""), models, data.get("apiKey", ""))]
+        entries = [
+            (
+                data.get("baseUrl", ""),
+                models,
+                resolve_profile_api_key(data.get("apiKey", "")),
+            )
+        ]
         faster = data.get("fasterModel")
         if isinstance(faster, dict) and faster.get("id"):
             faster_base = faster.get("baseUrl", data.get("baseUrl", ""))
             if faster_base == data.get("baseUrl", ""):
                 models.add(faster["id"])
             else:
-                entries.append((faster_base, {faster["id"]}, faster.get("apiKey", "")))
+                entries.append(
+                    (
+                        faster_base,
+                        {faster["id"]},
+                        resolve_profile_api_key(faster.get("apiKey", "")),
+                    )
+                )
         return entries
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Could not read Junie profile %s — skipping (%s)", path, exc)
