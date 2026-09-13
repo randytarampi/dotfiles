@@ -115,9 +115,15 @@ ACP_AGENTS = {
 
 
 def local_model():
-    """Resolve the best chat-capable model from the combined local pool."""
+    """Resolve the best chat-capable model from the combined local pool.
+
+    The winner powers the openai-compatible local agents (codex, pi, junie,
+    gemini); claude--local gates itself on Anthropic-protocol support inside
+    build_local_agents, so resolution here uses the openai protocol and
+    never discards the pool winner just because it cannot serve Anthropic.
+    """
     models = [model for pool in active_engine_pools().values() for model in pool]
-    model = resolve_local_winner(models, "anthropic")
+    model = resolve_local_winner(models, "openai")
     if not model:
         logger.warning(
             "No local model available for ACP agent fallback; using sentinel"
@@ -219,10 +225,16 @@ def build_local_agents(model_ref):
             ),
         }
     else:
-        claude_env = {
-            "ANTHROPIC_BASE_URL": get_ollama_local_base_url(),
-            "ANTHROPIC_AUTH_TOKEN": "ollama",
-        }
+        # Ollama exposes no Anthropic-compatible /v1/messages surface, so
+        # pointing claude--local at the Ollama base URL guarantees a silent
+        # runtime failure. Omit the agent instead; the fleet-wide Claude
+        # Code entry still runs on cloud providers.
+        logger.info(
+            "Skipping claude--local: local engine %r cannot serve the Anthropic "
+            "protocol (no /v1/messages surface)",
+            provider,
+        )
+        claude_env = None
     agents = {}
     if engine and engine.get("gemini_support"):
         agents["gemini--local"] = {
@@ -237,15 +249,16 @@ def build_local_agents(model_ref):
         logger.info(
             "Skipping gemini--local: winning local engine is not Gemini-compatible"
         )
+    if claude_env is not None:
+        agents["claude--local"] = {
+            "command": "claude-agent-acp",
+            "args": ["--model", model],
+            "description": "Claude Code (combined local pool fallback)",
+            "local_fallback": True,
+            "env": claude_env,
+        }
     agents.update(
         {
-            "claude--local": {
-                "command": "claude-agent-acp",
-                "args": ["--model", model],
-                "description": "Claude Code (combined local pool fallback)",
-                "local_fallback": True,
-                "env": claude_env,
-            },
             "codex--local": {
                 "command": "codex-acp",
                 "args": ["--profile", "local", "--model", model],

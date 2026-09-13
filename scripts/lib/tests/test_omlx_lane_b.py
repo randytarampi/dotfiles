@@ -120,12 +120,12 @@ def test_acp_local_agent_follows_pool_winner_engine(monkeypatch):
     assert agents["claude--local"]["env"]["ANTHROPIC_BASE_URL"].endswith("/v1")
     assert agents["codex--local"]["args"][:2] == ["--profile", "local"]
     assert not any(name.endswith("--omlx") for name in agents)
-    assert (
-        acp.build_local_agents("ollama-model")["claude--local"]["env"][
-            "ANTHROPIC_AUTH_TOKEN"
-        ]
-        == "ollama"
-    )
+    # Ollama cannot serve Anthropic (/v1/messages): claude--local omits
+    # itself instead of pointing at a broken endpoint; the rest survive.
+    ollama_agents = acp.build_local_agents("ollama-model")
+    assert "claude--local" not in ollama_agents
+    assert "codex--local" in ollama_agents
+    assert "pi--local" in ollama_agents
 
 
 def test_acp_main_emits_pool_driven_local_agents(tmp_path, monkeypatch):

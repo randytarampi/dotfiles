@@ -837,6 +837,8 @@ def test_unknown_engine_winner_falls_back_to_ollama(monkeypatch):
         ),
         patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
     ):
+        # local_model() resolves the openai-compatible pool winner (claude--
+        # local gates itself on Anthropic support separately).
         assert acp.local_model() == "ollama/legacy"
     assert len(calls) == 2
 
