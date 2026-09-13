@@ -5,7 +5,7 @@
 # Usage:
 #   source "${LIB_DIR}/tier_detect.sh"
 #   detect_tier DOTFILES_OPENCODE_TIER
-#   # Sets: TIER, _has_openai, _has_anthropic, _has_ollama_cloud, _has_ollama
+#   # Sets: TIER, _has_openai, _has_anthropic, _has_ollama_cloud, _has_ollama, _has_omlx
 #
 # The override env var name controls which DOTFILES_*_TIER variable
 # is checked for manual tier selection.
@@ -19,6 +19,7 @@ detect_tier() {
   _has_anthropic=false
   _has_ollama_cloud=false
   _has_ollama=false
+  _has_omlx=false
 
   # Check env vars first (explicit API keys take precedence)
   if [[ -n "${OPENAI_API_KEY:-}" ]]; then
@@ -49,6 +50,14 @@ detect_tier() {
   if command -v ollama >/dev/null 2>&1; then
     _has_ollama=true
   fi
+  if [[ "${DOTFILES_RUN_OMLX_SETUP:-0}" == "1" ]] && command -v curl >/dev/null 2>&1; then
+    _omlx_base="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
+    _omlx_auth=()
+    [[ -n "${OMLX_API_KEY:-}" ]] && _omlx_auth=(-H "Authorization: Bearer ${OMLX_API_KEY}")
+    if curl -fsS --max-time 2 "${_omlx_base%/}/health" "${_omlx_auth[@]}" >/dev/null 2>&1; then
+      _has_omlx=true
+    fi
+  fi
 
   # Tier auto-detection — covers all 11 tiers (6 cloud + 5 local)
   # local-pro, local-mini, local-nano, local-solo are manual-only (set via override var)
@@ -73,5 +82,5 @@ detect_tier() {
     TIER="local"
   fi
 
-  info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama)"
+  info "Detected tier: $TIER (ollama_cloud: $_has_ollama_cloud, openai: $_has_openai, anthropic: $_has_anthropic, ollama: $_has_ollama, omlx: $_has_omlx)"
 }
