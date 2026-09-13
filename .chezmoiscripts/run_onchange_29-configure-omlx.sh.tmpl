@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # .chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl: {{ include ".chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl" | sha256sum }}
+# scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
+# scripts/lib/omlx.py: {{ include "scripts/lib/omlx.py" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -53,15 +55,49 @@ if current != rendered:
 path.chmod(0o600)
 PY
 ok "oMLX settings written to $SETTINGS_PATH"
+CONFIGURED_PORT="$(python3 - <<'PY'
+import json
+from pathlib import Path
+
+try:
+    print(json.loads(Path.home().joinpath('.omlx/settings.json').read_text()).get('server', {}).get('port', ''))
+except (OSError, ValueError):
+    print('')
+PY
+)"
+if [[ -n "${OMLX_PORT:-}" && "$CONFIGURED_PORT" != "$OMLX_PORT" ]]; then
+  warn "oMLX settings server.port ($CONFIGURED_PORT) diverges from OMLX_PORT ($OMLX_PORT) — persisted settings are authoritative"
+fi
 # The Homebrew service plist does not inherit ~/.env; persisted settings are authoritative.
 
+OMLX_STARTED=false
 if ! command -v brew >/dev/null 2>&1; then
   warn "Homebrew not found — cannot manage oMLX service"
 elif brew services info omlx 2>/dev/null | grep -Eqi 'running: (false|none)|not started'; then
   brew services start omlx
   ok "oMLX service started"
+  OMLX_STARTED=true
 else
   info "oMLX service already running or unavailable — leaving lifecycle unchanged"
+fi
+
+if [[ "$OMLX_STARTED" == true ]]; then
+  OMLX_BASE_URL="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
+  OMLX_AUTH_ARGS=()
+  [[ -n "${OMLX_API_KEY:-}" ]] && OMLX_AUTH_ARGS=(-H "Authorization: Bearer ${OMLX_API_KEY}")
+  ready=false
+  for _ in {1..60}; do
+    if curl -fsS --max-time 2 "${OMLX_BASE_URL%/}/health" "${OMLX_AUTH_ARGS[@]+${OMLX_AUTH_ARGS[@]}}" >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$ready" == true ]]; then
+    ok "oMLX health endpoint ready"
+  else
+    warn "oMLX health endpoint did not become ready within 60 seconds — continuing"
+  fi
 fi
 
 # OLLAMA_KV_CACHE_TYPE → oMLX per-model TurboQuant KV: one canonical env

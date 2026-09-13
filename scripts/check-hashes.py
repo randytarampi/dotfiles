@@ -78,6 +78,11 @@ def find_trackable_files():
             continue
         trackable.add(rel)
 
+    for f in (SCRIPTS_DIR / "lib").glob("*.py"):
+        rel = f"scripts/lib/{f.name}"
+        if rel not in NON_TRACKED_SCRIPTS:
+            trackable.add(rel)
+
     # All shell scripts in scripts/
     for f in SCRIPTS_DIR.glob("*.sh"):
         rel = f"scripts/{f.name}"
