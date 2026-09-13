@@ -198,13 +198,13 @@ def audio_models(provider):
 
 
 def resolve_engine(provider):
-    """Return the registered engine contract, or None for unknown providers."""
-    engine = LOCAL_ENGINES.get(provider)
-    if engine is None:
-        logger.warning(
-            "Unknown local engine '%s'; refusing to guess its protocol", provider
-        )
-    return engine
+    """Return the registered engine contract, or None for unknown providers.
+
+    Cloud providers (ollama-cloud, openai, meridian, ...) are not local
+    engines and legitimately resolve to None — silent by design so callers
+    that probe mixed provider namespaces stay log-clean.
+    """
+    return LOCAL_ENGINES.get(provider)
 
 
 def local_endpoint_for(provider, protocol):

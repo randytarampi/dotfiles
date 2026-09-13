@@ -20,6 +20,14 @@ import logger
 from discover_models import find_ollama, list_local_ollama_models
 from local_engines import resolve_engine
 
+_WARNED_MESSAGES = set()
+
+
+def _warn_once(message):
+    if message not in _WARNED_MESSAGES:
+        _WARNED_MESSAGES.add(message)
+        logger.warning(message)
+
 
 def extract_param_count(model_name: str) -> int:
     """Extract parameter count from model name for size-based classification.
@@ -507,7 +515,7 @@ def resolve_roles_from_list(
             "No vision-capable local models found; observer role will not have a local model"
         )
     if not classified["audio"]:
-        logger.warning(
+        _warn_once(
             "No audio-capable local models found; audio role will not have a local model"
         )
 
