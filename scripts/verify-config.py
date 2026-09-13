@@ -220,6 +220,13 @@ def validate_omlx_settings(data):
         or cache["initial_cache_blocks"] < 0
     ):
         errors.append("cache.initial_cache_blocks must be an integer >= 0")
+    mcp = data.get("mcp", {})
+    if not isinstance(mcp.get("expose_tools"), bool):
+        errors.append("mcp.expose_tools must be a boolean")
+    if mcp.get("config_path") is not None and not isinstance(
+        mcp.get("config_path"), str
+    ):
+        errors.append("mcp.config_path must be a string or null")
     return errors
 
 

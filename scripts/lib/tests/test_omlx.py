@@ -133,6 +133,7 @@ def test_merge_omlx_settings_uses_nested_schema_and_preserves_unmanaged_keys():
     assert settings["cache"]["initial_cache_blocks"] == 256
     assert settings["auth"]["api_key"] == "secret"
     assert settings["huggingface"]["endpoint"] == "https://hf.example"
+    assert settings["mcp"]["expose_tools"] is False
     assert settings["custom"] == {"keep": True}
 
 
@@ -152,6 +153,18 @@ def test_verify_omlx_settings_accepts_valid_nested_cache_schema():
     verify = _load_script("verify_config", "verify-config.py")
     settings = local_engines.merge_omlx_settings({})
     assert verify.validate_omlx_settings(settings) == []
+
+
+def test_merge_omlx_settings_pins_mcp_expose_tools_off():
+    # Upstream default is true; the managed writer must converge it off.
+    settings = local_engines.merge_omlx_settings(
+        {"mcp": {"expose_tools": True, "config_path": "/tmp/mcp.json"}},
+        {"OMLX_API_KEY": "secret"},
+    )
+    assert settings["mcp"]["expose_tools"] is False
+    assert settings["mcp"]["config_path"] == "/tmp/mcp.json"
+    explicit = local_engines.merge_omlx_settings({}, {"OMLX_MCP_EXPOSE_TOOLS": "1"})
+    assert explicit["mcp"]["expose_tools"] is True
 
 
 def test_verify_omlx_settings_reports_invalid_memory_guard():

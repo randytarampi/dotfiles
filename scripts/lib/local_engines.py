@@ -448,6 +448,19 @@ def merge_omlx_settings(existing, environ=None):
             _section(section_name)[key] = value
         # Env unset → preserve the on-disk value (admin-UI-managed).
 
+    # MCP: fleet consumers (OpenCode, Codex, ACP, Junie…) run their own MCP
+    # clients, so backend tool merge into API completions must stay off
+    # (upstream default expose_tools=true would silently duplicate tools for
+    # every caller). The dashboard Chat UI is unaffected — it calls
+    # /v1/mcp/* directly and does not depend on the expose toggle. Pinned
+    # unconditionally (not preserve-on-unset) because the upstream default
+    # is true: a first-run file or an admin flip must converge back to off
+    # unless OMLX_MCP_EXPOSE_TOOLS explicitly enables it. config_path stays
+    # admin-UI-managed (no managed env var).
+    mcp = _section("mcp")
+    expose_raw = _env("OMLX_MCP_EXPOSE_TOOLS")
+    mcp["expose_tools"] = _bool_strict(expose_raw) if expose_raw else False
+
     return settings
 
 
