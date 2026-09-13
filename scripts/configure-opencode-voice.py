@@ -51,7 +51,7 @@ from env import load_env
 from ai_models import strip_provider_prefix
 from opencode_config import get_available_tiers
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
-from tier_resolve import list_local_ollama_models
+from tier_resolve import list_local_ollama_models, resolve_roles_from_list
 from provider_endpoints import PROVIDER_ENDPOINTS
 from local_engines import (
     active_engines,
@@ -131,8 +131,10 @@ def get_voice_config(
                             os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0")
                             or "0"
                         )
-                    categories = tier_registry.classify_models_for_preset(
-                        local_models, registry, resolution_preset, min_emb
+                    categories = resolve_roles_from_list(
+                        local_models,
+                        min_reasoning_embedding=min_emb,
+                        moe_codegen_reuse=False,
                     )
                     tier_registry.apply_placeholder_overrides(
                         categories, category_models
@@ -233,8 +235,10 @@ def get_voice_config(
                     min_emb = int(
                         os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"
                     )
-                categories = tier_registry.classify_models_for_preset(
-                    local_models, registry, resolution_preset, min_emb
+                categories = resolve_roles_from_list(
+                    local_models,
+                    min_reasoning_embedding=min_emb,
+                    moe_codegen_reuse=False,
                 )
                 tier_registry.apply_placeholder_overrides(categories, category_models)
                 resolved_roles = tier_registry.materialize_role_models(
@@ -351,6 +355,7 @@ def main():
     )
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
+    load_env()
 
     # Resolve config directory
     opencode_dir = os.environ.get("OPENCODE_DIR")
