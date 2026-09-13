@@ -170,19 +170,46 @@ def active_engine_pools(include_cloud=False):
 
 
 def _model_identity(model_name):
-    """Return a normalized ``(family, params)`` identity for a model name.
+    """Return a normalized ``(family, params, markers)`` identity for a name.
 
-    Family is the leading alpha run of the lowercased name with separators
-    stripped (``gemma-4`` → ``gemma``, ``Qwen3.8`` → ``qwen``); params is
-    the first size token via :func:`tier_resolve.extract_param_count`
-    (``gemma-4-12B-it-MLX-8bit`` → 12, ``qwen3.8:27b-mlx`` → 27). Used to
-    detect engine-equivalent models across Ollama and oMLX, which name the
-    same weights differently.
+    ``family`` is the leading alpha run plus any immediately following
+    version digits, lowercased and separator-folded (``gemma-4`` →
+    ``gemma4``, ``qwen2.5`` → ``qwen2.5``); ``params`` is the first size
+    token via :func:`tier_resolve.extract_param_count` (``gemma-4-12B-it-
+    MLX-8bit`` → 12, ``qwen3.8:27b-mlx`` → 27); ``markers`` is the set of
+    remaining distinguishing tokens (``coder``, ``vl``, ``it`` …) after
+    removing the family, any family-prefixed token, sizes, and
+    engine/quantization tokens.
+
+    Two models are engine-equivalent only when family, params, and markers
+    all match — ``qwen3.8:27b-mlx`` ↔ ``Qwen3.8-27B-MLX-4bit`` merge, while
+    ``Qwen4-7B`` never removes ``qwen2.5-coder:7b`` or ``qwen3:7b``.
     """
     from tier_resolve import extract_param_count
 
-    family = re.match(r"[a-z]+", model_name.lower())
-    return family.group(0) if family else "", extract_param_count(model_name)
+    lowered = model_name.lower()
+    match = re.match(r"([a-z]+)(?:[-.]?(\d+(?:\.\d+)?))?", lowered)
+    base_family = match.group(1) if match else ""
+    version = match.group(2) if match and match.group(2) else ""
+    family = base_family + (version or "")
+    params = extract_param_count(model_name)
+    engine_quant_tokens = {"mlx", "mxfp8", "4bit", "8bit", "gguf", "cloud"}
+    # "it" (instruct) is not distinguishing across engines: Ollama tags
+    # drop it (gemma4:12b-mxfp8) while upstream oMLX names keep it
+    # (gemma-4-12B-it-…). True fine-tune markers (coder/vl/audio/math)
+    # remain.
+    engine_quant_tokens.add("it")
+    excluded_prefixes = {base_family, family} if base_family else {family}
+    markers = frozenset(
+        token
+        for token in re.split(r"[-_:./]+", lowered)
+        if token
+        and token not in engine_quant_tokens
+        and token not in excluded_prefixes
+        and not any(token.startswith(prefix) for prefix in excluded_prefixes)
+        and not re.fullmatch(r"\d+(?:\.\d+)?[bmt]?", token)
+    )
+    return family, params, markers
 
 
 def merged_local_pool(include_cloud=False):
@@ -276,7 +303,7 @@ def local_endpoint_for(provider, protocol):
     if protocol not in {"openai", "anthropic"}:
         return None
     engine = resolve_engine(provider)
-    if engine is None:
+    if engine is None or not engine_gate_active(provider):
         return None
     support_key = f"{protocol}_support"
     supports = engine.get(support_key, protocol == "openai")
@@ -333,8 +360,13 @@ def resolve_local_winner(models, protocol="openai"):
     ]
     fallback = resolve_roles_from_list(ollama_models) if ollama_models else {}
     fallback_winner = fallback.get("solo") or fallback.get("code-gen")
-    if fallback_winner and (protocol == "openai" or protocol == "anthropic"):
+    if fallback_winner and protocol == "openai":
         return fallback_winner
+    if fallback_winner and protocol == "anthropic":
+        logger.info(
+            "Ollama fallback winner cannot serve %s; no local winner available",
+            protocol,
+        )
     return None
 
 

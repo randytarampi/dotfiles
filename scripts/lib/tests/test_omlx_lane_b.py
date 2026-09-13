@@ -97,12 +97,14 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
 def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
     codex = load_script("configure-codex.py")
     monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
+    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: p == "omlx")
     enabled = codex.build_provider_config("omlx/chat") + codex.build_profiles_config(
         "cloud", "omlx/chat"
     )
     assert "model_providers.omlx" in enabled
     assert "profiles.local" in enabled
     assert 'model = "chat"' in enabled
+    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: False)
     ollama = codex.build_provider_config("ollama/chat") + codex.build_profiles_config(
         "cloud", "ollama/chat"
     )
@@ -113,6 +115,7 @@ def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
 def test_acp_local_agent_follows_pool_winner_engine(monkeypatch):
     acp = load_script("configure-acp-agents.py")
     monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
+    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: True)
     agents = acp.build_local_agents("omlx/chat")
     assert agents["claude--local"]["env"]["ANTHROPIC_BASE_URL"].endswith("/v1")
     assert agents["codex--local"]["args"][:2] == ["--profile", "local"]

@@ -517,6 +517,7 @@ def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
             local_engines.LOCAL_ENGINES["omlx"],
             {"base_url": lambda: "http://omlx:8000"},
         ),
+        patch.object(local_engines, "engine_gate_active", lambda p: p == "omlx"),
         patch.dict(os.environ, {}, clear=True),
     ):
         provider = generate_profiles.build_provider_configs(cfg)["omlx"]
@@ -1137,3 +1138,43 @@ def test_pi_role_models_env_bridge(monkeypatch):
 
     monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_ROLES", raising=False)
     assert pi._role_models_from_env() is None
+
+
+def test_identity_does_not_remove_distinct_qwen_models(monkeypatch):
+    """Regression: an oMLX Qwen4-7B must not remove qwen2.5-coder:7b or qwen3:7b.
+
+    Identity now requires family (with version folded), param count, and
+    fine-tune markers to all match; only truly equivalent names merge.
+    """
+    fake_ollama = [
+        {"name": "qwen2.5-coder:7b", "size_gb": 4.7, "provider": "ollama"},
+        {"name": "qwen3:7b", "size_gb": 4.7, "provider": "ollama"},
+    ]
+    fake_omlx = [{"name": "Qwen4-7B", "size_gb": 4.4, "provider": "omlx"}]
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models",
+        lambda p, ic=False: fake_ollama if p == "ollama" else fake_omlx,
+    )
+    monkeypatch.setattr(local_engines, "active_engines", lambda: ["ollama", "omlx"])
+    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: True)
+    pool = local_engines.merged_local_pool()
+    names = [m["name"] for m in pool]
+    assert "qwen2.5-coder:7b" in names
+    assert "qwen3:7b" in names
+    assert "Qwen4-7B" in names
+
+
+def test_identity_marks_fine_tune_variants_distinct():
+    """Same family+size but coder-vs-instruct markers must not merge."""
+    from local_engines import _model_identity
+
+    instruct = _model_identity("qwen3.8:27b-mlx")
+    coder = _model_identity("Qwen3.8-27B-Coder-MLX-4bit")
+    assert instruct != coder
+    assert "coder" in coder[2]
+    # Real equivalence pairs still merge.
+    assert _model_identity("qwen3.8:27b-mlx") == _model_identity("Qwen3.8-27B-MLX-4bit")
+    assert _model_identity("gemma4:12b-mxfp8") == _model_identity(
+        "gemma-4-12B-it-MLX-8bit"
+    )
