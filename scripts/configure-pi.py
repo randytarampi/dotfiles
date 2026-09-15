@@ -602,6 +602,7 @@ def main():
             "npm:@juicesharp/rpiv-ask-user-question",
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
+            "npm:pi-edit-session-in-place",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],
