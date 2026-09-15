@@ -60,12 +60,37 @@ make services-restart
 | `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. |
 | `OMLX_SSD_CACHE_DIR` | `$HOME/.omlx/cache` | Persistent SSD KV-cache directory. |
 | `OMLX_MAX_CONCURRENT_REQUESTS` | `8` | Scheduler concurrency. |
-| `OMLX_API_KEY` | — | Optional Bearer/API key; persisted as `auth.api_key` when set. |
+| `OMLX_API_KEY` | _(unset)_ | Intentionally unset on deployed machines: with no key oMLX sets
+  `skip_api_key_verification` and binds loopback only, so it is reached solely
+  through Caddy's `/omlx/*` route. Set it to restore external server aliases +
+  per-key auth. |
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
 
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
+
+### Env-authoritative vs admin-UI-managed keys
+
+`merge_omlx_settings` (Script 29) writes a fixed set of **env-authoritative**
+keys into `~/.omlx/settings.json`; all other keys are preserved from the
+on-disk file and remain **admin-UI-managed** (tuned in the dashboard).
+
+**Env-authoritative** (the repo `~/.env` value wins on every deploy):
+`server.host`, `server.port`, `server.log_level`, `memory.*`,
+`scheduler.max_concurrent_requests`, `cache.*`, `mcp.expose_tools`, and
+`model.model_dirs` (via `OMLX_MODEL_DIR`).
+
+**Admin-UI-managed** (preserved as-is): `mcp.config_path`,
+`huggingface.endpoint`, per-model `model_settings.json` (TurboQuant KV), and any
+oMLX key not listed above.
+
+**No-API-key mode (loopback only):** when `OMLX_API_KEY` is unset, the writer
+also forces `server.skip_api_key_verification = true` and restricts
+`server.server_aliases` to `["127.0.0.1", "localhost"]` with empty
+`server.cors_origins`, so the admin UI and API are reachable only through Caddy's
+`/omlx/*` route — never directly on an external alias. Restoring `OMLX_API_KEY`
+re-enables external server aliases and per-key auth (both then admin-UI-managed).
 
 ### Cache parity
 
@@ -144,7 +169,9 @@ endpoint needs its own base URL.
 
 When enabled, `/omlx/*` is a read-only reverse proxy to the local oMLX service.
 Administrative and mutating endpoints are blocked. The route is gated by
-`DOTFILES_RUN_OMLX_SETUP=1`.
+`DOTFILES_RUN_OMLX_SETUP=1`. With no `OMLX_API_KEY` configured, oMLX binds
+loopback only and skips its own API key, so Caddy is the sole external entry
+point and carries `basic_auth` for `lan`/`public` access modes.
 
 ## Capability mapping
 
