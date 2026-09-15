@@ -66,6 +66,7 @@ make services-restart
   per-key auth. |
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
+| `OMLX_WIRED_LIMIT_MB` | `40960` | Metal wired limit in MB (Apple Silicon). Script 29 runs `configure-omlx-wired-limit.py` to apply `sudo sysctl iogpu.wired_limit_mb=<limit>` and install the root `com.dotfiles.omlx-wired-limit` LaunchDaemon that re-applies it at boot. Apple's default cap (~75% of RAM) rejects model loads above it with HTTP 507; 40960 MB fits a 38 GB model such as a 35B 4-bit on a 48 GB Mac. Values above 90% of physical RAM are refused. |
 
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.

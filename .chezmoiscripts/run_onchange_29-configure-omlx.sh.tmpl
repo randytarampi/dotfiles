@@ -4,6 +4,7 @@ set -euo pipefail
 # .chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl: {{ include ".chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
 # scripts/lib/omlx.py: {{ include "scripts/lib/omlx.py" | sha256sum }}
+# scripts/configure-omlx-wired-limit.py: {{ include "scripts/configure-omlx-wired-limit.py" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -127,3 +128,11 @@ else
 fi
 
 ok "oMLX setup complete"
+
+# Raise the macOS Metal wired limit so large local models (e.g. 35B 4-bit)
+# fit under the kernel cap; persists across reboots via a root LaunchDaemon.
+if [[ -f "{{ .chezmoi.sourceDir }}/scripts/configure-omlx-wired-limit.py" ]]; then
+  python3 "{{ .chezmoi.sourceDir }}/scripts/configure-omlx-wired-limit.py" || warn "configure-omlx-wired-limit.py failed (oMLX models above the Metal cap will 507)"
+else
+  info "configure-omlx-wired-limit.py not found — skipping wired-limit tuning"
+fi

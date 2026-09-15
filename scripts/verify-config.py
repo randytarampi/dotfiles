@@ -160,7 +160,10 @@ CHECKS = [
     (
         "DOTFILES_RUN_OMLX_SETUP",
         "oMLX settings",
-        [HOME / ".omlx/settings.json"],
+        [
+            HOME / ".omlx/settings.json",
+            Path("/Library/LaunchDaemons/com.dotfiles.omlx-wired-limit.plist"),
+        ],
     ),
 ]
 
@@ -388,7 +391,9 @@ def main():
         all_exist = True
         for path in paths:
             if path.exists():
-                if gate == "DOTFILES_RUN_OMLX_SETUP":
+                # Only the oMLX settings JSON gets schema validation; the
+                # wired-limit LaunchDaemon plist is XML, not JSON.
+                if gate == "DOTFILES_RUN_OMLX_SETUP" and path.suffix == ".json":
                     try:
                         settings = json.loads(path.read_text(encoding="utf-8"))
                         for error in validate_omlx_settings(settings):
