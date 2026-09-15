@@ -375,7 +375,12 @@ def local_caddy_target(provider):
     engine = resolve_engine(provider)
     if engine is None:
         return None
-    return engine["caddy_path"], f"127.0.0.1:{engine['default_port']}"
+    # Resolve the port the same way configure-caddy.py does so the proxy
+    # target matches the live service (OMLX_PORT overrides default_port).
+    port = os.environ.get(engine["port_env"], engine["default_port"]).strip() or engine[
+        "default_port"
+    ]
+    return engine["caddy_path"], f"127.0.0.1:{port}"
 
 
 def merge_omlx_settings(existing, environ=None):
@@ -483,7 +488,36 @@ def merge_omlx_settings(existing, environ=None):
         value = _env(env_name)
         if value:
             _section(section_name)[key] = value
-        # Env unset → preserve the on-disk value (admin-UI-managed).
+        elif section_name == "auth":
+            # Dropped key: never persist a stale oMLX API key (only when present).
+            auth_section = settings.get("auth")
+            if isinstance(auth_section, dict):
+                auth_section.pop("api_key", None)
+        # huggingface.endpoint: preserve the admin-UI value when unset.
+
+    # When no OMLX_API_KEY is configured, oMLX runs behind Caddy (which owns
+    # external exposure via basic_auth) or on loopback only, so it must not
+    # require its own API key and must not bind external server aliases
+    # (which would let the admin UI / API be reached directly, bypassing Caddy).
+    # With a key present, all three stay admin-UI-managed.
+    server_section = settings.setdefault("server", {})
+    if not isinstance(server_section, dict):
+        server_section = {}
+        settings["server"] = server_section
+    if _env("OMLX_API_KEY"):
+        server_section.pop("skip_api_key_verification", None)
+        server_section.pop("server_aliases", None)
+        server_section.pop("cors_origins", None)
+    else:
+        server_section["skip_api_key_verification"] = True
+        server_section["server_aliases"] = ["127.0.0.1", "localhost"]
+        server_section["cors_origins"] = []
+        # Flip the auth-side flag too so the daemon itself accepts no-key
+        # requests on loopback (otherwise it 401s even with no api_key). Only
+        # touch an existing auth section; never synthesize one.
+        auth_section = settings.get("auth")
+        if isinstance(auth_section, dict):
+            auth_section["skip_api_key_verification"] = True
 
     # MCP: fleet consumers (OpenCode, Codex, ACP, Junie…) run their own MCP
     # clients, so backend tool merge into API completions must stay off
