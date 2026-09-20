@@ -8,7 +8,7 @@ _err_handler() {
     local line_no="${1:-$1}"
     local command="${2:-$BASH_COMMAND}"
     local caller_file="unknown"
-    if [[ -n "${BASH_SOURCE[1]}" ]]; then
+    if [[ -n "${BASH_SOURCE[1]:-}" ]]; then
       caller_file=$(basename "${BASH_SOURCE[1]}")
     fi
     local timestamp
@@ -66,7 +66,7 @@ _log() {
 
   local caller_file="unknown"
   local caller_line="0"
-  # ${VAR+...} guards: under set -u, an unset BASH_SOURCE subscript (e.g. script
+  # ${VAR:-} guards: under set -u, an unset BASH_SOURCE subscript (e.g. script
   # piped via stdin, or short call stacks) is an unbound-variable error.
   if [[ -n "${BASH_SOURCE[2]:-}" ]]; then
     caller_file=$(basename "${BASH_SOURCE[2]}")
