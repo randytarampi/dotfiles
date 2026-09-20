@@ -377,9 +377,10 @@ def local_caddy_target(provider):
         return None
     # Resolve the port the same way configure-caddy.py does so the proxy
     # target matches the live service (OMLX_PORT overrides default_port).
-    port = os.environ.get(engine["port_env"], engine["default_port"]).strip() or engine[
-        "default_port"
-    ]
+    port = (
+        os.environ.get(engine["port_env"], engine["default_port"]).strip()
+        or engine["default_port"]
+    )
     return engine["caddy_path"], f"127.0.0.1:{port}"
 
 
