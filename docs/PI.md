@@ -16,9 +16,15 @@ extensible, and configured from the shared OpenCode tier registry.
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
 orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle.
 Local models use the shared tier resolver; providers include Ollama, oMLX, Ollama
-Cloud, Meridian, OpenAI, Google, OpenRouter, and OpenCode Zen. Provider models
-are emitted only when their API key is configured; missing providers are warned
-about and skipped. For cloud tiers, the fallback ACP agent's full
+Cloud, Meridian, OpenAI, Google, OpenRouter, and OpenCode Zen. Cloud provider
+models are emitted only when their API key is configured; missing providers are
+warned about and skipped. Keyless loopback local providers (oMLX) are different:
+pi treats a provider without an `apiKey` as unauthenticated and drops it from
+model resolution, so `configure-pi.py` emits a literal placeholder apiKey
+(`"omlx"`) for them when their key env var is unset — oMLX accepts any bearer
+token in no-key mode (loopback-only exposure). When the key env var is set, the
+provider block references it (`$OMLX_API_KEY`); the variable must be present in
+pi's runtime environment (loaded from `~/.env`) for the provider to authenticate. For cloud tiers, the fallback ACP agent's full
 `~/.pi-local` configuration is materialized using
 `DOTFILES_LOCAL_FALLBACK_PRESET` (default: `local`) passed as `--preset`
 so the fallback is fully local. `local-*` tiers skip that duplicate
