@@ -39,7 +39,7 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `deepseek-v4-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
 Every preset defines an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer: the hook strips images from the main conversation
@@ -448,9 +448,10 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use `deepseek-v4.1-flash`, `glm-5.3`,
-`glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` — the exact set varies by
-tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts
+Ollama Cloud presets use `deepseek-v4.1-flash`, `deepseek-v4-flash`,
+`gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` — the
+exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama
+Cloud Pro accounts
 have a 3-slot concurrency limit (3 concurrent requests per account, regardless
 of how many distinct models are used). Model lists are not hardcoded in
 mozart-router config — the GenericOpenAIAdapter auto-discovers available
@@ -567,7 +568,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `glm-5.3` | standard | max | 753B MoE flagship, 1M context, text-only; strictly dominates glm-5.2 on all 13 shared benchmarks; leads nemotron-3-ultra on GDPval-AA v2 (1769 vs 1448, NVIDIA vendor-reported); orchestrator/oracle fallbacks use max |
 | `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
-| `kimi-k2.7-code` | standard | none | Catalog-only legacy code-focused model; mandatory thinking (cannot disable) |
+| `kimi-k2.7-code` | standard | none | Active fixer fallback in the refreshed `_tiers` (all three cloud presets); mandatory thinking (cannot disable) |
 | `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
 | `gpt-6-astra` | standard | — | Flagship degraded-fallback head for plus orchestrator/oracle chains; not a primary anchor; no model-specific variant policy (inherits each role's configured variant) |
 | `deepseek-v4.1-flash` | standard | — | Active Ollama Cloud council/fallback model |
