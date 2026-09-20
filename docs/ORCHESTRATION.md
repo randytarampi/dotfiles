@@ -23,7 +23,7 @@ flowchart TD
     end
 
     subgraph "Layer 2: Chezmoi Scripts"
-        S1[run_once_01-03<br/>One-time: dirs, security, perms]
+        S1[run_once_01-03, 21<br/>One-time: dirs, security, perms, ACME DDNS migration]
         S2[run_onchange_04-29<br/>Hash-triggered: installs, config]
     end
 
@@ -60,8 +60,8 @@ flowchart TD
 - Use `{{ env "VAR" }}` to pull from `~/.env`
 
 ### Layer 2: Chezmoi Scripts (`.chezmoiscripts/`)
-- `run_once_01-03`: One-time operations (directory creation, security hardening, SSH permissions)
-- `run_onchange_04-29`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
+- `run_once_01-03, 21`: One-time operations (directory creation, security hardening, SSH permissions, ACME DDNS migration)
+- `run_onchange_04-29`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation; duplicate prefix slots 10 and 18 hold distinct tools)
 - Bridge between templates and configure scripts
 - Chezmoi sorts `run_once_*` before `run_onchange_*`, then by numeric prefix
 
@@ -87,7 +87,7 @@ sequenceDiagram
     User->>Make: make deploy
     Make->>Chezmoi: chezmoi apply
     Chezmoi->>Chezmoi: Apply templates (Layer 1)
-    Chezmoi->>Scripts: Run run_once_01-03
+    Chezmoi->>Scripts: Run run_once_01-03, 21
     Chezmoi->>Scripts: Run run_onchange_04-29 (if hashes changed)
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
@@ -156,7 +156,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 ## Design Decisions
 
 1. **`make deploy` does everything** — one command reconciles the machine. No separate "rebuild" step.
-2. **`run_onchange` for all re-runnable scripts** — only 3 scripts are `run_once` (dirs, security, perms). Everything else is `run_onchange` with hash triggers.
+2. **`run_onchange` for all re-runnable scripts** — 4 scripts are `run_once` (dirs, security, perms, ACME DDNS migration: 01-03, 21). Everything else is `run_onchange` with hash triggers.
 3. **Opt-in gates** — `DOTFILES_RUN_*_SETUP` env vars default to `0` for fleet management (one user, multiple machines with different needs).
 4. **Hash triggers** — chezmoi detects config file changes automatically via `{{ include "path" | sha256sum }}` comments.
 5. **`configure-all.sh` wrapper** — sources shared libs (`common.sh`, `tier_detect.sh`), runs configure scripts in dependency order with warn-on-fail.

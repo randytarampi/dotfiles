@@ -250,10 +250,10 @@ integration, model management, and platform-gating details.
 │   ├── ISSUE_TEMPLATE/
 │   ├── workflows/ci.yml
 │   └── dependabot.yml
-├── .chezmoiscripts/              # 30 scripts: run_once_01-03 (one-time) + run_onchange_04-29 (hash-triggered)
-│   ├── # Phase 1: One-time setup (01-03)
+├── .chezmoiscripts/              # 32 scripts: four run_once (01-03, 21) + 28 run_onchange_04-29 (hash-triggered)
+│   ├── # Phase 1: One-time setup (01-03, 21)
 │   ├── # Phase 2: Package/CLI installs (04-11)
-│   └── # Phase 3: Tool configuration (12-28)
+│   └── # Phase 3: Tool configuration (12-20, 22-29)
 ├── AGENTS.md                  # AI agent guidance (authoritative — scripts, tiers, MCP, symlinks)
 ├── dot_bashrc                     # Bash config
 ├── dot_zshrc                      # Zsh config
