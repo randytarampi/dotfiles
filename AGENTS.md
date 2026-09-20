@@ -286,6 +286,7 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
+| [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Ordered modernization work items, portability risks, tool recommendations and local-model analysis |
 
 ---
 
