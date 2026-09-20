@@ -66,10 +66,12 @@ _log() {
 
   local caller_file="unknown"
   local caller_line="0"
-  if [[ -n "${BASH_SOURCE[2]}" ]]; then
+  # ${VAR+...} guards: under set -u, an unset BASH_SOURCE subscript (e.g. script
+  # piped via stdin, or short call stacks) is an unbound-variable error.
+  if [[ -n "${BASH_SOURCE[2]:-}" ]]; then
     caller_file=$(basename "${BASH_SOURCE[2]}")
     caller_line="${BASH_LINENO[1]:-0}"
-  elif [[ -n "${BASH_SOURCE[1]}" ]]; then
+  elif [[ -n "${BASH_SOURCE[1]:-}" ]]; then
     caller_file=$(basename "${BASH_SOURCE[1]}")
     caller_line="${BASH_LINENO[0]:-0}"
   fi
