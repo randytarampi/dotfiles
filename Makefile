@@ -12,8 +12,6 @@ CHEZMOI_SOURCE := $(CURDIR)
 ENV_FILE ?= $(HOME)/.env
 ENV_EXAMPLE ?= dot_dotfiles/shell/.env.example
 SHFMT ?= $(shell if command -v shfmt >/dev/null 2>&1; then command -v shfmt; elif command -v brew >/dev/null 2>&1 && [ -x "$$(brew --prefix)/bin/shfmt" ]; then printf "%s/bin/shfmt" "$$(brew --prefix)"; fi)
-PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
-
 define LOAD_ENV
 set -a; [ -f "$(ENV_FILE)" ] && . "$(ENV_FILE)"; set +a
 endef
@@ -231,13 +229,13 @@ symlinks: ## Create symlinks for repository scripts
 	@bash scripts/setup-bin-symlinks.sh "$(CURDIR)/scripts"
 
 test: ## Run the Python test suite
-	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/ -q
+	@PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/ -q
 	@if compgen -G '.coverage.*' > /dev/null; then poetry run coverage combine; fi
 	@poetry run coverage report
 	@poetry run coverage lcov
 
 test-tier-registry: ## Run tier registry unit tests
-	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/test_tier_registry.py -q --cov-fail-under=0
+	@PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/test_tier_registry.py -q --cov-fail-under=0
 
 check-actionlint: ## Lint all GitHub Actions workflows
 	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint not installed (brew install actionlint)"; exit 1; }
