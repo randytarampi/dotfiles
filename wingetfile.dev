@@ -10,7 +10,7 @@ Python.Python.3.12
 # --- Dev tools ---
 # Cross-ref: brew cask 'docker-desktop'
 Docker.DockerCLI
-# Cross-ref: brew 'copilot-cli'
+# Cross-ref: brew cask 'copilot-cli'
 GitHub.Copilot
 # Cross-ref: brew cask 'codex'
 OpenAI.Codex
