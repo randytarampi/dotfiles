@@ -17,6 +17,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Poetry must be on PATH before setup-python: the action's cache: poetry
+      # mode invokes poetry to derive cache keys, so install it first (pinned
+      # to the poetry.lock generator version).
+      - name: Install Poetry (before setup-python)
+        run: |
+          if command -v pipx >/dev/null 2>&1; then
+            pipx install poetry==2.4.3
+          else
+            python -m pip install poetry==2.4.3
+          fi
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -86,6 +96,20 @@ jobs:
           # Git checkout supplies Git Bash; make and chezmoi are explicit, pinned deps.
           choco install make --version=4.4.1 --no-progress -y
           choco install chezmoi --version=2.68.0 --no-progress -y
+      - name: Configure chezmoi script interpreter (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # Windows cannot exec .sh scripts directly ("not a valid Win32
+          # application"); chezmoi routes scripts through the interpreter
+          # configured for the script extension. Point .sh at Git Bash and hand
+          # the config to chezmoi via CHEZMOI_CONFIG (make deploy invokes
+          # chezmoi without --config).
+          cat > "$RUNNER_TEMP/chezmoi-interpreters.toml" <<'EOF'
+          [interpreters.sh]
+              command = 'C:\Program Files\Git\bin\bash.exe'
+          EOF
+          echo "CHEZMOI_CONFIG=$RUNNER_TEMP/chezmoi-interpreters.toml" >> "$GITHUB_ENV"
       - name: Prepare fresh home and empty environment
         shell: bash
         run: |
