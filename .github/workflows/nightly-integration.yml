@@ -17,16 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Config-generation families are intentionally the first nightly subset.
-        # Package installs, services, security hardening, and system-default
-        # families remain explicitly excluded until a runner-specific contract exists.
+        # Configuration-only families: each has a postcondition below. Package
+        # installs (Pi, Mozart), unavailable-prerequisite probes (CodeGraph),
+        # services, security hardening, and system-default families are excluded.
         include:
           - gate: DOTFILES_RUN_OPENCODE_SETUP
-          - gate: DOTFILES_RUN_PI_SETUP
           - gate: DOTFILES_RUN_MCP_SETUP
-          - gate: DOTFILES_RUN_MOZART_SETUP
           - gate: DOTFILES_RUN_AGENT_GUIDANCE_SETUP
-          - gate: DOTFILES_RUN_CODEGRAPH_SETUP
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -48,6 +45,28 @@ jobs:
           # No pre-existing ~/.config/chezmoi: each matrix entry is fresh.
       - name: Run canonical deploy path
         run: make deploy
+      - name: Verify gate postcondition
+        shell: bash
+        run: |
+          case '${{ matrix.gate }}' in
+            DOTFILES_RUN_OPENCODE_SETUP|DOTFILES_RUN_MCP_SETUP)
+              artifact="$HOME/.config/opencode/opencode.json"
+              test -s "$artifact" || { echo "Missing $artifact" >&2; exit 1; }
+              ;;
+            DOTFILES_RUN_AGENT_GUIDANCE_SETUP)
+              artifact="$HOME/AGENTS.md"
+              test -s "$artifact" || { echo "Missing $artifact" >&2; exit 1; }
+              grep -q '<!-- AGENT_GUIDANCE_START -->' "$artifact" || {
+                echo "Missing guidance markers in $artifact" >&2
+                exit 1
+              }
+              grep -q '<!-- AGENT_GUIDANCE_END -->' "$artifact" || {
+                echo "Missing guidance markers in $artifact" >&2
+                exit 1
+              }
+              ;;
+            *) echo "No postcondition registered for ${{ matrix.gate }}" >&2; exit 1 ;;
+          esac
       - name: Record gate result
         if: always()
         run: |
