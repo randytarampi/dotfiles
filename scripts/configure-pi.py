@@ -188,10 +188,13 @@ def build_local_provider(provider, model_ids):
     }
     if api_key_env and os.environ.get(api_key_env, "").strip():
         provider_config["apiKey"] = f"${api_key_env}"
-    else:
-        # oMLX accepts a bearer token in keyless loopback mode; Pi still
-        # requires an apiKey field to consider the provider authenticated.
+    elif not api_key_env or engine.get("api_key_optional"):
+        # Keyless-capable engine (e.g. oMLX no-key loopback mode accepts any
+        # bearer token): Pi still requires an apiKey field to consider the
+        # provider authenticated, so emit a literal placeholder (provider id).
         provider_config["apiKey"] = provider
+    # else: the engine requires its API key and it is unset — omit apiKey so
+    # pi treats the provider as unauthenticated and skips it in resolution.
     return provider_config
 
 

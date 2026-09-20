@@ -1,3 +1,4 @@
+import contextlib
 import importlib.util
 import json
 import os
@@ -76,30 +77,68 @@ class BuildLocalProviderTest(unittest.TestCase):
     def _build_omlx_provider(self):
         return configure_pi.build_local_provider("omlx", ["chat"])
 
-    def test_omlx_provider_uses_api_key_env_reference_when_configured(self):
-        with (
-            patch.dict(
-                os.environ,
-                {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": "secret"},
-                clear=False,
-            ),
+    def _hermetic(self):
+        """Patch registry endpoint + model metadata so no network is touched.
+
+        build_local_provider passes model ids through model_entry, whose
+        metadata lookup would query a live oMLX instance for an unstubbed
+        engine; a stubbed model_entry keeps the test hermetic and focused on
+        the apiKey branches under review.
+        """
+        patched_engine = {
+            "base_url": lambda: "http://omlx:8000",
+            "health_check": lambda: (True, "HTTP 200"),
+        }
+        return (
             patch.dict(
                 local_engines.LOCAL_ENGINES["omlx"],
-                {
-                    "base_url": lambda: "http://omlx:8000",
-                    "health_check": lambda: (True, "HTTP 200"),
-                },
+                patched_engine,
             ),
-        ):
+            patch.object(
+                configure_pi,
+                "model_entry",
+                lambda model_id, local=True, provider=None: {"id": model_id},
+            ),
+        )
+
+    def test_omlx_provider_uses_api_key_env_reference_when_configured(self):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                patch.dict(
+                    os.environ,
+                    {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": "secret"},
+                    clear=False,
+                )
+            )
+            for ctx in self._hermetic():
+                stack.enter_context(ctx)
             provider = self._build_omlx_provider()
 
         self.assertEqual(provider["apiKey"], "$OMLX_API_KEY")
 
     def test_omlx_provider_uses_literal_placeholder_without_api_key(self):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                patch.dict(
+                    os.environ,
+                    {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": ""},
+                    clear=False,
+                )
+            )
+            for ctx in self._hermetic():
+                stack.enter_context(ctx)
+            provider = self._build_omlx_provider()
+
+        self.assertEqual(provider["apiKey"], "omlx")
+
+    def test_required_key_engine_without_key_is_omitted(self):
+        # An engine that requires its API key (api_key_optional unset) and has
+        # none configured keeps the pre-existing behaviour: no apiKey field,
+        # so pi treats the provider as unauthenticated.
         with (
             patch.dict(
                 os.environ,
-                {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": ""},
+                {"DOTFILES_RUN_OMLX_SETUP": "1"},
                 clear=False,
             ),
             patch.dict(
@@ -107,12 +146,19 @@ class BuildLocalProviderTest(unittest.TestCase):
                 {
                     "base_url": lambda: "http://omlx:8000",
                     "health_check": lambda: (True, "HTTP 200"),
+                    "api_key_optional": False,
                 },
             ),
+            patch.object(
+                configure_pi,
+                "model_entry",
+                lambda model_id, local=True, provider=None: {"id": model_id},
+            ),
         ):
+            os.environ.pop("OMLX_API_KEY", None)
             provider = self._build_omlx_provider()
 
-        self.assertEqual(provider["apiKey"], "omlx")
+        self.assertNotIn("apiKey", provider)
 
 
 if __name__ == "__main__":

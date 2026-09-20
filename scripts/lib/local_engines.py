@@ -37,6 +37,7 @@ LOCAL_ENGINES = {
         "api": "openai+anthropic",
         "base_url": get_omlx_base_url,
         "api_key_env": "OMLX_API_KEY",
+        "api_key_optional": True,
         "anthropic_support": True,
         "gemini_support": False,
         "profile_provider": "omlx",
