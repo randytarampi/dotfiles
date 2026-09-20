@@ -21,10 +21,21 @@ CLEANUP_SPEC.loader.exec_module(cleanup_project)
 
 def run_script(script_name, workspace, *args):
     """Run a repo script against a workspace; return CompletedProcess."""
+    # Strip DOTFILES_PROJECT_* so ambient project configuration (e.g. from the
+    # developer's shell or CI) cannot leak into the subprocess and change what
+    # configure-project does — only the workspace under test decides behaviour.
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("DOTFILES_PROJECT_")
+    }
+    env["HOME"] = os.path.join(workspace, "home")
+    env["USERPROFILE"] = env["HOME"]
     return subprocess.run(
         [sys.executable, os.path.join(REPO_ROOT, "scripts", script_name)]
         + ["--workspace-root", workspace]
         + list(args),
+        env=env,
         capture_output=True,
         text=True,
         timeout=120,
@@ -45,6 +56,29 @@ class RoundTripTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.workspace = self._tmp.name
+        self.home = Path(self.workspace) / "home"
+        skills_dir = self.home / ".local" / "share" / "dotfiles" / "skills"
+        for name in (
+            "iamhumans",
+            "find-skills",
+            "add-lang",
+            "agent-eval",
+            "plannotator-compound",
+            "plannotator-setup-goal",
+            "plannotator-visual-explainer",
+            "handoff",
+            "implement",
+            "tdd",
+            "diagnosing-bugs",
+            "code-review",
+            "resolving-merge-conflicts",
+            "aws-billing-and-cost-management",
+            "agent-browser",
+            "turborepo",
+        ):
+            skill = skills_dir / name
+            skill.mkdir(parents=True, exist_ok=True)
+            (skill / "SKILL.md").write_text("# Test skill\n", encoding="utf-8")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -77,7 +111,7 @@ class RoundTripTests(unittest.TestCase):
         link = root / ".opencode" / "skills" / "add-lang"
         if not link.exists():
             os.symlink(
-                os.path.expanduser("~/.local/share/dotfiles/skills/add-lang"),
+                self.home / ".local" / "share" / "dotfiles" / "skills" / "add-lang",
                 link,
             )
         # tier step
