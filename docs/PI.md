@@ -17,14 +17,25 @@ Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
 orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle.
 Local models use the shared tier resolver; providers include Ollama, oMLX, Ollama
 Cloud, Meridian, OpenAI, Google, OpenRouter, and OpenCode Zen. Cloud provider
-models are emitted only when their API key is configured; missing providers are
-warned about and skipped. Keyless loopback local providers (oMLX) are different:
-pi treats a provider without an `apiKey` as unauthenticated and drops it from
-model resolution, so `configure-pi.py` emits a literal placeholder apiKey
-(`"omlx"`) for them when their key env var is unset — oMLX accepts any bearer
-token in no-key mode (loopback-only exposure). When the key env var is set, the
-provider block references it (`$OMLX_API_KEY`); the variable must be present in
-pi's runtime environment (loaded from `~/.env`) for the provider to authenticate. For cloud tiers, the fallback ACP agent's full
+models are emitted only when their API key is configured; missing dynamic
+providers are warned about and skipped (Ollama Cloud is always emitted, with a
+runtime `$OLLAMA_API_KEY` reference). Keyless-capable local engines (oMLX) are
+different: pi treats a provider without an `apiKey` as unauthenticated and
+drops it from model resolution, so `configure-pi.py` emits a literal
+placeholder apiKey (`"omlx"`) for engines marked `api_key_optional` when their
+key env var is unset — oMLX no-key mode accepts any bearer token. oMLX itself
+stays loopback-only in no-key mode; Caddy owns external exposure. When the key
+env var is set, the provider block references it (`$OMLX_API_KEY`).
+
+Two runtime notes:
+
+- Pi does not load `~/.env` itself. The referenced variable must be exported
+  into pi's runtime environment (for example by shell initialization) for the
+  provider to authenticate; otherwise the provider is dropped.
+- The apiKey is fixed at generation time. Switching between keyed and keyless
+  oMLX modes requires rerunning `configure-pi.py` (i.e. `make deploy` or
+  `DOTFILES_RUN_PI_SETUP=1 make configure`); a generated literal placeholder
+  does not later become a `$OMLX_API_KEY` reference on its own. For cloud tiers, the fallback ACP agent's full
 `~/.pi-local` configuration is materialized using
 `DOTFILES_LOCAL_FALLBACK_PRESET` (default: `local`) passed as `--preset`
 so the fallback is fully local. `local-*` tiers skip that duplicate
