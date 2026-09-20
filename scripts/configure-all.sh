@@ -118,7 +118,9 @@ if [[ "$CONFIG_MODE" != "global" && "$CONFIG_MODE" != "project" ]]; then
   exit 2
 fi
 IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
-for _skip in "${_skip_list[@]}"; do
+# ${_skip_list[@]+...} guards against bash 3.2 (macOS /bin/bash) treating an
+# empty array as unset under set -u; CI runs with system bash 3.2.
+for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
   cleanup | npm-packages | secrets | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | opencode-restart | "") ;;
   *)
@@ -128,7 +130,7 @@ for _skip in "${_skip_list[@]}"; do
   esac
 done
 step_skipped() { [[ ",${SKIP_STEPS}," == *",$1,"* ]]; }
-COMMON_STRICT=1 parse_common_args "${FILTERED_ARGS[@]}"
+COMMON_STRICT=1 parse_common_args ${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}
 
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
