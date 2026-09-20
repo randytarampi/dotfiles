@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: poetry
       - name: Install macOS tooling
         if: runner.os == 'macOS'
         run: brew install actionlint shellcheck shfmt chezmoi
@@ -35,11 +36,11 @@ jobs:
       - name: Install Python test dependencies
         run: |
           if command -v pipx >/dev/null 2>&1; then
-            pipx install poetry
+            pipx install poetry==2.4.3
           else
-            python -m pip install poetry
+            python -m pip install poetry==2.4.3
           fi
-          poetry install --with test
+          poetry install --with test,tooling
       - name: CI verification
         run: make ci-verify
       - name: Python tests
@@ -50,6 +51,7 @@ jobs:
           file: coverage.lcov
           format: lcov
           parallel: true
+          flag-name: ${{ matrix.os }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
@@ -58,6 +60,7 @@ jobs:
 
   finish:
     needs: verify
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
