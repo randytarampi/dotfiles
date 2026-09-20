@@ -103,7 +103,16 @@ jobs:
         run: make deploy
       - name: Chezmoi no-op check
         shell: bash
-        run: chezmoi --source "$GITHUB_WORKSPACE" apply --dry-run --force
+        run: |
+          chezmoi --source "$GITHUB_WORKSPACE" verify
+          if ! diff_output="$(chezmoi --source "$GITHUB_WORKSPACE" diff)"; then
+            echo "chezmoi diff command failed" >&2
+            exit 1
+          fi
+          if [[ -n "$diff_output" ]]; then
+            printf 'chezmoi reports drift after the idempotency pass:\n%s\n' "$diff_output" >&2
+            exit 1
+          fi
       # make doctor is currently meaningful on Unix; Windows is a deliberate
       # allow-failure portability probe for bash/path incompatibilities.
       - name: Doctor (Unix)
