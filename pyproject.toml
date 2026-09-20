@@ -11,6 +11,10 @@ package-mode = false
 pytest = "^8.0"
 pytest-cov = "^6.0"
 
+[tool.poetry.group.tooling.dependencies]
+black = "^25.0"
+PyYAML = "^6.0"
+
 [tool.pytest.ini_options]
 testpaths = "scripts/lib/tests"
 addopts = "-q --cov=scripts --cov-branch --cov-report=lcov --cov-report=term-missing"
@@ -18,11 +22,14 @@ addopts = "-q --cov=scripts --cov-branch --cov-report=lcov --cov-report=term-mis
 [tool.coverage.run]
 branch = true
 source = ["scripts"]
+omit = ["scripts/lib/tests/**"]
+parallel = true
+concurrency = ["multiprocessing"]
 
 [tool.coverage.report]
-# Ratchet — raise as coverage grows. Baseline measured 2026-09-20 at
-# 29.44% (line+branch, --cov=scripts, 134 tests).
-fail_under = 29
+# Ratchet — raise as coverage grows. Baseline remeasured with subprocess
+# coverage enabled and test modules omitted from measurement.
+fail_under = 25
 
 [tool.black]
 # Cap inferred targets: requires-python >=3.10 otherwise makes black infer

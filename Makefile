@@ -232,6 +232,9 @@ symlinks: ## Create symlinks for repository scripts
 
 test: ## Run the Python test suite
 	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/ -q
+	@if compgen -G '.coverage.*' > /dev/null; then poetry run coverage combine; fi
+	@poetry run coverage report
+	@poetry run coverage lcov
 
 test-tier-registry: ## Run tier registry unit tests
 	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/test_tier_registry.py -q --cov-fail-under=0
