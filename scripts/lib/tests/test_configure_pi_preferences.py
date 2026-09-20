@@ -2,6 +2,9 @@ import importlib.util
 import json
 import os
 import unittest
+from unittest.mock import patch
+
+import local_engines
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", ".."))
@@ -67,6 +70,49 @@ class ApplyPreservedPreferencesTest(unittest.TestCase):
         prev = {"lastChangelogVersion": "0.86.0"}
         configure_pi.apply_preserved_preferences(settings, prev)
         self.assertEqual(settings["lastChangelogVersion"], "0.86.0")
+
+
+class BuildLocalProviderTest(unittest.TestCase):
+    def _build_omlx_provider(self):
+        return configure_pi.build_local_provider("omlx", ["chat"])
+
+    def test_omlx_provider_uses_api_key_env_reference_when_configured(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": "secret"},
+                clear=False,
+            ),
+            patch.dict(
+                local_engines.LOCAL_ENGINES["omlx"],
+                {
+                    "base_url": lambda: "http://omlx:8000",
+                    "health_check": lambda: (True, "HTTP 200"),
+                },
+            ),
+        ):
+            provider = self._build_omlx_provider()
+
+        self.assertEqual(provider["apiKey"], "$OMLX_API_KEY")
+
+    def test_omlx_provider_uses_literal_placeholder_without_api_key(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"DOTFILES_RUN_OMLX_SETUP": "1", "OMLX_API_KEY": ""},
+                clear=False,
+            ),
+            patch.dict(
+                local_engines.LOCAL_ENGINES["omlx"],
+                {
+                    "base_url": lambda: "http://omlx:8000",
+                    "health_check": lambda: (True, "HTTP 200"),
+                },
+            ),
+        ):
+            provider = self._build_omlx_provider()
+
+        self.assertEqual(provider["apiKey"], "omlx")
 
 
 if __name__ == "__main__":

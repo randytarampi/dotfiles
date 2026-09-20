@@ -188,6 +188,10 @@ def build_local_provider(provider, model_ids):
     }
     if api_key_env and os.environ.get(api_key_env, "").strip():
         provider_config["apiKey"] = f"${api_key_env}"
+    else:
+        # oMLX accepts a bearer token in keyless loopback mode; Pi still
+        # requires an apiKey field to consider the provider authenticated.
+        provider_config["apiKey"] = provider
     return provider_config
 
 
