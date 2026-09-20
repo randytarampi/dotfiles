@@ -216,11 +216,11 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 ## Run CI verification checks
+ci-verify: lint drift doctor check-hashes check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
@@ -234,7 +234,7 @@ test: ## Run the Python test suite
 	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/ -q
 
 test-tier-registry: ## Run tier registry unit tests
-	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/test_tier_registry.py -q
+	@PYTHONPATH=scripts/lib $(PYTHON) -m pytest scripts/lib/tests/test_tier_registry.py -q --cov-fail-under=0
 
 check-actionlint: ## Lint all GitHub Actions workflows
 	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint not installed (brew install actionlint)"; exit 1; }

@@ -11,6 +11,7 @@
 
 # Local Python development environment
 .venv/
+coverage.lcov
 
 # Generated ACP agent config (emitted by configure-acp-agents.py)
 configs/opencode/acp-agents.json

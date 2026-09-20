@@ -1,0 +1,31 @@
+[project]
+name = "dotfiles"
+version = "0.1.0"
+description = "Personal dotfiles managed by chezmoi"
+requires-python = ">=3.10"
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.0"
+pytest-cov = "^6.0"
+
+[tool.pytest.ini_options]
+testpaths = "scripts/lib/tests"
+addopts = "-q --cov=scripts --cov-branch --cov-report=lcov --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["scripts"]
+
+[tool.coverage.report]
+# Ratchet — raise as coverage grows. Baseline measured 2026-09-20 at
+# 29.44% (line+branch, --cov=scripts, 134 tests).
+fail_under = 29
+
+[tool.black]
+# Cap inferred targets: requires-python >=3.10 otherwise makes black infer
+# py315, whose formatting the py3.14 safety check cannot parse (AGENTS.md
+# gotcha). Repo floor is 3.10; tested on 3.10/3.11/3.14.
+target-version = ["py310", "py311", "py312", "py313", "py314"]
