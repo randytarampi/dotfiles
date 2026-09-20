@@ -55,8 +55,61 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-      - name: Deploy smoke
+
+  deploy:
+    name: Deploy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install deploy tooling (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+          curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Install deploy tooling (macOS)
+        if: runner.os == 'macOS'
+        run: brew install chezmoi make
+      - name: Install deploy tooling (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Git checkout supplies Git Bash; make and chezmoi are explicit, pinned deps.
+          choco install make --version=4.4.1 --no-progress -y
+          choco install chezmoi --version=2.68.0 --no-progress -y
+      - name: Prepare fresh home and empty environment
+        shell: bash
+        run: |
+          # Ephemeral runners are isolated; this also makes the HOME/state-dir contract explicit.
+          mkdir -p "$RUNNER_TEMP/dotfiles-home"
+          echo "HOME=$RUNNER_TEMP/dotfiles-home" >> "$GITHUB_ENV"
+          echo "USERPROFILE=$RUNNER_TEMP/dotfiles-home" >> "$GITHUB_ENV"
+          cp dot_dotfiles/shell/.env.example "$RUNNER_TEMP/dotfiles-home/.env"
+          rm -rf "$RUNNER_TEMP/dotfiles-home/.config/chezmoi"
+      - name: Deploy (first pass)
+        shell: bash
         run: make deploy
+      - name: Deploy (idempotency pass)
+        shell: bash
+        run: make deploy
+      - name: Chezmoi no-op check
+        shell: bash
+        run: chezmoi --source "$GITHUB_WORKSPACE" apply --dry-run --force
+      # make doctor is currently meaningful on Unix; Windows is a deliberate
+      # allow-failure portability probe for bash/path incompatibilities.
+      - name: Doctor (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: make doctor
 
   finish:
     needs: verify
