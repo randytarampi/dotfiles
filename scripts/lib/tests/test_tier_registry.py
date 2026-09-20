@@ -77,12 +77,12 @@ class TierRegistryTests(unittest.TestCase):
         self.assertIn("omo-slim-opencode-zen-free", tiers)
 
     def test_voice_mapping_for_remote_presets_uses_openai_defaults(self):
-        with patch.object(
-            configure_voice, "check_ollama_daemon", return_value=(None, False)
-        ), patch.object(
-            configure_voice, "list_local_ollama_models", return_value=[]
-        ), patch.dict(
-            "os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}
+        with (
+            patch.object(
+                configure_voice, "check_ollama_daemon", return_value=(None, False)
+            ),
+            patch.object(configure_voice, "list_local_ollama_models", return_value=[]),
+            patch.dict("os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}),
         ):
             for tier in (
                 "omo-slim-openai",
