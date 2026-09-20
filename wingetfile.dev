@@ -8,21 +8,21 @@
 Python.Python.3.12
 
 # --- Dev tools ---
-# Cross-ref: brew 'docker-cli'
+# Cross-ref: brew cask 'docker-desktop'
 Docker.DockerCLI
-# Cross-ref: brew 'github-copilot'
+# Cross-ref: brew 'copilot-cli'
 GitHub.Copilot
-# Cross-ref: brew 'codex'
+# Cross-ref: brew cask 'codex'
 OpenAI.Codex
-# Cross-ref: brew 'opencode'
+# Cross-ref: brew 'anomalyco/tap/opencode'
 SST.opencode
-# Cross-ref: brew 'OpenCodeDesktop'
+# Cross-ref: brew cask 'opencode-desktop'
 SST.OpenCodeDesktop
-# Cross-ref: brew 'dotPeek'
+# Cross-ref: brew cask 'jetbrains-toolbox' (bundled JetBrains tools)
 JetBrains.dotPeek
-# Cross-ref: brew 'dotTrace'
+# Cross-ref: brew cask 'jetbrains-toolbox' (bundled JetBrains tools)
 JetBrains.dotTrace
-# Cross-ref: brew 'ollama'
+# Cross-ref: brew cask 'ollama-app'
 Ollama.Ollama
 # Cross-ref: brew 'fastfetch'
 Fastfetch-cli.Fastfetch

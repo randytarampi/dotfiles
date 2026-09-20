@@ -24,7 +24,7 @@ flowchart TD
 
     subgraph "Layer 2: Chezmoi Scripts"
         S1[run_once_01-03<br/>One-time: dirs, security, perms]
-        S2[run_onchange_04-28<br/>Hash-triggered: installs, config]
+        S2[run_onchange_04-29<br/>Hash-triggered: installs, config]
     end
 
     subgraph "Layer 3: Configure Scripts"
@@ -61,7 +61,7 @@ flowchart TD
 
 ### Layer 2: Chezmoi Scripts (`.chezmoiscripts/`)
 - `run_once_01-03`: One-time operations (directory creation, security hardening, SSH permissions)
-- `run_onchange_04-28`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
+- `run_onchange_04-29`: Hash-triggered re-runnable scripts (package installs, CLI installs, config generation)
 - Bridge between templates and configure scripts
 - Chezmoi sorts `run_once_*` before `run_onchange_*`, then by numeric prefix
 
@@ -88,7 +88,7 @@ sequenceDiagram
     Make->>Chezmoi: chezmoi apply
     Chezmoi->>Chezmoi: Apply templates (Layer 1)
     Chezmoi->>Scripts: Run run_once_01-03
-    Chezmoi->>Scripts: Run run_onchange_04-28 (if hashes changed)
+    Chezmoi->>Scripts: Run run_onchange_04-29 (if hashes changed)
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
@@ -175,6 +175,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: openspec, codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
+| 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 11 | install-meridian-launchd | run_onchange | Meridian launchd plist (macOS) | `DOTFILES_RUN_MERIDIAN_SETUP` |
 | 12 | configure-macos-defaults | run_onchange | macOS user preferences | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` |
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
