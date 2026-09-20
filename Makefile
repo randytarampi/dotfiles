@@ -44,15 +44,7 @@ lint: ## Run repository lint and syntax checks
 		fi; \
 	done
 	@echo "Checking YAML file syntax..."
-	@if command -v js-yaml >/dev/null 2>&1; then \
-		for f in *.yaml *.yml .chezmoidata/*.yaml .chezmoidata/*.yml; do \
-			if [ -f "$$f" ]; then \
-				js-yaml "$$f" > /dev/null || exit 1; \
-			fi; \
-		done; \
-	else \
-		echo "js-yaml not installed; skipping YAML check"; \
-	fi
+	@poetry run python -c 'from pathlib import Path; import yaml; paths = list(Path(".").glob("*.yaml")) + list(Path(".").glob("*.yml")) + list(Path(".chezmoidata").glob("*.yaml")) + list(Path(".chezmoidata").glob("*.yml")); [yaml.safe_load(path.read_text()) for path in paths]'
 	@echo "Checking Python syntax compiler-checks..."
 	@for f in scripts/*.py scripts/lib/*.py; do [ -f "$$f" ] && python3 -m py_compile "$$f" >/dev/null || exit 1; done
 	@echo "Checking PEP 604 type hint compatibility..."
@@ -60,11 +52,7 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking heredocs in .chezmoiscripts..."
 	@python3 scripts/check-heredocs.py
 	@echo "Checking Python formatting with black (dry-run)..."
-	@if command -v black >/dev/null 2>&1; then \
-		black --check scripts/ scripts/lib/; \
-	else \
-		echo "black not installed; skipping Python format check"; \
-	fi
+	@poetry run black --check scripts/ scripts/lib/
 
 fix: ## Format shell and Python files and normalize text files
 	@if [ -n "$(SHFMT)" ]; then \
