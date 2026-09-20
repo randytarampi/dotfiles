@@ -16,27 +16,55 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Install macOS tooling
         if: runner.os == 'macOS'
-        run: brew install shellcheck shfmt chezmoi
+        run: brew install actionlint shellcheck shfmt chezmoi
       - name: Install Ubuntu tooling
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck shfmt
+          sudo apt-get install -y actionlint shellcheck shfmt
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Prepare empty environment
         run: cp dot_dotfiles/shell/.env.example "$HOME/.env"
       - name: Install Python test dependencies
-        run: python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt
+        run: |
+          if command -v pipx >/dev/null 2>&1; then
+            pipx install poetry
+          else
+            python -m pip install poetry
+          fi
+          poetry install --with test
       - name: CI verification
         run: make ci-verify
       - name: Python tests
         run: make test
+      - name: Upload coverage
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        with:
+          file: coverage.lcov
+          format: lcov
+          parallel: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
       - name: Deploy smoke
         run: make deploy
+
+  finish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Finish coverage upload
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        with:
+          parallel-finished: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
