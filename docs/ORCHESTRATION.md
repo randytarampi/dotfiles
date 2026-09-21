@@ -92,6 +92,7 @@ sequenceDiagram
     Scripts->>Configure: Call configure-*.py scripts
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
+    Configure->>Configure: configure-aws.py (non-secret AWS CLI baseline)
     Configure->>Configure: configure-jetbrains-ai.py (Junie profiles via tier registry)
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
@@ -180,6 +181,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | 12 | configure-macos-defaults | run_onchange | macOS user preferences | `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` |
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
 | 14 | configure-secrets | run_onchange | .env distribution to AI dirs | `DOTFILES_RUN_SECRETS_SETUP` |
+| — | configure-aws | configure-all.sh | Non-secret AWS CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_AWS_CONFIG_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
@@ -242,6 +244,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
+| `DOTFILES_RUN_AWS_CONFIG_SETUP` | 0 | `configure-all.sh` (non-secret AWS CLI config baseline) |
 | `DOTFILES_RUN_CODEGRAPH_SETUP` | 0 | Script 19 (CodeGraph MCP) |
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |

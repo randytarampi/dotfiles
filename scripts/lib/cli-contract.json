@@ -170,6 +170,14 @@
       ]
     },
     {
+      "path": "scripts/configure-aws.py",
+      "capabilities": ["public", "mutates", "backups"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-caddy.py",
       "capabilities": [
         "public",

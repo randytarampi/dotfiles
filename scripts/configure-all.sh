@@ -122,7 +122,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -301,6 +301,17 @@ elif ! step_skipped secrets && [[ "${DOTFILES_RUN_SECRETS_SETUP:-0}" == "1" ]]; 
   run_step "Secrets configuration" python3 "$SCRIPT_DIR/configure-secrets.py"
 else
   info "DOTFILES_RUN_SECRETS_SETUP not set — skipping secrets distribution"
+fi
+
+# 1.1. AWS CLI config baseline (non-secret; credentials remain user-owned)
+if ! step_skipped aws && [[ "${DOTFILES_RUN_AWS_CONFIG_SETUP:-0}" == "1" ]]; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    run_step "AWS CLI configuration" python3 "$SCRIPT_DIR/configure-aws.py" --dry-run
+  else
+    run_step "AWS CLI configuration" python3 "$SCRIPT_DIR/configure-aws.py"
+  fi
+else
+  info "DOTFILES_RUN_AWS_CONFIG_SETUP='${DOTFILES_RUN_AWS_CONFIG_SETUP:-0}' — skipping AWS CLI configuration"
 fi
 
 # 1.5. Refresh Junie model profiles (models-only; dir scaffolding handled by run_onchange_06)

@@ -34,6 +34,11 @@ multi-session change. They are estimates, not recorded durations.
   corresponding Brewfile identifiers. [docs/ORCHESTRATION.md:62-66,165-198;
   wingetfile.dev:1-38]
 
+| Item | Status | Evidence |
+|---|---|---|
+| Licence | `[completed-in-this-pass]` | CC0 (Unlicense) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
+| qlty | `[completed-in-this-pass]` — not integrated | The local verification gate found no installed `qlty` CLI, no Homebrew formula, no repository `qlty.toml`, and no credential-free way to verify a qlty Cloud project. No badge or configuration was added. |
+
 ## 3. Ordered work items
 
 ### 1. Close the cross-platform deploy probe
@@ -45,6 +50,10 @@ Fix only failures demonstrated by the Windows deploy lane. The audit identifies
 `readlink -f`, `mapfile`, Homebrew paths, LaunchAgents, `launchctl`, and
 platform-specific doctor checks; it is not permission for a broad rewrite
 (see the shell-to-Python inventory below for script-level evidence).
+
+**Status:** `[verified]` The Windows lane was green on run 7 at `5e48340`.
+The probe remains `continue-on-error` until the promotion criteria below are
+met.
 
 **Acceptance criteria:** the Windows lane has a documented result for every
 failure; bounded fixes pass the Windows deploy, second-deploy idempotency and
@@ -106,16 +115,19 @@ script · **Dependencies:** a failing or materially constrained Windows probe;
 CLI capability contracts and regression tests.
 
 Apply the criteria **logic-heavy, weakly tested and platform-sensitive** to the
-Phase 4 inventory. Mechanical ports come first because these scripts are
-always-executed or high fan-out, not because Python is preferred everywhere.
+Phase 4 inventory. These are quality-driven port candidates, not Windows-
+necessary work: Git Bash resolved the current Windows probe without ports.
+Tranche 1 is the first three candidates below. Mechanical ports come first
+because these scripts are always-executed or high fan-out, not because Python
+is preferred everywhere.
 
 | Order | Candidate | Evidence and bounded acceptance |
 |---|---|---|
-| 1 | `scripts/configure-all.sh` (`readlink -f`) | Preserve dependency ordering, warn-on-fail semantics and CLI contract; test path resolution on Windows and Unix. [scripts/configure-all.sh] |
-| 2 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
-| 3 | `scripts/update-nvm-globals.sh` | Replace Homebrew and Unix path assumptions only where the probe demonstrates need; test package-manager selection. [scripts/update-nvm-globals.sh] |
-| 4 | `scripts/install-acp-adapters.sh` | Preserve adapter versions and package-manager intent; test Windows installation and a no-network dry run. [scripts/install-acp-adapters.sh] |
-| 5 | `scripts/setup-bin-symlinks.sh` | Preserve fresh-deploy behaviour, link targets and idempotency; test Windows-compatible link or fallback behaviour. This is always executed by `run_onchange_05`. [.chezmoiscripts/run_onchange_05-setup-bin-symlinks.sh.tmpl] |
+| Tranche 1 · 1 | `scripts/setup-bin-symlinks.sh` | Preserve fresh-deploy behaviour, link targets and idempotency; add coverage for path resolution and the symlink table. This is always executed by `run_onchange_05`. [.chezmoiscripts/run_onchange_05-setup-bin-symlinks.sh.tmpl] |
+| Tranche 1 · 2 | `scripts/update-nvm-globals.sh` | Preserve package-manager and path logic; add coverage for package-manager selection. [scripts/update-nvm-globals.sh] |
+| Tranche 1 · 3 | `scripts/install-acp-adapters.sh` | Preserve adapter versions and package-manager intent; add coverage for installation selection and a no-network dry run. [scripts/install-acp-adapters.sh] |
+| Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
+| Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Preserve dependency ordering, warn-on-fail semantics and CLI contract; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting, then test path resolution on Windows and Unix. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
 
 **Acceptance criteria for every port:** the shell implementation is not removed
 until the Python replacement has parity tests, `--help`/dry-run behaviour where
