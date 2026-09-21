@@ -147,8 +147,12 @@ jobs:
       - name: Chezmoi no-op check
         shell: bash
         run: |
-          chezmoi --source "$GITHUB_WORKSPACE" verify
-          if ! diff_output="$(chezmoi --source "$GITHUB_WORKSPACE" diff)"; then
+          # Verify with the same effective configuration the deploy passes
+          # used: CHEZMOI carries the Windows interpreters --config override,
+          # and chezmoi otherwise warns that the config file template changed
+          # and exits 1 (observed on run 5).
+          "${CHEZMOI:-chezmoi}" --source "$GITHUB_WORKSPACE" verify
+          if ! diff_output="$("${CHEZMOI:-chezmoi}" --source "$GITHUB_WORKSPACE" diff)"; then
             echo "chezmoi diff command failed" >&2
             exit 1
           fi
