@@ -627,7 +627,7 @@
       ],
       "positional_operand": null,
       "child_scripts": [
-        "update-nvm-globals.sh",
+        "update-nvm-globals.py",
         "sync-brewfiles.py"
       ]
     },
