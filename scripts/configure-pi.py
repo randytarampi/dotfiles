@@ -622,6 +622,11 @@ def main():
     for role, builtin in ROLE_TO_BUILTIN.items():
         if role not in role_models:
             continue
+        # Unresolvable role models (e.g. _local placeholders on a machine with
+        # no local daemon) must not become agent overrides: a None model would
+        # crash provider parsing later and pin the built-in to nothing.
+        if not role_models[role]:
+            continue
         override = {"model": role_models[role]}
         role_config = roles.get(role, {})
         if isinstance(role_config, dict) and role_config.get("variant"):
@@ -694,7 +699,7 @@ def main():
     skipped_role_overrides = {}
     builtin_roles = {builtin: role for role, builtin in ROLE_TO_BUILTIN.items()}
     for builtin, override in list(settings["subagents"]["agentOverrides"].items()):
-        model_ref = override.get("model", "")
+        model_ref = override.get("model") or ""
         provider = model_ref.split("/", 1)[0] if "/" in model_ref else ""
         if provider in skipped_provider_names:
             skipped_role_overrides.setdefault(provider, []).append(

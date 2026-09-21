@@ -62,9 +62,12 @@ def run_configure(home, **values):
         text=True,
         timeout=30,
     )
-    # The allowlisted environment is the isolation boundary: all expected
-    # configure output is rooted below HOME, never the developer's home.
-    assert str(Path.home()) not in combined_output(result)
+    # The allowlisted environment is the isolation boundary: successful runs
+    # must never reference the real home. Crash tracebacks legitimately cite
+    # repo files, which on CI live under the real home, so check clean exits
+    # only; failing runs are caught by the returncode assertions below.
+    if result.returncode == 0:
+        assert str(Path.home()) not in combined_output(result)
     return result
 
 
