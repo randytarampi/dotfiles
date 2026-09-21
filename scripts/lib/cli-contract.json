@@ -91,20 +91,6 @@
   },
   "scripts": [
     {
-      "path": "scripts/setup-bin-symlinks.py",
-      "capabilities": [
-        "public",
-        "mutates"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--dry-run"
-      ],
-      "positional_operand": "source_dir",
-      "child_scripts": []
-    },
-    {
       "path": "scripts/configure-acp-agents.py",
       "capabilities": [
         "public",
@@ -557,7 +543,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-acp-adapters.py",
+      "path": "scripts/install-acp-adapters.sh",
       "capabilities": [
         "public",
         "mutates"
@@ -641,7 +627,7 @@
       ],
       "positional_operand": null,
       "child_scripts": [
-        "update-nvm-globals.py",
+        "update-nvm-globals.sh",
         "sync-brewfiles.py"
       ]
     },
