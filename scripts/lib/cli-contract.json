@@ -543,7 +543,7 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/install-acp-adapters.sh",
+      "path": "scripts/install-acp-adapters.py",
       "capabilities": [
         "public",
         "mutates"
