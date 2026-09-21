@@ -34,5 +34,9 @@
 	directory = *
 {{- if lookPath "gpg" }}
 [gpg]
+{{- if eq .chezmoi.os "windows" }}
+	program = "{{ lookPath "gpg" | replace "\\" "/" }}"
+{{- else }}
 	program = {{ lookPath "gpg" }}
+{{- end }}
 {{- end }}
