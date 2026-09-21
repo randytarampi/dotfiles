@@ -119,13 +119,16 @@ jobs:
           # application"); chezmoi routes scripts through the interpreter
           # configured for the script extension. Point .sh at Git Bash and hand
           # the config to chezmoi via the CHEZMOI make-variable override
-          # (Makefile:11 uses ?=, so the environment wins; the CHEZMOI_CONFIG
-          # env var is ignored by chezmoi — verified empirically on 2.72.2).
+          # (Makefile:11 uses ?=, so the environment wins). The config path
+          # must be forward-slashed: a backslashed RUNNER_TEMP path is
+          # unquoted in the make recipe, so bash strips the backslash escapes
+          # and chezmoi silently proceeds without the config (runs 1-4).
           cat > "$RUNNER_TEMP/chezmoi-interpreters.toml" <<'EOF'
           [interpreters.sh]
               command = 'C:\Program Files\Git\bin\bash.exe'
           EOF
-          echo "CHEZMOI=chezmoi --config $RUNNER_TEMP/chezmoi-interpreters.toml" >> "$GITHUB_ENV"
+          cz_config="$(cygpath -m "$RUNNER_TEMP")/chezmoi-interpreters.toml"
+          echo "CHEZMOI=chezmoi --config $cz_config" >> "$GITHUB_ENV"
       - name: Prepare fresh home and empty environment
         shell: bash
         run: |
