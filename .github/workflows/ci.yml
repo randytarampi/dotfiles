@@ -148,11 +148,12 @@ jobs:
         shell: bash
         run: |
           # Verify with the same effective configuration the deploy passes
-          # used: CHEZMOI carries the Windows interpreters --config override,
-          # and chezmoi otherwise warns that the config file template changed
-          # and exits 1 (observed on run 5).
-          "${CHEZMOI:-chezmoi}" --source "$GITHUB_WORKSPACE" verify
-          if ! diff_output="$("${CHEZMOI:-chezmoi}" --source "$GITHUB_WORKSPACE" diff)"; then
+          # used: CHEZMOI carries the Windows interpreters --config override
+          # and must word-split (unquoted) into its three words — quoting it
+          # turns the whole string into one command name and exits 127
+          # (observed on run 6). The value is workflow-controlled.
+          ${CHEZMOI:-chezmoi} --source "$GITHUB_WORKSPACE" verify
+          if ! diff_output="$(${CHEZMOI:-chezmoi} --source "$GITHUB_WORKSPACE" diff)"; then
             echo "chezmoi diff command failed" >&2
             exit 1
           fi
