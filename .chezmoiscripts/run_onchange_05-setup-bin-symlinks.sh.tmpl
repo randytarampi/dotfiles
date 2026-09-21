@@ -50,5 +50,9 @@ set -euo pipefail
 # scripts/configure-skills.py: {{ include "scripts/configure-skills.py" | sha256sum }}
 # scripts/check-pep604.py: {{ include "scripts/check-pep604.py" | sha256sum }}
 # scripts/check-categories.py: {{ include "scripts/check-categories.py" | sha256sum }}
+# scripts/setup-bin-symlinks.py: {{ include "scripts/setup-bin-symlinks.py" | sha256sum }}
 
-"{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.sh" "{{ .chezmoi.sourceDir }}/scripts"
+# Keep the historical shell entrypoint covered while it remains a compatibility shim.
+# scripts/setup-bin-symlinks.sh: {{ include "scripts/setup-bin-symlinks.sh" | sha256sum }}
+
+"{{ .chezmoi.sourceDir }}/scripts/setup-bin-symlinks.py" "{{ .chezmoi.sourceDir }}/scripts"
