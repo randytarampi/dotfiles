@@ -117,7 +117,7 @@ if command -v npm >/dev/null 2>&1; then
   if [[ "$is_windows" == "1" ]]; then
     run_update "npm globals" npm update -g
   else
-    run_update "npm globals" bash "$SCRIPT_DIR/update-nvm-globals.sh"
+    run_update "npm globals" python3 "$SCRIPT_DIR/update-nvm-globals.py"
   fi
 else
   skipped_lanes+=("npm globals")
