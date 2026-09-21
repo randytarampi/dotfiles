@@ -557,6 +557,20 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/setup-bin-symlinks.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
+      "positional_operand": "source_dir",
+      "child_scripts": []
+    },
+    {
       "path": "scripts/install-fonts.sh",
       "capabilities": [
         "public",
