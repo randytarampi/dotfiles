@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Optional
 
 HOME = Path.home()
+OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
+    r"^\d+(?:\.\d+)?(?:KB|MB|GB)$", re.IGNORECASE
+)
 CORTEX_HOME = Path(
     os.environ.get("SNOWFLAKE_HOME", str(HOME / ".snowflake")).strip()
 ).expanduser()
@@ -187,6 +190,17 @@ def validate_omlx_settings(data):
         errors.append("server.host must be a string")
     if not isinstance(server.get("port"), int) or not 1 <= server["port"] <= 65535:
         errors.append("server.port must be an integer from 1 to 65535")
+    upload_size = server.get("max_audio_upload_size")
+    if upload_size is not None and not (
+        isinstance(upload_size, str)
+        and (
+            OMLX_AUDIO_UPLOAD_SIZE_PATTERN.fullmatch(upload_size.strip())
+            or (upload_size.strip().isdigit() and int(upload_size.strip()) >= 1)
+        )
+    ):
+        errors.append(
+            "server.max_audio_upload_size must be an integer or a value such as 128MB"
+        )
     model_dirs = data.get("model", {}).get("model_dirs")
     if not isinstance(model_dirs, list) or not all(
         isinstance(value, str) for value in model_dirs
@@ -233,6 +247,17 @@ def validate_omlx_settings(data):
     ):
         errors.append("mcp.config_path must be a string or null")
     return errors
+
+
+def omlx_settings_warnings(data):
+    """Return non-fatal warnings for values the writer would normalize."""
+    value = data.get("server", {}).get("max_audio_upload_size")
+    if isinstance(value, int) or (isinstance(value, str) and value.strip().isdigit()):
+        return [
+            "server.max_audio_upload_size is unitless; oMLX treats unitless values as bytes "
+            "and the next managed write will normalize this to an explicit MB value"
+        ]
+    return []
 
 
 def check_ssh_permissions():
@@ -399,6 +424,8 @@ def main():
                         for error in validate_omlx_settings(settings):
                             print(f"  \u2717 {description}: {error}")
                             all_exist = False
+                        for warning in omlx_settings_warnings(settings):
+                            print(f"  \u26a0 {description}: {warning}")
                     except (OSError, json.JSONDecodeError):
                         print(f"  \u2717 {description}: INVALID JSON {path}")
                         all_exist = False
