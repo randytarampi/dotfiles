@@ -192,10 +192,17 @@ def validate_omlx_settings(data):
         errors.append("server.port must be an integer from 1 to 65535")
     upload_size = server.get("max_audio_upload_size")
     if upload_size is not None and not (
-        isinstance(upload_size, str)
-        and (
-            OMLX_AUDIO_UPLOAD_SIZE_PATTERN.fullmatch(upload_size.strip())
-            or (upload_size.strip().isdigit() and int(upload_size.strip()) >= 1)
+        (
+            isinstance(upload_size, int)
+            and not isinstance(upload_size, bool)
+            and upload_size >= 1
+        )
+        or (
+            isinstance(upload_size, str)
+            and (
+                OMLX_AUDIO_UPLOAD_SIZE_PATTERN.fullmatch(upload_size.strip())
+                or (upload_size.strip().isdigit() and int(upload_size.strip()) >= 1)
+            )
         )
     ):
         errors.append(
