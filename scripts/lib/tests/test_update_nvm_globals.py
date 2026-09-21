@@ -54,6 +54,7 @@ def test_dry_run_does_not_update_or_change_nvm_state(monkeypatch, tmp_path, upda
     assert nvm.call_args_list[0].args[0] == ["version", "default"]
     assert nvm.call_args_list[1].args[0] == ["ls", "--no-colors"]
     assert len(nvm.call_args_list) == 2
+    assert not (tmp_path / ".nvm").exists()
 
 
 def test_updates_default_other_versions_and_system_node(monkeypatch, tmp_path, updater):

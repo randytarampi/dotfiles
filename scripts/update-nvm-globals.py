@@ -90,7 +90,8 @@ def _system_npm():
 
 
 def update_globals(dry_run=False):
-    Path.home().joinpath(".nvm").mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        Path.home().joinpath(".nvm").mkdir(parents=True, exist_ok=True)
     probe = _nvm(["version", "default"])
     if probe.returncode == 127:
         logger.error(
