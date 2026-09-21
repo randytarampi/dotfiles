@@ -38,7 +38,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y actionlint shellcheck shfmt
+          # actionlint is not in Ubuntu's apt repositories — install the pinned
+          # upstream release binary instead.
+          sudo apt-get install -y shellcheck shfmt
+          mkdir -p "$HOME/bin"
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 "$HOME/bin"
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Prepare empty environment
@@ -103,13 +107,14 @@ jobs:
           # Windows cannot exec .sh scripts directly ("not a valid Win32
           # application"); chezmoi routes scripts through the interpreter
           # configured for the script extension. Point .sh at Git Bash and hand
-          # the config to chezmoi via CHEZMOI_CONFIG (make deploy invokes
-          # chezmoi without --config).
+          # the config to chezmoi via the CHEZMOI make-variable override
+          # (Makefile:11 uses ?=, so the environment wins; the CHEZMOI_CONFIG
+          # env var is ignored by chezmoi — verified empirically on 2.72.2).
           cat > "$RUNNER_TEMP/chezmoi-interpreters.toml" <<'EOF'
           [interpreters.sh]
               command = 'C:\Program Files\Git\bin\bash.exe'
           EOF
-          echo "CHEZMOI_CONFIG=$RUNNER_TEMP/chezmoi-interpreters.toml" >> "$GITHUB_ENV"
+          echo "CHEZMOI=chezmoi --config $RUNNER_TEMP/chezmoi-interpreters.toml" >> "$GITHUB_ENV"
       - name: Prepare fresh home and empty environment
         shell: bash
         run: |
