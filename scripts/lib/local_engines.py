@@ -2,6 +2,7 @@
 
 import os
 import re
+import re
 
 import logger
 from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
@@ -409,6 +410,32 @@ def merge_omlx_settings(existing, environ=None):
     def _int(value):
         return int(str(value).strip())
 
+    def _max_audio_upload_size(value):
+        """Validate and normalize oMLX's audio upload limit for a write."""
+        raw = str(value).strip()
+        if re.fullmatch(r"\d+(?:\.\d+)?(?:KB|MB|GB)", raw, re.IGNORECASE):
+            return raw
+        if re.fullmatch(r"\d+", raw):
+            # oMLX interprets a unitless value as bytes. Treat legacy numeric
+            # settings as the user's intended MB value while writing, because
+            # tiny values such as 128 bytes make audio uploads fail with 413.
+            if int(raw) < 1:
+                raise ValueError(
+                    "server.max_audio_upload_size must be a positive integer or "
+                    "a value such as 128MB; unitless oMLX values are bytes"
+                )
+            normalized = f"{int(raw)}MB"
+            logger.warning(
+                f"Normalizing unitless server.max_audio_upload_size={value!r} to "
+                f"{normalized}; oMLX treats unitless values as bytes"
+            )
+            return normalized
+        raise ValueError(
+            "Invalid server.max_audio_upload_size={!r}; use an integer number "
+            "of MB (for example 128MB), or a value matching "
+            "<number>[KB|MB|GB]. Unitless oMLX values are bytes.".format(value)
+        )
+
     settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}
 
     def _section(name):
@@ -430,6 +457,13 @@ def merge_omlx_settings(existing, environ=None):
     _override(server, "host", "OMLX_HOST", str, "127.0.0.1")
     _override(server, "port", "OMLX_PORT", _int, "8000")
     _override(server, "log_level", "OMLX_LOG_LEVEL", str, "info")
+    audio_upload_env = _env("OMLX_MAX_AUDIO_UPLOAD_SIZE")
+    if audio_upload_env:
+        server["max_audio_upload_size"] = str(audio_upload_env)
+    if "max_audio_upload_size" in server:
+        server["max_audio_upload_size"] = _max_audio_upload_size(
+            server["max_audio_upload_size"]
+        )
 
     model = _section("model")
     model_dir_env = _env("OMLX_MODEL_DIR")
