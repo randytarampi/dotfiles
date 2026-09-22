@@ -6,9 +6,9 @@ eeeeee eeeee eeeee eeee e  e     eeee eeeee
 88ee8 8eee8   88  88   88 88eee 88ee 8ee88
 ```
 
-[@randytarampi](https://github.com/randytarampi)'s [`dotfiles`](https://github.com/randytarampi/dotfiles) managed by [`chezmoi`](https://chezmoi.io/).
-
 [![CI](https://github.com/randytarampi/dotfiles/actions/workflows/ci.yml/badge.svg?branch=main&label=CI&style=flat-square)](https://github.com/randytarampi/dotfiles/actions/workflows/ci.yml) [![CodeQL](https://github.com/randytarampi/dotfiles/actions/workflows/codeql.yml/badge.svg?branch=main&label=CodeQL&style=flat-square)](https://github.com/randytarampi/dotfiles/security/code-scanning) [![Coverage status](https://img.shields.io/coveralls/randytarampi/dotfiles.svg?branch=main&style=flat-square)](https://coveralls.io/github/randytarampi/dotfiles?branch=main) [![Issues](https://img.shields.io/github/issues/randytarampi/dotfiles?style=flat-square)](https://github.com/randytarampi/dotfiles/issues) [![Pull requests](https://img.shields.io/github/issues-pr/randytarampi/dotfiles?style=flat-square)](https://github.com/randytarampi/dotfiles/pulls) [![License](https://img.shields.io/badge/license-unlicense-blue?style=flat-square)](LICENSE)
+
+[@randytarampi](https://github.com/randytarampi)'s [`dotfiles`](https://github.com/randytarampi/dotfiles) managed by [`chezmoi`](https://chezmoi.io/).
 
 ## Quick Start
 
