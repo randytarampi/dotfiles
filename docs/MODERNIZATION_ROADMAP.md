@@ -47,7 +47,7 @@ multi-session change. They are estimates, not recorded durations.
 | Item | Status | Evidence |
 |---|---|---|
 | Licence | `[completed-in-this-pass]` | CC0 (Unlicense) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
-| qlty | `[completed-in-this-pass]` — not integrated; blocker disproven | The earlier "no credential-free way to verify a qlty Cloud project" claim is **disproven**: `me` runs qlty coverage uploads credential-free via OIDC ([me/.github/workflows/test.yml:351-357](../../me/.github/workflows/test.yml), `qlty.toml`), and external qlty checks have already run successfully on this repository's PRs. Adoption is a separate approved work item: bounded, reversible, non-required, Coveralls retained by design. |
+| qlty | `[completed-in-this-pass]` — integrated 2026-09-22 | The earlier "no credential-free way to verify a qlty Cloud project" claim was **disproven** (me/'s OIDC pattern), and the follow-up work item has now landed: minimal [qlty.toml](../qlty.toml) (release checks opted out) plus a supplemental, **non-required** OIDC coverage upload in [ci.yml](../.github/workflows/ci.yml) (`qltysh/qlty-action/coverage` pinned to the v2 commit; `id-token: write` on the verify job). Coveralls remains the primary report by design. |
 | Action-SHA pinning | `[completed-in-this-pass]` — policy recorded | Required/security/deployment workflows (ci, nightly, codeql) pin verified immutable full SHAs; write-capable agent review workflows float by documented design ([docs/AGENTIC-REVIEW.md](AGENTIC-REVIEW.md): moving major tags) and remain an **enumerated gap**, not a settled exception. No repo-wide `sha_pinning_required` is proposed while those lanes float. |
 
 ## 3. Ordered work items
@@ -194,7 +194,7 @@ wingetfile but no gate generates configuration) versus **package missing**
 
 | Priority | Tool | Why it matters | Recommended action |
 |---|---|---|---|
-| High | Docker | Package and deploy paths expect Docker-compatible local workflows and defaults. | Already packaged, not configured (`Brewfile.desktop.dev` cask `docker-desktop`, `wingetfile.dev` `Docker.DockerCLI`): add a gated `config.json` baseline; document daemon-dependent checks. **Natural next tool gate** — `me` runs an owned Docker/LocalStack workflow (`me/scripts/feed-v5-local.mjs`), so the shape is proven fleet-side. |
+| High | Docker | Package and deploy paths expect Docker-compatible local workflows and defaults. | `[completed-in-this-pass]` Gated, non-secret `~/.docker/config.json` baseline shipped: [scripts/configure-docker.py](../scripts/configure-docker.py) (`DOTFILES_RUN_DOCKER_CONFIG_SETUP`, create-only-if-missing, JSON parse-verify of existing, malformed → error-not-clobber), wired into `configure-all.sh` after the AWS step, documented in `.env.example` + [docs/ORCHESTRATION.md](ORCHESTRATION.md), five hermetic tests incl. the credsStore-absent case (credential helper detection). |
 | High | AWS CLI | AWS profiles are an expected operator boundary for cloud scripts; credentials remain user-owned. | `[completed-in-this-pass]` Gated, non-secret `~/.aws/config` baseline shipped: [scripts/configure-aws.py](../scripts/configure-aws.py) (`DOTFILES_RUN_AWS_CONFIG_SETUP`, create-only-if-missing, configparser verify of existing), wired into `configure-all.sh`, documented in `.env.example` + [docs/ORCHESTRATION.md](ORCHESTRATION.md), four hermetic tests in [scripts/lib/tests/test_configure_aws.py](../scripts/lib/tests/test_configure_aws.py). |
 | High | kubectl | Kubernetes operations need an explicit CLI and opt-in kubeconfig handling. | Package missing: add package coverage and a gated, non-secret kubeconfig/default-context policy; never generate credentials. Deferred until a real workload exists. |
 | High | Pulumi | Infrastructure work needs backend and organisation defaults, while state and secrets are sensitive. | **Scope corrected 2026-09-22:** configure the Pulumi *CLI* if a dotfiles surface needs it, but never set a repository-level default backend/org — `me` owns its backend (`me/infrastructure/Pulumi.yaml`), and a dotfiles default would create a second owner. Decision deferred to the `me` governance programme. |
@@ -261,18 +261,16 @@ fleet-significant and deserve staged governance.
     (the pattern proven in `me/infrastructure/src/github/rulesets.ts:30-32`).
     Zero workflow prerequisites; safe regardless of push flow; imports cleanly
     into the Pulumi governance stack later.
-3. `[in-progress]` Required-check enforcement: enable only after a fresh PR
-    has run the aggregates and the emitted check context name is recorded, and
-    after the PR-first habit is formed — on a personal account, required checks
-    reject every direct push (no Integration bypass actor exists), and a
-    PR-required gate the solo operator routinely bypasses is decorative.
-    Zero approving reviews; admin bypass is break-glass, never routine; agent
-    review workflows are never required checks.
-    **[verified 2026-09-22]** PR #7 observed the exact check context names:
-    `ci/required` and `security/required` (both green, alongside
-    `coverage/coveralls` 33.708% and external `qlty fmt` / `qlty check` /
-    GitGuardian / Greptile checks on the same PR). The remaining step is the
-    PR-first-habit decision and ruleset configuration.
+3. `[completed-in-this-pass 2026-09-22]` Required-check enforcement: the
+   exact check context names were observed on PR #7 (`ci/required`,
+   `security/required`) and the ruleset now requires them (ruleset id
+   23831218, active): pull requests required before merge on
+   `refs/heads/main`, status checks `ci/required` + `security/required`
+   mandatory, admin bypass retained as break-glass only. Zero approving
+   reviews (a solo operator cannot independently approve); agent review
+   workflows are never required checks; direct push to `main` is no longer
+   the default flow — use PRs, with admin break-glass documented in the
+   decision record below.
 4. `[completed-in-this-pass]` Dependabot vulnerability alerts and security
     fixes enabled (version updates already configured; auto-merge stays off
     until the dependency policy lands).
