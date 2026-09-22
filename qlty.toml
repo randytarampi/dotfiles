@@ -1,13 +1,8 @@
 # Keep Qlty's plugin configuration minimal and opt out of release checks.
 # Mirrors me/qlty.toml — the fleet-verified pattern (OIDC coverage upload,
 # credential-free).
+# bandit scoping lives in .bandit (the plugin's driver runs `bandit --ini
+# .bandit`): test files are excluded there, since B101/B404/B603 are false
+# positives in pytest suites.
 [plugin]
 release = false
-
-# bandit's assert/subprocess findings are false positives in pytest suites:
-# asserts are the assertion mechanism (B101), and test subprocess mocking is
-# intentional (B404/B603). Scope bandit to production scripts only.
-[[plugin]]
-name = "bandit"
-mode = "blocker"
-exclude_patterns = ["scripts/lib/tests/**"]
