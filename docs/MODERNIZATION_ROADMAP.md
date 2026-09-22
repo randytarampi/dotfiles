@@ -275,13 +275,13 @@ fleet-significant and deserve staged governance.
     fixes enabled (version updates already configured; auto-merge stays off
     until the dependency policy lands).
 
-**Decision record (2026-09-22):** direct push remains authorized while the
-pilot PR proves the aggregates; the transition plan is PR-first as habit
-before PR-required as rule, with documented break-glass semantics (never
-routine; record the reason; restore normal flow immediately after). The
-action-SHA policy is recorded in the §2 table: required/security/deployment
-lanes are pinned; agent-review lanes float by documented design and are the
-enumerated gap.
+**Decision record (2026-09-22, final):** the pilot proved the aggregates and
+the PR-first flow on PR #7; the transition is now complete — **PR-required is
+the rule, not the habit** (ruleset id 23831218). Break-glass semantics are
+unchanged: admin bypass only, never routine; record the reason; restore
+normal flow immediately after. The action-SHA policy is recorded in the §2
+table: required/security/deployment lanes are pinned; agent-review lanes
+float by documented design and are the enumerated gap.
 **[verified 2026-09-22]** Stage-1 ruleset live: "main history protection"
 (ruleset id 23831217, enforcement active) — deletion + non-fast-forward
 blocked on `refs/heads/main`, bypass actor RepositoryRole admin
