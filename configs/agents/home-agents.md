@@ -42,6 +42,8 @@ These apply to every repo, every session.
 
 For changes requiring exploration of unknown scope, delegate bounded discovery first. Use direct reads for files you expect to edit, reconcile, or verify. If scope is unclear after two discovery calls, or discovery spans multiple subsystems, delegate one bounded exploration task. Request concise file:line findings, avoid full file dumps in parent context.
 
+Never run two write-capable subagent lanes that commit concurrently to one repository, even with disjoint file scopes: git staging and HEAD are process-global, so parallel commits race — work is lost to staging conflicts, finished edits strand in stashes, and commit boundaries cross-contaminate. Dispatch committing lanes one at a time, serialize their commits from the orchestrator, or isolate parallel writers in separate git worktrees.
+
 ### Planning scope
 
 When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront — not just the obvious ones. If a plan covers some tools but not others, the user will ask about the missing ones. Enumerate all configured tools (OpenCode, Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Pi, Junie, Cline, Cortex, Antigravity) in the initial plan rather than discovering them through rejection cycles.
