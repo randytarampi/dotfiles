@@ -17,6 +17,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+      # Grants the Qlty coverage step's OIDC exchange (me/-proven pattern).
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Poetry must be on PATH before setup-python: the action's cache: poetry
@@ -71,6 +73,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+      # Supplemental, non-required coverage lane: the credential-free OIDC
+      # exchange proven in me/.github/workflows/test.yml (qltysh/qlty-action
+      # pinned to the v2 commit). Coveralls remains the primary report.
+      - name: Upload coverage to Qlty
+        if: ${{ !cancelled() }}
+        uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637 # v2
+        with:
+          oidc: true
+          files: coverage.lcov
+          total-parts-count: ${{ strategy.job-total }}
 
   deploy:
     name: Deploy (${{ matrix.os }})
