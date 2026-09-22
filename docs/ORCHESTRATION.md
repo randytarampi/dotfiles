@@ -93,6 +93,7 @@ sequenceDiagram
     Make->>Configure: configure-all.sh (always runs)
     Configure->>Configure: configure-secrets.py (secrets)
     Configure->>Configure: configure-aws.py (non-secret AWS CLI baseline)
+    Configure->>Configure: configure-docker.py (non-secret Docker CLI baseline)
     Configure->>Configure: configure-jetbrains-ai.py (Junie profiles via tier registry)
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
@@ -182,6 +183,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | 13 | configure-iterm2 | run_onchange | iTerm2 DynamicProfiles | — |
 | 14 | configure-secrets | run_onchange | .env distribution to AI dirs | `DOTFILES_RUN_SECRETS_SETUP` |
 | — | configure-aws | configure-all.sh | Non-secret AWS CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_AWS_CONFIG_SETUP` |
+| — | [configure-docker](../scripts/configure-docker.py) | configure-all.sh | Non-secret Docker CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_DOCKER_CONFIG_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |

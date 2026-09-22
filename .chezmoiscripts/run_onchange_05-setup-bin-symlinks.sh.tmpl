@@ -8,6 +8,7 @@ set -euo pipefail
 # Script hash triggers (re-run when any script changes):
 # scripts/configure-secrets.py: {{ include "scripts/configure-secrets.py" | sha256sum }}
 # scripts/configure-aws.py: {{ include "scripts/configure-aws.py" | sha256sum }}
+# scripts/configure-docker.py: {{ include "scripts/configure-docker.py" | sha256sum }}
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
 # scripts/_configure-jetbrains-workspace-project.py: {{ include "scripts/_configure-jetbrains-workspace-project.py" | sha256sum }}
 # scripts/configure-mcps.py: {{ include "scripts/configure-mcps.py" | sha256sum }}
