@@ -28,15 +28,12 @@ managed by the unconditional Brewfile entry.
 
 ## Installation and service
 
-Historically oMLX came from the `jundot/omlx` Homebrew tap; that tap and its
-upstream repository were removed upstream in September 2026 (404), so the
-formula is no longer in `Brewfile.dev`. The installed bundle persists in
-`/opt/homebrew/Cellar/omlx` and is not upgraded by `brew update`. Until a
-maintained tap or release reappears, reinstalling or upgrading oMLX is a
-manual step: download the release bundle from wherever the project republishes
-and reinstall, then `brew services start omlx` (the service plist is
-`~/Library/LaunchAgents/sh.brew.omlx.plist`, binary
-`/opt/homebrew/opt/omlx/bin/omlx`).
+The formula is declared in `Brewfile.dev`:
+
+```ruby
+tap "jundot/omlx", "https://github.com/jundot/omlx"
+brew "jundot/omlx/omlx"
+```
 
 `run_onchange_29-configure-omlx.sh.tmpl` writes and merges
 `~/.omlx/settings.json`, then starts the service with `brew services`. The
