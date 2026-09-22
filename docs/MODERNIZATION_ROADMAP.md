@@ -261,13 +261,18 @@ fleet-significant and deserve staged governance.
    (the pattern proven in `me/infrastructure/src/github/rulesets.ts:30-32`).
    Zero workflow prerequisites; safe regardless of push flow; imports cleanly
    into the Pulumi governance stack later.
-3. `[aspirational]` Required-check enforcement: enable only after a fresh PR
+3. `[in-progress]` Required-check enforcement: enable only after a fresh PR
    has run the aggregates and the emitted check context name is recorded, and
    after the PR-first habit is formed — on a personal account, required checks
    reject every direct push (no Integration bypass actor exists), and a
    PR-required gate the solo operator routinely bypasses is decorative.
    Zero approving reviews; admin bypass is break-glass, never routine; agent
    review workflows are never required checks.
+   **[verified 2026-09-22]** PR #7 observed the exact check context names:
+   `ci/required` and `security/required` (both green, alongside
+   `coverage/coveralls` 33.708% and external `qlty fmt` / `qlty check` /
+   GitGuardian / Greptile checks on the same PR). The remaining step is the
+   PR-first-habit decision and ruleset configuration.
 4. `[completed-in-this-pass]` Dependabot vulnerability alerts and security
    fixes enabled (version updates already configured; auto-merge stays off
    until the dependency policy lands).
