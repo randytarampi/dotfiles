@@ -1,7 +1,7 @@
 # Dotfiles modernization roadmap
 
-> **Status:** Phase 5 lane B roadmap, dated 2026-09-20
-> **Scope:** dotfiles productionalization, portability, local-model operations and documentation
+> **Status:** Productionalization roadmap, reconciled 2026-09-22
+> **Scope:** dotfiles productionalization, portability, local-model operations, governance and documentation
 > **Confidence:** `[verified]` is supported by repository files or a recorded check; `[believed]` is a bounded interpretation; `[aspirational]` is a target.
 
 ## 1. Document contract
@@ -19,25 +19,36 @@ multi-session change. They are estimates, not recorded durations.
 
 ## 2. Baseline and completed work
 
-- `[verified]` Phase 1 through Phase 4 are complete at `128125b`. The recorded
-  validation is `make verify`, `make test` (140 tests), `make ci-verify`,
-  `poetry check` and actionlint; the production coverage measurement was 33%
-  against a 25% floor (evidence: this repository's Phase 1-4 commits and
-  [pyproject.toml](../pyproject.toml)).
-- `[verified]` The Windows deploy is a portability probe and remains
-  `continue-on-error`; macOS and Ubuntu are the required baseline. The nightly
-  lane currently runs only OPENCODE, MCP and AGENT_GUIDANCE with postconditions.
-  [.github/workflows/ci.yml; .github/workflows/nightly-integration.yml]
+- `[verified]` Phase 1 through Phase 4 are complete at `128125b`; rounds 1–2 of
+  follow-up work landed through `9d05d65`. The recorded validation is
+  `make verify`, `make test` (160+ tests), `make ci-verify`, `poetry check` and
+  actionlint; the production coverage measurement is 33% (branch-aware pytest;
+  Coveralls reports 33.71% line coverage at `9d05d65`) against a floor now
+  ratcheted to 27% (evidence: [pyproject.toml](../pyproject.toml) and CI run
+  35713182137, all-green including the required Windows lane).
+- `[verified]` The Windows deploy lane was **promoted to required** at
+  `288b410` after three consecutive green runs (`5e48340`, `389ab47`,
+  `f237cb6`); `continue-on-error` is removed from the deploy matrix.
+  [`.github/workflows/ci.yml`] The nightly lane runs OPENCODE, MCP and
+  AGENT_GUIDANCE with postconditions and remains allow-failure.
+  [.github/workflows/nightly-integration.yml]
 - `[completed-in-this-pass]` The orchestration range now names the actual
   `run_onchange_04` through `run_onchange_29` scripts, and its inventory includes
   `install-acp-adapters`. The `wingetfile.dev` cross-references now use the
   corresponding Brewfile identifiers. [docs/ORCHESTRATION.md:62-66,165-198;
   wingetfile.dev:1-38]
+- `[verified]` 2026-09-22 — dated coverage-semantics correction. Three numbers
+  circulated for the same floor: 32% (roadmap, superseded), 33% (branch-aware
+  pytest at `9d05d65`), 33.71% (Coveralls line coverage, build 81894625).
+  The authoritative internal gate is the branch-aware pytest measure; Coveralls
+  line coverage is the external report. The floor is 27%.
+  [pyproject.toml; CI run 35713182137]
 
 | Item | Status | Evidence |
 |---|---|---|
 | Licence | `[completed-in-this-pass]` | CC0 (Unlicense) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
-| qlty | `[completed-in-this-pass]` — not integrated | The local verification gate found no installed `qlty` CLI, no Homebrew formula, no repository `qlty.toml`, and no credential-free way to verify a qlty Cloud project. No badge or configuration was added. |
+| qlty | `[completed-in-this-pass]` — not integrated; blocker disproven | The earlier "no credential-free way to verify a qlty Cloud project" claim is **disproven**: `me` runs qlty coverage uploads credential-free via OIDC ([me/.github/workflows/test.yml:351-357](../../me/.github/workflows/test.yml), `qlty.toml`), and external qlty checks have already run successfully on this repository's PRs. Adoption is a separate approved work item: bounded, reversible, non-required, Coveralls retained by design. |
+| Action-SHA pinning | `[completed-in-this-pass]` — policy recorded | Required/security/deployment workflows (ci, nightly, codeql) pin verified immutable full SHAs; write-capable agent review workflows float by documented design ([docs/AGENTIC-REVIEW.md](AGENTIC-REVIEW.md): moving major tags) and remain an **enumerated gap**, not a settled exception. No repo-wide `sha_pinning_required` is proposed while those lanes float. |
 
 ## 3. Ordered work items
 
@@ -51,9 +62,15 @@ Fix only failures demonstrated by the Windows deploy lane. The audit identifies
 platform-specific doctor checks; it is not permission for a broad rewrite
 (see the shell-to-Python inventory below for script-level evidence).
 
-**Status:** `[verified]` The Windows lane was green on run 7 at `5e48340`.
-The probe remains `continue-on-error` until the promotion criteria below are
-met.
+**Status:** `[completed-in-this-pass]` The Windows lane was **promoted to
+required** at `288b410` after three consecutive green runs (`5e48340`,
+`389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix,
+and every promotion fix was demonstrated and bounded (script-exec interpreters
+chain, cygpath forward-slash, deploy-effective no-op check).
+[.github/workflows/ci.yml; runs 35713182137, 35696345590]
+**Residual (deliberate):** `make doctor` remains Unix-gated in CI
+([.github/workflows/ci.yml:166-171]); making doctor meaningful on Windows is
+the next Windows extension, backlogged.
 
 **Acceptance criteria:** the Windows lane has a documented result for every
 failure; bounded fixes pass the Windows deploy, second-deploy idempotency and
@@ -76,6 +93,14 @@ default gates remain excluded from shared runners; the report distinguishes
 skipped, failed and passed gates; then `continue-on-error` is removed and the
 workflow is made required after an observed stabilization period.
 
+**Status:** `[in-progress]` Promotion semantics corrected 2026-09-22: this is a
+schedule-only workflow, so it can **never be a required pull-request check**.
+Promotion means removing `continue-on-error` so scheduled failures are truthful,
+with failure notification/issue ownership. Decision date: on or after
+2026-09-29, gated on roughly seven consecutive green scheduled runs on the
+current logic (only one scheduled + one manual success at `5e48340` exists so
+far). [.github/workflows/nightly-integration.yml]
+
 ### 3. Add oMLX audio-upload validation and normalization
 
 **Priority:** High · **Effort:** M · **Dependencies:** the existing
@@ -87,19 +112,31 @@ it caused STT HTTP 413 responses. It was corrected machine-side to `128MB`,
 after which the transcription endpoint returned HTTP 200. No repository script
 currently manages this value.
 
-**Acceptance criteria:** a configure-time check accepts documented byte and
-unit forms, normalizes or reports an unsafe value without silently changing
-unrelated settings, verifies the effective limit before STT use, and has tests
-for the unitless, valid and missing cases. The implementation must not pin a
-particular STT model name.
+**Status:** `[completed-in-this-pass]` The validator exists and is tested
+([scripts/lib/local_engines.py](../scripts/lib/local_engines.py):
+`_max_audio_upload_size`, wired into `merge_omlx_settings` with an
+`OMLX_MAX_AUDIO_UPLOAD_SIZE` override; doctor check in
+[scripts/verify-config.py](../scripts/verify-config.py); six hermetic cases in
+[scripts/lib/tests/test_omlx_settings.py](../scripts/lib/tests/test_omlx_settings.py)).
+Decided semantics (2026-09-22): unitless values are **refused at write time**
+(bytes-accurate; no MB reinterpretation — the `'128'`-bytes incident is
+encoded), invalid values warn-and-preserve rather than abort the deploy, and
+`validate_omlx_settings` remains the hard structural gate. [docs/OMLX.md]
+**Residual (open):** no pre-STT runtime effective-limit check exists; the
+acceptance criterion "verifies the effective limit before STT use" is not met
+and stays open rather than being silently dropped.
 
 ### 4. Ratchet production coverage modestly
 
 **Priority:** Medium · **Effort:** M per quarter · **Dependencies:** the
 measured production baseline and subprocess coverage already in place.
 
-The current production floor is 25%; the measured result is 33% after the
-Phase 4 scenario harness. [pyproject.toml; Makefile test target] Raise the floor in small
+The production floor was 25%; the measured result is 33% (branch-aware pytest;
+Coveralls reports 33.71% line coverage). On 2026-09-22 the floor was ratcheted
+to **27%** ([pyproject.toml](../pyproject.toml)), keeping ~6 points of headroom
+so one flaky test cannot break `main`; 30+ is gated on representative tests
+(orchestration, failed/partial deploy paths), not wrapper-test padding.
+[pyproject.toml; Makefile test target] Raise the floor in small
 quarterly increments only when new coverage is representative, rather than
 targeting 100%.
 
@@ -116,18 +153,26 @@ CLI capability contracts and regression tests.
 
 Apply the criteria **logic-heavy, weakly tested and platform-sensitive** to the
 Phase 4 inventory. These are quality-driven port candidates, not Windows-
-necessary work: Git Bash resolved the current Windows probe without ports.
-Tranche 1 is the first three candidates below. Mechanical ports come first
-because these scripts are always-executed or high fan-out, not because Python
-is preferred everywhere.
+necessary work: Git Bash resolved the Windows probe without ports.
+**Status:** `[completed-in-this-pass]` Tranche 1 (the first three candidates)
+is delivered with parity tests and thin compatibility shims:
+[scripts/setup-bin-symlinks.py](../scripts/setup-bin-symlinks.py) +
+[scripts/lib/tests/test_setup_bin_symlinks.py](../scripts/lib/tests/test_setup_bin_symlinks.py),
+[scripts/update-nvm-globals.py](../scripts/update-nvm-globals.py) (single-shell
+nvm flow with structured markers, after a post-review fix),
+[scripts/install-acp-adapters.py](../scripts/install-acp-adapters.py).
+Tranche 2 stays **evidence-gated**: `run-local-review.sh` ports only on a
+demonstrated Bash/path failure or materially untestable change;
+`configure-all.sh` is high-risk (sourced-library semantics) and is not ported
+speculatively.
 
 | Order | Candidate | Evidence and bounded acceptance |
 |---|---|---|
-| Tranche 1 · 1 | `scripts/setup-bin-symlinks.sh` | Preserve fresh-deploy behaviour, link targets and idempotency; add coverage for path resolution and the symlink table. This is always executed by `run_onchange_05`. [.chezmoiscripts/run_onchange_05-setup-bin-symlinks.sh.tmpl] |
-| Tranche 1 · 2 | `scripts/update-nvm-globals.sh` | Preserve package-manager and path logic; add coverage for package-manager selection. [scripts/update-nvm-globals.sh] |
-| Tranche 1 · 3 | `scripts/install-acp-adapters.sh` | Preserve adapter versions and package-manager intent; add coverage for installation selection and a no-network dry run. [scripts/install-acp-adapters.sh] |
-| Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
-| Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Preserve dependency ordering, warn-on-fail semantics and CLI contract; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting, then test path resolution on Windows and Unix. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
+| Tranche 1 · 1 | `scripts/setup-bin-symlinks.sh` | **Done** — Python port + parity tests + thin `.sh` shim; wired by `run_onchange_05`. |
+| Tranche 1 · 2 | `scripts/update-nvm-globals.sh` | **Done** — Python port + parity tests; wired by `update-system.sh`. |
+| Tranche 1 · 3 | `scripts/install-acp-adapters.sh` | **Done** — Python port + parity tests; `.sh` reduced to a compat wrapper consumed by `run_onchange_10`. |
+| Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Deferred pending evidence. Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
+| Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Deferred pending evidence; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
 
 **Acceptance criteria for every port:** the shell implementation is not removed
 until the Python replacement has parity tests, `--help`/dry-run behaviour where
@@ -149,10 +194,10 @@ wingetfile but no gate generates configuration) versus **package missing**
 
 | Priority | Tool | Why it matters | Recommended action |
 |---|---|---|---|
-| High | Docker | Package and deploy paths expect Docker-compatible local workflows and defaults. | Already packaged, not configured (`Brewfile.desktop.dev` cask `docker-desktop`, `wingetfile.dev` `Docker.DockerCLI`): add a gated `config.json` baseline; document daemon-dependent checks. |
-| High | AWS CLI | AWS profiles are an expected operator boundary for cloud scripts; credentials remain user-owned. | Already packaged, not configured (`Brewfile.dev.ops` `awscli`, `wingetfile.dev.ops` `Amazon.AWSCLI`): add a non-secret `~/.aws/config` baseline; gate profile creation. |
-| High | kubectl | Kubernetes operations need an explicit CLI and opt-in kubeconfig handling. | Package missing: add package coverage and a gated, non-secret kubeconfig/default-context policy; never generate credentials. |
-| High | Pulumi | Infrastructure work needs backend and organisation defaults, while state and secrets are sensitive. | Already packaged, not configured (`Brewfile` tap, `Brewfile.dev.ops`, `wingetfile.dev.ops`): add a gated backend/org configuration; document login and state ownership. |
+| High | Docker | Package and deploy paths expect Docker-compatible local workflows and defaults. | Already packaged, not configured (`Brewfile.desktop.dev` cask `docker-desktop`, `wingetfile.dev` `Docker.DockerCLI`): add a gated `config.json` baseline; document daemon-dependent checks. **Natural next tool gate** — `me` runs an owned Docker/LocalStack workflow (`me/scripts/feed-v5-local.mjs`), so the shape is proven fleet-side. |
+| High | AWS CLI | AWS profiles are an expected operator boundary for cloud scripts; credentials remain user-owned. | `[completed-in-this-pass]` Gated, non-secret `~/.aws/config` baseline shipped: [scripts/configure-aws.py](../scripts/configure-aws.py) (`DOTFILES_RUN_AWS_CONFIG_SETUP`, create-only-if-missing, configparser verify of existing), wired into `configure-all.sh`, documented in `.env.example` + [docs/ORCHESTRATION.md](ORCHESTRATION.md), four hermetic tests in [scripts/lib/tests/test_configure_aws.py](../scripts/lib/tests/test_configure_aws.py). |
+| High | kubectl | Kubernetes operations need an explicit CLI and opt-in kubeconfig handling. | Package missing: add package coverage and a gated, non-secret kubeconfig/default-context policy; never generate credentials. Deferred until a real workload exists. |
+| High | Pulumi | Infrastructure work needs backend and organisation defaults, while state and secrets are sensitive. | **Scope corrected 2026-09-22:** configure the Pulumi *CLI* if a dotfiles surface needs it, but never set a repository-level default backend/org — `me` owns its backend (`me/infrastructure/Pulumi.yaml`), and a dotfiles default would create a second owner. Decision deferred to the `me` governance programme. |
 | Medium | gcloud | Cloud tooling is useful but no active repo workload currently requires a generated profile. | Package missing: add package coverage only if a gate-backed workload is identified; otherwise document intentionally absent. |
 | Medium | mongosh / Compass | MongoDB is partially covered through skills and MCP; the CLI/app boundary is not configured. | Add package coverage and optional shell defaults only for an approved MongoDB workflow; otherwise document the partial coverage. |
 | Medium | psql | Database troubleshooting benefits from a client and `.psqlrc`, but no current gate requires it. | Add package coverage and a small gated `.psqlrc` when a supported workflow exists; otherwise document absent. |
@@ -188,6 +233,52 @@ replaced by `deepseek-v4.1-flash` (diversity over the marginally higher
 three tiers. Tier docs, registry tests and configuration were updated together
 ([docs/TIERS.md](TIERS.md), `oh-my-opencode-slim.json`,
 `scripts/lib/tests/test_tier_registry.py`).
+
+### 8. Governance closure: aggregate checks, branch protection and merge flow — NEW 2026-09-22
+
+**Priority:** High · **Effort:** M · **Dependencies:** the stable aggregate
+checks delivered in this pass ([.github/workflows/ci.yml](../.github/workflows/ci.yml)
+`ci/required`; [.github/workflows/codeql.yml](../.github/workflows/codeql.yml)
+`security/required`); a fresh pull request observing the exact emitted check
+context names.
+
+This repository serves privileged workflows to six downstream repositories
+(`.github/workflows/agentic-review.yml@main`, consumed with
+`secrets: inherit` and write permissions), so changes to `main` are
+fleet-significant and deserve staged governance.
+
+**Staged model (target: a governed trunk, not ceremonial branch-and-merge):**
+
+1. `[completed-in-this-pass]` Stable aggregates `ci/required` (gates on
+   verify, the deploy matrix including the required Windows lane, and Coveralls
+   finalization) and `security/required` (both CodeQL legs) — synthetic,
+   stably named, never `if: always()`. The `finish` job is disqualified as a
+   required check (its `if: always()` makes its success meaningless).
+   [Makefile: `check-ci-assets` also added to `ci-verify` so asset drift
+   cannot ship silently.]
+2. `[completed-in-this-pass]` History protection on `main`: block deletion and
+   non-fast-forward; bypass actor = repository admin, bypass mode `always`
+   (the pattern proven in `me/infrastructure/src/github/rulesets.ts:30-32`).
+   Zero workflow prerequisites; safe regardless of push flow; imports cleanly
+   into the Pulumi governance stack later.
+3. `[aspirational]` Required-check enforcement: enable only after a fresh PR
+   has run the aggregates and the emitted check context name is recorded, and
+   after the PR-first habit is formed — on a personal account, required checks
+   reject every direct push (no Integration bypass actor exists), and a
+   PR-required gate the solo operator routinely bypasses is decorative.
+   Zero approving reviews; admin bypass is break-glass, never routine; agent
+   review workflows are never required checks.
+4. `[completed-in-this-pass]` Dependabot vulnerability alerts and security
+   fixes enabled (version updates already configured; auto-merge stays off
+   until the dependency policy lands).
+
+**Decision record (2026-09-22):** direct push remains authorized while the
+pilot PR proves the aggregates; the transition plan is PR-first as habit
+before PR-required as rule, with documented break-glass semantics (never
+routine; record the reason; restore normal flow immediately after). The
+action-SHA policy is recorded in the §2 table: required/security/deployment
+lanes are pinned; agent-review lanes float by documented design and are the
+enumerated gap.
 
 ## 4. Local-model analysis
 
