@@ -2,7 +2,6 @@
 
 import os
 import re
-import re
 
 import logger
 from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
@@ -421,12 +420,12 @@ def merge_omlx_settings(existing, environ=None):
         raw = str(value).strip()
         if re.fullmatch(r"\d+(?:\.\d+)?(?:KB|MB|GB)", raw, re.IGNORECASE):
             return raw
-        raise ValueError(
-            "Invalid server.max_audio_upload_size={!r}; use a value with an "
-            "explicit unit such as 128MB (numbers matching <number>[KB|MB|GB]). "
-            "Unitless values are refused because oMLX would read them as "
-            "bytes.".format(value)
+        logger.warning(
+            "Invalid server.max_audio_upload_size=%r; preserving existing setting "
+            "(use an explicit unit such as 128MB)",
+            value,
         )
+        return None
 
     settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}
 
@@ -450,12 +449,11 @@ def merge_omlx_settings(existing, environ=None):
     _override(server, "port", "OMLX_PORT", _int, "8000")
     _override(server, "log_level", "OMLX_LOG_LEVEL", str, "info")
     audio_upload_env = _env("OMLX_MAX_AUDIO_UPLOAD_SIZE")
-    if audio_upload_env:
-        server["max_audio_upload_size"] = str(audio_upload_env)
-    if "max_audio_upload_size" in server:
-        server["max_audio_upload_size"] = _max_audio_upload_size(
-            server["max_audio_upload_size"]
-        )
+    audio_upload_value = audio_upload_env or server.get("max_audio_upload_size")
+    if audio_upload_value is not None:
+        validated_audio_upload = _max_audio_upload_size(audio_upload_value)
+        if validated_audio_upload is not None:
+            server["max_audio_upload_size"] = validated_audio_upload
 
     model = _section("model")
     model_dir_env = _env("OMLX_MODEL_DIR")
