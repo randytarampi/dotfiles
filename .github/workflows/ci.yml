@@ -79,6 +79,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     # Windows lane promoted to required after three consecutive green runs
     # (5e48340, 389ab47, f237cb6) following the chezmoi 2.72.2 +
     # interpreters + cygpath fixes; the portability probe period is over.
