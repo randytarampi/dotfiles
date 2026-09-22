@@ -251,18 +251,6 @@ def validate_omlx_settings(data):
     return errors
 
 
-def omlx_settings_warnings(data):
-    """Return non-fatal warnings for values the writer would refuse."""
-    value = data.get("server", {}).get("max_audio_upload_size")
-    if isinstance(value, int) or (isinstance(value, str) and value.strip().isdigit()):
-        return [
-            "server.max_audio_upload_size is unitless; oMLX treats unitless values as bytes "
-            "and the next managed write will refuse this value — set an explicit unit "
-            "such as 128MB"
-        ]
-    return []
-
-
 def check_ssh_permissions():
     """Warn if SSH config or private keys have wrong permissions."""
     ssh_dir = HOME / ".ssh"
@@ -427,8 +415,6 @@ def main():
                         for error in validate_omlx_settings(settings):
                             print(f"  \u2717 {description}: {error}")
                             all_exist = False
-                        for warning in omlx_settings_warnings(settings):
-                            print(f"  \u26a0 {description}: {warning}")
                     except (OSError, json.JSONDecodeError):
                         print(f"  \u2717 {description}: INVALID JSON {path}")
                         all_exist = False
