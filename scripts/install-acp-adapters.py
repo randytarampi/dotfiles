@@ -58,10 +58,9 @@ def install_antigravity_acp(dry_run=False):
             "'agy' not found on PATH — the bridge will auto-download it, but this is unexpected"
         )
         logger.warning("Install agy first: brew install --cask antigravity-cli")
-    arch = os.uname().machine
-    if arch != "arm64":
+    if sys.platform != "darwin":
         logger.warning(
-            "Unsupported architecture: %s — skipping antigravity-acp install", arch
+            "Unsupported platform: %s — skipping antigravity-acp install", sys.platform
         )
         logger.warning("Only macOS arm64 is currently supported")
         return 0

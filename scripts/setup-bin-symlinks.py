@@ -51,7 +51,9 @@ def setup_bin_symlinks(source_dir=None, *, dry_run=False):
     created = skipped = removed = 0
 
     # Match the shell's ordering: Python scripts first, then shell scripts.
-    scripts = list(source_scripts.glob("*.py")) + list(source_scripts.glob("*.sh"))
+    scripts = sorted(
+        list(source_scripts.glob("*.py")) + list(source_scripts.glob("*.sh"))
+    )
     for script in scripts:
         if not script.is_file():
             continue
