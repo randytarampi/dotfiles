@@ -178,6 +178,14 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/configure-docker.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-caddy.py",
       "capabilities": [
         "public",
