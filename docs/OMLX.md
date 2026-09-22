@@ -60,7 +60,7 @@ make services-restart
 | `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. |
 | `OMLX_SSD_CACHE_DIR` | `$HOME/.omlx/cache` | Persistent SSD KV-cache directory. |
 | `OMLX_MAX_CONCURRENT_REQUESTS` | `8` | Scheduler concurrency. |
-| `OMLX_MAX_AUDIO_UPLOAD_SIZE` | — | Audio upload limit; use an explicit unit such as `128MB` because oMLX treats unitless values as bytes. |
+| `OMLX_MAX_AUDIO_UPLOAD_SIZE` | — | Audio upload limit; use an explicit unit such as `128MB` because oMLX treats unitless values as bytes. Unitless values are refused at write time (decided 2026-09-22 after the round-1 413 incident) — the writer does not guess whether a legacy number meant bytes or megabytes. |
 | `OMLX_API_KEY` | _(unset)_ | Intentionally unset on deployed machines: with no key oMLX sets
   `skip_api_key_verification` and binds loopback only, so it is reached solely
   through Caddy's `/omlx/*` route. Set it to restore external server aliases +
