@@ -284,6 +284,10 @@ routine; record the reason; restore normal flow immediately after). The
 action-SHA policy is recorded in the §2 table: required/security/deployment
 lanes are pinned; agent-review lanes float by documented design and are the
 enumerated gap.
+**[verified 2026-09-22]** Stage-1 ruleset live: "main history protection"
+(ruleset id 23831217, enforcement active) — deletion + non-fast-forward
+blocked on `refs/heads/main`, bypass actor RepositoryRole admin
+(bypass mode `always`). Pilot PR #7: https://github.com/randytarampi/dotfiles/pull/7.
 
 ## 4. Local-model analysis
 
