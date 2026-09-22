@@ -27,3 +27,22 @@ jobs:
       - uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         with:
           upload: true
+
+  # Stable aggregate check for future branch rules: this job name must never
+  # change (rulesets reference it by name). Gates on every matrix leg's
+  # result instead of coupling branch policy to matrix-generated job names.
+  security-required:
+    name: security/required
+    needs: [analyze]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check aggregate results
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Needs results: $results"
+          if printf '%s' "$results" | grep -qE 'failure|cancelled|skipped'; then
+            echo "security/required: one or more analysis legs did not succeed" >&2
+            exit 1
+          fi
+          echo "security/required: all analysis legs succeeded"
