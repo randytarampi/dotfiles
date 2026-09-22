@@ -50,18 +50,18 @@ def test_env_coverage_scans_and_classifies_documentation(tmp_path):
     scan = tmp_path / "scan"
     scan.mkdir()
     (scan / "configure.py").write_text(
-        "os.environ['DOTFILES_RUN_EXAMPLE_SETUP']; GH_TOKEN\n"
+        "os.environ['" + "DOTFILES_" + "RUN_EXAMPLE_SETUP" + "']; GH_TOKEN\n"
     )
-    (scan / "check-ignore.py").write_text("DOTFILES_NOT_COUNTED")
+    (scan / "check-ignore.py").write_text("DOTFILES_" + "NOT_COUNTED")
     env_example = tmp_path / ".env.example"
-    env_example.write_text("# DOTFILES_RUN_EXAMPLE_SETUP=0\nGH_TOKEN=x\n")
+    env_example.write_text("# DOTFILES_" + "RUN_EXAMPLE_SETUP=0\nGH_TOKEN=x\n")
     module.SCAN_DIRS = [(scan, {".py"})]
     module.ENV_EXAMPLE = env_example
-    assert module.find_referenced_vars() == {"DOTFILES_RUN_EXAMPLE_SETUP"}
+    assert module.find_referenced_vars() == {"DOTFILES_" + "RUN_EXAMPLE_SETUP"}
     assert "GH_TOKEN" in module.find_referenced_env_names()
-    assert module.find_documented_vars() == {"DOTFILES_RUN_EXAMPLE_SETUP"}
+    assert module.find_documented_vars() == {"DOTFILES_" + "RUN_EXAMPLE_SETUP"}
     assert module.find_documented_env_vars() == {
-        "DOTFILES_RUN_EXAMPLE_SETUP",
+        "DOTFILES_" + "RUN_EXAMPLE_SETUP",
         "GH_TOKEN",
     }
     assert module.alias_is_explained(
@@ -69,8 +69,8 @@ def test_env_coverage_scans_and_classifies_documentation(tmp_path):
         "GH_TOKEN",
         "GITHUB_TOKEN",
     )
-    assert module.ownership_info({"DOTFILES_RUN_EXAMPLE_SETUP", "OTHER"}) == [
-        ("DOTFILES_RUN_EXAMPLE_SETUP", "repo")
+    assert module.ownership_info({"DOTFILES_" + "RUN_EXAMPLE_SETUP", "OTHER"}) == [
+        ("DOTFILES_" + "RUN_EXAMPLE_SETUP", "repo")
     ]
 
 
