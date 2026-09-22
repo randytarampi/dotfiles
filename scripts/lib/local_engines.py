@@ -411,29 +411,21 @@ def merge_omlx_settings(existing, environ=None):
         return int(str(value).strip())
 
     def _max_audio_upload_size(value):
-        """Validate and normalize oMLX's audio upload limit for a write."""
+        """Validate oMLX's audio upload limit for a write.
+
+        oMLX interprets a unitless value as BYTES (the round-1 incident:
+        '128' meant 128 bytes and audio uploads failed with 413). We do not
+        reinterpret the user's intent: a unitless value is refused with an
+        actionable error so the file keeps its documented meaning.
+        """
         raw = str(value).strip()
         if re.fullmatch(r"\d+(?:\.\d+)?(?:KB|MB|GB)", raw, re.IGNORECASE):
             return raw
-        if re.fullmatch(r"\d+", raw):
-            # oMLX interprets a unitless value as bytes. Treat legacy numeric
-            # settings as the user's intended MB value while writing, because
-            # tiny values such as 128 bytes make audio uploads fail with 413.
-            if int(raw) < 1:
-                raise ValueError(
-                    "server.max_audio_upload_size must be a positive integer or "
-                    "a value such as 128MB; unitless oMLX values are bytes"
-                )
-            normalized = f"{int(raw)}MB"
-            logger.warning(
-                f"Normalizing unitless server.max_audio_upload_size={value!r} to "
-                f"{normalized}; oMLX treats unitless values as bytes"
-            )
-            return normalized
         raise ValueError(
-            "Invalid server.max_audio_upload_size={!r}; use an integer number "
-            "of MB (for example 128MB), or a value matching "
-            "<number>[KB|MB|GB]. Unitless oMLX values are bytes.".format(value)
+            "Invalid server.max_audio_upload_size={!r}; use a value with an "
+            "explicit unit such as 128MB (numbers matching <number>[KB|MB|GB]). "
+            "Unitless values are refused because oMLX would read them as "
+            "bytes.".format(value)
         )
 
     settings = copy.deepcopy(existing) if isinstance(existing, dict) else {}

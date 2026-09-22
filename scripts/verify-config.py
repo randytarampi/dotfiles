@@ -191,22 +191,17 @@ def validate_omlx_settings(data):
     if not isinstance(server.get("port"), int) or not 1 <= server["port"] <= 65535:
         errors.append("server.port must be an integer from 1 to 65535")
     upload_size = server.get("max_audio_upload_size")
-    if upload_size is not None and not (
-        (
-            isinstance(upload_size, int)
-            and not isinstance(upload_size, bool)
-            and upload_size >= 1
+    if upload_size is not None and not isinstance(upload_size, str):
+        errors.append(
+            "server.max_audio_upload_size must be a string with an explicit unit "
+            "such as 128MB"
         )
-        or (
-            isinstance(upload_size, str)
-            and (
-                OMLX_AUDIO_UPLOAD_SIZE_PATTERN.fullmatch(upload_size.strip())
-                or (upload_size.strip().isdigit() and int(upload_size.strip()) >= 1)
-            )
-        )
+    elif isinstance(upload_size, str) and not OMLX_AUDIO_UPLOAD_SIZE_PATTERN.fullmatch(
+        upload_size.strip()
     ):
         errors.append(
-            "server.max_audio_upload_size must be an integer or a value such as 128MB"
+            "server.max_audio_upload_size must be a value with an explicit unit "
+            "such as 128MB; unitless values are refused (oMLX would read them as bytes)"
         )
     model_dirs = data.get("model", {}).get("model_dirs")
     if not isinstance(model_dirs, list) or not all(
@@ -257,12 +252,13 @@ def validate_omlx_settings(data):
 
 
 def omlx_settings_warnings(data):
-    """Return non-fatal warnings for values the writer would normalize."""
+    """Return non-fatal warnings for values the writer would refuse."""
     value = data.get("server", {}).get("max_audio_upload_size")
     if isinstance(value, int) or (isinstance(value, str) and value.strip().isdigit()):
         return [
             "server.max_audio_upload_size is unitless; oMLX treats unitless values as bytes "
-            "and the next managed write will normalize this to an explicit MB value"
+            "and the next managed write will refuse this value — set an explicit unit "
+            "such as 128MB"
         ]
     return []
 

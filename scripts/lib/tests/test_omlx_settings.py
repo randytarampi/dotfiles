@@ -15,13 +15,11 @@ def _load_verify_config():
     return module
 
 
-def test_unitless_audio_upload_size_is_normalized_with_warning(caplog):
-    with caplog.at_level("WARNING"):
-        settings = local_engines.merge_omlx_settings(
+def test_unitless_audio_upload_size_is_refused_as_bytes_ambiguous():
+    with pytest.raises(ValueError, match="Unitless"):
+        local_engines.merge_omlx_settings(
             {"server": {"max_audio_upload_size": "128"}}, {}
         )
-    assert settings["server"]["max_audio_upload_size"] == "128MB"
-    assert "unitless" in caplog.text
 
 
 def test_valid_audio_upload_size_passes_through():
