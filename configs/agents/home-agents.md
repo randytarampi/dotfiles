@@ -44,6 +44,16 @@ For changes requiring exploration of unknown scope, delegate bounded discovery f
 
 Never run two write-capable subagent lanes that commit concurrently to one repository, even with disjoint file scopes: git staging and HEAD are process-global, so parallel commits race — work is lost to staging conflicts, finished edits strand in stashes, and commit boundaries cross-contaminate. Dispatch committing lanes one at a time, serialize their commits from the orchestrator, or isolate parallel writers in separate git worktrees.
 
+Dispatch background specialists before ending a turn when user input may arrive: a foreground or in-turn dispatch loses in-flight specialist work when the turn is interrupted. After an interruption, verify the repository's tip and dirty state directly before re-dispatching (a specialist's stashes and partial commits are recoverable only after verification — three incidents on 2026-09-22).
+
+### Third-party tool claims
+
+Before building on a third-party tool's documented behaviour (env vars, config keys, CLI flags), verify it locally with the tool's own introspection (`--help`, `dump-config`, `config show`, a scratch-directory probe) — research claims can be wrong or version-stale, and a two-minute probe beats a wrong implementation (2026-09-22: chezmoi silently ignores `CHEZMOI_CONFIG`; qlty silently ignores `qlty.toml` `[[plugin]] exclude_patterns` — bandit scoping belongs in `.bandit`, which the driver actually reads).
+
+### GitHub rulesets API notes
+
+- Verified live 2026-09-22 (dotfiles rulesets 23831217/23837328): `rules` and `bypass_actors` must be real JSON arrays in the rulesets REST call — `-F 'key[0]=...'` form-encoding yields 422 "not of type array"; `required_status_checks` entries must OMIT `integration_id` entirely (explicit `null` returns 422 "data matches no possible input"); the job-level `permissions` key is valid only at job level in workflow YAML, not step level (actionlint catches it); `qlty config show` reveals a plugin's actual driver invocation (e.g. bandit reads `--ini .bandit`).
+
 ### Planning scope
 
 When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront — not just the obvious ones. If a plan covers some tools but not others, the user will ask about the missing ones. Enumerate all configured tools (OpenCode, Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Pi, Junie, Cline, Cortex, Antigravity) in the initial plan rather than discovering them through rejection cycles.
