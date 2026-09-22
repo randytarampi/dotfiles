@@ -171,9 +171,9 @@
     },
     {
       "path": "scripts/configure-aws.py",
-      "capabilities": ["public", "mutates", "backups"],
+      "capabilities": ["public", "mutates"],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
+      "accepted_flags": ["--help", "--dry-run"],
       "positional_operand": null,
       "child_scripts": []
     },
