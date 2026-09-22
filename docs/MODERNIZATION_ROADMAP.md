@@ -264,7 +264,7 @@ fleet-significant and deserve staged governance.
 3. `[completed-in-this-pass 2026-09-22]` Required-check enforcement: the
     exact check context names were observed on PR #7 (`ci/required`,
     `security/required`) and the ruleset now requires them (ruleset id
-    23831218, active): pull requests required before merge on
+    23837328, active): pull requests required before merge on
     `refs/heads/main`, status checks `ci/required` + `security/required`
     mandatory, admin bypass retained as break-glass only. Zero approving
     reviews (a solo operator cannot independently approve); agent review
@@ -277,7 +277,7 @@ fleet-significant and deserve staged governance.
 
 **Decision record (2026-09-22, final):** the pilot proved the aggregates and
 the PR-first flow on PR #7; the transition is now complete — **PR-required is
-the rule, not the habit** (ruleset id 23831218). Break-glass semantics are
+the rule, not the habit** (ruleset id 23837328). Break-glass semantics are
 unchanged: admin bypass only, never routine; record the reason; restore
 normal flow immediately after. The action-SHA policy is recorded in the §2
 table: required/security/deployment lanes are pinned; agent-review lanes
