@@ -1,0 +1,5 @@
+# bandit configuration for qlty's bandit plugin (driver: bandit --ini .bandit).
+# Test files are excluded: B101 asserts are pytest's assertion mechanism, and
+# B404/B603 subprocess use in tests is intentional mocking, not production risk.
+[bandit]
+exclude = scripts/lib/tests
