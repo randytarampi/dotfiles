@@ -1,0 +1,5 @@
+# Keep Qlty's plugin configuration minimal and opt out of release checks.
+# Mirrors me/qlty.toml — the fleet-verified pattern (OIDC coverage upload,
+# credential-free).
+[plugin]
+release = false
