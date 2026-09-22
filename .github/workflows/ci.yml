@@ -183,3 +183,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+
+  # Stable aggregate check for future branch rules: this job name must never
+  # change (rulesets reference it by name). It gates on every predecessor's
+  # result — unlike finish, whose if: always() makes its success meaningless
+  # as a required signal.
+  ci-required:
+    name: ci/required
+    needs: [verify, deploy, finish]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check aggregate results
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Needs results: $results"
+          if printf '%s' "$results" | grep -qE 'failure|cancelled|skipped'; then
+            echo "ci/required: one or more required jobs did not succeed" >&2
+            exit 1
+          fi
+          echo "ci/required: all required jobs succeeded"
