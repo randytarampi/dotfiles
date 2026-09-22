@@ -486,7 +486,7 @@ Packages available on both platforms by category:
 | Session Manager | `session-manager-plugin` | `Amazon.SessionManagerPlugin` |
 | Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
 | Ollama | `ollama-app` (cask) | `Ollama.Ollama` |
-| oMLX | `jundot/omlx/omlx` (Apple Silicon/macOS only) | — |
+| oMLX | manual install (tap retired upstream; see docs/OMLX.md) | — |
 | OpenCode | `opencode-desktop` (cask) / `anomalyco/tap/opencode` | `SST.OpenCodeDesktop` / `SST.opencode` |
 | Codex | `codex` (cask) | `OpenAI.Codex` |
 | VS Code | `visual-studio-code` (cask) | `Microsoft.VisualStudioCode` |
