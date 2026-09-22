@@ -43,7 +43,7 @@ if [[ -z "$default_version" || "$default_version" == "N/A" ]]; then
   exit 1
 fi
 printf 'NVMUPD default=%s\\n' "$default_version"
-other_versions="$(nvm ls --no-colors 2>/dev/null | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | grep -v "^$default_version$" | sort -rV | uniq)"
+other_versions="$(nvm ls --no-colors 2>/dev/null | grep -v 'N/A' | grep -v '\\->' | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | grep -v "^$default_version$" | sort -rV | uniq)"
 printf '%s\\n' 'NVMUPD lane=default status=ok detail=dry-run'
 for version in $other_versions; do
   printf 'NVMUPD lane=propagate:%s status=ok detail=dry-run\\n' "$version"
@@ -66,8 +66,7 @@ if [[ -z "$default_version" || "$default_version" == "N/A" ]]; then
 fi
 printf 'NVMUPD default=%s\\n' "$default_version"
 other_versions="$(nvm ls --no-colors 2>/dev/null | \\
-  grep -v -E '(^|[[:space:]])default ->|v[0-9]+\\.[0-9]+\\.[0-9]+ -> system' | \\
-  grep -v 'N/A' | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | \\
+  grep -v 'N/A' | grep -v '\\->' | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | \\
   grep -v "^$default_version$" | sort -rV | uniq)"
 if [[ "{dry_flag}" == 1 ]]; then
   printf '%s\\n' 'NVMUPD lane=default status=ok detail=dry-run'
