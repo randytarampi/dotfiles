@@ -314,6 +314,17 @@ else
   info "DOTFILES_RUN_AWS_CONFIG_SETUP='${DOTFILES_RUN_AWS_CONFIG_SETUP:-0}' — skipping AWS CLI configuration"
 fi
 
+# 1.2. Docker CLI config baseline (non-secret; credentials remain user-owned)
+if ! step_skipped docker && [[ "${DOTFILES_RUN_DOCKER_CONFIG_SETUP:-0}" == "1" ]]; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    run_step "Docker CLI configuration" python3 "$SCRIPT_DIR/configure-docker.py" --dry-run
+  else
+    run_step "Docker CLI configuration" python3 "$SCRIPT_DIR/configure-docker.py"
+  fi
+else
+  info "DOTFILES_RUN_DOCKER_CONFIG_SETUP='${DOTFILES_RUN_DOCKER_CONFIG_SETUP:-0}' — skipping Docker CLI configuration"
+fi
+
 # 1.5. Refresh Junie model profiles (models-only; dir scaffolding handled by run_onchange_06)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Junie model refresh (dry-run mode)"
