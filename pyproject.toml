@@ -29,7 +29,11 @@ concurrency = ["multiprocessing"]
 [tool.coverage.report]
 # Ratchet — raise as coverage grows. Baseline remeasured with subprocess
 # coverage enabled and test modules omitted from measurement.
-fail_under = 25
+# 2026-09-22: 33% measured (branch-aware pytest; Coveralls reports 33.71%
+# line coverage). Floor 27 keeps ~6 points of headroom; 30+ is gated on
+# representative tests (orchestration, failed/partial deploy paths), not
+# wrapper-test padding.
+fail_under = 27
 
 [tool.black]
 # Cap inferred targets: requires-python >=3.10 otherwise makes black infer
