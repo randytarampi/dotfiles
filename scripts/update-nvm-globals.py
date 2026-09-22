@@ -4,6 +4,7 @@
 import argparse
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -19,44 +20,113 @@ import logger  # noqa: E402
 VERSION_RE = re.compile(r"v\d+\.\d+\.\d+")
 
 
-def _brew_prefix():
-    try:
-        result = subprocess.run(
-            ["brew", "--prefix"], capture_output=True, text=True, check=True
-        )
-        prefix = result.stdout.strip()
-        if prefix:
-            return Path(prefix)
-    except (OSError, subprocess.CalledProcessError):
-        pass
-    return next(
-        (
-            Path(candidate)
-            for candidate in ("/opt/homebrew", "/usr/local")
-            if Path(candidate).exists()
-        ),
-        None,
-    )
-
-
 def _nvm_script():
     nvm_dir = Path.home() / ".nvm"
-    local_script = nvm_dir / "nvm.sh"
-    if local_script.is_file():
-        return local_script
-    prefix = _brew_prefix()
-    candidate = prefix / "opt/nvm/nvm.sh" if prefix else None
-    return candidate if candidate and candidate.is_file() else None
-
-
-def _nvm(args, *, check=False):
-    script = _nvm_script()
-    if script is None:
-        return subprocess.CompletedProcess(args, 127, "", "nvm.sh not found")
-    command = f'source "{script}" && nvm {" ".join(args)}'
-    return subprocess.run(
-        ["bash", "-c", command], capture_output=True, text=True, check=check
+    candidates = [nvm_dir / "nvm.sh"]
+    candidates.extend(
+        Path(prefix) / "opt/nvm/nvm.sh" for prefix in ("/opt/homebrew", "/usr/local")
     )
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
+
+
+def _compose_script(script, *, dry_run=False):
+    if dry_run:
+        return f"""set +e
+source {shlex.quote(str(script))}
+if ! command -v nvm >/dev/null 2>&1; then
+  printf '%s\\n' 'NVMUPD fatal=nvm-not-found'
+  exit 1
+fi
+default_version="$(nvm version default 2>/dev/null)"
+if [[ -z "$default_version" || "$default_version" == "N/A" ]]; then
+  printf '%s\\n' 'NVMUPD fatal=no-default'
+  exit 1
+fi
+printf 'NVMUPD default=%s\\n' "$default_version"
+other_versions="$(nvm ls --no-colors 2>/dev/null | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | grep -v "^$default_version$" | sort -rV | uniq)"
+printf '%s\\n' 'NVMUPD lane=default status=ok detail=dry-run'
+for version in $other_versions; do
+  printf 'NVMUPD lane=propagate:%s status=ok detail=dry-run\\n' "$version"
+done
+printf '%s\\n' 'NVMUPD lane=system status=ok detail=dry-run'
+printf '%s\\n' 'NVMUPD lane=final status=ok detail=dry-run'
+exit 0
+"""
+    dry_flag = "1" if dry_run else "0"
+    return f"""set +e
+source {shlex.quote(str(script))}
+if ! command -v nvm >/dev/null 2>&1; then
+  printf '%s\\n' 'NVMUPD fatal=nvm-not-found'
+  exit 1
+fi
+default_version="$(nvm version default 2>/dev/null)"
+if [[ -z "$default_version" || "$default_version" == "N/A" ]]; then
+  printf '%s\\n' 'NVMUPD fatal=no-default'
+  exit 1
+fi
+printf 'NVMUPD default=%s\\n' "$default_version"
+other_versions="$(nvm ls --no-colors 2>/dev/null | \\
+  grep -v -E '(^|[[:space:]])default ->|v[0-9]+\\.[0-9]+\\.[0-9]+ -> system' | \\
+  grep -v 'N/A' | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | \\
+  grep -v "^$default_version$" | sort -rV | uniq)"
+if [[ "{dry_flag}" == 1 ]]; then
+  printf '%s\\n' 'NVMUPD lane=default status=ok detail=dry-run'
+  for version in $other_versions; do
+    printf 'NVMUPD lane=propagate:%s status=ok detail=dry-run\\n' "$version"
+  done
+  printf '%s\\n' 'NVMUPD lane=system status=ok detail=dry-run'
+  printf '%s\\n' 'NVMUPD lane=final status=ok detail=dry-run'
+  exit 0
+fi
+
+if nvm use default >/dev/null 2>&1; then
+  if command -v npm >/dev/null 2>&1 && npm update -g >/dev/null 2>&1; then
+    printf '%s\\n' 'NVMUPD lane=default status=ok detail=updated'
+  else
+    printf '%s\\n' 'NVMUPD lane=default status=warn detail=npm-update-failed'
+  fi
+else
+  printf '%s\\n' 'NVMUPD lane=default status=warn detail=nvm-use-failed'
+fi
+for version in $other_versions; do
+  if ! nvm use "$version" >/dev/null 2>&1; then
+    printf 'NVMUPD lane=propagate:%s status=warn detail=nvm-use-failed\\n' "$version"
+    continue
+  fi
+  if nvm reinstall-packages default >/dev/null 2>&1; then
+    printf 'NVMUPD lane=propagate:%s status=ok detail=reinstalled\\n' "$version"
+  else
+    printf 'NVMUPD lane=propagate:%s status=warn detail=reinstall-failed\\n' "$version"
+  fi
+done
+
+system_npm=""
+if command -v brew >/dev/null 2>&1; then
+  brew_prefix="$(brew --prefix 2>/dev/null)"
+  [[ -x "$brew_prefix/bin/npm" ]] && system_npm="$brew_prefix/bin/npm"
+fi
+if [[ -z "$system_npm" ]]; then
+  for prefix in /opt/homebrew /usr/local; do
+    if [[ -x "$prefix/bin/npm" ]]; then system_npm="$prefix/bin/npm"; break; fi
+  done
+fi
+if [[ -n "$system_npm" ]]; then
+  system_node="${{system_npm%/*}}/node"
+  system_version="$($system_node --version 2>/dev/null || printf unknown)"
+  if "$system_npm" update -g >/dev/null 2>&1; then
+    printf 'NVMUPD lane=system status=ok detail=%s\\n' "$system_version"
+  else
+    printf 'NVMUPD lane=system status=warn detail=npm-update-failed\\n'
+  fi
+else
+  printf '%s\\n' 'NVMUPD lane=system status=ok detail=none-found'
+fi
+if nvm use default >/dev/null 2>&1; then
+  printf '%s\\n' 'NVMUPD lane=final status=ok detail=default-restored'
+else
+  printf '%s\\n' 'NVMUPD lane=final status=warn detail=default-restore-failed'
+fi
+"""
 
 
 def _installed_versions(default_version, listing):
@@ -77,97 +147,46 @@ def _installed_versions(default_version, listing):
     )
 
 
-def _system_npm():
-    prefix = _brew_prefix()
-    candidates = [prefix / "bin/npm"] if prefix else []
-    candidates.extend(
-        Path(path) / "bin/npm" for path in ("/opt/homebrew", "/usr/local")
-    )
-    return next(
-        (path for path in candidates if path.is_file() and os.access(path, os.X_OK)),
-        None,
-    )
-
-
 def update_globals(dry_run=False):
-    if not dry_run:
-        Path.home().joinpath(".nvm").mkdir(parents=True, exist_ok=True)
-    probe = _nvm(["version", "default"])
-    if probe.returncode == 127:
+    script = _nvm_script()
+    if script is None:
         logger.error(
             "nvm not found. Ensure NVM_DIR=%s and nvm.sh is sourced.",
             Path.home() / ".nvm",
         )
         return 1
-    default_version = probe.stdout.strip()
-    if not default_version or default_version == "N/A":
-        logger.error("No nvm default version set. Run: nvm alias default <version>")
+    try:
+        result = subprocess.run(
+            ["bash", "-c", _compose_script(script, dry_run=dry_run)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        logger.warning("Could not run nvm update shell: %s", error)
+        return 0
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+    markers = re.findall(r"NVMUPD ([^\n]+)", output)
+    for marker in markers:
+        fields = dict(item.split("=", 1) for item in marker.split() if "=" in item)
+        lane = fields.get("lane", "unknown")
+        status = fields.get("status")
+        detail = fields.get("detail", "")
+        if status == "warn":
+            logger.warning("nvm lane %s warning: %s", lane, detail)
+        elif status == "ok":
+            logger.info("nvm lane %s: %s", lane, detail)
+    if "fatal=" in output:
+        logger.error(
+            "nvm update failed: %s",
+            output.strip().split("fatal=", 1)[1].splitlines()[0],
+        )
         return 1
-
-    logger.info("Default node version: %s", default_version)
-    versions_result = _nvm(["ls", "--no-colors"])
-    other_versions = _installed_versions(default_version, versions_result.stdout)
-    logger.info("Updating global packages on %s...", default_version)
-    if not dry_run:
-        _nvm(["use", "default"])
-        result = subprocess.run(["npm", "update", "-g"], check=False)
-        if result.returncode:
-            logger.warning("npm update -g on %s had failures", default_version)
-
-    if other_versions:
-        logger.info(
-            "Propagating packages from %s to other versions...", default_version
-        )
-        for version in other_versions:
-            logger.info(
-                "Reinstalling packages on %s from %s...", version, default_version
-            )
-            if dry_run:
-                continue
-            if _nvm(["use", version]).returncode:
-                logger.warning("nvm use %s failed — skipping", version)
-                continue
-            if _nvm(["reinstall-packages", "default"]).returncode:
-                logger.warning("reinstall-packages on %s had failures", version)
-    else:
-        logger.info(
-            "Only one installed version (%s). Nothing to propagate.", default_version
-        )
-
-    system_npm = _system_npm()
-    system_version = "unknown"
-    if system_npm:
-        node = system_npm.parent / "node"
-        try:
-            system_version = (
-                subprocess.run(
-                    [str(node), "--version"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                ).stdout.strip()
-                or "unknown"
-            )
-        except OSError:
-            pass
-        logger.info("Updating global packages on system node (%s)...", system_version)
-        if (
-            not dry_run
-            and subprocess.run(
-                [str(system_npm), "update", "-g"], check=False
-            ).returncode
-        ):
-            logger.warning("npm update -g on system node had failures")
-    else:
-        logger.info("No system (Homebrew) node found — skipping")
-
-    if not dry_run:
-        _nvm(["use", "default"])
+    if result.returncode:
+        logger.error("nvm update shell failed with exit code %s", result.returncode)
+        return 1
     logger.info(
-        "Global packages updated across all node versions.\n\nDefault: %s\nnvm versions: %s\nSystem node: %s\n\nUpdate script complete!",
-        default_version,
-        ", ".join(other_versions),
-        system_version if system_npm else "none found",
+        "Global packages updated across all node versions.\n\nUpdate script complete!"
     )
     return 0
 
