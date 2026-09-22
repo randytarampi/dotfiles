@@ -262,15 +262,15 @@ fleet-significant and deserve staged governance.
     Zero workflow prerequisites; safe regardless of push flow; imports cleanly
     into the Pulumi governance stack later.
 3. `[completed-in-this-pass 2026-09-22]` Required-check enforcement: the
-   exact check context names were observed on PR #7 (`ci/required`,
-   `security/required`) and the ruleset now requires them (ruleset id
-   23831218, active): pull requests required before merge on
-   `refs/heads/main`, status checks `ci/required` + `security/required`
-   mandatory, admin bypass retained as break-glass only. Zero approving
-   reviews (a solo operator cannot independently approve); agent review
-   workflows are never required checks; direct push to `main` is no longer
-   the default flow — use PRs, with admin break-glass documented in the
-   decision record below.
+    exact check context names were observed on PR #7 (`ci/required`,
+    `security/required`) and the ruleset now requires them (ruleset id
+    23831218, active): pull requests required before merge on
+    `refs/heads/main`, status checks `ci/required` + `security/required`
+    mandatory, admin bypass retained as break-glass only. Zero approving
+    reviews (a solo operator cannot independently approve); agent review
+    workflows are never required checks; direct push to `main` is no longer
+    the default flow — use PRs, with admin break-glass documented in the
+    decision record below.
 4. `[completed-in-this-pass]` Dependabot vulnerability alerts and security
     fixes enabled (version updates already configured; auto-merge stays off
     until the dependency policy lands).

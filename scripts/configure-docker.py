@@ -14,9 +14,9 @@ LIB_DIR = SCRIPT_DIR / "lib"
 if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
-import logger
-from cli_helpers import add_common_args
-from env import load_env
+import logger  # noqa: E402 — lib imports follow the house sys.path bootstrap
+from cli_helpers import add_common_args  # noqa: E402
+from env import load_env  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

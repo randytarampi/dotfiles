@@ -3,3 +3,11 @@
 # credential-free).
 [plugin]
 release = false
+
+# bandit's assert/subprocess findings are false positives in pytest suites:
+# asserts are the assertion mechanism (B101), and test subprocess mocking is
+# intentional (B404/B603). Scope bandit to production scripts only.
+[[plugin]]
+name = "bandit"
+mode = "blocker"
+exclude_patterns = ["scripts/lib/tests/**"]
