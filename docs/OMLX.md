@@ -35,6 +35,16 @@ tap "jundot/omlx", "https://github.com/jundot/omlx"
 brew "jundot/omlx/omlx"
 ```
 
+History: the tap and its upstream repository were temporarily removed
+upstream in September 2026 (a moderation takedown, later reversed); the
+formula briefly lived outside the Brewfile during the removal. As of
+2026-09-22 the repository is restored and the Brewfile entry is active again.
+If the tap ever disappears again, the installed bundle persists in
+`/opt/homebrew/Cellar/omlx` and reinstall/upgrade is a manual step
+(see the repository's release page; the service plist is
+`~/Library/LaunchAgents/sh.brew.omlx.plist`, binary
+`/opt/homebrew/opt/omlx/bin/omlx`).
+
 `run_onchange_29-configure-omlx.sh.tmpl` writes and merges
 `~/.omlx/settings.json`, then starts the service with `brew services`. The
 persisted settings use the nested oMLX schema:
