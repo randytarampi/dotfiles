@@ -37,14 +37,14 @@ jobs:
           cache: poetry
       - name: Install macOS tooling
         if: runner.os == 'macOS'
-        run: brew install actionlint shellcheck shfmt chezmoi
+        run: brew install actionlint bats-core shellcheck shfmt chezmoi
       - name: Install Ubuntu tooling
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           # actionlint is not in Ubuntu's apt repositories — install the pinned
           # upstream release binary instead.
-          sudo apt-get install -y shellcheck shfmt
+           sudo apt-get install -y bats shellcheck shfmt
           mkdir -p "$HOME/bin"
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 "$HOME/bin"
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
@@ -63,6 +63,8 @@ jobs:
         run: make ci-verify
       - name: Python tests
         run: make test
+      - name: Shell tests
+        run: make test-shell
       - name: Upload coverage
         uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
         with:
