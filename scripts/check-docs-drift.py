@@ -43,15 +43,10 @@ def looks_like_path(value):
         )
     ):
         return False
-    return "/" in value or Path(value).suffix in {
-        ".md",
-        ".py",
-        ".sh",
-        ".json",
-        ".yaml",
-        ".yml",
-        ".toml",
-    }
+    # Bare filenames in prose/code are commonly command names or paths relative
+    # to a shell variable; only repository-relative paths with a directory (or
+    # root Markdown documents) are unambiguous here.
+    return "/" in value or Path(value).suffix == ".md"
 
 
 def extract_references(document):

@@ -11,7 +11,7 @@ def load_script():
     return module
 
 
-def test_show_categories_reports_effective_state(tmp_path, monkeypatch, capsys):
+def test_show_categories_reports_effective_state(tmp_path, monkeypatch, capsys, caplog):
     module = load_script()
     categories = tmp_path / "categories.yaml"
     categories.write_text("categories:\n  dev_cli: true\n  gaming: false\n")
@@ -22,4 +22,4 @@ def test_show_categories_reports_effective_state(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "dev_cli" in output
     assert "gaming" in output
-    assert "1/2 categories active" in output
+    assert "1/2 categories active" in caplog.text
