@@ -54,6 +54,16 @@ def test_malformed_reported(tmp_path):
     assert path.read_text() == "not json\n"
 
 
+def test_scalar_and_list_roots_are_rejected_without_clobbering(tmp_path):
+    path = tmp_path / ".docker/config.json"
+    path.parent.mkdir()
+    for content in ("[]", '"scalar"'):
+        path.write_text(content)
+        result = run(tmp_path, DOTFILES_RUN_DOCKER_CONFIG_SETUP=1)
+        assert result.returncode == 1
+        assert path.read_text() == content
+
+
 def test_omits_creds_store_without_helper(tmp_path):
     result = run(tmp_path, DOTFILES_RUN_DOCKER_CONFIG_SETUP=1)
     assert result.returncode == 0

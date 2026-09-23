@@ -320,9 +320,9 @@ requires a controlled benchmark.
 
 ## 5. Residual risks and promotion gates
 
-1. **Windows promotion:** the probe must first produce actionable failures and
-   bounded fixes; only then should `continue-on-error` be removed.
-   [.github/workflows/ci.yml]
+1. **Windows promotion:** promoted to required after three consecutive green
+    runs; the remaining Windows extension is the deliberately Unix-gated doctor
+    check. [.github/workflows/ci.yml; item 1]
 2. **Nightly promotion:** keep allow-failure until prerequisites, artefacts and
    postconditions make failures meaningful. PI, MOZART and CODEGRAPH package
    installation are not silently promoted into a configuration-only lane.
