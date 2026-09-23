@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
         description="Seed a non-secret AWS CLI configuration baseline",
         allow_abbrev=False,
     )
-    add_common_args(parser, no_backup=True)
+    add_common_args(parser)
     return parser.parse_args()
 
 

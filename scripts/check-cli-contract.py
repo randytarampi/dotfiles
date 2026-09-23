@@ -14,6 +14,7 @@ Exit 1: violations found.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -185,6 +186,12 @@ def smoke_test_help(entry):
         marker in (result.stdout + result.stderr).lower() for marker in HELP_MARKERS
     ):
         violations.append(f"{label}: --help output missing usage/options marker")
+    if not violations:
+        help_output = result.stdout + result.stderr
+        actual = set(re.findall(r"(?<![\w-])--[a-zA-Z0-9][\w-]*", help_output))
+        missing = actual - accepted
+        for flag in sorted(missing):
+            violations.append(f"{label}: parser accepts undeclared flag {flag}")
 
     return violations
 

@@ -101,6 +101,7 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
+        "--local-fallback-preset",
         "--preset",
         "--output",
         "--slim-file",
@@ -139,6 +140,8 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
+        "--category-model",
+        "--role-model",
         "--skip",
         "--category-model",
         "--local-fallback-placeholder",
@@ -152,6 +155,8 @@
       "positional_operand": null,
       "child_scripts": [
         "install-npm-brewfile-packages.sh",
+        "configure-aws.py",
+        "configure-docker.py",
         "configure-secrets.py",
         "configure-jetbrains-ai.py",
         "configure-mcps.py",
@@ -411,6 +416,7 @@
         "--dry-run",
         "--show-secrets",
         "--no-backup",
+        "--local-fallback-preset",
         "--role-model",
         "--local-fallback-role",
         "--category-model",
@@ -427,7 +433,8 @@
         "mutates",
         "tier_selector",
         "scope_selector",
-        "orchestrates"
+        "orchestrates",
+        "backups"
       ],
       "enforcement": "strict",
       "failure_policy": "fail_fast",
@@ -821,6 +828,8 @@
         "--local-fallback-placeholder",
         "--local-fallback-role",
         "--local-fallback-preset",
+        "--category-model",
+        "--role-model",
         "--min-reasoning-embedding",
         "--ollama-base-url"
       ],
@@ -846,7 +855,6 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup",
         "--workspace-root",
         "--steps",
         "--skip",
