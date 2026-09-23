@@ -44,3 +44,17 @@ def test_antigravity_gate_off(monkeypatch):
     with mock.patch.object(module.subprocess, "run") as run:
         assert module.install_antigravity_acp() == 0
         run.assert_not_called()
+
+
+def test_antigravity_skips_intel_mac(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP", "1")
+    monkeypatch.setattr(module, "sys", mock.Mock(platform="darwin"))
+    monkeypatch.setattr(module.platform, "machine", lambda: "x86_64")
+    assert module.install_antigravity_acp() == 0
+
+
+def test_antigravity_skips_linux_arm64(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP", "1")
+    monkeypatch.setattr(module, "sys", mock.Mock(platform="linux"))
+    monkeypatch.setattr(module.platform, "machine", lambda: "arm64")
+    assert module.install_antigravity_acp() == 0
