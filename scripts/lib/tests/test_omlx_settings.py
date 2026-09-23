@@ -68,3 +68,17 @@ def test_read_only_check_flags_unitless_and_accepts_missing_or_suffixed():
         "unitless values are refused" in error
         for error in verify.validate_omlx_settings(unitless)
     )
+
+
+def test_read_only_check_rejects_non_object_root_and_sections():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[3] / "scripts" / "verify-config.py"
+    spec = importlib.util.spec_from_file_location("verify_config_guards", path)
+    assert spec is not None and spec.loader is not None
+    verify = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verify)
+    assert "root must be a JSON object" in verify.validate_omlx_settings([])
+    errors = verify.validate_omlx_settings({"server": []})
+    assert any("server must be a JSON object" in error for error in errors)
