@@ -24,7 +24,7 @@ def clean_target(target):
     """Return a local link target, or None for external/non-file targets."""
     target = target.strip().strip("<>")
     target = target.split("#", 1)[0].split("?", 1)[0]
-    if not target or target.startswith(("#", "/", "~")):
+    if not target or target.startswith(("#", "/", "~", "--")):
         return None
     if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith("//"):
         return None
@@ -46,7 +46,9 @@ def looks_like_path(value):
     # Bare filenames in prose/code are commonly command names or paths relative
     # to a shell variable; only repository-relative paths with a directory (or
     # root Markdown documents) are unambiguous here.
-    return "/" in value or Path(value).suffix == ".md"
+    return (
+        "/" in value and not value.endswith(".env.local") or Path(value).suffix == ".md"
+    )
 
 
 def extract_references(document):
