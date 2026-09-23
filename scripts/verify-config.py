@@ -185,7 +185,16 @@ def check_acp_agents(config):
 def validate_omlx_settings(data):
     """Return schema violations for managed oMLX settings values."""
     errors = []
-    server = data.get("server", {})
+    if not isinstance(data, dict):
+        return ["oMLX settings root must be a JSON object"]
+    sections = {}
+    for name in ("server", "model", "memory", "scheduler"):
+        value = data.get(name, {})
+        if not isinstance(value, dict):
+            errors.append(f"{name} must be a JSON object")
+            value = {}
+        sections[name] = value
+    server = sections["server"]
     if not isinstance(server.get("host"), str):
         errors.append("server.host must be a string")
     if not isinstance(server.get("port"), int) or not 1 <= server["port"] <= 65535:
@@ -203,19 +212,19 @@ def validate_omlx_settings(data):
             "server.max_audio_upload_size must be a value with an explicit unit "
             "such as 128MB; unitless values are refused (oMLX would read them as bytes)"
         )
-    model_dirs = data.get("model", {}).get("model_dirs")
+    model_dirs = sections["model"].get("model_dirs")
     if not isinstance(model_dirs, list) or not all(
         isinstance(value, str) for value in model_dirs
     ):
         errors.append("model.model_dirs must be a list of strings")
-    memory = data.get("memory", {})
+    memory = sections["memory"]
     if memory.get("prefill_memory_guard") is not False and memory.get(
         "memory_guard_tier"
     ) not in {"safe", "balanced", "aggressive"}:
         errors.append(
             "memory.memory_guard_tier must be safe, balanced, aggressive, or absent when prefill is false (OMLX_MEMORY_GUARD)"
         )
-    scheduler = data.get("scheduler", {})
+    scheduler = sections["scheduler"]
     if (
         not isinstance(scheduler.get("max_concurrent_requests"), int)
         or scheduler["max_concurrent_requests"] < 1
@@ -455,6 +464,12 @@ def main():
                 )
                 exit_code = 1
             else:
+                if not isinstance(zones_data, dict):
+                    print(
+                        f"  ✗ ddns-route53 zones config: root must be a JSON object ({zones_config_path})"
+                    )
+                    exit_code = 1
+                    zones_data = {}
                 zones = zones_data.get("zones", [])
                 if not isinstance(zones, list):
                     print(
