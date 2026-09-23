@@ -18,6 +18,13 @@ DOCUMENTS = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "README.md")
 BACKTICK_PATTERN = re.compile(r"`([^`]+)`")
 MARKDOWN_LINK_PATTERN = re.compile(r"!?(?:\[[^]]*\])\(([^)]+)\)")
 DOC_REFERENCE_PATTERN = re.compile(r"(?:^|/)docs/([^/\s)`#?]+\.md)(?:[#?]|$)")
+# Paths that exist only on machines with gates enabled (generated at runtime,
+# gitignored): a fresh CI checkout cannot verify them, so references to them
+# are checked for existence on the authoring machine instead of here.
+GENERATED_PATHS = (
+    ".opencode/.env",
+    "configs/opencode/acp-agents.json",
+)
 
 
 def clean_target(target):
@@ -111,7 +118,14 @@ def main():
         for target, reference_type in extract_references(document):
             references.add(target)
             resolved = resolve_reference(target)
-            if resolved is None or not resolved.exists():
+            if resolved is not None and resolved.exists():
+                logger.info("Verified %s reference: %s", reference_type, target)
+            elif str(target).replace("./", "") in GENERATED_PATHS:
+                logger.info(
+                    "Generated-path reference (exists on gated machines): %s",
+                    target,
+                )
+            elif resolved is None or not resolved.exists():
                 logger.error(
                     "%s references missing path: %s (%s)",
                     document.relative_to(REPO_ROOT),
