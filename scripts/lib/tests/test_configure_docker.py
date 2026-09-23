@@ -33,7 +33,6 @@ def test_creates_baseline(tmp_path):
     assert json.loads((tmp_path / ".docker/config.json").read_text()) == {
         "auths": {},
         "credsStore": "desktop",
-        "currentContext": "default",
     }
 
 
@@ -60,5 +59,4 @@ def test_omits_creds_store_without_helper(tmp_path):
     assert result.returncode == 0
     assert json.loads((tmp_path / ".docker/config.json").read_text()) == {
         "auths": {},
-        "currentContext": "default",
     }

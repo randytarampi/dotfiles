@@ -31,8 +31,10 @@ def parse_args() -> argparse.Namespace:
 def validate_existing(path: Path) -> None:
     try:
         with path.open(encoding="utf-8") as handle:
-            json.load(handle)
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
+            content = json.load(handle)
+            if not isinstance(content, dict):
+                raise ValueError("root must be a JSON object")
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as exc:
         logger.error(
             "Docker config is malformed and was not changed: %s (%s)", path, exc
         )
@@ -68,7 +70,7 @@ def main() -> None:
         logger.info(
             "docker-credential-desktop is unavailable; omitting credsStore from Docker config"
         )
-    content["currentContext"] = "default"
+    # Docker Desktop manages contexts; writing "default" can select the wrong socket.
 
     if args.dry_run:
         logger.info("Would write Docker config: %s", path)
