@@ -25,6 +25,7 @@ jobs:
       # mode invokes poetry to derive cache keys, so install it first (pinned
       # to the poetry.lock generator version).
       - name: Install Poetry (before setup-python)
+        # pipx is preferred when available; pip is the runner fallback.
         run: |
           if command -v pipx >/dev/null 2>&1; then
             pipx install poetry==2.4.3
@@ -53,11 +54,6 @@ jobs:
         run: cp dot_dotfiles/shell/.env.example "$HOME/.env"
       - name: Install Python test dependencies
         run: |
-          if command -v pipx >/dev/null 2>&1; then
-            pipx install poetry==2.4.3
-          else
-            python -m pip install poetry==2.4.3
-          fi
           poetry install --with test,tooling
       - name: CI verification
         run: make ci-verify
