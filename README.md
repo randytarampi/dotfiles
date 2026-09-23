@@ -166,7 +166,7 @@ make ci-verify                               # CI verification (lint + drift + d
 - Auto-detected agents: `opencode`, `gemini`, `antigravity`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`, `pi`, and `cortex`.
 - `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
 - `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
-- Install adapter prerequisites with `scripts/install-acp-adapters.sh` (`brew install copilot-cli`, `npm i -g @agentclientprotocol/claude-agent-acp`, `npm i -g @agentclientprotocol/codex-acp`), then sign in to each agent separately.
+- Install adapter prerequisites with `scripts/install-acp-adapters.py` (`brew install copilot-cli`, `npm i -g @agentclientprotocol/claude-agent-acp`, `npm i -g @agentclientprotocol/codex-acp`), then sign in to each agent separately.
 - After the first install, run `make brewfile-sync` to capture the new npm globals in the Brewfiles.
 - Regenerate with `scripts/configure-acp-agents.py --preset <tier>`.
 
@@ -345,7 +345,7 @@ integration, model management, and platform-gating details.
     ├── configure-opencode-tier.py # Switch active preset tier (--preset required)
     ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
     ├── get-tools.py               # Get MCP tool registry keys
-    ├── install-acp-adapters.sh    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
+    ├── install-acp-adapters.py    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
     ├── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
     └── generate-jetbrains-profiles.py # Generate model profiles JSON files
