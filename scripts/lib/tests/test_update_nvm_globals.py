@@ -77,7 +77,7 @@ def test_dry_run_composes_no_mutating_commands(updater, tmp_path, monkeypatch):
     assert "nvm use" not in composed
 
 
-def test_shell_launch_failure_warns_and_continues(
+def test_shell_launch_failure_is_runtime_failure(
     updater, tmp_path, monkeypatch, caplog
 ):
     nvm_script = tmp_path / "nvm.sh"
@@ -87,7 +87,7 @@ def test_shell_launch_failure_warns_and_continues(
         updater.subprocess, "run", Mock(side_effect=FileNotFoundError("bash"))
     )
 
-    assert updater.update_globals() == 0
+    assert updater.update_globals() == 1
     assert "Could not run nvm update shell" in caplog.text
 
 

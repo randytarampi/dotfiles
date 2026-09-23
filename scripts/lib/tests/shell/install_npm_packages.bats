@@ -34,7 +34,7 @@ setup() {
     "$REPO_ROOT/scripts/install-npm-brewfile-packages.sh" \
     "$BATS_TEST_TMPDIR/Brewfile"
 
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
   [[ "$output" == *"Installed/updated: 1"* ]]
   [[ "$output" == *"Failed: 1"* ]]
 }
