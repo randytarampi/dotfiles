@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[2]
 
 
@@ -156,7 +158,6 @@ def test_brewfile_completeness_maps_categories_and_rejects_missing_files(
     monkeypatch.setattr(
         module.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code))
     )
-    try:
+    with pytest.raises(SystemExit) as error:
         module.main()
-    except SystemExit as error:
-        assert error.code == 1
+    assert error.value.code == 1
