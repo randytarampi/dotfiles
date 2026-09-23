@@ -725,6 +725,15 @@ def sync_brewfiles(args: argparse.Namespace) -> int:
     try:
         for entry in unassigned:
             suggestion = classify_entry(entry)
+            if args.auto and not suggestion:
+                # --auto is used by update-system: it must never prompt.
+                # Unassignable entries are skipped with a warning; assign them
+                # interactively (without --auto) or add them to a Brewfile.
+                logger.warning(
+                    f"No heuristic suggestion for {format_entry(entry)} — "
+                    "skipping (run interactively without --auto to assign)"
+                )
+                continue
             category_key = prompt_for_category(entry, suggestion)
             if not category_key:
                 logger.warning(f"Skipped {format_entry(entry)}")

@@ -83,7 +83,7 @@ if [[ "$platform" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
     warned_lanes+=("brew doctor")
   fi
   if command -v python3 >/dev/null 2>&1; then
-    run_update "Brewfile sync" python3 "$SCRIPT_DIR/sync-brewfiles.py"
+    run_update "Brewfile sync" python3 "$SCRIPT_DIR/sync-brewfiles.py" --auto
   else
     warn "python3 not found — skipping Brewfile sync"
     skipped_lanes+=("Brewfile sync")
