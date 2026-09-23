@@ -89,7 +89,7 @@ if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
     fi
 
     # Trust third-party taps before running brew bundle
-    for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed 's/^tap "//;s/"$//'); do
+    for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed -E 's/^tap "([^"]+)".*/\1/'); do
         brew trust "$tap_name" 2>/dev/null || true
     done
 
