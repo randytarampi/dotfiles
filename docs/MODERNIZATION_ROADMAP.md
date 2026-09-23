@@ -20,9 +20,9 @@ multi-session change. They are estimates, not recorded durations.
 ## 2. Baseline and completed work
 
 - `[verified]` Phase 1 through Phase 4 are complete at `128125b`; rounds 1–2 of
-  follow-up work landed through `9d05d65`. The recorded validation is
+  follow-up work landed through `d0d5090`. The recorded validation is
   `make verify`, `make test` (160+ tests), `make ci-verify`, `poetry check` and
-  actionlint; the production coverage measurement is 33% (branch-aware pytest;
+  actionlint; the production coverage measurement is 36% (branch-aware pytest;
   Coveralls reports 33.71% line coverage at `9d05d65`) against a floor now
   ratcheted to 27% (evidence: [pyproject.toml](../pyproject.toml) and CI run
   35713182137, all-green including the required Windows lane).
@@ -46,7 +46,7 @@ multi-session change. They are estimates, not recorded durations.
 
 | Item | Status | Evidence |
 |---|---|---|
-| Licence | `[completed-in-this-pass]` | CC0 (Unlicense) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
+| Licence | `[completed-in-this-pass]` | Unlicense (public-domain dedication) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
 | qlty | `[completed-in-this-pass]` — integrated 2026-09-22 | The earlier "no credential-free way to verify a qlty Cloud project" claim was **disproven** (me/'s OIDC pattern), and the follow-up work item has now landed: minimal [qlty.toml](../qlty.toml) (release checks opted out) plus a supplemental coverage upload in [ci.yml](../.github/workflows/ci.yml), isolated from the required gate (step-level `continue-on-error`, success-gated). Coveralls remains the primary report by design. |
 | Action-SHA pinning | `[completed-in-this-pass]` — policy recorded | Required/security/deployment workflows (ci, nightly, codeql) pin verified immutable full SHAs; write-capable agent review workflows float by documented design ([docs/AGENTIC-REVIEW.md](AGENTIC-REVIEW.md): moving major tags) and remain an **enumerated gap**, not a settled exception. No repo-wide `sha_pinning_required` is proposed while those lanes float. |
 
@@ -69,7 +69,7 @@ and every promotion fix was demonstrated and bounded (script-exec interpreters
 chain, cygpath forward-slash, deploy-effective no-op check).
 [.github/workflows/ci.yml; runs 35713182137, 35696345590]
 **Residual (deliberate):** `make doctor` remains Unix-gated in CI
-([.github/workflows/ci.yml:166-171]); making doctor meaningful on Windows is
+  ([.github/workflows/ci.yml:184-189]); making doctor meaningful on Windows is
 the next Windows extension, backlogged.
 
 **Acceptance criteria:** the Windows lane has a documented result for every
@@ -109,14 +109,14 @@ far). [.github/workflows/nightly-integration.yml]
 The machine-side `~/.omlx/settings.json` value
 `server.max_audio_upload_size` was the unitless string `128`, meaning 128 bytes;
 it caused STT HTTP 413 responses. It was corrected machine-side to `128MB`,
-after which the transcription endpoint returned HTTP 200. No repository script
-currently manages this value.
+after which the transcription endpoint returned HTTP 200. This was true before
+this pass; the value is now validated by the configure and doctor paths below.
 
 **Status:** `[completed-in-this-pass]` The validator exists and is tested
 ([scripts/lib/local_engines.py](../scripts/lib/local_engines.py):
 `_max_audio_upload_size`, wired into `merge_omlx_settings` with an
 `OMLX_MAX_AUDIO_UPLOAD_SIZE` override; doctor check in
-[scripts/verify-config.py](../scripts/verify-config.py); six hermetic cases in
+  [scripts/verify-config.py](../scripts/verify-config.py); seven hermetic cases in
 [scripts/lib/tests/test_omlx_settings.py](../scripts/lib/tests/test_omlx_settings.py)).
 Decided semantics (2026-09-22): unitless values are **refused at write time**
 (bytes-accurate; no MB reinterpretation — the `'128'`-bytes incident is
@@ -131,9 +131,9 @@ and stays open rather than being silently dropped.
 **Priority:** Medium · **Effort:** M per quarter · **Dependencies:** the
 measured production baseline and subprocess coverage already in place.
 
-The production floor was 25%; the measured result is 33% (branch-aware pytest;
+The production floor was 27%; the measured result is 36% (branch-aware pytest;
 Coveralls reports 33.71% line coverage). On 2026-09-22 the floor was ratcheted
-to **27%** ([pyproject.toml](../pyproject.toml)), keeping ~6 points of headroom
+  to **27%** ([pyproject.toml](../pyproject.toml)), keeping ~9 points of headroom
 so one flaky test cannot break `main`; 30+ is gated on representative tests
 (orchestration, failed/partial deploy paths), not wrapper-test padding.
 [pyproject.toml; Makefile test target] Raise the floor in small
@@ -170,7 +170,7 @@ speculatively.
 |---|---|---|
 | Tranche 1 · 1 | `scripts/setup-bin-symlinks.sh` | **Done** — Python port + parity tests + thin `.sh` shim; wired by `run_onchange_05`. |
 | Tranche 1 · 2 | `scripts/update-nvm-globals.sh` | **Done** — Python port + parity tests; wired by `update-system.sh`. |
-| Tranche 1 · 3 | `scripts/install-acp-adapters.sh` | **Done** — Python port + parity tests; `.sh` reduced to a compat wrapper consumed by `run_onchange_10`. |
+| Tranche 1 · 3 | `scripts/install-acp-adapters.py` | **Done** — Python port + parity tests; consumed directly by `run_onchange_10` (the former `.sh` wrapper was deleted in `af1c1f5`). |
 | Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Deferred pending evidence. Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
 | Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Deferred pending evidence; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
 
@@ -251,9 +251,11 @@ fleet-significant and deserve staged governance.
 
 1. `[completed-in-this-pass]` Stable aggregates `ci/required` (gates on
     verify, the deploy matrix including the required Windows lane, and Coveralls
-    finalization) and `security/required` (both CodeQL legs) — synthetic,
-    stably named, never `if: always()`. The `finish` job is disqualified as a
-    required check (its `if: always()` makes its success meaningless).
+     finalization) and `security/required` (both CodeQL legs). The aggregates
+     always run (`if: always()`) and gate explicitly on every predecessor's
+     result — unlike `finish`, whose `always()` run asserts nothing. An
+     unconditional `always()` job that asserts nothing is disqualified as a
+     required check.
     [Makefile: `check-ci-assets` also added to `ci-verify` so asset drift
     cannot ship silently.]
 2. `[completed-in-this-pass]` History protection on `main`: block deletion and
@@ -285,7 +287,15 @@ float by documented design and are the enumerated gap.
 **[verified 2026-09-22]** Stage-1 ruleset live: "main history protection"
 (ruleset id 23831217, enforcement active) — deletion + non-fast-forward
 blocked on `refs/heads/main`, bypass actor RepositoryRole admin
-(bypass mode `always`). Pilot PR #7: https://github.com/randytarampi/dotfiles/pull/7.
+ (bypass mode `always`). Pilot PR #7: https://github.com/randytarampi/dotfiles/pull/7.
+
+**Owner decisions (2026-09-22):** the actionlint download script and
+`get.chezmoi.io` installers remain deliberately unpinned so update-system and
+fresh installs pull the latest tool versions; this is an accepted supply-chain
+trade-off. The d0d5090 break-glass record is retained here: direct push to main
+after ruleset activation was a docs-only follow-through of the reflect round,
+using the admin bypass once; subsequent work returns to PR-first. Live merge
+settings are rebase-only; squash is disabled.
 
 ## 4. Local-model analysis
 
@@ -317,8 +327,8 @@ requires a controlled benchmark.
    postconditions make failures meaningful. PI, MOZART and CODEGRAPH package
    installation are not silently promoted into a configuration-only lane.
    [.github/workflows/nightly-integration.yml]
-3. **Coverage:** the 25% production floor is a ratchet starting point, not a
-   promise of 100%. [pyproject.toml]
+3. **Coverage:** the 27% production floor is a ratchet starting point; the
+    current measured value is 36%, not a promise of 100%. [pyproject.toml]
 4. **Machine state:** the oMLX upload-limit correction was machine-side; future
    configure scripts must validate it without assuming that this repository owns
    every upstream setting. [docs/VOICE.md]
