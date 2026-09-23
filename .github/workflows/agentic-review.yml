@@ -266,7 +266,7 @@ jobs:
           git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
             while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - name: Run OpenCode review
-        uses: anomalyco/opencode/github@16747470f976aca3d362ad730bcd3fe82ecc2c9a # v1.18.29
+        uses: anomalyco/opencode/github@ca27d3328fcd0d470588149c902a963452f1abaf # v2.0.7
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
