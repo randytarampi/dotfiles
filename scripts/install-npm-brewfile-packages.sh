@@ -102,9 +102,11 @@ if [[ "$COMMON_DRY_RUN" != "1" && "$RECONCILED_COREPACK" == "1" ]]; then
       ok "corepack shims enabled"
     else
       warn "Failed to run corepack enable — yarn/pnpm shims may be missing"
+      FAILED_COUNT=$((FAILED_COUNT + 1))
     fi
   else
     warn "corepack not resolvable after install — skipping corepack enable"
+    FAILED_COUNT=$((FAILED_COUNT + 1))
   fi
 fi
 
@@ -112,3 +114,7 @@ fi
 info "Reconciliation complete for $BREWFILE:
   • Installed/updated: $INSTALLED_COUNT
   • Failed: $FAILED_COUNT"
+
+if ((FAILED_COUNT > 0)); then
+  exit 1
+fi

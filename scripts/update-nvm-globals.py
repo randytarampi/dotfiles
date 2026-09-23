@@ -163,7 +163,7 @@ def update_globals(dry_run=False):
         )
     except OSError as error:
         logger.warning("Could not run nvm update shell: %s", error)
-        return 0
+        return 1
     output = "\n".join(part for part in (result.stdout, result.stderr) if part)
     markers = re.findall(r"NVMUPD ([^\n]+)", output)
     for marker in markers:
