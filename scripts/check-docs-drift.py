@@ -56,7 +56,12 @@ def looks_like_path(value):
 
 def extract_references(document):
     """Extract local backtick and Markdown-link references from a document."""
-    text = document.read_text(encoding="utf-8")
+    text = re.sub(
+        r"^```.*?^```\s*$",
+        "",
+        document.read_text(encoding="utf-8"),
+        flags=re.MULTILINE | re.DOTALL,
+    )
     references = []
 
     for match in BACKTICK_PATTERN.finditer(text):
