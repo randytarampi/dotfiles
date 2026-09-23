@@ -79,6 +79,6 @@ def test_read_only_check_rejects_non_object_root_and_sections():
     assert spec is not None and spec.loader is not None
     verify = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(verify)
-    assert "root must be a JSON object" in verify.validate_omlx_settings([])
+    assert "root must be a JSON object" in verify.validate_omlx_settings([])[0]
     errors = verify.validate_omlx_settings({"server": []})
     assert any("server must be a JSON object" in error for error in errors)
