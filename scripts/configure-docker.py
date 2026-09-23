@@ -77,6 +77,8 @@ def main() -> None:
         return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        # A single small baseline write is intentional; existing configs are
+        # never replaced, and Docker will validate this fresh file on use.
         with path.open("w", encoding="utf-8") as handle:
             json.dump(content, handle, indent=2)
             handle.write("\n")
