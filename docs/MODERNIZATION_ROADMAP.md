@@ -47,7 +47,7 @@ multi-session change. They are estimates, not recorded durations.
 | Item | Status | Evidence |
 |---|---|---|
 | Licence | `[completed-in-this-pass]` | CC0 (Unlicense) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
-| qlty | `[completed-in-this-pass]` — integrated 2026-09-22 | The earlier "no credential-free way to verify a qlty Cloud project" claim was **disproven** (me/'s OIDC pattern), and the follow-up work item has now landed: minimal [qlty.toml](../qlty.toml) (release checks opted out) plus a supplemental, **non-required** OIDC coverage upload in [ci.yml](../.github/workflows/ci.yml) (`qltysh/qlty-action/coverage` pinned to the v2 commit; `id-token: write` on the verify job). Coveralls remains the primary report by design. |
+| qlty | `[completed-in-this-pass]` — integrated 2026-09-22 | The earlier "no credential-free way to verify a qlty Cloud project" claim was **disproven** (me/'s OIDC pattern), and the follow-up work item has now landed: minimal [qlty.toml](../qlty.toml) (release checks opted out) plus a supplemental coverage upload in [ci.yml](../.github/workflows/ci.yml), isolated from the required gate (step-level `continue-on-error`, success-gated). Coveralls remains the primary report by design. |
 | Action-SHA pinning | `[completed-in-this-pass]` — policy recorded | Required/security/deployment workflows (ci, nightly, codeql) pin verified immutable full SHAs; write-capable agent review workflows float by documented design ([docs/AGENTIC-REVIEW.md](AGENTIC-REVIEW.md): moving major tags) and remain an **enumerated gap**, not a settled exception. No repo-wide `sha_pinning_required` is proposed while those lanes float. |
 
 ## 3. Ordered work items

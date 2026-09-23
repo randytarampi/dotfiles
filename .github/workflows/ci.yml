@@ -44,7 +44,7 @@ jobs:
           sudo apt-get update
           # actionlint is not in Ubuntu's apt repositories — install the pinned
           # upstream release binary instead.
-           sudo apt-get install -y bats shellcheck shfmt
+          sudo apt-get install -y bats shellcheck shfmt
           mkdir -p "$HOME/bin"
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 "$HOME/bin"
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
@@ -75,11 +75,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-      # Supplemental, non-required coverage lane: the credential-free OIDC
-      # exchange proven in me/.github/workflows/test.yml (qltysh/qlty-action
-      # pinned to the v2 commit). Coveralls remains the primary report.
+      # Supplemental coverage lane isolated from the required gate. The
+      # success gate prevents stale coverage uploads; step-level failure
+      # tolerance keeps Qlty service/OIDC failures from failing verify.
       - name: Upload coverage to Qlty
-        if: ${{ !cancelled() }}
+        if: ${{ success() }}
+        continue-on-error: true
         uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637 # v2
         with:
           oidc: true
