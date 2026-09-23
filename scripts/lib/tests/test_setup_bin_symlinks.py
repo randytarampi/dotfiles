@@ -100,3 +100,15 @@ def test_dry_run_writes_nothing(monkeypatch, tmp_path, source_dir, setup_script)
 
     assert setup_script.setup_bin_symlinks(source_dir, dry_run=True) == 0
     assert not home.exists()
+
+
+def test_relative_source_dir_creates_absolute_targets(
+    monkeypatch, tmp_path, source_dir, setup_script
+):
+    monkeypatch.setattr(
+        setup_script.Path, "home", staticmethod(lambda: tmp_path / "home")
+    )
+    monkeypatch.chdir(tmp_path)
+    relative = source_dir.relative_to(tmp_path)
+    setup_script.setup_bin_symlinks(str(relative))
+    assert (tmp_path / "home/.dotfiles/bin/_dot--alpha").readlink().is_absolute()

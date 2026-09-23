@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install ACP adapters used by OpenCode."""
 
-import argparse, os, shutil, subprocess, sys
+import argparse, os, platform, shutil, subprocess, sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -58,7 +58,7 @@ def install_antigravity_acp(dry_run=False):
             "'agy' not found on PATH — the bridge will auto-download it, but this is unexpected"
         )
         logger.warning("Install agy first: brew install --cask antigravity-cli")
-    if sys.platform != "darwin":
+    if sys.platform != "darwin" or platform.machine() != "arm64":
         logger.warning(
             "Unsupported platform: %s — skipping antigravity-acp install", sys.platform
         )

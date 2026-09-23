@@ -14,7 +14,7 @@ import logger  # noqa: E402
 
 
 def _source_scripts(source_dir):
-    return Path(source_dir) if source_dir else SCRIPT_DIR
+    return Path(source_dir).expanduser().resolve() if source_dir else SCRIPT_DIR
 
 
 def setup_bin_symlinks(source_dir=None, *, dry_run=False):
