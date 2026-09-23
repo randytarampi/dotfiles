@@ -124,3 +124,7 @@ When adding a script:
 
 See the [orchestration reference](ORCHESTRATION.md) and [adding components
 guide](ADDING.md) for implementation details.
+
+The shell test suite intentionally does not use kcov: version 43.1 hangs while
+wrapping bats on macOS arm64 (verified 2026-09-22). The bats suite is therefore
+validated through normal execution rather than kcov.
