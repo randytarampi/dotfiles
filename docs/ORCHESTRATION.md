@@ -174,7 +174,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | 04 | install-packages | run_onchange | Homebrew/Winget packages | `DOTFILES_RUN_PACKAGES_SETUP` |
 | 05 | setup-bin-symlinks | run_onchange | Symlink scripts to ~/bin | — |
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
-| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
+| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim, openspec, vibeguard, tokenscope, planning-with-files, quota, opencode-mem) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: openspec, codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
