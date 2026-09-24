@@ -141,7 +141,7 @@ When adding a new script:
 - Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with
   `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
 - Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
-- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and the Tokenscope plugin are documented in [docs/OPENCODE.md](docs/OPENCODE.md).
+- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and v2 token reporting via `opencode stats --cost` are documented in [docs/OPENCODE.md](docs/OPENCODE.md).
 
 ### Environment Gating
 
@@ -198,7 +198,7 @@ Recurring validation quirks — check these before diagnosing failures:
 - **Tests:** `make test` (or `PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/ -q`). Poetry owns the test environment; the Makefile sets `PYTHONPATH` because direct module imports require it.
 - **Formatting:** black lives at `/opt/homebrew/bin/black` (bare `python3` has no `black` module). Run it on touched `.py` files **before** `git commit` — the pre-commit hook reformats and aborts the first commit otherwise.
 - **LSP noise:** import-resolution errors in `scripts/*.py` under the IDE are pre-existing runtime `PYTHONPATH` artifacts, not introduced breakage. Use `python3 -m py_compile <file>` for ground truth.
-- **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
+- **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, legacy `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
 - **Deploy aborts:** `make deploy` runs chezmoi scripts sequentially; one failure (e.g. the Caddy script's `sudo` password prompt in non-interactive shells) aborts before later `run_onchange` scripts. To run a specific script standalone: `bash -n <(chezmoi execute-template < .chezmoiscripts/run_onchange_XX-*.sh.tmpl)` to check syntax, then pipe the same render to `bash` to execute.
 - **Drift lane:** `make check-model-drift` loads `~/.env` and reports checked/skipped provider endpoints; auth failures (401/403/404) are skipped, never silent zeros.
 
@@ -273,7 +273,7 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
 | [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
 | [docs/MERIDIAN.md](docs/MERIDIAN.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
-| [docs/VOICE.md](docs/VOICE.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
+| [docs/VOICE.md](docs/VOICE.md) | Historical OpenCode voice plugin, accepted v2 removal, and substitutes |
 | [docs/JUNIE.md](docs/JUNIE.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |
 | [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing with OpenCode, configuration, launching, prerequisites |
 | [docs/DCP.md](docs/DCP.md) | Context compaction thresholds, OpenCode config paths |
@@ -282,7 +282,7 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/INSTALL.md](docs/INSTALL.md) | Full installation, upgrade, and verification instructions |
 | [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
 | [docs/PI.md](docs/PI.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
-| [docs/OPENCODE.md](docs/OPENCODE.md) | OpenCode configuration, ACP agent verification, Tokenscope plugin |
+| [docs/OPENCODE.md](docs/OPENCODE.md) | OpenCode v2 configuration, ACP verification, pinned plugins, and stats |
 | [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |

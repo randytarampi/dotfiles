@@ -346,7 +346,7 @@ fi
 # Track OpenCode success separately to gate the service restart.
 OC_SUCCESS=0
 
-# 3. OpenCode config (tier, models, voice — creates oh-my-opencode-slim.json)
+# 3. OpenCode config (tier, models — creates oh-my-opencode-slim.json)
 if ! step_skipped opencode && [[ "${DOTFILES_RUN_OPENCODE_SETUP:-0}" == "1" ]]; then
   info "Configuring OpenCode (tier=$OC_TIER)..."
   _failures_before="$FAILURES"
@@ -375,7 +375,7 @@ else
   info "DOTFILES_RUN_CORTEX_SETUP not set — skipping Cortex configuration"
 fi
 
-# 3.5. Configure Meridian proxy plugin (must run after OpenCode; injects plugin into opencode.json)
+# 3.5. Configure Meridian proxy settings for other tools
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Meridian configuration (dry-run mode)"
 elif ! step_skipped meridian && [[ "${DOTFILES_RUN_MERIDIAN_SETUP:-0}" == "1" ]]; then

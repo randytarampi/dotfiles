@@ -403,30 +403,6 @@
       "child_scripts": []
     },
     {
-      "path": "scripts/configure-opencode-voice.py",
-      "capabilities": [
-        "public",
-        "mutates",
-        "backups"
-      ],
-      "enforcement": "strict",
-      "accepted_flags": [
-        "--help",
-        "--preset",
-        "--dry-run",
-        "--show-secrets",
-        "--no-backup",
-        "--local-fallback-preset",
-        "--role-model",
-        "--local-fallback-role",
-        "--category-model",
-        "--local-fallback-placeholder",
-        "--min-reasoning-embedding"
-      ],
-      "positional_operand": null,
-      "child_scripts": []
-    },
-    {
       "path": "scripts/configure-opencode.py",
       "capabilities": [
         "public",
@@ -457,7 +433,6 @@
         "configure-mcp-tool.py",
         "configure-acp-agents.py",
         "configure-opencode-tier.py",
-        "configure-opencode-voice.py",
         "configure-opencode-dcp.py"
       ]
     },

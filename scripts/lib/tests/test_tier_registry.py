@@ -33,9 +33,6 @@ def load_script_module(name, filename):
 
 
 configure_pi = load_script_module("configure_pi", "configure-pi.py")
-configure_voice = load_script_module(
-    "configure_opencode_voice", "configure-opencode-voice.py"
-)
 generate_profiles = load_script_module(
     "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
 )
@@ -75,27 +72,6 @@ class TierRegistryTests(unittest.TestCase):
         self.assertIn("omo-slim-openai", tiers)
         self.assertIn("omo-slim-thirty-dollars", tiers)
         self.assertIn("omo-slim-opencode-zen-free", tiers)
-
-    def test_voice_mapping_for_remote_presets_uses_openai_defaults(self):
-        with (
-            patch.object(
-                configure_voice, "check_ollama_daemon", return_value=(None, False)
-            ),
-            patch.object(configure_voice, "list_local_ollama_models", return_value=[]),
-            patch.dict("os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}),
-        ):
-            for tier in (
-                "omo-slim-openai",
-                "omo-slim-thirty-dollars",
-                "omo-slim-opencode-zen-free",
-            ):
-                config = configure_voice.get_voice_config(tier)
-                expected_model = (
-                    "muse-spark-1.2-contributor-free"
-                    if tier == "omo-slim-opencode-zen-free"
-                    else "gpt-5.6-luna"
-                )
-                self.assertEqual(config["model"], expected_model)
 
     def test_google_provider_endpoint_uses_v1beta_compat_path(self):
         providers = generate_profiles.build_provider_configs(

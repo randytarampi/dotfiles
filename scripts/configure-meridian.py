@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
 Configure Meridian Helper.
-Adds the Meridian proxy plugin to an existing OpenCode configuration.
+Configures Meridian proxy settings used by non-OpenCode tools.
 """
 
 import sys
 import json
 import argparse
 import os
-import shutil
-import subprocess
 import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -25,28 +23,15 @@ from file_utils import backup_file, write_text_file
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Cleanly appends the Meridian plugin path to the OpenCode configuration."
+        description="Configure Meridian proxy settings used by non-OpenCode tools."
     )
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
 
-    opencode_dir = os.environ.get("OPENCODE_DIR")
-    if opencode_dir:
-        config_dir = os.path.abspath(os.path.expanduser(opencode_dir))
-    else:
-        config_dir = os.path.join(os.path.expanduser("~"), ".config", "opencode")
-
-    config_path = os.path.join(config_dir, "opencode.json")
     meridian_host = os.environ.get("MERIDIAN_HOST", MERIDIAN_DEFAULT_HOST)
     meridian_port = os.environ.get("MERIDIAN_PORT", MERIDIAN_DEFAULT_PORT)
 
     logger.info("Checking prerequisites...")
-
-    if not os.path.exists(config_path):
-        logger.critical(
-            f"opencode.json not found at {config_path}\nRun configure-opencode.py first."
-        )
-        sys.exit(1)
 
     # Health check
     health_url = f"http://{meridian_host}:{meridian_port}/health"
@@ -57,62 +42,6 @@ def main():
     except Exception:
         logger.warning(f"Meridian not reachable at {health_url}")
         logger.warning("Run install-meridian.sh and start the service first.")
-        logger.warning(
-            "Plugin will still be added — Claude models won't work until meridian is running."
-        )
-
-    # Resolve plugin path
-    meridian_plugin_path = ""
-    npm_bin = shutil.which("npm")
-    if npm_bin:
-        try:
-            result = subprocess.run(
-                [npm_bin, "root", "-g"], capture_output=True, text=True, timeout=5
-            )
-            npm_root = result.stdout.strip()
-            if npm_root:
-                candidate = os.path.join(
-                    npm_root, "@rynfar", "meridian", "plugin", "meridian.ts"
-                )
-                if os.path.isfile(candidate):
-                    meridian_plugin_path = candidate
-        except Exception:
-            pass
-
-    if not meridian_plugin_path:
-        logger.critical(
-            "Could not resolve meridian plugin path. Is @rynfar/meridian installed globally?"
-        )
-        sys.exit(1)
-
-    logger.info(f"Adding meridian plugin to {config_path}...")
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-
-        plugins = config.get("plugin", [])
-        if meridian_plugin_path not in plugins:
-            plugins.append(meridian_plugin_path)
-            config["plugin"] = plugins
-            if args.dry_run:
-                logger.info(f"Would append Meridian plugin path to {config_path}")
-            else:
-                if os.path.exists(config_path) and not args.no_backup:
-                    backup_path = backup_file(config_path, enabled=True)
-                    if backup_path:
-                        logger.info(f"Backed up opencode.json to {backup_path}")
-                with open(config_path, "w", encoding="utf-8") as f:
-                    json.dump(config, f, indent=2)
-                    f.write("\n")
-                logger.info("Meridian plugin path appended successfully")
-        else:
-            logger.info("Meridian plugin path already present in configuration")
-
-    except Exception as e:
-        logger.critical(f"Failed to update config: {e}")
-        sys.exit(1)
-
     meridian_config_dir = os.path.expanduser("~/.config/meridian")
     sdk_features_path = os.path.join(meridian_config_dir, "sdk-features.json")
     try:
@@ -154,9 +83,8 @@ def main():
         sys.exit(1)
 
     summary_lines = [
-        "Meridian plugin configured!",
+        "Meridian proxy settings configured!",
         "",
-        f"Plugin path: {meridian_plugin_path}",
         f"Meridian proxy: http://{meridian_host}:{meridian_port}",
         f"  • SDK features: {sdk_features_path} (opencode.codeSystemPrompt=false)",
         "",

@@ -2,7 +2,7 @@
 """
 Configure OpenCode Helper.
 Constructs the opencode.json configuration based on presets, mode, local Ollama, and templates.
-Also generates tui.json for the voice plugin via configure-opencode-voice.py.
+Also generates the OpenCode CLI client configuration via configure-opencode-dcp.py.
 """
 
 from __future__ import annotations
@@ -160,9 +160,9 @@ def main():
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
-    add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
+    add_skip_arg(parser, ["mcps", "acp-agents", "tier", "dcp"])
     args = parser.parse_args()
-    skipped = parse_skip(args.skip, ["mcps", "acp-agents", "tier", "voice", "dcp"])
+    skipped = parse_skip(args.skip, ["mcps", "acp-agents", "tier", "dcp"])
     failures = 0
 
     configs_dir_path = os.path.abspath(
@@ -360,14 +360,13 @@ def main():
             )
         local_ollama = local_provider_block("ollama", models_obj)
 
-    meridian_plugin_path = os.environ.get("MERIDIAN_PLUGIN_PATH", "")
     # include_anthropic governs the anthropic provider block in global mode.
     # Project mode derives providers from the preset instead (see below).
     include_anthropic = args.preset in [
         "pro-plus-anthropic",
         "plus-anthropic",
         "anthropic",
-    ] or bool(meridian_plugin_path)
+    ]
 
     # Allow access to cross-platform temp directories (/tmp, macOS
     # $TMPDIR, Windows %TEMP%) without prompting. These are used by
@@ -466,9 +465,6 @@ def main():
                 "options": {"baseURL": "https://api.githubcopilot.com"},
             }
 
-        if meridian_plugin_path:
-            config["plugin"].append(meridian_plugin_path)
-
         # Mirror oh-my-opencode-slim PR #520: disable the full OpenCode
         # built-in agent set replaced by OMOS (build, explore, general, plan).
         # Preserve any existing agent entries instead of wholesale-replacing.
@@ -502,13 +498,12 @@ def main():
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
-            "lsp": True,
             "provider": {},
             "plugin": [
-                "oh-my-opencode-slim@latest",
-                "@tarquinen/opencode-dcp@latest",
+                "oh-my-opencode-slim@2.2.24",
+                "@tarquinen/opencode-dcp@3.2.0",
                 [
-                    "@plannotator/opencode@latest",
+                    "@plannotator/opencode@0.27.18",
                     {
                         "workflow": "plan-agent",
                         "planningAgents": [
@@ -524,9 +519,8 @@ def main():
                         ],
                     },
                 ],
-                "opencode-plugin-openspec@latest",
-                "opencode-vibeguard@latest",
-                "@ramtinj95/opencode-tokenscope@latest",
+                "opencode-planning-with-files@1.0.1",
+                "@slkiser/opencode-quota@4.10.2",
             ],
             "agent": {
                 "build": {"disable": True},
@@ -746,9 +740,6 @@ def main():
         for provider, block in local_engine_providers.items():
             register_local_provider(config, provider, block)
 
-        if meridian_plugin_path:
-            config["plugin"].append(meridian_plugin_path)
-
         if not config["mcp"]:
             del config["mcp"]
 
@@ -788,22 +779,7 @@ def main():
         logger.info("\n".join(summary_lines))
         return
 
-    # global mode:
-    # 2. Write vibeguard.config.json
-    vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
-    if os.path.exists(vibeguard_src) and args.dry_run:
-        logger.info(f"[dry-run] Would copy vibeguard.config.json to {config_dir_path}")
-    elif os.path.exists(vibeguard_src):
-        vibeguard_dst = os.path.join(config_dir_path, "vibeguard.config.json")
-        try:
-            shutil.copy(vibeguard_src, vibeguard_dst)
-            logger.info("vibeguard.config.json written (sensitive-string redaction)")
-        except Exception as e:
-            logger.warning(f"Failed to copy vibeguard.config.json: {e}")
-    else:
-        logger.warning(f"vibeguard.config.json not found at {vibeguard_src}")
-
-    # 3. Write oh-my-opencode-slim.json
+    # 2. Write oh-my-opencode-slim.json
     presets_json_path = os.path.join(
         configs_dir_path, "opencode", "oh-my-opencode-slim.json"
     )
@@ -927,32 +903,7 @@ def main():
         logger.error(f"Failed to set active tier: {e}")
         failures += 1
 
-    # 5. Configure voice plugin (tui.json)
-    if "voice" in skipped:
-        logger.info("Skipping voice plugin configuration")
-    else:
-        logger.info("Configuring voice plugin...")
-    try:
-        if "voice" in skipped:
-            pass
-        else:
-            voice_args = [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),
-                "--preset",
-                args.preset,
-            ] + forward_common_args(args)
-            voice_args += forward_model_override_args(args)
-            voice_args += forward_min_reasoning_embedding_arg(args)
-            if args.no_backup:
-                voice_args.append("--no-backup")
-            subprocess.run(voice_args, check=True)
-            logger.info("Voice plugin configured")
-    except Exception as e:
-        logger.error(f"Failed to configure voice plugin: {e}")
-        failures += 1
-
-    # 5b. Configure DCP TUI plugin (tui.json)
+    # 5. Configure OpenCode CLI client plugins
     if "dcp" in skipped:
         logger.info("Skipping DCP TUI plugin configuration")
     else:
@@ -979,9 +930,8 @@ def main():
         f"Config written to: {config_dir_path}",
         "  • opencode.json (providers, MCP servers, plugins)",
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
-        "  • vibeguard.config.json (sensitive-string redaction)",
         "  • acp-agents.json (ACP-capable agent wrappers — see ~/.config/opencode/oh-my-opencode-slim.json)",
-        "  • tui.json (voice + DCP TUI plugin config)",
+        "  • cli.json (DCP + quota CLI plugin config)",
         "",
         "To switch tiers:",
         "     configure-opencode-tier.py --preset pro",
@@ -1000,12 +950,6 @@ def main():
         "",
         "To regenerate without local ollama:",
         "     set DOTFILES_USE_LOCAL_OLLAMA=0 and re-run configure-opencode.py",
-        "",
-        "To add/update Meridian proxy plugin:",
-        "     configure-meridian.py",
-        "",
-        "To configure voice plugin separately:",
-        "     configure-opencode-voice.py --preset <tier>",
         "",
         "Configure script complete!",
     ]

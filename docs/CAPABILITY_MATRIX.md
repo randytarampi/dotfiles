@@ -6,7 +6,7 @@ bridge or compatibility layer is used.
 
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, 15 tiers | yes | yes | native tiers | not collected | full (STT+TTS) | env-vars |
+| opencode v2.0.15 | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, 15 tiers | yes | direct provider traffic; Meridian proxy remains available to other tools | native tiers | not collected | removed; macOS dictation or Pi STT | env-vars |
 | codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
 | junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
 | pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | `pi-mcp-adapter`, generated Pi config | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin |
@@ -29,6 +29,6 @@ bridge or compatibility layer is used.
   entries are generated only for tools with a supported local fallback.
 - `scripts/configure-skills.py` reconciles the canonical store into all target
   directories, including Pi, Cortex, Antigravity, and Junie's resolved `~/.ai`.
-- Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through
-  its generated `models.json`; tools marked “no” have no direct Meridian wiring.
+- OpenCode v2 routes provider traffic directly. Pi consumes Meridian through its
+  generated `models.json`; tools marked “no” have no direct Meridian wiring.
   Mozart routes provider traffic and is not an additional per-tool ACP target.

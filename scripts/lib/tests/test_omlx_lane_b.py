@@ -41,52 +41,6 @@ def load_script(name):
     return module
 
 
-def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
-    voice = load_script("configure-opencode-voice.py")
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "true")
-    monkeypatch.setenv("OMLX_API_KEY", "secret")
-    with (
-        patch.dict(
-            local_engines.LOCAL_ENGINES["omlx"],
-            {
-                "health_check": lambda: (True, "HTTP 200"),
-                "audio_discovery": lambda: [
-                    {"name": "omlx/whisper", "model_type": "audio_stt"}
-                ],
-            },
-        ),
-        patch.object(
-            voice.tier_registry,
-            "load_registry",
-            return_value={"preset": "local", "presets": {}},
-        ),
-        patch.object(
-            voice.tier_registry, "uses_local_placeholders", return_value=False
-        ),
-    ):
-        config = voice.get_voice_config("local")
-    assert config["sttEndpoint"].endswith("/v1")
-    assert config["sttModel"] == "whisper"
-    assert config["sttApiKeyEnv"] == "OMLX_API_KEY"
-
-    monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "false")
-    monkeypatch.delenv("OMLX_API_KEY", raising=False)
-    with patch.object(
-        voice.tier_registry, "uses_local_placeholders", return_value=False
-    ):
-        assert "sttEndpoint" not in voice.get_voice_config("local")
-
-
-def test_voice_local_stt_absent_falls_back(monkeypatch):
-    voice = load_script("configure-opencode-voice.py")
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    with patch.dict(
-        local_engines.LOCAL_ENGINES["omlx"], {"audio_discovery": lambda: []}
-    ):
-        assert "sttEndpoint" not in voice.get_voice_config("local")
-
-
 def test_caddy_omlx_route_is_gated(monkeypatch):
     caddy = load_script("configure-caddy.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")

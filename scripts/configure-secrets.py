@@ -132,33 +132,7 @@ def main():
                 "IntelliJ IDEA not found or MCP server jars not detected — stdio mode won't work"
             )
 
-    # 4. Meridian plugin path
-    logger.info("Resolving Meridian plugin path...")
-    meridian_plugin_path = ""
-    npm_bin = shutil.which("npm")
-    if npm_bin:
-        try:
-            res = subprocess.run(
-                [npm_bin, "root", "-g"], capture_output=True, text=True, timeout=5
-            )
-            npm_root = res.stdout.strip()
-            if npm_root:
-                candidate = os.path.join(
-                    npm_root, "@rynfar/meridian/plugin/meridian.ts"
-                )
-                if os.path.isfile(candidate):
-                    meridian_plugin_path = candidate
-                    logger.info(f"Meridian plugin found at {meridian_plugin_path}")
-                else:
-                    logger.warning(
-                        "Meridian plugin not found at expected npm global path"
-                    )
-        except Exception:
-            pass
-    else:
-        logger.warning("npm not found — cannot resolve Meridian plugin path")
-
-    # 5. Additional MCP Template Vars
+    # 4. Additional MCP Template Vars
     logger.info("Resolving additional MCP environment variables...")
     shortcut_token = os.environ.get("SHORTCUT_API_TOKEN", "")
     mdb_client_id = os.environ.get("MDB_MCP_API_CLIENT_ID", "")
@@ -188,7 +162,6 @@ export GITHUB_TOKEN="$GH_TOKEN"
 export SENTRY_AUTH_TOKEN="{sentry_token}"
 export IJ_MCP_SERVER_JAVA="{java_bin}"
 export IJ_MCP_SERVER_CLASSPATH="{classpath}"
-export MERIDIAN_PLUGIN_PATH="{meridian_plugin_path}"
 export SHORTCUT_API_TOKEN="{shortcut_token}"
 export MDB_MCP_API_CLIENT_ID="{mdb_client_id}"
 export MDB_MCP_API_CLIENT_SECRET="{mdb_client_secret}"
@@ -242,10 +215,6 @@ export BETTERSTACK_API_TOKEN="{betterstack_token}"
         )
     else:
         summary_lines.append("  • IntelliJ MCP: SSE transport (no JVM needed)")
-
-    summary_lines.append(
-        f"  • Meridian plugin: {meridian_plugin_path if meridian_plugin_path else 'missing'}"
-    )
 
     if shortcut_token:
         summary_lines.append("  • Shortcut token: set")

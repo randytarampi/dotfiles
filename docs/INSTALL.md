@@ -113,3 +113,33 @@ After pulling changes that rename gates or restructure scripts:
 3. `make reset` — clear orphaned chezmoi script state (only needed after script renames)
 4. `make deploy` — full rebuild
 5. `make verify` — confirm everything is in order
+
+### OpenCode v1 to v2
+
+OpenCode v2 is installed through Homebrew and replaces the v1 formula. Before
+switching, run `opencode uninstall --dry-run` to inventory paths, stop
+`com.opencode.web` and all v1 processes, and make permission-preserving backups
+of `~/.config/opencode`, every reported data/state directory, each project
+`.opencode` directory, and project `opencode.json` files.
+
+Then swap the formula:
+
+```bash
+brew uninstall opencode
+brew install anomalyco/tap/opencode-v2
+```
+
+Inspect the installed CLI before relying on plugin command spelling. The v2
+configuration keeps generated `opencode.json` V1-shaped; terminal plugins use
+`~/.config/opencode/cli.json`. Validate MCP, ACP, retained plugins and the TUI
+in a fresh v2 session before restarting the web service.
+
+To roll back, swap formulas and restore backups conditionally:
+
+```bash
+brew uninstall anomalyco/tap/opencode-v2
+brew install anomalyco/tap/opencode
+```
+
+Restore the backed-up config, data/state directories and project files only
+after confirming which state belongs to the version being restored.

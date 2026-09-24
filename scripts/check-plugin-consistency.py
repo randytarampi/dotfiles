@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check OpenCode plugin specifications across install and config sources."""
+"""Check pinned OpenCode plugins across install and generator sources."""
 
 import argparse
 import ast
@@ -12,28 +12,26 @@ INSTALL_SCRIPT = (
     REPO_ROOT / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
 )
 CONFIG_SCRIPT = REPO_ROOT / "scripts/configure-opencode.py"
+DCP_SCRIPT = REPO_ROOT / "scripts/configure-opencode-dcp.py"
 PLUGIN_LINE = re.compile(r'^\s*["\']([^"\']+)["\']\s*,?\s*$')
+EXPECTED = {
+    "oh-my-opencode-slim@2.2.24",
+    "@tarquinen/opencode-dcp@3.2.0",
+    "@plannotator/opencode@0.27.18",
+    "opencode-planning-with-files@1.0.1",
+    "@slkiser/opencode-quota@4.10.2",
+}
 
 
 def parse_install_plugins(path):
-    """Return plugin specs installed by the shell template."""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    plugins = []
-    in_array = False
-    for line in lines:
+    plugins, in_array = [], False
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not in_array and re.match(r"^\s*PLUGINS\s*=\s*\(\s*$", line):
             in_array = True
-            continue
-        if in_array:
-            if re.match(r"^\s*\)\s*$", line):
-                in_array = False
-                continue
-            match = PLUGIN_LINE.match(line)
-            if match:
-                plugins.append(match.group(1))
-
-        if re.search(r"\b(?:bunx|npx)\s+oh-my-opencode-slim@latest\s+install\b", line):
-            plugins.append("oh-my-opencode-slim@latest")
+        elif in_array and re.match(r"^\s*\)\s*$", line):
+            in_array = False
+        elif in_array and (match := PLUGIN_LINE.match(line)):
+            plugins.append(match.group(1))
     if in_array:
         raise ValueError("PLUGINS array is not terminated")
     return plugins
@@ -43,76 +41,58 @@ def _plugin_value(value):
     if isinstance(value, ast.Constant) and isinstance(value.value, str):
         return value.value
     if isinstance(value, (ast.List, ast.Tuple)) and value.elts:
-        first = value.elts[0]
-        if isinstance(first, ast.Constant) and isinstance(first.value, str):
-            return first.value
+        return _plugin_value(value.elts[0])
     return None
 
 
 def parse_config_plugins(path):
-    """Return plugin specs from Python dictionary entries named ``plugin``."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     plugins = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        for key, value in zip(node.keys, node.values):
-            if isinstance(key, ast.Constant) and key.value == "plugin":
-                if not isinstance(value, ast.List):
-                    raise ValueError("config plugin entry is not a list")
-                for entry in value.elts:
-                    plugin = _plugin_value(entry)
-                    if plugin is not None:
-                        plugins.append(plugin)
-    if not plugins:
-        raise ValueError('config generator contains no "plugin" entries')
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and key.value == "plugin":
+                    plugins.extend(filter(None, (_plugin_value(e) for e in value.elts)))
     return plugins
 
 
-def plugin_base(spec):
-    return spec[:-6] if spec.endswith("@latest") else spec
-
-
-def check_consistency(install_plugins, config_plugins):
-    install_by_base = {plugin_base(spec): spec for spec in install_plugins}
-    config_by_base = {plugin_base(spec): spec for spec in config_plugins}
-    exit_code = 0
-
-    for name in sorted(set(install_by_base) & set(config_by_base)):
-        install_spec = install_by_base[name]
-        config_spec = config_by_base[name]
-        if install_spec != config_spec:
-            print(
-                f"ERROR: spec-string mismatch for {name}: "
-                f"install={install_spec!r}, config={config_spec!r}"
-            )
-            exit_code = 1
-
-    # TUI plugins are configured in tui.json (not opencode.json) by dedicated
-    # configure-opencode-*.py scripts. They are intentionally absent from the
-    # opencode.json plugin array, so suppress the false-positive warning.
-    # Keys use plugin_base() format (trailing @ retained after @latest strip).
-    TUI_PLUGINS = {"@renjfk/opencode-voice@"}
-
-    for name in sorted(set(install_by_base) - set(config_by_base)):
-        if name in TUI_PLUGINS:
-            continue
-        print(f"WARNING: installed but not configured: {install_by_base[name]}")
-    for name in sorted(set(config_by_base) - set(install_by_base)):
-        print(f"WARNING: configured but not installed: {config_by_base[name]}")
-    return exit_code
+def parse_cli_plugins(path):
+    text = path.read_text(encoding="utf-8")
+    return set(re.findall(r'"package":\s*"([^"]+)"', text)) | set(
+        re.findall(r'"@[^" ]+":\s*"([^" ]+)"', text)
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Check OpenCode plugin specs in install and config sources."
-    )
-    parser.parse_args()
-
+    argparse.ArgumentParser(description=__doc__, allow_abbrev=False).parse_args()
     try:
-        install_plugins = parse_install_plugins(INSTALL_SCRIPT)
-        config_plugins = parse_config_plugins(CONFIG_SCRIPT)
-        return check_consistency(install_plugins, config_plugins)
+        install = set(parse_install_plugins(INSTALL_SCRIPT))
+        config = set(parse_config_plugins(CONFIG_SCRIPT))
+        cli = parse_cli_plugins(DCP_SCRIPT)
+        for label, actual in (("install", install), ("config", config)):
+            missing = EXPECTED - actual
+            if missing:
+                print(f"ERROR: {label} missing: {', '.join(sorted(missing))}")
+                return 1
+        required_cli = {
+            "@tarquinen/opencode-dcp@3.2.0",
+            "@slkiser/opencode-quota@4.10.2",
+        }
+        if not required_cli <= cli:
+            print(
+                f"ERROR: cli.json writer missing: {', '.join(sorted(required_cli - cli))}"
+            )
+            return 1
+        if install != config | {
+            "opencode-planning-with-files@1.0.1",
+            "@slkiser/opencode-quota@4.10.2",
+        }:
+            print(
+                f"ERROR: install/config plugin mismatch: install={sorted(install)}, config={sorted(config)}"
+            )
+            return 1
+        print("OpenCode plugin sources are consistent.")
+        return 0
     except (OSError, SyntaxError, ValueError) as error:
         print(f"ERROR: could not check plugin consistency: {error}", file=sys.stderr)
         return 1

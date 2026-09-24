@@ -1,15 +1,25 @@
-# Voice Plugin (opencode-voice)
+# Voice Plugin (historical OpenCode integration)
 
-> Deep reference for voice plugin configuration, tier mapping, and dependencies.
+> Historical reference for the removed OpenCode voice plugin and current substitutes.
 
-OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin that adds voice input (STT) and output (TTS) to the OpenCode terminal interface.
+## Removed in OpenCode v2
+
+`@renjfk/opencode-voice` is V1-only and is not loaded by OpenCode v2. This is an
+accepted loss; no redaction or compatibility mitigation is promised. The former
+`configure-opencode-voice.py` writer is removed.
+
+For voice input, use macOS dictation or Pi's STT support. In OpenCode, `/rename`
+regains the `ctrl+r` key binding previously supplied by the voice workflow.
+The historical tier and STT/TTS notes below are retained for reference only.
+
+Historically, OpenCode voice support was provided by [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice), a TUI-only plugin that added voice input (STT) and output (TTS).
 
 ---
 
 ## Key Properties
 
 - **TUI-only**: The plugin only hooks into the TUI, not the desktop app or VSCode extension
-- **Configured in `tui.json`**: Separate from `opencode.json`; written by `configure-opencode-voice.py`
+- **Historical configuration**: `tui.json` was separate from `opencode.json`; it was written by `configure-opencode-voice.py`
 - **Tier-aware**: Voice LLM endpoint and STT backend are selected based on the active preset
 - **Local-first**: Default uses local Ollama + whisper-cli; cloud STT is an upgrade when API keys are available
 
@@ -17,7 +27,7 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 
 ## Voice Config Generation
 
-`scripts/configure-opencode-voice.py` writes `~/.config/opencode/tui.json` with a tier-aware voice plugin config. It is called automatically by `configure-opencode.py` after tier switching.
+Historically, `scripts/configure-opencode-voice.py` wrote `~/.config/opencode/tui.json` with a tier-aware voice plugin config after tier switching. It is no longer run.
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
@@ -65,7 +75,8 @@ Voice requires local STT/TTS tooling regardless of tier:
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model file |
 | Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice file |
 
-These are installed by `run_onchange_07-install-opencode-plugins.sh.tmpl` (gated on `DOTFILES_RUN_VOICE_SETUP=1`).
+Historically, these were installed by `run_onchange_07-install-opencode-plugins.sh.tmpl`
+(gated on `DOTFILES_RUN_VOICE_SETUP=1`); OpenCode v2 no longer installs them.
 
 ---
 
@@ -84,7 +95,7 @@ Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_U
 
 | File | Purpose |
 |------|---------|
-| `~/.config/opencode/tui.json` | Voice plugin config (+ other TUI plugins). `tui.json` is a shared file — each TUI plugin has its own `configure-opencode-*.py` that defensively merges only its own entry. DCP (`/dcp` panel, v3.1.13+) is co-located here; see [DCP.md](DCP.md). |
+| `~/.config/opencode/tui.json` | Historical v1 voice/TUI plugin config. OpenCode v2 uses `cli.json`; see [DCP.md](DCP.md). |
 | `~/.local/share/whisper-cpp/` | Whisper model directory |
 | `~/.local/share/piper-voices/` | Piper voice directory |
 | `~/.local/bin/piper` | Piper TTS binary (installed by `uv tool install piper-tts`) |
@@ -93,13 +104,14 @@ Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_U
 
 ## Environment Gating
 
-Voice deps in `run_onchange_07-install-opencode-plugins.sh.tmpl` are gated on `DOTFILES_RUN_VOICE_SETUP=1` (default: 0). The voice config writer (`configure-opencode-voice.py`) runs unconditionally — it only writes `tui.json` and always respects the active tier.
+The historical voice dependencies and `DOTFILES_RUN_VOICE_SETUP` gate applied to
+the removed v1 plugin. OpenCode v2 does not run the voice config writer.
 
 ## Cross-tool voice support
 
 | Tool | Voice support | Mechanism | Notes |
 |---|---|---|---|
-| opencode | Full (STT + TTS) | `@renjfk/opencode-voice` plugin | Tier-aware; see sections above |
+| opencode | Removed in v2 | macOS dictation; `/rename` restores `ctrl+r` | The V1-only plugin loss was accepted |
 | pi | STT only | `@juicesharp/rpiv-voice` plugin | TTS not available; hallucination filter configurable |
 | claude | STT only | built-in `/voice` dictation | No TTS; speech-to-text only |
 | codex | None | — | No voice plugin or built-in support |
@@ -126,9 +138,9 @@ model formats and fixed paths.
 
 ### Piper TTS
 
-Piper is currently OpenCode-only (via `@renjfk/opencode-voice`). No other tool
+Piper was OpenCode-only (via `@renjfk/opencode-voice`). No other tool
 in this repo has Piper integration. The Piper voice model is configured via
-`DOTFILES_PIPER_VOICE` and managed by `scripts/configure-opencode-voice.py`.
+`DOTFILES_PIPER_VOICE` and managed by the removed voice writer.
 
 ### i18n / locale
 

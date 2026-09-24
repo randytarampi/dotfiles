@@ -195,30 +195,22 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
   # Review job runs untrusted PR content. The dispatcher gates triggers to
-  # trusted repo actors; keep provider keys minimal and never add write
-  # permissions beyond pull-requests/issues here.
+  # trusted repo actors; this lane is review-only and cannot modify the
+  # checked-out repository.
   opencode:
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
     runs-on: ubuntu-latest
-    # OpenCode may push a requested fix; reviewer-only lanes remain read-only.
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 1
           ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
-      # Attribute agent commits and avoid runners' missing git identity failure.
-      # Downstream repositories may override this with their preferred identity.
-      - name: Configure git identity for agent commits
-        run: |
-          git config --local user.name "opencode-agent[bot]"
-          git config --local user.email "opencode-agent[bot]@users.noreply.github.com"
       # Downstream callers need this trusted checkout for shared review assets.
       - name: Checkout trusted review assets
         uses: actions/checkout@v7
@@ -259,29 +251,87 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      # OpenCode may push a requested fix; strip the trusted checkout's git
-      # include config so submodule scanning does not error on its directory.
-      - name: Remove trusted checkout git include config
-        run: |
-          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
-            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - name: Run OpenCode review
-        uses: anomalyco/opencode/github@16747470f976aca3d362ad730bcd3fe82ecc2c9a # v1.18.29
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
+          # Review-only posture: the OpenCode process must NOT receive the
+          # write-capable GITHUB_TOKEN — GitHub MCP tools run under --auto,
+          # so a write-capable token would expose PR mutations to prompt
+          # injection. Publication happens in a later step with its own
+          # GH_TOKEN; this step also disables the GitHub MCP entirely.
           OPENCODE_CONFIG: ${{ github.workspace }}/__TRUSTED_DOTFILES__/configs/opencode/ci/opencode.json
-        with:
-          model: opencode/big-pickle
-          use_github_token: "true"
-          prompt: |
-            ${{ needs.parse.outputs.prompt != '' && format('{0}
+          REVIEW_PROMPT: ${{ needs.parse.outputs.prompt }}
+        run: |
+          set -euo pipefail
+          review_file="${RUNNER_TEMP}/opencode-review.txt"
+          review_log="${RUNNER_TEMP}/opencode-review.log"
+          review_status_file="${RUNNER_TEMP}/opencode-review.status"
+          : > "${review_file}"
+          : > "${review_log}"
+          printf '1\n' > "${review_status_file}"
+          if [[ -n "${REVIEW_PROMPT}" ]]; then
+            prompt="${REVIEW_PROMPT}"$'\n\n---\n\n'"${CODE_REVIEW_PROMPT}"
+          else
+            prompt="${CODE_REVIEW_PROMPT}"
+          fi
 
-            ---
+          # v2.0.15 has no GitHub Release asset/checksum; pin the official v2
+          # installer to tag commit 6f3639d82ed0760091792189b78f8eeb44f699b1.
+          curl -fsSL 'https://raw.githubusercontent.com/anomalyco/opencode/6f3639d82ed0760091792189b78f8eeb44f699b1/install' |
+            bash -s -- --version 2.0.15 --no-modify-path
+          export PATH="${HOME}/.opencode/bin:${PATH}"
+          opencode --version
+          set +e
+          opencode run --auto --model opencode/big-pickle "${prompt}" > "${review_file}" 2> "${review_log}"
+          review_status=$?
+          set -e
+          printf '%s\n' "${review_status}" > "${review_status_file}"
+          if ((review_status != 0)); then
+            cat "${review_log}" >&2
+            exit "${review_status}"
+          fi
 
-            {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+      - name: Publish OpenCode review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          review_file="${RUNNER_TEMP}/opencode-review.txt"
+          review_log="${RUNNER_TEMP}/opencode-review.log"
+          review_status_file="${RUNNER_TEMP}/opencode-review.status"
+          marker='<!-- agentic-review:opencode-result -->'
+
+          if [[ -z "${PR_NUMBER}" ]]; then
+            echo "OpenCode review has no pull request number for comment publication." >&2
+            exit 1
+          fi
+          review_status=1
+          [[ -s "${review_status_file}" ]] && review_status="$(<"${review_status_file}")"
+          review=""
+          [[ -f "${review_file}" ]] && review="$(<"${review_file}")"
+          if [[ "${review_status}" != 0 ]]; then
+            review="$(printf 'OpenCode review failed before producing a review.\n\n%s' "$(<"${review_log}")")"
+          elif [[ -z "${review}" ]]; then
+            review="OpenCode completed without a review response."
+          fi
+          body="$(printf '%s\n\n%s\n\nSee the [workflow logs](%s/%s/actions/runs/%s).' \
+            "${marker}" "${review}" "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}")"
+
+          comment_id="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq 'first(.[] | select(.body | contains("<!-- agentic-review:opencode-result -->")) | .id) // empty')"
+          if [[ -n "${comment_id}" ]]; then
+            gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
+          else
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+          fi
+
+          if [[ "${review_status}" != 0 ]]; then
+            exit "${review_status}"
+          fi
 
   junie:
     needs: parse
@@ -557,13 +607,17 @@ jobs:
               status="Junie work completed and was pushed — see the workflow logs."
             elif [[ "${result}" == "success" ]]; then
               case "${agent}" in
-                opencode) status="OpenCode review completed — see the agent's review comment above." ;;
+                opencode) status="OpenCode review posted as a PR comment by this workflow." ;;
                 junie) status="Junie review completed — see the agent's comment above." ;;
                 gemini) status="Gemini review completed — see the agent's comment above." ;;
                 *) status="${agent} review completed." ;;
               esac
             else
-              status="${token} review FAILED."
+              if [[ "${agent}" == "opencode" ]]; then
+                status="OpenCode review or PR comment publication FAILED."
+              else
+                status="${token} review FAILED."
+              fi
             fi
             body="$(printf '%s\n\n%s\n\n%s' \
               "${marker}" "${status}" \

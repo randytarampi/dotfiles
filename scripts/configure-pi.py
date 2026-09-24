@@ -610,6 +610,7 @@ def main():
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
             "npm:pi-edit-session-in-place",
+            "npm:planning-with-files",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],

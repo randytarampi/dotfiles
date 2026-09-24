@@ -13,14 +13,18 @@ used by both the GitHub Actions and local review lanes.
 | Reviewer | Action | Trigger | Secret | Job |
 |---|---|---|---|---|
 | GitHub Copilot | native reviewer | add as reviewer, or `review-copilot` label | none | broad correctness; reads `AGENTS.md` and repo MCP/skills |
-| OpenCode | `anomalyco/opencode/github` | `/oc <prompt>` or `/opencode <prompt>` mention, or `review-opencode` label | `OPENCODE_API_KEY` | local preset roles via explicit model + provider blocks, MCP mirror, skills, codegraph |
+| OpenCode v2.0.15 | direct `opencode run` CLI | `/oc <prompt>` or `/opencode <prompt>` mention, or `review-opencode` label | `OPENCODE_API_KEY` | local preset roles via explicit model + provider blocks, MCP mirror, skills, codegraph |
 | Junie | `JetBrains/junie-github-action@v1` | `@junie-agent <prompt>` mention, or `review-junie` label | `JUNIE_API_KEY` | shared review method (custom-prompt mode with GitHub context attached) |
 | Gemini | `google-github-actions/run-gemini-cli@v0` | `@gemini-cli /review` mention, or `review-gemini` label | `GEMINI_API_KEY` | behavior regressions, missing tests, operational risk |
 | Copilot auto-request | REST job in the reusable workflow | `review-copilot` label | none | requests `copilot-pull-request-reviewer[bot]` |
 
-`review-all` fans out to opencode, junie, gemini, and copilot. Mentions work
-regardless of labels; labels gate unprompted reviews. OpenCode is label-gated
-like the others.
+`review-all` fans out to opencode, junie, gemini, and copilot. The reusable
+dispatcher supports its `workflow_call`, `issue_comment`, and
+`pull_request_review_comment` routing, then runs OpenCode v2 directly in the
+job. `/opencode` and `/oc` comment commands still work as dispatcher triggers,
+and labels retain their OpenCode review behaviour. The dispatcher constructs the
+complete prompt itself, including the shared review prompt and any custom
+prompt text.
 
 ## Labels
 
@@ -71,19 +75,21 @@ repository instructions.
   stable stub and points its `uses:` reference at the selected dotfiles ref.
   Re-onboarding is only needed when trigger events or permissions change.
   The CI OpenCode lane runs the explicitly selected model with all three
-  provider keys available. The repo's local fallback policy is a runtime
+  provider keys available and publishes the captured CLI response as an
+  idempotent marked PR comment. The repo's local fallback policy is a runtime
   plugin concern and is not part of the CI config.
   OpenCode and Gemini load the shared prompt from a trusted
   `randytarampi/dotfiles@main` checkout using a random environment delimiter;
   PR content never participates in prompt-file loading.
 - Security posture: minimal `permissions` per job, `sender.type != 'Bot'`
   filter, per-PR `concurrency` cancel-in-progress, actions pinned to moving
-  major tags (OpenCode pinned to its release SHA — it publishes no major tag),
-  read-only MCP tool allowlists, no `pull_request_target`. Push-capable lanes
-  (OpenCode, Junie, Gemini) run with token checkout, persisted credentials,
-  and `contents: write` so mentioned agents can push requested fixes; the
-  Copilot lane stays orchestration-only — Copilot's own write-back is governed
-  by repo Settings → Copilot → Agent permissions, not by this workflow.
+  major tags, and OpenCode installed from its pinned v2.0.15 release,
+  read-only MCP tool allowlists, no `pull_request_target`. The OpenCode lane is
+  explicitly review-only: it has `contents: read` plus `pull-requests: write`
+  solely to publish its marked review comment, uses non-persisted checkout
+  credentials, and denies OpenCode `edit` (including write/patch), `bash`, and
+  `task` permissions even with `--auto` enabled. It cannot commit, push, or
+  modify the worktree.
 
 ## Secrets
 
@@ -220,19 +226,18 @@ jobs:
 
 ## Known limitations
 
-Reviewer jobs execute with default tool permissions. A stricter CI permission
-profile is follow-up work; dispatcher gating is the primary control.
+The OpenCode reviewer uses explicit deny rules for mutation and shell tools;
+`--auto` cannot override those denies. Dispatcher gating remains the primary
+control for reviewer jobs.
 
 ## Predictability
 
-Push-capable agent lanes configure a per-lane git identity before running the
-agent: `opencode-agent[bot]`, `junie-agent[bot]`, or `gemini-agent[bot]`. This
-makes commits attributable and avoids runner failures caused by an unset git
-identity. Downstream repositories may override the local git identity when
-needed. Junie keeps its bundled commit-and-push behaviour (`silent_mode` is
-unset — it gates the bundled commit steps); `skip_feedback` suppresses the
-action's own status comments so the notify job's standardized messaging stands
-alone.
+Junie and Gemini lanes configure a per-lane git identity before running their
+agents. The OpenCode lane is deliberately review-only and does not configure a
+write-capable checkout or git identity. Junie keeps its bundled commit-and-push
+behaviour (`silent_mode` is unset — it gates the bundled commit steps);
+`skip_feedback` suppresses the action's own status comments so the notify job's
+standardized messaging stands alone.
 
 ## Copilot lane prerequisites
 

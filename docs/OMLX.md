@@ -174,7 +174,7 @@ endpoint needs its own base URL.
 | Pi | oMLX provider alongside Ollama; native `max_model_len` context is used. |
 | ACP agents | `claude--local` and `codex--local` are pool-driven; the winning engine supplies the endpoint and authentication follows that engine's configuration. |
 | Codex | Pool-driven winner per profile plus one provider per gate-active engine — `codex --model <any-id>` resolves against the engine's `base_url`, so every pool model is selectable without re-configuring. Pin an app with the engine's own launcher. |
-| Voice | oMLX `audio_stt` is selected below explicit OpenAI STT tiers; `DOTFILES_USE_LOCAL_OMLX=false` opts out. TTS remains Piper and Pi voice is unchanged. |
+| Voice | OpenCode's V1 voice plugin was removed; oMLX `audio_stt` remains available to other configured STT consumers. Pi voice is unchanged. |
 | Mozart router | Gate-active, reachable engines are appended as `generic-openai` gateways by `configure-mozart-router.py` (deduped by base URL; API key via the engine's `api_key_env`). With oMLX running, the deployed `mozart.json` carries an `omlx` gateway. |
 
 ## Caddy

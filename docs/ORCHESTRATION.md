@@ -97,7 +97,7 @@ sequenceDiagram
     Configure->>Configure: configure-jetbrains-ai.py (Junie profiles via tier registry)
     Configure->>Configure: configure-mcps.py (MCP)
     Configure->>Configure: configure-opencode.py (tier, models)
-    Configure->>Configure: configure-meridian.py (plugin injection + SDK features)
+    Configure->>Configure: configure-meridian.py (SDK features; no OpenCode plugin injection)
     Configure->>Configure: configure-codex.py (Codex provider config)
     Configure->>Configure: configure-mozart-router.py
     Configure->>Configure: configure-agent-guidance.py
@@ -174,7 +174,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | 04 | install-packages | run_onchange | Homebrew/Winget packages | `DOTFILES_RUN_PACKAGES_SETUP` |
 | 05 | setup-bin-symlinks | run_onchange | Symlink scripts to ~/bin | — |
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
-| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
+| 07 | install-opencode-plugins | run_onchange | Registration reporter: verifies the OpenCode binary and reports config-registered v2 plugins (DCP, quota, planning-with-files, plannotator, oh-my-opencode-slim) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: openspec, codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
@@ -185,7 +185,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | — | configure-aws | configure-all.sh | Non-secret AWS CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_AWS_CONFIG_SETUP` |
 | — | [configure-docker](../scripts/configure-docker.py) | configure-all.sh | Non-secret Docker CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_DOCKER_CONFIG_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
-| 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
+| 16 | configure-opencode | run_onchange | OpenCode v2 tier and model configuration; no LSP or voice plugin | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
 | 10, 18 | install/configure-cortex | run_onchange | Snowflake Cortex Code CLI and native config | `DOTFILES_RUN_CORTEX_SETUP` |
 | 17 | configure-mozart-router | run_onchange | Mozart router config | `DOTFILES_RUN_MOZART_SETUP` |
@@ -210,6 +210,15 @@ to detect drift, and `--dry-run` to preview a stamp.
 `configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py`
 remains the global Junie-model path; project Junie work is delegated by
 the unified script. Both consume the shared tier registry via `scripts/lib/tier_registry.py`.
+
+OpenCode v2 consistency checks require five pinned plugins — oh-my-opencode-slim,
+DCP, Plannotator, planning-with-files and quota — in the install and generator
+sources, and require DCP and quota in the native v2 `cli.json` writer. It does
+not independently reject removed voice, Vibeguard, Tokenscope, OpenSpec-plugin
+or Meridian-plugin entries; those removals are enforced by the generators and
+install sources.
+The removed `configure-opencode-voice.py` is intentionally absent from the
+inventory; the standalone OpenSpec CLI in Script 08 is unchanged.
 
 ### Skills catalog
 
@@ -242,7 +251,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
 | `DOTFILES_RUN_CADDY_SETUP` | 0 | Scripts 21-25 (migration, ddns-route53, acme.sh, Caddy, Plannotator) |
 | `DOTFILES_RUN_OPENCODE_WEB_SETUP` | 0 | Script 26 (OpenCode web LaunchAgent) |
-| `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
+| `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode v2 tier and models) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
@@ -256,7 +265,6 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_SKILLS_AWS_SETUP` | 0 | Activate the AWS skills category globally |
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |
-| `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper.cpp, sox, piper-tts, models) |
 
 ## Dependency Ordering
 
@@ -272,8 +280,7 @@ graph LR
     S14[14 secrets] --> S1_5[1.5 junie models]
     S1_5 --> S15[15 MCP]
     S15 --> S16[16 opencode]
-    S16 --> S3_5[3.5 meridian plugin]
-    S3_5 --> S17[17 mozart]
+    S16 --> S17[17 mozart]
     S16 --> S19[19 codegraph]
     S16 --> S20[20 agent guidance]
     S20 --> S27[27 ollama daemon]

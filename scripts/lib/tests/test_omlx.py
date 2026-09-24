@@ -598,28 +598,6 @@ def test_pi_omlx_context_ignores_ollama_cap():
             assert configure_pi._model_context_window("chat", True, "omlx") == 131072
 
 
-def test_voice_omlx_llm_endpoint_and_api_key_are_conditional(monkeypatch):
-    voice = _load_script("configure_opencode_voice", "configure-opencode-voice.py")
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    with (
-        patch.dict(
-            local_engines.LOCAL_ENGINES["omlx"],
-            {"base_url": lambda: "http://omlx:8000"},
-        ),
-        patch.dict(os.environ, {"OMLX_API_KEY": "secret"}, clear=False),
-    ):
-        configured = voice.local_voice_provider("omlx/chat")
-    assert configured == {
-        "endpoint": "http://omlx:8000/v1",
-        "model": "chat",
-        "apiKeyEnv": "OMLX_API_KEY",
-    }
-    monkeypatch.delenv("DOTFILES_RUN_OMLX_SETUP")
-    with patch.dict(os.environ, {}, clear=True):
-        unconfigured = voice.local_voice_provider("omlx/chat")
-    assert "apiKeyEnv" not in unconfigured
-
-
 def test_acp_local_model_uses_combined_pool(monkeypatch):
     acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
@@ -757,13 +735,6 @@ def test_fleet_synthetic_engine_materializes_across_consumers(monkeypatch, tmp_p
             junie_openai["lmstudio"]["baseUrl"]
             == "http://lmstudio:1234/v1/chat/completions"
         )
-
-        # 5. Voice audio via the registry audio contract
-        audio = local_engines.audio_models("lmstudio")
-        assert [m["name"] for m in audio] == ["lmvoice"]
-        voice = _load_script("configure_opencode_voice", "configure-opencode-voice.py")
-        configured = voice.local_voice_provider("lmstudio/lmvoice")
-        assert configured == {"endpoint": "http://lmstudio:1234/v1", "model": "lmvoice"}
 
         # 6. Caddy route via the registry caddy contract
         configure_caddy = _load_script("configure_caddy", "configure-caddy.py")

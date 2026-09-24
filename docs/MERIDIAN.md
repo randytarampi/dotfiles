@@ -1,6 +1,6 @@
 # Meridian Proxy
 
-Meridian is a local Anthropic-compatible proxy/router at `http://127.0.0.1:3456/v1`, also an OpenCode plugin (`@rynfar/meridian`). Gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`. Uses Claude Code SDK OAuth (not `ANTHROPIC_API_KEY`).
+Meridian is a local Anthropic-compatible proxy/router at `http://127.0.0.1:3456/v1`. Gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`. Uses Claude Code SDK OAuth (not `ANTHROPIC_API_KEY`). OpenCode v2 routes provider traffic directly; the former Meridian OpenCode plugin and `MERIDIAN_PLUGIN_PATH` export are removed. Meridian remains available to other tools and through its proxy endpoint.
 
 For Mozart router config (a separate component), see [MOZART.md](MOZART.md).
 
@@ -71,7 +71,7 @@ Verify alignment by checking:
 
 ## Configuration Scripts
 
-- `scripts/configure-meridian.py` — appends Meridian plugin path to `opencode.json` plugin array. Also manages `~/.config/meridian/sdk-features.json` (ensures `opencode.codeSystemPrompt=false`, preserving other adapter settings).
+- `scripts/configure-meridian.py` — manages `~/.config/meridian/sdk-features.json` (ensures `opencode.codeSystemPrompt=false`, preserving other adapter settings); it no longer injects an OpenCode plugin.
 - `scripts/configure-codex.py` — adds Meridian as an available provider in `~/.codex/config.toml` (base_url, wire_api, env_key). Codex defaults to OpenAI; switch to Meridian with `codex -c model_provider=meridian -m <model>`. Preserves existing runtime settings.
 - `scripts/meridian-launch.sh` — launches Meridian proxy, unsets `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`.
 - `.chezmoiscripts/run_onchange_11-install-meridian-launchd.sh.tmpl` — installs launchd plist for Meridian.

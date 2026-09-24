@@ -2,7 +2,7 @@
 """Shared tier-resolution helpers for local Ollama model classification.
 
 Extracted from configure-opencode-tier.py to eliminate dynamic module loading
-across configure-opencode.py, configure-opencode-voice.py, and
+across configure-opencode.py and
 other tier-aware configuration scripts.
 
 Provides:

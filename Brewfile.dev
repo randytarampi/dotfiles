@@ -152,7 +152,8 @@ brew "parallel"
 brew "cask"
 
 # --- Shared tap formulas (from core Brewfile) ---
-brew "anomalyco/tap/opencode", trusted: true
+# OpenCode v2 requires the v1 formula to be absent because the formulas conflict.
+brew "anomalyco/tap/opencode-v2", trusted: true
 brew "facebook/fb/idb-companion"
 brew "microsoft/mssql-release/msodbcsql18"
 brew "microsoft/mssql-release/mssql-tools18"

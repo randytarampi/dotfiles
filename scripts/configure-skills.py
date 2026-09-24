@@ -28,6 +28,7 @@ Options:
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -249,6 +250,15 @@ def main():
     # Re-read installed after fetching
     if not args.dry_run:
         installed_names = get_installed_skills(CANONICAL_STORE)
+
+    if (
+        "planning-with-files" in active_names
+        and "planning-with-files" in installed_names
+    ):
+        logger.info(
+            "planning-with-files: skill distribution only; Codex native hooks deferred "
+            "(upstream payload not shipped via skills channel)"
+        )
 
     # Symlink all active skills to all agent dirs
     symlinked = 0

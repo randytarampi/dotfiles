@@ -80,7 +80,6 @@ The `:cloud` suffix is appended **only** when routing through the local daemon. 
 |--------|--------|
 | `configure-opencode.py` | Merges `ollama` + `ollama-cloud` into single provider when cloud-capable |
 | `configure-opencode-tier.py` | Discovers cloud models, appends `:cloud` suffixes to fallback chains |
-| `configure-opencode-voice.py` | Routes voice through local daemon with `:cloud` suffix when capable |
 | `configure-mozart-router.py` | Routes `ollama-cloud` gateway through local daemon when proxy enabled |
 
 #### Environment Variables

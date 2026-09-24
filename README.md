@@ -140,7 +140,6 @@ make migrate             # Migrate deprecated gate names + append missing templa
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py --preset pro-plus   # Switch AI model tier
 scripts/configure-all.sh [options]            # --preset, --mode, --skip, --local-fallback-*, --min-reasoning-embedding
-scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
 scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
@@ -340,10 +339,9 @@ integration, model management, and platform-gating details.
     ├── verify-brewfile-completeness.py # Verify Brewfile completeness
     ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
     ├── configure-mcp-tool.py      # Generate MCP config for a single tool
-    ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
+    ├── configure-meridian.py      # Configure Meridian proxy settings for non-OpenCode tools
     ├── configure-opencode.py      # Write OpenCode config (local ollama default)
     ├── configure-opencode-tier.py # Switch active preset tier (--preset required)
-    ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
     ├── get-tools.py               # Get MCP tool registry keys
     ├── install-acp-adapters.py    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
@@ -487,7 +485,7 @@ Packages available on both platforms by category:
 | Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
 | Ollama | `ollama-app` (cask) | `Ollama.Ollama` |
 | oMLX | `jundot/omlx/omlx` (Apple Silicon/macOS only) | — |
-| OpenCode | `opencode-desktop` (cask) / `anomalyco/tap/opencode` | `SST.OpenCodeDesktop` / `SST.opencode` |
+| OpenCode | `opencode-desktop` (cask) / `anomalyco/tap/opencode-v2` | `SST.OpenCodeDesktop` / `SST.opencode` |
 | Codex | `codex` (cask) | `OpenAI.Codex` |
 | VS Code | `visual-studio-code` (cask) | `Microsoft.VisualStudioCode` |
 | Slack | `slack` (cask) | `SlackTechnologies.Slack` |
@@ -520,6 +518,16 @@ Packages available on both platforms by category:
 | Steam | `steam` (cask) | `Valve.Steam` |
 
 ---
+
+### OpenCode v2 migration
+
+The managed OpenCode installation is v2.0.15. Before migrating from v1, run
+`opencode uninstall --dry-run`, stop `com.opencode.web` and all v1 processes,
+and preserve permissions while backing up `~/.config/opencode`, all reported
+data/state directories, project `.opencode` directories and project
+`opencode.json` files. Swap formulas with `brew uninstall opencode` followed by
+`brew install anomalyco/tap/opencode-v2`; see [docs/INSTALL.md](docs/INSTALL.md)
+for rollback and validation.
 
 ## AI
 
@@ -565,15 +573,20 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
-**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. Requires DCP in `tui.json` (written by `scripts/configure-opencode-dcp.py`). Core compression still loads from `opencode.json`. See [docs/DCP.md](docs/DCP.md).
+**OpenCode v2:** The generated `opencode.json` remains V1-shaped and is normalized in memory. Terminal-only plugins are written to `~/.config/opencode/cli.json` using the [v2 schema](https://opencode.ai/v2/cli.json). `/dcp` opens the DCP context/stats/manual-mode panel; see [docs/DCP.md](docs/DCP.md).
 
-### Voice Plugin (opencode-voice)
+**Plugin set:** oh-my-opencode-slim `2.2.24`, DCP `3.2.0`, Plannotator `0.27.18`, planning-with-files `1.0.1`, and quota `4.10.2`. Quota uses `enabledProviders: "auto"` and writes `~/.config/opencode/opencode-quota/quota-toast.jsonc`. Use `opencode stats --cost` for token and cost reporting.
 
-OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
+Planning-with-files is distributed as a skill only; Codex native hooks are
+deferred because the upstream payload is not shipped through the skills channel.
 
-**Configuration:** `~/.config/opencode/tui.json` (written by `configure-opencode-voice.py`, tier-aware)
+### Voice Plugin (removed from OpenCode v2)
 
-| Tier | Voice LLM | STT Backend |
+The V1-only [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) plugin was removed for v2; this loss was accepted. Use macOS dictation or Pi STT. `/rename` regains the `ctrl+r` key binding. Historical tier and dependency notes are retained in [docs/VOICE.md](docs/VOICE.md).
+
+**Historical configuration:** `~/.config/opencode/tui.json` (no longer written for v2).
+
+| Historical tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
 | **local-pro** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
@@ -589,7 +602,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 
 **Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
 
-**Local STT/TTS dependencies** (installed by `run_onchange_07` during `make deploy`, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
+**Historical local STT/TTS dependencies** (the v1 voice plugin's dependencies; no longer installed for OpenCode v2):
 
 | Component | Install | Purpose |
 |-----------|---------|---------|
@@ -599,9 +612,11 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model (default: `ggml-large-v3-turbo.bin`) |
 | Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice (default: `en_US-lessac-high`) |
 
-Model defaults are configurable: `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VOICE`.
+Historical voice model defaults are removed with the voice integration; the
+former `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VOICE` settings are retained
+for historical reference only.
 
-Configure voice: `scripts/configure-opencode-voice.py --preset <tier>`
+The historical `configure-opencode-voice.py` writer is removed.
 
 ### Mozart Router
 
@@ -627,7 +642,7 @@ Spec-driven development (SDD) for AI coding assistants.
 - Install: `npm install -g @fission-ai/openspec@latest`
 - Init: `cd your-project && openspec init`
 - Commands: `/opsx:propose`, `/opsx:apply`, `/opsx:archive`
-- Plugin: `opencode-plugin-openspec` adds the `openspec-plan` agent for read-only planning
+- OpenCode plugin: `opencode-plugin-openspec` was V1-only and is dropped; the standalone CLI remains supported
 - Telemetry: `OPENSPEC_TELEMETRY=0` and `DO_NOT_TRACK=1`
 
 ### Junie CLI

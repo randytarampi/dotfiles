@@ -25,6 +25,11 @@ Cross-platform OpenCode configuration paths:
 - Cache: `~/.cache/opencode/` (macOS/Linux), `%USERPROFILE%\.cache\opencode` (Windows)
 - Data: `~/.local/share/opencode/` (macOS/Linux), `%USERPROFILE%\.local\share\opencode` (Windows)
 
+OpenCode v2 also uses `~/.config/opencode/cli.json` for terminal-only plugins.
+The legacy global `tui.json` is imported non-destructively when `cli.json` is
+absent and v2 starts; the migration-aware DCP writer performs that import when
+it needs to write the file.
+
 Both the CLI and desktop app read from `~/.config/opencode/` — no symlinks needed.
 
 ---
@@ -36,19 +41,19 @@ Since v3.1.13, DCP ships a TUI panel entrypoint (`./tui`) alongside its server e
 - Manual-mode controls (`manualMode.enabled`, `manualMode.automaticStrategies`)
 - `/dcp-compress [focus]` for prompt-triggered manual compression
 
-**Loading the panel requires DCP in `tui.json`** (in addition to `opencode.json` for core compression):
+**Loading the panel requires DCP in `cli.json`** (in addition to `opencode.json` for core compression):
 
 ```json
 {
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": [
-    "@tarquinen/opencode-dcp@latest",
-    ["@renjfk/opencode-voice", { "...": "..." }]
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    "@tarquinen/opencode-dcp@3.2.0"
   ]
 }
 ```
 
-No options tuple is needed for the DCP entry — the panel reads thresholds and state from `~/.config/opencode/dcp.jsonc`. The DCP entry is written by `scripts/configure-opencode-dcp.py`, which defensively merges into `tui.json` (creating the file if missing, touching only the DCP entry). Other TUI plugins (e.g. voice) are preserved.
+No options tuple is needed for the DCP entry — the panel reads thresholds and state from `~/.config/opencode/dcp.jsonc`. The entry is written by `scripts/configure-opencode-dcp.py`, which reads existing `cli.json` or imports legacy `tui.json`, removes the unsupported voice entry, preserves unrelated settings and plugins, then writes native v2 `cli.json`.
 
 > [!NOTE]
-> `tui.json` is a shared file — each TUI plugin has its own `configure-opencode-*.py` that defensively merges only its own entry. See [VOICE.md](VOICE.md) for the voice plugin's equivalent.
+> `cli.json` is the shared terminal-plugin file. Its writer is migration-aware so
+> legacy `tui.json` settings are not discarded during the v2 transition.

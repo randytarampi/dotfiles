@@ -616,28 +616,39 @@ def main():
     else:
         print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
 
-    # Optional Meridian plugin check (only enforced when enabled)
-    meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
-    if meridian_gate:
-        if opencode_config is not None:
-            plugins = opencode_config.get("plugin", [])
-            meridian_present = any(
-                isinstance(plugin, str) and "meridian.ts" in plugin
-                for plugin in plugins
-            )
-            if meridian_present:
-                print("  \u2713 Meridian plugin: registered in opencode.json")
-            else:
-                print("  \u2717 Meridian plugin: not found in opencode.json")
+    opencode_setup_gate = os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") == "1"
+    cli_path = HOME / ".config/opencode/cli.json"
+    if opencode_setup_gate:
+        if cli_path.exists():
+            try:
+                cli_config = json.loads(cli_path.read_text(encoding="utf-8"))
+                cli_plugins = (
+                    cli_config.get("plugins", [])
+                    if isinstance(cli_config, dict)
+                    else []
+                )
+                packages = {
+                    entry.get("package")
+                    for entry in cli_plugins
+                    if isinstance(entry, dict)
+                }
+                required = {
+                    "@tarquinen/opencode-dcp@3.2.0",
+                    "@slkiser/opencode-quota@4.10.2",
+                }
+                if required <= packages:
+                    print("  ✓ OpenCode cli.json plugins: DCP and quota")
+                else:
+                    print("  ✗ OpenCode cli.json plugins: missing DCP or quota")
+                    exit_code = 1
+            except (OSError, json.JSONDecodeError):
+                print("  ✗ OpenCode cli.json: could not parse")
                 exit_code = 1
-        elif opencode_json.exists():
-            print("  \u2717 Meridian plugin: could not parse opencode.json")
-            exit_code = 1
         else:
-            print("  \u2717 Meridian plugin: opencode.json not found")
+            print("  ✗ OpenCode cli.json: MISSING")
             exit_code = 1
     else:
-        print("  \u2298 Meridian plugin (gate DOTFILES_RUN_MERIDIAN_SETUP=0, skipped)")
+        print("  ⊘ OpenCode cli.json (gate DOTFILES_RUN_OPENCODE_SETUP=0, skipped)")
 
     # Optional Junie model profiles check (only enforced when enabled)
     junie_gate = os.environ.get("DOTFILES_RUN_JUNIE_CLI_SETUP", "0") == "1"

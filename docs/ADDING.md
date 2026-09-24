@@ -59,7 +59,8 @@ Some tools cannot consume the full template set. Check the target app's document
 These scripts are useful when you want to refresh runtime-generated files without waiting for a full orchestration pass:
 
 - `scripts/configure-secrets.py` — resolves secrets and `.env`-derived paths; called by `configure-all.sh`, but also useful as a standalone refresh step
-- `scripts/configure-meridian.py` — refreshes Meridian proxy config for OpenCode
+- `scripts/configure-meridian.py` — refreshes Meridian proxy settings for
+  non-OpenCode tools; OpenCode v2 routes provider traffic directly
 - `scripts/configure-jetbrains-ai.py` — regenerates JetBrains AI model profiles, dirs, and symlinks (MCPs are generated separately by the `mcps` step)
 
 See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the three-layer architecture and when to use these helpers.
