@@ -156,15 +156,25 @@ frontend.
    **Config ownership model (explicit):** these are Open WebUI `ConfigVar`s —
    under the default `ENABLE_PERSISTENT_CONFIG=True`, database values take
    precedence over environment variables after first launch, so hand-entered
-   admin-UI changes silently win over regeneration. The initial build sets
-   `ENABLE_PERSISTENT_CONFIG=False` (environment-authoritative): managed
-   connection settings regenerate from `~/.env` + the registry on every
-   restart, admin-UI connection edits become ephemeral, and runtime
-   conveniences that are not connection settings still persist. The
-   alternative (database-authoritative with idempotent API reconciliation)
-   is documented as the fallback if ephemeral admin settings prove
-   unacceptable in practice. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS`
-   supply per-connection `prefix_id` (stable model-ID prefixes) and
+   admin-UI changes silently win over regeneration.
+   **The design is database-authoritative with idempotent API reconciliation**
+   (default `ENABLE_PERSISTENT_CONFIG=True` retained). Setting
+   `ENABLE_PERSISTENT_CONFIG=False` was rejected on source-verified grounds:
+   it disables persistence for the *entire* config table — not just managed
+   connections — including the config-table keys that hold admin-created
+   cloud connections (`openai.api_keys` / `openai.api_base_urls` /
+   `openai.api_configs` / `ollama.api_configs` — Open WebUI v0.11.4 source,
+   `backend/open_webui/config.py:2827-2831` and `models/config.py`
+   `upsert()`/`get()`), so named cloud integrations would not survive a
+   restart under that mode. Instead, the configure script reconciles managed
+   local connections idempotently through Open WebUI's API at deployment
+   time: it reads the current connection config, updates/deletes/recreates
+   only the managed entries (registry-derived `prefix_id` values make managed
+   entries identifiable), and leaves unrelated state (chats, users, workspace
+   models, admin-created cloud connections, UI preferences) untouched.
+   Regeneration therefore happens on `make deploy`/restart, not by fighting
+   database precedence. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
+   per-connection `prefix_id` (stable model-ID prefixes) and
    `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
    OpenAI-protocol clouds stay unambiguous.
    Plug/unplug a *gated* engine = flip its `DOTFILES_RUN_*` gate + `make
@@ -176,17 +186,13 @@ frontend.
    registry already feeds OpenCode providers, Mozart, Caddy, and Junie — this
    adds one more consumer, not a new source of truth.
    **Offline engines:** `active_engines()` checks gates, not reachability. An
-   enabled-but-offline engine keeps its generated connection; Open WebUI shows
-   an empty model list for it until the endpoint answers. If empty-list
-   behaviour is intrusive in practice, the `*_API_CONFIGS` `enable` flag is
-   the documented toggle.
-   **Cloud providers are NOT generated.** Open WebUI exposes no env-var path
-   for Anthropic-type connections, and its OpenAI-integration env vars are
-   `ConfigVar`s that conflict with the environment-authoritative mode above;
-   cloud connections (OpenAI, Anthropic, OpenRouter, Google) are therefore
-   one-time named integrations configured in the admin UI with API keys from
-   `~/.env`. `LOCAL_ENGINES` is authoritative for local endpoint metadata
-   only — not for all Open WebUI state.
+   enabled-but-offline engine keeps its generated connection; its model list
+   loads only if/when the endpoint answers — discovery may time out or be
+   delayed, and behaviour is treated as degraded, not guaranteed-empty. To
+   suppress a connection outright (e.g. Ollama without a gate), set the
+   engine's entry in `*_API_CONFIGS` in the generated env (`enable: false`)
+   — admin-UI `enable` flips are ephemeral under default persistence, so the
+   generated env (from `~/.env`) is the authoritative input for this toggle.
 2. **Gate + LaunchAgent + Caddy, like every optional service.**
    A new `DOTFILES_RUN_*_SETUP` gate (default 0; concrete name chosen at
    implementation — see open questions), documented in `.env.example`
@@ -265,10 +271,11 @@ frontend.
   model-list mechanism** (Ollama via its native API, OpenAI-protocol
   connections via `/v1/models`); no checked-in chat catalogue exists, unlike
   OpenCode's catalogs. Admin pin/hide/order preferences are persisted Open
-  WebUI state — under the environment-authoritative policy above they remain
-  persistent (they are not connection settings), but their interaction with
-  regeneration must be validated during implementation.
-  Documented refresh flow: restart the service after changing engine gates.
+  WebUI state (config-table rows); they coexist with reconciliation because
+  reconciliation touches only registry-derived managed connection entries,
+  but this interaction must be validated during implementation.
+  Documented refresh flow: run `make deploy` (reconciliation) or restart the
+  service after changing engine gates.
 
 ## Maintenance guidance
 
@@ -364,20 +371,24 @@ assume adding a chat-frontend cloud provider touches it.
 
 Decisions already made in this design (not open): Ollama connects via its
 native API only and is deduplicated out of the OpenAI-protocol array;
-environment-authoritative config (`ENABLE_PERSISTENT_CONFIG=False`) is the
-default policy; cloud providers are one-time named integrations; Caddy uses a
-dedicated host by default; Meridian is excluded unless both conditions in
-principle 3 pass.
+database-authoritative config with idempotent API reconciliation is the
+config-ownership model; cloud providers are one-time named integrations;
+Caddy uses a dedicated host by default; Meridian is excluded unless both
+conditions in principle 3 pass.
 
-1. Meridian authorization (user decision, not a research question): if the
-   OAuth-backed Claude Code SDK path should also serve general chat,
-   authorize it explicitly; otherwise it stays OpenCode/Mozart-only.
+1. Meridian authorization (gated on evidence, not preference): including the
+   OAuth-backed Claude Code SDK path as a general chat backend would require
+   explicit upstream/provider permission — evidence that this particular use
+   is authorized under Anthropic's terms. Without that, it stays
+   OpenCode/Mozart-only and chat uses the normal Anthropic API integration.
 2. pip-in-venv for the LaunchAgent (repo has no Docker dependency; pip
    matches existing LaunchAgent patterns): verify `open-webui serve` behaves
    well under launchd (stdout, respawn) and choose the exact immutable pin.
 3. Port allocation (`OPENWEBUI_PORT`, default 8080) and the concrete Caddy
    host name (e.g. `chat.<domain>`).
-4. Validate the environment-authoritative mode in practice: confirm admin
-   conveniences that should persist (model ordering, theme, workspace
-   settings) survive restarts, and confirm the database-authoritative
-   fallback is not needed.
+4. Validate the reconciliation design in practice: verify the Open WebUI
+   API surface used by the reconcile step (read/update/delete managed
+   connection entries by `prefix_id`) against the pinned release; confirm
+   unrelated persisted state (model ordering, workspace models, admin-created
+   cloud connections, UI settings) is genuinely untouched by reconciliation
+   and survives restarts.
