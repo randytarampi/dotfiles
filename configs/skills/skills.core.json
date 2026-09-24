@@ -20,7 +20,8 @@
         { "source": "mattpocock/skills", "name": "resolving-merge-conflicts" },
         { "source": "aws/agent-toolkit-for-aws", "name": "aws-billing-and-cost-management" },
         { "source": "vercel-labs/agent-browser", "name": "agent-browser" },
-        { "source": "vercel/turborepo", "name": "turborepo" }
+        { "source": "vercel/turborepo", "name": "turborepo" },
+        { "source": "OthmanAdi/planning-with-files", "name": "planning-with-files" }
       ]
     }
   }
