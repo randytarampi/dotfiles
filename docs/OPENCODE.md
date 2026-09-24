@@ -59,6 +59,38 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
 
 6. **Test**: In OpenCode, use `/agent <agent-name>` to invoke a specific ACP agent (e.g., `@gemini hello`, `@copilot explain this code`, `@pi help`, `@codex--local review this`)
 
+## Fleet Plugins
+
+The generated `plugin` array in `opencode.json` (via `scripts/configure-opencode.py`,
+mirrored in `.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`)
+currently registers:
+
+| Plugin | Purpose |
+|--------|---------|
+| `oh-my-opencode-slim@latest` | Orchestrator agent suite (deepwork, skills distribution) |
+| `@tarquinen/opencode-dcp@latest` | Dynamic context pruning / compress tool |
+| `@plannotator/opencode@latest` | Interactive plan/code review UI |
+| `opencode-plugin-openspec@latest` | OpenSpec planning agent |
+| `opencode-vibeguard@latest` | Secrets redaction before LLM requests |
+| `@ramtinj95/opencode-tokenscope@latest` | Token usage/cost reporting |
+| `opencode-planning-with-files@latest` | Persistent planning state (task_plan/findings/progress) |
+| `@slkiser/opencode-quota@latest` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`) |
+| `opencode-mem@latest` | Persistent project/user memory with vector search |
+| Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
+
+`planning-with-files` is additionally distributed as a **skill to every
+configured tool** via `configs/skills/skills.core.json` +
+`scripts/configure-skills.py` (canonical cache `~/.local/share/dotfiles/skills`,
+symlinked to `~/.agents`, OpenCode, Claude, Codex, Cursor, Junie, Copilot,
+Pi, Cortex, and Antigravity skill directories).
+
+> **Note (2026-09-24):** These plugins are registered for the v1 CLI
+> (1.18.32). Live validation confirmed all load on v1; upstream `v2`
+> builds do not exist yet for `opencode-planning-with-files`,
+> `@slkiser/opencode-quota`, and `opencode-mem` — on an OpenCode v2
+> binary they fail the plugin loader (no v2 `default {id, setup}`).
+> Revisit before migrating to OpenCode v2.
+
 ## Tokenscope
 
 `@ramtinj95/opencode-tokenscope` is an OpenCode plugin for analyzing token usage and costs:

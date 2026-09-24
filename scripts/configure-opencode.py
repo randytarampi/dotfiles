@@ -527,6 +527,9 @@ def main():
                 "opencode-plugin-openspec@latest",
                 "opencode-vibeguard@latest",
                 "@ramtinj95/opencode-tokenscope@latest",
+                "opencode-planning-with-files@latest",
+                "@slkiser/opencode-quota@latest",
+                "opencode-mem@latest",
             ],
             "agent": {
                 "build": {"disable": True},

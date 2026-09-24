@@ -620,6 +620,29 @@ Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer
 
 Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode@latest`) is already configured in global `opencode.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
 
+### Planning-with-Files
+
+Persistent planning state (`task_plan.md`, `findings.md`, `progress.md`) that survives crashes and compaction.
+
+- OpenCode plugin: `opencode-planning-with-files@latest` (config-registered)
+- Skill distribution: every configured tool via `configs/skills/skills.core.json` (canonical cache + symlinks to all 10 tool skill directories)
+- Upstream: https://github.com/OthmanAdi/planning-with-files
+
+### OpenCode Quota
+
+Quota/usage/cost surfaces for OpenCode sessions.
+
+- OpenCode plugin: `@slkiser/opencode-quota@latest` (config-registered)
+- Sidecar config: `~/.config/opencode/opencode-quota/quota-toast.jsonc` (`enabledProviders: "auto"`)
+- Upstream: https://github.com/slkiser/opencode-quota
+
+### OpenCode Mem
+
+Persistent project/user memory with vector search.
+
+- OpenCode plugin: `opencode-mem@latest` (config-registered)
+- Upstream: https://github.com/tickernelz/opencode-mem
+
 ### OpenSpec
 
 Spec-driven development (SDD) for AI coding assistants.
