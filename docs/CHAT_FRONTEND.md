@@ -154,9 +154,9 @@ frontend.
    the [Open WebUI env-configuration reference](https://docs.openwebui.com/reference/env-configuration/),
    2026-09-24) from `active_engines()` + `local_endpoint_for()`.
    **Config ownership model (explicit):** these are Open WebUI `ConfigVar`s —
-   under the default `ENABLE_PERSISTENT_CONFIG=True`, database values take
-   precedence over environment variables after first launch, so hand-entered
-   admin-UI changes silently win over regeneration.
+   under the default `ENABLE_PERSISTENT_CONFIG=True`, generated environment
+   values only seed a fresh installation; database values take precedence
+   from then on.
    **The design is database-authoritative with idempotent API reconciliation**
    (default `ENABLE_PERSISTENT_CONFIG=True` retained). Setting
    `ENABLE_PERSISTENT_CONFIG=False` was rejected on source-verified grounds:
@@ -167,13 +167,27 @@ frontend.
    `backend/open_webui/config.py:2827-2831` and `models/config.py`
    `upsert()`/`get()`), so named cloud integrations would not survive a
    restart under that mode. Instead, the configure script reconciles managed
-   local connections idempotently through Open WebUI's API at deployment
-   time: it reads the current connection config, updates/deletes/recreates
-   only the managed entries (registry-derived `prefix_id` values make managed
-   entries identifiable), and leaves unrelated state (chats, users, workspace
-   models, admin-created cloud connections, UI preferences) untouched.
-   Regeneration therefore happens on `make deploy`/restart, not by fighting
-   database precedence. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
+   local connections idempotently through Open WebUI's API. **The
+   reconciler's computed desired state is the runtime authority** — `~/.env`
+   and `LOCAL_ENGINES` are its inputs, not the authority itself. Lifecycle:
+   1. Generated env values may seed a fresh installation.
+   2. `make deploy` computes the desired managed connection set from
+      `active_engines()` + `local_endpoint_for()`.
+   3. Once Open WebUI is available, reconciliation reads the current
+      database connection config, merges managed entries, and writes through
+      the API.
+   4. Ordinary service restarts retain database state and do **not**
+      regenerate; reconciliation happens only on deploy.
+   Managed-entry ownership is collision-safe: managed entries carry
+   registry-derived `prefix_id` values within a reserved managed prefix
+   namespace; reconciliation adopts, updates or deletes an entry only when
+   both the `prefix_id` and the entry's endpoint/connection type match the
+   expected registry-derived values; on any ownership collision it fails
+   closed (report and abort rather than delete an unrelated connection), and
+   unmanaged admin-created entries are preserved via read-merge-write.
+   Admin-UI connection changes persist in the database until the next
+   reconciliation, which may then overwrite managed entries — never
+   unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
    per-connection `prefix_id` (stable model-ID prefixes) and
    `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
    OpenAI-protocol clouds stay unambiguous.
@@ -186,13 +200,14 @@ frontend.
    registry already feeds OpenCode providers, Mozart, Caddy, and Junie — this
    adds one more consumer, not a new source of truth.
    **Offline engines:** `active_engines()` checks gates, not reachability. An
-   enabled-but-offline engine keeps its generated connection; its model list
+   enabled-but-offline engine keeps its configured connection; its model list
    loads only if/when the endpoint answers — discovery may time out or be
    delayed, and behaviour is treated as degraded, not guaranteed-empty. To
-   suppress a connection outright (e.g. Ollama without a gate), set the
-   engine's entry in `*_API_CONFIGS` in the generated env (`enable: false`)
-   — admin-UI `enable` flips are ephemeral under default persistence, so the
-   generated env (from `~/.env`) is the authoritative input for this toggle.
+   suppress a connection outright (e.g. ungated Ollama), set the canonical
+   `~/.env` adapter setting the reconciler honours (a per-engine disable
+   list; concrete variable name chosen at implementation) — admin-UI
+   `enable` flips persist in the database until the next reconciliation, so
+   that `~/.env` input, not the admin UI, is authoritative for this toggle.
 2. **Gate + LaunchAgent + Caddy, like every optional service.**
    A new `DOTFILES_RUN_*_SETUP` gate (default 0; concrete name chosen at
    implementation — see open questions), documented in `.env.example`
@@ -274,8 +289,9 @@ frontend.
   WebUI state (config-table rows); they coexist with reconciliation because
   reconciliation touches only registry-derived managed connection entries,
   but this interaction must be validated during implementation.
-  Documented refresh flow: run `make deploy` (reconciliation) or restart the
-  service after changing engine gates.
+  Documented refresh flow: run `make deploy` — it recomputes desired state
+  and reconciles managed connections. An ordinary service restart reloads
+  database state and does **not** reconcile.
 
 ## Maintenance guidance
 
@@ -288,8 +304,9 @@ frontend.
 2. The chat-frontend configure script picks it up automatically (it consumes
    `active_engines()` like every other consumer). Document the resulting
    model-ID prefixing (`prefix_id` in `*_API_CONFIGS`) and the
-   enabled-but-offline behaviour (connection stays configured, empty model
-   list until the endpoint answers).
+   enabled-but-offline behaviour (connection stays configured; discovery is
+   degraded — the model list loads only when the endpoint answers and may
+   time out or be delayed).
 3. Document the gate in `.env.example`; run `make verify`.
 
 ### Adding a cloud provider
