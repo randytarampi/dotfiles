@@ -287,29 +287,35 @@ opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
 
 openwebui-start: ## Start Open WebUI service
 	@echo "Starting Open WebUI..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.openwebui.web.plist 2>/dev/null || true; \
-		launchctl kickstart -k "gui/$$(id -u)/com.openwebui.web" 2>/dev/null || true; \
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/openwebui_service.sh && openwebui_service_start; \
 	else \
 		echo "Open WebUI LaunchAgent is macOS-only — skipping"; \
 	fi
 
 openwebui-stop: ## Stop Open WebUI service
 	@echo "Stopping Open WebUI..."
-	@if [ "$$(uname)" = "Darwin" ]; then launchctl bootout "gui/$$(id -u)/com.openwebui.web" 2>/dev/null || true; fi
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop; fi
 
-openwebui-restart: openwebui-stop openwebui-start ## Restart Open WebUI service
-	@echo "Open WebUI restarted."
+openwebui-restart: ## Restart Open WebUI service
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/openwebui_service.sh && openwebui_service_restart && echo "Open WebUI restarted."; \
+	else \
+		echo "Open WebUI LaunchAgent is macOS-only — skipping"; \
+	fi
 
 openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi
 	@set -e; \
 	backup_dir="$$HOME/.local/share/openwebui/backups"; \
 	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; \
-	$(MAKE) --no-print-directory openwebui-stop; \
-	trap '$(MAKE) --no-print-directory openwebui-start >/dev/null' EXIT; \
+	. scripts/lib/openwebui_service.sh; openwebui_service_stop; \
 	archive="$$backup_dir/$$(date +%Y%m%d-%H%M%S).tar.gz"; \
-	tar -czf "$$archive" -C "$$HOME/.local/share/openwebui" data; \
+	tar -czf "$$archive" -C "$$HOME/.local/share/openwebui" data || { openwebui_service_start || true; exit 1; }; \
 	for old in $$(ls -1t "$$backup_dir"/*.tar.gz 2>/dev/null | tail -n +6); do rm -f "$$old"; done; \
+	openwebui_service_start; \
 	echo "Open WebUI backup written: $$archive"
 
 meridian-restart: ## Restart Meridian proxy service

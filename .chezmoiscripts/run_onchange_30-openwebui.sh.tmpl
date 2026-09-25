@@ -4,12 +4,16 @@ set -euo pipefail
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
+source "${LIB_DIR}/caddy_helpers.sh"
+source "${LIB_DIR}/openwebui_service.sh"
 
 # Script hash triggers (re-run when Open WebUI reconciliation changes):
 # scripts/configure-openwebui.py: {{ include "scripts/configure-openwebui.py" | sha256sum }}
 # scripts/lib/openwebui.py: {{ include "scripts/lib/openwebui.py" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
 # scripts/lib/provider_endpoints.py: {{ include "scripts/lib/provider_endpoints.py" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 
@@ -17,8 +21,7 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
   PLIST_DIR="$(caddy_launch_agents_dir 2>/dev/null || printf '%s' "$HOME/Library/LaunchAgents")"
   PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
-  LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain 2>/dev/null || printf 'gui/%s' "$UID")"
-  launchctl bootout "$LAUNCHCTL_DOMAIN/com.openwebui.web" 2>/dev/null || true
+  launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
   rm -f "$PLIST_PATH"
   pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — removed Open WebUI LaunchAgent; preserved data"
@@ -30,8 +33,6 @@ if [[ "$OS_NAME" != "darwin" ]]; then
   warn "Open WebUI LaunchAgent wiring is supported on macOS only; skipping service setup"
   exit 0
 fi
-
-source "${LIB_DIR}/caddy_helpers.sh"
 
 OPENWEBUI_HOME="$HOME/.local/share/openwebui"
 VENV_DIR="$OPENWEBUI_HOME/venv"
@@ -63,44 +64,13 @@ fi
 mkdir -p "$DATA_DIR" "$LOG_DIR"
 chmod 700 "$DATA_DIR" "$LOG_DIR"
 
-# Preserve generated/bootstrap values across deploys; upstream consumes the
-# admin credentials only when creating the first account.
-if [[ -f "$SERVICE_ENV" ]]; then
-  # shellcheck disable=SC1090
-  source "$SERVICE_ENV"
-fi
-# ~/.env is authoritative for explicitly configured upstream/bootstrap values.
-if [[ -f "$HOME/.env" ]]; then
-  # shellcheck disable=SC1090
-  source "$HOME/.env"
-fi
-WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
-WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-}"
-WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
-OPENWEBUI_API_KEY="${OPENWEBUI_API_KEY:-}"
-if [[ -z "$WEBUI_SECRET_KEY" ]]; then
-  command -v openssl >/dev/null 2>&1 || die "openssl is required to generate WEBUI_SECRET_KEY"
-  WEBUI_SECRET_KEY="$(openssl rand -hex 32)" || die "Failed to generate WEBUI_SECRET_KEY"
-fi
-if [[ -z "$WEBUI_ADMIN_PASSWORD" ]]; then
-  command -v openssl >/dev/null 2>&1 || die "openssl is required to generate WEBUI_ADMIN_PASSWORD"
-  WEBUI_ADMIN_PASSWORD="$(openssl rand -hex 32)" || die "Failed to generate WEBUI_ADMIN_PASSWORD"
-fi
-TMP_ENV="${SERVICE_ENV}.tmp.$$"
-umask 077
-{
-  printf 'WEBUI_SECRET_KEY=%q\n' "$WEBUI_SECRET_KEY"
-  printf 'WEBUI_ADMIN_EMAIL=%q\n' "${WEBUI_ADMIN_EMAIL:-admin@localhost}"
-  printf 'WEBUI_ADMIN_PASSWORD=%q\n' "$WEBUI_ADMIN_PASSWORD"
-  printf 'OPENWEBUI_API_KEY=%q\n' "$OPENWEBUI_API_KEY"
-  printf 'OPENWEBUI_PORT=%q\n' "${OPENWEBUI_PORT:-8080}"
-} >"$TMP_ENV"
-chmod 600 "$TMP_ENV"
-mv "$TMP_ENV" "$SERVICE_ENV"
+openwebui_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile Open WebUI service.env"
+# The service env is private; source it only into this process for the plist.
+# shellcheck disable=SC1090
+source "$SERVICE_ENV"
 
 PLIST_DIR="$(caddy_launch_agents_dir)"
 PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
-LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain)"
 mkdir -p "$PLIST_DIR"
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -126,21 +96,9 @@ cat >"$PLIST_PATH" <<EOF
 </plist>
 EOF
 chmod 600 "$PLIST_PATH"
-# Boot-out is asynchronous; absorb the teardown race with a bounded retry
-# and surface the real error instead of suppressing stderr.
-BOOT_ERR=""
-for _ in 1 2 3; do
-  launchctl bootout "$LAUNCHCTL_DOMAIN/com.openwebui.web" 2>/dev/null || true
-  sleep 2
-  if BOOT_ERR="$(launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" 2>&1)"; then
-    BOOT_ERR=""
-    break
-  fi
-done
-if [[ -n "$BOOT_ERR" ]]; then
-  warn "Failed to bootstrap com.openwebui.web: $BOOT_ERR"
+if ! openwebui_service_start; then
+  die "${OPENWEBUI_SERVICE_ERROR:-Failed to start com.openwebui.web}"
 fi
-launchctl kickstart -k "$LAUNCHCTL_DOMAIN/com.openwebui.web" >/dev/null 2>&1 || true
 
 for _ in {1..60}; do
   if curl -fsS --max-time 3 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/api/version" >/dev/null 2>&1; then
