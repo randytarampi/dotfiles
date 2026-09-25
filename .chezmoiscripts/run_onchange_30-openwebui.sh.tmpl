@@ -8,20 +8,158 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when Open WebUI reconciliation changes):
 # scripts/configure-openwebui.py: {{ include "scripts/configure-openwebui.py" | sha256sum }}
 # scripts/lib/openwebui.py: {{ include "scripts/lib/openwebui.py" | sha256sum }}
+# scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
+# scripts/lib/provider_endpoints.py: {{ include "scripts/lib/provider_endpoints.py" | sha256sum }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 
 # Gate on DOTFILES_RUN_OPENWEBUI_SETUP env var (set in ~/.env)
 if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI configuration"
+  PLIST_DIR="$(caddy_launch_agents_dir 2>/dev/null || printf '%s' "$HOME/Library/LaunchAgents")"
+  PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
+  LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain 2>/dev/null || printf 'gui/%s' "$UID")"
+  launchctl bootout "$LAUNCHCTL_DOMAIN/com.openwebui.web" 2>/dev/null || true
+  rm -f "$PLIST_PATH"
+  pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
+  info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — removed Open WebUI LaunchAgent; preserved data"
   exit 0
 fi
 
-# configure-openwebui.py is the sole reconciler of managed Open WebUI connections.
-# Deployment wiring (venv, LaunchAgent, Caddy) lands in the Phase 4b script.
+OS_NAME="{{ .chezmoi.os }}"
+if [[ "$OS_NAME" != "darwin" ]]; then
+  warn "Open WebUI LaunchAgent wiring is supported on macOS only; skipping service setup"
+  exit 0
+fi
+
+source "${LIB_DIR}/caddy_helpers.sh"
+
+OPENWEBUI_HOME="$HOME/.local/share/openwebui"
+VENV_DIR="$OPENWEBUI_HOME/venv"
+DATA_DIR="$OPENWEBUI_HOME/data"
+LOG_DIR="$OPENWEBUI_HOME/logs"
+SERVICE_ENV="$OPENWEBUI_HOME/service.env"
+VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.11.4}"
+
+PYTHON_BIN=""
+for candidate in python3.11 python3.12; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v "$candidate")"
+    break
+  fi
+done
+[[ -n "$PYTHON_BIN" ]] || die "Open WebUI requires python3.11 or python3.12 (python3.14 is unsupported)"
+
+if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+  info "Creating Open WebUI Python environment..."
+  mkdir -p "$OPENWEBUI_HOME"
+  "$PYTHON_BIN" -m venv "$VENV_DIR" || die "Failed to create Open WebUI virtual environment"
+fi
+if ! "$VENV_DIR/bin/python" -m pip install -q "open-webui==${VERSION}"; then
+  warn "Open WebUI install failed; retrying once"
+  sleep 2
+  "$VENV_DIR/bin/python" -m pip install -q "open-webui==${VERSION}" || die "Failed to install open-webui==${VERSION}"
+fi
+
+mkdir -p "$DATA_DIR" "$LOG_DIR"
+chmod 700 "$DATA_DIR" "$LOG_DIR"
+
+# Preserve generated/bootstrap values across deploys; upstream consumes the
+# admin credentials only when creating the first account.
+if [[ -f "$SERVICE_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$SERVICE_ENV"
+fi
+# ~/.env is authoritative for explicitly configured upstream/bootstrap values.
+if [[ -f "$HOME/.env" ]]; then
+  # shellcheck disable=SC1090
+  source "$HOME/.env"
+fi
+WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
+WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-}"
+WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
+OPENWEBUI_API_KEY="${OPENWEBUI_API_KEY:-}"
+if [[ -z "$WEBUI_SECRET_KEY" ]]; then
+  command -v openssl >/dev/null 2>&1 || die "openssl is required to generate WEBUI_SECRET_KEY"
+  WEBUI_SECRET_KEY="$(openssl rand -hex 32)" || die "Failed to generate WEBUI_SECRET_KEY"
+fi
+if [[ -z "$WEBUI_ADMIN_PASSWORD" ]]; then
+  command -v openssl >/dev/null 2>&1 || die "openssl is required to generate WEBUI_ADMIN_PASSWORD"
+  WEBUI_ADMIN_PASSWORD="$(openssl rand -hex 32)" || die "Failed to generate WEBUI_ADMIN_PASSWORD"
+fi
+TMP_ENV="${SERVICE_ENV}.tmp.$$"
+umask 077
+{
+  printf 'WEBUI_SECRET_KEY=%q\n' "$WEBUI_SECRET_KEY"
+  printf 'WEBUI_ADMIN_EMAIL=%q\n' "${WEBUI_ADMIN_EMAIL:-admin@localhost}"
+  printf 'WEBUI_ADMIN_PASSWORD=%q\n' "$WEBUI_ADMIN_PASSWORD"
+  printf 'OPENWEBUI_API_KEY=%q\n' "$OPENWEBUI_API_KEY"
+  printf 'OPENWEBUI_PORT=%q\n' "${OPENWEBUI_PORT:-8080}"
+} >"$TMP_ENV"
+chmod 600 "$TMP_ENV"
+mv "$TMP_ENV" "$SERVICE_ENV"
+
+PLIST_DIR="$(caddy_launch_agents_dir)"
+PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
+LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain)"
+mkdir -p "$PLIST_DIR"
+cat >"$PLIST_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.openwebui.web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string><string>-lc</string>
+    <string>set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LOG_DIR/server.log</string>
+  <key>StandardErrorPath</key><string>$LOG_DIR/server.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>DATA_DIR</key><string>$DATA_DIR</string>
+    <key>GLOBAL_LOG_LEVEL</key><string>INFO</string>
+  </dict>
+</dict>
+</plist>
+EOF
+chmod 600 "$PLIST_PATH"
+# Boot-out is asynchronous; absorb the teardown race with a bounded retry
+# and surface the real error instead of suppressing stderr.
+BOOT_ERR=""
+for _ in 1 2 3; do
+  launchctl bootout "$LAUNCHCTL_DOMAIN/com.openwebui.web" 2>/dev/null || true
+  sleep 2
+  if BOOT_ERR="$(launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" 2>&1)"; then
+    BOOT_ERR=""
+    break
+  fi
+done
+if [[ -n "$BOOT_ERR" ]]; then
+  warn "Failed to bootstrap com.openwebui.web: $BOOT_ERR"
+fi
+launchctl kickstart -k "$LAUNCHCTL_DOMAIN/com.openwebui.web" >/dev/null 2>&1 || true
+
+for _ in {1..60}; do
+  if curl -fsS --max-time 3 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/api/version" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+if ! curl -fsS --max-time 3 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/api/version" >/dev/null 2>&1; then
+  warn "Open WebUI is still starting; reconciliation will retry on a later deploy"
+fi
+
+# The reconciler consumes ~/.env, while service.env is the runtime secret store.
+set -a
+# shellcheck disable=SC1090
+source "$SERVICE_ENV"
+set +a
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
 if [[ -f "$CONFIGURE_SCRIPT" ]]; then
-  "$CONFIGURE_SCRIPT"
+  "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
 else
   warn "configure-openwebui.py not found at $CONFIGURE_SCRIPT"
 fi
