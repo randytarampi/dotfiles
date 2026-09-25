@@ -16,6 +16,7 @@ import platform
 import re
 import shutil
 import subprocess
+import plistlib
 from pathlib import Path
 from typing import Optional
 
@@ -637,6 +638,14 @@ def main():
         (openwebui_root / "service.env", "Open WebUI service env"),
     ]
     if openwebui_gate:
+        venv_binary = openwebui_root / "venv/bin/open-webui"
+        if not (venv_binary.is_file() and os.access(venv_binary, os.X_OK)):
+            print(
+                f"  \u2717 Open WebUI executable: MISSING or not executable {venv_binary}"
+            )
+            exit_code = 1
+        else:
+            print(f"  \u2713 Open WebUI executable: {venv_binary}")
         for path, label in openwebui_mode_checks:
             if path.exists():
                 mode = path.stat().st_mode & 0o777
@@ -655,6 +664,51 @@ def main():
             else:
                 print(f"  \u2717 {label}: MISSING {path}")
                 exit_code = 1
+        service_env = openwebui_root / "service.env"
+        required_names = {
+            "WEBUI_SECRET_KEY",
+            "WEBUI_ADMIN_EMAIL",
+            "WEBUI_ADMIN_PASSWORD",
+            "OPENWEBUI_API_KEY",
+        }
+        if service_env.is_file():
+            names = {
+                line.split("=", 1)[0].strip()
+                for line in service_env.read_text(encoding="utf-8").splitlines()
+                if "=" in line and line.split("=", 1)[0].strip()
+            }
+            missing_names = required_names - names
+            if missing_names:
+                print(
+                    f"  \u2717 Open WebUI service env: missing required key names {sorted(missing_names)}"
+                )
+                exit_code = 1
+            else:
+                print("  \u2713 Open WebUI service env: required key names present")
+        if openwebui_plist.is_file():
+            plist_mode = openwebui_plist.stat().st_mode & 0o777
+            plist_text = openwebui_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print(
+                    f"  \u2717 Open WebUI plist: mode {oct(plist_mode)} (expected 0o600)"
+                )
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                env_keys = set(plist.get("EnvironmentVariables", {}))
+                if env_keys != {"DATA_DIR", "GLOBAL_LOG_LEVEL"}:
+                    print(
+                        f"  \u2717 Open WebUI plist: unexpected EnvironmentVariables keys {sorted(env_keys)}"
+                    )
+                    exit_code = 1
+                if any(name in plist_text for name in required_names):
+                    print(
+                        "  \u2717 Open WebUI plist: secret or bootstrap variable name present"
+                    )
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open WebUI plist: invalid property list")
+                exit_code = 1
         logs_dir = openwebui_root / "logs"
         if logs_dir.exists() and (logs_dir.stat().st_mode & 0o777) != 0o700:
             print(
@@ -663,7 +717,34 @@ def main():
             exit_code = 1
         caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
         if caddyfile and caddyfile.exists():
-            if "chat." in caddyfile.read_text(encoding="utf-8"):
+            caddy_text = caddyfile.read_text(encoding="utf-8")
+            port = os.environ.get("OPENWEBUI_PORT", "8080")
+            public = os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1"
+            access_mode = os.environ.get("CADDY_ACCESS", "localhost").strip().lower()
+            matcher_required = access_mode == "lan" or not public
+            chat_blocks = []
+            lines = caddy_text.splitlines()
+            for index, line in enumerate(lines):
+                if "chat." not in line or not line.rstrip().endswith("{"):
+                    continue
+                depth = 0
+                block = []
+                for candidate in lines[index:]:
+                    depth += candidate.count("{") - candidate.count("}")
+                    block.append(candidate)
+                    if depth == 0:
+                        break
+                chat_blocks.append("\n".join(block))
+            functional_blocks = [
+                block
+                for block in chat_blocks
+                if f"reverse_proxy 127.0.0.1:{port}" in block
+            ]
+            policies_ok = bool(functional_blocks) and all(
+                ("@not_lan not remote_ip private_ranges" in block) == matcher_required
+                for block in functional_blocks
+            )
+            if functional_blocks and policies_ok:
                 print(f"  \u2713 Open WebUI Caddy site: {caddyfile}")
             else:
                 print(
