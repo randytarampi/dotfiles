@@ -128,6 +128,7 @@ manually if you prefer to manage Keychain trust yourself.
 | oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative, write, and non-local `/v1/models/status` endpoints are blocked. With `OMLX_API_KEY`, the Bearer key is the route's auth layer instead of basic auth. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
 | OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; Caddy `basic_auth` is the only external auth layer. |
+| Open WebUI | `chat.<domain>` | `http://127.0.0.1:8080` | Dedicated host (not a path prefix); LAN allowlist only, **no Caddy `basic_auth`** — Open WebUI's own session auth is the application layer (both Caddy basic auth and app Bearer use the `Authorization` header). Gated by `DOTFILES_RUN_OPENWEBUI_SETUP=1`; public exposure requires the explicit opt-in `DOTFILES_OPENWEBUI_PUBLIC=1` (default 0). |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |
 | Plannotator portal | `/` | static files | Static share portal; no backend control plane exposed. |
 
