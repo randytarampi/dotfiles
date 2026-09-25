@@ -391,6 +391,7 @@ def build_openwebui_site_blocks(
                 "127.0.0.1",
                 "tls internal",
                 port,
+                lan_only=not public_opt_in,
             )
         )
         for domain in domains:
@@ -401,6 +402,7 @@ def build_openwebui_site_blocks(
                         "127.0.0.1",
                         local_domain_tls_line,
                         port,
+                        lan_only=not public_opt_in,
                     )
                 )
         return blocks
