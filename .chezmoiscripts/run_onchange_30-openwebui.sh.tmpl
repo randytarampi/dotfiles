@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/env.sh"
+
+# Script hash triggers (re-run when Open WebUI reconciliation changes):
+# scripts/configure-openwebui.py: {{ include "scripts/configure-openwebui.py" | sha256sum }}
+# scripts/lib/openwebui.py: {{ include "scripts/lib/openwebui.py" | sha256sum }}
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+
+# Gate on DOTFILES_RUN_OPENWEBUI_SETUP env var (set in ~/.env)
+if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI configuration"
+  exit 0
+fi
+
+# configure-openwebui.py is the sole reconciler of managed Open WebUI connections.
+# Deployment wiring (venv, LaunchAgent, Caddy) lands in the Phase 4b script.
+CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
+if [[ -f "$CONFIGURE_SCRIPT" ]]; then
+  "$CONFIGURE_SCRIPT"
+else
+  warn "configure-openwebui.py not found at $CONFIGURE_SCRIPT"
+fi

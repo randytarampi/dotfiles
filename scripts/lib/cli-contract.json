@@ -870,6 +870,20 @@
       "accepted_flags": ["--help", "--dry-run", "--no-backup"],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-openwebui.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--emit-env",
+        "--reconcile",
+        "--check"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
