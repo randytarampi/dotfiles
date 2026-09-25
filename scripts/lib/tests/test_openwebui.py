@@ -269,6 +269,22 @@ def test_wrong_collection_is_collision():
     assert result.status == "collision"
 
 
+def test_empty_prefix_id_current_entries_do_not_crash():
+    current = [_entry("", "https://api.openai.com/v1", key="seeded-key")]
+    desired = {
+        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+        "ollama": [],
+    }
+    result = openwebui.reconcile([], current, desired)
+    assert result.status == "clean"
+    actions = {
+        item["entry"]["config"].get("prefix_id"): item["action"]
+        for item in result.plan.entries
+    }
+    assert actions[""] == "keep"
+    assert actions["dw-openai"] == "add"
+
+
 def test_normalization_fails_closed_for_unknown_shapes():
     with pytest.raises(openwebui.OpenWebUIError):
         openwebui.OpenWebUIClient.normalize({"unexpected": {}}, "openai")

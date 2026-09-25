@@ -516,7 +516,7 @@ def reconcile(
             )
     for prefix, wanted in desired_by_prefix.items():
         if prefix not in seen and not any(
-            _identity(item)[0] == prefix for _, item in current
+            _identity(item) == prefix for _, item in current
         ):
             plan.entries.append(
                 {
@@ -532,7 +532,7 @@ def reconcile(
 
 def _identity(entry):
     config = entry.get("config", {}) if isinstance(entry, dict) else {}
-    return config.get("prefix_id", "")
+    return config.get("prefix_id", "") or ""
 
 
 def _serialized(entry):
