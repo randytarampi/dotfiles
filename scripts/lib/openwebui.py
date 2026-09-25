@@ -234,10 +234,12 @@ class AuthError(OpenWebUIError):
 
 
 class OpenWebUIClient:
-    """Thin adapter; API paths and envelope details remain TO-VERIFY in 4b."""
+    """Thin adapter for the verified Open WebUI 0.11.4 configuration API."""
 
-    OPENAI_CONFIG_PATH = "/api/v1/configs/openai"  # TO-VERIFY in Phase 4b
-    OLLAMA_CONFIG_PATH = "/api/v1/configs/ollama"  # TO-VERIFY in Phase 4b
+    OPENAI_CONFIG_PATH = "/openai/config"
+    OLLAMA_CONFIG_PATH = "/ollama/config"
+    OPENAI_UPDATE_PATH = "/openai/config/update"
+    OLLAMA_UPDATE_PATH = "/ollama/config/update"
 
     def __init__(self, base_url, api_key, timeout=10):
         self.base_url, self.api_key, self.timeout = (
@@ -279,10 +281,10 @@ class OpenWebUIClient:
         return self._request(self.OLLAMA_CONFIG_PATH)
 
     def update_openai_config(self, config):
-        return self._request(self.OPENAI_CONFIG_PATH, "PUT", config)
+        return self._request(self.OPENAI_UPDATE_PATH, "POST", config)
 
     def update_ollama_config(self, config):
-        return self._request(self.OLLAMA_CONFIG_PATH, "PUT", config)
+        return self._request(self.OLLAMA_UPDATE_PATH, "POST", config)
 
     @staticmethod
     def normalize(response, collection):
@@ -299,6 +301,57 @@ class OpenWebUIClient:
                 if not all(isinstance(item, dict) for item in response[key]):
                     raise OpenWebUIError("Open WebUI returned a non-object connection")
                 return response[key], copy.deepcopy(response)
+        if (
+            collection == "openai"
+            and {
+                "OPENAI_API_BASE_URLS",
+                "OPENAI_API_KEYS",
+                "OPENAI_API_CONFIGS",
+            }
+            <= response.keys()
+        ):
+            urls = response["OPENAI_API_BASE_URLS"]
+            keys = response["OPENAI_API_KEYS"]
+            configs = response["OPENAI_API_CONFIGS"]
+            if (
+                not isinstance(urls, list)
+                or not isinstance(keys, list)
+                or not isinstance(configs, dict)
+            ):
+                raise OpenWebUIError(
+                    "Open WebUI OpenAI configuration has invalid field types"
+                )
+            return [
+                {
+                    "url": url,
+                    "key": keys[index] if index < len(keys) else "",
+                    "config": copy.deepcopy(
+                        configs.get(str(index), configs.get(url, {}))
+                    ),
+                }
+                for index, url in enumerate(urls)
+            ], copy.deepcopy(response)
+        if (
+            collection == "ollama"
+            and {
+                "OLLAMA_BASE_URLS",
+                "OLLAMA_API_CONFIGS",
+            }
+            <= response.keys()
+        ):
+            urls = response["OLLAMA_BASE_URLS"]
+            configs = response["OLLAMA_API_CONFIGS"]
+            if not isinstance(urls, list) or not isinstance(configs, dict):
+                raise OpenWebUIError(
+                    "Open WebUI Ollama configuration has invalid field types"
+                )
+            entries = []
+            for index, url in enumerate(urls):
+                config = copy.deepcopy(configs.get(str(index), configs.get(url, {})))
+                entries.append(
+                    {"url": url, "key": config.pop("key", ""), "config": config}
+                )
+            return entries, copy.deepcopy(response)
         if not response:
             return [], copy.deepcopy(response)
         raise OpenWebUIError("Open WebUI response is missing a recognized envelope")
@@ -306,6 +359,25 @@ class OpenWebUIClient:
     @staticmethod
     def payload(envelope, entries):
         if isinstance(envelope, dict):
+            if "OPENAI_API_BASE_URLS" in envelope:
+                result = copy.deepcopy(envelope)
+                result["OPENAI_API_BASE_URLS"] = [entry["url"] for entry in entries]
+                result["OPENAI_API_KEYS"] = [entry.get("key", "") for entry in entries]
+                result["OPENAI_API_CONFIGS"] = {
+                    str(index): copy.deepcopy(entry.get("config", {}))
+                    for index, entry in enumerate(entries)
+                }
+                return result
+            if "OLLAMA_BASE_URLS" in envelope:
+                result = copy.deepcopy(envelope)
+                result["OLLAMA_BASE_URLS"] = [entry["url"] for entry in entries]
+                result["OLLAMA_API_CONFIGS"] = {}
+                for index, entry in enumerate(entries):
+                    config = copy.deepcopy(entry.get("config", {}))
+                    if entry.get("key"):
+                        config["key"] = entry["key"]
+                    result["OLLAMA_API_CONFIGS"][str(index)] = config
+                return result
             result = copy.deepcopy(envelope)
             key = next(
                 (key for key in ("connections", "data", "items") if key in result),
