@@ -276,6 +276,26 @@ def test_normalization_fails_closed_for_unknown_shapes():
         openwebui.OpenWebUIClient.normalize("not-json-object", "openai")
 
 
+def test_live_0114_config_shapes_normalize_and_round_trip():
+    openai = {
+        "ENABLE_OPENAI_API": True,
+        "OPENAI_API_BASE_URLS": ["http://openai/v1"],
+        "OPENAI_API_KEYS": ["key"],
+        "OPENAI_API_CONFIGS": {"0": {"prefix_id": "dw-openai", "enable": True}},
+    }
+    ollama = {
+        "ENABLE_OLLAMA_API": True,
+        "OLLAMA_BASE_URLS": ["http://ollama"],
+        "OLLAMA_API_CONFIGS": {"0": {"key": "key", "prefix_id": "dw-ollama"}},
+    }
+    openai_entries, _ = openwebui.OpenWebUIClient.normalize(openai, "openai")
+    ollama_entries, _ = openwebui.OpenWebUIClient.normalize(ollama, "ollama")
+    assert openai_entries[0]["key"] == "key"
+    assert ollama_entries[0]["config"] == {"prefix_id": "dw-ollama"}
+    assert openwebui.OpenWebUIClient.payload(openai, openai_entries) == openai
+    assert openwebui.OpenWebUIClient.payload(ollama, ollama_entries) == ollama
+
+
 def test_desired_state_does_not_probe_without_ollama_key(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     probe = pytest.fail
