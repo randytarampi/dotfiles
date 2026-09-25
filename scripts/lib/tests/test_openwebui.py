@@ -285,6 +285,18 @@ def test_empty_prefix_id_current_entries_do_not_crash():
     assert actions["dw-openai"] == "add"
 
 
+def test_null_prefix_id_current_entry_does_not_crash():
+    current = [_entry("", "https://api.openai.com/v1", key="seeded-key")]
+    current[0]["config"]["prefix_id"] = None
+    result = openwebui.reconcile(
+        current,
+        [],
+        {"openai": [], "ollama": []},
+    )
+    assert result.status == "clean"
+    assert result.plan.entries[0]["action"] == "keep"
+
+
 def test_normalization_fails_closed_for_unknown_shapes():
     with pytest.raises(openwebui.OpenWebUIError):
         openwebui.OpenWebUIClient.normalize({"unexpected": {}}, "openai")

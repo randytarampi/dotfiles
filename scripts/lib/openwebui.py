@@ -455,7 +455,7 @@ def reconcile(
     seen = set()
     for collection, existing in current:
         config = existing.get("config", {})
-        prefix = config.get("prefix_id", "")
+        prefix = _identity(existing)
         wanted = desired_by_prefix.get(prefix)
         owner = catalogue.get(prefix)
         expected_type = owner and owner["connection_type"] == config.get(
