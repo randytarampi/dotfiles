@@ -15,8 +15,8 @@
 **Recommendation: Open WebUI, adopted in stages**, integrated the same way every
 optional service in this repo is integrated — a gate, a generated LaunchAgent, a
 Caddy route, and local-provider connections generated from the existing
-`LOCAL_ENGINES` registry (cloud providers connect via one-time named
-integrations). It is the best ecosystem fit for the requested breadth, but
+`LOCAL_ENGINES` registry (cloud providers are reconciler-managed when their
+upstream-native keys are present). It is the best ecosystem fit for the requested breadth, but
 **no candidate today satisfies breadth, maturity, simplicity and strong
 isolation simultaneously**, so adoption is staged and reversible:
 
@@ -142,11 +142,11 @@ frontend.
                          │        │  local connections generated from
                          │        │  LOCAL_ENGINES; cloud providers as
                          └────────┼─────────────────────────────────┘
-                                  │      one-time named integrations
+                                   │      reconciler-managed dw-<provider> entries
         ┌────────────┬───────────┴──────────┬──────────────┐
         ▼            ▼                      ▼              ▼
      Ollama        oMLX               OpenAI/Anthropic   OpenRouter
-     :11434   :OPENWEBUI_…/v1          (named integrations/   (optional)
+      :11434   :OPENWEBUI_…/v1          (managed entries/      (optional)
    (native)    OpenAI+Anthropic API    direct API keys)
 ```
 
@@ -251,11 +251,10 @@ frontend.
 4. **No subscription proxying. Ever.** ChatGPT Plus / Claude Pro sessions are not
    API backends; they stay in their vendor apps.
 5. **Security boundaries stay separate.** The chat frontend is the only
-   Caddy-exposed piece: LAN-accessible via the repo's LAN allowlist + basic
-   auth, and **never inheriting a global `CADDY_ACCESS=public` mode** — if the
-   Caddy exposure mode changes, the chat route's exposure must be reviewed
-   explicitly. Application-level auth is its own layer (Caddy basic auth is an
-   outer shell, not a substitute): initial admin bootstrap via
+    Caddy-exposed piece: LAN-accessible via the repo's LAN allowlist with no
+    Caddy basic auth, and **never inheriting a global `CADDY_ACCESS=public` mode** —
+    public exposure requires the explicit `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
+    Application session auth is the boundary: initial admin bootstrap via
    `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` (auto-disables signup after
    creating the admin), `ENABLE_SIGNUP=False` thereafter, single-user posture.
    Open Terminal and Computer start **disabled and unregistered** from the
