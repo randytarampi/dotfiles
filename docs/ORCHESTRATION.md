@@ -153,7 +153,7 @@ to detect drift, and `--dry-run` to preview a stamp.
 | `make plannotator-restart` | Restart Plannotator paste service (launchd/systemd) | Port conflict or config change |
 | `make ollama-env-restart` | Re-apply Ollama daemon environment variables | After OLLAMA_* env changes |
 | `make omlx-restart` | Restart the oMLX Homebrew service | After oMLX settings changes |
-| `make services-restart` | All managed services: opencode + plannotator + meridian + ddns + caddy + ollama-env + omlx | Full service restart |
+| `make services-restart` | All managed services: opencode + openwebui + plannotator + meridian + ddns + caddy + ollama-env + omlx | Full service restart |
 
 ## Design Decisions
 
