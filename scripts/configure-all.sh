@@ -135,6 +135,7 @@ COMMON_STRICT=1 parse_common_args ${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
 source "$LIB_DIR/tier_args.sh"
+source "$LIB_DIR/openwebui_service.sh"
 
 FAILURES=0
 
@@ -489,7 +490,23 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Caddy configuration (dry-run mode)"
 elif ! step_skipped caddy && [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   info "Configuring Caddy..."
+  _caddyfile=""
+  _caddy_before=""
+  if command -v brew >/dev/null 2>&1; then
+    _caddyfile="$(brew --prefix)/etc/caddy/Caddyfile"
+    [[ -f "$_caddyfile" ]] && _caddy_before="$(shasum -a 256 "$_caddyfile" | cut -d' ' -f1)"
+  fi
   run_step "Caddy configuration" python3 "$SCRIPT_DIR/configure-caddy.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+  if [[ -n "$_caddyfile" && -f "$_caddyfile" ]]; then
+    _caddy_after="$(shasum -a 256 "$_caddyfile" | cut -d' ' -f1)"
+    if [[ "$_caddy_before" != "$_caddy_after" ]]; then
+      if caddy validate --config "$_caddyfile"; then
+        caddy reload --force --config "$_caddyfile" || warn "Caddy reload failed"
+      else
+        warn "Caddy validation failed; skipping reload"
+      fi
+    fi
+  fi
 fi
 
 # 8c. Open WebUI connection reconciliation (deployment wiring is handled by chezmoi script 30)
@@ -497,8 +514,17 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Open WebUI reconciliation (dry-run mode)"
 elif ! step_skipped openwebui && [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" ]]; then
   info "Reconciling Open WebUI connections..."
+  run_step "Open WebUI service environment" openwebui_service_env_sync "$HOME/.local/share/openwebui/service.env"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    run_step "Open WebUI service restart" openwebui_service_restart
+  fi
   run_step "Open WebUI reconciliation" python3 "$SCRIPT_DIR/configure-openwebui.py"
 else
+  if [[ "$(uname)" == "Darwin" ]]; then
+    openwebui_service_stop
+    pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
+    rm -f "$(openwebui_service_plist)"
+  fi
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI reconciliation"
 fi
 
