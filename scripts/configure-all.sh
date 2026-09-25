@@ -122,7 +122,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | openwebui | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -490,6 +490,16 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
 elif ! step_skipped caddy && [[ "${DOTFILES_RUN_CADDY_SETUP:-0}" == "1" ]]; then
   info "Configuring Caddy..."
   run_step "Caddy configuration" python3 "$SCRIPT_DIR/configure-caddy.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+fi
+
+# 8c. Open WebUI connection reconciliation (deployment wiring is handled by chezmoi script 30)
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  info "Skipping Open WebUI reconciliation (dry-run mode)"
+elif ! step_skipped openwebui && [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" ]]; then
+  info "Reconciling Open WebUI connections..."
+  run_step "Open WebUI reconciliation" python3 "$SCRIPT_DIR/configure-openwebui.py"
+else
+  info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI reconciliation"
 fi
 
 # 9. Restart OpenCode Web to pick up config changes (opencode.json, acp-agents.json, etc.)

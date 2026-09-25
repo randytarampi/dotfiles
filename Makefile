@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -285,6 +285,33 @@ opencode-stop: ## Stop OpenCode Web service
 opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
 	@echo "OpenCode Web restarted."
 
+openwebui-start: ## Start Open WebUI service
+	@echo "Starting Open WebUI..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl bootstrap "gui/$$(id -u)" ~/Library/LaunchAgents/com.openwebui.web.plist 2>/dev/null || true; \
+		launchctl kickstart -k "gui/$$(id -u)/com.openwebui.web" 2>/dev/null || true; \
+	else \
+		echo "Open WebUI LaunchAgent is macOS-only — skipping"; \
+	fi
+
+openwebui-stop: ## Stop Open WebUI service
+	@echo "Stopping Open WebUI..."
+	@if [ "$$(uname)" = "Darwin" ]; then launchctl bootout "gui/$$(id -u)/com.openwebui.web" 2>/dev/null || true; fi
+
+openwebui-restart: openwebui-stop openwebui-start ## Restart Open WebUI service
+	@echo "Open WebUI restarted."
+
+openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
+	@set -e; \
+	backup_dir="$$HOME/.local/share/openwebui/backups"; \
+	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; \
+	$(MAKE) --no-print-directory openwebui-stop; \
+	trap '$(MAKE) --no-print-directory openwebui-start >/dev/null' EXIT; \
+	archive="$$backup_dir/$$(date +%Y%m%d-%H%M%S).tar.gz"; \
+	tar -czf "$$archive" -C "$$HOME/.local/share/openwebui" data; \
+	for old in $$(ls -1t "$$backup_dir"/*.tar.gz 2>/dev/null | tail -n +6); do rm -f "$$old"; done; \
+	echo "Open WebUI backup written: $$archive"
+
 meridian-restart: ## Restart Meridian proxy service
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		launchctl bootout "gui/$$(id -u)/com.meridian.proxy" 2>/dev/null || true; \
@@ -345,7 +372,7 @@ plannotator-restart: ## Restart Plannotator paste service
 	fi
 	@echo "Plannotator restarted."
 
-services-restart: opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
+services-restart: opencode-restart openwebui-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
 
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update

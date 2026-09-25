@@ -354,6 +354,69 @@ def build_opencode_site_blocks(
     return blocks
 
 
+def build_openwebui_site_block(
+    site_label: str,
+    bind_ip: str,
+    tls_line: str,
+    port: str,
+    lan_only: bool = False,
+) -> str:
+    lines = [f"{site_label} {{", f"  bind {bind_ip}", f"  {tls_line}", ""]
+    if lan_only:
+        lines.extend(
+            ["  @not_lan not remote_ip private_ranges", "  abort @not_lan", ""]
+        )
+    lines.extend(
+        [f"  reverse_proxy 127.0.0.1:{port} {{", "    flush_interval -1", "  }", "}"]
+    )
+    return "\n".join(lines)
+
+
+def build_openwebui_site_blocks(
+    domains: list[str],
+    access_mode: str,
+    bind_ip: str,
+    cert_fullchain: str,
+    cert_key: str,
+    local_domain_tls_line: str,
+    port: str,
+    https_port: str,
+    public_opt_in: bool,
+) -> list[str]:
+    blocks: list[str] = []
+    if access_mode == "localhost":
+        blocks.append(
+            build_openwebui_site_block(
+                build_site_label("chat.localhost", https_port),
+                "127.0.0.1",
+                "tls internal",
+                port,
+            )
+        )
+        for domain in domains:
+            if domain.startswith("local."):
+                blocks.append(
+                    build_openwebui_site_block(
+                        build_site_label(f"chat.{domain}", https_port),
+                        "127.0.0.1",
+                        local_domain_tls_line,
+                        port,
+                    )
+                )
+        return blocks
+    for domain in domains:
+        blocks.append(
+            build_openwebui_site_block(
+                build_site_label(f"chat.{domain}", https_port),
+                bind_ip,
+                f"tls {cert_fullchain} {cert_key}",
+                port,
+                lan_only=access_mode == "lan" or not public_opt_in,
+            )
+        )
+    return blocks
+
+
 def build_caddyfile(
     domains: list[str],
     access_mode: str,
@@ -365,6 +428,7 @@ def build_caddyfile(
     opencode_port: str,
     plannotator_portal_dir: str,
     https_port: str,
+    openwebui_port: str = "8080",
 ) -> str:
     route_block = build_route_block(
         plannotator_portal_dir, block_omlx_status=access_mode != "localhost"
@@ -430,6 +494,19 @@ def build_caddyfile(
         opencode_port=opencode_port,
         https_port=https_port,
     )
+    openwebui_sites = []
+    if os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1":
+        openwebui_sites = build_openwebui_site_blocks(
+            domains=domains,
+            access_mode=access_mode,
+            bind_ip=bind_ip,
+            cert_fullchain=cert_fullchain,
+            cert_key=cert_key,
+            local_domain_tls_line=local_domain_tls_line,
+            port=openwebui_port,
+            https_port=https_port,
+            public_opt_in=os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1",
+        )
 
     template_path = (
         Path(__file__).resolve().parent.parent / "configs" / "caddy" / "Caddyfile.tmpl"
@@ -442,6 +519,7 @@ def build_caddyfile(
     return string.Template(template_text).substitute(
         domain_sites="\n\n".join(domain_blocks),
         opencode_sites="\n\n".join(opencode_sites),
+        openwebui_sites="\n\n".join(openwebui_sites),
         localhost_block="\n\n".join(localhost_blocks),
     )
 
@@ -488,6 +566,7 @@ def main() -> None:
 
     bind_ip = os.environ.get("CADDY_BIND_IP", "").strip() or get_bind_ip()
     opencode_port = os.environ.get("OPENCODE_SERVER_PORT", "4096").strip() or "4096"
+    openwebui_port = os.environ.get("OPENWEBUI_PORT", "8080").strip() or "8080"
     https_port = os.environ.get("CADDY_HTTPS_PORT", "443").strip() or "443"
     plannotator_portal_dir = str(
         expand_path(
@@ -513,6 +592,7 @@ def main() -> None:
             opencode_port=opencode_port,
             plannotator_portal_dir=plannotator_portal_dir,
             https_port=https_port,
+            openwebui_port=openwebui_port,
         )
     except Exception as exc:
         logger.critical(f"Failed to build Caddyfile: {exc}")

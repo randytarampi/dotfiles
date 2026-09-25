@@ -168,6 +168,17 @@ CHECKS = [
             Path("/Library/LaunchDaemons/com.dotfiles.omlx-wired-limit.plist"),
         ],
     ),
+    (
+        "DOTFILES_RUN_OPENWEBUI_SETUP",
+        "Open WebUI deployment",
+        [
+            HOME / "Library/LaunchAgents/com.openwebui.web.plist",
+            HOME / ".local/share/openwebui/venv",
+            HOME / ".local/share/openwebui/data",
+            HOME / ".local/share/openwebui/logs",
+            HOME / ".local/share/openwebui/service.env",
+        ],
+    ),
 ]
 
 
@@ -615,6 +626,63 @@ def main():
             exit_code = 1
     else:
         print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
+
+    # Open WebUI deployment artefacts and security modes.
+    openwebui_gate = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
+    openwebui_plist = HOME / "Library/LaunchAgents/com.openwebui.web.plist"
+    openwebui_root = HOME / ".local/share/openwebui"
+    openwebui_mode_checks = [
+        (openwebui_root / "data", "Open WebUI data directory"),
+        (openwebui_root / "logs", "Open WebUI logs directory"),
+        (openwebui_root / "service.env", "Open WebUI service env"),
+    ]
+    if openwebui_gate:
+        for path, label in openwebui_mode_checks:
+            if path.exists():
+                mode = path.stat().st_mode & 0o777
+                expected = (
+                    0o700
+                    if path.name in {"data", "logs"}
+                    else 0o600 if path.name == "service.env" else None
+                )
+                if expected is not None and mode != expected:
+                    print(
+                        f"  \u2717 {label}: mode {oct(mode)} (expected {oct(expected)})"
+                    )
+                    exit_code = 1
+                else:
+                    print(f"  \u2713 {label}: {path}")
+            else:
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        logs_dir = openwebui_root / "logs"
+        if logs_dir.exists() and (logs_dir.stat().st_mode & 0o777) != 0o700:
+            print(
+                f"  \u2717 Open WebUI logs directory: mode {oct(logs_dir.stat().st_mode & 0o777)} (expected 0o700)"
+            )
+            exit_code = 1
+        caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
+        if caddyfile and caddyfile.exists():
+            if "chat." in caddyfile.read_text(encoding="utf-8"):
+                print(f"  \u2713 Open WebUI Caddy site: {caddyfile}")
+            else:
+                print(
+                    f"  \u2717 Open WebUI Caddy site: missing chat.* site in {caddyfile}"
+                )
+                exit_code = 1
+        else:
+            print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
+            exit_code = 1
+    else:
+        if openwebui_plist.exists():
+            print(
+                f"  \u2717 Open WebUI LaunchAgent remains while gate is off: {openwebui_plist}"
+            )
+            exit_code = 1
+        else:
+            print(
+                "  \u2298 Open WebUI (gate DOTFILES_RUN_OPENWEBUI_SETUP=0, LaunchAgent absent)"
+            )
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
