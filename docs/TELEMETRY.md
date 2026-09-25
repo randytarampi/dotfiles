@@ -24,6 +24,7 @@ shell startup. These are the canonical opt-out levers:
 | agy (Antigravity) | — | — | no local opt-out (Google account policy) |
 | junie | — | — | IDE setting (not env-manageable) |
 | cortex | — | — | no local opt-out (Snowflake account governance) |
+| open-webui | — | — | no telemetry collected by default (upstream `ENABLE_OTEL`, `ENABLE_OTEL_TRACES`, `ENABLE_OTEL_METRICS`, `ENABLE_OTEL_LOGS` all default to `False`; verified in the 0.11.4 source) |
 
 Codex note: `OTEL_SDK_DISABLED=true` suppresses the OTel SDK but does not fully
 disable Codex analytics. Codex requires `config.toml` settings

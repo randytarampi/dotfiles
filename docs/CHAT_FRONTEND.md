@@ -1,8 +1,14 @@
-# Unified Multi-Provider Chat Frontend (Proposed)
+# Unified Multi-Provider Chat Frontend (Open WebUI)
 
-> **Status: proposed, not implemented.** This document is the research-backed design
+> **Status: implemented (Phase 4a/4b).** This document is the research-backed design
 > for a unified chat frontend over the repo's local engines and cloud providers.
-> Implementation (Phase 4) is pending approval; nothing here is wired up yet.
+> The reconciler (`scripts/lib/openwebui.py`), configure script
+> (`scripts/configure-openwebui.py`), and deployment wiring
+> (`.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl`, LaunchAgent
+> `com.openwebui.web`, Caddy `chat.<domain>`) are committed and live-validated
+> against `open-webui==0.11.4` (venv 2.3 GB, ~800 MB RSS, 612 models discovered
+> in the pilot reconciliation). Gate it on with `DOTFILES_RUN_OPENWEBUI_SETUP=1`
+> in `~/.env` + `make deploy`; see `.env.example` for the full variable set.
 
 ## TL;DR
 
@@ -208,29 +214,40 @@ frontend.
    list; concrete variable name chosen at implementation) — admin-UI
    `enable` flips persist in the database until the next reconciliation, so
    that `~/.env` input, not the admin UI, is authoritative for this toggle.
-2. **Gate + LaunchAgent + Caddy, like every optional service.**
-   A new `DOTFILES_RUN_*_SETUP` gate (default 0; concrete name chosen at
-   implementation — see open questions), documented in `.env.example`
-   (check-env-coverage), Layer-2 script `run_onchange_30-openwebui.sh.tmpl`
-   (next free slot; hash-triggered on the configure script), LaunchAgent
-   `com.openwebui.web` (mirrors `com.opencode.web`), Caddy site on a
-   **dedicated host/subdomain** (e.g. `chat.<domain>`) behind the existing LAN
-   allowlist + basic auth. A dedicated host is the default because a path
-   prefix (`/webui/*`) can break root-relative assets, redirects and
-   WebSocket URLs; subpath serving would need local verification first and
-   is not assumed.
-3. **Cloud providers via one-time named integrations.** OpenAI/Anthropic/
-   OpenRouter/Google connect with their own API keys from `~/.env`
-   (upstream-native env vars; no new `DOTFILES_` names for provider keys),
-   configured once in Settings → Admin → Connections. Meridian
-   (Anthropic-compatible `:3456/v1`) **remains excluded by default**: it is
-   OAuth-backed (Claude Code SDK), not an API-key service, so exposing it as a
-   general chat API would be exactly the subscription-to-API bridge this
-   design rejects. Inclusion would require *both* technical compatibility
-   (custom base URL on an Anthropic connection) *and* an explicit decision
-   that this particular OAuth-backed use is authorized — otherwise Meridian
-   stays an OpenCode/Mozart-only path and chat uses the normal Anthropic API
-   integration (no hacks).
+ 2. **Gate + LaunchAgent + Caddy, like every optional service.**
+    `DOTFILES_RUN_OPENWEBUI_SETUP` (default 0), documented in
+    `.env.example` (check-env-coverage), Layer-2 script
+    `run_onchange_30-openwebui.sh.tmpl` (hash-triggered on the configure
+    script + `openwebui.py` + `local_engines.py` + `provider_endpoints.py`),
+    LaunchAgent `com.openwebui.web` (mirrors `com.opencode.web`), Caddy site on
+    a **dedicated host/subdomain** (`chat.<domain>`) behind the existing LAN
+    allowlist — **no Caddy `basic_auth` on this site** (Open WebUI's own
+    session auth is the application layer; Caddy basic auth and app Bearer
+    both use the `Authorization` header, so double-layering is avoided by
+    design). A dedicated host is the default because a path prefix
+    (`/webui/*`) can break root-relative assets, redirects and WebSocket
+    URLs; subpath serving would need local verification first and is not
+    assumed. Making `chat.<domain>` publicly reachable requires the explicit
+    opt-in gate `DOTFILES_OPENWEBUI_PUBLIC=1` (default 0) — it never inherits
+    a global `CADDY_ACCESS=public` mode.
+ 3. **Cloud providers are reconciler-managed when their keys exist.** The
+    reconciler (`scripts/lib/openwebui.py`) includes repo-known cloud
+    providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama
+    Cloud) in the desired state whenever their upstream-native API key is set
+    in `~/.env` — same `dw-` prefix ownership, collision and preservation
+    rules as local engines; key rotation surfaces as an update action and
+    removing a key removes the managed entry on the next deploy. Providers
+    without keys are simply skipped. Anthropic-protocol connections are
+    URL-based in Open WebUI (the connection points at an
+    Anthropic-compatible base URL with `x-api-key`); `connection_type` is
+    metadata, not a protocol selector — verified live against 0.11.4.
+    Meridian (Anthropic-compatible `:3456/v1`) is **included by explicit
+    user authorization** (recorded during Phase 4 planning — third consumer
+    after OpenCode/Mozart) as a reconciler-managed `dw-meridian` connection
+    whenever `is_meridian_configured()` reports it available
+    (`MERIDIAN_API_KEY` / `ANTHROPIC_BASE_URL`); absent that, no entry is
+    created. It is still **not** a general subscription-to-API bridge: the
+    authorization covers this specific OAuth-backed deployment.
 4. **No subscription proxying. Ever.** ChatGPT Plus / Claude Pro sessions are not
    API backends; they stay in their vendor apps.
 5. **Security boundaries stay separate.** The chat frontend is the only
@@ -311,20 +328,24 @@ frontend.
 
 ### Adding a cloud provider
 
-Cloud connections are **client configuration, not repo-generated
-infrastructure** — Open WebUI has no env-var path for Anthropic-type
-connections, and cloud integrations are one-time admin-UI entries using keys
-from `~/.env`. No `LOCAL_ENGINES` or gateway change is involved. Note the
-boundary: `scripts/lib/provider_endpoints.py` is the OpenCode-side provider
-registry (Google, OpenRouter, OpenCode entries with `api` protocols and
-allowlist files) — it is **not** a generic all-provider registry and does not
-currently cover OpenAI or Anthropic. Extending it is a deliberate decision
-that carries OpenCode catalogue and `MODEL_UPDATES.md` obligations; do not
-assume adding a chat-frontend cloud provider touches it.
+Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode
+Zen, Ollama Cloud) are **reconciler-managed**: set the provider's
+upstream-native API key in `~/.env` and the next `make deploy` adds/updates
+the `dw-<provider>` connection with the same ownership guarantees as local
+engines. No admin-UI entry is needed for these. A brand-new provider that the
+reconciler does not know yet needs a small `compute_desired_state()` /
+ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic
+test) — keep the Open WebUI-adjacent registry there rather than genericizing
+`scripts/lib/provider_endpoints.py`, which remains the OpenCode-side registry
+(Google, OpenRouter, OpenCode entries with `api` protocols and allowlist
+files; extending it carries OpenCode catalogue and `MODEL_UPDATES.md`
+obligations).
 
-1. One-time named integration in Open WebUI (Settings → Admin → Connections)
-   with the provider's API key from `~/.env`.
-2. Document any new env var in `.env.example`.
+1. Set the provider's API key in `~/.env` (upstream-native name).
+2. If it is a new provider for the reconciler: add its chat-connection
+   metadata to `scripts/lib/openwebui.py` + test; document any new env var in
+   `.env.example`.
+3. Run `make deploy`; verify with `scripts/configure-openwebui.py --check`.
 
 ### Model preset refresh
 
@@ -384,28 +405,35 @@ assume adding a chat-frontend cloud provider touches it.
   benchmarking evidence exists; Reddit sampling blocked during research — flagged
   as residual uncertainty on community sentiment, not on documented facts)
 
-## Open questions for implementation (Phase 4, gated on approval)
+## Implementation record (Phase 4, resolved)
 
-Decisions already made in this design (not open): Ollama connects via its
-native API only and is deduplicated out of the OpenAI-protocol array;
-database-authoritative config with idempotent API reconciliation is the
-config-ownership model; cloud providers are one-time named integrations;
-Caddy uses a dedicated host by default; Meridian is excluded unless both
-conditions in principle 3 pass.
+All former open questions were resolved during implementation and
+live-validated against `open-webui==0.11.4`:
 
-1. Meridian authorization (gated on evidence, not preference): including the
-   OAuth-backed Claude Code SDK path as a general chat backend would require
-   explicit upstream/provider permission — evidence that this particular use
-   is authorized under Anthropic's terms. Without that, it stays
-   OpenCode/Mozart-only and chat uses the normal Anthropic API integration.
-2. pip-in-venv for the LaunchAgent (repo has no Docker dependency; pip
-   matches existing LaunchAgent patterns): verify `open-webui serve` behaves
-   well under launchd (stdout, respawn) and choose the exact immutable pin.
-3. Port allocation (`OPENWEBUI_PORT`, default 8080) and the concrete Caddy
-   host name (e.g. `chat.<domain>`).
-4. Validate the reconciliation design in practice: verify the Open WebUI
-   API surface used by the reconcile step (read/update/delete managed
-   connection entries by `prefix_id`) against the pinned release; confirm
-   unrelated persisted state (model ordering, workspace models, admin-created
-   cloud connections, UI settings) is genuinely untouched by reconciliation
-   and survives restarts.
+1. **Meridian:** included by explicit user authorization (Phase 4 planning)
+   as a reconciler-managed `dw-meridian` connection whenever
+   `is_meridian_configured()` reports availability; no entry is created
+   otherwise. Not a general subscription-to-API bridge.
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.11.4}`
+   in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
+   3.14 unsupported upstream). LaunchAgent behaviour verified live
+   (KeepAlive respawn works; see the bootout/bootstrap retry note below).
+3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
+   `chat.<CADDY_DOMAIN>`, LAN-only by default with the explicit
+   `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
+4. **Reconciliation API surface verified live:** reads are
+   `GET /openai/config` + `GET /ollama/config`; writes are
+   `POST /openai/config/update` + `POST /ollama/config/update`; envelopes are
+   `{ENABLE_*_API, *_BASE_URLS: list, *_API_KEYS: list, *_API_CONFIGS:
+   dict[index→config]}`. Anthropic support is URL-based; `connection_type` is
+   metadata, not protocol selection. Unrelated persisted state (model
+   ordering, admin-created entries) is untouched by reconciliation — enforced
+   by verbatim unmanaged-entry preservation with snapshot verification.
+   Live pilot: `add=7, keep=2, collisions=0`, then idempotent
+   `keep=9, collisions=0`; 612 models discovered. One live-only bug was found
+   and fixed during validation: 0.11.4 seeds default connections with an
+   **empty `prefix_id`**, which the reconciler's add-guard previously
+   mis-indexed (first-character vs full-string comparison); it now compares
+   full strings and preserves empty-prefix seed entries verbatim. The
+   LaunchAgent wiring also absorbed an upstream launchd quirk: `bootout` is
+   asynchronous, so the bootstrap step retries with a bounded backoff.
