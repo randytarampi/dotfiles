@@ -1026,6 +1026,134 @@ def main():
     else:
         print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
 
+    litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+    litellm_root = HOME / ".local/share/litellm"
+    litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
+    expected_litellm_port = os.environ.get("LITELLM_PORT", "4000")
+    if litellm_gate:
+        litellm_paths = [
+            (litellm_root / "venv/bin/litellm", "LiteLLM executable"),
+            (litellm_root / "config.yaml", "LiteLLM config"),
+            (litellm_root / "service.env", "LiteLLM service env"),
+            (litellm_root / "data", "LiteLLM data directory"),
+            (litellm_root / "logs", "LiteLLM logs directory"),
+            (litellm_plist, "LiteLLM LaunchAgent"),
+        ]
+        for path, label in litellm_paths:
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        for path in (litellm_root / "data", litellm_root / "logs"):
+            if path.exists() and (path.stat().st_mode & 0o777) != 0o700:
+                print(f"  \u2717 LiteLLM directory mode: {path}")
+                exit_code = 1
+        service_env = litellm_root / "service.env"
+        litellm_env_values = {}
+        if service_env.is_file():
+            for line in service_env.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    litellm_env_values[key.strip()] = value.strip().strip("'\"")
+            if service_env.stat().st_mode & 0o777 != 0o600:
+                print("  \u2717 LiteLLM service env: key schema or mode mismatch")
+                exit_code = 1
+        if (litellm_root / "config.yaml").is_file():
+            config_text = (litellm_root / "config.yaml").read_text(encoding="utf-8")
+            refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
+            expected_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT"} | refs
+            if set(litellm_env_values) != expected_env:
+                print(
+                    "  \u2717 LiteLLM service env: provider allowlist does not match config refs"
+                )
+                exit_code = 1
+            master_key = litellm_env_values.get("LITELLM_MASTER_KEY", "")
+            if not master_key.startswith("sk-") or len(master_key) < 16:
+                print("  \u2717 LiteLLM service env: invalid master-key shape")
+                exit_code = 1
+            if litellm_env_values.get("LITELLM_PORT") != expected_litellm_port:
+                print("  \u2717 LiteLLM service env: LITELLM_PORT drift")
+                exit_code = 1
+            api_key_lines = [
+                line.strip()
+                for line in config_text.splitlines()
+                if line.strip().startswith("api_key:")
+            ]
+            if any(
+                not (
+                    line.split(":", 1)[1].strip().startswith("os.environ/")
+                    or line.split(":", 1)[1].strip() == "none"
+                )
+                for line in api_key_lines
+            ):
+                print("  \u2717 LiteLLM config: inline api_key detected")
+                exit_code = 1
+            if (
+                "telemetry: false" not in config_text
+                or "master_key: os.environ/LITELLM_MASTER_KEY" not in config_text
+            ):
+                print("  \u2717 LiteLLM config: telemetry/master-key policy mismatch")
+                exit_code = 1
+        if litellm_plist.is_file():
+            plist_mode = litellm_plist.stat().st_mode & 0o777
+            plist_text = litellm_plist.read_text(encoding="utf-8")
+            if (
+                plist_mode != 0o600
+                or "LITELLM_MASTER_KEY" in plist_text
+                or "EnvironmentVariables" in plist_text
+            ):
+                print(
+                    "  \u2717 LiteLLM plist: mode/secrets/environment contract mismatch"
+                )
+                exit_code = 1
+            if (
+                "env -i" not in plist_text
+                or "--noprofile --norc" not in plist_text
+                or "bash -lc" in plist_text
+            ):
+                print("  \u2717 LiteLLM plist: unsafe wrapper")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                arguments = " ".join(
+                    str(item) for item in plist.get("ProgramArguments", [])
+                )
+                match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not match or {
+                    token.split("=", 1)[0]
+                    for token in shlex.split(match.group(1))
+                    if "=" in token
+                } != {"HOME", "PATH"}:
+                    print(
+                        "  \u2717 LiteLLM plist: wrapper environment allowlist mismatch"
+                    )
+                    exit_code = 1
+                if (
+                    "--config" not in arguments
+                    or str(litellm_root / "config.yaml") not in arguments
+                ):
+                    print("  \u2717 LiteLLM plist: config path missing")
+                    exit_code = 1
+                if (
+                    "--host 127.0.0.1" not in arguments
+                    or "--num_workers 1" not in arguments
+                ):
+                    print("  \u2717 LiteLLM plist: launch contract mismatch")
+                    exit_code = 1
+                port_match = re.search(r'--port "?([^"\s]+)"?', arguments)
+                if not port_match or port_match.group(1) != expected_litellm_port:
+                    print("  \u2717 LiteLLM plist: launch port drift")
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 LiteLLM plist: invalid property list")
+                exit_code = 1
+    elif litellm_plist.exists():
+        print(
+            f"  \u2717 LiteLLM LaunchAgent remains while gate is off: {litellm_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 LiteLLM (gate disabled, LaunchAgent absent)")
+
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
     if meridian_gate:
