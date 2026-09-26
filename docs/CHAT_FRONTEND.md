@@ -346,7 +346,9 @@ The optional daily backup timer retains the newest five local snapshots;
 off-machine export is intentionally out of scope. Linux gets a systemd user
 unit for the chat service following the repo's existing user-unit patterns;
 terminal/cptr remain macOS-priority
-integrations. No new Caddy routes are introduced.
+integrations. The only Caddy route this phase adds is the `chat.<domain>`
+Open WebUI host, created when `DOTFILES_RUN_OPENWEBUI_SETUP` is enabled
+(dedicated host, LAN-only by default; see `docs/CADDY.md`).
 
 Two security notes for MCP registration (accepted, documented boundaries):
 

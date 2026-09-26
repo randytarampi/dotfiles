@@ -46,7 +46,32 @@ litellm_service_env_sync "$SERVICE_ENV" || die "Failed to align LiteLLM provider
 
 PLIST="$(litellm_service_plist)"
 mkdir -p "$(dirname "$PLIST")"
-cat >"$PLIST" <<EOF
+
+if [[ "{{ .chezmoi.os }}" == "linux" ]]; then
+  # Linux: systemd user unit mirroring the LaunchAgent discipline (no secrets
+  # in the unit; the wrapper sources the mode-600 service env inside a
+  # scrubbed non-login shell).
+  SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+  mkdir -p "$SYSTEMD_USER_DIR"
+  cat >"$SYSTEMD_USER_DIR/litellm.service" <<EOF
+[Unit]
+Description=LiteLLM proxy gateway
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source "$SERVICE_ENV"; set +a; exec "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" --num_workers 1'
+Restart=on-failure
+StandardOutput=append:$LOGS/proxy.log
+StandardError=append:$LOGS/proxy.log
+EOF
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
+    systemctl --user enable --now litellm.service || warn "systemd user LiteLLM start failed"
+  else
+    info "systemd user session unavailable; wrote litellm.service for later activation"
+  fi
+else
+  cat >"$PLIST" <<'PLIST_EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -59,7 +84,7 @@ cat >"$PLIST" <<EOF
   <key>StandardOutPath</key><string>$LOGS/proxy.log</string>
   <key>StandardErrorPath</key><string>$LOGS/proxy.log</string>
 </dict></plist>
-EOF
+PLIST_EOF
 chmod 600 "$PLIST"
 if ! litellm_service_start; then die "${LITELLM_SERVICE_ERROR:-Failed to start LiteLLM}"; fi
 for _ in {1..30}; do
@@ -70,3 +95,4 @@ if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readi
   warn "LiteLLM is still starting; configuration will retry on a later deploy"
 fi
 "$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+fi

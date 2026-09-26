@@ -814,6 +814,9 @@ def main():
     terminal_gate = (
         openwebui_gate
         and os.environ.get("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "0") == "1"
+        # Terminal is macOS-priority per the approved design (bare-metal
+        # launchd runtime; no Linux deployment).
+        and sys.platform == "darwin"
     )
     terminal_plist = HOME / "Library/LaunchAgents/com.openwebui.terminal.plist"
     terminal_root = openwebui_root / "terminal-workspace"
@@ -919,6 +922,9 @@ def main():
     computer_gate = (
         openwebui_gate
         and os.environ.get("DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP", "0") == "1"
+        # cptr is macOS-priority per the approved design (bare-metal
+        # LaunchAgent runtime; no Linux deployment).
+        and sys.platform == "darwin"
     )
     computer_root = HOME / ".local/share/cptr"
     computer_plist = HOME / "Library/LaunchAgents/com.openwebui.computer.plist"

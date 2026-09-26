@@ -98,6 +98,16 @@ def compute_model_list(environ=None):
             "openrouter/openai/gpt-4o",
             PROVIDER_ENDPOINTS["openrouter"]["baseUrl"],
         ),
+        "opencode": (
+            PROVIDER_ENDPOINTS["opencode"]["apiKeyEnv"],
+            "openai/gpt-5.6-luna",
+            PROVIDER_ENDPOINTS["opencode"]["baseUrl"],
+        ),
+        "ollama-cloud": (
+            "OLLAMA_API_KEY",
+            "openai/gpt-oss:120b",
+            "https://ollama.com/v1",
+        ),
     }
     for provider, (key_env, model, base_url) in clouds.items():
         if environ.get(key_env, "").strip():
