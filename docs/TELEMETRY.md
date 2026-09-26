@@ -25,6 +25,9 @@ shell startup. These are the canonical opt-out levers:
 | junie | — | — | IDE setting (not env-manageable) |
 | cortex | — | — | no local opt-out (Snowflake account governance) |
 | open-webui | — | — | no telemetry collected by default (upstream `ENABLE_OTEL`, `ENABLE_OTEL_TRACES`, `ENABLE_OTEL_METRICS`, `ENABLE_OTEL_LOGS` all default to `False`; verified in the 0.11.4 source) |
+| open-terminal | — | — | no telemetry observed in installed 0.14.0 source |
+| cptr | — | — | no telemetry observed in installed 0.9.21 source |
+| litellm | — | `~/.local/share/litellm/config.yaml` | config opt-out: generated `litellm_settings.telemetry: false` (installed default is enabled) |
 
 Codex note: `OTEL_SDK_DISABLED=true` suppresses the OTel SDK but does not fully
 disable Codex analytics. Codex requires `config.toml` settings
