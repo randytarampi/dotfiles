@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+source "$LIB_DIR/litellm_service.sh"
+# scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
+# scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
+# secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
+
+load_env || warn "\$HOME/.env not found, skipping env load"
+CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py"
+if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
+  if [[ "{{ .chezmoi.os }}" == "linux" ]]; then
+    systemctl --user disable --now litellm.service 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/litellm.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+  else
+    litellm_service_stop
+    rm -f "$(litellm_service_plist)"
+  fi
+  pkill -f "$HOME/.local/share/litellm/venv/bin/litellm" 2>/dev/null || true
+  info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM; preserved venv/data"
+  exit 0
+fi
+
+LITELLM_HOME="$HOME/.local/share/litellm"
+VENV="$LITELLM_HOME/venv"
+CONFIG="$LITELLM_HOME/config.yaml"
+DATA="$LITELLM_HOME/data"
+LOGS="$LITELLM_HOME/logs"
+SERVICE_ENV="$LITELLM_HOME/service.env"
+VERSION="${DOTFILES_LITELLM_VERSION:-1.102.1}"
+PYTHON_BIN=""
+for candidate in python3.11 python3.12 python3.10; do
+  if command -v "$candidate" >/dev/null 2>&1; then PYTHON_BIN="$(command -v "$candidate")"; break; fi
+done
+[[ -n "$PYTHON_BIN" ]] || die "LiteLLM requires python3.10, python3.11, or python3.12"
+if [[ ! -x "$VENV/bin/python" ]]; then mkdir -p "$LITELLM_HOME"; "$PYTHON_BIN" -m venv "$VENV" || die "Failed to create LiteLLM virtual environment"; fi
+if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}"; then
+  warn "LiteLLM install failed; retrying once"
+  sleep 2
+  "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" || die "Failed to install litellm[proxy]==${VERSION}"
+fi
+mkdir -p "$DATA" "$LOGS"
+chmod 700 "$DATA" "$LOGS"
+litellm_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile LiteLLM service.env"
+"$CONFIGURE_SCRIPT" || die "Failed to generate LiteLLM config"
+litellm_service_env_sync "$SERVICE_ENV" || die "Failed to align LiteLLM provider environment"
+
+PLIST="$(litellm_service_plist)"
+mkdir -p "$(dirname "$PLIST")"
+
+if [[ "{{ .chezmoi.os }}" == "linux" ]]; then
+  # Linux: systemd user unit mirroring the LaunchAgent discipline (no secrets
+  # in the unit; the wrapper sources the mode-600 service env inside a
+  # scrubbed non-login shell).
+  SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+  mkdir -p "$SYSTEMD_USER_DIR"
+  cat >"$SYSTEMD_USER_DIR/litellm.service" <<EOF
+[Unit]
+Description=LiteLLM proxy gateway
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source "$SERVICE_ENV"; set +a; exec "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" --num_workers 1'
+Restart=on-failure
+StandardOutput=append:$LOGS/proxy.log
+StandardError=append:$LOGS/proxy.log
+EOF
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
+    systemctl --user enable --now litellm.service || warn "systemd user LiteLLM start failed"
+  else
+    info "systemd user session unavailable; wrote litellm.service for later activation"
+  fi
+else
+  cat >"$PLIST" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.litellm.proxy</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string><string>-c</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV/bin" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "{{ env "LITELLM_PORT" | default "4000" }}" --num_workers 1'</string>
+  </array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LOGS/proxy.log</string>
+  <key>StandardErrorPath</key><string>$LOGS/proxy.log</string>
+</dict></plist>
+PLIST_EOF
+chmod 600 "$PLIST"
+if ! litellm_service_start; then die "${LITELLM_SERVICE_ERROR:-Failed to start LiteLLM}"; fi
+for _ in {1..30}; do
+  if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then break; fi
+  sleep 2
+done
+if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 && ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then
+  warn "LiteLLM is still starting; configuration will retry on a later deploy"
+fi
+"$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+fi

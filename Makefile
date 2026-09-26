@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -285,6 +285,85 @@ opencode-stop: ## Stop OpenCode Web service
 opencode-restart: opencode-stop opencode-start ## Restart OpenCode Web service
 	@echo "OpenCode Web restarted."
 
+openwebui-start: ## Start Open WebUI service
+	@echo "Starting Open WebUI..."
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/openwebui_service.sh && openwebui_service_start; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user enable --now open-webui.service 2>/dev/null || echo "systemd user session unavailable — skipping"; \
+	else \
+		echo "Open WebUI service is unsupported on this platform — skipping"; \
+	fi
+
+openwebui-stop: ## Stop Open WebUI service
+	@echo "Stopping Open WebUI..."
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop open-webui.service 2>/dev/null || true; fi
+
+openwebui-restart: ## Restart Open WebUI service
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		. scripts/lib/openwebui_service.sh && openwebui_service_restart && echo "Open WebUI restarted."; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user restart open-webui.service 2>/dev/null || echo "systemd user session unavailable — skipping"; \
+	else \
+		echo "Open WebUI service is unsupported on this platform — skipping"; \
+	fi
+
+openwebui-terminal-start: ## Start the gated localhost-only Open Terminal service
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP:-0}" != "1" ]; then echo "Open Terminal gates are off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_terminal_service_start; fi
+
+openwebui-terminal-stop: ## Stop the Open Terminal service
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_terminal_service_stop; fi
+
+openwebui-terminal-restart: openwebui-terminal-stop openwebui-terminal-start ## Restart Open Terminal
+
+openwebui-computer-start: ## Start the gated localhost-only cptr service
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP:-0}" != "1" ]; then echo "Open WebUI Computer gates are off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_computer_service_start; fi
+
+openwebui-computer-stop: ## Stop the cptr service
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_computer_service_stop; fi
+
+openwebui-computer-restart: openwebui-computer-stop openwebui-computer-start ## Restart cptr
+
+# LiteLLM is an independent loopback gateway and intentionally does not join services-restart.
+litellm-start: ## Start LiteLLM gateway
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]; then echo "LiteLLM gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_start; fi
+
+litellm-stop: ## Stop LiteLLM gateway
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; fi
+
+litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
+
+openwebui-backup-timer-start: ## Start the gated Open WebUI backup timer
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE:-0}" != "1" ]; then echo "Open WebUI backup timer gates are off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" != "Darwin" ]; then echo "Open WebUI backup timer is macOS-only — skipping"; exit 0; fi; \
+	domain="gui/$$(id -u)"; label="com.dotfiles.openwebui.backup"; \
+	timer_ok=0; \
+	for attempt in 1 2 3; do \
+		launchctl bootout "$$domain/$$label" 2>/dev/null || true; sleep 1; \
+		if launchctl bootstrap "$$domain" ~/Library/LaunchAgents/com.dotfiles.openwebui.backup.plist 2>/dev/null && launchctl print "$$domain/$$label" >/dev/null 2>&1; then timer_ok=1; break; fi; \
+	done; \
+	[ "$$timer_ok" = "1" ] || { echo "Backup timer failed to load after 3 attempts" >&2; exit 1; }
+
+openwebui-backup-timer-stop: ## Stop the Open WebUI backup timer
+	@if [ "$$(uname)" != "Darwin" ]; then echo "Open WebUI backup timer is macOS-only — skipping"; exit 0; fi; \
+	launchctl bootout "gui/$$(id -u)/com.dotfiles.openwebui.backup" 2>/dev/null || true
+
+openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi; \
+	set -e -o pipefail; umask 077; backup_dir="$$HOME/.local/share/openwebui/backups"; data_dir="$$HOME/.local/share/openwebui/data"; \
+	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; stage="$$(mktemp -d "$$backup_dir/.stage.XXXXXX")"; \
+	trap 'rm -rf "$$stage"' EXIT; mkdir -p "$$stage/data"; \
+	tar -cf - -C "$$HOME/.local/share/openwebui" --exclude='data/webui.db' --exclude='data/webui.db-wal' --exclude='data/webui.db-shm' data | tar -xf - -C "$$stage"; \
+	if [ -f "$$data_dir/webui.db" ]; then command -v sqlite3 >/dev/null 2>&1 || { echo "sqlite3 is required for a live-safe Open WebUI backup" >&2; exit 1; }; sqlite3 "$$data_dir/webui.db" ".backup '$$stage/data/webui.db'"; fi; \
+	archive="$$backup_dir/$$(date +%Y%m%d-%H%M%S).tar.gz"; tar -czf "$$archive" -C "$$stage" data; \
+	for old in $$(ls -1t "$$backup_dir"/*.tar.gz 2>/dev/null | tail -n +6); do rm -f "$$old"; done; \
+	echo "Open WebUI backup written: $$archive (manual integrity check: sqlite3 <extracted>/data/webui.db 'PRAGMA integrity_check;')"
+
 meridian-restart: ## Restart Meridian proxy service
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		launchctl bootout "gui/$$(id -u)/com.meridian.proxy" 2>/dev/null || true; \
@@ -345,7 +424,7 @@ plannotator-restart: ## Restart Plannotator paste service
 	fi
 	@echo "Plannotator restarted."
 
-services-restart: opencode-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
+services-restart: opencode-restart openwebui-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
 
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update

@@ -201,6 +201,8 @@ Recurring validation quirks — check these before diagnosing failures:
 - **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
 - **Deploy aborts:** `make deploy` runs chezmoi scripts sequentially; one failure (e.g. the Caddy script's `sudo` password prompt in non-interactive shells) aborts before later `run_onchange` scripts. To run a specific script standalone: `bash -n <(chezmoi execute-template < .chezmoiscripts/run_onchange_XX-*.sh.tmpl)` to check syntax, then pipe the same render to `bash` to execute.
 - **Drift lane:** `make check-model-drift` loads `~/.env` and reports checked/skipped provider endpoints; auth failures (401/403/404) are skipped, never silent zeros.
+- **Gate-consistent validation:** live service validation can leave LaunchAgents running while the corresponding `~/.env` gate is `0`; doctor's stale-LaunchAgent checks flag that drift. End every validation cycle by running the service's gate-off lifecycle (or re-running `make deploy`), and `unset DOTFILES_RUN_*` exports between validation commands — gate exports leak across shell invocations.
+- **launchd bootout is asynchronous:** `launchctl bootout` followed immediately by `bootstrap` can hit the teardown race and a `launchctl print` right after may still report the old state. Use the shared retry helper (`scripts/lib/openwebui_service.sh`: bootout → sleep → bootstrap → `launchctl print` loaded-check, ×3) for any new service, and verify service health after a delay, not instantly.
 
 ---
 
@@ -286,6 +288,7 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
+| [docs/CHAT_FRONTEND.md](docs/CHAT_FRONTEND.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
 | [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Ordered modernization work items, portability risks, tool recommendations and local-model analysis |
 
 ---

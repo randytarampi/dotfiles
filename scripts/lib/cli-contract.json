@@ -870,6 +870,31 @@
       "accepted_flags": ["--help", "--dry-run", "--no-backup"],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-openwebui.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--emit-env",
+        "--reconcile",
+        "--reconcile-terminal",
+        "--reconcile-mcp",
+        "--reconcile-catalogue",
+        "--check"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-litellm.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }

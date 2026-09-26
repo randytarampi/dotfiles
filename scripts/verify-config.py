@@ -16,6 +16,8 @@ import platform
 import re
 import shutil
 import subprocess
+import plistlib
+import shlex
 from pathlib import Path
 from typing import Optional
 
@@ -45,7 +47,11 @@ def get_brew_prefix() -> Optional[Path]:
 
 
 BREW_PREFIX = get_brew_prefix()
-CADDY_CHECK_PATHS = [BREW_PREFIX / "etc/caddy/Caddyfile"] if BREW_PREFIX else []
+CADDY_CHECK_PATHS = (
+    [BREW_PREFIX / "etc/caddy/Caddyfile"]
+    if sys.platform == "darwin" and BREW_PREFIX
+    else [Path("/etc/caddy/Caddyfile")] if sys.platform != "darwin" else []
+)
 
 
 def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
@@ -166,6 +172,26 @@ CHECKS = [
         [
             HOME / ".omlx/settings.json",
             Path("/Library/LaunchDaemons/com.dotfiles.omlx-wired-limit.plist"),
+        ],
+    ),
+    (
+        "DOTFILES_RUN_OPENWEBUI_SETUP",
+        "Open WebUI deployment",
+        # Platform-specific: the LaunchAgent (macOS) or the systemd user unit
+        # (Linux) carries the service contract; the shared venv/data/service-env
+        # paths are common. Full validation lives in the dedicated section below.
+        (
+            [
+                HOME / "Library/LaunchAgents/com.openwebui.web.plist",
+            ]
+            if sys.platform == "darwin"
+            else [HOME / ".config/systemd/user/open-webui.service"]
+        )
+        + [
+            HOME / ".local/share/openwebui/venv",
+            HOME / ".local/share/openwebui/data",
+            HOME / ".local/share/openwebui/logs",
+            HOME / ".local/share/openwebui/service.env",
         ],
     ),
 ]
@@ -415,6 +441,12 @@ def main():
 
         all_exist = True
         for path in paths:
+            if (
+                gate == "DOTFILES_RUN_OPENWEBUI_SETUP"
+                and sys.platform != "darwin"
+                and "Library/LaunchAgents/com.openwebui.web.plist" in str(path)
+            ):
+                continue
             if path.exists():
                 # Only the oMLX settings JSON gets schema validation; the
                 # wired-limit LaunchDaemon plist is XML, not JSON.
@@ -615,6 +647,667 @@ def main():
             exit_code = 1
     else:
         print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
+
+    # Open WebUI deployment artefacts and security modes.
+    openwebui_gate = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
+    openwebui_plist = HOME / "Library/LaunchAgents/com.openwebui.web.plist"
+    openwebui_unit = HOME / ".config/systemd/user/open-webui.service"
+    openwebui_root = HOME / ".local/share/openwebui"
+    openwebui_mode_checks = [
+        (openwebui_root / "data", "Open WebUI data directory"),
+        (openwebui_root / "logs", "Open WebUI logs directory"),
+        (openwebui_root / "service.env", "Open WebUI service env"),
+    ]
+    if openwebui_gate:
+        venv_binary = openwebui_root / "venv/bin/open-webui"
+        if not (venv_binary.is_file() and os.access(venv_binary, os.X_OK)):
+            print(
+                f"  \u2717 Open WebUI executable: MISSING or not executable {venv_binary}"
+            )
+            exit_code = 1
+        else:
+            print(f"  \u2713 Open WebUI executable: {venv_binary}")
+        for path, label in openwebui_mode_checks:
+            if path.exists():
+                mode = path.stat().st_mode & 0o777
+                expected = (
+                    0o700
+                    if path.name in {"data", "logs"}
+                    else 0o600 if path.name == "service.env" else None
+                )
+                if expected is not None and mode != expected:
+                    print(
+                        f"  \u2717 {label}: mode {oct(mode)} (expected {oct(expected)})"
+                    )
+                    exit_code = 1
+                else:
+                    print(f"  \u2713 {label}: {path}")
+            else:
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        service_env = openwebui_root / "service.env"
+        required_names = {
+            "WEBUI_SECRET_KEY",
+            "WEBUI_ADMIN_EMAIL",
+            "WEBUI_ADMIN_PASSWORD",
+            "OPENWEBUI_API_KEY",
+        }
+        if service_env.is_file():
+            names = {
+                line.split("=", 1)[0].strip()
+                for line in service_env.read_text(encoding="utf-8").splitlines()
+                if "=" in line and line.split("=", 1)[0].strip()
+            }
+            missing_names = required_names - names
+            if missing_names:
+                print(
+                    f"  \u2717 Open WebUI service env: missing required key names {sorted(missing_names)}"
+                )
+                exit_code = 1
+            else:
+                print("  \u2713 Open WebUI service env: required key names present")
+        if openwebui_plist.is_file():
+            plist_mode = openwebui_plist.stat().st_mode & 0o777
+            plist_text = openwebui_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print(
+                    f"  \u2717 Open WebUI plist: mode {oct(plist_mode)} (expected 0o600)"
+                )
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                env_keys = set(plist.get("EnvironmentVariables", {}))
+                if env_keys != {"DATA_DIR", "GLOBAL_LOG_LEVEL"}:
+                    print(
+                        f"  \u2717 Open WebUI plist: unexpected EnvironmentVariables keys {sorted(env_keys)}"
+                    )
+                    exit_code = 1
+                if any(name in plist_text for name in required_names):
+                    print(
+                        "  \u2717 Open WebUI plist: secret or bootstrap variable name present"
+                    )
+                    exit_code = 1
+                if (
+                    "--noprofile --norc" not in plist_text
+                    or "env -i" not in plist_text
+                    or "bash -lc" in plist_text
+                    or "DATA_DIR=" not in plist_text
+                    or any(
+                        name in plist_text
+                        for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+                    )
+                ):
+                    print("  \u2717 Open WebUI plist: unsafe login-shell wrapper")
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open WebUI plist: invalid property list")
+                exit_code = 1
+        if sys.platform != "darwin":
+            if not openwebui_unit.is_file():
+                print(f"  \u2717 Open WebUI systemd unit: MISSING {openwebui_unit}")
+                exit_code = 1
+            else:
+                unit_text = openwebui_unit.read_text(encoding="utf-8")
+                if (
+                    "DATA_DIR=" not in unit_text
+                    or "--noprofile --norc" not in unit_text
+                    or "env -i" not in unit_text
+                    or "WEBUI_SECRET_KEY" in unit_text
+                ):
+                    print("  \u2717 Open WebUI systemd unit: service contract mismatch")
+                    exit_code = 1
+        logs_dir = openwebui_root / "logs"
+        if logs_dir.exists() and (logs_dir.stat().st_mode & 0o777) != 0o700:
+            print(
+                f"  \u2717 Open WebUI logs directory: mode {oct(logs_dir.stat().st_mode & 0o777)} (expected 0o700)"
+            )
+            exit_code = 1
+        caddy_gate = os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") == "1"
+        caddyfile = CADDY_CHECK_PATHS[0] if caddy_gate and CADDY_CHECK_PATHS else None
+        if caddyfile and caddyfile.exists():
+            caddy_text = caddyfile.read_text(encoding="utf-8")
+            port = os.environ.get("OPENWEBUI_PORT", "8080")
+            public = os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1"
+            access_mode = os.environ.get("CADDY_ACCESS", "localhost").strip().lower()
+            matcher_required = access_mode == "lan" or not public
+            chat_blocks = []
+            lines = caddy_text.splitlines()
+            for index, line in enumerate(lines):
+                if "chat." not in line or not line.rstrip().endswith("{"):
+                    continue
+                depth = 0
+                block = []
+                for candidate in lines[index:]:
+                    depth += candidate.count("{") - candidate.count("}")
+                    block.append(candidate)
+                    if depth == 0:
+                        break
+                chat_blocks.append("\n".join(block))
+            functional_blocks = [
+                block
+                for block in chat_blocks
+                if f"reverse_proxy 127.0.0.1:{port}" in block
+            ]
+            policies_ok = bool(functional_blocks) and all(
+                ("@not_lan not remote_ip private_ranges" in block) == matcher_required
+                for block in functional_blocks
+            )
+            if functional_blocks and policies_ok:
+                print(f"  \u2713 Open WebUI Caddy site: {caddyfile}")
+            else:
+                print(
+                    f"  \u2717 Open WebUI Caddy site: missing chat.* site in {caddyfile}"
+                )
+                exit_code = 1
+        else:
+            if caddy_gate and sys.platform == "darwin":
+                print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
+                exit_code = 1
+            else:
+                print(
+                    "  \u2298 Open WebUI Caddy site (Caddyfile unavailable on this platform)"
+                )
+    else:
+        wrong_platform_service = (
+            openwebui_plist if sys.platform == "darwin" else openwebui_unit
+        )
+        if wrong_platform_service.exists():
+            print(
+                f"  \u2717 Open WebUI service remains while gate is off: {wrong_platform_service}"
+            )
+            exit_code = 1
+        else:
+            print(
+                "  \u2298 Open WebUI (gate DOTFILES_RUN_OPENWEBUI_SETUP=0, LaunchAgent absent)"
+            )
+
+    terminal_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "0") == "1"
+        # Terminal is macOS-priority per the approved design (bare-metal
+        # launchd runtime; no Linux deployment).
+        and sys.platform == "darwin"
+    )
+    terminal_plist = HOME / "Library/LaunchAgents/com.openwebui.terminal.plist"
+    terminal_root = openwebui_root / "terminal-workspace"
+    terminal_env = openwebui_root / "terminal.env"
+    terminal_config = openwebui_root / "terminal.toml"
+    terminal_binary = openwebui_root / "venv/bin/open-terminal"
+    if terminal_gate:
+        terminal_checks = [
+            (terminal_binary, "Open Terminal executable"),
+            (terminal_root, "Open Terminal workspace"),
+            (terminal_env, "Open Terminal service env"),
+            (terminal_config, "Open Terminal config"),
+            (terminal_plist, "Open Terminal LaunchAgent"),
+        ]
+        for path, label in terminal_checks:
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        if not (terminal_binary.is_file() and os.access(terminal_binary, os.X_OK)):
+            print(
+                f"  \u2717 Open Terminal executable: not executable {terminal_binary}"
+            )
+            exit_code = 1
+        if terminal_root.exists() and (terminal_root.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 Open Terminal workspace: expected mode 0o700")
+            exit_code = 1
+        if terminal_env.is_file():
+            if terminal_env.stat().st_mode & 0o777 != 0o600:
+                print("  \u2717 Open Terminal service env: expected mode 0o600")
+                exit_code = 1
+            names = {
+                line.split("=", 1)[0].strip()
+                for line in terminal_env.read_text(encoding="utf-8").splitlines()
+                if "=" in line and line.split("=", 1)[0].strip()
+            }
+            required = {
+                "OPEN_TERMINAL_API_KEY",
+                "OPEN_TERMINAL_FILE_BROWSER_ROOT",
+                "OPENWEBUI_TERMINAL_PORT",
+            }
+            if not required <= names:
+                print("  \u2717 Open Terminal service env: required key names missing")
+                exit_code = 1
+        if terminal_plist.is_file():
+            plist_mode = terminal_plist.stat().st_mode & 0o777
+            plist_text = terminal_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print("  \u2717 Open Terminal plist: expected mode 0o600")
+                exit_code = 1
+            if any(
+                name in plist_text
+                for name in (
+                    "OPEN_TERMINAL_API_KEY",
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                    "WEBUI_SECRET_KEY",
+                )
+            ):
+                print("  \u2717 Open Terminal plist: API key name/value present")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                env_keys = set(plist.get("EnvironmentVariables", {}))
+                if env_keys != {"OPEN_TERMINAL_FILE_BROWSER_ROOT", "GLOBAL_LOG_LEVEL"}:
+                    print("  \u2717 Open Terminal plist: unexpected environment keys")
+                    exit_code = 1
+                if (
+                    "--noprofile --norc" not in plist_text
+                    or "env -i" not in plist_text
+                    or "bash -lc" in plist_text
+                    or "OPEN_TERMINAL_FILE_BROWSER_ROOT=" not in plist_text
+                ):
+                    print("  \u2717 Open Terminal plist: unsafe login-shell wrapper")
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open Terminal plist: invalid property list")
+                exit_code = 1
+        if terminal_config.is_file():
+            config_mode = terminal_config.stat().st_mode & 0o777
+            config_text = terminal_config.read_text(encoding="utf-8")
+            expected_port = os.environ.get("OPENWEBUI_TERMINAL_PORT", "8123")
+            expected_root = str(terminal_root)
+            if config_mode != 0o600:
+                print("  \u2717 Open Terminal config: expected mode 0o600")
+                exit_code = 1
+            if (
+                'host = "127.0.0.1"' not in config_text
+                or f"port = {expected_port}" not in config_text
+                or f'file_browser_root = "{expected_root}"' not in config_text
+            ):
+                print(
+                    "  \u2717 Open Terminal config: host/port/workspace settings mismatch"
+                )
+                exit_code = 1
+    elif terminal_plist.exists():
+        print(
+            f"  \u2717 Open Terminal LaunchAgent remains while sub-gate is off: {terminal_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 Open Terminal (main/sub-gate disabled, LaunchAgent absent)")
+
+    computer_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP", "0") == "1"
+        # cptr is macOS-priority per the approved design (bare-metal
+        # LaunchAgent runtime; no Linux deployment).
+        and sys.platform == "darwin"
+    )
+    computer_root = HOME / ".local/share/cptr"
+    computer_plist = HOME / "Library/LaunchAgents/com.openwebui.computer.plist"
+    computer_venv = computer_root / "venv/bin/cptr"
+    computer_data = computer_root / "data"
+    computer_env = computer_root / "service.env"
+    if computer_gate:
+        for path, label in (
+            (computer_venv, "cptr executable"),
+            (computer_data, "cptr data directory"),
+            (computer_env, "cptr service env"),
+            (computer_plist, "cptr LaunchAgent"),
+        ):
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        if not (computer_venv.is_file() and os.access(computer_venv, os.X_OK)):
+            print(f"  \u2717 cptr executable: not executable {computer_venv}")
+            exit_code = 1
+        if computer_data.exists() and (computer_data.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 cptr data directory: expected mode 0o700")
+            exit_code = 1
+        if computer_env.is_file() and (computer_env.stat().st_mode & 0o777) != 0o600:
+            print("  \u2717 cptr service env: expected mode 0o600")
+            exit_code = 1
+        computer_logs = computer_root / "logs"
+        if not computer_logs.is_dir():
+            print(
+                "  \u2717 cptr logs directory: missing (may hold token-bearing setup log)"
+            )
+            exit_code = 1
+        elif (computer_logs.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 cptr logs directory: expected mode 0o700")
+            exit_code = 1
+        expected_cptr_data = str(computer_root / "data")
+        expected_cptr_port = os.environ.get("OPENWEBUI_COMPUTER_PORT", "8124")
+        if computer_env.is_file():
+            env_values = {}
+            for line in computer_env.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    env_values[key] = value.strip().strip("'\"")
+            if set(env_values) != {"CPTR_DATA_DIR", "OPENWEBUI_COMPUTER_PORT"}:
+                print("  \u2717 cptr service env: unexpected key names")
+                exit_code = 1
+            if env_values.get("CPTR_DATA_DIR") != expected_cptr_data:
+                print("  \u2717 cptr service env: CPTR_DATA_DIR is not isolated")
+                exit_code = 1
+            if env_values.get("OPENWEBUI_COMPUTER_PORT") != expected_cptr_port:
+                print("  \u2717 cptr service env: OPENWEBUI_COMPUTER_PORT drift")
+                exit_code = 1
+        if computer_plist.is_file():
+            plist_mode = computer_plist.stat().st_mode & 0o777
+            plist_text = computer_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print("  \u2717 cptr plist: expected mode 0o600")
+                exit_code = 1
+            if any(
+                name in plist_text
+                for name in (
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                    "WEBUI_SECRET_KEY",
+                    "GEMINI_",
+                    "GOOGLE_",
+                    "OPENROUTER_",
+                    "MERIDIAN_",
+                    "OLLAMA_API",
+                    "GITHUB",
+                    "GH_",
+                )
+            ):
+                print("  \u2717 cptr plist: provider secret present")
+                exit_code = 1
+            if re.search(r"sk-[A-Za-z0-9_-]+", plist_text):
+                print("  \u2717 cptr plist: sk- credential present")
+                exit_code = 1
+            if (
+                "CPTR_DATA_DIR=" not in plist_text
+                or "OPENWEBUI_COMPUTER_PORT=" not in plist_text
+                or "env -i" not in plist_text
+                or "--noprofile --norc" not in plist_text
+                or "bash -lc" in plist_text
+            ):
+                print("  \u2717 cptr plist: unsafe or incomplete scrubbed wrapper")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                if "EnvironmentVariables" in plist:
+                    print("  \u2717 cptr plist: EnvironmentVariables must be absent")
+                    exit_code = 1
+                arguments = " ".join(
+                    str(item) for item in plist.get("ProgramArguments", [])
+                )
+                if (
+                    "--host 127.0.0.1" not in arguments
+                    or "--headless" not in arguments
+                    or "--reload" in arguments
+                ):
+                    print("  \u2717 cptr plist: launch contract mismatch")
+                    exit_code = 1
+                env_match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not env_match:
+                    print("  \u2717 cptr plist: env-i allowlist missing")
+                    exit_code = 1
+                else:
+                    env_tokens = shlex.split(env_match.group(1))
+                    env_values = {
+                        token.split("=", 1)[0]: token.split("=", 1)[1]
+                        for token in env_tokens
+                        if "=" in token
+                    }
+                    env_keys = set(env_values)
+                    if env_keys != {
+                        "HOME",
+                        "PATH",
+                        "CPTR_DATA_DIR",
+                        "OPENWEBUI_COMPUTER_PORT",
+                    }:
+                        print(
+                            "  \u2717 cptr plist: wrapper environment allowlist mismatch"
+                        )
+                        exit_code = 1
+                    if env_values.get("CPTR_DATA_DIR") != expected_cptr_data:
+                        print("  \u2717 cptr plist: CPTR_DATA_DIR is not isolated")
+                        exit_code = 1
+                    if env_values.get("OPENWEBUI_COMPUTER_PORT") != expected_cptr_port:
+                        print("  \u2717 cptr plist: wrapper port drift")
+                        exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 cptr plist: invalid property list")
+                exit_code = 1
+    elif computer_plist.exists():
+        print(
+            f"  \u2717 cptr LaunchAgent remains while sub-gate is off: {computer_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
+
+    litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+    litellm_root = HOME / ".local/share/litellm"
+    litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
+    litellm_unit = HOME / ".config/systemd/user/litellm.service"
+    expected_litellm_port = os.environ.get("LITELLM_PORT", "4000")
+    if litellm_gate:
+        service_artifact = litellm_plist if sys.platform == "darwin" else litellm_unit
+        litellm_paths = [
+            (litellm_root / "venv/bin/litellm", "LiteLLM executable"),
+            (litellm_root / "config.yaml", "LiteLLM config"),
+            (litellm_root / "service.env", "LiteLLM service env"),
+            (litellm_root / "data", "LiteLLM data directory"),
+            (litellm_root / "logs", "LiteLLM logs directory"),
+            (service_artifact, "LiteLLM service artifact"),
+        ]
+        for path, label in litellm_paths:
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        for path in (litellm_root / "data", litellm_root / "logs"):
+            if path.exists() and (path.stat().st_mode & 0o777) != 0o700:
+                print(f"  \u2717 LiteLLM directory mode: {path}")
+                exit_code = 1
+        service_env = litellm_root / "service.env"
+        litellm_env_values = {}
+        if service_env.is_file():
+            for line in service_env.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    litellm_env_values[key.strip()] = value.strip().strip("'\"")
+            if service_env.stat().st_mode & 0o777 != 0o600:
+                print("  \u2717 LiteLLM service env: key schema or mode mismatch")
+                exit_code = 1
+        if (litellm_root / "config.yaml").is_file():
+            config_text = (litellm_root / "config.yaml").read_text(encoding="utf-8")
+            refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
+            expected_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT"} | refs
+            if set(litellm_env_values) != expected_env:
+                print(
+                    "  \u2717 LiteLLM service env: provider allowlist does not match config refs"
+                )
+                exit_code = 1
+            master_key = litellm_env_values.get("LITELLM_MASTER_KEY", "")
+            if not master_key.startswith("sk-") or len(master_key) < 16:
+                print("  \u2717 LiteLLM service env: invalid master-key shape")
+                exit_code = 1
+            if litellm_env_values.get("LITELLM_PORT") != expected_litellm_port:
+                print("  \u2717 LiteLLM service env: LITELLM_PORT drift")
+                exit_code = 1
+            api_key_lines = [
+                line.strip()
+                for line in config_text.splitlines()
+                if line.strip().startswith("api_key:")
+            ]
+            if any(
+                not (
+                    line.split(":", 1)[1].strip().startswith("os.environ/")
+                    or line.split(":", 1)[1].strip() == "none"
+                )
+                for line in api_key_lines
+            ):
+                print("  \u2717 LiteLLM config: inline api_key detected")
+                exit_code = 1
+            if (
+                "telemetry: false" not in config_text
+                or "master_key: os.environ/LITELLM_MASTER_KEY" not in config_text
+            ):
+                print("  \u2717 LiteLLM config: telemetry/master-key policy mismatch")
+                exit_code = 1
+        if sys.platform == "darwin" and litellm_plist.is_file():
+            plist_mode = litellm_plist.stat().st_mode & 0o777
+            plist_text = litellm_plist.read_text(encoding="utf-8")
+            if (
+                plist_mode != 0o600
+                or "LITELLM_MASTER_KEY" in plist_text
+                or "EnvironmentVariables" in plist_text
+            ):
+                print(
+                    "  \u2717 LiteLLM plist: mode/secrets/environment contract mismatch"
+                )
+                exit_code = 1
+            if (
+                "env -i" not in plist_text
+                or "--noprofile --norc" not in plist_text
+                or "bash -lc" in plist_text
+            ):
+                print("  \u2717 LiteLLM plist: unsafe wrapper")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                arguments = " ".join(
+                    str(item) for item in plist.get("ProgramArguments", [])
+                )
+                match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not match or {
+                    token.split("=", 1)[0]
+                    for token in shlex.split(match.group(1))
+                    if "=" in token
+                } != {"HOME", "PATH"}:
+                    print(
+                        "  \u2717 LiteLLM plist: wrapper environment allowlist mismatch"
+                    )
+                    exit_code = 1
+                if (
+                    "--config" not in arguments
+                    or str(litellm_root / "config.yaml") not in arguments
+                ):
+                    print("  \u2717 LiteLLM plist: config path missing")
+                    exit_code = 1
+                if (
+                    "--host 127.0.0.1" not in arguments
+                    or "--num_workers 1" not in arguments
+                ):
+                    print("  \u2717 LiteLLM plist: launch contract mismatch")
+                    exit_code = 1
+                port_match = re.search(r'--port "?([^"\s]+)"?', arguments)
+                if not port_match or port_match.group(1) != expected_litellm_port:
+                    print("  \u2717 LiteLLM plist: launch port drift")
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 LiteLLM plist: invalid property list")
+                exit_code = 1
+        if sys.platform != "darwin" and litellm_unit.is_file():
+            unit_text = litellm_unit.read_text(encoding="utf-8")
+            if (
+                "env -i" not in unit_text
+                or "--noprofile --norc" not in unit_text
+                or "LITELLM_MASTER_KEY" in unit_text
+            ):
+                print("  \u2717 LiteLLM systemd unit: service contract mismatch")
+                exit_code = 1
+    elif (litellm_plist if sys.platform == "darwin" else litellm_unit).exists():
+        print(
+            f"  \u2717 LiteLLM LaunchAgent remains while gate is off: {litellm_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 LiteLLM (gate disabled, LaunchAgent absent)")
+
+    backup_timer_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE", "0") == "1"
+        and sys.platform == "darwin"
+    )
+    backup_timer = HOME / "Library/LaunchAgents/com.dotfiles.openwebui.backup.plist"
+    if backup_timer_gate:
+        if not backup_timer.is_file():
+            print(f"  \u2717 Open WebUI backup timer: MISSING {backup_timer}")
+            exit_code = 1
+        else:
+            timer_mode = backup_timer.stat().st_mode & 0o777
+            if timer_mode != 0o600:
+                print("  \u2717 Open WebUI backup timer: expected mode 0o600")
+                exit_code = 1
+            try:
+                timer = plistlib.loads(
+                    backup_timer.read_text(encoding="utf-8").encode()
+                )
+                interval = timer.get("StartCalendarInterval")
+                if not isinstance(interval, dict) or interval != {
+                    "Hour": 3,
+                    "Minute": 0,
+                }:
+                    print(
+                        "  \u2717 Open WebUI backup timer: expected StartCalendarInterval 03:00 exactly"
+                    )
+                    exit_code = 1
+                if any(
+                    key in timer for key in ("RunAtLoad", "KeepAlive", "StartInterval")
+                ):
+                    print(
+                        "  \u2717 Open WebUI backup timer: continuous-run keys must be absent"
+                    )
+                    exit_code = 1
+                arguments = " ".join(
+                    str(item) for item in timer.get("ProgramArguments", [])
+                )
+                if (
+                    "--noprofile --norc" not in arguments
+                    or "env -i" not in arguments
+                    or "bash -lc" in arguments
+                ):
+                    print("  \u2717 Open WebUI backup timer: unsafe shell wrapper")
+                    exit_code = 1
+                timer_env_match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not timer_env_match or {
+                    token.split("=", 1)[0]
+                    for token in shlex.split(timer_env_match.group(1))
+                    if "=" in token
+                } != {"HOME", "PATH"}:
+                    print(
+                        "  \u2717 Open WebUI backup timer: wrapper environment allowlist mismatch"
+                    )
+                    exit_code = 1
+                log_path = str(HOME / ".local/share/openwebui/logs/backup-timer.log")
+                timer_text = backup_timer.read_text(encoding="utf-8")
+                # The deployed timer invokes make in the *deployed* checkout
+                # (chezmoi source dir), which can differ from the checkout
+                # running this verifier — resolve it via chezmoi, falling back
+                # to this file's checkout.
+                repo_path = None
+                chezmoi_bin = shutil.which("chezmoi")
+                if chezmoi_bin:
+                    # Fixed-argument invocation of a resolved binary with no
+                    # operator-controlled input — B603/B607 do not apply.
+                    probe = subprocess.run(  # nosec B603, B607
+                        [chezmoi_bin, "source-path"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if probe.returncode == 0 and probe.stdout.strip():
+                        repo_path = probe.stdout.strip()
+                if not repo_path:
+                    repo_path = str(Path(__file__).resolve().parent.parent)
+                if (
+                    "openwebui-backup" not in arguments
+                    or repo_path not in arguments
+                    or log_path not in timer_text
+                ):
+                    print(
+                        "  \u2717 Open WebUI backup timer: program or log contract mismatch"
+                    )
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open WebUI backup timer: invalid property list")
+                exit_code = 1
+    elif backup_timer.exists():
+        print(
+            f"  \u2717 Open WebUI backup timer remains while schedule gate is off: {backup_timer}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 Open WebUI backup timer (gate disabled, plist absent)")
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"

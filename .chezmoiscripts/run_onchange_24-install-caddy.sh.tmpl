@@ -5,6 +5,8 @@ set -euo pipefail
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# secret presence fingerprint: {{ if env "WEBUI_SECRET_KEY" }}set{{ else }}unset{{ end }}:{{ if env "WEBUI_ADMIN_PASSWORD" }}set{{ else }}unset{{ end }}:{{ if env "OPENWEBUI_API_KEY" }}set{{ else }}unset{{ end }}
 
 {{- if eq .chezmoi.os "darwin" }}
 BREW_BIN="${BREW_BIN:-$(command -v brew 2>/dev/null || true)}"
@@ -64,7 +66,8 @@ info "Generating Caddyfile..."
 sudo -u "$REAL_USER" env HOME="$REAL_HOME" PATH="$PATH" DOTFILES_RUN_CADDY_SETUP="${DOTFILES_RUN_CADDY_SETUP:-0}" python3 "{{ .chezmoi.sourceDir }}/scripts/configure-caddy.py" || warn "configure-caddy.py failed"
 
 info "Ensuring Caddy-served domains resolve in /etc/hosts..."
-# Caddy serves OpenCode web at opencode.localhost (all modes) plus:
+# Caddy serves OpenCode web at opencode.localhost and Open WebUI at
+# chat.localhost (all modes) plus:
 # - localhost: local.* domains and their opencode subdomains
 # - lan/public: all domains and their opencode subdomains
 # macOS doesn't auto-resolve *.localhost subdomains or local.* domains, so add entries to /etc/hosts.
@@ -80,7 +83,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$(
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -95,12 +98,16 @@ zones_path = Path(
 )
 domains = load_domains(zones_path)
 access_mode = os.environ.get("CADDY_ACCESS", "localhost")
+openwebui_enabled = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
 
 entries: list[str] = []
 marker = "# dotfiles-caddy-managed"
 
 entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
 entries.append(f"::1\t\topencode.localhost\t{marker}")
+if openwebui_enabled:
+    entries.append(f"127.0.0.1\tchat.localhost\t{marker}")
+    entries.append(f"::1\t\tchat.localhost\t{marker}")
 
 if access_mode == "localhost":
     served_domains = [domain for domain in domains if domain.startswith("local.")]
@@ -111,6 +118,8 @@ for domain in served_domains:
     entries.append(f"127.0.0.1\t{domain}\t{marker}")
     entries.append(f"::1\t\t{domain}\t{marker}")
     entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
+    if openwebui_enabled:
+        entries.append(f"127.0.0.1\tchat.{domain}\t{marker}")
 
 for entry in entries:
     print(entry)
@@ -239,7 +248,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$({
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -251,15 +260,21 @@ from caddy_domains import load_domains
 zones_path = Path(os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")))
 domains = load_domains(zones_path)
 access_mode = os.environ.get("CADDY_ACCESS", "localhost")
+openwebui_enabled = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
 entries: list[str] = []
 marker = "# dotfiles-caddy-managed"
 entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
 entries.append(f"::1\t\topencode.localhost\t{marker}")
+if openwebui_enabled:
+    entries.append(f"127.0.0.1\tchat.localhost\t{marker}")
+    entries.append(f"::1\t\tchat.localhost\t{marker}")
 served_domains = [domain for domain in domains if domain.startswith("local.")] if access_mode == "localhost" else domains
 for domain in served_domains:
     entries.append(f"127.0.0.1\t{domain}\t{marker}")
     entries.append(f"::1\t\t{domain}\t{marker}")
     entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
+    if openwebui_enabled:
+        entries.append(f"127.0.0.1\tchat.{domain}\t{marker}")
 for entry in entries:
     print(entry)
 PY
