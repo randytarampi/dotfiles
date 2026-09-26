@@ -425,6 +425,39 @@ obligations).
    `.env.example`.
 3. Run `make deploy`; verify with `scripts/configure-openwebui.py --check`.
 
+### Secrets precedence and rotation
+
+The service environment files (`service.env`, `terminal.env`,
+`litellm/…/service.env`) are **derived state**; `~/.env` is user-authored
+input. Each reconciliation sources `~/.env` first, then the persisted service
+file, then applies non-empty `~/.env` overrides — so an empty `~/.env`
+assignment never clobbers a generated secret, and a non-empty user-set value
+always wins.
+
+- **Rotation:** set the new value (non-empty) in `~/.env`; the template's
+  secret digest fingerprint fires and the next `make deploy` rewrites the
+  service env and restarts the service.
+- **Deletion:** to drop a generated secret entirely, remove it from both
+  `~/.env` and the service file — the reconciler regenerates on the next run.
+- **Bootstrap-only credentials:** `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD`
+  are consumed by upstream when creating the *first* account. Rotating them
+  later does **not** change the stored login — regenerate via Open WebUI's
+  own account settings instead.
+- **Recovery:** if stored credentials become undecryptable (e.g. the
+  `WEBUI_SECRET_KEY` was rotated while entries existed), restore the
+  previous `WEBUI_SECRET_KEY` from the pre-change backup, or re-register the
+  affected connections after a deploy.
+
+### Backups — scope and ownership state
+
+`make openwebui-backup` archives the whole `data/` directory, which includes
+both the SQLite `webui.db` (via a live-safe `sqlite3 .backup` copy) **and**
+the reconciler's ownership-state files (`data/managed-mcp.json`,
+`data/managed-models.json`). Restoring a backup therefore restores both the
+chat data and the ownership history that tells the reconciler which entries
+are repo-managed. Keep backup archives with secret material — they contain
+connection and MCP credentials.
+
 ### Model preset refresh
 
 - **Local engines:** models are discovered live through each connection's
