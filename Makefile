@@ -348,16 +348,15 @@ openwebui-backup-timer-stop: ## Stop the Open WebUI backup timer
 	@launchctl bootout "gui/$$(id -u)/com.dotfiles.openwebui.backup" 2>/dev/null || true
 
 openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
-	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi
-	@set -e; \
-	backup_dir="$$HOME/.local/share/openwebui/backups"; \
-	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; \
-	. scripts/lib/openwebui_service.sh; openwebui_service_stop; \
-	archive="$$backup_dir/$$(date +%Y%m%d-%H%M%S).tar.gz"; \
-	tar -czf "$$archive" -C "$$HOME/.local/share/openwebui" data || { openwebui_service_start || true; exit 1; }; \
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi; \
+	set -e; backup_dir="$$HOME/.local/share/openwebui/backups"; data_dir="$$HOME/.local/share/openwebui/data"; \
+	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; stage="$$(mktemp -d "$$backup_dir/.stage.XXXXXX")"; \
+	trap 'rm -rf "$$stage"' EXIT; mkdir -p "$$stage/data"; \
+	tar -cf - -C "$$HOME/.local/share/openwebui" --exclude='data/webui.db' --exclude='data/webui.db-wal' --exclude='data/webui.db-shm' data | tar -xf - -C "$$stage"; \
+	if [ -f "$$data_dir/webui.db" ]; then command -v sqlite3 >/dev/null 2>&1 || { echo "sqlite3 is required for a live-safe Open WebUI backup" >&2; exit 1; }; sqlite3 "$$data_dir/webui.db" ".backup '$$stage/data/webui.db'"; fi; \
+	archive="$$backup_dir/$$(date +%Y%m%d-%H%M%S).tar.gz"; tar -czf "$$archive" -C "$$stage" data; \
 	for old in $$(ls -1t "$$backup_dir"/*.tar.gz 2>/dev/null | tail -n +6); do rm -f "$$old"; done; \
-	openwebui_service_start; \
-	echo "Open WebUI backup written: $$archive"
+	echo "Open WebUI backup written: $$archive (manual integrity check: sqlite3 <extracted>/data/webui.db 'PRAGMA integrity_check;')"
 
 meridian-restart: ## Restart Meridian proxy service
 	@if [ "$$(uname)" = "Darwin" ]; then \

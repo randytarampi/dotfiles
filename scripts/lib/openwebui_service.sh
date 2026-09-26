@@ -19,17 +19,26 @@ openwebui_service_env_sync() {
   local tmp
   service_home="$(dirname "$service_env")"
   mkdir -p "$service_home"
-  if [[ -f "$service_env" ]]; then
-    # shellcheck disable=SC1090
-    source "$service_env"
-  fi
-  # Ports are lifecycle config, not generated secrets: never let a stale
-  # service-file value survive a default/override change (e.g. port migration).
-  unset OPENWEBUI_PORT
+  local env_WEBUI_SECRET_KEY="" env_WEBUI_ADMIN_EMAIL="" env_WEBUI_ADMIN_PASSWORD="" env_OPENWEBUI_API_KEY="" env_OPENWEBUI_PORT=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
   fi
+  env_WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY"
+  env_WEBUI_ADMIN_EMAIL="$WEBUI_ADMIN_EMAIL"
+  env_WEBUI_ADMIN_PASSWORD="$WEBUI_ADMIN_PASSWORD"
+  env_OPENWEBUI_API_KEY="$OPENWEBUI_API_KEY"
+  env_OPENWEBUI_PORT="$OPENWEBUI_PORT"
+  if [[ -f "$service_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$service_env"
+  fi
+  [[ -n "$env_WEBUI_SECRET_KEY" ]] && WEBUI_SECRET_KEY="$env_WEBUI_SECRET_KEY"
+  [[ -n "$env_WEBUI_ADMIN_EMAIL" ]] && WEBUI_ADMIN_EMAIL="$env_WEBUI_ADMIN_EMAIL"
+  [[ -n "$env_WEBUI_ADMIN_PASSWORD" ]] && WEBUI_ADMIN_PASSWORD="$env_WEBUI_ADMIN_PASSWORD"
+  [[ -n "$env_OPENWEBUI_API_KEY" ]] && OPENWEBUI_API_KEY="$env_OPENWEBUI_API_KEY"
+  unset OPENWEBUI_PORT
+  [[ -n "$env_OPENWEBUI_PORT" ]] && OPENWEBUI_PORT="$env_OPENWEBUI_PORT"
   WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
   WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-admin@localhost}"
   WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
@@ -113,17 +122,26 @@ openwebui_terminal_service_env_sync() {
   local tmp
   terminal_home="$(dirname "$service_env")"
   mkdir -p "$terminal_home"
-  if [[ -f "$service_env" ]]; then
-    # shellcheck disable=SC1090
-    source "$service_env"
-  fi
-  # Ports are lifecycle config, not generated secrets: never let a stale
-  # service-file value survive a default/override change (e.g. port migration).
-  unset OPENWEBUI_TERMINAL_PORT
+  local env_WEBUI_SECRET_KEY="" env_WEBUI_ADMIN_EMAIL="" env_WEBUI_ADMIN_PASSWORD="" env_OPENWEBUI_API_KEY="" env_OPENWEBUI_PORT=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
   fi
+  env_WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY"
+  env_WEBUI_ADMIN_EMAIL="$WEBUI_ADMIN_EMAIL"
+  env_WEBUI_ADMIN_PASSWORD="$WEBUI_ADMIN_PASSWORD"
+  env_OPENWEBUI_API_KEY="$OPENWEBUI_API_KEY"
+  env_OPENWEBUI_PORT="$OPENWEBUI_PORT"
+  if [[ -f "$service_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$service_env"
+  fi
+  [[ -n "$env_WEBUI_SECRET_KEY" ]] && WEBUI_SECRET_KEY="$env_WEBUI_SECRET_KEY"
+  [[ -n "$env_WEBUI_ADMIN_EMAIL" ]] && WEBUI_ADMIN_EMAIL="$env_WEBUI_ADMIN_EMAIL"
+  [[ -n "$env_WEBUI_ADMIN_PASSWORD" ]] && WEBUI_ADMIN_PASSWORD="$env_WEBUI_ADMIN_PASSWORD"
+  [[ -n "$env_OPENWEBUI_API_KEY" ]] && OPENWEBUI_API_KEY="$env_OPENWEBUI_API_KEY"
+  unset OPENWEBUI_PORT
+  [[ -n "$env_OPENWEBUI_PORT" ]] && OPENWEBUI_PORT="$env_OPENWEBUI_PORT"
   OPEN_TERMINAL_FILE_BROWSER_ROOT="${OPEN_TERMINAL_FILE_BROWSER_ROOT:-$HOME/.local/share/openwebui/terminal-workspace}"
   OPENWEBUI_TERMINAL_PORT="${OPENWEBUI_TERMINAL_PORT:-8123}"
   if [[ -z "${OPEN_TERMINAL_API_KEY:-}" ]]; then

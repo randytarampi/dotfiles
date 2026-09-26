@@ -264,7 +264,11 @@ class OpenWebUIClient:
             method=method,
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            # Loopback-only URLs by construction (base_url is 127.0.0.1 or a
+            # user-configured LAN endpoint) — B310 does not apply.
+            with urllib.request.urlopen(  # nosec B310
+                request, timeout=self.timeout
+            ) as response:
                 return json.loads(response.read().decode() or "{}")
         except urllib.error.HTTPError as error:
             if error.code in {401, 403}:
@@ -293,7 +297,10 @@ class OpenWebUIClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            # Loopback-only signin endpoint by construction — B310 does not apply.
+            with urllib.request.urlopen(  # nosec B310
+                request, timeout=self.timeout
+            ) as response:
                 token = json.loads(response.read().decode() or "{}").get("token")
         except (urllib.error.HTTPError, urllib.error.URLError, OSError):
             return False

@@ -135,7 +135,9 @@ COMMON_STRICT=1 parse_common_args ${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
 source "$LIB_DIR/tier_args.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/openwebui_service.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/litellm_service.sh"
 
 FAILURES=0

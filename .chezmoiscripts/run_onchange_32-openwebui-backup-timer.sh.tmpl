@@ -28,8 +28,8 @@ cat >"$PLIST" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>com.dotfiles.openwebui.backup</string>
   <key>ProgramArguments</key><array>
-    <string>/bin/bash</string><string>-lc</string>
-    <string>make -C "{{ .chezmoi.sourceDir }}" openwebui-backup</string>
+    <string>/bin/bash</string><string>-c</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin" /bin/bash --noprofile --norc -c 'exec make -C "{{ .chezmoi.sourceDir }}" openwebui-backup'</string>
   </array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>$HOME/.local/share/openwebui/logs/backup-timer.log</string>

@@ -8,18 +8,34 @@ litellm_service_env_sync() {
   local LITELLM_MASTER_KEY="" LITELLM_PORT=""
   local OMLX_API_KEY="" MERIDIAN_API_KEY="" OPENAI_API_KEY="" ANTHROPIC_API_KEY="" GEMINI_API_KEY="" OPENROUTER_API_KEY=""
   mkdir -p "$(dirname "$service_env")"
-  if [[ -f "$service_env" ]]; then
-    # shellcheck disable=SC1090
-    source "$service_env"
-  fi
-  unset OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY
-  # Ports are lifecycle config, not generated secrets: never let a stale
-  # service-file value survive a default/override change.
-  unset LITELLM_PORT
+  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT=""
+  local env_OMLX_API_KEY="" env_MERIDIAN_API_KEY="" env_OPENAI_API_KEY="" env_ANTHROPIC_API_KEY="" env_GEMINI_API_KEY="" env_OPENROUTER_API_KEY=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
   fi
+  env_LITELLM_MASTER_KEY="$LITELLM_MASTER_KEY"
+  env_LITELLM_PORT="$LITELLM_PORT"
+  env_OMLX_API_KEY="$OMLX_API_KEY"
+  env_MERIDIAN_API_KEY="$MERIDIAN_API_KEY"
+  env_OPENAI_API_KEY="$OPENAI_API_KEY"
+  env_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+  env_GEMINI_API_KEY="$GEMINI_API_KEY"
+  env_OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
+  if [[ -f "$service_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$service_env"
+  fi
+  [[ -n "$env_LITELLM_MASTER_KEY" ]] && LITELLM_MASTER_KEY="$env_LITELLM_MASTER_KEY"
+  [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
+  [[ -n "$env_OMLX_API_KEY" ]] && OMLX_API_KEY="$env_OMLX_API_KEY"
+  [[ -n "$env_MERIDIAN_API_KEY" ]] && MERIDIAN_API_KEY="$env_MERIDIAN_API_KEY"
+  [[ -n "$env_OPENAI_API_KEY" ]] && OPENAI_API_KEY="$env_OPENAI_API_KEY"
+  [[ -n "$env_ANTHROPIC_API_KEY" ]] && ANTHROPIC_API_KEY="$env_ANTHROPIC_API_KEY"
+  [[ -n "$env_GEMINI_API_KEY" ]] && GEMINI_API_KEY="$env_GEMINI_API_KEY"
+  [[ -n "$env_OPENROUTER_API_KEY" ]] && OPENROUTER_API_KEY="$env_OPENROUTER_API_KEY"
+  unset OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY LITELLM_PORT
+  [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
   local config_path
   config_path="$(dirname "$service_env")/config.yaml"
   if [[ -f "$config_path" ]]; then

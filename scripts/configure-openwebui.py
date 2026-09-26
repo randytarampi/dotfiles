@@ -2,6 +2,7 @@
 """Configure and reconcile the opt-in Open WebUI deployment."""
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -15,10 +16,21 @@ LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger
-from cli_helpers import add_common_args
-from env import load_env
-from openwebui import (
+# configure-mcp-tool.py (the canonical MCP lane) lives in scripts/ with a
+# hyphenated filename, so it cannot be imported by module name — load it by
+# path and reuse its registry parsing + env-var resolution instead of a
+# second implementation.
+_mcp_tool_spec = importlib.util.spec_from_file_location(
+    "configure_mcp_tool", os.path.join(SCRIPT_DIR, "configure-mcp-tool.py")
+)
+_mcp_tool = importlib.util.module_from_spec(_mcp_tool_spec)
+_mcp_tool_spec.loader.exec_module(_mcp_tool)
+resolve_env_vars = _mcp_tool.resolve_env_vars
+
+import logger  # noqa: E402 (sys.path must be set up first)
+from cli_helpers import add_common_args  # noqa: E402
+from env import load_env  # noqa: E402
+from openwebui import (  # noqa: E402
     OpenWebUIClient,
     OpenWebUIError,
     compute_desired_state,
@@ -26,7 +38,10 @@ from openwebui import (
     reconcile,
     reconcile_via_api,
 )
-from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
+from provider_endpoints import (  # noqa: E402
+    PROVIDER_ENDPOINTS,
+    provider_models,
+)
 
 GATE_ENV = "DOTFILES_RUN_OPENWEBUI_SETUP"
 
@@ -71,15 +86,42 @@ def _admin_credentials():
 
 
 def _streamable_mcp_connections(repo_root=None):
+    """MCP inventory from the canonical registry (configs/mcp/global-mcps.json
+    -> tools.<tool>.mcp_servers[].template), NOT a directory glob — a JSON
+    file dropped into configs/mcp/ for any other purpose must not silently
+    acquire prompt-driven tool-execution capability in the chat UI.
+
+    Only Streamable-HTTP servers qualify (type: url, http/https). Header
+    credentials resolve through the shared resolve_env_vars helper
+    (configure-mcp-tool.py); servers whose required ${VAR} credentials are
+    absent from ~/.env are skipped (name-only warning)."""
     base = Path(repo_root) if repo_root else Path(SCRIPT_DIR).parent
-    root = base / "configs" / "mcp"
+    registry_path = base / "configs" / "mcp" / "global-mcps.json"
+    templates_dir = base / "configs" / "mcp"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        logger.warning("MCP registry unreadable (%s): %s", registry_path, error)
+        return []
+
+    # Collect distinct template names across every tool's mcp_servers entries.
+    template_names = []
+    for tool_config in (registry.get("tools") or {}).values():
+        for server in tool_config.get("mcp_servers") or []:
+            template = server.get("template")
+            if template and template not in template_names:
+                template_names.append(template)
+
     connections = []
-    for path in sorted(root.glob("*.json")):
-        if path.name == "global-mcps.json":
+    for template_name in template_names:
+        tpl_path = templates_dir / f"{template_name}.json"
+        if not tpl_path.is_file():
+            logger.warning("MCP template not found: %s", tpl_path)
             continue
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            data = json.loads(tpl_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning("MCP template unreadable (%s): %s", tpl_path, error)
             continue
         url = data.get("url")
         if (
@@ -90,24 +132,17 @@ def _streamable_mcp_connections(repo_root=None):
             continue
         parsed = urlsplit(url)
         headers = data.get("headers") or {}
-        if any(
-            not os.environ.get(variable, "").strip()
-            for value in headers.values()
-            for variable in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", str(value))
-        ):
+        required = re.findall(r"\$\{(\w+)\}", json.dumps(headers))
+        missing = [v for v in required if not os.environ.get(v, "").strip()]
+        if missing:
             logger.warning(
                 "Skipping MCP server with unresolved credentials: %s",
-                data.get("name", path.stem),
+                data.get("name", template_name),
             )
             continue
         # Resolved credentials persist server-side in Open WebUI's config-table DB.
         resolved_headers = {
-            key: re.sub(
-                r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}",
-                lambda match: os.environ.get(match.group(1), ""),
-                str(value),
-            )
-            for key, value in headers.items()
+            key: resolve_env_vars(str(value)) for key, value in headers.items()
         }
         connections.append(
             {
@@ -122,7 +157,7 @@ def _streamable_mcp_connections(repo_root=None):
                 # {})` over tool_server.connections — an EXPLICIT null defeats the
                 # .get() default and crashes startup. Always write an empty mapping.
                 "config": {},
-                "info": {"id": f"dotfiles-mcp-{data.get('name', path.stem)}"},
+                "info": {"id": f"dotfiles-mcp-{data.get('name', template_name)}"},
             }
         )
     return connections
@@ -437,7 +472,7 @@ def _catalogue_state_path(migrate=True):
     return path
 
 
-def _load_catalogue_state(current_values, desired_ids, migrate=True):
+def _load_catalogue_state(desired_ids, migrate=True):
     path = _catalogue_state_path(migrate)
     if path.is_file():
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -483,13 +518,7 @@ def _reconcile_catalogue(client, dry_run=False):
                 len(missing),
             )
             curated = [m for m in curated if m in live_ids]
-    all_current_values = []
-    for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
-        value = response.get(key, [])
-        all_current_values.extend(
-            value.split(",") if isinstance(value, str) else list(value or [])
-        )
-    owned = _load_catalogue_state(all_current_values, set(curated), migrate=not dry_run)
+    owned = _load_catalogue_state(set(curated), migrate=not dry_run)
     managed_ids = owned | set(curated)
     desired = dict(response)
     for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
@@ -497,11 +526,6 @@ def _reconcile_catalogue(client, dry_run=False):
             key, ",".join(curated) if key == "MODEL_ORDER_LIST" else ""
         )
         merged = _merge_catalogue_key(current_value, managed_ids)
-        current_entries = (
-            current_value.split(",")
-            if isinstance(current_value, str)
-            else list(current_value or [])
-        )
         merged = [
             entry for entry in merged if entry not in (managed_ids - set(curated))
         ]
