@@ -206,21 +206,6 @@ def compute_desired_state():
     return desired
 
 
-def emit_env(desired=None, masked=False):
-    desired = desired or compute_desired_state()
-    entries = desired.get("openai", []) + desired.get("anthropic", [])
-    keys = [mask_secret(item["key"]) if masked else item["key"] for item in entries]
-    return "\n".join(
-        [
-            f"OPENAI_API_BASE_URLS={json.dumps([item['url'] for item in entries])}",
-            f"OPENAI_API_KEYS={json.dumps(keys, ensure_ascii=False)}",
-            f"OPENAI_API_CONFIGS={json.dumps([item['config'] for item in entries], sort_keys=True)}",
-            f"OLLAMA_BASE_URLS={';'.join(item['url'] for item in desired.get('ollama', []))}",
-            f"OLLAMA_API_CONFIGS={json.dumps([item['config'] for item in desired.get('ollama', [])], sort_keys=True)}",
-        ]
-    )
-
-
 class OpenWebUIError(RuntimeError):
     pass
 

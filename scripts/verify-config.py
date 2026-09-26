@@ -1216,7 +1216,7 @@ def main():
 
     backup_timer_gate = (
         openwebui_gate
-        and os.environ.get("DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE", "0") == "1"
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP", "0") == "1"
         and sys.platform == "darwin"
     )
     backup_timer = HOME / "Library/LaunchAgents/com.dotfiles.openwebui.backup.plist"

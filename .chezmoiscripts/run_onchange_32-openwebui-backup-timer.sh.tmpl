@@ -6,7 +6,7 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/env.sh"
 # Makefile: {{ include "Makefile" | sha256sum }}
 # scripts/lib/openwebui_service.sh: {{ include "scripts/lib/openwebui_service.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP" | default "0" }}
 
 load_env || warn "\$HOME/.env not found, skipping backup timer"
 if [[ "{{ .chezmoi.os }}" != "darwin" ]]; then
@@ -14,7 +14,7 @@ if [[ "{{ .chezmoi.os }}" != "darwin" ]]; then
   exit 0
 fi
 PLIST="$HOME/Library/LaunchAgents/com.dotfiles.openwebui.backup.plist"
-if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" || "${DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE:-0}" != "1" ]]; then
+if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" || "${DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP:-0}" != "1" ]]; then
   launchctl bootout "gui/${UID:-$(id -u)}/com.dotfiles.openwebui.backup" 2>/dev/null || true
   rm -f "$PLIST"
   info "Open WebUI backup timer disabled; preserved backup history"

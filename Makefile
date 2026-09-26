@@ -339,7 +339,7 @@ litellm-stop: ## Stop LiteLLM gateway
 litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
 
 openwebui-backup-timer-start: ## Start the gated Open WebUI backup timer
-	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE:-0}" != "1" ]; then echo "Open WebUI backup timer gates are off — skipping"; exit 0; fi; \
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP:-0}" != "1" ]; then echo "Open WebUI backup timer gates are off — skipping"; exit 0; fi; \
 	if [ "$$(uname)" != "Darwin" ]; then echo "Open WebUI backup timer is macOS-only — skipping"; exit 0; fi; \
 	domain="gui/$$(id -u)"; label="com.dotfiles.openwebui.backup"; \
 	timer_ok=0; \

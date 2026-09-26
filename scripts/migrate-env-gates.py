@@ -102,6 +102,12 @@ MIGRATIONS = [
     ),
     # OpenCode web gate: add _SETUP suffix for consistency
     ("DOTFILES_RUN_OPENCODE_WEB", "DOTFILES_RUN_OPENCODE_WEB_SETUP", None),
+    # Backup timer gate rename: preserve existing user opt-in values.
+    (
+        "DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE",
+        "DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP",
+        None,
+    ),
     # Caddy gate split: retain CADDY_SETUP for Caddy and inherit it into the
     # independent DDNS, ACME, and Plannotator paste gates when absent.
     (
