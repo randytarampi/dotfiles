@@ -1251,7 +1251,9 @@ def main():
                 repo_path = None
                 chezmoi_bin = shutil.which("chezmoi")
                 if chezmoi_bin:
-                    probe = subprocess.run(
+                    # Fixed-argument invocation of a resolved binary with no
+                    # operator-controlled input — B603/B607 do not apply.
+                    probe = subprocess.run(  # nosec B603, B607
                         [chezmoi_bin, "source-path"],
                         capture_output=True,
                         text=True,
