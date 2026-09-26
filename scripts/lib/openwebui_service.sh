@@ -181,3 +181,79 @@ openwebui_terminal_service_start() {
 openwebui_terminal_service_restart() {
   openwebui_terminal_service_start
 }
+
+openwebui_computer_service_domain() {
+  openwebui_service_domain
+}
+
+openwebui_computer_service_plist() {
+  printf '%s\n' "${HOME}/Library/LaunchAgents/com.openwebui.computer.plist"
+}
+
+openwebui_computer_service_env_sync() {
+  local service_env="${1:-$HOME/.local/share/cptr/service.env}"
+  local cptr_home
+  local CPTR_DATA_DIR="" OPENWEBUI_COMPUTER_PORT=""
+  local tmp
+  cptr_home="$(dirname "$service_env")"
+  mkdir -p "$cptr_home"
+  if [[ -f "$service_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$service_env"
+  fi
+  unset OPENWEBUI_COMPUTER_PORT
+  if [[ -f "$HOME/.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$HOME/.env"
+  fi
+  # Invariant: cptr state stays isolated from Open WebUI and arbitrary env overrides.
+  CPTR_DATA_DIR="$HOME/.local/share/cptr/data"
+  OPENWEBUI_COMPUTER_PORT="${OPENWEBUI_COMPUTER_PORT:-8124}"
+  tmp="${service_env}.tmp.$$"
+  umask 077
+  {
+    printf 'CPTR_DATA_DIR=%q\n' "$CPTR_DATA_DIR"
+    printf 'OPENWEBUI_COMPUTER_PORT=%q\n' "$OPENWEBUI_COMPUTER_PORT"
+  } >"$tmp"
+  chmod 600 "$tmp"
+  if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$service_env"
+  fi
+}
+
+openwebui_computer_service_stop() {
+  launchctl bootout "$(openwebui_computer_service_domain)/com.openwebui.computer" 2>/dev/null || true
+}
+
+openwebui_computer_service_start() {
+  local domain plist bootstrap_ok=0 output
+  OPENWEBUI_COMPUTER_SERVICE_ERROR=""
+  domain="$(openwebui_computer_service_domain)"
+  plist="$(openwebui_computer_service_plist)"
+  [[ -f "$plist" ]] || {
+    OPENWEBUI_COMPUTER_SERVICE_ERROR="Open WebUI Computer plist missing: $plist"
+    printf '%s\n' "$OPENWEBUI_COMPUTER_SERVICE_ERROR" >&2
+    return 1
+  }
+  for _ in 1 2 3; do
+    openwebui_computer_service_stop
+    sleep 2
+    if output="$(launchctl bootstrap "$domain" "$plist" 2>&1)" && launchctl print "$domain/com.openwebui.computer" >/dev/null 2>&1; then
+      bootstrap_ok=1
+      break
+    fi
+  done
+  if [[ "$bootstrap_ok" != "1" ]]; then
+    OPENWEBUI_COMPUTER_SERVICE_ERROR="Failed to bootstrap com.openwebui.computer after 3 attempts: $output"
+    printf '%s\n' "$OPENWEBUI_COMPUTER_SERVICE_ERROR" >&2
+    return 1
+  fi
+  launchctl kickstart -k "$domain/com.openwebui.computer" >/dev/null 2>&1 || true
+  launchctl print "$domain/com.openwebui.computer" >/dev/null 2>&1
+}
+
+openwebui_computer_service_restart() {
+  openwebui_computer_service_start
+}

@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -314,6 +314,15 @@ openwebui-terminal-stop: ## Stop the Open Terminal service
 	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_terminal_service_stop; fi
 
 openwebui-terminal-restart: openwebui-terminal-stop openwebui-terminal-start ## Restart Open Terminal
+
+openwebui-computer-start: ## Start the gated localhost-only cptr service
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP:-0}" != "1" ]; then echo "Open WebUI Computer gates are off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_computer_service_start; fi
+
+openwebui-computer-stop: ## Stop the cptr service
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_computer_service_stop; fi
+
+openwebui-computer-restart: openwebui-computer-stop openwebui-computer-start ## Restart cptr
 
 openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi

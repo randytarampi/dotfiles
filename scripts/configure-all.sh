@@ -527,12 +527,22 @@ elif ! step_skipped openwebui && [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" 
       rm -f "$(openwebui_terminal_service_plist)"
     fi
   fi
+  if [[ "${DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP:-0}" != "1" ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+      openwebui_computer_service_stop
+      pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
+      rm -f "$(openwebui_computer_service_plist)"
+    fi
+  fi
 else
   DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 run_step "Open Terminal registration removal" python3 "$SCRIPT_DIR/configure-openwebui.py" --reconcile-terminal
   if [[ "$(uname)" == "Darwin" ]]; then
     openwebui_terminal_service_stop
     pkill -f "$HOME/.local/share/openwebui/venv/bin/open-terminal" 2>/dev/null || true
     rm -f "$(openwebui_terminal_service_plist)"
+    openwebui_computer_service_stop
+    pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
+    rm -f "$(openwebui_computer_service_plist)"
   fi
   if [[ "$(uname)" == "Darwin" ]]; then
     openwebui_service_stop
