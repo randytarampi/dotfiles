@@ -122,7 +122,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | openwebui | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | openwebui | litellm | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -136,6 +136,7 @@ source "$LIB_DIR/env.sh"
 source "$LIB_DIR/tier_detect.sh"
 source "$LIB_DIR/tier_args.sh"
 source "$LIB_DIR/openwebui_service.sh"
+source "$LIB_DIR/litellm_service.sh"
 
 FAILURES=0
 
@@ -550,6 +551,27 @@ else
     rm -f "$(openwebui_service_plist)"
   fi
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI reconciliation"
+fi
+
+# 8d. LiteLLM is a separate loopback gateway for non-OpenWebUI clients.
+if ! step_skipped litellm; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    run_step "LiteLLM configuration dry-run" python3 "$SCRIPT_DIR/configure-litellm.py" --dry-run
+  elif [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" ]]; then
+    run_step "LiteLLM service environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"
+    run_step "LiteLLM configuration" python3 "$SCRIPT_DIR/configure-litellm.py"
+    run_step "LiteLLM provider environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"
+    if [[ "$(uname)" == "Darwin" ]]; then run_step "LiteLLM service restart" litellm_service_restart; fi
+  else
+    if [[ "$(uname)" == "Darwin" ]]; then
+      litellm_service_stop
+      rm -f "$(litellm_service_plist)"
+      pkill -f "$HOME/.local/share/litellm/venv/bin/litellm" 2>/dev/null || true
+    fi
+    info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM"
+  fi
+else
+  info "Skipping LiteLLM configuration (--skip litellm)"
 fi
 
 # 9. Restart OpenCode Web to pick up config changes (opencode.json, acp-agents.json, etc.)

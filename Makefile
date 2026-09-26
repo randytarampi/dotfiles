@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -323,6 +323,16 @@ openwebui-computer-stop: ## Stop the cptr service
 	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_computer_service_stop; fi
 
 openwebui-computer-restart: openwebui-computer-stop openwebui-computer-start ## Restart cptr
+
+# LiteLLM is an independent loopback gateway and intentionally does not join services-restart.
+litellm-start: ## Start LiteLLM gateway
+	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]; then echo "LiteLLM gate is off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_start; fi
+
+litellm-stop: ## Stop LiteLLM gateway
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; fi
+
+litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
 
 openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi
