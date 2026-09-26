@@ -299,6 +299,17 @@ registered through the verified
 chat plist or inherited provider environment. Enterprise per-user Terminals
 are out of scope.
 
+#### Open WebUI Computer (Phase 4d)
+
+`cptr` is a separately installed and operated, SSH-equivalent runtime with
+full host filesystem and shell privileges; it is not a sandbox and must be
+treated as user-privilege-equivalent. It uses a dedicated venv, `CPTR_DATA_DIR`,
+localhost-only LaunchAgent, port 8124, and no Caddy route. Its sub-gate is
+independent but requires the main chat gate. Expose-as-provider is deliberately
+OFF: creating a cptr gateway key and adding an Open WebUI OpenAI connection are
+manual admin-UI steps reserved for a later security decision; no key or
+provider registration is automated.
+
 ### Operations snapshot (from upstream docs, Sept 2026)
 
 - Default SQLite + local ChromaDB is fine for one user; **not** for network
