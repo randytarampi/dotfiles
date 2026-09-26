@@ -706,6 +706,18 @@ def main():
                         "  \u2717 Open WebUI plist: secret or bootstrap variable name present"
                     )
                     exit_code = 1
+                if (
+                    "--noprofile --norc" not in plist_text
+                    or "env -i" not in plist_text
+                    or "bash -lc" in plist_text
+                    or "DATA_DIR=" not in plist_text
+                    or any(
+                        name in plist_text
+                        for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+                    )
+                ):
+                    print("  \u2717 Open WebUI plist: unsafe login-shell wrapper")
+                    exit_code = 1
             except (OSError, plistlib.InvalidFileException, ValueError):
                 print("  \u2717 Open WebUI plist: invalid property list")
                 exit_code = 1
@@ -764,6 +776,111 @@ def main():
             print(
                 "  \u2298 Open WebUI (gate DOTFILES_RUN_OPENWEBUI_SETUP=0, LaunchAgent absent)"
             )
+
+    terminal_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "0") == "1"
+    )
+    terminal_plist = HOME / "Library/LaunchAgents/com.openwebui.terminal.plist"
+    terminal_root = openwebui_root / "terminal-workspace"
+    terminal_env = openwebui_root / "terminal.env"
+    terminal_config = openwebui_root / "terminal.toml"
+    terminal_binary = openwebui_root / "venv/bin/open-terminal"
+    if terminal_gate:
+        terminal_checks = [
+            (terminal_binary, "Open Terminal executable"),
+            (terminal_root, "Open Terminal workspace"),
+            (terminal_env, "Open Terminal service env"),
+            (terminal_config, "Open Terminal config"),
+            (terminal_plist, "Open Terminal LaunchAgent"),
+        ]
+        for path, label in terminal_checks:
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        if not (terminal_binary.is_file() and os.access(terminal_binary, os.X_OK)):
+            print(
+                f"  \u2717 Open Terminal executable: not executable {terminal_binary}"
+            )
+            exit_code = 1
+        if terminal_root.exists() and (terminal_root.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 Open Terminal workspace: expected mode 0o700")
+            exit_code = 1
+        if terminal_env.is_file():
+            if terminal_env.stat().st_mode & 0o777 != 0o600:
+                print("  \u2717 Open Terminal service env: expected mode 0o600")
+                exit_code = 1
+            names = {
+                line.split("=", 1)[0].strip()
+                for line in terminal_env.read_text(encoding="utf-8").splitlines()
+                if "=" in line and line.split("=", 1)[0].strip()
+            }
+            required = {
+                "OPEN_TERMINAL_API_KEY",
+                "OPEN_TERMINAL_FILE_BROWSER_ROOT",
+                "OPENWEBUI_TERMINAL_PORT",
+            }
+            if not required <= names:
+                print("  \u2717 Open Terminal service env: required key names missing")
+                exit_code = 1
+        if terminal_plist.is_file():
+            plist_mode = terminal_plist.stat().st_mode & 0o777
+            plist_text = terminal_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print("  \u2717 Open Terminal plist: expected mode 0o600")
+                exit_code = 1
+            if any(
+                name in plist_text
+                for name in (
+                    "OPEN_TERMINAL_API_KEY",
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                    "WEBUI_SECRET_KEY",
+                )
+            ):
+                print("  \u2717 Open Terminal plist: API key name/value present")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                env_keys = set(plist.get("EnvironmentVariables", {}))
+                if env_keys != {"OPEN_TERMINAL_FILE_BROWSER_ROOT", "GLOBAL_LOG_LEVEL"}:
+                    print("  \u2717 Open Terminal plist: unexpected environment keys")
+                    exit_code = 1
+                if (
+                    "--noprofile --norc" not in plist_text
+                    or "env -i" not in plist_text
+                    or "bash -lc" in plist_text
+                    or "OPEN_TERMINAL_FILE_BROWSER_ROOT=" not in plist_text
+                ):
+                    print("  \u2717 Open Terminal plist: unsafe login-shell wrapper")
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open Terminal plist: invalid property list")
+                exit_code = 1
+        if terminal_config.is_file():
+            config_mode = terminal_config.stat().st_mode & 0o777
+            config_text = terminal_config.read_text(encoding="utf-8")
+            expected_port = os.environ.get("OPENWEBUI_TERMINAL_PORT", "8123")
+            expected_root = str(terminal_root)
+            if config_mode != 0o600:
+                print("  \u2717 Open Terminal config: expected mode 0o600")
+                exit_code = 1
+            if (
+                'host = "127.0.0.1"' not in config_text
+                or f"port = {expected_port}" not in config_text
+                or f'file_browser_root = "{expected_root}"' not in config_text
+            ):
+                print(
+                    "  \u2717 Open Terminal config: host/port/workspace settings mismatch"
+                )
+                exit_code = 1
+    elif terminal_plist.exists():
+        print(
+            f"  \u2717 Open Terminal LaunchAgent remains while sub-gate is off: {terminal_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 Open Terminal (main/sub-gate disabled, LaunchAgent absent)")
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"

@@ -14,16 +14,29 @@ source "${LIB_DIR}/openwebui_service.sh"
 # scripts/lib/provider_endpoints.py: {{ include "scripts/lib/provider_endpoints.py" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
+# terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
+CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
 
 # Gate on DOTFILES_RUN_OPENWEBUI_SETUP env var (set in ~/.env)
 if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
+  # Registration clearing needs the chat API key from the service env, so
+  # source it before invoking the reconciler (remove before service teardown).
+  SERVICE_ENV="$HOME/.local/share/openwebui/service.env"
+  if [[ -f "$SERVICE_ENV" ]]; then
+    # shellcheck disable=SC1090
+    source "$SERVICE_ENV"
+  fi
+  DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Failed to clear Open Terminal registration"
   PLIST_DIR="$(caddy_launch_agents_dir 2>/dev/null || printf '%s' "$HOME/Library/LaunchAgents")"
   PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
   launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
   rm -f "$PLIST_PATH"
   pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
+  launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
+  pkill -f "$HOME/.local/share/openwebui/venv/bin/open-terminal" 2>/dev/null || true
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — removed Open WebUI LaunchAgent; preserved data"
   exit 0
 fi
@@ -80,8 +93,8 @@ cat >"$PLIST_PATH" <<EOF
   <key>Label</key><string>com.openwebui.web</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string><string>-lc</string>
-    <string>set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"</string>
+    <string>/bin/bash</string><string>-c</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV_DIR/bin" DATA_DIR="$DATA_DIR" GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"'</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -115,9 +128,94 @@ set -a
 # shellcheck disable=SC1090
 source "$SERVICE_ENV"
 set +a
-CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
 if [[ -f "$CONFIGURE_SCRIPT" ]]; then
   "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
 else
   warn "configure-openwebui.py not found at $CONFIGURE_SCRIPT"
+fi
+
+# Open Terminal is a separate privileged bare-metal runtime. It is enabled only
+# when the main chat gate and this companion sub-gate are both enabled. There is
+# no Caddy route; registration is performed through the admin API below.
+TERMINAL_GATE="${DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP:-0}"
+if [[ "$TERMINAL_GATE" != "1" ]]; then
+  DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Failed to clear Open Terminal registration"
+  openwebui_terminal_service_stop
+  rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
+  pkill -f "$VENV_DIR/bin/open-terminal" 2>/dev/null || true
+  info "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP='$TERMINAL_GATE' — skipping Open Terminal; preserved workspace and key material"
+  exit 0
+fi
+
+TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.0}"
+if ! "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}"; then
+  warn "Open Terminal install failed; retrying once"
+  sleep 2
+  "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}" || die "Failed to install open-terminal==${TERMINAL_VERSION}"
+fi
+TERMINAL_HOME="$OPENWEBUI_HOME"
+TERMINAL_WORKSPACE="$TERMINAL_HOME/terminal-workspace"
+TERMINAL_LOG_DIR="$TERMINAL_HOME/logs"
+TERMINAL_ENV="$TERMINAL_HOME/terminal.env"
+TERMINAL_CONFIG="$TERMINAL_HOME/terminal.toml"
+mkdir -p "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
+chmod 700 "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
+openwebui_terminal_service_env_sync "$TERMINAL_ENV" || warn "Failed to reconcile Open Terminal service.env"
+# shellcheck disable=SC1090
+source "$TERMINAL_ENV"
+cat >"$TERMINAL_CONFIG" <<EOF
+host = "127.0.0.1"
+port = ${OPENWEBUI_TERMINAL_PORT:-8123}
+file_browser_root = "${OPEN_TERMINAL_FILE_BROWSER_ROOT}"
+EOF
+chmod 600 "$TERMINAL_CONFIG"
+TERMINAL_PLIST="$(openwebui_terminal_service_plist)"
+cat >"$TERMINAL_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.openwebui.terminal</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string><string>-c</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV_DIR/bin" GLOBAL_LOG_LEVEL=INFO OPEN_TERMINAL_FILE_BROWSER_ROOT="$TERMINAL_WORKSPACE" /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$TERMINAL_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-terminal" run --config "$TERMINAL_CONFIG"'</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$TERMINAL_LOG_DIR/terminal.log</string>
+  <key>StandardErrorPath</key><string>$TERMINAL_LOG_DIR/terminal.log</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>OPEN_TERMINAL_FILE_BROWSER_ROOT</key><string>$TERMINAL_WORKSPACE</string>
+    <key>GLOBAL_LOG_LEVEL</key><string>INFO</string>
+  </dict>
+</dict>
+</plist>
+EOF
+chmod 600 "$TERMINAL_PLIST"
+if ! openwebui_terminal_service_start; then
+  warn "${OPENWEBUI_TERMINAL_SERVICE_ERROR:-Failed to start Open Terminal}"
+else
+  terminal_port="${OPENWEBUI_TERMINAL_PORT:-8123}"
+  terminal_healthy=0
+  terminal_identity=0
+  for _ in {1..15}; do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/health" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/" >/dev/null 2>&1; then
+      terminal_healthy=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ "$terminal_healthy" != "1" ]]; then
+    warn "Open Terminal is not healthy yet; continuing fail-soft"
+  else
+    openapi_json="$(curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/openapi.json" 2>/dev/null || true)"
+    if printf '%s' "$openapi_json" | python3 -c 'import json, sys; d=json.load(sys.stdin); info=d.get("info", {}); title=str(info.get("title", "")).lower(); description=str(info.get("description", "")).lower(); raise SystemExit(0 if title == "open terminal" or "remote terminal api" in description else 1)' 2>/dev/null; then
+      terminal_identity=1
+    else
+      warn "Open Terminal identity was not confirmed from /openapi.json; skipping registration"
+    fi
+  fi
+  if [[ "$terminal_identity" == "1" && -f "$CONFIGURE_SCRIPT" ]]; then
+    "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Open Terminal registration failed"
+  fi
 fi
