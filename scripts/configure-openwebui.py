@@ -2,9 +2,13 @@
 """Configure and reconcile the opt-in Open WebUI deployment."""
 
 import argparse
+import json
 import os
+import re
 import shlex
 import sys
+from pathlib import Path
+from urllib.parse import urlsplit
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -22,6 +26,7 @@ from openwebui import (
     reconcile,
     reconcile_via_api,
 )
+from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 
 GATE_ENV = "DOTFILES_RUN_OPENWEBUI_SETUP"
 
@@ -34,6 +39,8 @@ def _parser():
     mode.add_argument("--reconcile", action="store_true")
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--reconcile-terminal", action="store_true")
+    mode.add_argument("--reconcile-mcp", action="store_true")
+    mode.add_argument("--reconcile-catalogue", action="store_true")
     return parser
 
 
@@ -52,6 +59,212 @@ def _openwebui_service_value(name):
     return _service_env_value(
         os.path.expanduser("~/.local/share/openwebui/service.env"), name
     )
+
+
+def _admin_credentials():
+    return {
+        "email": os.environ.get("WEBUI_ADMIN_EMAIL", "")
+        or _openwebui_service_value("WEBUI_ADMIN_EMAIL"),
+        "password": os.environ.get("WEBUI_ADMIN_PASSWORD", "")
+        or _openwebui_service_value("WEBUI_ADMIN_PASSWORD"),
+    }
+
+
+def _streamable_mcp_connections(repo_root=None):
+    base = Path(repo_root) if repo_root else Path(SCRIPT_DIR).parent
+    root = base / "configs" / "mcp"
+    connections = []
+    for path in sorted(root.glob("*.json")):
+        if path.name == "global-mcps.json":
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        url = data.get("url")
+        if (
+            data.get("type") != "url"
+            or not isinstance(url, str)
+            or urlsplit(url).scheme not in {"http", "https"}
+        ):
+            continue
+        parsed = urlsplit(url)
+        headers = data.get("headers") or {}
+        if any(
+            not os.environ.get(variable, "").strip()
+            for value in headers.values()
+            for variable in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", str(value))
+        ):
+            logger.warning(
+                "Skipping MCP server with unresolved credentials: %s",
+                data.get("name", path.stem),
+            )
+            continue
+        # Resolved credentials persist server-side in Open WebUI's config-table DB.
+        resolved_headers = {
+            key: re.sub(
+                r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}",
+                lambda match: os.environ.get(match.group(1), ""),
+                str(value),
+            )
+            for key, value in headers.items()
+        }
+        connections.append(
+            {
+                "url": f"{parsed.scheme}://{parsed.netloc}",
+                "path": parsed.path or "/",
+                "type": "mcp",
+                "auth_type": ("bearer" if headers.get("Authorization") else "none"),
+                "forward_cookies": False,
+                "headers": resolved_headers or None,
+                "key": None,
+                # Upstream 0.11.4 lifespan does `'access_control' in c.get('config',
+                # {})` over tool_server.connections — an EXPLICIT null defeats the
+                # .get() default and crashes startup. Always write an empty mapping.
+                "config": {},
+                "info": {"id": f"dotfiles-mcp-{data.get('name', path.stem)}"},
+            }
+        )
+    return connections
+
+
+def _mcp_state_path(migrate=True):
+    path = Path(os.path.expanduser("~/.local/share/openwebui/data/managed-mcp.json"))
+    old = path.parent.parent / "managed-mcp.json"
+    # Legacy-state migration is a filesystem WRITE: skip it during dry-run.
+    if migrate and old.is_file() and not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(old, path)
+    return path
+
+
+def _write_mcp_state(connections):
+    path = _mcp_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rendered = json.dumps({"connections": connections}, indent=2) + "\n"
+    if path.is_file() and path.read_text(encoding="utf-8") == rendered:
+        return
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp.write_text(rendered, encoding="utf-8")
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+
+
+def _reconcile_mcp(client, dry_run=False):
+    response = client.get_tool_servers_config()
+    if not isinstance(response, dict):
+        raise OpenWebUIError("Open WebUI MCP configuration has an invalid shape")
+    current = response.get("TOOL_SERVER_CONNECTIONS", [])
+    if not isinstance(current, list) or not all(
+        isinstance(item, dict) for item in current
+    ):
+        raise OpenWebUIError("Open WebUI MCP configuration has an invalid shape")
+    desired = _streamable_mcp_connections()
+    desired_by_id = {item["info"]["id"]: item for item in desired}
+    state_path = _mcp_state_path(migrate=not dry_run)
+    if state_path.is_file():
+        owned = json.loads(state_path.read_text(encoding="utf-8")).get(
+            "connections", {}
+        )
+    else:
+        # Conservative first-run seeding: claim ONLY current entries whose
+        # url matches the desired payload (what the reconciler is about to
+        # deploy). A same-ID entry with a different url is NOT owned — it is
+        # an unmanaged collision, never silently adopted.
+        owned = {
+            (item.get("info") or {}).get("id"): item.get("url")
+            for item in current
+            if (item.get("info") or {}).get("id", "").startswith("dotfiles-mcp-")
+            and (item.get("info") or {}).get("id") in desired_by_id
+            and item.get("url")
+            == desired_by_id[(item.get("info") or {}).get("id")]["url"]
+        }
+    managed_ids = set(owned) | set(desired_by_id)
+    for item in current:
+        item_id = (item.get("info") or {}).get("id")
+        if item_id in owned and item.get("url") != owned[item_id]:
+            raise OpenWebUIError(f"MCP registration collision for {item_id}")
+        if item_id in desired_by_id and item_id not in owned:
+            raise OpenWebUIError(f"MCP registration collision for unmanaged {item_id}")
+        # Owned entries (id in state AND current url matches the recorded url)
+        # may UPDATE to a new desired endpoint/path — legitimate migrations.
+        # Collision handling above is reserved for unowned same-ID entries and
+        # ownership-identity drift.
+    merged = [
+        item
+        for item in current
+        if (item.get("info") or {}).get("id") not in managed_ids
+    ] + desired
+
+    def managed_fields(item):
+        return {
+            key: item.get(key)
+            for key in (
+                "url",
+                "path",
+                "type",
+                "auth_type",
+                "headers",
+                "key",
+                "config",
+                "info",
+            )
+        }
+
+    current_projection = {
+        (item.get("info") or {}).get("id"): managed_fields(item)
+        for item in current
+        if (item.get("info") or {}).get("id") in managed_ids
+    }
+    merged_projection = {
+        (item.get("info") or {}).get("id"): managed_fields(item)
+        for item in merged
+        if (item.get("info") or {}).get("id") in managed_ids
+    }
+    if merged_projection == current_projection:
+        logger.info("MCP registration is clean")
+        if not dry_run:
+            _write_mcp_state({item["info"]["id"]: item["url"] for item in desired})
+        return 0
+    if dry_run:
+        logger.info("MCP registration dry-run: desired_streamable=%d", len(desired))
+        return 0
+    latest = client.get_tool_servers_config()
+    if not isinstance(latest, dict) or latest.get("TOOL_SERVER_CONNECTIONS") != current:
+        raise OpenWebUIError("Open WebUI MCP configuration changed before write")
+    client.update_tool_servers_config({"TOOL_SERVER_CONNECTIONS": merged})
+    verified_response = client.get_tool_servers_config()
+    verified = (
+        verified_response.get("TOOL_SERVER_CONNECTIONS")
+        if isinstance(verified_response, dict)
+        else None
+    )
+    unmanaged = [
+        item
+        for item in current
+        if (item.get("info") or {}).get("id") not in managed_ids
+    ]
+    verified_managed = {
+        (item.get("info") or {}).get("id"): managed_fields(item)
+        for item in verified or []
+        if (item.get("info") or {}).get("id") in desired_by_id
+    }
+    expected_managed = {item["info"]["id"]: managed_fields(item) for item in desired}
+    if (
+        not isinstance(verified, list)
+        or [
+            item
+            for item in verified
+            if (item.get("info") or {}).get("id") not in managed_ids
+        ]
+        != unmanaged
+        or verified_managed != expected_managed
+    ):
+        raise OpenWebUIError(
+            "Open WebUI MCP unmanaged preservation verification failed"
+        )
+    _write_mcp_state({item["info"]["id"]: item["url"] for item in desired})
+    return 0
 
 
 def _reconcile_terminal(client, dry_run=False):
@@ -97,7 +310,7 @@ def _reconcile_terminal(client, dry_run=False):
             "key": terminal_key,
             "auth_type": "bearer",
             "forward_cookies": False,
-            "config": None,
+            "config": {},
         }
     merged = [item for item in current if item.get("id") != managed_id]
     if desired is not None:
@@ -162,6 +375,159 @@ def _reconcile_terminal(client, dry_run=False):
     return 0
 
 
+def _curated_cloud_models():
+    providers = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": PROVIDER_ENDPOINTS["google"]["apiKeyEnv"],
+        "openrouter": PROVIDER_ENDPOINTS["openrouter"]["apiKeyEnv"],
+        "opencode": PROVIDER_ENDPOINTS["opencode"]["apiKeyEnv"],
+    }
+    models = []
+    for provider, key_env in providers.items():
+        if not os.environ.get(key_env, "").strip():
+            continue
+        if provider in PROVIDER_ENDPOINTS:
+            ids = provider_models(provider)
+        else:
+            allowlist = (
+                Path(SCRIPT_DIR).parent
+                / "configs"
+                / "opencode"
+                / f"{provider}-models.json"
+            )
+            ids = sorted(
+                json.loads(allowlist.read_text(encoding="utf-8")).get("models", {})
+            )
+        models.extend(f"{provider}/{model}" for model in ids)
+    return sorted(set(models))
+
+
+def _merge_catalogue_key(current_value, managed_ids):
+    """Merge-only update: managed IDs are updated/removed/appended; user
+    entries and their relative order are preserved verbatim. Never clears
+    the key."""
+    if isinstance(current_value, str):
+        current_entries = [e for e in current_value.split(",") if e]
+    else:
+        current_entries = list(current_value or [])
+    unmanaged = [e for e in current_entries if e not in set(managed_ids)]
+    kept_managed = [e for e in current_entries if e in set(managed_ids)]
+    appended = [m for m in managed_ids if m not in set(current_entries)]
+    merged = unmanaged + kept_managed + appended
+    return merged
+
+
+MANAGED_CATALOGUE_PREFIXES = (
+    "openai/",
+    "anthropic/",
+    "google/",
+    "openrouter/",
+    "opencode/",
+)
+
+
+def _catalogue_state_path(migrate=True):
+    path = Path(os.path.expanduser("~/.local/share/openwebui/data/managed-models.json"))
+    old = path.parent.parent / "managed-models.json"
+    # Legacy-state migration is a filesystem WRITE: skip it during dry-run.
+    if migrate and old.is_file() and not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(old, path)
+    return path
+
+
+def _load_catalogue_state(current_values, desired_ids, migrate=True):
+    path = _catalogue_state_path(migrate)
+    if path.is_file():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return set(data.get("managed_ids", []))
+    # First-run adoption is conservative: only models this run explicitly
+    # desires become managed; provider-shaped user entries remain unmanaged.
+    return set(desired_ids)
+
+
+def _write_catalogue_state(managed_ids):
+    path = _catalogue_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rendered = json.dumps({"managed_ids": sorted(managed_ids)}, indent=2) + "\n"
+    if path.is_file() and path.read_text(encoding="utf-8") == rendered:
+        return
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp.write_text(rendered, encoding="utf-8")
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+
+
+def _reconcile_catalogue(client, dry_run=False):
+    response = client.get_models_config()
+    if not isinstance(response, dict):
+        raise OpenWebUIError("Open WebUI model catalogue has an invalid shape")
+    curated = _curated_cloud_models()
+    if curated:
+        # Validate curated IDs against the LIVE /api/models listing: any
+        # curated ID the running service does not know is dropped (never
+        # guess ID formats). Service down -> skip without writing.
+        try:
+            live_ids = {m.get("id") for m in client.get_models().get("data", [])}
+        except OpenWebUIError as error:
+            logger.warning(
+                "Skipping catalogue reconciliation; live model IDs unavailable: %s",
+                error,
+            )
+            return 0
+        missing = [m for m in curated if m not in live_ids]
+        if missing:
+            logger.warning(
+                "Dropping %d curated model IDs absent from live /api/models",
+                len(missing),
+            )
+            curated = [m for m in curated if m in live_ids]
+    all_current_values = []
+    for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
+        value = response.get(key, [])
+        all_current_values.extend(
+            value.split(",") if isinstance(value, str) else list(value or [])
+        )
+    owned = _load_catalogue_state(all_current_values, set(curated), migrate=not dry_run)
+    managed_ids = owned | set(curated)
+    desired = dict(response)
+    for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
+        current_value = response.get(
+            key, ",".join(curated) if key == "MODEL_ORDER_LIST" else ""
+        )
+        merged = _merge_catalogue_key(current_value, managed_ids)
+        current_entries = (
+            current_value.split(",")
+            if isinstance(current_value, str)
+            else list(current_value or [])
+        )
+        merged = [
+            entry for entry in merged if entry not in (managed_ids - set(curated))
+        ]
+        merged.extend(item for item in curated if item not in merged)
+        if key == "MODEL_ORDER_LIST":
+            desired[key] = merged
+        else:
+            desired[key] = ",".join(merged)
+    if desired == response:
+        logger.info("Curated model catalogue is clean")
+        if not dry_run:
+            _write_catalogue_state(set(curated))
+        return 0
+    if dry_run:
+        logger.info("Curated model catalogue dry-run: models=%d", len(curated))
+        return 0
+    if client.get_models_config() != response:
+        raise OpenWebUIError("Open WebUI model catalogue changed before write")
+    client.update_models_config(desired)
+    if client.get_models_config() != desired:
+        raise OpenWebUIError("Open WebUI model catalogue verification failed")
+    _write_catalogue_state(set(curated))
+    logger.info("Curated cloud model catalogue reconciled: models=%d", len(curated))
+    return 0
+
+
 def main():
     args = _parser().parse_args()
     terminal_gate_override = os.environ.get("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP")
@@ -200,6 +566,51 @@ def main():
             return _reconcile_terminal(client, args.dry_run)
         except OpenWebUIError as error:
             logger.error("Open Terminal registration failed: %s", error)
+            return 1
+
+    if args.reconcile_mcp:
+        api_key = os.environ.get(
+            "OPENWEBUI_API_KEY", ""
+        ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
+        if not api_key:
+            logger.warning("OPENWEBUI_API_KEY is absent; skipping MCP registration")
+            return 0
+        base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
+        client = OpenWebUIClient(
+            base_url, api_key, admin_credentials=_admin_credentials()
+        )
+        if not client.health_check():
+            logger.warning("Open WebUI is not healthy; skipping MCP registration")
+            return 0
+        try:
+            return _reconcile_mcp(client, args.dry_run)
+        except OpenWebUIError as error:
+            logger.error("MCP registration failed: %s", error)
+            return 1
+
+    if args.reconcile_catalogue:
+        api_key = os.environ.get(
+            "OPENWEBUI_API_KEY", ""
+        ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
+        if not api_key:
+            logger.warning(
+                "OPENWEBUI_API_KEY is absent; skipping catalogue reconciliation"
+            )
+            return 0
+        client = OpenWebUIClient(
+            f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}",
+            api_key,
+            admin_credentials=_admin_credentials(),
+        )
+        if not client.health_check():
+            logger.warning(
+                "Open WebUI is not healthy; skipping catalogue reconciliation"
+            )
+            return 0
+        try:
+            return _reconcile_catalogue(client, args.dry_run)
+        except (OpenWebUIError, OSError, json.JSONDecodeError) as error:
+            logger.error("Catalogue reconciliation failed: %s", error)
             return 1
 
     desired = compute_desired_state()

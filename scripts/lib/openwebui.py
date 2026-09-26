@@ -241,6 +241,8 @@ class OpenWebUIClient:
     OPENAI_UPDATE_PATH = "/openai/config/update"
     OLLAMA_UPDATE_PATH = "/ollama/config/update"
     TERMINAL_CONFIG_PATH = "/api/v1/configs/terminal_servers"
+    TOOL_SERVERS_CONFIG_PATH = "/api/v1/configs/tool_servers"
+    MODELS_CONFIG_PATH = "/api/v1/configs/models"
 
     def __init__(self, base_url, api_key, timeout=10, admin_credentials=None):
         self.base_url, self.api_key, self.timeout = (
@@ -325,6 +327,23 @@ class OpenWebUIClient:
 
     def update_terminal_servers_config(self, config):
         return self._request(self.TERMINAL_CONFIG_PATH, "POST", config)
+
+    def get_tool_servers_config(self):
+        return self._request(self.TOOL_SERVERS_CONFIG_PATH)
+
+    def update_tool_servers_config(self, config):
+        return self._request(self.TOOL_SERVERS_CONFIG_PATH, "POST", config)
+
+    MODELS_LIST_PATH = "/api/models"
+
+    def get_models(self):
+        return self._request(self.MODELS_LIST_PATH)
+
+    def get_models_config(self):
+        return self._request(self.MODELS_CONFIG_PATH)
+
+    def update_models_config(self, config):
+        return self._request(self.MODELS_CONFIG_PATH, "POST", config)
 
     @staticmethod
     def normalize(response, collection):

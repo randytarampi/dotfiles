@@ -881,6 +881,8 @@
         "--emit-env",
         "--reconcile",
         "--reconcile-terminal",
+        "--reconcile-mcp",
+        "--reconcile-catalogue",
         "--check"
       ],
       "positional_operand": null,

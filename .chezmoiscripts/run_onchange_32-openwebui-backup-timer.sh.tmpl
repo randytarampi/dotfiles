@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/env.sh"
+# Makefile: {{ include "Makefile" | sha256sum }}
+# scripts/lib/openwebui_service.sh: {{ include "scripts/lib/openwebui_service.sh" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE" | default "0" }}
+
+load_env || warn "\$HOME/.env not found, skipping backup timer"
+if [[ "{{ .chezmoi.os }}" != "darwin" ]]; then
+  info "Open WebUI backup LaunchAgent timer is macOS-only; skipping"
+  exit 0
+fi
+PLIST="$HOME/Library/LaunchAgents/com.dotfiles.openwebui.backup.plist"
+if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" || "${DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE:-0}" != "1" ]]; then
+  launchctl bootout "gui/${UID:-$(id -u)}/com.dotfiles.openwebui.backup" 2>/dev/null || true
+  rm -f "$PLIST"
+  info "Open WebUI backup timer disabled; preserved backup history"
+  exit 0
+fi
+
+mkdir -p "$(dirname "$PLIST")" "$HOME/.local/share/openwebui/logs"
+cat >"$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.dotfiles.openwebui.backup</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string><string>-lc</string>
+    <string>make -C "{{ .chezmoi.sourceDir }}" openwebui-backup</string>
+  </array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>$HOME/.local/share/openwebui/logs/backup-timer.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.local/share/openwebui/logs/backup-timer.log</string>
+</dict></plist>
+EOF
+chmod 600 "$PLIST"
+# Established launchd lifecycle: bootout -> bootstrap -> loaded-ness check
+# (idempotent double-start; a loaded timer is simply re-kicked).
+TIMER_DOMAIN="gui/${UID:-$(id -u)}"
+TIMER_LABEL="com.dotfiles.openwebui.backup"
+TIMER_OK=0
+for _ in 1 2 3; do
+  launchctl bootout "$TIMER_DOMAIN/$TIMER_LABEL" >/dev/null 2>&1 || true
+  sleep 1
+  if launchctl bootstrap "$TIMER_DOMAIN" "$PLIST" >/dev/null 2>&1 && launchctl print "$TIMER_DOMAIN/$TIMER_LABEL" >/dev/null 2>&1; then
+    TIMER_OK=1
+    break
+  fi
+done
+if [[ "$TIMER_OK" != "1" ]]; then
+  die "Failed to bootstrap Open WebUI backup timer after 3 attempts"
+fi
+launchctl print "$TIMER_DOMAIN/$TIMER_LABEL" >/dev/null 2>&1 || die "Open WebUI backup timer did not load"

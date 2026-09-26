@@ -12,6 +12,24 @@ source "${LIB_DIR}/openwebui_service.sh"
 # scripts/lib/openwebui.py: {{ include "scripts/lib/openwebui.py" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
 # scripts/lib/provider_endpoints.py: {{ include "scripts/lib/provider_endpoints.py" | sha256sum }}
+# configs/mcp/global-mcps.json: {{ include "configs/mcp/global-mcps.json" | sha256sum }}
+# configs/mcp/context7.json: {{ include "configs/mcp/context7.json" | sha256sum }}
+# configs/mcp/github.json: {{ include "configs/mcp/github.json" | sha256sum }}
+# configs/mcp/idea.json: {{ include "configs/mcp/idea.json" | sha256sum }}
+# configs/mcp/sentry.json: {{ include "configs/mcp/sentry.json" | sha256sum }}
+# configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
+# configs/mcp/betterstack.json: {{ include "configs/mcp/betterstack.json" | sha256sum }}
+# configs/mcp/mongodb.json: {{ include "configs/mcp/mongodb.json" | sha256sum }}
+# configs/mcp/notion.json: {{ include "configs/mcp/notion.json" | sha256sum }}
+# configs/mcp/shortcut.json: {{ include "configs/mcp/shortcut.json" | sha256sum }}
+# configs/mcp/atlassian.json: {{ include "configs/mcp/atlassian.json" | sha256sum }}
+# configs/mcp/testrigor.json: {{ include "configs/mcp/testrigor.json" | sha256sum }}
+# configs/opencode/anthropic-models.json: {{ include "configs/opencode/anthropic-models.json" | sha256sum }}
+# configs/opencode/google-models.json: {{ include "configs/opencode/google-models.json" | sha256sum }}
+# configs/opencode/openai-models.json: {{ include "configs/opencode/openai-models.json" | sha256sum }}
+# configs/opencode/openrouter-models.json: {{ include "configs/opencode/openrouter-models.json" | sha256sum }}
+# configs/opencode/opencode-models.json: {{ include "configs/opencode/opencode-models.json" | sha256sum }}
+# configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
 # terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
@@ -19,6 +37,7 @@ source "${LIB_DIR}/openwebui_service.sh"
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
+OS_NAME="{{ .chezmoi.os }}"
 
 # Gate on DOTFILES_RUN_OPENWEBUI_SETUP env var (set in ~/.env)
 if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
@@ -32,22 +51,29 @@ if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
   DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Failed to clear Open Terminal registration"
   PLIST_DIR="$(caddy_launch_agents_dir 2>/dev/null || printf '%s' "$HOME/Library/LaunchAgents")"
   PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
-  launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
+  if [[ "$OS_NAME" == "darwin" ]]; then
+    launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
+  else
+    systemctl --user disable --now open-webui.service 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/open-webui.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
   rm -f "$PLIST_PATH"
   pkill -f "$HOME/.local/share/openwebui/venv/bin/open-webui serve" 2>/dev/null || true
-  launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
-  rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
-  pkill -f "$HOME/.local/share/openwebui/venv/bin/open-terminal" 2>/dev/null || true
-  launchctl bootout "$(openwebui_computer_service_domain)/com.openwebui.computer" 2>/dev/null || true
-  rm -f "$HOME/Library/LaunchAgents/com.openwebui.computer.plist"
-  pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
+  if [[ "$OS_NAME" == "darwin" ]]; then
+    launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
+    pkill -f "$HOME/.local/share/openwebui/venv/bin/open-terminal" 2>/dev/null || true
+    launchctl bootout "$(openwebui_computer_service_domain)/com.openwebui.computer" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/com.openwebui.computer.plist"
+    pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
+  fi
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — removed Open WebUI LaunchAgent; preserved data"
   exit 0
 fi
 
-OS_NAME="{{ .chezmoi.os }}"
-if [[ "$OS_NAME" != "darwin" ]]; then
-  warn "Open WebUI LaunchAgent wiring is supported on macOS only; skipping service setup"
+if [[ "$OS_NAME" != "darwin" && "$OS_NAME" != "linux" ]]; then
+  warn "Open WebUI service wiring is supported on macOS/Linux only; skipping service setup"
   exit 0
 fi
 
@@ -85,6 +111,41 @@ openwebui_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile Open WebUI
 # The service env is private; source it only into this process for the plist.
 # shellcheck disable=SC1090
 source "$SERVICE_ENV"
+
+if [[ "$OS_NAME" == "linux" ]]; then
+  SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+  mkdir -p "$SYSTEMD_USER_DIR"
+  cat >"$SYSTEMD_USER_DIR/open-webui.service" <<EOF
+[Unit]
+Description=Open WebUI
+
+[Service]
+Type=simple
+Environment=DATA_DIR=$DATA_DIR
+Environment=GLOBAL_LOG_LEVEL=INFO
+ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/openwebui/venv/bin DATA_DIR=${DATA_DIR} GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a; source "$SERVICE_ENV"; set +a; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "${OPENWEBUI_PORT:-8080}"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
+    systemctl --user enable --now open-webui.service || warn "systemd user Open WebUI start failed"
+  else
+    info "systemd user session unavailable; wrote open-webui.service for later activation"
+  fi
+  for _ in {1..60}; do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/api/version" >/dev/null 2>&1; then break; fi
+    sleep 2
+  done
+  "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
+  "$CONFIGURE_SCRIPT" --reconcile-mcp || warn "Open WebUI MCP registration failed"
+  "$CONFIGURE_SCRIPT" --reconcile-catalogue || warn "Open WebUI catalogue reconciliation failed"
+  info "Open Terminal and cptr LaunchAgents are macOS-only; LiteLLM remains a separate optional service"
+  exit 0
+fi
 
 PLIST_DIR="$(caddy_launch_agents_dir)"
 PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
@@ -134,6 +195,8 @@ source "$SERVICE_ENV"
 set +a
 if [[ -f "$CONFIGURE_SCRIPT" ]]; then
   "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
+  "$CONFIGURE_SCRIPT" --reconcile-mcp || warn "Open WebUI MCP registration failed"
+  "$CONFIGURE_SCRIPT" --reconcile-catalogue || warn "Open WebUI catalogue reconciliation failed"
 else
   warn "configure-openwebui.py not found at $CONFIGURE_SCRIPT"
 fi
