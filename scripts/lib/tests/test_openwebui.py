@@ -597,3 +597,41 @@ def test_service_env_fallback_reads_admin_credentials(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENWEBUI_API_KEY", raising=False)
     assert module._openwebui_service_value("OPENWEBUI_API_KEY") == "service-key"
     assert module._openwebui_service_value("WEBUI_ADMIN_EMAIL") == "admin@example"
+
+
+def test_computer_helpers_env_shape_and_missing_plist(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    env_path = tmp_path / "cptr" / "service.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("CPTR_DATA_DIR=/tmp\nOPENWEBUI_COMPUTER_PORT=8124\n")
+    script = (
+        f"HOME={tmp_path!s}; export HOME; source {helper!s}; "
+        f"openwebui_computer_service_env_sync {env_path!s}; "
+        f"test -s {env_path!s}; grep -q '^CPTR_DATA_DIR=' {env_path!s}; "
+        "openwebui_computer_service_start"
+    )
+    result = subprocess.run(["bash", "-c", script], capture_output=True)
+    assert result.returncode == 1
+    assert "CPTR_DATA_DIR=" in env_path.read_text()
+    assert "OPENWEBUI_COMPUTER_PORT=8124" in env_path.read_text()
+
+
+def test_configure_all_subgate_cleanup_blocks_are_siblings():
+    source = (
+        Path(__file__).resolve().parents[3] / "scripts/configure-all.sh"
+    ).read_text()
+    terminal_start = source.index('if [[ "${DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP')
+    computer_start = source.index(
+        'if [[ "${DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP', terminal_start
+    )
+    terminal_close = source.rfind("\n  fi", terminal_start, computer_start)
+    assert terminal_close > terminal_start
+    assert computer_start > terminal_close
+    assert "openwebui_terminal_service_stop" in source[terminal_start:computer_start]
+    assert "openwebui_computer_service_stop" in source[computer_start:]
+    assert {(False, False), (False, True), (True, False), (True, True)} == {
+        (False, False),
+        (False, True),
+        (True, False),
+        (True, True),
+    }

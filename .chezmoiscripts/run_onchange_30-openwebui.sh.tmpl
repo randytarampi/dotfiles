@@ -15,6 +15,7 @@ source "${LIB_DIR}/openwebui_service.sh"
 # env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
 # terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
+# computer fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_COMPUTER_VERSION" | default "0.9.21" }}:{{ env "OPENWEBUI_COMPUTER_PORT" | default "8124" }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-openwebui.py"
@@ -37,6 +38,9 @@ if [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]]; then
   launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
   rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
   pkill -f "$HOME/.local/share/openwebui/venv/bin/open-terminal" 2>/dev/null || true
+  launchctl bootout "$(openwebui_computer_service_domain)/com.openwebui.computer" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/com.openwebui.computer.plist"
+  pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — removed Open WebUI LaunchAgent; preserved data"
   exit 0
 fi
@@ -144,33 +148,32 @@ if [[ "$TERMINAL_GATE" != "1" ]]; then
   rm -f "$HOME/Library/LaunchAgents/com.openwebui.terminal.plist"
   pkill -f "$VENV_DIR/bin/open-terminal" 2>/dev/null || true
   info "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP='$TERMINAL_GATE' — skipping Open Terminal; preserved workspace and key material"
-  exit 0
-fi
-
-TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.0}"
-if ! "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}"; then
-  warn "Open Terminal install failed; retrying once"
-  sleep 2
-  "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}" || die "Failed to install open-terminal==${TERMINAL_VERSION}"
-fi
-TERMINAL_HOME="$OPENWEBUI_HOME"
-TERMINAL_WORKSPACE="$TERMINAL_HOME/terminal-workspace"
-TERMINAL_LOG_DIR="$TERMINAL_HOME/logs"
-TERMINAL_ENV="$TERMINAL_HOME/terminal.env"
-TERMINAL_CONFIG="$TERMINAL_HOME/terminal.toml"
-mkdir -p "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
-chmod 700 "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
-openwebui_terminal_service_env_sync "$TERMINAL_ENV" || warn "Failed to reconcile Open Terminal service.env"
-# shellcheck disable=SC1090
-source "$TERMINAL_ENV"
-cat >"$TERMINAL_CONFIG" <<EOF
+else
+  # No exit on gate-off: the cptr section below has its own independent sub-gate.
+  TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.0}"
+  if ! "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}"; then
+    warn "Open Terminal install failed; retrying once"
+    sleep 2
+    "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}" || die "Failed to install open-terminal==${TERMINAL_VERSION}"
+  fi
+  TERMINAL_HOME="$OPENWEBUI_HOME"
+  TERMINAL_WORKSPACE="$TERMINAL_HOME/terminal-workspace"
+  TERMINAL_LOG_DIR="$TERMINAL_HOME/logs"
+  TERMINAL_ENV="$TERMINAL_HOME/terminal.env"
+  TERMINAL_CONFIG="$TERMINAL_HOME/terminal.toml"
+  mkdir -p "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
+  chmod 700 "$TERMINAL_WORKSPACE" "$TERMINAL_LOG_DIR"
+  openwebui_terminal_service_env_sync "$TERMINAL_ENV" || warn "Failed to reconcile Open Terminal service.env"
+  # shellcheck disable=SC1090
+  source "$TERMINAL_ENV"
+  cat >"$TERMINAL_CONFIG" <<EOF
 host = "127.0.0.1"
 port = ${OPENWEBUI_TERMINAL_PORT:-8123}
 file_browser_root = "${OPEN_TERMINAL_FILE_BROWSER_ROOT}"
 EOF
-chmod 600 "$TERMINAL_CONFIG"
-TERMINAL_PLIST="$(openwebui_terminal_service_plist)"
-cat >"$TERMINAL_PLIST" <<EOF
+  chmod 600 "$TERMINAL_CONFIG"
+  TERMINAL_PLIST="$(openwebui_terminal_service_plist)"
+  cat >"$TERMINAL_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -191,31 +194,97 @@ cat >"$TERMINAL_PLIST" <<EOF
 </dict>
 </plist>
 EOF
-chmod 600 "$TERMINAL_PLIST"
-if ! openwebui_terminal_service_start; then
-  warn "${OPENWEBUI_TERMINAL_SERVICE_ERROR:-Failed to start Open Terminal}"
-else
-  terminal_port="${OPENWEBUI_TERMINAL_PORT:-8123}"
-  terminal_healthy=0
-  terminal_identity=0
-  for _ in {1..15}; do
-    if curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/health" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/" >/dev/null 2>&1; then
-      terminal_healthy=1
-      break
+  chmod 600 "$TERMINAL_PLIST"
+  if ! openwebui_terminal_service_start; then
+    warn "${OPENWEBUI_TERMINAL_SERVICE_ERROR:-Failed to start Open Terminal}"
+  else
+    terminal_port="${OPENWEBUI_TERMINAL_PORT:-8123}"
+    terminal_healthy=0
+    terminal_identity=0
+    for _ in {1..15}; do
+      if curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/health" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/" >/dev/null 2>&1; then
+        terminal_healthy=1
+        break
+      fi
+      sleep 2
+    done
+    if [[ "$terminal_healthy" != "1" ]]; then
+      warn "Open Terminal is not healthy yet; continuing fail-soft"
+    else
+      openapi_json="$(curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/openapi.json" 2>/dev/null || true)"
+      if printf '%s' "$openapi_json" | python3 -c 'import json, sys; d=json.load(sys.stdin); info=d.get("info", {}); title=str(info.get("title", "")).lower(); description=str(info.get("description", "")).lower(); raise SystemExit(0 if title == "open terminal" or "remote terminal api" in description else 1)' 2>/dev/null; then
+        terminal_identity=1
+      else
+        warn "Open Terminal identity was not confirmed from /openapi.json; skipping registration"
+      fi
     fi
+    if [[ "$terminal_identity" == "1" && -f "$CONFIGURE_SCRIPT" ]]; then
+      "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Open Terminal registration failed"
+    fi
+  fi
+fi
+
+# Open WebUI Computer is a separate SSH-equivalent, full-host runtime. It is
+# never exposed through Caddy and is deliberately not registered as a provider.
+COMPUTER_GATE="${DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP:-0}"
+if [[ "$COMPUTER_GATE" != "1" ]]; then
+  openwebui_computer_service_stop
+  rm -f "$HOME/Library/LaunchAgents/com.openwebui.computer.plist"
+  pkill -f "$HOME/.local/share/cptr/venv/bin/cptr" 2>/dev/null || true
+  info "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP='$COMPUTER_GATE' — skipping cptr; preserved data and venv"
+  exit 0
+fi
+
+CPTR_HOME="$HOME/.local/share/cptr"
+CPTR_VENV="$CPTR_HOME/venv"
+CPTR_DATA_DIR="$CPTR_HOME/data"
+CPTR_LOG_DIR="$CPTR_HOME/logs"
+CPTR_SERVICE_ENV="$CPTR_HOME/service.env"
+CPTR_VERSION="${DOTFILES_OPENWEBUI_COMPUTER_VERSION:-0.9.21}"
+CPTR_PYTHON=""
+for candidate in python3.11 python3.12; do
+  if command -v "$candidate" >/dev/null 2>&1; then CPTR_PYTHON="$(command -v "$candidate")"; break; fi
+done
+[[ -n "$CPTR_PYTHON" ]] || die "cptr requires python3.11 or python3.12"
+if [[ ! -x "$CPTR_VENV/bin/python" ]]; then
+  mkdir -p "$CPTR_HOME"
+  "$CPTR_PYTHON" -m venv "$CPTR_VENV" || die "Failed to create cptr virtual environment"
+fi
+if ! "$CPTR_VENV/bin/python" -m pip install -q "cptr==${CPTR_VERSION}"; then
+  warn "cptr install failed; retrying once"
+  sleep 2
+  "$CPTR_VENV/bin/python" -m pip install -q "cptr==${CPTR_VERSION}" || die "Failed to install cptr==${CPTR_VERSION}"
+fi
+mkdir -p "$CPTR_DATA_DIR" "$CPTR_LOG_DIR"
+chmod 700 "$CPTR_DATA_DIR" "$CPTR_LOG_DIR"
+openwebui_computer_service_env_sync "$CPTR_SERVICE_ENV" || die "Failed to reconcile cptr service.env"
+# shellcheck disable=SC1090
+source "$CPTR_SERVICE_ENV"
+CPTR_PLIST="$(openwebui_computer_service_plist)"
+cat >"$CPTR_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.openwebui.computer</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string><string>-c</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$CPTR_VENV/bin" CPTR_DATA_DIR="$CPTR_DATA_DIR" OPENWEBUI_COMPUTER_PORT="${OPENWEBUI_COMPUTER_PORT:-8124}" /bin/bash --noprofile --norc -c 'exec "$CPTR_VENV/bin/cptr" run --host 127.0.0.1 --port "\${OPENWEBUI_COMPUTER_PORT:-8124}" --headless'</string>
+  </array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$CPTR_LOG_DIR/computer.log</string>
+  <key>StandardErrorPath</key><string>$CPTR_LOG_DIR/computer.log</string>
+</dict></plist>
+EOF
+chmod 600 "$CPTR_PLIST"
+if ! openwebui_computer_service_start; then
+  warn "${OPENWEBUI_COMPUTER_SERVICE_ERROR:-Failed to start cptr}"
+else
+  cptr_port="${OPENWEBUI_COMPUTER_PORT:-8124}"
+  cptr_healthy=0
+  for _ in {1..15}; do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${cptr_port}/api/health" >/dev/null 2>&1; then cptr_healthy=1; break; fi
     sleep 2
   done
-  if [[ "$terminal_healthy" != "1" ]]; then
-    warn "Open Terminal is not healthy yet; continuing fail-soft"
-  else
-    openapi_json="$(curl -fsS --max-time 3 "http://127.0.0.1:${terminal_port}/openapi.json" 2>/dev/null || true)"
-    if printf '%s' "$openapi_json" | python3 -c 'import json, sys; d=json.load(sys.stdin); info=d.get("info", {}); title=str(info.get("title", "")).lower(); description=str(info.get("description", "")).lower(); raise SystemExit(0 if title == "open terminal" or "remote terminal api" in description else 1)' 2>/dev/null; then
-      terminal_identity=1
-    else
-      warn "Open Terminal identity was not confirmed from /openapi.json; skipping registration"
-    fi
-  fi
-  if [[ "$terminal_identity" == "1" && -f "$CONFIGURE_SCRIPT" ]]; then
-    "$CONFIGURE_SCRIPT" --reconcile-terminal || warn "Open Terminal registration failed"
-  fi
+  [[ "$cptr_healthy" == "1" ]] || warn "cptr is not healthy yet; first-launch setup URL remains in computer.log"
+  info "cptr provider exposure is deliberately OFF; create its gateway key and Open WebUI connection manually only after a separate security decision"
 fi

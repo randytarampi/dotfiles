@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import plistlib
+import shlex
 from pathlib import Path
 from typing import Optional
 
@@ -881,6 +882,149 @@ def main():
         exit_code = 1
     else:
         print("  \u2298 Open Terminal (main/sub-gate disabled, LaunchAgent absent)")
+
+    computer_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP", "0") == "1"
+    )
+    computer_root = HOME / ".local/share/cptr"
+    computer_plist = HOME / "Library/LaunchAgents/com.openwebui.computer.plist"
+    computer_venv = computer_root / "venv/bin/cptr"
+    computer_data = computer_root / "data"
+    computer_env = computer_root / "service.env"
+    if computer_gate:
+        for path, label in (
+            (computer_venv, "cptr executable"),
+            (computer_data, "cptr data directory"),
+            (computer_env, "cptr service env"),
+            (computer_plist, "cptr LaunchAgent"),
+        ):
+            if not path.exists():
+                print(f"  \u2717 {label}: MISSING {path}")
+                exit_code = 1
+        if not (computer_venv.is_file() and os.access(computer_venv, os.X_OK)):
+            print(f"  \u2717 cptr executable: not executable {computer_venv}")
+            exit_code = 1
+        if computer_data.exists() and (computer_data.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 cptr data directory: expected mode 0o700")
+            exit_code = 1
+        if computer_env.is_file() and (computer_env.stat().st_mode & 0o777) != 0o600:
+            print("  \u2717 cptr service env: expected mode 0o600")
+            exit_code = 1
+        computer_logs = computer_root / "logs"
+        if not computer_logs.is_dir():
+            print(
+                "  \u2717 cptr logs directory: missing (may hold token-bearing setup log)"
+            )
+            exit_code = 1
+        elif (computer_logs.stat().st_mode & 0o777) != 0o700:
+            print("  \u2717 cptr logs directory: expected mode 0o700")
+            exit_code = 1
+        expected_cptr_data = str(computer_root / "data")
+        expected_cptr_port = os.environ.get("OPENWEBUI_COMPUTER_PORT", "8124")
+        if computer_env.is_file():
+            env_values = {}
+            for line in computer_env.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    env_values[key] = value.strip().strip("'\"")
+            if set(env_values) != {"CPTR_DATA_DIR", "OPENWEBUI_COMPUTER_PORT"}:
+                print("  \u2717 cptr service env: unexpected key names")
+                exit_code = 1
+            if env_values.get("CPTR_DATA_DIR") != expected_cptr_data:
+                print("  \u2717 cptr service env: CPTR_DATA_DIR is not isolated")
+                exit_code = 1
+            if env_values.get("OPENWEBUI_COMPUTER_PORT") != expected_cptr_port:
+                print("  \u2717 cptr service env: OPENWEBUI_COMPUTER_PORT drift")
+                exit_code = 1
+        if computer_plist.is_file():
+            plist_mode = computer_plist.stat().st_mode & 0o777
+            plist_text = computer_plist.read_text(encoding="utf-8")
+            if plist_mode != 0o600:
+                print("  \u2717 cptr plist: expected mode 0o600")
+                exit_code = 1
+            if any(
+                name in plist_text
+                for name in (
+                    "OPENAI_API_KEY",
+                    "ANTHROPIC_API_KEY",
+                    "WEBUI_SECRET_KEY",
+                    "GEMINI_",
+                    "GOOGLE_",
+                    "OPENROUTER_",
+                    "MERIDIAN_",
+                    "OLLAMA_API",
+                    "GITHUB",
+                    "GH_",
+                )
+            ):
+                print("  \u2717 cptr plist: provider secret present")
+                exit_code = 1
+            if re.search(r"sk-[A-Za-z0-9_-]+", plist_text):
+                print("  \u2717 cptr plist: sk- credential present")
+                exit_code = 1
+            if (
+                "CPTR_DATA_DIR=" not in plist_text
+                or "OPENWEBUI_COMPUTER_PORT=" not in plist_text
+                or "env -i" not in plist_text
+                or "--noprofile --norc" not in plist_text
+                or "bash -lc" in plist_text
+            ):
+                print("  \u2717 cptr plist: unsafe or incomplete scrubbed wrapper")
+                exit_code = 1
+            try:
+                plist = plistlib.loads(plist_text.encode())
+                if "EnvironmentVariables" in plist:
+                    print("  \u2717 cptr plist: EnvironmentVariables must be absent")
+                    exit_code = 1
+                arguments = " ".join(
+                    str(item) for item in plist.get("ProgramArguments", [])
+                )
+                if (
+                    "--host 127.0.0.1" not in arguments
+                    or "--headless" not in arguments
+                    or "--reload" in arguments
+                ):
+                    print("  \u2717 cptr plist: launch contract mismatch")
+                    exit_code = 1
+                env_match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not env_match:
+                    print("  \u2717 cptr plist: env-i allowlist missing")
+                    exit_code = 1
+                else:
+                    env_tokens = shlex.split(env_match.group(1))
+                    env_values = {
+                        token.split("=", 1)[0]: token.split("=", 1)[1]
+                        for token in env_tokens
+                        if "=" in token
+                    }
+                    env_keys = set(env_values)
+                    if env_keys != {
+                        "HOME",
+                        "PATH",
+                        "CPTR_DATA_DIR",
+                        "OPENWEBUI_COMPUTER_PORT",
+                    }:
+                        print(
+                            "  \u2717 cptr plist: wrapper environment allowlist mismatch"
+                        )
+                        exit_code = 1
+                    if env_values.get("CPTR_DATA_DIR") != expected_cptr_data:
+                        print("  \u2717 cptr plist: CPTR_DATA_DIR is not isolated")
+                        exit_code = 1
+                    if env_values.get("OPENWEBUI_COMPUTER_PORT") != expected_cptr_port:
+                        print("  \u2717 cptr plist: wrapper port drift")
+                        exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 cptr plist: invalid property list")
+                exit_code = 1
+    elif computer_plist.exists():
+        print(
+            f"  \u2717 cptr LaunchAgent remains while sub-gate is off: {computer_plist}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
