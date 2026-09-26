@@ -46,6 +46,8 @@ Never run two write-capable subagent lanes that commit concurrently to one repos
 
 Dispatch background specialists before ending a turn when user input may arrive: a foreground or in-turn dispatch loses in-flight specialist work when the turn is interrupted. After an interruption, verify the repository's tip and dirty state directly before re-dispatching (a specialist's stashes and partial commits are recoverable only after verification — three incidents on 2026-09-22).
 
+Verify a specialist's file-change report by reading the touched files before reconciling a phase — completion summaries can misattribute work, report a different phase's content, or overstate what landed (five incidents on 2026-09-26 during the Open WebUI integration; a `git status --porcelain` + targeted grep of the claimed files settles it in seconds). When a report and the tree disagree, trust the tree.
+
 ### Third-party tool claims
 
 Before building on a third-party tool's documented behaviour (env vars, config keys, CLI flags), verify it locally with the tool's own introspection (`--help`, `dump-config`, `config show`, a scratch-directory probe) — research claims can be wrong or version-stale, and a two-minute probe beats a wrong implementation (2026-09-22: chezmoi silently ignores `CHEZMOI_CONFIG`; qlty silently ignores `qlty.toml` `[[plugin]] exclude_patterns` — bandit scoping belongs in `.bandit`, which the driver actually reads).
