@@ -120,6 +120,9 @@ openwebui_terminal_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/openwebui/terminal.env}"
   local terminal_home
   local OPEN_TERMINAL_API_KEY="" OPEN_TERMINAL_FILE_BROWSER_ROOT="" OPENWEBUI_TERMINAL_PORT=""
+  # WEBUI_*/OPENWEBUI_PORT are captured from ~/.env when present; declare
+  # them so sparse environments don't trip set -u on the capture lines.
+  local WEBUI_SECRET_KEY="" WEBUI_ADMIN_EMAIL="" WEBUI_ADMIN_PASSWORD="" OPENWEBUI_API_KEY="" OPENWEBUI_PORT=""
   local tmp
   terminal_home="$(dirname "$service_env")"
   mkdir -p "$terminal_home"
@@ -128,11 +131,11 @@ openwebui_terminal_service_env_sync() {
     # shellcheck disable=SC1091
     source "$HOME/.env"
   fi
-  env_WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY"
-  env_WEBUI_ADMIN_EMAIL="$WEBUI_ADMIN_EMAIL"
-  env_WEBUI_ADMIN_PASSWORD="$WEBUI_ADMIN_PASSWORD"
-  env_OPENWEBUI_API_KEY="$OPENWEBUI_API_KEY"
-  env_OPENWEBUI_PORT="$OPENWEBUI_PORT"
+  env_WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
+  env_WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-}"
+  env_WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
+  env_OPENWEBUI_API_KEY="${OPENWEBUI_API_KEY:-}"
+  env_OPENWEBUI_PORT="${OPENWEBUI_PORT:-}"
   if [[ -f "$service_env" ]]; then
     # shellcheck disable=SC1090
     source "$service_env"

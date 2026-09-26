@@ -83,10 +83,9 @@ def get_bind_ip() -> str:
 
 def resolve_tls_for_local_domains(brew_prefix: str) -> str:
     """Use real acme.sh cert if available, else tls internal."""
-    cert_fullchain = str(
-        Path(brew_prefix) / "etc" / "caddy" / "certs" / "fullchain.pem"
-    )
-    cert_key = str(Path(brew_prefix) / "etc" / "caddy" / "certs" / "key.pem")
+    cert_root = Path(brew_prefix) / "etc" if sys.platform == "darwin" else Path("/etc")
+    cert_fullchain = str(cert_root / "caddy" / "certs" / "fullchain.pem")
+    cert_key = str(cert_root / "caddy" / "certs" / "key.pem")
     if Path(cert_fullchain).exists() and Path(cert_key).exists():
         return f"tls {cert_fullchain} {cert_key}"
     return "tls internal"
@@ -583,10 +582,9 @@ def main() -> None:
             or "~/.plannotator/portal"
         )
     )
-    cert_fullchain = str(
-        Path(brew_prefix) / "etc" / "caddy" / "certs" / "fullchain.pem"
-    )
-    cert_key = str(Path(brew_prefix) / "etc" / "caddy" / "certs" / "key.pem")
+    cert_root = Path(brew_prefix) / "etc" if sys.platform == "darwin" else Path("/etc")
+    cert_fullchain = str(cert_root / "caddy" / "certs" / "fullchain.pem")
+    cert_key = str(cert_root / "caddy" / "certs" / "key.pem")
     local_domain_tls_line = resolve_tls_for_local_domains(brew_prefix)
 
     try:
