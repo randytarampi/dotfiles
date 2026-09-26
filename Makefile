@@ -331,10 +331,10 @@ openwebui-computer-restart: openwebui-computer-stop openwebui-computer-start ## 
 # LiteLLM is an independent loopback gateway and intentionally does not join services-restart.
 litellm-start: ## Start LiteLLM gateway
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]; then echo "LiteLLM gate is off — skipping"; exit 0; fi; \
-	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_start; fi
+	if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_start; elif [ "$$(uname)" = "Linux" ]; then systemctl --user start litellm.service 2>/dev/null || echo "systemd user session unavailable — skipping"; fi
 
 litellm-stop: ## Stop LiteLLM gateway
-	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; fi
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop litellm.service 2>/dev/null || true; fi
 
 litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
 

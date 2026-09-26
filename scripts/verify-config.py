@@ -1274,8 +1274,9 @@ def main():
                 # The deployed timer invokes make in the *deployed* checkout
                 # (chezmoi source dir), which can differ from the checkout
                 # running this verifier — resolve it via chezmoi, falling back
-                # to this file's checkout.
-                repo_path = None
+                # to this file's checkout. Accept EITHER path: a worktree-
+                # generated plist legitimately points at this checkout.
+                repo_paths = []
                 chezmoi_bin = shutil.which("chezmoi")
                 if chezmoi_bin:
                     # Fixed-argument invocation of a resolved binary with no
@@ -1286,12 +1287,13 @@ def main():
                         text=True,
                     )
                     if probe.returncode == 0 and probe.stdout.strip():
-                        repo_path = probe.stdout.strip()
-                if not repo_path:
-                    repo_path = str(Path(__file__).resolve().parent.parent)
+                        repo_paths.append(probe.stdout.strip())
+                local_checkout = str(Path(__file__).resolve().parent.parent)
+                if local_checkout not in repo_paths:
+                    repo_paths.append(local_checkout)
                 if (
                     "openwebui-backup" not in arguments
-                    or repo_path not in arguments
+                    or not any(p in arguments for p in repo_paths)
                     or log_path not in timer_text
                 ):
                     print(

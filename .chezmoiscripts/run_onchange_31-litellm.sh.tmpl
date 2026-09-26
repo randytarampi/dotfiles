@@ -65,10 +65,10 @@ Description=LiteLLM proxy gateway
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source "$SERVICE_ENV"; set +a; exec "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" --num_workers 1'
+ExecStart=/usr/bin/env -i HOME=%h PATH=/usr/bin:/bin:%h/.local/share/litellm/venv/bin /bin/bash --noprofile --norc -c 'set -a; source "$LITELLM_HOME/service.env"; set +a; exec "$LITELLM_HOME/venv/bin/litellm" --config "$LITELLM_HOME/config.yaml" --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" --num_workers 1'
 Restart=on-failure
-StandardOutput=append:$LOGS/proxy.log
-StandardError=append:$LOGS/proxy.log
+StandardOutput=append:$LITELLM_HOME/logs/proxy.log
+StandardError=append:$LITELLM_HOME/logs/proxy.log
 EOF
   if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
     systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
