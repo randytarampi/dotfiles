@@ -47,7 +47,11 @@ def get_brew_prefix() -> Optional[Path]:
 
 
 BREW_PREFIX = get_brew_prefix()
-CADDY_CHECK_PATHS = [BREW_PREFIX / "etc/caddy/Caddyfile"] if BREW_PREFIX else []
+CADDY_CHECK_PATHS = (
+    [BREW_PREFIX / "etc/caddy/Caddyfile"]
+    if sys.platform == "darwin" and BREW_PREFIX
+    else [Path("/etc/caddy/Caddyfile")] if sys.platform != "darwin" else []
+)
 
 
 def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
@@ -758,7 +762,8 @@ def main():
                 f"  \u2717 Open WebUI logs directory: mode {oct(logs_dir.stat().st_mode & 0o777)} (expected 0o700)"
             )
             exit_code = 1
-        caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
+        caddy_gate = os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") == "1"
+        caddyfile = CADDY_CHECK_PATHS[0] if caddy_gate and CADDY_CHECK_PATHS else None
         if caddyfile and caddyfile.exists():
             caddy_text = caddyfile.read_text(encoding="utf-8")
             port = os.environ.get("OPENWEBUI_PORT", "8080")
@@ -795,8 +800,13 @@ def main():
                 )
                 exit_code = 1
         else:
-            print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
-            exit_code = 1
+            if caddy_gate and sys.platform == "darwin":
+                print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
+                exit_code = 1
+            else:
+                print(
+                    "  \u2298 Open WebUI Caddy site (Caddyfile unavailable on this platform)"
+                )
     else:
         wrong_platform_service = (
             openwebui_plist if sys.platform == "darwin" else openwebui_unit
@@ -1068,15 +1078,17 @@ def main():
     litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
+    litellm_unit = HOME / ".config/systemd/user/litellm.service"
     expected_litellm_port = os.environ.get("LITELLM_PORT", "4000")
     if litellm_gate:
+        service_artifact = litellm_plist if sys.platform == "darwin" else litellm_unit
         litellm_paths = [
             (litellm_root / "venv/bin/litellm", "LiteLLM executable"),
             (litellm_root / "config.yaml", "LiteLLM config"),
             (litellm_root / "service.env", "LiteLLM service env"),
             (litellm_root / "data", "LiteLLM data directory"),
             (litellm_root / "logs", "LiteLLM logs directory"),
-            (litellm_plist, "LiteLLM LaunchAgent"),
+            (service_artifact, "LiteLLM service artifact"),
         ]
         for path, label in litellm_paths:
             if not path.exists():
@@ -1132,7 +1144,7 @@ def main():
             ):
                 print("  \u2717 LiteLLM config: telemetry/master-key policy mismatch")
                 exit_code = 1
-        if litellm_plist.is_file():
+        if sys.platform == "darwin" and litellm_plist.is_file():
             plist_mode = litellm_plist.stat().st_mode & 0o777
             plist_text = litellm_plist.read_text(encoding="utf-8")
             if (
@@ -1185,7 +1197,16 @@ def main():
             except (OSError, plistlib.InvalidFileException, ValueError):
                 print("  \u2717 LiteLLM plist: invalid property list")
                 exit_code = 1
-    elif litellm_plist.exists():
+        if sys.platform != "darwin" and litellm_unit.is_file():
+            unit_text = litellm_unit.read_text(encoding="utf-8")
+            if (
+                "env -i" not in unit_text
+                or "--noprofile --norc" not in unit_text
+                or "LITELLM_MASTER_KEY" in unit_text
+            ):
+                print("  \u2717 LiteLLM systemd unit: service contract mismatch")
+                exit_code = 1
+    elif (litellm_plist if sys.platform == "darwin" else litellm_unit).exists():
         print(
             f"  \u2717 LiteLLM LaunchAgent remains while gate is off: {litellm_plist}"
         )

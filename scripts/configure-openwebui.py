@@ -567,9 +567,15 @@ def main():
         api_key = os.environ.get(
             "OPENWEBUI_API_KEY", ""
         ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
-        if not api_key:
+        admin_email = os.environ.get(
+            "WEBUI_ADMIN_EMAIL", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_EMAIL")
+        admin_password = os.environ.get(
+            "WEBUI_ADMIN_PASSWORD", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_PASSWORD")
+        if not api_key and not (admin_email and admin_password):
             logger.warning(
-                "OPENWEBUI_API_KEY is absent; skipping terminal registration"
+                "OPENWEBUI_API_KEY and admin credentials are absent; skipping terminal registration"
             )
             return 0
         base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
@@ -577,10 +583,8 @@ def main():
             base_url,
             api_key,
             admin_credentials={
-                "email": os.environ.get("WEBUI_ADMIN_EMAIL", "")
-                or _openwebui_service_value("WEBUI_ADMIN_EMAIL"),
-                "password": os.environ.get("WEBUI_ADMIN_PASSWORD", "")
-                or _openwebui_service_value("WEBUI_ADMIN_PASSWORD"),
+                "email": admin_email,
+                "password": admin_password,
             },
         )
         if not client.health_check():
@@ -596,8 +600,16 @@ def main():
         api_key = os.environ.get(
             "OPENWEBUI_API_KEY", ""
         ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
-        if not api_key:
-            logger.warning("OPENWEBUI_API_KEY is absent; skipping MCP registration")
+        admin_email = os.environ.get(
+            "WEBUI_ADMIN_EMAIL", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_EMAIL")
+        admin_password = os.environ.get(
+            "WEBUI_ADMIN_PASSWORD", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_PASSWORD")
+        if not api_key and not (admin_email and admin_password):
+            logger.warning(
+                "OPENWEBUI_API_KEY and admin credentials are absent; skipping MCP registration"
+            )
             return 0
         base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
         client = OpenWebUIClient(
@@ -616,9 +628,15 @@ def main():
         api_key = os.environ.get(
             "OPENWEBUI_API_KEY", ""
         ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
-        if not api_key:
+        admin_email = os.environ.get(
+            "WEBUI_ADMIN_EMAIL", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_EMAIL")
+        admin_password = os.environ.get(
+            "WEBUI_ADMIN_PASSWORD", ""
+        ) or _openwebui_service_value("WEBUI_ADMIN_PASSWORD")
+        if not api_key and not (admin_email and admin_password):
             logger.warning(
-                "OPENWEBUI_API_KEY is absent; skipping catalogue reconciliation"
+                "OPENWEBUI_API_KEY and admin credentials are absent; skipping catalogue reconciliation"
             )
             return 0
         client = OpenWebUIClient(
