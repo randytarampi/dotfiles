@@ -332,6 +332,34 @@ LiteLLM's database-less auth path (a prisma `ModuleNotFoundError`) rather than
 a clean 401; valid master-key requests short-circuit before that path.
 Loopback-only binding limits exposure.
 
+#### Platform completion (Phase 4f)
+
+Streamable-HTTP MCP registration uses Open WebUI's verified admin tool-server
+API (`/api/v1/configs/tool_servers`) for qualifying `configs/mcp/*.json` URL
+entries; stdio/SSE entries remain excluded. Curated cloud model defaults,
+pinned models, and ordering are reconciled through the verified
+`/api/v1/configs/models` admin API from the repo allowlists.
+The optional daily backup timer retains the newest five local snapshots;
+off-machine export is intentionally out of scope. Linux gets a systemd user
+unit for the chat service following the repo's existing user-unit patterns;
+terminal/cptr remain macOS-priority
+integrations. No new Caddy routes are introduced.
+
+Two security notes for MCP registration (accepted, documented boundaries):
+
+1. **Credential persistence:** resolved MCP auth headers (e.g. `Bearer
+   ${GH_TOKEN}` expanded from `~/.env`) are stored server-side in Open
+   WebUI's config-table database via the admin API — the same durability
+   class as connection credentials. Consequently, `make openwebui-backup`
+   snapshots contain these credentials; handle backup archives with the same
+   care as secret material.
+2. **Remote MCP = trusted data-egress/tool-execution boundary:** registering
+   a remote MCP server grants it prompt-driven tool execution and data
+   egress per its own contract (the prompt-to-data-exfiltration path this
+   integration accepts deliberately). Only registry-vetted Streamable-HTTP
+   servers from `configs/mcp/*.json` are registered; servers whose
+   credentials are absent are skipped.
+
 ### Operations snapshot (from upstream docs, Sept 2026)
 
 - Default SQLite + local ChromaDB is fine for one user; **not** for network

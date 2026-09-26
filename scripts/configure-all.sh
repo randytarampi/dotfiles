@@ -520,6 +520,8 @@ elif ! step_skipped openwebui && [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" 
     run_step "Open WebUI service restart" openwebui_service_restart
   fi
   run_step "Open WebUI reconciliation" python3 "$SCRIPT_DIR/configure-openwebui.py"
+  run_step "Open WebUI MCP registration" python3 "$SCRIPT_DIR/configure-openwebui.py" --reconcile-mcp
+  run_step "Open WebUI catalogue reconciliation" python3 "$SCRIPT_DIR/configure-openwebui.py" --reconcile-catalogue
   if [[ "${DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP:-0}" != "1" ]]; then
     DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP=0 run_step "Open Terminal registration removal" python3 "$SCRIPT_DIR/configure-openwebui.py" --reconcile-terminal
     if [[ "$(uname)" == "Darwin" ]]; then
