@@ -1,6 +1,6 @@
 # Unified Multi-Provider Chat Frontend (Open WebUI)
 
-> **Status: implemented (Phase 4a/4b).** This document is the research-backed design
+> **Status: implemented (Phases 4a–4f).** This document is the research-backed design
 > for a unified chat frontend over the repo's local engines and cloud providers.
 > The reconciler (`scripts/lib/openwebui.py`), configure script
 > (`scripts/configure-openwebui.py`), and deployment wiring
@@ -312,8 +312,11 @@ provider registration is automated.
 
 #### LiteLLM Gateway (Phase 4e)
 
-LiteLLM is a separate, loopback-only OpenAI-compatible gateway on port 4000
-for other local clients; Open WebUI remains directly connected and Mozart
+LiteLLM is an **optional, gate-off-by-default** gateway
+(`DOTFILES_RUN_LITELLM_SETUP`; nothing consumes it unless a client is
+explicitly pointed at it): a separate, loopback-only OpenAI-compatible
+gateway on port 4000 for other local clients; Open WebUI remains directly
+connected and Mozart
 remains the OpenCode-side router. Its pinned config is generated from the repo
 registries and provider keys, with stateless master-key auth and no database:
 virtual keys, budgets, and spend accounting are deliberate non-goals. There is

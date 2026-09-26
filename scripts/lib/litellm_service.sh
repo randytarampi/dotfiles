@@ -69,7 +69,10 @@ litellm_service_env_sync() {
     [[ -n "${OPENROUTER_API_KEY:-}" ]] && printf 'OPENROUTER_API_KEY=%q\n' "$OPENROUTER_API_KEY"
   } >"$tmp"
   chmod 600 "$tmp"
-  if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then rm -f "$tmp"; else mv "$tmp" "$service_env"; fi
+  if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    chmod 600 "$service_env"
+    rm -f "$tmp"
+  else mv "$tmp" "$service_env"; fi
 }
 
 litellm_service_stop() { launchctl bootout "$(litellm_service_domain)/com.litellm.proxy" 2>/dev/null || true; }
