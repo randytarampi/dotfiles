@@ -173,8 +173,17 @@ CHECKS = [
     (
         "DOTFILES_RUN_OPENWEBUI_SETUP",
         "Open WebUI deployment",
-        [
-            HOME / "Library/LaunchAgents/com.openwebui.web.plist",
+        # Platform-specific: the LaunchAgent (macOS) or the systemd user unit
+        # (Linux) carries the service contract; the shared venv/data/service-env
+        # paths are common. Full validation lives in the dedicated section below.
+        (
+            [
+                HOME / "Library/LaunchAgents/com.openwebui.web.plist",
+            ]
+            if sys.platform == "darwin"
+            else [HOME / ".config/systemd/user/open-webui.service"]
+        )
+        + [
             HOME / ".local/share/openwebui/venv",
             HOME / ".local/share/openwebui/data",
             HOME / ".local/share/openwebui/logs",
@@ -428,6 +437,12 @@ def main():
 
         all_exist = True
         for path in paths:
+            if (
+                gate == "DOTFILES_RUN_OPENWEBUI_SETUP"
+                and sys.platform != "darwin"
+                and "Library/LaunchAgents/com.openwebui.web.plist" in str(path)
+            ):
+                continue
             if path.exists():
                 # Only the oMLX settings JSON gets schema validation; the
                 # wired-limit LaunchDaemon plist is XML, not JSON.
@@ -632,6 +647,7 @@ def main():
     # Open WebUI deployment artefacts and security modes.
     openwebui_gate = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
     openwebui_plist = HOME / "Library/LaunchAgents/com.openwebui.web.plist"
+    openwebui_unit = HOME / ".config/systemd/user/open-webui.service"
     openwebui_root = HOME / ".local/share/openwebui"
     openwebui_mode_checks = [
         (openwebui_root / "data", "Open WebUI data directory"),
@@ -722,6 +738,20 @@ def main():
             except (OSError, plistlib.InvalidFileException, ValueError):
                 print("  \u2717 Open WebUI plist: invalid property list")
                 exit_code = 1
+        if sys.platform != "darwin":
+            if not openwebui_unit.is_file():
+                print(f"  \u2717 Open WebUI systemd unit: MISSING {openwebui_unit}")
+                exit_code = 1
+            else:
+                unit_text = openwebui_unit.read_text(encoding="utf-8")
+                if (
+                    "DATA_DIR=" not in unit_text
+                    or "--noprofile --norc" not in unit_text
+                    or "env -i" not in unit_text
+                    or "WEBUI_SECRET_KEY" in unit_text
+                ):
+                    print("  \u2717 Open WebUI systemd unit: service contract mismatch")
+                    exit_code = 1
         logs_dir = openwebui_root / "logs"
         if logs_dir.exists() and (logs_dir.stat().st_mode & 0o777) != 0o700:
             print(
@@ -768,9 +798,12 @@ def main():
             print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
             exit_code = 1
     else:
-        if openwebui_plist.exists():
+        wrong_platform_service = (
+            openwebui_plist if sys.platform == "darwin" else openwebui_unit
+        )
+        if wrong_platform_service.exists():
             print(
-                f"  \u2717 Open WebUI LaunchAgent remains while gate is off: {openwebui_plist}"
+                f"  \u2717 Open WebUI service remains while gate is off: {wrong_platform_service}"
             )
             exit_code = 1
         else:
@@ -1153,6 +1186,67 @@ def main():
         exit_code = 1
     else:
         print("  \u2298 LiteLLM (gate disabled, LaunchAgent absent)")
+
+    backup_timer_gate = (
+        openwebui_gate
+        and os.environ.get("DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE", "0") == "1"
+        and sys.platform == "darwin"
+    )
+    backup_timer = HOME / "Library/LaunchAgents/com.dotfiles.openwebui.backup.plist"
+    if backup_timer_gate:
+        if not backup_timer.is_file():
+            print(f"  \u2717 Open WebUI backup timer: MISSING {backup_timer}")
+            exit_code = 1
+        else:
+            timer_mode = backup_timer.stat().st_mode & 0o777
+            if timer_mode != 0o600:
+                print("  \u2717 Open WebUI backup timer: expected mode 0o600")
+                exit_code = 1
+            try:
+                timer = plistlib.loads(
+                    backup_timer.read_text(encoding="utf-8").encode()
+                )
+                interval = timer.get("StartCalendarInterval")
+                if not isinstance(interval, dict) or interval != {
+                    "Hour": 3,
+                    "Minute": 0,
+                }:
+                    print(
+                        "  \u2717 Open WebUI backup timer: expected StartCalendarInterval 03:00 exactly"
+                    )
+                    exit_code = 1
+                if any(
+                    key in timer for key in ("RunAtLoad", "KeepAlive", "StartInterval")
+                ):
+                    print(
+                        "  \u2717 Open WebUI backup timer: continuous-run keys must be absent"
+                    )
+                    exit_code = 1
+                arguments = " ".join(
+                    str(item) for item in timer.get("ProgramArguments", [])
+                )
+                log_path = str(HOME / ".local/share/openwebui/logs/backup-timer.log")
+                timer_text = backup_timer.read_text(encoding="utf-8")
+                repo_path = str(Path(__file__).resolve().parent.parent)
+                if (
+                    "openwebui-backup" not in arguments
+                    or repo_path not in arguments
+                    or log_path not in timer_text
+                ):
+                    print(
+                        "  \u2717 Open WebUI backup timer: program or log contract mismatch"
+                    )
+                    exit_code = 1
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                print("  \u2717 Open WebUI backup timer: invalid property list")
+                exit_code = 1
+    elif backup_timer.exists():
+        print(
+            f"  \u2717 Open WebUI backup timer remains while schedule gate is off: {backup_timer}"
+        )
+        exit_code = 1
+    else:
+        print("  \u2298 Open WebUI backup timer (gate disabled, plist absent)")
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"

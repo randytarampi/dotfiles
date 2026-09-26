@@ -599,6 +599,147 @@ def test_service_env_fallback_reads_admin_credentials(monkeypatch, tmp_path):
     assert module._openwebui_service_value("WEBUI_ADMIN_EMAIL") == "admin@example"
 
 
+def test_mcp_registry_selects_http_and_excludes_stdio_sse(tmp_path):
+    module = _script()
+    (tmp_path / "configs/mcp").mkdir(parents=True)
+    (tmp_path / "configs/mcp/http.json").write_text(
+        '{"name":"http","type":"url","url":"https://example.test/mcp"}'
+    )
+    (tmp_path / "configs/mcp/stdio.json").write_text(
+        '{"name":"stdio","type":"command","command":"tool"}'
+    )
+    (tmp_path / "configs/mcp/sse.json").write_text(
+        '{"name":"sse","type":"url","url":"sse://example.test"}'
+    )
+    selected = module._streamable_mcp_connections(tmp_path)
+    assert [item["info"]["id"] for item in selected] == ["dotfiles-mcp-http"]
+
+
+def test_mcp_registry_resolves_or_skips_header_placeholders(tmp_path, monkeypatch):
+    root = tmp_path / "configs/mcp"
+    root.mkdir(parents=True)
+    (root / "missing.json").write_text(
+        '{"name":"missing","type":"url","url":"https://missing.test/mcp","headers":{"Authorization":"Bearer ${MISSING_MCP_TOKEN}"}}'
+    )
+    (root / "present.json").write_text(
+        '{"name":"present","type":"url","url":"https://present.test/mcp","headers":{"Authorization":"Bearer ${GH_TOKEN}"}}'
+    )
+    monkeypatch.setenv("GH_TOKEN", "token")
+    module = _script()
+    selected = module._streamable_mcp_connections(tmp_path)
+    assert [item["info"]["id"] for item in selected] == ["dotfiles-mcp-present"]
+    assert selected[0]["headers"]["Authorization"] == "Bearer token"
+
+
+def test_mcp_registration_collision_and_clean_preservation(monkeypatch, tmp_path):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    desired = module._streamable_mcp_connections(Path(__file__).resolve().parents[3])
+    assert desired
+
+    class Client:
+        def __init__(self, current):
+            self.current, self.writes = current, 0
+
+        def get_tool_servers_config(self):
+            return {"TOOL_SERVER_CONNECTIONS": self.current}
+
+        def update_tool_servers_config(self, payload):
+            self.current = payload["TOOL_SERVER_CONNECTIONS"]
+            self.writes += 1
+
+    collision = dict(desired[0], url="https://wrong.example")
+    with pytest.raises(openwebui.OpenWebUIError):
+        module._reconcile_mcp(Client([collision]), dry_run=False)
+    unmanaged = {"info": {"id": "admin"}, "url": "https://admin.example"}
+    client = Client([unmanaged] + desired)
+    assert module._reconcile_mcp(client) == 0
+    assert client.writes == 0
+
+
+def test_mcp_removed_registry_state_is_deleted(monkeypatch, tmp_path):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    state = tmp_path / ".local/share/openwebui/data"
+    state.mkdir(parents=True)
+    (state / "managed-mcp.json").write_text(
+        '{"connections":{"dotfiles-mcp-old":"https://old.example"}}'
+    )
+
+    class Client:
+        def __init__(self):
+            self.current = [
+                {"info": {"id": "dotfiles-mcp-old"}, "url": "https://old.example"}
+            ]
+            self.writes = 0
+
+        def get_tool_servers_config(self):
+            return {"TOOL_SERVER_CONNECTIONS": self.current}
+
+        def update_tool_servers_config(self, payload):
+            self.current = payload["TOOL_SERVER_CONNECTIONS"]
+            self.writes += 1
+
+    monkeypatch.setattr(module, "_streamable_mcp_connections", lambda: [])
+    client = Client()
+    assert module._reconcile_mcp(client) == 0
+    assert client.current == [] and client.writes == 1
+
+
+def test_catalogue_reconciliation_is_merge_only(monkeypatch, tmp_path):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    curated = ["openai/gpt-x", "anthropic/claude-y"]
+
+    monkeypatch.setattr(module, "_curated_cloud_models", lambda: curated)
+    live = {"data": [{"id": mid} for mid in curated]}
+
+    class Client:
+        def __init__(self, current):
+            self.current, self.writes = current, 0
+
+        def get_models(self):
+            return live
+
+        def get_models_config(self):
+            return dict(self.current)
+
+        def update_models_config(self, config):
+            self.current = dict(config)
+            self.writes += 1
+
+    user_default = "user-favorite-model"
+    user_pinned = "user-pinned-model,another-pin"
+    user_order = ["user-first", "user-second"]
+    client = Client(
+        {
+            "DEFAULT_MODELS": user_default,
+            "DEFAULT_PINNED_MODELS": user_pinned,
+            "MODEL_ORDER_LIST": list(user_order),
+        }
+    )
+    assert module._reconcile_catalogue(client) == 0
+    assert client.writes == 1
+    # user entries preserved verbatim and FIRST; managed entries appended
+    # (order within the appended set is the reconciler's, not the caller's)
+    assert client.current["DEFAULT_MODELS"].split(",")[0] == user_default
+    assert set(client.current["DEFAULT_MODELS"].split(",")[1:]) == set(curated)
+    assert client.current["DEFAULT_PINNED_MODELS"].split(",")[0] == "user-pinned-model"
+    assert user_order[0] == client.current["MODEL_ORDER_LIST"][0]
+    assert set(curated).issubset(set(client.current["MODEL_ORDER_LIST"]))
+    # idempotent second run: no write
+    assert module._reconcile_catalogue(client) == 0
+    assert client.writes == 1
+    monkeypatch.setattr(module, "_curated_cloud_models", lambda: [])
+    assert module._reconcile_catalogue(client) == 0
+    assert client.writes == 2
+    assert client.current["DEFAULT_MODELS"] == user_default
+    assert client.current["MODEL_ORDER_LIST"] == user_order
+
+
 def test_computer_helpers_env_shape_and_missing_plist(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     env_path = tmp_path / "cptr" / "service.env"
