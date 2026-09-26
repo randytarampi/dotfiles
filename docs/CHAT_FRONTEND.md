@@ -257,13 +257,13 @@ frontend.
     Application session auth is the boundary: initial admin bootstrap via
    `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` (auto-disables signup after
    creating the admin), `ENABLE_SIGNUP=False` thereafter, single-user posture.
-   Open Terminal and Computer start **disabled and unregistered** from the
-   LAN-facing instance; when adopted, they get their own access decision —
-   Open Terminal as a separate localhost-only runtime, Computer as a separately
-   installed application with its own auth — never implicitly reachable
-   through the Caddy-exposed chat instance. "Localhost-only" (loopback) and
-   "private network" (Tailscale/LAN) are distinct exposure modes and never
-   conflated.
+    Open Terminal is explicitly registered into the LAN-facing chat instance
+    under the user-authorized application-authenticated LAN boundary; its UX
+    lives inside the chat UI. The terminal server remains a separate
+    localhost-only runtime with no dedicated Caddy route, while Computer is a
+    separately installed application with its own auth. "Localhost-only"
+    (loopback) and "private network" (Tailscale/LAN) are distinct exposure
+    modes and never conflated.
 6. **No LiteLLM gateway initially.** oMLX already speaks OpenAI + Anthropic and
    Ollama is built in; both UIs connect directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
@@ -285,6 +285,19 @@ frontend.
 - Open Terminal — separate security/reliability pilot, disabled by default
 - Open WebUI Computer — separately installed and operated application, own
   experimental decision with its own access boundary
+
+#### Open Terminal (Phase 4c)
+
+Open Terminal runs as a separate, opt-in `com.openwebui.terminal` LaunchAgent,
+bound to `127.0.0.1` with no Caddy route. It requires both Open WebUI gates and
+uses a mode-600 terminal env/key plus an isolated workspace root; that root is
+only a UI hint, not a filesystem sandbox. Bare-metal Open Terminal is
+user-privilege-equivalent (full shell/filesystem access), so treat it as a
+privileged runtime. Under the amended threat model, the chat connection is
+registered through the verified
+`/api/v1/configs/terminal_servers` admin API using `OPENWEBUI_API_KEY`; terminal/provider keys never enter the
+chat plist or inherited provider environment. Enterprise per-user Terminals
+are out of scope.
 
 ### Operations snapshot (from upstream docs, Sept 2026)
 
@@ -375,9 +388,9 @@ obligations).
 - No Meridian-as-chat-backend unless both the technical and authorization
   conditions in the design principles pass.
 - No LiteLLM/OpenRouter gateway layer in the initial build.
-- No Open Terminal or Computer exposure — enabled or not, these are never
-  reachable through the Caddy-exposed chat instance without their own explicit
-  access decision.
+- No direct Open Terminal socket or Caddy route; its registered chat access is
+  the explicit app-authenticated LAN decision. Computer remains separately
+  installed and independently exposed, if adopted.
 - No replacement of the OpenCode tier system — this is a parallel consumer of
   `LOCAL_ENGINES`, not a new abstraction over it.
 
