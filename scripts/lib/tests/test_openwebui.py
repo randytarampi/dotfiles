@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -400,6 +401,72 @@ def test_cloud_connections_require_keys(monkeypatch):
     )
 
 
+def test_signin_fallback_retries_with_session_token(monkeypatch):
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = json.dumps(body).encode()
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        calls.append((request.full_url, dict(request.headers).get("Authorization", "")))
+        if "/api/v1/auths/signin" in request.full_url:
+            return FakeResponse({"token": "jwt-token"})
+        auth = dict(request.headers).get("Authorization", "")
+        if auth == "Bearer jwt-token":
+            return FakeResponse({"ok": True})
+        raise urllib.error.HTTPError(
+            request.full_url, 401, "unauthorized", {}, io.BytesIO(b"")
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = openwebui.OpenWebUIClient(
+        "http://x",
+        "sk-stale",
+        admin_credentials={"email": "a@b", "password": "pw"},
+    )
+    assert client.get_openai_config() == {"ok": True}
+    signin_calls = [c for c in calls if "/api/v1/auths/signin" in c[0]]
+    assert len(signin_calls) == 1
+    # credentials must never be sent as headers
+    assert all("a@b" not in (c[1] or "") for c in calls)
+
+
+def test_signin_fallback_absent_credentials_fails_closed(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    calls = []
+
+    def fake_urlopen(request, timeout=None):
+        calls.append(request.full_url)
+        raise urllib.error.HTTPError(
+            request.full_url, 401, "unauthorized", {}, io.BytesIO(b"")
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = openwebui.OpenWebUIClient("http://x", "sk-stale")
+    with pytest.raises(openwebui.AuthError):
+        client.get_openai_config()
+    # no signin attempted without credentials; no retry loop
+    assert all("/api/v1/auths/signin" not in url for url in calls)
+
+
 def test_cli_exit_codes(monkeypatch):
     module = _script()
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
@@ -429,3 +496,104 @@ def test_cli_exit_codes(monkeypatch):
     with pytest.raises(SystemExit) as error:
         module.main()
     assert error.value.code == 2
+
+
+def test_terminal_helpers_error_paths_are_hermetic(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    env_file = tmp_path / "terminal.env"
+    sync_script = (
+        f"source {helper!s}; openssl() {{ return 1; }}; "
+        f"openwebui_terminal_service_env_sync {env_file!s}"
+    )
+    sync = subprocess.run(["bash", "-c", sync_script], capture_output=True)
+    assert sync.returncode == 1
+    start_script = f"HOME={tmp_path!s}; export HOME; source {helper!s}; openwebui_terminal_service_start"
+    start = subprocess.run(["bash", "-c", start_script], capture_output=True)
+    assert start.returncode == 1
+
+
+def test_terminal_registration_collision_and_shape_fail_closed(monkeypatch, tmp_path):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with pytest.raises(openwebui.OpenWebUIError):
+        module._reconcile_terminal(
+            type(
+                "Client",
+                (),
+                {
+                    "get_terminal_servers_config": lambda self: {
+                        "TERMINAL_SERVER_CONNECTIONS": [
+                            {
+                                "id": "dotfiles-open-terminal",
+                                "url": "http://wrong",
+                                "auth_type": "bearer",
+                            }
+                        ]
+                    }
+                },
+            )()
+        )
+    with pytest.raises(openwebui.OpenWebUIError):
+        module._reconcile_terminal(
+            type("Client", (), {"get_terminal_servers_config": lambda self: []})()
+        )
+
+
+def test_terminal_registration_absence_and_snapshot_change(monkeypatch, tmp_path):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "0")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    env_path = tmp_path / ".local/share/openwebui/terminal.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("OPEN_TERMINAL_API_KEY='terminal-key'\n")
+
+    class Client:
+        def __init__(self):
+            self.connections = [
+                {
+                    "id": "dotfiles-open-terminal",
+                    "url": "http://127.0.0.1:8123",
+                    "auth_type": "bearer",
+                }
+            ]
+            self.writes = 0
+
+        def get_terminal_servers_config(self):
+            return {"TERMINAL_SERVER_CONNECTIONS": self.connections}
+
+        def update_terminal_servers_config(self, payload):
+            self.connections = payload["TERMINAL_SERVER_CONNECTIONS"]
+            self.writes += 1
+
+    client = Client()
+    assert module._reconcile_terminal(client) == 0
+    assert client.connections == []
+    assert client.writes == 1
+
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP", "1")
+    client.connections = []
+    client.writes = 0
+    calls = iter(
+        [
+            {"TERMINAL_SERVER_CONNECTIONS": []},
+            {"TERMINAL_SERVER_CONNECTIONS": [{"id": "other"}]},
+        ]
+    )
+    client.get_terminal_servers_config = lambda: next(calls)
+    with pytest.raises(openwebui.OpenWebUIError):
+        module._reconcile_terminal(client)
+
+
+def test_service_env_fallback_reads_admin_credentials(monkeypatch, tmp_path):
+    module = _script()
+    service_env = tmp_path / "service.env"
+    service_env.write_text(
+        "OPENWEBUI_API_KEY='service-key'\nWEBUI_ADMIN_EMAIL='admin@example'\nWEBUI_ADMIN_PASSWORD='pw'\n"
+    )
+    monkeypatch.setattr(module.os.path, "expanduser", lambda _: str(service_env))
+    monkeypatch.delenv("OPENWEBUI_API_KEY", raising=False)
+    assert module._openwebui_service_value("OPENWEBUI_API_KEY") == "service-key"
+    assert module._openwebui_service_value("WEBUI_ADMIN_EMAIL") == "admin@example"

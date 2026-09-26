@@ -880,6 +880,7 @@
         "--dry-run",
         "--emit-env",
         "--reconcile",
+        "--reconcile-terminal",
         "--check"
       ],
       "positional_operand": null,

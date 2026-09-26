@@ -2,6 +2,7 @@
   "version": 1,
   "tools": {
     "open-webui": {"telemetry": "default-off", "telemetry_env_vars": [], "telemetry_config_file": null, "voice": "none", "voice_mechanism": null, "i18n": "env-vars", "i18n_mechanism": "LANG/LC_ALL", "guidance_path": null, "guidance_consumes": false},
+    "open-terminal": {"telemetry": "no telemetry observed in installed package", "telemetry_env_vars": [], "telemetry_config_file": null, "voice": "none", "voice_mechanism": null, "i18n": "env-vars", "i18n_mechanism": "LANG/LC_ALL", "guidance_path": null, "guidance_consumes": false},
     "opencode": {"telemetry": "not-collected", "telemetry_env_vars": [], "telemetry_config_file": null, "voice": "full", "voice_mechanism": "@renjfk/opencode-voice plugin", "i18n": "env-vars", "i18n_mechanism": "LANG/LC_ALL", "guidance_path": "~/.config/opencode/AGENTS.md", "guidance_consumes": true},
     "claude": {"telemetry": "env-var", "telemetry_env_vars": ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"], "telemetry_config_file": "~/.claude/settings.json", "voice": "stt-only", "voice_mechanism": "built-in /voice dictation", "i18n": "env-vars", "i18n_mechanism": "LANG/LC_ALL", "guidance_path": "~/.claude/CLAUDE.md", "guidance_consumes": true},
     "codex": {"telemetry": "env-var", "telemetry_env_vars": ["OTEL_SDK_DISABLED"], "telemetry_config_file": "~/.codex/config.toml", "voice": "none", "voice_mechanism": null, "i18n": "env-vars", "i18n_mechanism": "LANG/LC_ALL", "guidance_path": "~/.codex/AGENTS.md", "guidance_consumes": true},

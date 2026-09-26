@@ -240,15 +240,18 @@ class OpenWebUIClient:
     OLLAMA_CONFIG_PATH = "/ollama/config"
     OPENAI_UPDATE_PATH = "/openai/config/update"
     OLLAMA_UPDATE_PATH = "/ollama/config/update"
+    TERMINAL_CONFIG_PATH = "/api/v1/configs/terminal_servers"
 
-    def __init__(self, base_url, api_key, timeout=10):
+    def __init__(self, base_url, api_key, timeout=10, admin_credentials=None):
         self.base_url, self.api_key, self.timeout = (
             base_url.rstrip("/"),
             api_key,
             timeout,
         )
+        self.admin_credentials = admin_credentials or {}
+        self._session_token = None
 
-    def _request(self, path, method="GET", payload=None):
+    def _request(self, path, method="GET", payload=None, retry_auth=True):
         request = urllib.request.Request(
             self.base_url + path,
             data=json.dumps(payload).encode() if payload is not None else None,
@@ -262,10 +265,41 @@ class OpenWebUIClient:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return json.loads(response.read().decode() or "{}")
         except urllib.error.HTTPError as error:
-            error_type = AuthError if error.code in {401, 403} else ReachableError
-            raise error_type(f"Open WebUI API HTTP {error.code}") from error
+            if error.code in {401, 403}:
+                if retry_auth and self._try_signin():
+                    return self._request(path, method, payload, retry_auth=False)
+                raise AuthError(f"Open WebUI API HTTP {error.code}") from error
+            raise ReachableError(f"Open WebUI API HTTP {error.code}") from error
         except (urllib.error.URLError, OSError, json.JSONDecodeError) as error:
             raise ReachableError(f"Open WebUI API unavailable: {error}") from error
+
+    def _try_signin(self):
+        """Fall back to admin-credential auth when the API key is rejected.
+
+        Some Open WebUI deployments disable API-key authentication for admin
+        config endpoints; a signin-derived session token still authorizes
+        them. Never logs credential material.
+        """
+        email = self.admin_credentials.get("email")
+        password = self.admin_credentials.get("password")
+        if not email or not password or self._session_token:
+            return False
+        request = urllib.request.Request(
+            self.base_url + "/api/v1/auths/signin",
+            data=json.dumps({"email": email, "password": password}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                token = json.loads(response.read().decode() or "{}").get("token")
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            return False
+        if not token:
+            return False
+        self._session_token = token
+        self.api_key = token
+        return True
 
     def health_check(self):
         try:
@@ -285,6 +319,12 @@ class OpenWebUIClient:
 
     def update_ollama_config(self, config):
         return self._request(self.OLLAMA_UPDATE_PATH, "POST", config)
+
+    def get_terminal_servers_config(self):
+        return self._request(self.TERMINAL_CONFIG_PATH)
+
+    def update_terminal_servers_config(self, config):
+        return self._request(self.TERMINAL_CONFIG_PATH, "POST", config)
 
     @staticmethod
     def normalize(response, collection):

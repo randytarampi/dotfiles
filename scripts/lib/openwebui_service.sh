@@ -23,6 +23,9 @@ openwebui_service_env_sync() {
     # shellcheck disable=SC1090
     source "$service_env"
   fi
+  # Ports are lifecycle config, not generated secrets: never let a stale
+  # service-file value survive a default/override change (e.g. port migration).
+  unset OPENWEBUI_PORT
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
@@ -93,4 +96,88 @@ openwebui_service_start() {
 
 openwebui_service_restart() {
   openwebui_service_start
+}
+
+openwebui_terminal_service_domain() {
+  openwebui_service_domain
+}
+
+openwebui_terminal_service_plist() {
+  printf '%s\n' "${HOME}/Library/LaunchAgents/com.openwebui.terminal.plist"
+}
+
+openwebui_terminal_service_env_sync() {
+  local service_env="${1:-$HOME/.local/share/openwebui/terminal.env}"
+  local terminal_home
+  local OPEN_TERMINAL_API_KEY="" OPEN_TERMINAL_FILE_BROWSER_ROOT="" OPENWEBUI_TERMINAL_PORT=""
+  local tmp
+  terminal_home="$(dirname "$service_env")"
+  mkdir -p "$terminal_home"
+  if [[ -f "$service_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$service_env"
+  fi
+  # Ports are lifecycle config, not generated secrets: never let a stale
+  # service-file value survive a default/override change (e.g. port migration).
+  unset OPENWEBUI_TERMINAL_PORT
+  if [[ -f "$HOME/.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$HOME/.env"
+  fi
+  OPEN_TERMINAL_FILE_BROWSER_ROOT="${OPEN_TERMINAL_FILE_BROWSER_ROOT:-$HOME/.local/share/openwebui/terminal-workspace}"
+  OPENWEBUI_TERMINAL_PORT="${OPENWEBUI_TERMINAL_PORT:-8123}"
+  if [[ -z "${OPEN_TERMINAL_API_KEY:-}" ]]; then
+    command -v openssl >/dev/null 2>&1 || return 1
+    if ! OPEN_TERMINAL_API_KEY="$(openssl rand -hex 32)" || [[ -z "$OPEN_TERMINAL_API_KEY" ]]; then
+      return 1
+    fi
+  fi
+  tmp="${service_env}.tmp.$$"
+  umask 077
+  {
+    printf 'OPEN_TERMINAL_API_KEY=%q\n' "$OPEN_TERMINAL_API_KEY"
+    printf 'OPEN_TERMINAL_FILE_BROWSER_ROOT=%q\n' "$OPEN_TERMINAL_FILE_BROWSER_ROOT"
+    printf 'OPENWEBUI_TERMINAL_PORT=%q\n' "$OPENWEBUI_TERMINAL_PORT"
+  } >"$tmp"
+  chmod 600 "$tmp"
+  if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$service_env"
+  fi
+}
+
+openwebui_terminal_service_stop() {
+  launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
+}
+
+openwebui_terminal_service_start() {
+  local domain plist bootstrap_ok=0 output
+  OPENWEBUI_TERMINAL_SERVICE_ERROR=""
+  domain="$(openwebui_terminal_service_domain)"
+  plist="$(openwebui_terminal_service_plist)"
+  [[ -f "$plist" ]] || {
+    OPENWEBUI_TERMINAL_SERVICE_ERROR="Open Terminal plist missing: $plist"
+    printf '%s\n' "$OPENWEBUI_TERMINAL_SERVICE_ERROR" >&2
+    return 1
+  }
+  for _ in 1 2 3; do
+    openwebui_terminal_service_stop
+    sleep 2
+    if output="$(launchctl bootstrap "$domain" "$plist" 2>&1)" && launchctl print "$domain/com.openwebui.terminal" >/dev/null 2>&1; then
+      bootstrap_ok=1
+      break
+    fi
+  done
+  if [[ "$bootstrap_ok" != "1" ]]; then
+    OPENWEBUI_TERMINAL_SERVICE_ERROR="Failed to bootstrap com.openwebui.terminal after 3 attempts: $output"
+    printf '%s\n' "$OPENWEBUI_TERMINAL_SERVICE_ERROR" >&2
+    return 1
+  fi
+  launchctl kickstart -k "$domain/com.openwebui.terminal" >/dev/null 2>&1 || true
+  launchctl print "$domain/com.openwebui.terminal" >/dev/null 2>&1
+}
+
+openwebui_terminal_service_restart() {
+  openwebui_terminal_service_start
 }
