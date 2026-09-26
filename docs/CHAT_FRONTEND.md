@@ -310,6 +310,28 @@ OFF: creating a cptr gateway key and adding an Open WebUI OpenAI connection are
 manual admin-UI steps reserved for a later security decision; no key or
 provider registration is automated.
 
+#### LiteLLM Gateway (Phase 4e)
+
+LiteLLM is a separate, loopback-only OpenAI-compatible gateway on port 4000
+for other local clients; Open WebUI remains directly connected and Mozart
+remains the OpenCode-side router. Its pinned config is generated from the repo
+registries and provider keys, with stateless master-key auth and no database:
+virtual keys, budgets, and spend accounting are deliberate non-goals. There is
+no Caddy route; only clients on the machine consume it.
+
+Telemetry is explicitly disabled: upstream defaults `litellm.telemetry=True`
+(anonymous PostHog usage events), and the generated config sets
+`litellm_settings.telemetry: false` (verified opt-out; disposition recorded in
+the fleet registry). Provider API keys reach the process through the mode-600
+service environment allowlist (sourced inside the scrubbed non-login wrapper),
+never through YAML, argv, or the plist.
+
+Operational limitation (documented, not an authentication bypass): in no-DB
+mode, requests with missing or invalid credentials return 500/400 from
+LiteLLM's database-less auth path (a prisma `ModuleNotFoundError`) rather than
+a clean 401; valid master-key requests short-circuit before that path.
+Loopback-only binding limits exposure.
+
 ### Operations snapshot (from upstream docs, Sept 2026)
 
 - Default SQLite + local ChromaDB is fine for one user; **not** for network
