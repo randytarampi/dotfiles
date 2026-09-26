@@ -83,11 +83,6 @@ def test_dual_protocol_and_stable_ownership(monkeypatch):
         item["config"]["prefix_id"] for item in state["openai"] + state["anthropic"]
     }
     assert {"dw-omlx-openai", "dw-omlx-anthropic"} <= prefixes
-    emitted = openwebui.emit_env(state)
-    assert "dw-omlx-openai" in emitted
-    assert "dw-omlx-anthropic" in emitted
-    assert "dw-meridian" in emitted
-    assert "dw-anthropic" in emitted
     result = openwebui.reconcile([], [], state)
     planned = {item["entry"]["config"]["prefix_id"] for item in result.plan.entries}
     assert {
@@ -377,16 +372,10 @@ def test_snapshot_change_fails_closed():
         )
 
 
-def test_mask_secret_and_env_emission():
+def test_mask_secret():
     assert openwebui.mask_secret("short") == "<set>"
     assert openwebui.mask_secret("") == "<unset>"
     assert openwebui.mask_secret(None) == "<unset>"
-    secret = "sk-super-secret-abcd"
-    rendered = openwebui.emit_env(
-        {"openai": [_entry("dw-openai", "http://x", key=secret)], "ollama": []},
-        masked=True,
-    )
-    assert secret not in rendered and "sk…abcd" in rendered
 
 
 def test_cloud_connections_require_keys(monkeypatch):

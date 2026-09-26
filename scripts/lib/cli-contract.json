@@ -878,7 +878,6 @@
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--emit-env",
         "--reconcile",
         "--reconcile-terminal",
         "--reconcile-mcp",

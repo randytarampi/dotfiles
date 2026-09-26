@@ -34,7 +34,6 @@ from openwebui import (  # noqa: E402
     OpenWebUIClient,
     OpenWebUIError,
     compute_desired_state,
-    emit_env,
     reconcile,
     reconcile_via_api,
 )
@@ -50,7 +49,6 @@ def _parser():
     parser = argparse.ArgumentParser(description="Configure Open WebUI connections.")
     add_common_args(parser)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--emit-env", action="store_true")
     mode.add_argument("--reconcile", action="store_true")
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--reconcile-terminal", action="store_true")
@@ -656,11 +654,6 @@ def main():
             return 1
 
     desired = compute_desired_state()
-    if args.emit_env:
-        logger.info("%s", emit_env(desired, masked=True))
-        logger.info("WEBUI_SECRET_KEY is supplied by the LaunchAgent environment")
-        return 0
-
     base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
     if not (args.reconcile or args.check):
         args.reconcile = True
