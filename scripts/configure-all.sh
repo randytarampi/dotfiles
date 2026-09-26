@@ -515,7 +515,10 @@ fi
 # 8c. Open WebUI connection reconciliation (deployment wiring is handled by chezmoi script 30)
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Open WebUI reconciliation (dry-run mode)"
-elif ! step_skipped openwebui && [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" ]]; then
+elif step_skipped openwebui; then
+  # Explicit --skip is a true no-op: never touch a working deployment.
+  info "Skipping Open WebUI reconciliation (--skip openwebui)"
+elif [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" ]]; then
   info "Reconciling Open WebUI connections..."
   run_step "Open WebUI service environment" openwebui_service_env_sync "$HOME/.local/share/openwebui/service.env"
   if [[ "$(uname)" == "Darwin" ]]; then
