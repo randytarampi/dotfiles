@@ -66,6 +66,7 @@ openwebui_service_env_sync() {
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    chmod 600 "$service_env"
     rm -f "$tmp"
   else
     mv "$tmp" "$service_env"
@@ -159,6 +160,7 @@ openwebui_terminal_service_env_sync() {
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    chmod 600 "$service_env"
     rm -f "$tmp"
   else
     mv "$tmp" "$service_env"
@@ -235,6 +237,7 @@ openwebui_computer_service_env_sync() {
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
+    chmod 600 "$service_env"
     rm -f "$tmp"
   else
     mv "$tmp" "$service_env"

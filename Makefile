@@ -290,20 +290,24 @@ openwebui-start: ## Start Open WebUI service
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
 	if [ "$$(uname)" = "Darwin" ]; then \
 		. scripts/lib/openwebui_service.sh && openwebui_service_start; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user enable --now open-webui.service 2>/dev/null || echo "systemd user session unavailable — skipping"; \
 	else \
-		echo "Open WebUI LaunchAgent is macOS-only — skipping"; \
+		echo "Open WebUI service is unsupported on this platform — skipping"; \
 	fi
 
 openwebui-stop: ## Stop Open WebUI service
 	@echo "Stopping Open WebUI..."
-	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop; fi
+	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/openwebui_service.sh && openwebui_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop open-webui.service 2>/dev/null || true; fi
 
 openwebui-restart: ## Restart Open WebUI service
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping"; exit 0; fi; \
 	if [ "$$(uname)" = "Darwin" ]; then \
 		. scripts/lib/openwebui_service.sh && openwebui_service_restart && echo "Open WebUI restarted."; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		systemctl --user restart open-webui.service 2>/dev/null || echo "systemd user session unavailable — skipping"; \
 	else \
-		echo "Open WebUI LaunchAgent is macOS-only — skipping"; \
+		echo "Open WebUI service is unsupported on this platform — skipping"; \
 	fi
 
 openwebui-terminal-start: ## Start the gated localhost-only Open Terminal service
@@ -336,6 +340,7 @@ litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
 
 openwebui-backup-timer-start: ## Start the gated Open WebUI backup timer
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_BACKUP_SCHEDULE:-0}" != "1" ]; then echo "Open WebUI backup timer gates are off — skipping"; exit 0; fi; \
+	if [ "$$(uname)" != "Darwin" ]; then echo "Open WebUI backup timer is macOS-only — skipping"; exit 0; fi; \
 	domain="gui/$$(id -u)"; label="com.dotfiles.openwebui.backup"; \
 	timer_ok=0; \
 	for attempt in 1 2 3; do \
@@ -345,11 +350,12 @@ openwebui-backup-timer-start: ## Start the gated Open WebUI backup timer
 	[ "$$timer_ok" = "1" ] || { echo "Backup timer failed to load after 3 attempts" >&2; exit 1; }
 
 openwebui-backup-timer-stop: ## Stop the Open WebUI backup timer
-	@launchctl bootout "gui/$$(id -u)/com.dotfiles.openwebui.backup" 2>/dev/null || true
+	@if [ "$$(uname)" != "Darwin" ]; then echo "Open WebUI backup timer is macOS-only — skipping"; exit 0; fi; \
+	launchctl bootout "gui/$$(id -u)/com.dotfiles.openwebui.backup" 2>/dev/null || true
 
 openwebui-backup: ## Snapshot Open WebUI data and retain the five newest backups
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ]; then echo "Open WebUI gate is off — skipping backup"; exit 0; fi; \
-	set -e; backup_dir="$$HOME/.local/share/openwebui/backups"; data_dir="$$HOME/.local/share/openwebui/data"; \
+	set -e -o pipefail; umask 077; backup_dir="$$HOME/.local/share/openwebui/backups"; data_dir="$$HOME/.local/share/openwebui/data"; \
 	mkdir -p "$$backup_dir"; chmod 700 "$$backup_dir"; stage="$$(mktemp -d "$$backup_dir/.stage.XXXXXX")"; \
 	trap 'rm -rf "$$stage"' EXIT; mkdir -p "$$stage/data"; \
 	tar -cf - -C "$$HOME/.local/share/openwebui" --exclude='data/webui.db' --exclude='data/webui.db-wal' --exclude='data/webui.db-shm' data | tar -xf - -C "$$stage"; \
