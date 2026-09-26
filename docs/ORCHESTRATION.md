@@ -311,6 +311,16 @@ graph LR
 3. Default to `0` (opt-in for fleet management)
 4. Add to the gate reference table above
 
+### Adding a new LaunchAgent service
+
+New launchd-managed services (LaunchAgent on macOS, systemd user unit on Linux) should reuse the shared lifecycle helpers instead of re-implementing launchd's quirks:
+
+1. Model the service on an existing sibling — `com.openwebui.web` (chat service) is the canonical pattern: gate-aware `run_onchange_*` template, mode-600 per-service env file for generated secrets (never secrets in the plist, argv, or `EnvironmentVariables`), and the shared lifecycle library.
+2. Source `scripts/lib/openwebui_service.sh` (or a sibling helper in the same style) for the launchd lifecycle: **`bootout` is asynchronous** — the established pattern is bootout → sleep → bootstrap → `launchctl print` loaded-check, retried up to 3×, with the captured error propagated and non-zero exit on exhaustion. An immediate `bootstrap` after `bootout` races launchd's teardown, and a `launchctl print` immediately after `bootstrap` can report the previous state — verify health after a delay.
+3. Wrap the service command in a scrubbed, non-login shell (`env -i HOME=... PATH=... <allowlisted non-secret vars> /bin/bash --noprofile --norc -c 'set -a; source <service env>; set +a; exec ...'`) so inherited shell environment (and provider keys) cannot reach the service; source the service env *inside* that wrapper.
+4. Wire gate-off to unload/remove the agent (and on Linux, remove the systemd unit + `systemctl --user daemon-reload`) while preserving service data; end any manual validation cycle in a gate-consistent state so doctor's stale-LaunchAgent checks stay clean.
+5. Reference implementations: `com.openwebui.web` (LaunchAgent + systemd user unit), `com.openwebui.terminal`, `com.litellm.proxy`, `com.dotfiles.openwebui.backup` (calendar timer).
+
 ## Gate Migrations
 
 When gate names change (e.g., `DOTFILES_RUN_*` → `DOTFILES_RUN_*_SETUP`), the migration script `scripts/migrate-env-gates.py` renames deprecated gates in `~/.env` to the current scheme. It preserves values, inherits from predecessor gates for splits, and backs up `~/.env` first.
