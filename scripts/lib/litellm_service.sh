@@ -37,9 +37,20 @@ litellm_service_env_sync() {
   [[ -n "$env_GEMINI_API_KEY" ]] && GEMINI_API_KEY="$env_GEMINI_API_KEY"
   [[ -n "$env_OPENROUTER_API_KEY" ]] && OPENROUTER_API_KEY="$env_OPENROUTER_API_KEY"
   [[ -n "$env_OPENCODE_API_KEY" ]] && OPENCODE_API_KEY="$env_OPENCODE_API_KEY"
-  [[ -n "$env_OLLAMA_API_KEY" ]] && OLLAMA_API_KEY="$env_OLLAMA_API_KEY"
+  # Unset the service-file values FIRST so ~/.env-captured values win
+  # below; then restore captured ~/.env values for keys whose os.environ/
+  # references are present in the generated config (the unset loop removes
+  # the rest). This keeps referenced provider keys in service.env.
   unset OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY OLLAMA_API_KEY LITELLM_PORT
   [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
+  [[ -n "$env_OMLX_API_KEY" ]] && OMLX_API_KEY="$env_OMLX_API_KEY"
+  [[ -n "$env_MERIDIAN_API_KEY" ]] && MERIDIAN_API_KEY="$env_MERIDIAN_API_KEY"
+  [[ -n "$env_OPENAI_API_KEY" ]] && OPENAI_API_KEY="$env_OPENAI_API_KEY"
+  [[ -n "$env_ANTHROPIC_API_KEY" ]] && ANTHROPIC_API_KEY="$env_ANTHROPIC_API_KEY"
+  [[ -n "$env_GEMINI_API_KEY" ]] && GEMINI_API_KEY="$env_GEMINI_API_KEY"
+  [[ -n "$env_OPENROUTER_API_KEY" ]] && OPENROUTER_API_KEY="$env_OPENROUTER_API_KEY"
+  [[ -n "$env_OPENCODE_API_KEY" ]] && OPENCODE_API_KEY="$env_OPENCODE_API_KEY"
+  [[ -n "$env_OLLAMA_API_KEY" ]] && OLLAMA_API_KEY="$env_OLLAMA_API_KEY"
   local config_path
   config_path="$(dirname "$service_env")/config.yaml"
   if [[ -f "$config_path" ]]; then

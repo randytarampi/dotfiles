@@ -564,7 +564,14 @@ def main() -> None:
     auth_block = build_auth_block(auth_users)
 
     brew_prefix = get_brew_prefix()
-    output_path = Path(brew_prefix) / "etc" / "caddy" / "Caddyfile"
+    # Platform-aligned Caddyfile path: Homebrew layout on macOS
+    # (<brew>/etc/caddy/Caddyfile); package-manager layout on Linux
+    # (/etc/caddy/Caddyfile) — matches verify-config's CADDY_CHECK_PATHS.
+    output_path = (
+        Path(brew_prefix) / "etc" / "caddy" / "Caddyfile"
+        if sys.platform == "darwin"
+        else Path("/etc/caddy/Caddyfile")
+    )
 
     bind_ip = os.environ.get("CADDY_BIND_IP", "").strip() or get_bind_ip()
     opencode_port = os.environ.get("OPENCODE_SERVER_PORT", "4096").strip() or "4096"
