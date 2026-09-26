@@ -602,6 +602,13 @@ def test_service_env_fallback_reads_admin_credentials(monkeypatch, tmp_path):
 def test_mcp_registry_selects_http_and_excludes_stdio_sse(tmp_path):
     module = _script()
     (tmp_path / "configs/mcp").mkdir(parents=True)
+    # Inventory comes from the registry (global-mcps.json), not a glob:
+    # stdio/sse templates referenced there are excluded; http is selected.
+    (tmp_path / "configs/mcp/global-mcps.json").write_text(
+        '{"project_mcp_templates":["http","stdio","sse"],'
+        '"tools":{"ai":{"mcp_servers":[{"template":"http"}]},'
+        '"cli":{"mcp_servers":[{"template":"stdio"},{"template":"sse"}]}}}'
+    )
     (tmp_path / "configs/mcp/http.json").write_text(
         '{"name":"http","type":"url","url":"https://example.test/mcp"}'
     )
@@ -611,6 +618,11 @@ def test_mcp_registry_selects_http_and_excludes_stdio_sse(tmp_path):
     (tmp_path / "configs/mcp/sse.json").write_text(
         '{"name":"sse","type":"url","url":"sse://example.test"}'
     )
+    # A stray JSON file in configs/mcp/ that the registry does not reference
+    # must NOT be registered (no glob-acquired capabilities).
+    (tmp_path / "configs/mcp/unreferenced.json").write_text(
+        '{"name":"unreferenced","type":"url","url":"https://stray.test/mcp"}'
+    )
     selected = module._streamable_mcp_connections(tmp_path)
     assert [item["info"]["id"] for item in selected] == ["dotfiles-mcp-http"]
 
@@ -618,6 +630,10 @@ def test_mcp_registry_selects_http_and_excludes_stdio_sse(tmp_path):
 def test_mcp_registry_resolves_or_skips_header_placeholders(tmp_path, monkeypatch):
     root = tmp_path / "configs/mcp"
     root.mkdir(parents=True)
+    (root / "global-mcps.json").write_text(
+        '{"project_mcp_templates":["missing","present"],'
+        '"tools":{"cli":{"mcp_servers":[{"template":"missing"},{"template":"present"}]}}}'
+    )
     (root / "missing.json").write_text(
         '{"name":"missing","type":"url","url":"https://missing.test/mcp","headers":{"Authorization":"Bearer ${MISSING_MCP_TOKEN}"}}'
     )
@@ -770,9 +786,11 @@ def test_configure_all_subgate_cleanup_blocks_are_siblings():
     assert computer_start > terminal_close
     assert "openwebui_terminal_service_stop" in source[terminal_start:computer_start]
     assert "openwebui_computer_service_stop" in source[computer_start:]
-    assert {(False, False), (False, True), (True, False), (True, True)} == {
-        (False, False),
-        (False, True),
-        (True, False),
-        (True, True),
-    }
+    # Each sub-gate's teardown is gated on its own `[[ gate == 0 ]]` condition
+    # inside an else-branch reachable only when the MAIN gate is off (and the
+    # step is not --skipped, which is a no-op since the Gate 2f review). Each
+    # gate variable is referenced exactly once in its own condition — the
+    # B1 fix split the previously-nested chains into independent branches.
+    assert source.count("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP") >= 1
+    assert source.count("DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP") >= 1
+    assert "openwebui_service_stop" in source  # main chat service teardown

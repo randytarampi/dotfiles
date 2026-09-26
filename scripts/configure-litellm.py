@@ -2,7 +2,6 @@
 """Generate the gated, loopback-only LiteLLM proxy configuration."""
 
 import argparse
-import json
 import os
 import sys
 
@@ -11,18 +10,12 @@ LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger
-from cli_helpers import add_common_args
-from env import load_env
-from litellm_config import compute_model_list, write_config
+import logger  # noqa: E402 (sys.path must be set up first)
+from cli_helpers import add_common_args  # noqa: E402
+from env import load_env  # noqa: E402
+from litellm_config import compute_model_list, write_config  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
-
-
-def mask_secret(value):
-    if not value:
-        return "<unset>"
-    return "<set>" if len(str(value)) < 8 else str(value)[:2] + "…" + str(value)[-4:]
 
 
 def main():
@@ -40,10 +33,11 @@ def main():
     try:
         entries = compute_model_list()
         if args.dry_run:
+            master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
             logger.info(
-                "LiteLLM dry-run: models=%d master_key=%s config=%s",
+                "LiteLLM dry-run: models=%d master_key_set=%s config=%s",
                 len(entries),
-                mask_secret(os.environ.get("LITELLM_MASTER_KEY")),
+                master_key_set,
                 config_path,
             )
             return 0

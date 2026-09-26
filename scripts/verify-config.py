@@ -1225,9 +1225,41 @@ def main():
                 arguments = " ".join(
                     str(item) for item in timer.get("ProgramArguments", [])
                 )
+                if (
+                    "--noprofile --norc" not in arguments
+                    or "env -i" not in arguments
+                    or "bash -lc" in arguments
+                ):
+                    print("  \u2717 Open WebUI backup timer: unsafe shell wrapper")
+                    exit_code = 1
+                timer_env_match = re.search(r"env -i (.*?) /bin/bash", arguments)
+                if not timer_env_match or {
+                    token.split("=", 1)[0]
+                    for token in shlex.split(timer_env_match.group(1))
+                    if "=" in token
+                } != {"HOME", "PATH"}:
+                    print(
+                        "  \u2717 Open WebUI backup timer: wrapper environment allowlist mismatch"
+                    )
+                    exit_code = 1
                 log_path = str(HOME / ".local/share/openwebui/logs/backup-timer.log")
                 timer_text = backup_timer.read_text(encoding="utf-8")
-                repo_path = str(Path(__file__).resolve().parent.parent)
+                # The deployed timer invokes make in the *deployed* checkout
+                # (chezmoi source dir), which can differ from the checkout
+                # running this verifier — resolve it via chezmoi, falling back
+                # to this file's checkout.
+                repo_path = None
+                chezmoi_bin = shutil.which("chezmoi")
+                if chezmoi_bin:
+                    probe = subprocess.run(
+                        [chezmoi_bin, "source-path"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if probe.returncode == 0 and probe.stdout.strip():
+                        repo_path = probe.stdout.strip()
+                if not repo_path:
+                    repo_path = str(Path(__file__).resolve().parent.parent)
                 if (
                     "openwebui-backup" not in arguments
                     or repo_path not in arguments
