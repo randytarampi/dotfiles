@@ -307,9 +307,10 @@ rewritten.
 Open WebUI's generated service environment also sets `DEFAULT_LOCALE` through
 `openwebui_default_locale()`: `OPENWEBUI_DEFAULT_LOCALE` wins; otherwise the
 first entry from `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, or `LANG` is used.
-Values such as `xx_YY.charset` are normalized to `xx-YY` and snapped to a
-region-qualified locale shipped by the frontend (`en-US` or `en-GB`); `en*`
-becomes `en-US`, and unknown values also fall back to `en-US`. This works
+Values such as `xx_YY.charset` are normalized to `xx-YY` and resolved against
+the pinned frontend's supported-locale list: exact matches pass through, bare
+codes snap to the first region-qualified bundle in that file's order, and
+unknown values fall back to `en-US`. This works
 around open-webui 0.11.4 upstream bug [#30348](https://github.com/open-webui/open-webui/issues/30348),
 where bare `en` and `en-CA` produce raw i18n keys such as
 `settings.admin.connections.title`. Upstream fix PR [#30354](https://github.com/open-webui/open-webui/pull/30354)

@@ -1371,14 +1371,17 @@ def test_openwebui_service_port_uses_retained_service_env(tmp_path):
 def test_openwebui_default_locale_resolution(tmp_path):
     service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     cases = [
-        ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "en-US"),
-        ({"OPENWEBUI_DEFAULT_LOCALE": "fr"}, "en-US"),
-        ({"OPENWEBUI_DEFAULT_LOCALE": "de-DE"}, "en-US"),
-        ({"OPENWEBUI_DEFAULT_LOCALE": "en-CA"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "fr-FR"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "en-GB"}, "en-GB"),
         ({"OPENWEBUI_DEFAULT_LOCALE": "en"}, "en-US"),
-        ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr"}, "fr-CA"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "pt"}, "pt-BR"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "zh"}, "zh-CN"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "uz"}, "uz-Cyrl-UZ"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "xx-YY"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr_FR.UTF-8"}, "fr-FR"),
+        ({"LANGUAGE": "fr_CA.UTF-8"}, "fr-CA"),
         ({"LANG": "en_CA.UTF-8"}, "en-US"),
-        ({"LANG": "fr_CA.UTF-8"}, "en-US"),
         ({}, "en-US"),
     ]
     for variables, expected in cases:
