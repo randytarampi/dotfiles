@@ -179,9 +179,10 @@ def compute_model_list(environ=None):
     return entries
 
 
-def render_config(environ=None):
+def render_config(environ=None, entries=None):
     environ = environ or os.environ
-    entries = compute_model_list(environ)
+    if entries is None:
+        entries = compute_model_list(environ)
     lines = ["model_list:" if entries else "model_list: []"]
     for entry in entries:
         params = entry["litellm_params"]
@@ -211,9 +212,9 @@ def render_config(environ=None):
     return "\n".join(lines)
 
 
-def write_config(path, environ=None):
+def write_config(path, environ=None, entries=None):
     path = Path(path)
-    rendered = render_config(environ)
+    rendered = render_config(environ, entries)
     if path.exists() and path.read_text(encoding="utf-8") == rendered:
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
