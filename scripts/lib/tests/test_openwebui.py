@@ -29,7 +29,17 @@ def hermetic_environment(monkeypatch):
             monkeypatch.delenv(name, raising=False)
 
 
-def _entry(prefix, url, kind="openai", collection="openai", key="secret-key", **config):
+def _entry(
+    prefix,
+    url,
+    kind="openai",
+    collection="openai",
+    key="secret-key",
+    managed=True,
+    **config,
+):
+    if managed:
+        config["managed_by"] = "dotfiles"
     return {
         "url": url,
         "key": key,
@@ -64,15 +74,15 @@ def test_exact_native_and_cloud_endpoints(monkeypatch):
         item["config"]["prefix_id"]: item
         for item in state["openai"] + state["anthropic"]
     }
-    assert state["ollama"][0]["url"] == "http://localhost:11434"
-    assert by_prefix["dw-openai"]["url"] == "http://openai.local/v1"
-    assert by_prefix["dw-anthropic"]["url"] == "http://anthropic.local"
-    assert by_prefix["dw-ollama-cloud"]["url"] == "https://ollama.com/v1"
+    assert state["ollama"][0]["url"] == "http://127.0.0.1:11434"
+    assert by_prefix["openai"]["url"] == "http://openai.local/v1"
+    assert by_prefix["anthropic"]["url"] == "http://anthropic.local"
+    assert by_prefix["ollama-cloud"]["url"] == "https://ollama.com/v1"
     monkeypatch.setattr(constants, "check_ollama_daemon", lambda: (True, True))
     proxied = openwebui.compute_desired_state()
     assert {item["config"]["prefix_id"]: item for item in proxied["openai"]}[
-        "dw-ollama-cloud"
-    ]["url"] == "http://localhost:11434/v1"
+        "ollama-cloud"
+    ]["url"] == "https://ollama.com/v1"
 
 
 def test_dual_protocol_and_stable_ownership(monkeypatch):
@@ -83,20 +93,20 @@ def test_dual_protocol_and_stable_ownership(monkeypatch):
     prefixes = {
         item["config"]["prefix_id"] for item in state["openai"] + state["anthropic"]
     }
-    assert {"dw-omlx-openai", "dw-omlx-anthropic"} <= prefixes
+    assert {"omlx"} <= prefixes
+    assert "omlx" not in {item["config"]["prefix_id"] for item in state["anthropic"]}
     result = openwebui.reconcile([], [], state)
     planned = {item["entry"]["config"]["prefix_id"] for item in result.plan.entries}
     assert {
-        "dw-omlx-openai",
-        "dw-omlx-anthropic",
-        "dw-meridian",
-        "dw-anthropic",
+        "omlx",
+        "meridian",
+        "anthropic",
     } <= planned
-    assert "dw-omlx-openai" in openwebui.ownership_catalogue()
+    assert "omlx" in openwebui.ownership_catalogue()
     monkeypatch.setenv("DOTFILES_OPENWEBUI_DISABLED_ENGINES", "omlx")
-    assert "dw-omlx-openai" in openwebui.ownership_catalogue()
+    assert "omlx" in openwebui.ownership_catalogue()
     assert not any(
-        item["config"]["prefix_id"].startswith("dw-omlx")
+        item["config"]["prefix_id"] == "omlx"
         for item in openwebui.compute_desired_state()["openai"]
         + openwebui.compute_desired_state()["anthropic"]
     )
@@ -107,7 +117,7 @@ def test_disabled_engine_and_meridian(monkeypatch):
     monkeypatch.setenv("DOTFILES_OPENWEBUI_DISABLED_ENGINES", "oMlX")
     monkeypatch.setattr(constants, "is_meridian_configured", lambda: False)
     assert not any(
-        item["config"]["prefix_id"].startswith("dw-omlx")
+        item["config"]["prefix_id"] == "omlx"
         for item in openwebui.compute_desired_state()["openai"]
         + openwebui.compute_desired_state()["anthropic"]
     )
@@ -119,17 +129,17 @@ def test_disabled_engine_and_meridian(monkeypatch):
         item
         for item in openwebui.compute_desired_state()["openai"]
         + openwebui.compute_desired_state()["anthropic"]
-        if item["config"]["prefix_id"] == "dw-meridian"
+        if item["config"]["prefix_id"] == "meridian"
     )
     assert item["url"] == "http://meridian:3456/v1"
 
 
 def test_collision_wrong_endpoint_is_fail_closed():
     desired = {
-        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
         "ollama": [],
     }
-    current = [_entry("dw-openai", "http://wrong/v1")]
+    current = [_entry("openai", "http://wrong/v1")]
     result = openwebui.reconcile(current, [], desired)
     assert result.status == "collision"
     assert not any(
@@ -138,35 +148,71 @@ def test_collision_wrong_endpoint_is_fail_closed():
 
 
 def test_key_rotation_enable_flip_and_dual_protocol_updates():
-    url = openwebui.ownership_catalogue()["dw-omlx-openai"]["url"]
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
     desired = {
         "openai": [
-            _entry("dw-omlx-openai", url, key="new-key"),
-            _entry("dw-omlx-anthropic", url, "anthropic", key="new-key"),
+            _entry("omlx", url, key="new-key"),
         ],
         "ollama": [],
     }
     current = [
-        _entry("dw-omlx-openai", url, key="old-key"),
-        _entry(
-            "dw-omlx-anthropic",
-            url,
-            "anthropic",
-            key="new-key",
-            enable=False,
-        ),
+        _entry("omlx", url, key="old-key"),
     ]
     result = openwebui.reconcile(current, [], desired)
-    assert [item["action"] for item in result.plan.entries] == ["update", "update"]
+    assert [item["action"] for item in result.plan.entries] == ["update"]
 
 
 def test_removal_uses_catalogue_without_managed_marker():
     desired = {"openai": [], "ollama": []}
     result = openwebui.reconcile(
-        [_entry("dw-openai", "https://api.openai.com/v1")], [], desired
+        [_entry("openai", "https://api.openai.com/v1")], [], desired
     )
     assert result.status == "clean"
     assert result.plan.entries[0]["action"] == "delete"
+
+
+def test_legacy_prefixes_migrate_and_stale_entries_are_deleted():
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    desired_entry = _entry("omlx", url)
+    result = openwebui.reconcile(
+        [
+            _entry("dw-omlx-openai", url, managed=False),
+            _entry("dw-foo", "https://stale.example/v1", managed=False),
+        ],
+        [],
+        {"openai": [desired_entry], "anthropic": [], "ollama": []},
+    )
+    assert [item["action"] for item in result.plan.entries] == ["update", "delete"]
+    migrated = result.plan.entries[0]["entry"]
+    assert migrated["config"]["prefix_id"] == "omlx"
+    assert migrated["config"]["managed_by"] == "dotfiles"
+
+    second = openwebui.reconcile(
+        [migrated], [], {"openai": [desired_entry], "anthropic": [], "ollama": []}
+    )
+    assert [item["action"] for item in second.plan.entries] == ["keep"]
+
+
+def test_new_style_entry_is_adopted_on_sight():
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    desired = _entry("omlx", url)
+    result = openwebui.reconcile(
+        [_entry("omlx", url, managed=False)],
+        [],
+        {"openai": [desired], "anthropic": [], "ollama": []},
+    )
+    assert result.plan.entries[0]["action"] == "update"
+    assert result.plan.entries[0]["entry"]["config"]["managed_by"] == "dotfiles"
+
+
+def test_unmarked_new_style_prefix_with_mismatched_identity_is_preserved():
+    result = openwebui.reconcile(
+        [_entry("omlx", "https://wrong.example/v1", managed=False)],
+        [],
+        {"openai": [], "anthropic": [], "ollama": []},
+    )
+    assert result.status == "clean"
+    assert result.plan.entries[0]["action"] == "keep"
 
 
 def _plain_default(url, collection):
@@ -182,20 +228,20 @@ def _plain_default(url, collection):
 def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     catalogue = openwebui.ownership_catalogue()
-    omlx_url = catalogue["dw-omlx-openai"]["url"]
-    ollama_url = catalogue["dw-ollama"]["url"]
+    omlx_url = catalogue["omlx"]["url"]
+    ollama_url = catalogue["ollama"]["url"]
     desired = {
-        "openai": [_entry("dw-omlx-openai", omlx_url)],
-        "ollama": [_entry("dw-ollama", ollama_url, "ollama", "ollama")],
+        "openai": [_entry("omlx", omlx_url)],
+        "ollama": [_entry("ollama", ollama_url, "ollama", "ollama")],
     }
     current_openai = [
         _plain_default("https://api.openai.com/v1", "openai"),
-        _entry("dw-omlx-openai", omlx_url),
+        _entry("omlx", omlx_url),
         _plain_default(omlx_url, "openai"),
     ]
     current_ollama = [
         _plain_default(ollama_url, "ollama"),
-        _entry("dw-ollama", ollama_url, "ollama", "ollama"),
+        _entry("ollama", ollama_url, "ollama", "ollama"),
     ]
     result = openwebui.reconcile(current_openai, current_ollama, desired)
     deletes = {
@@ -208,15 +254,15 @@ def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
     assert not any(
         item["action"] in {"delete", "skip", "update"}
         for item in result.plan.entries
-        if item["entry"]["config"].get("prefix_id", "").startswith("dw-")
+        if item["entry"]["config"].get("managed_by") == "dotfiles"
     )
     assert result.status == "clean"
 
 
 def test_unmanaged_entries_without_matching_url_are_preserved():
     desired = {
-        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
-        "ollama": [_entry("dw-ollama", "http://localhost:11434", "ollama", "ollama")],
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
+        "ollama": [_entry("ollama", "http://127.0.0.1:11434", "ollama", "ollama")],
     }
     unmanaged = _plain_default("http://user/v1", "openai")
     unmanaged["admin_metadata"] = {"model_order": ["user-model"]}
@@ -233,11 +279,11 @@ def test_unmanaged_entries_without_matching_url_are_preserved():
 def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     catalogue = openwebui.ownership_catalogue()
-    openai_url = catalogue["dw-openai"]["url"]
-    ollama_url = catalogue["dw-ollama"]["url"]
+    openai_url = catalogue["openai"]["url"]
+    ollama_url = catalogue["ollama"]["url"]
     desired = {
-        "openai": [_entry("dw-openai", openai_url)],
-        "ollama": [_entry("dw-ollama", ollama_url, "ollama", "ollama")],
+        "openai": [_entry("openai", openai_url)],
+        "ollama": [_entry("ollama", ollama_url, "ollama", "ollama")],
     }
 
     class Client:
@@ -245,7 +291,7 @@ def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
             self.openai = {
                 "connections": [
                     _plain_default(openai_url, "openai"),
-                    _entry("dw-openai", openai_url),
+                    _entry("openai", openai_url),
                 ]
             }
             self.ollama = {
@@ -253,7 +299,8 @@ def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
                 "OLLAMA_API_CONFIGS": {
                     "0": {"enable": True},
                     "1": {
-                        "prefix_id": "dw-ollama",
+                        "prefix_id": "ollama",
+                        "managed_by": "dotfiles",
                         "connection_type": "ollama",
                         "enable": True,
                     },
@@ -278,7 +325,7 @@ def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
     client = Client()
     openwebui.reconcile_via_api(client, desired)
     assert sorted(client.writes) == ["ollama", "openai"]
-    assert client.openai["connections"][0]["config"]["prefix_id"] == "dw-openai"
+    assert client.openai["connections"][0]["config"]["prefix_id"] == "openai"
     assert client.ollama["OLLAMA_BASE_URLS"] == [ollama_url]
     # Second pass: no writes, nothing to reconcile.
     client.writes = []
@@ -289,17 +336,17 @@ def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
 def test_unmanaged_and_envelope_preserved_and_only_changed_collection_written():
     class Client:
         def __init__(self):
-            unmanaged = _entry("user", "http://user/v1")
+            unmanaged = _entry("user", "http://user/v1", managed=False)
             unmanaged["admin_metadata"] = {"model_order": ["user-model"]}
             self.openai = {
                 "connections": [
                     unmanaged,
-                    _entry("dw-openai", "https://api.openai.com/v1"),
+                    _entry("openai", "https://api.openai.com/v1"),
                 ]
             }
             self.ollama = {
                 "items": [
-                    _entry("dw-ollama", "http://localhost:11434", "ollama", "ollama")
+                    _entry("ollama", "http://127.0.0.1:11434", "ollama", "ollama")
                 ]
             }
             self.writes = []
@@ -320,8 +367,8 @@ def test_unmanaged_and_envelope_preserved_and_only_changed_collection_written():
 
     client = Client()
     desired = {
-        "openai": [_entry("dw-openai", "https://api.openai.com/v1", key="rotated")],
-        "ollama": [_entry("dw-ollama", "http://localhost:11434", "ollama", "ollama")],
+        "openai": [_entry("openai", "https://api.openai.com/v1", key="rotated")],
+        "ollama": [_entry("ollama", "http://127.0.0.1:11434", "ollama", "ollama")],
     }
     openwebui.reconcile_via_api(client, desired)
     assert [name for name, _ in client.writes] == ["openai"]
@@ -375,18 +422,18 @@ def test_proxy_ownership_add_update_and_second_run_is_idempotent(monkeypatch):
 
 def test_wrong_collection_is_collision():
     desired = {
-        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
         "ollama": [],
     }
-    current = [_entry("dw-openai", "https://api.openai.com/v1", collection="ollama")]
+    current = [_entry("openai", "https://api.openai.com/v1", collection="ollama")]
     result = openwebui.reconcile([], current, desired)
     assert result.status == "collision"
 
 
 def test_empty_prefix_id_current_entries_do_not_crash():
-    current = [_entry("", "https://api.openai.com/v1", key="seeded-key")]
+    current = [_entry("", "https://api.openai.com/v1", key="seeded-key", managed=False)]
     desired = {
-        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
         "ollama": [],
     }
     result = openwebui.reconcile([], current, desired)
@@ -396,11 +443,11 @@ def test_empty_prefix_id_current_entries_do_not_crash():
         for item in result.plan.entries
     }
     assert actions[""] == "keep"
-    assert actions["dw-openai"] == "add"
+    assert actions["openai"] == "add"
 
 
 def test_null_prefix_id_current_entry_does_not_crash():
-    current = [_entry("", "https://api.openai.com/v1", key="seeded-key")]
+    current = [_entry("", "https://api.openai.com/v1", key="seeded-key", managed=False)]
     current[0]["config"]["prefix_id"] = None
     result = openwebui.reconcile(
         current,
@@ -423,17 +470,17 @@ def test_live_0114_config_shapes_normalize_and_round_trip():
         "ENABLE_OPENAI_API": True,
         "OPENAI_API_BASE_URLS": ["http://openai/v1"],
         "OPENAI_API_KEYS": ["key"],
-        "OPENAI_API_CONFIGS": {"0": {"prefix_id": "dw-openai", "enable": True}},
+        "OPENAI_API_CONFIGS": {"0": {"prefix_id": "openai", "enable": True}},
     }
     ollama = {
         "ENABLE_OLLAMA_API": True,
         "OLLAMA_BASE_URLS": ["http://ollama"],
-        "OLLAMA_API_CONFIGS": {"0": {"key": "key", "prefix_id": "dw-ollama"}},
+        "OLLAMA_API_CONFIGS": {"0": {"key": "key", "prefix_id": "ollama"}},
     }
     openai_entries, _ = openwebui.OpenWebUIClient.normalize(openai, "openai")
     ollama_entries, _ = openwebui.OpenWebUIClient.normalize(ollama, "ollama")
     assert openai_entries[0]["key"] == "key"
-    assert ollama_entries[0]["config"] == {"prefix_id": "dw-ollama"}
+    assert ollama_entries[0]["config"] == {"prefix_id": "ollama"}
     assert openwebui.OpenWebUIClient.payload(openai, openai_entries) == openai
     assert openwebui.OpenWebUIClient.payload(ollama, ollama_entries) == ollama
 
@@ -469,7 +516,11 @@ def test_snapshot_change_fails_closed():
 
         def get_openai_config(self):
             self.calls += 1
-            return [] if self.calls == 1 else [_entry("user", "http://changed")]
+            return (
+                []
+                if self.calls == 1
+                else [_entry("user", "http://changed", managed=False)]
+            )
 
         def get_ollama_config(self):
             return []
@@ -484,7 +535,7 @@ def test_snapshot_change_fails_closed():
         openwebui.reconcile_via_api(
             Client(),
             {
-                "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+                "openai": [_entry("openai", "https://api.openai.com/v1")],
                 "ollama": [],
             },
         )
@@ -498,12 +549,12 @@ def test_mask_secret():
 
 def test_cloud_connections_require_keys(monkeypatch):
     assert not any(
-        item["config"]["prefix_id"] == "dw-openai"
+        item["config"]["prefix_id"] == "openai"
         for item in openwebui.compute_desired_state()["openai"]
     )
     monkeypatch.setenv("OPENAI_API_KEY", "key")
     assert any(
-        item["config"]["prefix_id"] == "dw-openai"
+        item["config"]["prefix_id"] == "openai"
         for item in openwebui.compute_desired_state()["openai"]
     )
 
@@ -592,7 +643,7 @@ def test_cli_exit_codes(monkeypatch):
         module,
         "compute_desired_state",
         lambda: {
-            "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+            "openai": [_entry("openai", "https://api.openai.com/v1")],
             "ollama": [],
         },
     )
@@ -932,3 +983,42 @@ def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
     assert result.returncode == 0
     assert target.is_file()
     assert target.stat().st_mode & 0o777 == 0o600
+    if filename == "service.env":
+        names = {
+            line.split("=", 1)[0]
+            for line in target.read_text().splitlines()
+            if "=" in line
+        }
+        assert names == {
+            "WEBUI_SECRET_KEY",
+            "WEBUI_ADMIN_EMAIL",
+            "WEBUI_ADMIN_PASSWORD",
+            "OPENWEBUI_API_KEY",
+            "OPENWEBUI_PORT",
+            "DEFAULT_LOCALE",
+        }
+
+
+def test_openwebui_default_locale_resolution(tmp_path):
+    library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    cases = [
+        ({"OPENWEBUI_DEFAULT_LOCALE": "en-GB", "LANG": "fr_CA.UTF-8"}, "en-GB"),
+        ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),
+        ({"LANG": "en_CA.UTF-8"}, "en-US"),
+        ({}, "en-US"),
+    ]
+    for variables, expected in cases:
+        environment = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")}
+        environment.update(variables)
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source {shlex.quote(str(library))}; openwebui_default_locale",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == expected
