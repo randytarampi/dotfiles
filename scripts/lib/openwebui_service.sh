@@ -157,7 +157,7 @@ openwebui_service_restart() {
 }
 
 openwebui_service_port() {
-  local service_env="${1:-${OPENWEBUI_SERVICE_ENV:-$HOME/.local/share/openwebui/service.env}}"
+  local service_env="${OPENWEBUI_SERVICE_ENV:-$HOME/.local/share/openwebui/service.env}"
   local port="${OPENWEBUI_PORT:-}"
   if [[ -z "$port" && -f "$service_env" ]]; then
     local OPENWEBUI_PORT=""

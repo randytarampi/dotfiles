@@ -1275,7 +1275,8 @@ def test_openwebui_service_port_uses_retained_service_env(tmp_path):
             "bash",
             "-c",
             f"source {shlex.quote(str(service_script))}; "
-            f"openwebui_service_port {shlex.quote(str(service_env))}",
+            f"OPENWEBUI_SERVICE_ENV={shlex.quote(str(service_env))}; "
+            f"openwebui_service_port",
         ],
         env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
         capture_output=True,
