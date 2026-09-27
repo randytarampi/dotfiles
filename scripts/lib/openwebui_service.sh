@@ -13,24 +13,48 @@ openwebui_service_plist() {
 
 openwebui_default_locale() {
   local locale="${OPENWEBUI_DEFAULT_LOCALE:-}" candidate variable
-  local -a supported_locales=("en-US" "en-GB")
+  local -a supported_locales=(
+    "ar" "ar-BH"
+    "az-AZ" "bg-BG"
+    "bn-BD" "bo-TB"
+    "bs-BA" "ca-ES"
+    "ceb-PH" "cs-CZ"
+    "da-DK" "de-DE"
+    "dg-DG" "el-GR"
+    "en-US" "en-GB"
+    "es-ES" "et-EE"
+    "eu-ES" "fa-IR"
+    "fi-FI" "fil-PH"
+    "fo-FO" "fr-CA"
+    "fr-FR" "gl-ES"
+    "he-IL" "hi-IN"
+    "hr-HR" "hu-HU"
+    "id-ID" "ie-GA"
+    "it-IT" "ja-JP"
+    "ka-GE" "kab-DZ"
+    "ko-KR" "lt-LT"
+    "lv-LV" "ms-MY"
+    "nb-NO" "nl-NL"
+    "pa-IN" "pl-PL"
+    "pt-BR" "pt-PT"
+    "ro-RO" "ru-RU"
+    "sk-SK" "sl-SI"
+    "sr-RS" "sv-SE"
+    "ta-IN" "th-TH"
+    "tk-TM" "tr-TR"
+    "ug-CN" "uk-UA"
+    "ur-PK" "uz-Cyrl-UZ"
+    "uz-Latn-UZ" "vi-VN"
+    "zh-CN" "zh-TW"
+  )
   if [[ -n "$locale" ]]; then
     locale="${locale%%.*}"
     locale="${locale//_/-}"
-    # Overrides resolve against the pinned frontend's supported-locale list:
-    # only supported region-qualified locales pass through verbatim. Bare or
-    # region-unsupported codes (en, en-CA, zh, xx-YY) lack a frontend bundle
-    # and reproduce the open-webui#30348 raw-key bug, so they fall back to
-    # en-US — the pinned release ships only en-US and en-GB bundles.
-    for candidate in "${supported_locales[@]}"; do
-      [[ "$locale" == "$candidate" ]] && {
-        printf '%s\n' "$locale"
-        return
-      }
-    done
-    printf '%s\n' "${supported_locales[0]}"
-    return
   fi
+  # This list mirrors the pinned v0.11.4 frontend's
+  # src/lib/i18n/locales/languages.json: exact matches pass through, bare codes
+  # snap to the first region-qualified bundle in that file's order, and unknown
+  # values fall back to en-US (open-webui#30348 raw-key bug).
   if [[ -z "$locale" ]]; then
     for variable in LANGUAGE LC_ALL LC_MESSAGES LANG; do
       candidate="${!variable:-}"
@@ -49,7 +73,13 @@ openwebui_default_locale() {
       return
     }
   done
-  printf '%s\n' "${supported_locales[0]}"
+  for candidate in "${supported_locales[@]}"; do
+    [[ "$candidate" == "${locale}-"* ]] && {
+      printf '%s\n' "$candidate"
+      return
+    }
+  done
+  printf '%s\n' "en-US"
 }
 
 openwebui_service_env_sync() {
