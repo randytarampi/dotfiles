@@ -588,9 +588,14 @@ def _reconcile_catalogue(client, dry_run=False):
             current_catalogue_ids.update(value)
         elif value:
             current_catalogue_ids.update(value.split(","))
+    # Only state-proven managed IDs are retained: the state file is the
+    # ownership authority, and inferring ownership from the current catalogue
+    # would adopt unmanaged admin choices on first run and delete them once
+    # the provider recovers.
+    state_owned = owned if state_present else set()
     retained_unavailable = {
         model
-        for model in (owned if state_present else set()) | current_catalogue_ids
+        for model in state_owned
         if any(
             model.startswith(f"{provider}.") or model.startswith(f"{provider}/")
             for provider in unavailable
