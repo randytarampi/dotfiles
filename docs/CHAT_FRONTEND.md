@@ -270,7 +270,7 @@ frontend.
    reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
    directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
-   grow — it is *not* part of the initial build (avoids over-layering; Mozart
+  grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).
 7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs
    an immutable versioned release — exact pip version or a digest-pinned
@@ -451,7 +451,7 @@ Two security notes for MCP registration (accepted, documented boundaries):
 Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode
 Zen, Ollama Cloud) are **reconciler-managed**: set the provider's
 upstream-native API key in `~/.env` and the next `make deploy` adds/updates
-   the bare `<provider>` connection with the same ownership guarantees as local
+  the bare `<provider>` connection with the same ownership guarantees as local
 engines. No admin-UI entry is needed for these. A brand-new provider that the
 reconciler does not know yet needs a small `compute_desired_state()` /
 ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic
@@ -568,7 +568,7 @@ live-validated against `open-webui==0.11.4`:
 
 1. **Meridian:** included by explicit user authorization (Phase 4 planning)
    as a reconciler-managed `meridian` connection whenever
-   `is_meridian_configured()` reports availability; no entry is created
+  `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
 2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.11.4}`
    in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
