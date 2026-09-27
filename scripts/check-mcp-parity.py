@@ -64,6 +64,8 @@ def main():
     args = _parse_args()
     try:
         data = json.loads(args.registry.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("registry must be a JSON object")
         referenced = {
             item
             for item in data.get("project_mcp_templates", [])
@@ -72,7 +74,7 @@ def main():
         referenced.update(_walk_templates(data.get("tools", {})))
         configs = _json_stems(args.mcp_dir) - {args.registry.stem}
         templates = _json_stems(args.templates_dir)
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, json.JSONDecodeError) as error:
         logger.error("MCP parity error: %s", error)
         return 1
     missing_configs = referenced - configs
