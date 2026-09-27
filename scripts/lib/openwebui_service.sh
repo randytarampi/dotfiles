@@ -32,7 +32,8 @@ openwebui_default_locale() {
     if [[ "$locale" == en || "$locale" == en-* ]]; then
       printf '%s\n' "${supported_locales[0]}"
     elif [[ "$locale" != *-* ]]; then
-      printf '%s\n' "${locale}-${locale^^}"
+      # tr keeps this bash-3.2-safe (/bin/bash on macOS lacks ${var^^}).
+      printf '%s\n' "${locale}-$(printf '%s' "$locale" | tr '[:lower:]' '[:upper:]')"
     else
       printf '%s\n' "$locale"
     fi
