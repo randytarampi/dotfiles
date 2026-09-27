@@ -45,9 +45,12 @@ jobs:
           sudo apt-get update
           # actionlint is not in Ubuntu's apt repositories — install the pinned
           # upstream release binary instead.
-          sudo apt-get install -y bats shellcheck shfmt
+          # Pin shfmt to the brew version: apt's 3.8.0 formats case patterns
+          # differently than 3.14.x and would fail the shfmt drift gate.
+          sudo apt-get install -y bats shellcheck
           mkdir -p "$HOME/bin"
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 "$HOME/bin"
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64" -o "$HOME/bin/shfmt" && chmod +x "$HOME/bin/shfmt"
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Prepare empty environment
