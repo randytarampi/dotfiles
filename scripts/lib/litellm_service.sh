@@ -5,10 +5,10 @@ litellm_service_plist() { printf '%s\n' "$HOME/Library/LaunchAgents/com.litellm.
 
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
-  local LITELLM_MASTER_KEY="" LITELLM_PORT=""
+  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI=""
   local OMLX_API_KEY="" MERIDIAN_API_KEY="" OPENAI_API_KEY="" ANTHROPIC_API_KEY="" GEMINI_API_KEY="" OPENROUTER_API_KEY="" OPENCODE_API_KEY="" OLLAMA_API_KEY=""
   mkdir -p "$(dirname "$service_env")"
-  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT=""
+  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI=""
   local env_OMLX_API_KEY="" env_MERIDIAN_API_KEY="" env_OPENAI_API_KEY="" env_ANTHROPIC_API_KEY="" env_GEMINI_API_KEY="" env_OPENROUTER_API_KEY="" env_OPENCODE_API_KEY="" env_OLLAMA_API_KEY=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
@@ -16,6 +16,7 @@ litellm_service_env_sync() {
   fi
   env_LITELLM_MASTER_KEY="$LITELLM_MASTER_KEY"
   env_LITELLM_PORT="$LITELLM_PORT"
+  env_DISABLE_ADMIN_UI="$DISABLE_ADMIN_UI"
   env_OMLX_API_KEY="$OMLX_API_KEY"
   env_MERIDIAN_API_KEY="$MERIDIAN_API_KEY"
   env_OPENAI_API_KEY="$OPENAI_API_KEY"
@@ -30,6 +31,7 @@ litellm_service_env_sync() {
   fi
   [[ -n "$env_LITELLM_MASTER_KEY" ]] && LITELLM_MASTER_KEY="$env_LITELLM_MASTER_KEY"
   [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
+  [[ -n "$env_DISABLE_ADMIN_UI" ]] && DISABLE_ADMIN_UI="$env_DISABLE_ADMIN_UI"
   [[ -n "$env_OMLX_API_KEY" ]] && OMLX_API_KEY="$env_OMLX_API_KEY"
   [[ -n "$env_MERIDIAN_API_KEY" ]] && MERIDIAN_API_KEY="$env_MERIDIAN_API_KEY"
   [[ -n "$env_OPENAI_API_KEY" ]] && OPENAI_API_KEY="$env_OPENAI_API_KEY"
@@ -59,6 +61,15 @@ litellm_service_env_sync() {
     done
   fi
   LITELLM_PORT="${LITELLM_PORT:-4000}"
+  # DB-free deployments cannot complete a UI login (it mints a DB-backed
+  # session key), so the Admin UI is disabled by default to avoid a
+  # confusing "Not connected to DB!" login error. Set
+  # LITELLM_DISABLE_ADMIN_UI=False in ~/.env to re-enable it.
+  if [[ -n "${LITELLM_DISABLE_ADMIN_UI:-}" ]]; then
+    DISABLE_ADMIN_UI="$LITELLM_DISABLE_ADMIN_UI"
+  else
+    DISABLE_ADMIN_UI="${DISABLE_ADMIN_UI:-True}"
+  fi
   if [[ -z "$LITELLM_MASTER_KEY" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1
     local payload
@@ -76,6 +87,7 @@ litellm_service_env_sync() {
   {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
+    printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
     [[ -n "${OMLX_API_KEY:-}" ]] && printf 'OMLX_API_KEY=%q\n' "$OMLX_API_KEY"
     [[ -n "${MERIDIAN_API_KEY:-}" ]] && printf 'MERIDIAN_API_KEY=%q\n' "$MERIDIAN_API_KEY"
     [[ -n "${OPENAI_API_KEY:-}" ]] && printf 'OPENAI_API_KEY=%q\n' "$OPENAI_API_KEY"
