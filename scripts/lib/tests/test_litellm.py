@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -75,15 +76,22 @@ def test_render_is_idempotent(tmp_path):
 
 def test_litellm_service_missing_plist_fails_hermetically(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
-    script = f"HOME={tmp_path!s}; export HOME; source {helper!s}; litellm_service_start"
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; litellm_service_start"
+    )
     result = subprocess.run(["bash", "-c", script], capture_output=True)
     assert result.returncode == 1
 
 
-def test_litellm_env_sync_sparse_environment(tmp_path):
+def test_litellm_env_sync_in_sparse_environment(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     env_path = tmp_path / "litellm" / "service.env"
-    script = f"HOME={tmp_path!s}; export HOME; source {helper!s}; litellm_service_env_sync {env_path!s}"
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
     result = subprocess.run(
         ["bash", "-c", script],
         env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
@@ -99,8 +107,10 @@ def test_litellm_master_key_generation_rejects_failure_or_empty(tmp_path, openss
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     env_path = tmp_path / "service.env"
     script = (
-        f"HOME={tmp_path!s}; export HOME; openssl() {{ {openssl_body}; }}; "
-        f"source {helper!s}; litellm_service_env_sync {env_path!s}"
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"openssl() {{ {openssl_body}; }}; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
     )
     result = subprocess.run(["bash", "-c", script], capture_output=True)
     assert result.returncode == 1
