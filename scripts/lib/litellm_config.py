@@ -3,6 +3,8 @@
 import json
 import os
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from constants import (
@@ -12,6 +14,11 @@ from constants import (
 )
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
+
+# Cloud providers whose live /v1/models catalogue the generator enumerates
+# into the model list. Non-enumerable providers (openai keyless, opencode
+# 403) keep their single curated default alias instead.
+LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "opencode", "ollama-cloud")
 
 
 def _model_name(item):
@@ -25,6 +32,22 @@ def _entry(alias, model, *, api_base=None, key_env=None):
     if key_env:
         params["api_key"] = f"os.environ/{key_env}"
     return {"model_name": alias, "litellm_params": params}
+
+
+def _live_catalogue(provider, key, base_url, timeout=10):
+    """Fetch a provider's live /models IDs; empty list when unreachable."""
+    url = base_url.rstrip("/") + "/models"
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.load(response)
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+    return sorted(
+        str(item["id"])
+        for item in payload.get("data", [])
+        if isinstance(item, dict) and item.get("id")
+    )
 
 
 def _safe_models(provider):
@@ -111,6 +134,22 @@ def compute_model_list(environ=None):
     }
     for provider, (key_env, model, base_url) in clouds.items():
         if environ.get(key_env, "").strip():
+            if provider in LIVE_CATALOGUE_PROVIDERS:
+                live_base = PROVIDER_ENDPOINTS.get(provider, {}).get(
+                    "baseUrl", base_url
+                )
+                live_ids = _live_catalogue(provider, environ[key_env], live_base)
+                if live_ids:
+                    entries.extend(
+                        _entry(
+                            f"{provider}/{model_id}",
+                            f"openai/{model_id}",
+                            api_base=live_base,
+                            key_env=key_env,
+                        )
+                        for model_id in live_ids
+                    )
+                    continue
             entries.append(
                 _entry(f"{provider}/default", model, api_base=base_url, key_env=key_env)
             )
