@@ -500,24 +500,72 @@ def _reconcile_catalogue(client, dry_run=False):
         raise OpenWebUIError("Open WebUI model catalogue has an invalid shape")
     curated = _curated_cloud_models()
     if curated:
-        # Validate curated IDs against the LIVE /api/models listing: any
-        # curated ID the running service does not know is dropped (never
-        # guess ID formats). Service down -> skip without writing.
+        # Resolve curated names against live provider-prefixed IDs. Open WebUI
+        # may add an infix to the upstream name, so never guess an ID format;
+        # only use a live ID whose suffix matches the curated name. Service
+        # down -> skip without writing.
         try:
-            live_ids = {m.get("id") for m in client.get_models().get("data", [])}
+            live_ids = {
+                m.get("id")
+                for m in client.get_models().get("data", [])
+                if isinstance(m, dict) and isinstance(m.get("id"), str)
+            }
         except OpenWebUIError as error:
             logger.warning(
                 "Skipping catalogue reconciliation; live model IDs unavailable: %s",
                 error,
             )
             return 0
-        missing = [m for m in curated if m not in live_ids]
-        if missing:
-            logger.warning(
-                "Dropping %d curated model IDs absent from live /api/models",
-                len(missing),
+        if not live_ids:
+            return 0
+        live_by_provider = {
+            provider: {
+                live_id
+                for live_id in live_ids
+                if isinstance(live_id, str) and live_id.startswith(f"{provider}.")
+            }
+            for provider in {model.split("/", 1)[0] for model in curated}
+        }
+        resolved = []
+        missing = []
+        unavailable = set()
+        for model in curated:
+            provider, name = model.split("/", 1)
+            match = next(
+                (
+                    live_id
+                    for live_id in sorted(live_by_provider[provider])
+                    if live_id[len(provider) + 1 :] == name
+                    or live_id.endswith(f"/{name}")
+                ),
+                None,
             )
-            curated = [m for m in curated if m in live_ids]
+            if match is None:
+                missing.append(model)
+            else:
+                resolved.append(match)
+        for provider in live_by_provider:
+            provider_models = [
+                model for model in curated if model.split("/", 1)[0] == provider
+            ]
+            if provider_models and not any(
+                model in missing for model in provider_models
+            ):
+                continue
+            if provider_models and all(model in missing for model in provider_models):
+                unavailable.add(provider)
+        for provider in sorted(unavailable):
+            logger.info("Curated models for %s unavailable live; skipping", provider)
+        if missing:
+            partial_missing = [
+                model for model in missing if model.split("/", 1)[0] not in unavailable
+            ]
+            if partial_missing:
+                logger.warning(
+                    "Dropping %d curated model IDs absent from live /api/models",
+                    len(partial_missing),
+                )
+        curated = resolved
     owned = _load_catalogue_state(set(curated), migrate=not dry_run)
     managed_ids = owned | set(curated)
     desired = dict(response)
