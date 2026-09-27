@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
 # 403) keep their single curated default alias instead.
-LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "opencode", "ollama-cloud")
+LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "ollama-cloud")
 
 
 class LiveCatalogueError(Exception):
