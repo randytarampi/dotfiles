@@ -311,7 +311,10 @@ CPTR_SERVICE_ENV="$CPTR_HOME/service.env"
 CPTR_VERSION="${DOTFILES_OPENWEBUI_COMPUTER_VERSION:-0.9.21}"
 CPTR_PYTHON=""
 for candidate in python3.11 python3.12; do
-  if command -v "$candidate" >/dev/null 2>&1; then CPTR_PYTHON="$(command -v "$candidate")"; break; fi
+  if command -v "$candidate" >/dev/null 2>&1; then
+    CPTR_PYTHON="$(command -v "$candidate")"
+    break
+  fi
 done
 [[ -n "$CPTR_PYTHON" ]] || die "cptr requires python3.11 or python3.12"
 if [[ ! -x "$CPTR_VENV/bin/python" ]]; then
@@ -350,7 +353,10 @@ else
   cptr_port="${OPENWEBUI_COMPUTER_PORT:-8124}"
   cptr_healthy=0
   for _ in {1..15}; do
-    if curl -fsS --max-time 3 "http://127.0.0.1:${cptr_port}/api/health" >/dev/null 2>&1; then cptr_healthy=1; break; fi
+    if curl -fsS --max-time 3 "http://127.0.0.1:${cptr_port}/api/health" >/dev/null 2>&1; then
+      cptr_healthy=1
+      break
+    fi
     sleep 2
   done
   [[ "$cptr_healthy" == "1" ]] || warn "cptr is not healthy yet; first-launch setup URL remains in computer.log"
