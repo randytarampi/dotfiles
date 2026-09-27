@@ -194,12 +194,17 @@ check-templates: ## Render JSON chezmoi templates and validate output (catches G
 	done
 
 check-templates-scripts: ## Render and lint all run_onchange shell templates
-	@set -e; tmpdir="$$(mktemp -d)"; trap 'rm -rf "$$tmpdir"' EXIT; \
-	for tmpl in .chezmoiscripts/run_onchange_*.sh.tmpl; do \
-		out="$$tmpdir/$$(basename "$$tmpl" .tmpl)"; \
-		$(CHEZMOI) execute-template < "$$tmpl" > "$$out"; \
-		bash -n "$$out"; shellcheck --severity=error -s bash "$$out"; "$(SHFMT)" -i 4 -w "$$out"; "$(SHFMT)" -i 4 -d "$$out"; \
-	done
+	@if [ -n "$(SHFMT)" ]; then \
+		set -e; tmpdir="$$(mktemp -d)"; trap 'rm -rf "$$tmpdir"' EXIT; \
+		for tmpl in .chezmoiscripts/run_onchange_*.sh.tmpl; do \
+			out="$$tmpdir/$$(basename "$$tmpl" .tmpl)"; \
+			$(CHEZMOI) execute-template < "$$tmpl" > "$$out"; \
+			bash -n "$$out"; shellcheck --severity=error -s bash "$$out"; "$(SHFMT)" -i 2 -d "$$out"; \
+		done; \
+	else \
+		echo "shfmt not found. Install it with 'brew install shfmt' or 'winget install mvdan.shfmt'."; \
+		exit 1; \
+	fi
 
 check-mcp-parity: ## Verify MCP registry templates and config files are in parity
 	@python3 scripts/check-mcp-parity.py
@@ -217,7 +222,7 @@ verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-con
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
+ci-verify: lint drift doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
