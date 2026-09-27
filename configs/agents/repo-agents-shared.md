@@ -9,6 +9,9 @@ These policies apply to work in every repository.
 - Verify from the committed tree, never the working tree: when the tree is dirty, stash first (or verify `git show HEAD:<file>`) so in-flight content cannot satisfy a check the commit would fail.
 - Treat a lane's verification claim as unproven until it is independently re-run: re-execute the repo's verify command (and `actionlint` on workflow changes) before accepting it.
 - A service environment schema change is not complete in one surface: when adding, removing, or renaming a key in a generated `service.env`, update the generating `*_service_env_sync()` emitter, the verification script's required-names/expected set, and the env-sync test asserting the key schema — all in the same change.
+- Do not sleep-poll CI or specialist lanes; dispatch feedback-addressing work while checks run in the background and reconcile results when they land.
+- Stage explicit file paths, never `git add -A`: tooling temp files (coverage fragments, caches) land in untracked state and get swept into wholesale staging.
+- Prefer REST (`gh api repos/OWNER/REPO/...`) for label/metadata operations; `gh pr` GraphQL subcommands may fail on tokens without `read:org`.
 
 ### Commits and pushes
 
