@@ -24,7 +24,7 @@ def hermetic_environment(monkeypatch):
         ):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
-    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: None)
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
 
 
 def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
@@ -40,9 +40,9 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     }
 
 
-@pytest.mark.parametrize("catalogue", [["m1", "m2"], None, []])
+@pytest.mark.parametrize("catalogue", [["m1", "m2"], []])
 def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "secret")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
 
     entries = litellm_config.compute_model_list()
@@ -56,6 +56,13 @@ def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
         assert "api_base" in aliases["openrouter/m1"]["litellm_params"]
     else:
         assert "openrouter/default" in aliases
+
+
+def test_live_catalogue_failure_aborts_model_list(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: None)
+    with pytest.raises(litellm_config.LiveCatalogueError):
+        litellm_config.compute_model_list()
 
 
 def test_local_registry_models_use_protocol_specific_entries(monkeypatch):

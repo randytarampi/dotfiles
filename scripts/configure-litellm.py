@@ -13,7 +13,11 @@ if LIB_DIR not in sys.path:
 import logger  # noqa: E402 (sys.path must be set up first)
 from cli_helpers import add_common_args  # noqa: E402
 from env import load_env  # noqa: E402
-from litellm_config import compute_model_list, write_config  # noqa: E402
+from litellm_config import (  # noqa: E402
+    LiveCatalogueError,
+    compute_model_list,
+    write_config,
+)
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 
@@ -48,6 +52,12 @@ def main():
             len(entries),
         )
         return 0
+    except LiveCatalogueError as error:
+        logger.error(
+            "LiteLLM live catalogue enumeration failed; keeping existing config: %s",
+            error,
+        )
+        return 1
     except Exception as error:
         logger.error("LiteLLM configuration failed: %s", error)
         return 1
