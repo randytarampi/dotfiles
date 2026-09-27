@@ -383,6 +383,88 @@ def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
     assert client.writes == []
 
 
+def test_reconcile_via_api_migrates_legacy_dw_entry_and_verifies():
+    catalogue = openwebui.ownership_catalogue()
+    ollama_url = catalogue["ollama"]["url"]
+
+    class Client:
+        def __init__(self):
+            self.ollama = {
+                "OLLAMA_BASE_URLS": [ollama_url],
+                "OLLAMA_API_CONFIGS": {
+                    "0": {
+                        "prefix_id": "dw-ollama",
+                        "connection_type": "ollama",
+                        "enable": True,
+                    }
+                },
+            }
+            self.writes = 0
+
+        def get_openai_config(self):
+            return []
+
+        def get_ollama_config(self):
+            return self.ollama
+
+        def update_openai_config(self, payload):
+            raise AssertionError("unexpected OpenAI write")
+
+        def update_ollama_config(self, payload):
+            self.ollama = payload
+            self.writes += 1
+
+    desired = {
+        "openai": [],
+        "ollama": [_entry("ollama", ollama_url, "ollama", "ollama")],
+    }
+    client = Client()
+    result = openwebui.reconcile_via_api(client, desired)
+
+    assert result.status == "clean"
+    assert client.writes == 1
+    assert client.ollama["OLLAMA_API_CONFIGS"]["0"]["prefix_id"] == "ollama"
+    assert client.ollama["OLLAMA_API_CONFIGS"]["0"]["managed_by"] == "dotfiles"
+
+
+def test_reconcile_via_api_keeps_foreign_dw_entry_unmanaged():
+    catalogue = openwebui.ownership_catalogue()
+    openai_url = catalogue["openai"]["url"]
+    foreign = _entry("dw-foreign", "https://foreign.example/v1", managed=False)
+
+    class Client:
+        def __init__(self):
+            self.openai = {"connections": [foreign]}
+            self.writes = 0
+
+        def get_openai_config(self):
+            return self.openai
+
+        def get_ollama_config(self):
+            return []
+
+        def update_openai_config(self, payload):
+            self.openai = payload
+            self.writes += 1
+
+        def update_ollama_config(self, payload):
+            raise AssertionError("unexpected Ollama write")
+
+    desired = {
+        "openai": [_entry("openai", openai_url)],
+        "ollama": [],
+    }
+    client = Client()
+    result = openwebui.reconcile_via_api(client, desired)
+
+    assert client.writes == 1
+    assert any(
+        item["action"] == "delete"
+        and item["entry"]["config"]["prefix_id"] == "dw-foreign"
+        for item in result.plan.entries
+    )
+
+
 def test_unmanaged_and_envelope_preserved_and_only_changed_collection_written():
     class Client:
         def __init__(self):

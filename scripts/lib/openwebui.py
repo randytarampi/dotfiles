@@ -781,8 +781,17 @@ def reconcile_via_api(client, desired):
                 config.get("connection_type"),
                 collection,
             )
-            owner = catalogue.get(_identity(item))
-            return owner is not None and identity == _catalogue_identity(owner)
+            prefix = _identity(item)
+            owner = catalogue.get(prefix)
+            if owner is not None and identity == _catalogue_identity(owner):
+                return True
+            if prefix.startswith(MANAGED_PREFIX_NAMESPACE):
+                by_identity = {
+                    _catalogue_identity(owner): catalogue_prefix
+                    for catalogue_prefix, owner in catalogue.items()
+                }
+                return by_identity.get(identity) is not None
+            return False
 
         def _prune_fingerprint(item):
             # Full serialized identity (url + key + config) so a deleted seed
