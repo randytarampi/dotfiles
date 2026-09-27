@@ -46,7 +46,8 @@ def _json_stems(directory):
 
 def _parse_args():
     parser = argparse.ArgumentParser(
-        description="Verify MCP config and template directories have equal coverage."
+        description="Verify MCP config and template directories have equal coverage.",
+        allow_abbrev=False,
     )
     parser.add_argument("--registry", type=Path, default=REGISTRY)
     parser.add_argument("--mcp-dir", type=Path, default=MCP_DIR)
