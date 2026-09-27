@@ -691,6 +691,7 @@ def main():
             "WEBUI_ADMIN_EMAIL",
             "WEBUI_ADMIN_PASSWORD",
             "OPENWEBUI_API_KEY",
+            "DEFAULT_LOCALE",
         }
         if service_env.is_file():
             names = {
