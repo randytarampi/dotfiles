@@ -15,10 +15,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout target repository
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
+          submodules: false
       - name: Checkout trusted dotfiles scripts
         uses: actions/checkout@v7
         with:
@@ -27,6 +29,13 @@ jobs:
           path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
+          submodules: false
+      - name: Verify trusted codegraph script
+        run: |
+          test -f __TRUSTED_DOTFILES__/scripts/ci-codegraph.sh || {
+            echo "Trusted dotfiles checkout is missing scripts/ci-codegraph.sh" >&2
+            exit 1
+          }
       - name: Cache codegraph index
         uses: actions/cache@v6
         with:
