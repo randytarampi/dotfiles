@@ -872,7 +872,12 @@ def test_catalogue_reconciliation_is_merge_only(monkeypatch, tmp_path):
     curated = ["openai/gpt-x", "anthropic/claude-y"]
 
     monkeypatch.setattr(module, "_curated_cloud_models", lambda: curated)
-    live = {"data": [{"id": mid} for mid in curated]}
+    live = {
+        "data": [
+            {"id": "openai.gpt-x"},
+            {"id": "anthropic.claude-y"},
+        ]
+    }
 
     class Client:
         def __init__(self, current):
@@ -903,10 +908,11 @@ def test_catalogue_reconciliation_is_merge_only(monkeypatch, tmp_path):
     # user entries preserved verbatim and FIRST; managed entries appended
     # (order within the appended set is the reconciler's, not the caller's)
     assert client.current["DEFAULT_MODELS"].split(",")[0] == user_default
-    assert set(client.current["DEFAULT_MODELS"].split(",")[1:]) == set(curated)
+    live_curated = {"openai.gpt-x", "anthropic.claude-y"}
+    assert set(client.current["DEFAULT_MODELS"].split(",")[1:]) == live_curated
     assert client.current["DEFAULT_PINNED_MODELS"].split(",")[0] == "user-pinned-model"
     assert user_order[0] == client.current["MODEL_ORDER_LIST"][0]
-    assert set(curated).issubset(set(client.current["MODEL_ORDER_LIST"]))
+    assert live_curated.issubset(set(client.current["MODEL_ORDER_LIST"]))
     # idempotent second run: no write
     assert module._reconcile_catalogue(client) == 0
     assert client.writes == 1
@@ -915,6 +921,126 @@ def test_catalogue_reconciliation_is_merge_only(monkeypatch, tmp_path):
     assert client.writes == 2
     assert client.current["DEFAULT_MODELS"] == user_default
     assert client.current["MODEL_ORDER_LIST"] == user_order
+
+
+def test_catalogue_curated_names_resolve_to_live_prefixed_ids(
+    monkeypatch, tmp_path, caplog
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        module,
+        "_curated_cloud_models",
+        lambda: [
+            "google/gemini-2.5-flash",
+            "openrouter/inclusionai/ling-3.0-flash-fin:free",
+        ],
+    )
+
+    class Client:
+        def __init__(self):
+            self.current = {
+                "DEFAULT_MODELS": "",
+                "DEFAULT_PINNED_MODELS": "",
+                "MODEL_ORDER_LIST": [],
+            }
+
+        def get_models(self):
+            return {
+                "data": [
+                    {"id": "google.models/gemini-2.5-flash"},
+                    {"id": "openrouter.inclusionai/ling-3.0-flash-fin:free"},
+                ]
+            }
+
+        def get_models_config(self):
+            return dict(self.current)
+
+        def update_models_config(self, config):
+            self.current = dict(config)
+
+    client = Client()
+    assert module._reconcile_catalogue(client) == 0
+    assert set(client.current["MODEL_ORDER_LIST"]) == {
+        "google.models/gemini-2.5-flash",
+        "openrouter.inclusionai/ling-3.0-flash-fin:free",
+    }
+    assert "Dropping" not in caplog.text
+
+
+def test_catalogue_unavailable_provider_logs_info_without_warning(
+    monkeypatch, tmp_path, caplog
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "_curated_cloud_models", lambda: ["openai/gpt-5"])
+
+    class Client:
+        def get_models(self):
+            return {"data": [{"id": "google.models/gemini-2.5-flash"}]}
+
+        def get_models_config(self):
+            return {
+                "DEFAULT_MODELS": "",
+                "DEFAULT_PINNED_MODELS": "",
+                "MODEL_ORDER_LIST": [],
+            }
+
+    assert module._reconcile_catalogue(Client()) == 0
+    assert "Curated models for openai unavailable live; skipping" in caplog.text
+    assert "Dropping" not in caplog.text
+
+
+def test_catalogue_partial_provider_drift_warns_with_missing_count(
+    monkeypatch, tmp_path, caplog
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        module,
+        "_curated_cloud_models",
+        lambda: ["google/gemini-2.5-flash", "google/gemini-2.5-pro"],
+    )
+
+    class Client:
+        def __init__(self):
+            self.current = {
+                "DEFAULT_MODELS": "",
+                "DEFAULT_PINNED_MODELS": "",
+                "MODEL_ORDER_LIST": [],
+            }
+
+        def get_models(self):
+            return {"data": [{"id": "google.models/gemini-2.5-flash"}]}
+
+        def get_models_config(self):
+            return dict(self.current)
+
+        def update_models_config(self, config):
+            self.current = dict(config)
+
+    client = Client()
+    assert module._reconcile_catalogue(client) == 0
+    assert "Dropping 1 curated model IDs absent from live /api/models" in caplog.text
+    assert client.current["MODEL_ORDER_LIST"] == ["google.models/gemini-2.5-flash"]
+
+
+def test_catalogue_without_live_ids_skips_without_warning(
+    monkeypatch, tmp_path, caplog
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "_curated_cloud_models", lambda: ["openai/gpt-5"])
+
+    class Client:
+        def get_models(self):
+            return {"data": []}
+
+        def get_models_config(self):
+            return {}
+
+    assert module._reconcile_catalogue(Client()) == 0
+    assert "Dropping" not in caplog.text
 
 
 def test_computer_helpers_env_shape_and_missing_plist(tmp_path):
