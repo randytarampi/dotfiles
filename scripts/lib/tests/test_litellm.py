@@ -42,7 +42,7 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
 
 @pytest.mark.parametrize("catalogue", [["m1", "m2"], []])
 def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")  # trufflehog:ignore Lob
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
 
     entries = litellm_config.compute_model_list()

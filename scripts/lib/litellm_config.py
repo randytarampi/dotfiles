@@ -44,6 +44,9 @@ def _entry(alias, model, *, api_base=None, key_env=None):
 def _live_catalogue(provider, key, base_url, timeout=10):
     """Fetch a provider's live /models IDs, failing closed when unreachable."""
     url = base_url.rstrip("/") + "/models"
+    if not url.startswith("https://"):
+        # bandit B310: provider catalogues are https-only.
+        raise LiveCatalogueError(f"refusing non-https catalogue url for {provider}")
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
