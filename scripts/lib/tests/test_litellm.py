@@ -80,6 +80,20 @@ def test_litellm_service_missing_plist_fails_hermetically(tmp_path):
     assert result.returncode == 1
 
 
+def test_litellm_env_sync_sparse_environment(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    script = f"HOME={tmp_path!s}; export HOME; source {helper!s}; litellm_service_env_sync {env_path!s}"
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+    )
+    assert result.returncode == 0
+    assert env_path.is_file()
+    assert env_path.stat().st_mode & 0o777 == 0o600
+
+
 @pytest.mark.parametrize("openssl_body", ["return 1", ":"])
 def test_litellm_master_key_generation_rejects_failure_or_empty(tmp_path, openssl_body):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"

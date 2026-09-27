@@ -783,3 +783,24 @@ def test_configure_all_subgate_cleanup_blocks_are_siblings():
     assert source.count("DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP") >= 1
     assert source.count("DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP") >= 1
     assert "openwebui_service_stop" in source  # main chat service teardown
+
+
+@pytest.mark.parametrize(
+    "helper,filename",
+    [
+        ("openwebui_service_env_sync", "service.env"),
+        ("openwebui_terminal_service_env_sync", "terminal.env"),
+        ("openwebui_computer_service_env_sync", "computer.env"),
+    ],
+)
+def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
+    library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    target = tmp_path / filename
+    result = subprocess.run(
+        ["bash", "-c", f"source {library!s}; {helper} {target!s}"],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+    )
+    assert result.returncode == 0
+    assert target.is_file()
+    assert target.stat().st_mode & 0o777 == 0o600
