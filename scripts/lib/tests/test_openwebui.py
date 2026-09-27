@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -491,12 +492,15 @@ def test_terminal_helpers_error_paths_are_hermetic(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     env_file = tmp_path / "terminal.env"
     sync_script = (
-        f"source {helper!s}; openssl() {{ return 1; }}; "
-        f"openwebui_terminal_service_env_sync {env_file!s}"
+        f"source {shlex.quote(str(helper))}; openssl() {{ return 1; }}; "
+        f"openwebui_terminal_service_env_sync {shlex.quote(str(env_file))}"
     )
     sync = subprocess.run(["bash", "-c", sync_script], capture_output=True)
     assert sync.returncode == 1
-    start_script = f"HOME={tmp_path!s}; export HOME; source {helper!s}; openwebui_terminal_service_start"
+    start_script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; openwebui_terminal_service_start"
+    )
     start = subprocess.run(["bash", "-c", start_script], capture_output=True)
     assert start.returncode == 1
 
@@ -751,9 +755,11 @@ def test_computer_helpers_env_shape_and_missing_plist(tmp_path):
     env_path.parent.mkdir(parents=True)
     env_path.write_text("CPTR_DATA_DIR=/tmp\nOPENWEBUI_COMPUTER_PORT=8124\n")
     script = (
-        f"HOME={tmp_path!s}; export HOME; source {helper!s}; "
-        f"openwebui_computer_service_env_sync {env_path!s}; "
-        f"test -s {env_path!s}; grep -q '^CPTR_DATA_DIR=' {env_path!s}; "
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"openwebui_computer_service_env_sync {shlex.quote(str(env_path))}; "
+        f"test -s {shlex.quote(str(env_path))}; "
+        f"grep -q '^CPTR_DATA_DIR=' {shlex.quote(str(env_path))}; "
         "openwebui_computer_service_start"
     )
     result = subprocess.run(["bash", "-c", script], capture_output=True)
@@ -797,7 +803,12 @@ def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
     library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     target = tmp_path / filename
     result = subprocess.run(
-        ["bash", "-c", f"source {library!s}; {helper} {target!s}"],
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(library))}; "
+            f"{helper} {shlex.quote(str(target))}",
+        ],
         env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
         capture_output=True,
     )
