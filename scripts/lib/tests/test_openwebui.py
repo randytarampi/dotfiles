@@ -169,6 +169,123 @@ def test_removal_uses_catalogue_without_managed_marker():
     assert result.plan.entries[0]["action"] == "delete"
 
 
+def _plain_default(url, collection):
+    """Upstream-seeded default connection: enable-only config, no prefix_id."""
+    return {
+        "url": url,
+        "key": "",
+        "config": {"enable": True},
+        "collection": collection,
+    }
+
+
+def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    catalogue = openwebui.ownership_catalogue()
+    omlx_url = catalogue["dw-omlx-openai"]["url"]
+    ollama_url = catalogue["dw-ollama"]["url"]
+    desired = {
+        "openai": [_entry("dw-omlx-openai", omlx_url)],
+        "ollama": [_entry("dw-ollama", ollama_url, "ollama", "ollama")],
+    }
+    current_openai = [
+        _plain_default("https://api.openai.com/v1", "openai"),
+        _entry("dw-omlx-openai", omlx_url),
+        _plain_default(omlx_url, "openai"),
+    ]
+    current_ollama = [
+        _plain_default(ollama_url, "ollama"),
+        _entry("dw-ollama", ollama_url, "ollama", "ollama"),
+    ]
+    result = openwebui.reconcile(current_openai, current_ollama, desired)
+    deletes = {
+        item["entry"]["url"]
+        for item in result.plan.entries
+        if item["action"] == "delete"
+    }
+    assert deletes == {omlx_url, ollama_url}
+    # The managed twins are kept, not touched by the prune.
+    assert not any(
+        item["action"] in {"delete", "skip", "update"}
+        for item in result.plan.entries
+        if item["entry"]["config"].get("prefix_id", "").startswith("dw-")
+    )
+    assert result.status == "clean"
+
+
+def test_unmanaged_entries_without_matching_url_are_preserved():
+    desired = {
+        "openai": [_entry("dw-openai", "https://api.openai.com/v1")],
+        "ollama": [_entry("dw-ollama", "http://localhost:11434", "ollama", "ollama")],
+    }
+    unmanaged = _plain_default("http://user/v1", "openai")
+    unmanaged["admin_metadata"] = {"model_order": ["user-model"]}
+    result = openwebui.reconcile([unmanaged], [], desired)
+    item = next(
+        item
+        for item in result.plan.entries
+        if item["entry"].get("url") == "http://user/v1"
+    )
+    assert item["action"] == "keep"
+    assert item["entry"]["admin_metadata"] == {"model_order": ["user-model"]}
+
+
+def test_duplicate_prune_end_to_end_and_idempotent(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    catalogue = openwebui.ownership_catalogue()
+    openai_url = catalogue["dw-openai"]["url"]
+    ollama_url = catalogue["dw-ollama"]["url"]
+    desired = {
+        "openai": [_entry("dw-openai", openai_url)],
+        "ollama": [_entry("dw-ollama", ollama_url, "ollama", "ollama")],
+    }
+
+    class Client:
+        def __init__(self):
+            self.openai = {
+                "connections": [
+                    _plain_default(openai_url, "openai"),
+                    _entry("dw-openai", openai_url),
+                ]
+            }
+            self.ollama = {
+                "OLLAMA_BASE_URLS": [ollama_url, ollama_url],
+                "OLLAMA_API_CONFIGS": {
+                    "0": {"enable": True},
+                    "1": {
+                        "prefix_id": "dw-ollama",
+                        "connection_type": "ollama",
+                        "enable": True,
+                    },
+                },
+            }
+            self.writes = []
+
+        def get_openai_config(self):
+            return self.openai
+
+        def get_ollama_config(self):
+            return self.ollama
+
+        def update_openai_config(self, payload):
+            self.writes.append("openai")
+            self.openai = payload
+
+        def update_ollama_config(self, payload):
+            self.writes.append("ollama")
+            self.ollama = payload
+
+    client = Client()
+    openwebui.reconcile_via_api(client, desired)
+    assert sorted(client.writes) == ["ollama", "openai"]
+    assert client.openai["connections"][0]["config"]["prefix_id"] == "dw-openai"
+    assert client.ollama["OLLAMA_BASE_URLS"] == [ollama_url]
+    # Second pass: no writes, nothing to reconcile.
+    client.writes = []
+    openwebui.reconcile_via_api(client, desired)
+    assert client.writes == []
+
+
 def test_unmanaged_and_envelope_preserved_and_only_changed_collection_written():
     class Client:
         def __init__(self):

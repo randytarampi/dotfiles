@@ -504,6 +504,16 @@ def reconcile(
     plan = ReconcilePlan()
     collisions = []
     seen = set()
+    # Upstream seeds a default connection (plain enable-only config, no
+    # prefix_id) on first run; next to a managed twin with the same URL it is
+    # a duplicate. Only exact-URL matches of managed desired entries in the
+    # SAME collection are pruned; other unmanaged entries stay untouched.
+    managed_urls = {
+        collection: {
+            item["url"] for item in desired_entries if item["collection"] == collection
+        }
+        for collection in ("openai", "ollama")
+    }
     for collection, existing in current:
         config = existing.get("config", {})
         prefix = _identity(existing)
@@ -517,13 +527,22 @@ def reconcile(
         )
         expected_collection = owner and owner["collection"] == collection
         if not prefix.startswith(namespace):
-            plan.entries.append(
-                {
-                    "action": "keep",
-                    "collection": collection,
-                    "entry": copy.deepcopy(existing),
-                }
-            )
+            if existing.get("url") in managed_urls[collection]:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            else:
+                plan.entries.append(
+                    {
+                        "action": "keep",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
         elif (
             not owner
             or not expected_type
@@ -628,23 +647,35 @@ def reconcile_via_api(client, desired):
         else:
             client.update_ollama_config(payload)
     if changed:
-        before_unmanaged = {
-            collection: [
+        # Unmanaged entries the plan prunes as exact-URL duplicates of a
+        # managed entry are expected to disappear; anything else moving must
+        # fail the verification.
+        pruned_urls = {
+            (item["collection"], item["entry"]["url"])
+            for item in result.plan.entries
+            if item["action"] == "delete"
+            and not _identity(item["entry"]).startswith(MANAGED_PREFIX_NAMESPACE)
+        }
+
+        def _unmanaged(entries, collection):
+            return [
                 copy.deepcopy(item)
-                for item in result.snapshots[collection]["entries"]
+                for item in entries
                 if not _identity(item).startswith(MANAGED_PREFIX_NAMESPACE)
+                and (collection, item.get("url")) not in pruned_urls
             ]
+
+        before_unmanaged = {
+            collection: _unmanaged(result.snapshots[collection]["entries"], collection)
             for collection in result.snapshots
         }
         verified = reconcile(
             client.get_openai_config(), client.get_ollama_config(), desired
         )
         after_unmanaged = {
-            collection: [
-                copy.deepcopy(item)
-                for item in verified.snapshots[collection]["entries"]
-                if not _identity(item).startswith(MANAGED_PREFIX_NAMESPACE)
-            ]
+            collection: _unmanaged(
+                verified.snapshots[collection]["entries"], collection
+            )
             for collection in verified.snapshots
         }
         if (
