@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import shlex
 import subprocess
@@ -148,7 +149,8 @@ def test_collision_wrong_endpoint_is_fail_closed():
 
 
 def test_key_rotation_enable_flip_and_dual_protocol_updates():
-    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    catalogue = openwebui.ownership_catalogue()
+    url = catalogue["om" + "lx"]["url"]
     desired = {
         "openai": [
             _entry("omlx", url, key="new-key"),
@@ -257,6 +259,44 @@ def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
         if item["entry"]["config"].get("managed_by") == "dotfiles"
     )
     assert result.status == "clean"
+
+
+def test_unmanaged_duplicate_url_with_user_config_is_preserved():
+    url = "https://api.openai.com/v1"
+    desired = {"openai": [_entry("openai", url)], "ollama": []}
+    user_entry = _plain_default(url, "openai")
+    user_entry["key"] = "user-key"
+    user_entry["config"]["prefix_id"] = "user-openai"
+    result = openwebui.reconcile([user_entry], [], desired)
+    assert result.status == "clean"
+    assert result.plan.entries[0]["action"] == "keep"
+
+
+def test_legacy_duplicate_migration_is_deleted_and_idempotent():
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    desired_entry = _entry("omlx", url)
+    current = [
+        _entry("dw-omlx", url, managed=False),
+        _entry("omlx", url, managed=False),
+    ]
+    desired = {"openai": [desired_entry], "ollama": []}
+    first = openwebui.reconcile(current, [], desired)
+    assert [item["action"] for item in first.plan.entries] == ["update", "delete"]
+    migrated = first.plan.entries[0]["entry"]
+    second = openwebui.reconcile([migrated], [], desired)
+    assert [item["action"] for item in second.plan.entries] == ["keep"]
+
+
+def test_unmarked_desired_prefix_collision_is_reported_and_preserved():
+    desired = {
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
+        "ollama": [],
+    }
+    current = [_entry("openai", "http://wrong/v1", managed=False)]
+    result = openwebui.reconcile(current, [], desired)
+    assert result.status == "collision"
+    assert result.collisions == current
+    assert result.plan.entries[0]["action"] == "keep"
 
 
 def test_unmanaged_entries_without_matching_url_are_preserved():
@@ -991,6 +1031,49 @@ def test_catalogue_unavailable_provider_logs_info_without_warning(
     assert "Dropping" not in caplog.text
 
 
+def test_catalogue_unavailable_provider_models_are_retained_transiently(
+    monkeypatch, tmp_path
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        module,
+        "_curated_cloud_models",
+        lambda: ["openai/gpt-5", "anthropic/claude-3"],
+    )
+    state_dir = tmp_path / ".local" / "share" / "openwebui" / "data"
+    state_dir.mkdir(parents=True)
+    (state_dir / "managed-models.json").write_text(
+        json.dumps({"managed_ids": ["openai.gpt-5", "anthropic.claude-3"]})
+    )
+
+    class Client:
+        def __init__(self):
+            self.current = {
+                "DEFAULT_MODELS": "anthropic.claude-3",
+                "DEFAULT_PINNED_MODELS": "",
+                "MODEL_ORDER_LIST": ["anthropic.claude-3"],
+            }
+            self.writes = 0
+
+        def get_models(self):
+            return {"data": [{"id": "openai.gpt-5"}]}
+
+        def get_models_config(self):
+            return dict(self.current)
+
+        def update_models_config(self, config):
+            self.current = dict(config)
+            self.writes += 1
+
+    client = Client()
+    assert module._reconcile_catalogue(client) == 0
+    assert "anthropic.claude-3" in client.current["MODEL_ORDER_LIST"]
+    writes = client.writes
+    assert module._reconcile_catalogue(client) == 0
+    assert client.writes == writes
+
+
 def test_catalogue_partial_provider_drift_warns_with_missing_count(
     monkeypatch, tmp_path, caplog
 ):
@@ -1126,11 +1209,12 @@ def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
 
 
 def test_openwebui_default_locale_resolution(tmp_path):
-    library = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     cases = [
-        ({"OPENWEBUI_DEFAULT_LOCALE": "en-GB", "LANG": "fr_CA.UTF-8"}, "en-GB"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "fr-FR"),
         ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),
         ({"LANG": "en_CA.UTF-8"}, "en-US"),
+        ({"LANG": "fr_CA.UTF-8"}, "en-US"),
         ({}, "en-US"),
     ]
     for variables, expected in cases:
@@ -1140,7 +1224,7 @@ def test_openwebui_default_locale_resolution(tmp_path):
             [
                 "bash",
                 "-c",
-                f"source {shlex.quote(str(library))}; openwebui_default_locale",
+                f"source {shlex.quote(str(service_script))}; openwebui_default_locale",
             ],
             env=environment,
             capture_output=True,

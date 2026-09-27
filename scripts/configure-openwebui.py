@@ -499,6 +499,9 @@ def _reconcile_catalogue(client, dry_run=False):
     if not isinstance(response, dict):
         raise OpenWebUIError("Open WebUI model catalogue has an invalid shape")
     curated = _curated_cloud_models()
+    state_present = _catalogue_state_path(migrate=not dry_run).is_file()
+    owned = _load_catalogue_state(set(curated), migrate=not dry_run)
+    unavailable = set()
     if curated:
         # Resolve curated names against live provider-prefixed IDs. Open WebUI
         # may add an infix to the upstream name, so never guess an ID format;
@@ -528,7 +531,6 @@ def _reconcile_catalogue(client, dry_run=False):
         }
         resolved = []
         missing = []
-        unavailable = set()
         for model in curated:
             provider, name = model.split("/", 1)
             match = next(
@@ -566,8 +568,22 @@ def _reconcile_catalogue(client, dry_run=False):
                     len(partial_missing),
                 )
         curated = resolved
-    owned = _load_catalogue_state(set(curated), migrate=not dry_run)
-    managed_ids = owned | set(curated)
+    current_catalogue_ids = set()
+    for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
+        value = response.get(key, [])
+        current_catalogue_ids.update(
+            value if isinstance(value, list) else value.split(",") if value else []
+        )
+    retained_unavailable = {
+        model
+        for model in (owned if state_present else set()) | current_catalogue_ids
+        if any(
+            model.startswith(f"{provider}.") or model.startswith(f"{provider}/")
+            for provider in unavailable
+        )
+    }
+    retained_ids = set(curated) | retained_unavailable
+    managed_ids = owned | set(curated) | retained_unavailable
     desired = dict(response)
     for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
         current_value = response.get(
@@ -575,7 +591,7 @@ def _reconcile_catalogue(client, dry_run=False):
         )
         merged = _merge_catalogue_key(current_value, managed_ids)
         merged = [
-            entry for entry in merged if entry not in (managed_ids - set(curated))
+            entry for entry in merged if entry not in (managed_ids - retained_ids)
         ]
         merged.extend(item for item in curated if item not in merged)
         if key == "MODEL_ORDER_LIST":

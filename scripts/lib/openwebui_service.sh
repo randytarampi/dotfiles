@@ -14,6 +14,14 @@ openwebui_service_plist() {
 openwebui_default_locale() {
   local locale="${OPENWEBUI_DEFAULT_LOCALE:-}" candidate variable
   local -a supported_locales=("en-US" "en-GB")
+  # An explicit override is honoured verbatim; only derived system locales
+  # are snapped to the supported bundle list.
+  if [[ -n "$locale" ]]; then
+    locale="${locale%%.*}"
+    locale="${locale//_/-}"
+    printf '%s\n' "$locale"
+    return
+  fi
   if [[ -z "$locale" ]]; then
     for variable in LANGUAGE LC_ALL LC_MESSAGES LANG; do
       candidate="${!variable:-}"
@@ -39,7 +47,7 @@ openwebui_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/openwebui/service.env}"
   local service_home
   local WEBUI_SECRET_KEY="" WEBUI_ADMIN_EMAIL="" WEBUI_ADMIN_PASSWORD=""
-  local OPENWEBUI_API_KEY="" OPENWEBUI_PORT="" DEFAULT_LOCALE=""
+  local OPENWEBUI_API_KEY="" OPENWEBUI_PORT=""
   local OPENWEBUI_DEFAULT_LOCALE="${OPENWEBUI_DEFAULT_LOCALE:-}"
   local tmp
   service_home="$(dirname "$service_env")"
@@ -66,7 +74,6 @@ openwebui_service_env_sync() {
   unset OPENWEBUI_PORT
   [[ -n "$env_OPENWEBUI_PORT" ]] && OPENWEBUI_PORT="$env_OPENWEBUI_PORT"
   [[ -n "$env_OPENWEBUI_DEFAULT_LOCALE" ]] && OPENWEBUI_DEFAULT_LOCALE="$env_OPENWEBUI_DEFAULT_LOCALE"
-  [[ -z "$OPENWEBUI_DEFAULT_LOCALE" && -n "$DEFAULT_LOCALE" ]] && OPENWEBUI_DEFAULT_LOCALE="$DEFAULT_LOCALE"
   WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
   WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-admin@localhost}"
   WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
