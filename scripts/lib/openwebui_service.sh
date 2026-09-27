@@ -156,13 +156,17 @@ openwebui_service_restart() {
 
 openwebui_service_port() {
   local service_env="${OPENWEBUI_SERVICE_ENV:-$HOME/.local/share/openwebui/service.env}"
-  local port="${OPENWEBUI_PORT:-}"
-  if [[ -z "$port" && -f "$service_env" ]]; then
+  local port=""
+  # The launched service runs with env -i and sources service.env, so the
+  # service-env port is authoritative; an inherited OPENWEBUI_PORT is only a
+  # fallback for environments that have never run env sync.
+  if [[ -f "$service_env" ]]; then
     local OPENWEBUI_PORT=""
     # shellcheck disable=SC1090
     source "$service_env"
     port="${OPENWEBUI_PORT:-}"
   fi
+  [[ -z "$port" ]] && port="${OPENWEBUI_PORT:-}"
   printf '%s\n' "${port:-8080}"
 }
 
