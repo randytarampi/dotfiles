@@ -523,6 +523,7 @@ elif [[ "${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" == "1" ]]; then
   run_step "Open WebUI service environment" openwebui_service_env_sync "$HOME/.local/share/openwebui/service.env"
   if [[ "$(uname)" == "Darwin" ]]; then
     run_step "Open WebUI service restart" openwebui_service_restart
+    run_step "Open WebUI service health" openwebui_service_wait_healthy
   fi
   run_step "Open WebUI reconciliation" python3 "$SCRIPT_DIR/configure-openwebui.py"
   run_step "Open WebUI MCP registration" python3 "$SCRIPT_DIR/configure-openwebui.py" --reconcile-mcp

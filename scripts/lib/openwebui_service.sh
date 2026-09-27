@@ -138,6 +138,23 @@ openwebui_service_restart() {
   openwebui_service_start
 }
 
+# Block until the server answers /api/version, up to the given timeout.
+# launchctl reports the agent as loaded well before the port is bound, so
+# callers that reconcile immediately after a restart must wait for health.
+openwebui_service_wait_healthy() {
+  local port="${OPENWEBUI_PORT:-8080}" timeout="${1:-90}" deadline
+  deadline=$((SECONDS + timeout))
+  while ((SECONDS < deadline)); do
+    if curl -fsS --max-time 3 "http://127.0.0.1:${port}/api/version" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  OPENWEBUI_SERVICE_ERROR="Open WebUI did not become healthy within ${timeout}s"
+  printf '%s\n' "$OPENWEBUI_SERVICE_ERROR" >&2
+  return 1
+}
+
 openwebui_terminal_service_domain() {
   openwebui_service_domain
 }
