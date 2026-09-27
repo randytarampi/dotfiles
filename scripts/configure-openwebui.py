@@ -567,7 +567,14 @@ def _reconcile_catalogue(client, dry_run=False):
                 model in missing for model in provider_models
             ):
                 continue
-            if provider_models and all(model in missing for model in provider_models):
+            if (
+                provider_models
+                and all(model in missing for model in provider_models)
+                and not live_by_provider[provider]
+            ):
+                # Only an empty live listing makes the provider unavailable; a
+                # reachable provider whose curated names all drifted is
+                # reported as partial missing below instead.
                 unavailable.add(provider)
         for provider in sorted(unavailable):
             logger.info("Curated models for %s unavailable live; skipping", provider)
