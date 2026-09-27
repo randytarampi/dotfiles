@@ -137,17 +137,17 @@ frontend.
 ## Recommended architecture
 
 ```text
-                         ┌─────────────────────────────────┐
-   browser (LAN) ──► Caddy ──► Open WebUI (LaunchAgent, :8080)
-                         │        │  local connections generated from
-                         │        │  LOCAL_ENGINES; cloud providers as
-                         └────────┼─────────────────────────────────┘
-                                   │      reconciler-managed <provider> entries
+                        ┌─────────────────────────────────┐
+  browser (LAN) ──► Caddy ──► Open WebUI (LaunchAgent, :8080)
+                        │        │  local connections generated from
+                        │        │  LOCAL_ENGINES; cloud providers as
+                        └────────┼─────────────────────────────────┘
+                                  │      reconciler-managed <provider> entries
         ┌────────────┬───────────┴──────────┬──────────────┐
         ▼            ▼                      ▼              ▼
-     Ollama        oMLX               OpenAI/Anthropic   OpenRouter
+    Ollama        oMLX               OpenAI/Anthropic   OpenRouter
       :11434   :OPENWEBUI_…/v1          (managed entries/      (optional)
-   (native)    OpenAI API (managed)    direct API keys)
+  (native)    OpenAI API (managed)    direct API keys)
 ```
 
 ### Design principles (mapped to repo patterns)
@@ -184,21 +184,21 @@ frontend.
       the API.
    4. Ordinary service restarts retain database state and do **not**
       regenerate; reconciliation happens only on deploy.
-   Managed-entry ownership is collision-safe: managed entries carry a
-   `managed_by: dotfiles` marker in each connection's `api_configs` entry,
-   plus a registry-derived `prefix_id`. Reconciliation adopts an unmarked
-   entry when its catalogue identity and prefix match, updates or deletes a
-   marked entry only when its endpoint/connection type matches the expected
-   values, and fails closed on ownership collisions (report and abort rather
-   than delete an unrelated connection). Unmanaged admin-created entries are
-   preserved via read-merge-write.
-   Admin-UI connection changes persist in the database until the next
-   reconciliation, which may then overwrite managed entries — never
-   unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
-   per-connection `prefix_id` (stable model-ID prefixes) and
-   `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
-   OpenAI-protocol clouds stay unambiguous; the current prefix and picker-ID
-   contract is recorded below.
+  Managed-entry ownership is collision-safe: managed entries carry a
+  `managed_by: dotfiles` marker in each connection's `api_configs` entry,
+  plus a registry-derived `prefix_id`. Reconciliation adopts an unmarked
+  entry when its catalogue identity and prefix match, updates or deletes a
+  marked entry only when its endpoint/connection type matches the expected
+  values, and fails closed on ownership collisions (report and abort rather
+  than delete an unrelated connection). Unmanaged admin-created entries are
+  preserved via read-merge-write.
+  Admin-UI connection changes persist in the database until the next
+  reconciliation, which may then overwrite managed entries — never
+  unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
+  per-connection `prefix_id` (stable model-ID prefixes) and
+  `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
+  OpenAI-protocol clouds stay unambiguous; the current prefix and picker-ID
+  contract is recorded below.
    Plug/unplug a *gated* engine = flip its `DOTFILES_RUN_*` gate + `make
    deploy`; **Ollama is the exception — it has no gate** (`LOCAL_ENGINES`
    entry `gate_env: None`), so it is treated as always-present and its entry
@@ -267,8 +267,8 @@ frontend.
     (loopback) and "private network" (Tailscale/LAN) are distinct exposure
     modes and never conflated.
 6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
-   reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
-   directly. LiteLLM becomes a documented
+  reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
+  directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
    grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).

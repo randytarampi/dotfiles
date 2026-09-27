@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -43,13 +44,20 @@ def _entry(alias, model, *, api_base=None, key_env=None):
 
 def _live_catalogue(provider, key, base_url, timeout=10):
     """Fetch a provider's live /models IDs, failing closed when unreachable."""
-    url = base_url.rstrip("/") + "/models"
-    if not url.startswith("https://"):
-        # bandit B310: provider catalogues are https-only.
+    # bandit B310: provider catalogues are https-only; validate before the
+    # request is constructed so urlopen can never see a custom scheme.
+    parsed = urllib.parse.urlsplit(base_url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        # bandit B310: audit the constructed URL before urlopen sees it.
         raise LiveCatalogueError(f"refusing non-https catalogue url for {provider}")
+    url = urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path.rstrip("/") + "/models", "", "")
+    )
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(  # nosec B310 — https scheme audited above
+            request, timeout=timeout
+        ) as response:
             payload = json.load(response)
     except (urllib.error.URLError, ValueError, TypeError, AttributeError) as error:
         raise LiveCatalogueError(
