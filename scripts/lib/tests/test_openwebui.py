@@ -197,7 +197,7 @@ def test_legacy_prefixes_migrate_and_stale_entries_are_deleted():
 
 def test_new_style_entry_is_adopted_on_sight():
     url = openwebui.ownership_catalogue()["omlx"]["url"]
-    desired = _entry("omlx", url)  # trufflehog:ignore Lob
+    desired = _entry("omlx", url)
     result = openwebui.reconcile(
         [_entry("omlx", url, managed=False)],
         [],
@@ -1287,13 +1287,11 @@ def test_openwebui_service_port_uses_retained_service_env(tmp_path):
 
 
 def test_openwebui_default_locale_resolution(tmp_path):
-    service_script = (
-        Path(__file__).resolve().parents[1] / "openwebui_service.sh"
-    )  # trufflehog:ignore Lob
+    service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     cases = [
-        ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "fr-FR"),
-        ({"OPENWEBUI_DEFAULT_LOCALE": "fr"}, "fr-FR"),
-        ({"OPENWEBUI_DEFAULT_LOCALE": "de-DE"}, "de-DE"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "de-DE"}, "en-US"),
         ({"OPENWEBUI_DEFAULT_LOCALE": "en-CA"}, "en-US"),
         ({"OPENWEBUI_DEFAULT_LOCALE": "en"}, "en-US"),
         ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),

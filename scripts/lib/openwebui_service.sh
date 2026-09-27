@@ -17,26 +17,18 @@ openwebui_default_locale() {
   if [[ -n "$locale" ]]; then
     locale="${locale%%.*}"
     locale="${locale//_/-}"
-    # Honour supported overrides and explicitly requested non-English locales
-    # with a region-qualified form. Bare or region-unsupported codes lack a
-    # frontend bundle and reproduce the open-webui#30348 raw-key bug, so they
-    # map to a supported regional locale: English variants use the first
-    # supported English bundle; a bare non-English code keeps its language but
-    # gains the most common region (fr -> fr-FR).
+    # Overrides resolve against the pinned frontend's supported-locale list:
+    # only supported region-qualified locales pass through verbatim. Bare or
+    # region-unsupported codes (en, en-CA, zh, xx-YY) lack a frontend bundle
+    # and reproduce the open-webui#30348 raw-key bug, so they fall back to
+    # en-US — the pinned release ships only en-US and en-GB bundles.
     for candidate in "${supported_locales[@]}"; do
       [[ "$locale" == "$candidate" ]] && {
         printf '%s\n' "$locale"
         return
       }
     done
-    if [[ "$locale" == en || "$locale" == en-* ]]; then
-      printf '%s\n' "${supported_locales[0]}"
-    elif [[ "$locale" != *-* ]]; then
-      # tr keeps this bash-3.2-safe (/bin/bash on macOS lacks ${var^^}).
-      printf '%s\n' "${locale}-$(printf '%s' "$locale" | tr '[:lower:]' '[:upper:]')"
-    else
-      printf '%s\n' "$locale"
-    fi
+    printf '%s\n' "${supported_locales[0]}"
     return
   fi
   if [[ -z "$locale" ]]; then

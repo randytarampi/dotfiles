@@ -268,7 +268,7 @@ frontend.
     modes and never conflated.
 6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
    reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
-   directly. LiteLLM becomes a documented
+  directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
   grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).
@@ -567,8 +567,8 @@ All former open questions were resolved during implementation and
 live-validated against `open-webui==0.11.4`:
 
 1. **Meridian:** included by explicit user authorization (Phase 4 planning)
-   as a reconciler-managed `meridian` connection whenever
-  `is_meridian_configured()` reports availability; no entry is created
+  as a reconciler-managed `meridian` connection whenever
+   `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
 2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.11.4}`
    in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
