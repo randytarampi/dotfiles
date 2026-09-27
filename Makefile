@@ -198,7 +198,7 @@ check-templates-scripts: ## Render and lint all run_onchange shell templates
 		set -e; tmpdir="$$(mktemp -d)"; trap 'rm -rf "$$tmpdir"' EXIT; \
 		for tmpl in .chezmoiscripts/run_onchange_*.sh.tmpl; do \
 			out="$$tmpdir/$$(basename "$$tmpl" .tmpl)"; \
-			$(CHEZMOI) execute-template < "$$tmpl" > "$$out"; \
+			$(CHEZMOI) execute-template --source "$(CURDIR)" < "$$tmpl" > "$$out"; \
 			bash -n "$$out"; shellcheck --severity=error -s bash "$$out"; "$(SHFMT)" -i 2 -d "$$out"; \
 		done; \
 	else \
