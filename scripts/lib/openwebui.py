@@ -628,18 +628,10 @@ def reconcile(
                         "entry": copy.deepcopy(existing),
                     }
                 )
-            elif wanted is None:
+            elif wanted is None or prefix in seen:
                 plan.entries.append(
                     {
-                        "action": "delete",
-                        "collection": collection,
-                        "entry": copy.deepcopy(existing),
-                    }
-                )
-            elif prefix in seen:
-                plan.entries.append(
-                    {
-                        "action": "delete",
+                        "action": "keep" if wanted is None else "delete",
                         "collection": collection,
                         "entry": copy.deepcopy(existing),
                     }

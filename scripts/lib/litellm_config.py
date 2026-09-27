@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "opencode", "ollama-cloud")
 
 
+class LiveCatalogueError(Exception):
+    """A provider's live model catalogue could not be enumerated."""
+
+
 def _model_name(item):
     return item.get("name") if isinstance(item, dict) else str(item)
 
@@ -38,19 +42,25 @@ def _entry(alias, model, *, api_base=None, key_env=None):
 
 
 def _live_catalogue(provider, key, base_url, timeout=10):
-    """Fetch a provider's live /models IDs; None when unreachable."""
+    """Fetch a provider's live /models IDs, failing closed when unreachable."""
     url = base_url.rstrip("/") + "/models"
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
-    except (urllib.error.URLError, OSError, ValueError, TypeError, AttributeError):
-        return None
+    except (urllib.error.URLError, ValueError, TypeError, AttributeError) as error:
+        raise LiveCatalogueError(
+            f"live model catalogue enumeration failed for {provider}: {error}"
+        ) from error
     if not isinstance(payload, dict):
-        return None
+        raise LiveCatalogueError(
+            f"live model catalogue for {provider} was not an object"
+        )
     data = payload.get("data", [])
     if not isinstance(data, list):
-        return None
+        raise LiveCatalogueError(
+            f"live model catalogue for {provider} had invalid data"
+        )
     return sorted(
         str(item["id"]) for item in data if isinstance(item, dict) and item.get("id")
     )
@@ -146,9 +156,8 @@ def compute_model_list(environ=None):
                 )
                 live_ids = _live_catalogue(provider, environ[key_env], live_base)
                 if live_ids is None:
-                    logger.warning(
-                        "Live model catalogue unavailable for %s; using default alias",
-                        provider,
+                    raise LiveCatalogueError(
+                        f"live model catalogue enumeration failed for {provider}"
                     )
                 if live_ids:
                     entries.extend(

@@ -476,16 +476,28 @@ def _load_catalogue_state(desired_ids, migrate=True):
     path = _catalogue_state_path(migrate)
     if path.is_file():
         data = json.loads(path.read_text(encoding="utf-8"))
-        return set(data.get("managed_ids", []))
+        return (
+            set(data.get("managed_ids", [])),
+            set(data.get("retained_unavailable", [])),
+        )
     # First-run adoption is conservative: only models this run explicitly
     # desires become managed; provider-shaped user entries remain unmanaged.
-    return set(desired_ids)
+    return set(desired_ids), set()
 
 
-def _write_catalogue_state(managed_ids):
+def _write_catalogue_state(managed_ids, retained_unavailable=()):
     path = _catalogue_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    rendered = json.dumps({"managed_ids": sorted(managed_ids)}, indent=2) + "\n"
+    rendered = (
+        json.dumps(
+            {
+                "managed_ids": sorted(managed_ids),
+                "retained_unavailable": sorted(retained_unavailable),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     if path.is_file() and path.read_text(encoding="utf-8") == rendered:
         return
     temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -500,7 +512,8 @@ def _reconcile_catalogue(client, dry_run=False):
         raise OpenWebUIError("Open WebUI model catalogue has an invalid shape")
     curated = _curated_cloud_models()
     state_present = _catalogue_state_path(migrate=not dry_run).is_file()
-    owned = _load_catalogue_state(set(curated), migrate=not dry_run)
+    owned, persisted_retained = _load_catalogue_state(set(curated), migrate=not dry_run)
+    owned |= persisted_retained
     unavailable = set()
     if curated:
         # Resolve curated names against live provider-prefixed IDs. Open WebUI
@@ -571,9 +584,10 @@ def _reconcile_catalogue(client, dry_run=False):
     current_catalogue_ids = set()
     for key in ("DEFAULT_MODELS", "DEFAULT_PINNED_MODELS", "MODEL_ORDER_LIST"):
         value = response.get(key, [])
-        current_catalogue_ids.update(
-            value if isinstance(value, list) else value.split(",") if value else []
-        )
+        if isinstance(value, list):
+            current_catalogue_ids.update(value)
+        elif value:
+            current_catalogue_ids.update(value.split(","))
     retained_unavailable = {
         model
         for model in (owned if state_present else set()) | current_catalogue_ids
@@ -601,7 +615,9 @@ def _reconcile_catalogue(client, dry_run=False):
     if desired == response:
         logger.info("Curated model catalogue is clean")
         if not dry_run:
-            _write_catalogue_state(set(curated))
+            _write_catalogue_state(
+                set(curated) | retained_unavailable, retained_unavailable
+            )
         return 0
     if dry_run:
         logger.info("Curated model catalogue dry-run: models=%d", len(curated))
@@ -611,7 +627,7 @@ def _reconcile_catalogue(client, dry_run=False):
     client.update_models_config(desired)
     if client.get_models_config() != desired:
         raise OpenWebUIError("Open WebUI model catalogue verification failed")
-    _write_catalogue_state(set(curated))
+    _write_catalogue_state(set(curated) | retained_unavailable, retained_unavailable)
     logger.info("Curated cloud model catalogue reconciled: models=%d", len(curated))
     return 0
 

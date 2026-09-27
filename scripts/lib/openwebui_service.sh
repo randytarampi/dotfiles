@@ -14,12 +14,23 @@ openwebui_service_plist() {
 openwebui_default_locale() {
   local locale="${OPENWEBUI_DEFAULT_LOCALE:-}" candidate variable
   local -a supported_locales=("en-US" "en-GB")
-  # An explicit override is honoured verbatim; only derived system locales
-  # are snapped to the supported bundle list.
   if [[ -n "$locale" ]]; then
     locale="${locale%%.*}"
     locale="${locale//_/-}"
-    printf '%s\n' "$locale"
+    # Honour supported overrides and explicitly requested non-English locales.
+    # Unsupported English variants trigger the upstream raw-key bug, so use the
+    # first supported English bundle instead.
+    for candidate in "${supported_locales[@]}"; do
+      [[ "$locale" == "$candidate" ]] && {
+        printf '%s\n' "$locale"
+        return
+      }
+    done
+    if [[ "$locale" == en || "$locale" == en-* ]]; then
+      printf '%s\n' "${supported_locales[0]}"
+    else
+      printf '%s\n' "$locale"
+    fi
     return
   fi
   if [[ -z "$locale" ]]; then
@@ -145,11 +156,24 @@ openwebui_service_restart() {
   openwebui_service_start
 }
 
+openwebui_service_port() {
+  local service_env="${1:-$HOME/.local/share/openwebui/service.env}"
+  local port="${OPENWEBUI_PORT:-}"
+  if [[ -z "$port" && -f "$service_env" ]]; then
+    local OPENWEBUI_PORT=""
+    # shellcheck disable=SC1090
+    source "$service_env"
+    port="${OPENWEBUI_PORT:-}"
+  fi
+  printf '%s\n' "${port:-8080}"
+}
+
 # Block until the server answers /api/version, up to the given timeout.
 # launchctl reports the agent as loaded well before the port is bound, so
 # callers that reconcile immediately after a restart must wait for health.
 openwebui_service_wait_healthy() {
-  local port="${OPENWEBUI_PORT:-8080}" timeout="${1:-90}" deadline
+  local port timeout="${1:-90}" deadline
+  port="$(openwebui_service_port)"
   deadline=$((SECONDS + timeout))
   while ((SECONDS < deadline)); do
     if curl -fsS --max-time 3 "http://127.0.0.1:${port}/api/version" >/dev/null 2>&1; then

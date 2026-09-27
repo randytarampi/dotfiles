@@ -207,6 +207,16 @@ def test_new_style_entry_is_adopted_on_sight():
     assert result.plan.entries[0]["entry"]["config"]["managed_by"] == "dotfiles"
 
 
+def test_unmarked_adoptable_entry_is_preserved_when_provider_is_removed():
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    result = openwebui.reconcile(
+        [_entry("om" + "lx", url, managed=False)],
+        [],
+        {"openai": [], "anthropic": [], "ollama": []},
+    )
+    assert result.plan.entries[0]["action"] == "keep"
+
+
 def test_unmarked_new_style_prefix_with_mismatched_identity_is_preserved():
     result = openwebui.reconcile(
         [_entry("omlx", "https://wrong.example/v1", managed=False)],
@@ -1069,9 +1079,57 @@ def test_catalogue_unavailable_provider_models_are_retained_transiently(
     client = Client()
     assert module._reconcile_catalogue(client) == 0
     assert "anthropic.claude-3" in client.current["MODEL_ORDER_LIST"]
+    state = json.loads((state_dir / "managed-models.json").read_text())
+    assert "anthropic.claude-3" in state["managed_ids"]
+    assert "anthropic.claude-3" in state["retained_unavailable"]
     writes = client.writes
     assert module._reconcile_catalogue(client) == 0
     assert client.writes == writes
+
+
+def test_catalogue_retained_ids_normalize_after_provider_recovery(
+    monkeypatch, tmp_path
+):
+    module = _script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    curated = ["openai/gpt-5", "anthropic/claude-3"]
+    monkeypatch.setattr(module, "_curated_cloud_models", lambda: curated)
+    state_dir = tmp_path / ".local" / "share" / "openwebui" / "data"
+    state_dir.mkdir(parents=True)
+    state_path = state_dir / "managed-models.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "managed_ids": ["openai.gpt-5", "anthropic.claude-old"],
+                "retained_unavailable": ["anthropic.claude-old"],
+            }
+        )
+    )
+
+    class Client:
+        def __init__(self, live_id):
+            self.live_id = live_id
+            self.current = {
+                "DEFAULT_MODELS": "anthropic.claude-old",
+                "DEFAULT_PINNED_MODELS": "",
+                "MODEL_ORDER_LIST": ["anthropic.claude-old"],
+            }
+
+        def get_models(self):
+            return {"data": [{"id": "openai.gpt-5"}, {"id": self.live_id}]}
+
+        def get_models_config(self):
+            return dict(self.current)
+
+        def update_models_config(self, config):
+            self.current = dict(config)
+
+    client = Client("anthropic.claude-3")
+    assert module._reconcile_catalogue(client) == 0
+    assert "anthropic.claude-old" not in client.current["MODEL_ORDER_LIST"]
+    state = json.loads(state_path.read_text())
+    assert state["retained_unavailable"] == []
+    assert set(state["managed_ids"]) == {"openai.gpt-5", "anthropic.claude-3"}
 
 
 def test_catalogue_partial_provider_drift_warns_with_missing_count(
@@ -1208,10 +1266,31 @@ def test_openwebui_env_sync_sparse_environment(tmp_path, helper, filename):
         }
 
 
+def test_openwebui_service_port_uses_retained_service_env(tmp_path):
+    service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
+    service_env = tmp_path / "service.env"
+    service_env.write_text("OPENWEBUI_PORT=9876\n")
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(service_script))}; "
+            f"openwebui_service_port {shlex.quote(str(service_env))}",
+        ],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "9876"
+
+
 def test_openwebui_default_locale_resolution(tmp_path):
     service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     cases = [
         ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "fr-FR"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "en-CA"}, "en-US"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "en"}, "en-US"),
         ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),
         ({"LANG": "en_CA.UTF-8"}, "en-US"),
         ({"LANG": "fr_CA.UTF-8"}, "en-US"),
