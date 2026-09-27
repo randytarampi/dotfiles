@@ -1,6 +1,7 @@
 """Pure LiteLLM proxy configuration generation from dotfiles registries."""
 
 import json
+import logging
 import os
 import tempfile
 import urllib.error
@@ -14,6 +15,8 @@ from constants import (
 )
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
+
+logger = logging.getLogger(__name__)
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
@@ -35,18 +38,21 @@ def _entry(alias, model, *, api_base=None, key_env=None):
 
 
 def _live_catalogue(provider, key, base_url, timeout=10):
-    """Fetch a provider's live /models IDs; empty list when unreachable."""
+    """Fetch a provider's live /models IDs; None when unreachable."""
     url = base_url.rstrip("/") + "/models"
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
-    except (urllib.error.URLError, OSError, ValueError):
-        return []
+    except (urllib.error.URLError, OSError, ValueError, TypeError, AttributeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data", [])
+    if not isinstance(data, list):
+        return None
     return sorted(
-        str(item["id"])
-        for item in payload.get("data", [])
-        if isinstance(item, dict) and item.get("id")
+        str(item["id"]) for item in data if isinstance(item, dict) and item.get("id")
     )
 
 
@@ -139,6 +145,11 @@ def compute_model_list(environ=None):
                     "baseUrl", base_url
                 )
                 live_ids = _live_catalogue(provider, environ[key_env], live_base)
+                if live_ids is None:
+                    logger.warning(
+                        "Live model catalogue unavailable for %s; using default alias",
+                        provider,
+                    )
                 if live_ids:
                     entries.extend(
                         _entry(

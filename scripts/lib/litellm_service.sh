@@ -63,12 +63,13 @@ litellm_service_env_sync() {
   LITELLM_PORT="${LITELLM_PORT:-4000}"
   # DB-free deployments cannot complete a UI login (it mints a DB-backed
   # session key), so the Admin UI is disabled by default to avoid a
-  # confusing "Not connected to DB!" login error. Set
+  # confusing "Not connected to DB!" login error. The default always resets
+  # to True unless LITELLM_DISABLE_ADMIN_UI overrides it. Set
   # LITELLM_DISABLE_ADMIN_UI=False in ~/.env to re-enable it.
   if [[ -n "${LITELLM_DISABLE_ADMIN_UI:-}" ]]; then
     DISABLE_ADMIN_UI="$LITELLM_DISABLE_ADMIN_UI"
   else
-    DISABLE_ADMIN_UI="${DISABLE_ADMIN_UI:-True}"
+    DISABLE_ADMIN_UI="True"
   fi
   if [[ -z "$LITELLM_MASTER_KEY" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1

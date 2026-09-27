@@ -24,6 +24,7 @@ def hermetic_environment(monkeypatch):
         ):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: None)
 
 
 def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
@@ -37,6 +38,24 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     assert "meridian/claude-sonnet-5" in {
         entry["model_name"] for entry in litellm_config.compute_model_list()
     }
+
+
+@pytest.mark.parametrize("catalogue", [["m1", "m2"], None, []])
+def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret")
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
+
+    entries = litellm_config.compute_model_list()
+    aliases = {entry["model_name"]: entry for entry in entries}
+
+    if catalogue:
+        assert {"openrouter/m1", "openrouter/m2"} <= aliases.keys()
+        assert aliases["openrouter/m1"]["litellm_params"]["api_key"] == (
+            "os.environ/OPENROUTER_API_KEY"
+        )
+        assert "api_base" in aliases["openrouter/m1"]["litellm_params"]
+    else:
+        assert "openrouter/default" in aliases
 
 
 def test_local_registry_models_use_protocol_specific_entries(monkeypatch):
@@ -137,6 +156,7 @@ def test_litellm_env_sync_disable_admin_ui_override(tmp_path):
     assert (
         sync({"LITELLM_DISABLE_ADMIN_UI": "False"}, None)["DISABLE_ADMIN_UI"] == "False"
     )
+    assert sync({}, None)["DISABLE_ADMIN_UI"] == "True"
 
 
 @pytest.mark.parametrize("openssl_body", ["return 1", ":"])

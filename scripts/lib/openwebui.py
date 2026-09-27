@@ -589,15 +589,24 @@ def reconcile(
             target = identity_owner
             migrated = desired_by_prefix.get(target) if target else None
             if target and migrated is not None:
-                seen.add(target)
-                plan.entries.append(
-                    {
-                        "action": "update",
-                        "collection": collection,
-                        "entry": copy.deepcopy(migrated),
-                        "before": copy.deepcopy(existing),
-                    }
-                )
+                if target in seen:
+                    plan.entries.append(
+                        {
+                            "action": "delete",
+                            "collection": collection,
+                            "entry": copy.deepcopy(existing),
+                        }
+                    )
+                else:
+                    seen.add(target)
+                    plan.entries.append(
+                        {
+                            "action": "update",
+                            "collection": collection,
+                            "entry": copy.deepcopy(migrated),
+                            "before": copy.deepcopy(existing),
+                        }
+                    )
             else:
                 plan.entries.append(
                     {
@@ -610,6 +619,8 @@ def reconcile(
             # A new-style prefix without the marker is adoptable on sight only
             # when both its endpoint/type and prefix agree with the catalogue.
             if identity_owner != prefix:
+                if prefix in desired_by_prefix:
+                    collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
                     {
                         "action": "keep",
@@ -618,6 +629,14 @@ def reconcile(
                     }
                 )
             elif wanted is None:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            elif prefix in seen:
                 plan.entries.append(
                     {
                         "action": "delete",
@@ -636,7 +655,28 @@ def reconcile(
                     }
                 )
         else:
-            if existing.get("url") in managed_urls[collection]:
+            if prefix in desired_by_prefix:
+                collisions.append(copy.deepcopy(existing))
+                plan.entries.append(
+                    {
+                        "action": "keep",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+                continue
+            seed_config = {
+                key: value
+                for key, value in config.items()
+                if key not in {"connection_type", "enable", "prefix_id"}
+            }
+            is_upstream_seed = (
+                not prefix
+                and not existing.get("key")
+                and config.get("enable") is True
+                and not seed_config
+            )
+            if existing.get("url") in managed_urls[collection] and is_upstream_seed:
                 plan.entries.append(
                     {
                         "action": "delete",
@@ -715,9 +755,8 @@ def reconcile_via_api(client, desired):
         else:
             client.update_ollama_config(payload)
     if changed:
-        # Unmanaged entries the plan prunes as exact-URL duplicates of a
-        # managed entry are expected to disappear; anything else moving must
-        # fail the verification.
+        # Unmanaged entries the plan prunes are known upstream seed duplicates;
+        # anything else moving must fail the verification.
         pruned_urls = {
             (item["collection"], item["entry"]["url"])
             for item in result.plan.entries
@@ -725,14 +764,14 @@ def reconcile_via_api(client, desired):
         }
         catalogue = ownership_catalogue()
 
-        def _owned_or_migrating(item):
+        def _owned_or_migrating(item, collection):
             if _managed(item):
                 return True
             config = item.get("config", {})
             identity = _ownership_identity(
                 item.get("url", ""),
                 config.get("connection_type"),
-                item.get("collection"),
+                collection,
             )
             return identity in {
                 _catalogue_identity(owner) for owner in catalogue.values()
@@ -742,7 +781,7 @@ def reconcile_via_api(client, desired):
             return [
                 copy.deepcopy(item)
                 for item in entries
-                if not _owned_or_migrating(item)
+                if not _owned_or_migrating(item, collection)
                 and (collection, item.get("url")) not in pruned_urls
             ]
 
