@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
@@ -193,6 +193,14 @@ check-templates: ## Render JSON chezmoi templates and validate output (catches G
 		fi; \
 	done
 
+check-templates-scripts: ## Render and lint all run_onchange shell templates
+	@set -e; tmpdir="$$(mktemp -d)"; trap 'rm -rf "$$tmpdir"' EXIT; \
+	for tmpl in .chezmoiscripts/run_onchange_*.sh.tmpl; do \
+		out="$$tmpdir/$$(basename "$$tmpl" .tmpl)"; \
+		$(CHEZMOI) execute-template < "$$tmpl" > "$$out"; \
+		bash -n "$$out"; shellcheck --severity=error -s bash "$$out"; "$(SHFMT)" -i 4 -w "$$out"; "$(SHFMT)" -i 4 -d "$$out"; \
+	done
+
 check-docs-drift: ## Check for documentation drift between AGENTS.md, README.md, and docs/
 	@python3 scripts/check-docs-drift.py
 
@@ -202,7 +210,7 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
