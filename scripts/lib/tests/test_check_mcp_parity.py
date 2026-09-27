@@ -66,3 +66,10 @@ def test_mcp_config_without_template_is_flagged(tmp_path, monkeypatch):
         tmp_path, configs=("stray",), templates=()
     )
     assert run_check(module, registry, mcp_dir, templates_dir, monkeypatch) == 1
+
+
+def test_malformed_registry_reports_controlled_error(tmp_path, monkeypatch):
+    module = load_script("check-mcp-parity")
+    registry, mcp_dir, templates_dir = make_layout(tmp_path)
+    registry.write_text("[]")
+    assert run_check(module, registry, mcp_dir, templates_dir, monkeypatch) == 1
