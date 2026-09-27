@@ -26,3 +26,4 @@ gha-creds-*.json
 # Tracked CI config (global opencode.json ignore must not hide it)
 !configs/opencode/ci/
 !configs/opencode/ci/opencode.json
+.coverage.shush*
