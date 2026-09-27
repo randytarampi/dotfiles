@@ -393,7 +393,9 @@ def merge_omlx_settings(existing, environ=None):
     such as port or cache sizes wins), falling back to upstream defaults
     only on first run when the file has no value yet.
     """
-    environ = environ or os.environ
+    # Falsy-empty environ must NOT fall back to os.environ — tests and
+    # callers pass {} to mean "no environment overrides at all".
+    environ = os.environ if environ is None else environ
     import copy
 
     def _env(env_name):
