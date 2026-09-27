@@ -3,53 +3,95 @@
 
 import json
 import sys
+import argparse
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+LIB_DIR = SCRIPT_DIR / "lib"
+if str(LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(LIB_DIR))
+
+import logger  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = REPO_ROOT / "configs/mcp/global-mcps.json"
 MCP_DIR = REPO_ROOT / "configs/mcp"
+TEMPLATES_DIR = MCP_DIR / "templates"
 
 
-def _templates(value):
-    """Collect template names from the registry's known nested MCP shape."""
+def _server_templates(value):
+    """Collect template names from one registry object."""
+    if not isinstance(value, dict):
+        return
+    for item in value.get("mcp_servers", []):
+        if isinstance(item, dict) and isinstance(item.get("template"), str):
+            yield item["template"]
+
+
+def _walk_templates(value):
+    """Walk nested registry values without revisiting the server list."""
     if isinstance(value, dict):
-        for item in value.get("mcp_servers", []):
-            if isinstance(item, dict) and isinstance(item.get("template"), str):
-                yield item["template"]
-        for child in value.values():
-            if isinstance(child, dict):
-                yield from _templates(child)
-            elif isinstance(child, list) and child is not value.get("mcp_servers"):
-                for nested in child:
-                    yield from _templates(nested)
+        yield from _server_templates(value)
+        for key, child in value.items():
+            if key != "mcp_servers":
+                yield from _walk_templates(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_templates(child)
+
+
+def _json_stems(directory):
+    return {path.stem for path in directory.glob("*.json")}
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Verify MCP config and template directories have equal coverage."
+    )
+    parser.add_argument("--registry", type=Path, default=REGISTRY)
+    parser.add_argument("--mcp-dir", type=Path, default=MCP_DIR)
+    parser.add_argument("--templates-dir", type=Path, default=TEMPLATES_DIR)
+    return parser.parse_args()
+
+
+def _report_difference(names, message):
+    for name in sorted(names):
+        logger.error("%s: %s.json", message, name)
 
 
 def main():
+    args = _parse_args()
     try:
-        data = json.loads(REGISTRY.read_text(encoding="utf-8"))
+        data = json.loads(args.registry.read_text(encoding="utf-8"))
         referenced = {
             item
             for item in data.get("project_mcp_templates", [])
             if isinstance(item, str)
         }
-        referenced.update(_templates(data.get("tools", {})))
-        files = {
-            path.stem
-            for path in MCP_DIR.glob("*.json")
-            if path.name != "global-mcps.json"
-        }
+        referenced.update(_walk_templates(data.get("tools", {})))
+        configs = _json_stems(args.mcp_dir) - {args.registry.stem}
+        templates = _json_stems(args.templates_dir)
     except (OSError, json.JSONDecodeError) as error:
-        print(f"MCP parity error: {error}", file=sys.stderr)
+        logger.error("MCP parity error: %s", error)
         return 1
-    missing = sorted(referenced - files)
-    stray = sorted(files - referenced)
-    for name in missing:
-        print(f"missing MCP config: {name}.json", file=sys.stderr)
-    for name in stray:
-        print(f"unreferenced MCP config: {name}.json", file=sys.stderr)
-    if missing or stray:
+    missing_configs = referenced - configs
+    unreferenced_configs = configs - referenced
+    missing_configs_for_templates = templates - configs
+    stray_templates = configs - templates
+    _report_difference(missing_configs, "missing MCP config")
+    _report_difference(unreferenced_configs, "unreferenced MCP config")
+    _report_difference(missing_configs_for_templates, "missing MCP config for template")
+    _report_difference(stray_templates, "MCP config without template")
+    if any(
+        (
+            missing_configs,
+            unreferenced_configs,
+            missing_configs_for_templates,
+            stray_templates,
+        )
+    ):
         return 1
-    print(f"MCP parity OK: {len(files)} configs, {len(referenced)} templates")
+    logger.info("MCP parity OK: %d configs, %d templates", len(configs), len(templates))
     return 0
 
 
