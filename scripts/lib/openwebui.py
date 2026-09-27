@@ -16,12 +16,15 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit, urlunsplit
 
 import constants
 from local_engines import LOCAL_ENGINES, active_engines, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
 
 MANAGED_PREFIX_NAMESPACE = "dw-"
+MANAGED_MARKER_KEY = "managed_by"
+MANAGED_MARKER_VALUE = "dotfiles"
 DISABLED_ENGINES_ENV = "DOTFILES_OPENWEBUI_DISABLED_ENGINES"
 
 
@@ -45,6 +48,22 @@ def _disabled():
 
 def _root(url):
     return url.rstrip("/")[:-3] if url.rstrip("/").endswith("/v1") else url.rstrip("/")
+
+
+def _canonicalize_host(url):
+    """Use the stable loopback address for locally generated endpoints."""
+    parts = urlsplit(url)
+    if parts.hostname != "localhost":
+        return url
+    host = "127.0.0.1"
+    if parts.username or parts.password:
+        auth = parts.username or ""
+        if parts.password is not None:
+            auth += f":{parts.password}"
+        host = f"{auth}@{host}"
+    if parts.port:
+        host += f":{parts.port}"
+    return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
 
 
 def _anthropic_url(url):
@@ -74,27 +93,28 @@ def _connection(prefix, url, key, connection_type, collection):
             "prefix_id": prefix,
             "connection_type": connection_type,
             "enable": True,
+            MANAGED_MARKER_KEY: MANAGED_MARKER_VALUE,
         },
         "collection": collection,
     }
 
 
-def ownership_catalogue(ollama_cloud_proxy_url=None):
+def ownership_catalogue():
     """Return stable prefix → expected endpoint/type ownership identities."""
     catalogue = {}
     for provider in LOCAL_ENGINES:
         if provider == "ollama":
-            catalogue[f"{MANAGED_PREFIX_NAMESPACE}ollama"] = {
-                "url": _root(LOCAL_ENGINES[provider]["base_url"]()),
+            catalogue["ollama"] = {
+                "url": _canonicalize_host(_root(LOCAL_ENGINES[provider]["base_url"]())),
                 "connection_type": "ollama",
                 "collection": "ollama",
             }
             continue
-        for protocol in ("openai", "anthropic"):
+        for protocol in ("openai",):
             endpoint = _registry_endpoint(provider, protocol)
             if endpoint:
-                catalogue[f"{MANAGED_PREFIX_NAMESPACE}{provider}-{protocol}"] = {
-                    "url": endpoint[0],
+                catalogue[provider] = {
+                    "url": _canonicalize_host(endpoint[0]),
                     "connection_type": protocol,
                     "collection": "openai",
                 }
@@ -111,26 +131,14 @@ def ownership_catalogue(ollama_cloud_proxy_url=None):
         "meridian": (constants.get_meridian_base_url(), "anthropic"),
     }
     for provider, (url, connection_type) in clouds.items():
-        catalogue[f"{MANAGED_PREFIX_NAMESPACE}{provider}"] = {
+        url = _canonicalize_host(url)
+        catalogue[provider] = {
             "url": url,
             "urls": {url},
             "connection_type": connection_type,
             "collection": "openai",
         }
-    if ollama_cloud_proxy_url:
-        catalogue["dw-ollama-cloud"]["urls"].add(ollama_cloud_proxy_url)
-    catalogue["dw-ollama-cloud"]["urls"].add(constants.get_ollama_local_base_url())
     return catalogue
-
-
-def _ollama_cloud_url():
-    if not os.environ.get("OLLAMA_API_KEY", "").strip():
-        return constants.BASE_URLS["ollama-cloud"]
-    if constants.should_use_ollama_cloud_proxy():
-        _, can_proxy = constants.check_ollama_daemon()
-        if can_proxy:
-            return constants.get_ollama_local_base_url()
-    return constants.BASE_URLS["ollama-cloud"]
 
 
 def compute_desired_state():
@@ -143,22 +151,22 @@ def compute_desired_state():
         if provider == "ollama":
             desired["ollama"].append(
                 _connection(
-                    "dw-ollama",
-                    _root(constants.get_ollama_local_base_url()),
+                    "ollama",
+                    _canonicalize_host(_root(constants.get_ollama_local_base_url())),
                     "",
                     "ollama",
                     "ollama",
                 )
             )
             continue
-        for protocol in ("openai", "anthropic"):
+        for protocol in ("openai",):
             endpoint = local_endpoint_for(provider, protocol)
             if endpoint:
                 url, key_env = endpoint
                 desired[protocol].append(
                     _connection(
-                        f"dw-{provider}-{protocol}",
-                        url,
+                        provider,
+                        _canonicalize_host(url),
                         os.environ.get(key_env, "") if key_env else "",
                         protocol,
                         "openai",
@@ -167,8 +175,8 @@ def compute_desired_state():
     if constants.is_meridian_configured():
         desired["anthropic"].append(
             _connection(
-                "dw-meridian",
-                constants.get_meridian_base_url(),
+                "meridian",
+                _canonicalize_host(constants.get_meridian_base_url()),
                 os.environ.get("MERIDIAN_API_KEY", ""),
                 "anthropic",
                 "openai",
@@ -190,14 +198,14 @@ def compute_desired_state():
             elif provider == "anthropic":
                 url = _anthropic_url(constants.get_provider_base_url("anthropic"))
             elif provider == "ollama-cloud":
-                url = _ollama_cloud_url()
+                url = constants.BASE_URLS["ollama-cloud"]
             else:
                 url = PROVIDER_ENDPOINTS[provider]["baseUrl"]
             connection_type = "anthropic" if provider == "anthropic" else "openai"
             desired["anthropic" if connection_type == "anthropic" else "openai"].append(
                 _connection(
-                    f"dw-{provider}",
-                    url,
+                    provider,
+                    _canonicalize_host(url),
                     key,
                     connection_type,
                     "openai",
@@ -474,24 +482,33 @@ def _equal(current, wanted):
     )
 
 
+def _managed(entry):
+    return entry.get("config", {}).get(MANAGED_MARKER_KEY) == MANAGED_MARKER_VALUE
+
+
+def _ownership_identity(url, connection_type, collection):
+    return (_root(_canonicalize_host(url)), connection_type, collection)
+
+
+def _catalogue_identity(owner):
+    return _ownership_identity(
+        owner["url"], owner["connection_type"], owner["collection"]
+    )
+
+
 def reconcile(
     current_openai, current_ollama, desired, *, namespace=MANAGED_PREFIX_NAMESPACE
 ):
-    proxy_url = next(
-        (
-            item["url"]
-            for item in desired.get("openai", [])
-            if item["config"].get("prefix_id") == "dw-ollama-cloud"
-        ),
-        None,
-    )
-    catalogue = ownership_catalogue(proxy_url)
+    catalogue = ownership_catalogue()
     desired_entries = (
         desired.get("openai", [])
         + desired.get("anthropic", [])
         + desired.get("ollama", [])
     )
     desired_by_prefix = {_identity(item): item for item in desired_entries}
+    catalogue_by_identity = {
+        _catalogue_identity(owner): prefix for prefix, owner in catalogue.items()
+    }
     current = []
     snapshots = {}
     for collection, source in (("openai", current_openai), ("ollama", current_ollama)):
@@ -519,14 +536,106 @@ def reconcile(
         prefix = _identity(existing)
         wanted = desired_by_prefix.get(prefix)
         owner = catalogue.get(prefix)
-        expected_type = owner and owner["connection_type"] == config.get(
-            "connection_type"
+        current_identity = _ownership_identity(
+            existing.get("url", ""), config.get("connection_type"), collection
         )
-        expected_url = owner and existing.get("url") in owner.get(
-            "urls", {owner["url"]}
-        )
-        expected_collection = owner and owner["collection"] == collection
-        if not prefix.startswith(namespace):
+        identity_owner = catalogue_by_identity.get(current_identity)
+        expected_identity = owner and current_identity == _catalogue_identity(owner)
+        if _managed(existing):
+            if (
+                not owner
+                or not expected_identity
+                or (identity_owner and identity_owner != prefix)
+            ):
+                collisions.append(copy.deepcopy(existing))
+                plan.entries.append(
+                    {
+                        "action": "skip",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            elif wanted is None:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            elif _equal(existing, wanted):
+                seen.add(prefix)
+                plan.entries.append(
+                    {
+                        "action": "keep",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            else:
+                seen.add(prefix)
+                plan.entries.append(
+                    {
+                        "action": "update",
+                        "collection": collection,
+                        "entry": copy.deepcopy(wanted),
+                        "before": copy.deepcopy(existing),
+                    }
+                )
+        elif prefix.startswith(namespace):
+            # Legacy dw-* entries migrate only when their endpoint/type still
+            # belongs to the current catalogue.  A stale legacy entry is
+            # removed rather than adopted as an unrelated user connection.
+            target = identity_owner
+            migrated = desired_by_prefix.get(target) if target else None
+            if target and migrated is not None:
+                seen.add(target)
+                plan.entries.append(
+                    {
+                        "action": "update",
+                        "collection": collection,
+                        "entry": copy.deepcopy(migrated),
+                        "before": copy.deepcopy(existing),
+                    }
+                )
+            else:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+        elif identity_owner:
+            # A new-style prefix without the marker is adoptable on sight only
+            # when both its endpoint/type and prefix agree with the catalogue.
+            if identity_owner != prefix:
+                plan.entries.append(
+                    {
+                        "action": "keep",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            elif wanted is None:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+            else:
+                seen.add(prefix)
+                plan.entries.append(
+                    {
+                        "action": "update",
+                        "collection": collection,
+                        "entry": copy.deepcopy(wanted),
+                        "before": copy.deepcopy(existing),
+                    }
+                )
+        else:
             if existing.get("url") in managed_urls[collection]:
                 plan.entries.append(
                     {
@@ -543,47 +652,6 @@ def reconcile(
                         "entry": copy.deepcopy(existing),
                     }
                 )
-        elif (
-            not owner
-            or not expected_type
-            or not expected_url
-            or not expected_collection
-        ):
-            collisions.append(copy.deepcopy(existing))
-            plan.entries.append(
-                {
-                    "action": "skip",
-                    "collection": collection,
-                    "entry": copy.deepcopy(existing),
-                }
-            )
-        elif wanted is None:
-            plan.entries.append(
-                {
-                    "action": "delete",
-                    "collection": collection,
-                    "entry": copy.deepcopy(existing),
-                }
-            )
-        elif _equal(existing, wanted):
-            seen.add(prefix)
-            plan.entries.append(
-                {
-                    "action": "keep",
-                    "collection": collection,
-                    "entry": copy.deepcopy(existing),
-                }
-            )
-        else:
-            seen.add(prefix)
-            plan.entries.append(
-                {
-                    "action": "update",
-                    "collection": collection,
-                    "entry": copy.deepcopy(wanted),
-                    "before": copy.deepcopy(existing),
-                }
-            )
     for prefix, wanted in desired_by_prefix.items():
         if prefix not in seen and not any(
             _identity(item) == prefix for _, item in current
@@ -653,15 +721,28 @@ def reconcile_via_api(client, desired):
         pruned_urls = {
             (item["collection"], item["entry"]["url"])
             for item in result.plan.entries
-            if item["action"] == "delete"
-            and not _identity(item["entry"]).startswith(MANAGED_PREFIX_NAMESPACE)
+            if item["action"] == "delete" and not _managed(item["entry"])
         }
+        catalogue = ownership_catalogue()
+
+        def _owned_or_migrating(item):
+            if _managed(item):
+                return True
+            config = item.get("config", {})
+            identity = _ownership_identity(
+                item.get("url", ""),
+                config.get("connection_type"),
+                item.get("collection"),
+            )
+            return identity in {
+                _catalogue_identity(owner) for owner in catalogue.values()
+            }
 
         def _unmanaged(entries, collection):
             return [
                 copy.deepcopy(item)
                 for item in entries
-                if not _identity(item).startswith(MANAGED_PREFIX_NAMESPACE)
+                if not _owned_or_migrating(item)
                 and (collection, item.get("url")) not in pruned_urls
             ]
 
