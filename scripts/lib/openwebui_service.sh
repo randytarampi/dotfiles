@@ -17,9 +17,12 @@ openwebui_default_locale() {
   if [[ -n "$locale" ]]; then
     locale="${locale%%.*}"
     locale="${locale//_/-}"
-    # Honour supported overrides and explicitly requested non-English locales.
-    # Unsupported English variants trigger the upstream raw-key bug, so use the
-    # first supported English bundle instead.
+    # Honour supported overrides and explicitly requested non-English locales
+    # with a region-qualified form. Bare or region-unsupported codes lack a
+    # frontend bundle and reproduce the open-webui#30348 raw-key bug, so they
+    # map to a supported regional locale: English variants use the first
+    # supported English bundle; a bare non-English code keeps its language but
+    # gains the most common region (fr -> fr-FR).
     for candidate in "${supported_locales[@]}"; do
       [[ "$locale" == "$candidate" ]] && {
         printf '%s\n' "$locale"
@@ -28,6 +31,8 @@ openwebui_default_locale() {
     done
     if [[ "$locale" == en || "$locale" == en-* ]]; then
       printf '%s\n' "${supported_locales[0]}"
+    elif [[ "$locale" != *-* ]]; then
+      printf '%s\n' "${locale}-${locale^^}"
     else
       printf '%s\n' "$locale"
     fi

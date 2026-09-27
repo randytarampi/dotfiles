@@ -1290,6 +1290,8 @@ def test_openwebui_default_locale_resolution(tmp_path):
     service_script = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     cases = [
         ({"OPENWEBUI_DEFAULT_LOCALE": "fr-FR", "LANG": "en_US.UTF-8"}, "fr-FR"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "fr"}, "fr-FR"),
+        ({"OPENWEBUI_DEFAULT_LOCALE": "de-DE"}, "de-DE"),
         ({"OPENWEBUI_DEFAULT_LOCALE": "en-CA"}, "en-US"),
         ({"OPENWEBUI_DEFAULT_LOCALE": "en"}, "en-US"),
         ({"LANGUAGE": "fr_CA.UTF-8"}, "en-US"),
