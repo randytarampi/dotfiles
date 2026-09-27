@@ -14,7 +14,7 @@ source "${LIB_DIR}/env.sh"
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # configs/junie/model-groups.json: {{ include "configs/junie/model-groups.json" | sha256sum }}
 # junie-channel: {{ env "DOTFILES_JUNIE_CHANNEL" | default "release" }}
-# junie-version: {{ env "DOTFILES_JUNIE_VERSION" }}
+# junie-version:{{ env "DOTFILES_JUNIE_VERSION" }}
 # junie-local-model: {{ env "DOTFILES_JUNIE_LOCAL_MODEL" | default "0" }}
 # scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
 # scripts/lib/model_stamp.py: {{ include "scripts/lib/model_stamp.py" | sha256sum }}

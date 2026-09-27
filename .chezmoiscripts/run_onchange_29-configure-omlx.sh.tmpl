@@ -56,7 +56,8 @@ if current != rendered:
 path.chmod(0o600)
 PY
 ok "oMLX settings written to $SETTINGS_PATH"
-CONFIGURED_PORT="$(python3 - <<'PY'
+CONFIGURED_PORT="$(
+  python3 - <<'PY'
 import json
 from pathlib import Path
 

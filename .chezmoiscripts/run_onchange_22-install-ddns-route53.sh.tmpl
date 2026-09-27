@@ -42,14 +42,14 @@ Darwin)
   ;;
 Linux)
   case "$(uname -m)" in
-  arm64|aarch64) PKG="linux_arm64" ;;
+  arm64 | aarch64) PKG="linux_arm64" ;;
   x86_64) PKG="linux_amd64" ;;
   *) die "Unsupported architecture: $(uname -m)" ;;
   esac
   ;;
-MINGW*|MSYS*|CYGWIN*)
+MINGW* | MSYS* | CYGWIN*)
   case "$(uname -m)" in
-  arm64|aarch64) PKG="windows_arm64" ;;
+  arm64 | aarch64) PKG="windows_arm64" ;;
   x86_64) PKG="windows_amd64" ;;
   *) die "Unsupported architecture: $(uname -m)" ;;
   esac

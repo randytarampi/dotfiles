@@ -10,8 +10,8 @@ load_env || warn "\$HOME/.env not found, skipping env load"
 
 # Gate on DOTFILES_RUN_PACKAGES_SETUP env var (set in ~/.env)
 if [[ "${DOTFILES_RUN_PACKAGES_SETUP:-0}" != "1" ]]; then
-    info "DOTFILES_RUN_PACKAGES_SETUP='${DOTFILES_RUN_PACKAGES_SETUP:-0}' — skipping package installs"
-    exit 0
+  info "DOTFILES_RUN_PACKAGES_SETUP='${DOTFILES_RUN_PACKAGES_SETUP:-0}' — skipping package installs"
+  exit 0
 fi
 
 # run_onchange_04-install-packages.sh.tmpl
@@ -76,178 +76,178 @@ fi
 
 # --- Brew (macOS / Linux) ---
 if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-    BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
-    BREW_BIN="${BREW_PREFIX}/bin/brew"
+  BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+  BREW_BIN="${BREW_PREFIX}/bin/brew"
 
-    if ! command -v brew &>/dev/null; then
-        if [[ -x "${BREW_BIN}" ]]; then
-            eval "$("${BREW_BIN}" shellenv)"
-        else
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            eval "$("${BREW_BIN}" shellenv)"
-        fi
+  if ! command -v brew &>/dev/null; then
+    if [[ -x "${BREW_BIN}" ]]; then
+      eval "$("${BREW_BIN}" shellenv)"
+    else
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      eval "$("${BREW_BIN}" shellenv)"
     fi
+  fi
 
-    # Trust third-party taps before running brew bundle
-    for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed -E 's/^tap "([^"]+)".*/\1/'); do
-        brew trust "$tap_name" 2>/dev/null || true
-    done
+  # Trust third-party taps before running brew bundle
+  for tap_name in $(grep -h '^tap "' "{{ .chezmoi.sourceDir }}"/Brewfile* 2>/dev/null | sed -E 's/^tap "([^"]+)".*/\1/'); do
+    brew trust "$tap_name" 2>/dev/null || true
+  done
 
-    # Accept EULA for Microsoft SQL Server formulas (msodbcsql18, mssql-tools18)
-    # to avoid interactive prompt hanging brew bundle in non-interactive mode.
-    export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
+  # Accept EULA for Microsoft SQL Server formulas (msodbcsql18, mssql-tools18)
+  # to avoid interactive prompt hanging brew bundle in non-interactive mode.
+  export HOMEBREW_ACCEPT_EULA="${HOMEBREW_ACCEPT_EULA:-Y}"
 
-    # Filter ignored packages from a Brewfile before running brew bundle.
-    # Controlled by DOTFILES_BREWFILE_IGNORE (comma-separated brew/cask names).
-    brew_bundle_filtered() {
-        local file="$1"
-        if [[ -n "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
-            local tmpfile
-            tmpfile="$(mktemp)"
-            # Build grep pattern: skip lines matching any ignored name
-            local pattern
-            pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|')"
-            grep -vE "(brew|cask) \"($pattern)\"" "$file" > "$tmpfile"
-            brew bundle --file="$tmpfile"
-            local rc=$?
-            rm -f "$tmpfile"
-            return $rc
-        else
-            brew bundle --file="$file"
-        fi
-    }
+  # Filter ignored packages from a Brewfile before running brew bundle.
+  # Controlled by DOTFILES_BREWFILE_IGNORE (comma-separated brew/cask names).
+  brew_bundle_filtered() {
+    local file="$1"
+    if [[ -n "${DOTFILES_BREWFILE_IGNORE:-}" ]]; then
+      local tmpfile
+      tmpfile="$(mktemp)"
+      # Build grep pattern: skip lines matching any ignored name
+      local pattern
+      pattern="$(echo "$DOTFILES_BREWFILE_IGNORE" | tr ',' '|')"
+      grep -vE "(brew|cask) \"($pattern)\"" "$file" >"$tmpfile"
+      brew bundle --file="$tmpfile"
+      local rc=$?
+      rm -f "$tmpfile"
+      return $rc
+    else
+      brew bundle --file="$file"
+    fi
+  }
 
-    # dev.cli — always installed
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile" || warn "npm package reconciliation failed for Brewfile"
+  # dev.cli — always installed
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile" || warn "npm package reconciliation failed for Brewfile"
 
-    {{- if .categories.dev }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
-    {{- end }}
+  {{- if .categories.dev }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev" || warn "npm package reconciliation failed for Brewfile.dev"
+  {{- end }}
 
-    {{- if .categories.dev_security }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.security
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.security" || warn "npm package reconciliation failed for Brewfile.dev.security"
-    {{- end }}
+  {{- if .categories.dev_security }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.security
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.security" || warn "npm package reconciliation failed for Brewfile.dev.security"
+  {{- end }}
 
-    {{- if .categories.utilities }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.utilities
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.utilities" || warn "npm package reconciliation failed for Brewfile.utilities"
-    {{- end }}
+  {{- if .categories.utilities }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.utilities
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.utilities" || warn "npm package reconciliation failed for Brewfile.utilities"
+  {{- end }}
 
-    # Desktop Brewfiles include cask entries and are skipped on Linux.
-    {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers" || warn "npm package reconciliation failed for Brewfile.desktop.browsers"
-    {{- end }}
+  # Desktop Brewfiles include cask entries and are skipped on Linux.
+  {{- if and .categories.desktop_browsers (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.browsers" || warn "npm package reconciliation failed for Brewfile.desktop.browsers"
+  {{- end }}
 
-    {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.comms
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms" || warn "npm package reconciliation failed for Brewfile.desktop.comms"
-    {{- end }}
+  {{- if and .categories.desktop_comms (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.comms
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.comms" || warn "npm package reconciliation failed for Brewfile.desktop.comms"
+  {{- end }}
 
-    {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.security
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.security" || warn "npm package reconciliation failed for Brewfile.desktop.security"
-    {{- end }}
+  {{- if and .categories.desktop_security (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.security
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.security" || warn "npm package reconciliation failed for Brewfile.desktop.security"
+  {{- end }}
 
-    {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.media
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.media" || warn "npm package reconciliation failed for Brewfile.desktop.media"
-    {{- end }}
+  {{- if and .categories.desktop_media (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.media
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.media" || warn "npm package reconciliation failed for Brewfile.desktop.media"
+  {{- end }}
 
-    {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities" || warn "npm package reconciliation failed for Brewfile.desktop.utilities"
-    {{- end }}
+  {{- if and .categories.desktop_utilities (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.utilities" || warn "npm package reconciliation failed for Brewfile.desktop.utilities"
+  {{- end }}
 
-    {{- if and .categories.desktop_devices (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.devices
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.devices" || warn "npm package reconciliation failed for Brewfile.desktop.devices"
-    {{- end }}
+  {{- if and .categories.desktop_devices (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.devices
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.devices" || warn "npm package reconciliation failed for Brewfile.desktop.devices"
+  {{- end }}
 
-    {{- if and .categories.desktop_macos (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.macos
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.macos" || warn "npm package reconciliation failed for Brewfile.desktop.macos"
-    {{- end }}
+  {{- if and .categories.desktop_macos (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.macos
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.macos" || warn "npm package reconciliation failed for Brewfile.desktop.macos"
+  {{- end }}
 
-    {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts" || warn "npm package reconciliation failed for Brewfile.desktop.fonts"
-    {{- end }}
+  {{- if and .categories.desktop_fonts (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.fonts" || warn "npm package reconciliation failed for Brewfile.desktop.fonts"
+  {{- end }}
 
-    {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming" || warn "npm package reconciliation failed for Brewfile.desktop.gaming"
-    {{- end }}
+  {{- if and .categories.desktop_gaming (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming" || warn "npm package reconciliation failed for Brewfile.desktop.gaming"
+  {{- end }}
 
-    {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud" || warn "npm package reconciliation failed for Brewfile.desktop.cloud"
-    {{- end }}
+  {{- if and .categories.desktop_cloud (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.cloud" || warn "npm package reconciliation failed for Brewfile.desktop.cloud"
+  {{- end }}
 
-    {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity" || warn "npm package reconciliation failed for Brewfile.desktop.productivity"
-    {{- end }}
+  {{- if and .categories.desktop_productivity (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity" || warn "npm package reconciliation failed for Brewfile.desktop.productivity"
+  {{- end }}
 
-    {{- if and .categories.desktop_dev (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.dev
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev" || warn "npm package reconciliation failed for Brewfile.desktop.dev"
-    {{- end }}
+  {{- if and .categories.desktop_dev (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.dev
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.dev" || warn "npm package reconciliation failed for Brewfile.desktop.dev"
+  {{- end }}
 
-    {{- if .categories.dev_ops }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.ops
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops" || warn "npm package reconciliation failed for Brewfile.dev.ops"
-    {{- end }}
+  {{- if .categories.dev_ops }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.dev.ops
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.dev.ops" || warn "npm package reconciliation failed for Brewfile.dev.ops"
+  {{- end }}
 
-    {{- if .categories.legacy }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy" || warn "npm package reconciliation failed for Brewfile.legacy"
-    {{- end }}
+  {{- if .categories.legacy }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy" || warn "npm package reconciliation failed for Brewfile.legacy"
+  {{- end }}
 
-    {{- if and .categories.legacy_macfuse (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse" || warn "npm package reconciliation failed for Brewfile.legacy.macfuse"
-    {{- end }}
+  {{- if and .categories.legacy_macfuse (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.macfuse" || warn "npm package reconciliation failed for Brewfile.legacy.macfuse"
+  {{- end }}
 
-    {{- if and .categories.legacy_vmware (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware" || warn "npm package reconciliation failed for Brewfile.legacy.vmware"
-    {{- end }}
+  {{- if and .categories.legacy_vmware (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.legacy.vmware" || warn "npm package reconciliation failed for Brewfile.legacy.vmware"
+  {{- end }}
 
-    {{- if and .categories.desktop_privacy (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy" || warn "npm package reconciliation failed for Brewfile.desktop.privacy"
-    {{- end }}
+  {{- if and .categories.desktop_privacy (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.privacy" || warn "npm package reconciliation failed for Brewfile.desktop.privacy"
+  {{- end }}
 
-    {{- if and .categories.desktop_emulation (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.emulation"
-    {{- end }}
+  {{- if and .categories.desktop_emulation (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.emulation"
+  {{- end }}
 
-    {{- if and .categories.desktop_gaming_emulation (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.gaming.emulation"
-    {{- end }}
+  {{- if and .categories.desktop_gaming_emulation (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.gaming.emulation" || warn "npm package reconciliation failed for Brewfile.desktop.gaming.emulation"
+  {{- end }}
 
-    {{- if and .categories.desktop_productivity_msoffice (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.msoffice"
-    {{- end }}
+  {{- if and .categories.desktop_productivity_msoffice (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.msoffice" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.msoffice"
+  {{- end }}
 
-    {{- if and .categories.desktop_productivity_adobe (eq .chezmoi.os "darwin") }}
-    brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.adobe"
-    {{- end }}
+  {{- if and .categories.desktop_productivity_adobe (eq .chezmoi.os "darwin") }}
+  brew_bundle_filtered {{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-npm-brewfile-packages.sh" "{{ .chezmoi.sourceDir }}/Brewfile.desktop.productivity.adobe" || warn "npm package reconciliation failed for Brewfile.desktop.productivity.adobe"
+  {{- end }}
 fi
 
 # --- Cross-platform fonts (Linux + Windows; macOS handled by brew bundle above) ---
 {{- if .categories.desktop_fonts }}
 {{- if eq .chezmoi.os "linux" }}
 if command -v bash &>/dev/null; then
-    bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" linux || warn "Font installation completed with warnings"
+  bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" linux || warn "Font installation completed with warnings"
 fi
 {{- else if eq .chezmoi.os "windows" }}
 bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" windows || warn "Font installation completed with warnings"
@@ -259,126 +259,126 @@ bash "{{ .chezmoi.sourceDir }}/scripts/install-fonts.sh" windows || warn "Font i
 WINGET_BUNDLE="{{ .chezmoi.sourceDir }}/wingetfile"
 
 if ! command -v winget &>/dev/null; then
-    warn "winget not found; skipping Windows package installs"
+  warn "winget not found; skipping Windows package installs"
 else
-    info "Installing winget packages..."
+  info "Installing winget packages..."
 
-    # Filter ignored packages from a wingetfile before running winget import.
-    # Controlled by DOTFILES_WINGETFILE_IGNORE (comma-separated Package IDs).
-    winget_import_filtered() {
-        local file="$1"
-        if [[ -n "${DOTFILES_WINGETFILE_IGNORE:-}" ]]; then
-            local tmpfile
-            tmpfile="$(mktemp)"
-            local pattern
-            pattern="$(echo "$DOTFILES_WINGETFILE_IGNORE" | tr ',' '|')"
-            grep -vE "^($pattern)$" "$file" > "$tmpfile"
-            winget import --import-file "$tmpfile"
-            local rc=$?
-            rm -f "$tmpfile"
-            return $rc
-        else
-            winget import --import-file "$file"
-        fi
-    }
+  # Filter ignored packages from a wingetfile before running winget import.
+  # Controlled by DOTFILES_WINGETFILE_IGNORE (comma-separated Package IDs).
+  winget_import_filtered() {
+    local file="$1"
+    if [[ -n "${DOTFILES_WINGETFILE_IGNORE:-}" ]]; then
+      local tmpfile
+      tmpfile="$(mktemp)"
+      local pattern
+      pattern="$(echo "$DOTFILES_WINGETFILE_IGNORE" | tr ',' '|')"
+      grep -vE "^($pattern)$" "$file" >"$tmpfile"
+      winget import --import-file "$tmpfile"
+      local rc=$?
+      rm -f "$tmpfile"
+      return $rc
+    else
+      winget import --import-file "$file"
+    fi
+  }
 
-    # base — always installed
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile"
+  # base — always installed
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile"
 
-    {{- if .categories.dev }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev"
-    {{- end }}
+  {{- if .categories.dev }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev"
+  {{- end }}
 
-    {{- if .categories.dev_security }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.security"
-    {{- end }}
+  {{- if .categories.dev_security }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.security"
+  {{- end }}
 
-    {{- if .categories.utilities }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.utilities"
-    {{- end }}
+  {{- if .categories.utilities }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.utilities"
+  {{- end }}
 
-    {{- if .categories.desktop_dev }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.dev"
-    {{- end }}
+  {{- if .categories.desktop_dev }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.dev"
+  {{- end }}
 
-    {{- if .categories.desktop_browsers }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
-    {{- end }}
+  {{- if .categories.desktop_browsers }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.browsers"
+  {{- end }}
 
-    {{- if .categories.desktop_comms }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.comms"
-    {{- end }}
+  {{- if .categories.desktop_comms }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.comms"
+  {{- end }}
 
-    {{- if .categories.desktop_security }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.security"
-    {{- end }}
+  {{- if .categories.desktop_security }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.security"
+  {{- end }}
 
-    {{- if .categories.desktop_media }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.media"
-    {{- end }}
+  {{- if .categories.desktop_media }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.media"
+  {{- end }}
 
-    {{- if .categories.desktop_utilities }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
-    {{- end }}
+  {{- if .categories.desktop_utilities }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.utilities"
+  {{- end }}
 
-    {{- if .categories.desktop_devices }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.devices"
-    {{- end }}
+  {{- if .categories.desktop_devices }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.devices"
+  {{- end }}
 
-    {{- if .categories.desktop_macos }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.macos"
-    {{- end }}
+  {{- if .categories.desktop_macos }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.macos"
+  {{- end }}
 
-    {{- if and .categories.desktop_gaming }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming"
-    {{- end }}
+  {{- if and .categories.desktop_gaming }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming"
+  {{- end }}
 
-    {{- if .categories.desktop_fonts }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.fonts"
-    {{- end }}
+  {{- if .categories.desktop_fonts }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.fonts"
+  {{- end }}
 
-    {{- if .categories.desktop_cloud }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
-    {{- end }}
+  {{- if .categories.desktop_cloud }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.cloud"
+  {{- end }}
 
-    {{- if .categories.desktop_productivity }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity"
-    {{- end }}
+  {{- if .categories.desktop_productivity }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity"
+  {{- end }}
 
-    {{- if .categories.dev_ops }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
-    {{- end }}
+  {{- if .categories.dev_ops }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.dev.ops"
+  {{- end }}
 
-    {{- if .categories.legacy }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
-    {{- end }}
+  {{- if .categories.legacy }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy"
+  {{- end }}
 
-    {{- if .categories.legacy_macfuse }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.macfuse"
-    {{- end }}
+  {{- if .categories.legacy_macfuse }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.macfuse"
+  {{- end }}
 
-    {{- if .categories.legacy_vmware }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.vmware"
-    {{- end }}
+  {{- if .categories.legacy_vmware }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.legacy.vmware"
+  {{- end }}
 
-    {{- if .categories.desktop_privacy }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.privacy"
-    {{- end }}
+  {{- if .categories.desktop_privacy }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.privacy"
+  {{- end }}
 
-    {{- if .categories.desktop_emulation }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.emulation"
-    {{- end }}
+  {{- if .categories.desktop_emulation }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.emulation"
+  {{- end }}
 
-    {{- if .categories.desktop_gaming_emulation }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming.emulation"
-    {{- end }}
+  {{- if .categories.desktop_gaming_emulation }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.gaming.emulation"
+  {{- end }}
 
-    {{- if .categories.desktop_productivity_msoffice }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.msoffice"
-    {{- end }}
+  {{- if .categories.desktop_productivity_msoffice }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.msoffice"
+  {{- end }}
 
-    {{- if .categories.desktop_productivity_adobe }}
-    winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.adobe"
-    {{- end }}
+  {{- if .categories.desktop_productivity_adobe }}
+  winget_import_filtered "{{ .chezmoi.sourceDir }}/wingetfile.desktop.productivity.adobe"
+  {{- end }}
 fi
 {{- end }}
