@@ -142,12 +142,12 @@ frontend.
                          │        │  local connections generated from
                          │        │  LOCAL_ENGINES; cloud providers as
                          └────────┼─────────────────────────────────┘
-                                   │      reconciler-managed dw-<provider> entries
+                                   │      reconciler-managed <provider> entries
         ┌────────────┬───────────┴──────────┬──────────────┐
         ▼            ▼                      ▼              ▼
      Ollama        oMLX               OpenAI/Anthropic   OpenRouter
       :11434   :OPENWEBUI_…/v1          (managed entries/      (optional)
-   (native)    OpenAI+Anthropic API    direct API keys)
+   (native)    OpenAI API (managed)    direct API keys)
 ```
 
 ### Design principles (mapped to repo patterns)
@@ -184,19 +184,21 @@ frontend.
       the API.
    4. Ordinary service restarts retain database state and do **not**
       regenerate; reconciliation happens only on deploy.
-   Managed-entry ownership is collision-safe: managed entries carry
-   registry-derived `prefix_id` values within a reserved managed prefix
-   namespace; reconciliation adopts, updates or deletes an entry only when
-   both the `prefix_id` and the entry's endpoint/connection type match the
-   expected registry-derived values; on any ownership collision it fails
-   closed (report and abort rather than delete an unrelated connection), and
-   unmanaged admin-created entries are preserved via read-merge-write.
+   Managed-entry ownership is collision-safe: managed entries carry a
+   `managed_by: dotfiles` marker in each connection's `api_configs` entry,
+   plus a registry-derived `prefix_id`. Reconciliation adopts an unmarked
+   entry when its catalogue identity and prefix match, updates or deletes a
+   marked entry only when its endpoint/connection type matches the expected
+   values, and fails closed on ownership collisions (report and abort rather
+   than delete an unrelated connection). Unmanaged admin-created entries are
+   preserved via read-merge-write.
    Admin-UI connection changes persist in the database until the next
    reconciliation, which may then overwrite managed entries — never
    unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
    per-connection `prefix_id` (stable model-ID prefixes) and
    `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
-   OpenAI-protocol clouds stay unambiguous.
+   OpenAI-protocol clouds stay unambiguous; the current prefix and picker-ID
+   contract is recorded below.
    Plug/unplug a *gated* engine = flip its `DOTFILES_RUN_*` gate + `make
    deploy`; **Ollama is the exception — it has no gate** (`LOCAL_ENGINES`
    entry `gate_env: None`), so it is treated as always-present and its entry
@@ -234,7 +236,7 @@ frontend.
     reconciler (`scripts/lib/openwebui.py`) includes repo-known cloud
     providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama
     Cloud) in the desired state whenever their upstream-native API key is set
-    in `~/.env` — same `dw-` prefix ownership, collision and preservation
+    in `~/.env` — the same marker-based ownership, collision and preservation
     rules as local engines; key rotation surfaces as an update action and
     removing a key removes the managed entry on the next deploy. Providers
     without keys are simply skipped. Anthropic-protocol connections are
@@ -243,7 +245,7 @@ frontend.
     metadata, not a protocol selector — verified live against 0.11.4.
     Meridian (Anthropic-compatible `:3456/v1`) is **included by explicit
     user authorization** (recorded during Phase 4 planning — third consumer
-    after OpenCode/Mozart) as a reconciler-managed `dw-meridian` connection
+    after OpenCode/Mozart) as a reconciler-managed `meridian` connection
     whenever `is_meridian_configured()` reports it available
     (`MERIDIAN_API_KEY` / `ANTHROPIC_BASE_URL`); absent that, no entry is
     created. It is still **not** a general subscription-to-API bridge: the
@@ -264,8 +266,9 @@ frontend.
     separately installed application with its own auth. "Localhost-only"
     (loopback) and "private network" (Tailscale/LAN) are distinct exposure
     modes and never conflated.
-6. **No LiteLLM gateway initially.** oMLX already speaks OpenAI + Anthropic and
-   Ollama is built in; both UIs connect directly. LiteLLM becomes a documented
+6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
+   reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
+   directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
    grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).
@@ -273,6 +276,45 @@ frontend.
    an immutable versioned release — exact pip version or a digest-pinned
    image, updated deliberately. Moving tags (`main`, `main-slim`) are *not*
    pins and are not used.
+
+### Reconciler contract (2026-09-27 rework)
+
+The reconciler manages bare provider-name prefixes: `ollama` (native), `omlx`,
+`openai`, `google`, `openrouter`, `opencode`, `ollama-cloud`, `meridian`, and
+`anthropic`. The old `dw-*` namespace is retired. Ownership is identified by
+`managed_by: dotfiles` in each connection's `api_configs` entry, not by the
+prefix. An unmarked entry with a catalogue-matching identity and prefix is
+adopted and marked on the next reconcile. A legacy `dw-*` entry is migrated in
+place — prefix rewritten and marker added — when its endpoint and connection
+type match the catalogue; a legacy entry matching nothing is removed. Other
+unmanaged entries remain untouched.
+
+oMLX is reconciled as an OpenAI-compatible connection only; it no longer gets
+an Anthropic-facing connection. Local engine endpoints are canonicalized to
+`127.0.0.1`, not `localhost`. The `ollama-cloud` connection is always pinned
+to `https://ollama.com/v1`; setting `OLLAMA_API_KEY` no longer substitutes the
+local Ollama proxy URL.
+
+The model IDs in the picker consequently change with the prefix migration.
+Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`,
+`google.models/gemini-...`, `openrouter.vendor/model`, and
+`ollama.gemma4:12b-mxfp8`.
+This is safe to do before chats exist: on a fresh machine, the first reconcile
+converges before any chat history is created. Existing chats may refer to the
+old IDs and should be treated as a migration concern rather than silently
+rewritten.
+
+Open WebUI's generated service environment also sets `DEFAULT_LOCALE` through
+`openwebui_default_locale()`: `OPENWEBUI_DEFAULT_LOCALE` wins; otherwise the
+first entry from `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, or `LANG` is used.
+Values such as `xx_YY.charset` are normalized to `xx-YY` and snapped to a
+region-qualified locale shipped by the frontend (`en-US` or `en-GB`); `en*`
+becomes `en-US`, and unknown values also fall back to `en-US`. This works
+around open-webui 0.11.4 upstream bug [#30348](https://github.com/open-webui/open-webui/issues/30348),
+where bare `en` and `en-CA` produce raw i18n keys such as
+`settings.admin.connections.title`. Upstream fix PR [#30354](https://github.com/open-webui/open-webui/pull/30354)
+is merged to `dev`, but no v0.11.5 release contains it yet; the environment
+variable is therefore the durable workaround for now.
 
 ### What Open WebUI gives us beyond chat (staged, opt-in)
 
@@ -409,7 +451,7 @@ Two security notes for MCP registration (accepted, documented boundaries):
 Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode
 Zen, Ollama Cloud) are **reconciler-managed**: set the provider's
 upstream-native API key in `~/.env` and the next `make deploy` adds/updates
-the `dw-<provider>` connection with the same ownership guarantees as local
+   the bare `<provider>` connection with the same ownership guarantees as local
 engines. No admin-UI entry is needed for these. A brand-new provider that the
 reconciler does not know yet needs a small `compute_desired_state()` /
 ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic
@@ -480,6 +522,9 @@ connection and MCP credentials.
   `AGENTS.md`/`README.md`).
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
+- Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
+  once released, revisit whether the `DEFAULT_LOCALE` workaround remains
+  necessary.
 
 ## Explicit non-goals
 
@@ -522,7 +567,7 @@ All former open questions were resolved during implementation and
 live-validated against `open-webui==0.11.4`:
 
 1. **Meridian:** included by explicit user authorization (Phase 4 planning)
-   as a reconciler-managed `dw-meridian` connection whenever
+   as a reconciler-managed `meridian` connection whenever
    `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
 2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.11.4}`
