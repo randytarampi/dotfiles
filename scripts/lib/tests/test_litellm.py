@@ -31,10 +31,10 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     monkeypatch.setenv("MERIDIAN_API_KEY", "meridian")
     entries = litellm_config.compute_model_list()
     aliases = {entry["model_name"] for entry in entries}
-    assert "openai-default" in aliases
-    assert "anthropic-default" not in aliases
+    assert "openai/default" in aliases
+    assert "anthropic/default" not in aliases
     monkeypatch.setattr(litellm_config, "is_meridian_configured", lambda: True)
-    assert "meridian-claude-sonnet-5" in {
+    assert "meridian/claude-sonnet-5" in {
         entry["model_name"] for entry in litellm_config.compute_model_list()
     }
 
@@ -56,8 +56,8 @@ def test_local_registry_models_use_protocol_specific_entries(monkeypatch):
     aliases = {
         entry["model_name"]: entry for entry in litellm_config.compute_model_list()
     }
-    assert aliases["omlx-model-a"]["litellm_params"]["model"] == "openai/model-a"
-    assert aliases["ollama-model-b"]["litellm_params"]["model"] == "ollama/model-b"
+    assert aliases["omlx/model-a"]["litellm_params"]["model"] == "openai/model-a"
+    assert aliases["ollama/model-b"]["litellm_params"]["model"] == "ollama/model-b"
 
 
 def test_render_uses_environment_references_and_no_inline_keys(monkeypatch):
@@ -180,12 +180,12 @@ def test_litellm_keyed_local_and_meridian_shapes(monkeypatch):
         item["litellm_params"].get("api_key") == "os.environ/OMLX_API_KEY"
         for item in keyed
     )
-    assert any(item["model_name"] == "meridian-claude-sonnet-5" for item in keyed)
+    assert any(item["model_name"] == "meridian/claude-sonnet-5" for item in keyed)
 
 
 def test_google_uses_native_adapter(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "gemini")
     entries = litellm_config.compute_model_list()
-    google = next(item for item in entries if item["model_name"] == "google-default")
+    google = next(item for item in entries if item["model_name"] == "google/default")
     assert google["litellm_params"]["model"].startswith("gemini/")
     assert "api_base" not in google["litellm_params"]

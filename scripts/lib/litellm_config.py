@@ -48,7 +48,7 @@ def compute_model_list(environ=None):
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base
             entries.extend(
-                _entry(f"ollama-{model}", f"ollama/{model}", api_base=base)
+                _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
                 for model in models
             )
             continue
@@ -59,7 +59,7 @@ def compute_model_list(environ=None):
         key_env = key_env if key_env and environ.get(key_env, "").strip() else None
         entries.extend(
             _entry(
-                f"{provider}-{model}",
+                f"{provider}/{model}",
                 f"openai/{model}",
                 api_base=base_url,
                 key_env=key_env,
@@ -70,7 +70,7 @@ def compute_model_list(environ=None):
     if is_meridian_configured() and environ.get("MERIDIAN_API_KEY", "").strip():
         entries.append(
             _entry(
-                "meridian-claude-sonnet-5",
+                "meridian/claude-sonnet-5",
                 "anthropic/claude-sonnet-5",
                 api_base=get_meridian_base_url(),
                 key_env="MERIDIAN_API_KEY",
@@ -112,7 +112,7 @@ def compute_model_list(environ=None):
     for provider, (key_env, model, base_url) in clouds.items():
         if environ.get(key_env, "").strip():
             entries.append(
-                _entry(f"{provider}-default", model, api_base=base_url, key_env=key_env)
+                _entry(f"{provider}/default", model, api_base=base_url, key_env=key_env)
             )
     return entries
 
