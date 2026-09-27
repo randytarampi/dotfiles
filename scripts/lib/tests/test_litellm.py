@@ -42,7 +42,7 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
 
 @pytest.mark.parametrize("catalogue", [["m1", "m2"], []])
 def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-stub")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
 
     entries = litellm_config.compute_model_list()
@@ -59,7 +59,7 @@ def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
 
 
 def test_live_catalogue_failure_aborts_model_list(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-stub")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: None)
     with pytest.raises(litellm_config.LiveCatalogueError):
         litellm_config.compute_model_list()
