@@ -157,9 +157,9 @@ fi
 
 # Detect desktop environment
 case "${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}" in
-  *GNOME*|*ubuntu:GNOME*) DESKTOP=GNOME ;;
-  *KDE*|*PLASMA*) DESKTOP=KDE ;;
-  *) DESKTOP=unknown ;;
+*GNOME* | *ubuntu:GNOME*) DESKTOP=GNOME ;;
+*KDE* | *PLASMA*) DESKTOP=KDE ;;
+*) DESKTOP=unknown ;;
 esac
 
 if [[ "$DESKTOP" == "unknown" ]]; then

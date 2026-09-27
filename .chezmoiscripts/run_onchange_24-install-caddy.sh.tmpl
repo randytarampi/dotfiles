@@ -216,9 +216,9 @@ if ! command -v caddy >/dev/null 2>&1; then
     warn "apt-get could not install Caddy; trying the official binary"
     arch="$(uname -m)"
     case "$arch" in
-      x86_64) arch="amd64" ;;
-      aarch64|arm64) arch="arm64" ;;
-      *) die "Unsupported Linux architecture for Caddy: $arch" ;;
+    x86_64) arch="amd64" ;;
+    aarch64 | arm64) arch="arm64" ;;
+    *) die "Unsupported Linux architecture for Caddy: $arch" ;;
     esac
     caddy_tmp="$(mktemp)"
     curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${arch}" -o "$caddy_tmp" || die "Failed to download Caddy"
