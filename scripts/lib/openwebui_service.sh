@@ -11,15 +11,40 @@ openwebui_service_plist() {
   printf '%s\n' "${HOME}/Library/LaunchAgents/com.openwebui.web.plist"
 }
 
+openwebui_default_locale() {
+  local locale="${OPENWEBUI_DEFAULT_LOCALE:-}" candidate variable
+  local -a supported_locales=("en-US" "en-GB")
+  if [[ -z "$locale" ]]; then
+    for variable in LANGUAGE LC_ALL LC_MESSAGES LANG; do
+      candidate="${!variable:-}"
+      candidate="${candidate%%:*}"
+      if [[ -n "$candidate" ]]; then
+        locale="$candidate"
+        break
+      fi
+    done
+  fi
+  locale="${locale%%.*}"
+  locale="${locale//_/-}"
+  for candidate in "${supported_locales[@]}"; do
+    [[ "$locale" == "$candidate" ]] && {
+      printf '%s\n' "$locale"
+      return
+    }
+  done
+  printf '%s\n' "${supported_locales[0]}"
+}
+
 openwebui_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/openwebui/service.env}"
   local service_home
   local WEBUI_SECRET_KEY="" WEBUI_ADMIN_EMAIL="" WEBUI_ADMIN_PASSWORD=""
-  local OPENWEBUI_API_KEY="" OPENWEBUI_PORT=""
+  local OPENWEBUI_API_KEY="" OPENWEBUI_PORT="" DEFAULT_LOCALE=""
+  local OPENWEBUI_DEFAULT_LOCALE="${OPENWEBUI_DEFAULT_LOCALE:-}"
   local tmp
   service_home="$(dirname "$service_env")"
   mkdir -p "$service_home"
-  local env_WEBUI_SECRET_KEY="" env_WEBUI_ADMIN_EMAIL="" env_WEBUI_ADMIN_PASSWORD="" env_OPENWEBUI_API_KEY="" env_OPENWEBUI_PORT=""
+  local env_WEBUI_SECRET_KEY="" env_WEBUI_ADMIN_EMAIL="" env_WEBUI_ADMIN_PASSWORD="" env_OPENWEBUI_API_KEY="" env_OPENWEBUI_PORT="" env_OPENWEBUI_DEFAULT_LOCALE=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
@@ -29,6 +54,7 @@ openwebui_service_env_sync() {
   env_WEBUI_ADMIN_PASSWORD="$WEBUI_ADMIN_PASSWORD"
   env_OPENWEBUI_API_KEY="$OPENWEBUI_API_KEY"
   env_OPENWEBUI_PORT="$OPENWEBUI_PORT"
+  env_OPENWEBUI_DEFAULT_LOCALE="$OPENWEBUI_DEFAULT_LOCALE"
   if [[ -f "$service_env" ]]; then
     # shellcheck disable=SC1090
     source "$service_env"
@@ -39,11 +65,14 @@ openwebui_service_env_sync() {
   [[ -n "$env_OPENWEBUI_API_KEY" ]] && OPENWEBUI_API_KEY="$env_OPENWEBUI_API_KEY"
   unset OPENWEBUI_PORT
   [[ -n "$env_OPENWEBUI_PORT" ]] && OPENWEBUI_PORT="$env_OPENWEBUI_PORT"
+  [[ -n "$env_OPENWEBUI_DEFAULT_LOCALE" ]] && OPENWEBUI_DEFAULT_LOCALE="$env_OPENWEBUI_DEFAULT_LOCALE"
+  [[ -z "$OPENWEBUI_DEFAULT_LOCALE" && -n "$DEFAULT_LOCALE" ]] && OPENWEBUI_DEFAULT_LOCALE="$DEFAULT_LOCALE"
   WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-}"
   WEBUI_ADMIN_EMAIL="${WEBUI_ADMIN_EMAIL:-admin@localhost}"
   WEBUI_ADMIN_PASSWORD="${WEBUI_ADMIN_PASSWORD:-}"
   OPENWEBUI_API_KEY="${OPENWEBUI_API_KEY:-}"
   OPENWEBUI_PORT="${OPENWEBUI_PORT:-8080}"
+  OPENWEBUI_DEFAULT_LOCALE="$(openwebui_default_locale)"
   if [[ -z "$WEBUI_SECRET_KEY" || -z "$WEBUI_ADMIN_PASSWORD" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1
     if [[ -z "$WEBUI_SECRET_KEY" ]]; then
@@ -63,6 +92,7 @@ openwebui_service_env_sync() {
     printf 'WEBUI_ADMIN_PASSWORD=%q\n' "$WEBUI_ADMIN_PASSWORD"
     printf 'OPENWEBUI_API_KEY=%q\n' "$OPENWEBUI_API_KEY"
     printf 'OPENWEBUI_PORT=%q\n' "$OPENWEBUI_PORT"
+    printf 'DEFAULT_LOCALE=%q\n' "$OPENWEBUI_DEFAULT_LOCALE"
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
