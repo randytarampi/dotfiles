@@ -84,6 +84,8 @@ def _admin_credentials():
 
 
 def _streamable_mcp_connections(repo_root=None):
+    # idea.json (local JetBrains MCP at 127.0.0.1:64342) follows the registry
+    # like other URL entries; LAN exposure/reachability is a maintainer decision.
     """MCP inventory from the canonical registry (configs/mcp/global-mcps.json
     -> tools.<tool>.mcp_servers[].template), NOT a directory glob — a JSON
     file dropped into configs/mcp/ for any other purpose must not silently

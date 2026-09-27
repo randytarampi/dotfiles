@@ -28,6 +28,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/check-env-coverage.py",
     "scripts/check-hashes.py",  # self — doesn't need to track itself
     "scripts/check-docs-drift.py",  # Makefile-only verification tool
+    "scripts/check-mcp-parity.py",  # Makefile-only verification tool
     "scripts/cleanup-brewfiles.py",  # Makefile-only cleanup tool
     "scripts/cleanup-project.py",  # Makefile-only cleanup tool
     "scripts/show-categories.py",  # Makefile-only category management tool
