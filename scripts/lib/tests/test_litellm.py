@@ -100,6 +100,43 @@ def test_litellm_env_sync_in_sparse_environment(tmp_path):
     assert result.returncode == 0
     assert env_path.is_file()
     assert env_path.stat().st_mode & 0o777 == 0o600
+    env_text = env_path.read_text(encoding="utf-8")
+    names = {line.split("=", 1)[0] for line in env_text.splitlines() if "=" in line}
+    assert "DISABLE_ADMIN_UI" in names
+
+
+def test_litellm_env_sync_disable_admin_ui_override(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    env_path.parent.mkdir(parents=True)
+
+    def sync(extra_env, target):
+        script = (
+            f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+            f"source {shlex.quote(str(helper))}; "
+            f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+        )
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env={
+                "HOME": str(tmp_path),
+                "PATH": os.environ.get("PATH", ""),
+                **extra_env,
+            },
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        return dict(
+            line.split("=", 1)
+            for line in env_path.read_text(encoding="utf-8").splitlines()
+            if "=" in line
+        )
+
+    assert sync({}, None)["DISABLE_ADMIN_UI"] == "True"
+    assert (
+        sync({"LITELLM_DISABLE_ADMIN_UI": "False"}, None)["DISABLE_ADMIN_UI"] == "False"
+    )
 
 
 @pytest.mark.parametrize("openssl_body", ["return 1", ":"])

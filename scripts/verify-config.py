@@ -1112,7 +1112,11 @@ def main():
         if (litellm_root / "config.yaml").is_file():
             config_text = (litellm_root / "config.yaml").read_text(encoding="utf-8")
             refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
-            expected_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT"} | refs
+            expected_env = {
+                "LITELLM_MASTER_KEY",
+                "LITELLM_PORT",
+                "DISABLE_ADMIN_UI",
+            } | refs
             if set(litellm_env_values) != expected_env:
                 print(
                     "  \u2717 LiteLLM service env: provider allowlist does not match config refs"
