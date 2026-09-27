@@ -668,7 +668,10 @@ def reconcile(
                 and config.get("enable") is True
                 and not seed_config
             )
-            if existing.get("url") in managed_urls[collection] and is_upstream_seed:
+            if (
+                _canonicalize_host(existing.get("url", "")) in managed_urls[collection]
+                and is_upstream_seed
+            ):
                 plan.entries.append(
                     {
                         "action": "delete",

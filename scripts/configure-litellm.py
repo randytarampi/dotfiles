@@ -35,6 +35,8 @@ def main():
         return 0
     config_path = os.path.expanduser("~/.local/share/litellm/config.yaml")
     try:
+        # Compute the snapshot once: write_config reuses it instead of
+        # re-enumerating provider catalogues a second time per deploy.
         entries = compute_model_list()
         if args.dry_run:
             master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
@@ -45,7 +47,7 @@ def main():
                 config_path,
             )
             return 0
-        changed = write_config(config_path)
+        changed = write_config(config_path, entries=entries)
         logger.info(
             "LiteLLM config %s (%d model entries)",
             "updated" if changed else "unchanged",
