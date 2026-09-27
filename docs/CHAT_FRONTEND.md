@@ -268,9 +268,9 @@ frontend.
     modes and never conflated.
 6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
    reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
-  directly. LiteLLM becomes a documented
+   directly. LiteLLM becomes a documented
    escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
-  grow — it is *not* part of the initial build (avoids over-layering; Mozart
+   grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).
 7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs
    an immutable versioned release — exact pip version or a digest-pinned

@@ -751,9 +751,22 @@ def reconcile_via_api(client, desired):
             client.update_ollama_config(payload)
     if changed:
         # Unmanaged entries the plan prunes are known upstream seed duplicates;
-        # anything else moving must fail the verification.
-        pruned_urls = {
-            (item["collection"], item["entry"]["url"])
+        # anything else moving must fail the verification. Prunes are tracked
+        # by full serialized identity (collection + url + config) so a deleted
+        # seed never masks a different unmanaged entry sharing its URL.
+        pruned_entries = {
+            (
+                item["collection"],
+                item["entry"].get("url", ""),
+                json.dumps(
+                    {
+                        "url": item["entry"].get("url", ""),
+                        "key": item["entry"].get("key", ""),
+                        "config": item["entry"].get("config", {}),
+                    },
+                    sort_keys=True,
+                ),
+            )
             for item in result.plan.entries
             if item["action"] == "delete" and not _managed(item["entry"])
         }
@@ -768,16 +781,32 @@ def reconcile_via_api(client, desired):
                 config.get("connection_type"),
                 collection,
             )
-            return identity in {
-                _catalogue_identity(owner) for owner in catalogue.values()
-            }
+            owner = catalogue.get(_identity(item))
+            return owner is not None and identity == _catalogue_identity(owner)
+
+        def _prune_fingerprint(item):
+            # Full serialized identity (url + key + config) so a deleted seed
+            # never masks a different unmanaged entry sharing its URL.
+            return json.dumps(
+                {
+                    "url": item.get("url", ""),
+                    "key": item.get("key", ""),
+                    "config": item.get("config", {}),
+                },
+                sort_keys=True,
+            )
 
         def _unmanaged(entries, collection):
             return [
                 copy.deepcopy(item)
                 for item in entries
                 if not _owned_or_migrating(item, collection)
-                and (collection, item.get("url")) not in pruned_urls
+                and (
+                    collection,
+                    item.get("url", ""),
+                    _prune_fingerprint(item),
+                )
+                not in pruned_entries
             ]
 
         before_unmanaged = {
