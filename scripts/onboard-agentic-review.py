@@ -30,7 +30,8 @@ Secrets:
 Labels:
   review-opencode, review-junie, review-gemini, review-copilot, review-all
 Copilot setup:
-  Run copilot-setup-steps.yml once via workflow_dispatch.
+  Run copilot-setup-steps.yml once via workflow_dispatch, supplying the immutable
+  dotfiles commit SHA that contains the trusted verifier.
   In Settings → Copilot → MCP servers, add the read-only local codegraph server:
     codegraph serve --mcp
   Use the COPILOT_MCP_* prefix for Copilot MCP secrets.
@@ -43,6 +44,15 @@ Dispatcher:
   The installed dispatcher is a stable stub; trigger parsing and improvements
   arrive automatically through the configured dotfiles ref. Re-onboarding is
   only needed when trigger events or permissions change.
+Fix lane:
+  agentic-review-fix.yml is intentionally dotfiles-only and is not distributed
+  to downstream repositories. It requires owner authentication and the
+  agentic-review-fix environment approval before publishing a draft PR. Its
+  base_sha must be an existing 40-hex commit, and allowed_paths must list every
+  exact file permitted to change (one path per line); each run publishes a
+  unique agentic-review-bot/<run-id> branch. The generator installs and verifies
+  the pinned OpenCode CLI (opencode-ai@1.18.33); reruns use an exact-ref
+  force-with-lease guarded by the previously observed remote tip.
 Usage:
   Mention plus text requests an ad-hoc task; review labels request the standard review.
   Supported mentions: /oc, /opencode, @oc, @opencode, @junie-agent, @junie,

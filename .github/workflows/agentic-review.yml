@@ -201,33 +201,34 @@ jobs:
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
     runs-on: ubuntu-latest
-    # OpenCode may push a requested fix; reviewer-only lanes remain read-only.
+    # Normal review lanes never modify the checkout or push commits.
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
-          persist-credentials: true
-          fetch-depth: 1
-          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
-      # Attribute agent commits and avoid runners' missing git identity failure.
-      # Downstream repositories may override this with their preferred identity.
-      - name: Configure git identity for agent commits
-        run: |
-          git config --local user.name "opencode-agent[bot]"
-          git config --local user.email "opencode-agent[bot]@users.noreply.github.com"
-      # Downstream callers need this trusted checkout for shared review assets.
-      - name: Checkout trusted review assets
-        uses: actions/checkout@v7
-        with:
-          repository: randytarampi/dotfiles
-          ref: main
-          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${{ github.workflow_sha }}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Cache codegraph index
         uses: actions/cache@v6
         with:
@@ -236,12 +237,12 @@ jobs:
           restore-keys: |
             codegraph-${{ runner.os }}-${{ github.repository }}-
       - name: Install codegraph + build index
-        run: bash __TRUSTED_DOTFILES__/scripts/ci-codegraph.sh
+        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
       - name: Install code-review skill
-        run: mkdir -p .opencode/skills/code-review && cp __TRUSTED_DOTFILES__/.github/skills/code-review/SKILL.md .opencode/skills/code-review/SKILL.md
+        run: mkdir -p .opencode/skills/code-review && cp "${TRUSTED_DOTFILES}/.github/skills/code-review/SKILL.md" .opencode/skills/code-review/SKILL.md
       - name: Load review prompt
         run: |
-          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
+          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
@@ -259,12 +260,6 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      # OpenCode may push a requested fix; strip the trusted checkout's git
-      # include config so submodule scanning does not error on its directory.
-      - name: Remove trusted checkout git include config
-        run: |
-          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
-            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - name: Run OpenCode review
         uses: anomalyco/opencode/github@16747470f976aca3d362ad730bcd3fe82ecc2c9a # v1.18.29
         env:
@@ -272,7 +267,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
-          OPENCODE_CONFIG: ${{ github.workspace }}/__TRUSTED_DOTFILES__/configs/opencode/ci/opencode.json
+          OPENCODE_CONFIG: ${{ env.TRUSTED_DOTFILES }}/configs/opencode/ci/opencode.json
         with:
           model: opencode/big-pickle
           use_github_token: "true"
@@ -287,34 +282,36 @@ jobs:
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',junie,')
     runs-on: ubuntu-latest
-    # Junie may push a requested fix; reviewer-only lanes remain read-only.
+    # Normal review lanes never modify the checkout or push commits.
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
-          persist-credentials: true
-          fetch-depth: 1
-      # Attribute agent commits and avoid runners' missing git identity failure.
-      # Downstream repositories may override this with their preferred identity.
-      - name: Configure git identity for agent commits
-        run: |
-          git config --local user.name "junie-agent[bot]"
-          git config --local user.email "junie-agent[bot]@users.noreply.github.com"
-      - name: Checkout trusted review assets
-        uses: actions/checkout@v7
-        with:
-          repository: randytarampi/dotfiles
-          ref: main
-          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${{ github.workflow_sha }}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Load review prompt
         run: |
-          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
+          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
@@ -327,10 +324,6 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      - name: Remove trusted checkout git include config
-        run: |
-          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
-            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - uses: JetBrains/junie-github-action@v1
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
@@ -344,37 +337,37 @@ jobs:
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')
     runs-on: ubuntu-latest
-    # Gemini may push a requested fix like the OpenCode/Junie lanes.
+    # Normal review lanes never modify the checkout or push commits.
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
-          persist-credentials: true
-          fetch-depth: 1
-          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
-      # Attribute agent commits and avoid runners' missing git identity failure.
-      # Downstream repositories may override this with their preferred identity.
-      - name: Configure git identity for agent commits
-        run: |
-          git config --local user.name "gemini-agent[bot]"
-          git config --local user.email "gemini-agent[bot]@users.noreply.github.com"
-
-      # Downstream callers need this trusted checkout for shared review assets.
-      - name: Checkout trusted review assets
-        uses: actions/checkout@v7
-        with:
-          repository: randytarampi/dotfiles
-          ref: main
-          path: __TRUSTED_DOTFILES__
           persist-credentials: false
           fetch-depth: 1
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${{ github.workflow_sha }}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Load review prompt
         run: |
-          prompt_file="__TRUSTED_DOTFILES__/configs/review/code-review-prompt.md"
+          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
           delim=""
           for _ in {1..5}; do
             delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
@@ -393,12 +386,6 @@ jobs:
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
-      # Gemini may push a requested fix; strip the trusted checkout's git
-      # include config so submodule scanning does not error on its directory.
-      - name: Remove trusted checkout git include config
-        run: |
-          git config --local --name-only --get-regexp '^includeif\.gitdir:.*/__TRUSTED_DOTFILES__' |
-            while IFS= read -r key; do git config --local --unset-all "$key" || true; done
       - id: gemini
         uses: google-github-actions/run-gemini-cli@v0
         env:

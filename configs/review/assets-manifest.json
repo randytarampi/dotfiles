@@ -4,6 +4,8 @@
     "scripts/run-local-review.sh": "f9e0d4cfc36ceabfc06766d3faf835f8b674cc4124596260de3381b749174cb0",
     "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
     "configs/opencode/ci/opencode.json": "ba2ed2d5c5524cfdf5315bc12aadbb4d24e2eef56300e7696075c9ca5cf8ac8c",
-    "scripts/onboard-agentic-review.py": "3fc6dde486457bf6a384bf71c3aacf755a7a8ed342a21f662c43f9d139fced80"
+    "scripts/onboard-agentic-review.py": "19cb5032b5143876576280b871502bb989fd23788017f1be2deef7082a112d63",
+    "scripts/verify-ci-assets.py": "cb7d903fe640802b97a820409f0718eb422172f07aff9d82ecabc8fd7164bb22",
+    ".github/skills/code-review/SKILL.md": "1157a4d3dddd2167ae50f33316088da99107743afe42484d5c377c1b5652a348"
   }
 }

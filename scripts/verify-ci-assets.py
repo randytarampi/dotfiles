@@ -11,19 +11,34 @@ MANIFEST = ROOT / "configs/review/assets-manifest.json"
 
 
 def main():
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Verify hashes for CI and local review assets",
         allow_abbrev=False,
-    ).parse_args()
+    )
+    parser.add_argument("--root", type=Path, default=None)
+    parser.add_argument("--manifest", type=Path, default=None)
+    args = parser.parse_args()
+    root = (args.root or ROOT).resolve()
+    # Preserve the module constants when no override is supplied. Besides
+    # backwards compatibility, this keeps the verifier straightforward to
+    # isolate in unit tests; an explicit root gets its conventional manifest.
+    manifest = (
+        args.manifest
+        or (
+            MANIFEST
+            if args.root is None
+            else root / "configs/review/assets-manifest.json"
+        )
+    ).resolve()
     try:
-        assets = json.loads(MANIFEST.read_text(encoding="utf-8"))["assets"]
+        assets = json.loads(manifest.read_text(encoding="utf-8"))["assets"]
     except (OSError, json.JSONDecodeError, KeyError) as error:
         print(f"Could not read CI asset manifest: {error}")
         return 1
 
     drift = []
     for name, expected in assets.items():
-        path = ROOT / name
+        path = root / name
         if not path.is_file():
             drift.append(f"{name}: missing")
             continue

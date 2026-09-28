@@ -8,6 +8,11 @@ name: Copilot setup steps
 
 on:
   workflow_dispatch:
+    inputs:
+      trusted_ref:
+        description: "Immutable dotfiles commit containing the trusted verifier"
+        required: true
+        type: string
 
 jobs:
   copilot-setup-steps:
@@ -21,21 +26,22 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           submodules: false
-      - name: Checkout trusted dotfiles scripts
-        uses: actions/checkout@v7
-        with:
-          repository: randytarampi/dotfiles
-          ref: main
-          path: __TRUSTED_DOTFILES__
-          persist-credentials: false
-          fetch-depth: 1
-          submodules: false
-      - name: Verify trusted codegraph script
+      - name: Stage and verify trusted dotfiles scripts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          test -f __TRUSTED_DOTFILES__/scripts/ci-codegraph.sh || {
-            echo "Trusted dotfiles checkout is missing scripts/ci-codegraph.sh" >&2
-            exit 1
-          }
+          set -euo pipefail
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          trusted_sha="${{ inputs.trusted_ref }}"
+          [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Cache codegraph index
         uses: actions/cache@v6
         with:
@@ -44,4 +50,4 @@ jobs:
           restore-keys: |
             codegraph-${{ runner.os }}-${{ github.repository }}-
       - name: Install codegraph + build index
-        run: bash __TRUSTED_DOTFILES__/scripts/ci-codegraph.sh
+        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"

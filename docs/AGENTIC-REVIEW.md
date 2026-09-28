@@ -73,17 +73,49 @@ repository instructions.
   The CI OpenCode lane runs the explicitly selected model with all three
   provider keys available. The repo's local fallback policy is a runtime
   plugin concern and is not part of the CI config.
-  OpenCode and Gemini load the shared prompt from a trusted
-  `randytarampi/dotfiles@main` checkout using a random environment delimiter;
-  PR content never participates in prompt-file loading.
+  OpenCode, Junie, and Gemini stage the trusted dotfiles commit identified by
+  the reusable workflow's immutable `github.workflow_sha` and verify its asset
+  manifest before using prompts, configuration, skills, or `ci-codegraph.sh`.
+  Copilot setup accepts an explicit 40-character dotfiles commit SHA for the
+  same reason; PR content never participates in prompt-file loading.
 - Security posture: minimal `permissions` per job, `sender.type != 'Bot'`
   filter, per-PR `concurrency` cancel-in-progress, actions pinned to moving
   major tags (OpenCode pinned to its release SHA — it publishes no major tag),
-  read-only MCP tool allowlists, no `pull_request_target`. Push-capable lanes
-  (OpenCode, Junie, Gemini) run with token checkout, persisted credentials,
-  and `contents: write` so mentioned agents can push requested fixes; the
-  Copilot lane stays orchestration-only — Copilot's own write-back is governed
-  by repo Settings → Copilot → Agent permissions, not by this workflow.
+  read-only MCP tool allowlists, no `pull_request_target`. Normal OpenCode,
+  Junie, and Gemini lanes have `contents: read`, do not persist checkout
+  credentials, and cannot push. The separate manual fix lane is
+  owner-authenticated, generation-read-only, gated by the `agentic-review-fix`
+  environment, validates paths and gitlinks, then publishes only the
+  exact-path allowlist on a unique `agentic-review-bot/<run-id>` branch and
+  opens or updates an idempotent draft PR. It is dotfiles-only and is not
+  installed by the onboarding script. The Copilot lane stays orchestration-only
+  — Copilot's own write-back is governed by repo Settings → Copilot → Agent
+  permissions, not by this workflow.
+
+## Manual fix lane
+
+`agentic-review-fix.yml` is deliberately not distributed by
+`scripts/onboard-agentic-review.py`; it is a dotfiles-only, `workflow_dispatch`
+lane. The owner must provide:
+
+- `base_sha`: an existing 40-hex repository commit. Both jobs check out and
+  verify this exact commit.
+- `allowed_paths`: a newline-separated list of exact repository-relative paths.
+  The generator inventories tracked changes, deletions, and untracked files,
+  rejects anything outside this set, and includes approved untracked files in
+  the uploaded patch. The publisher repeats the exact-path and mode `160000`
+  checks before applying and staging it.
+- `trusted_ref`: an immutable 40-hex dotfiles commit containing the verifier.
+
+The generator runs `opencode run` directly with a read-only token and only
+edits its workspace. It installs the repository-pinned OpenCode CLI
+(`opencode-ai@1.18.33`) and verifies both its executable and reported version;
+it does not commit, push, or create a PR. After the
+`agentic-review-fix` environment approval, the publisher creates the unique
+`agentic-review-bot/<run-id>` branch. On reruns it records the current remote
+tip and uses an exact-ref `--force-with-lease` update; a changed tip fails
+closed. It updates an existing open draft PR for that head or creates one when
+absent.
 
 ## Secrets
 
@@ -169,8 +201,8 @@ natively; keep review posture guidance there for the Copilot lane.
 
 `.github/skills/code-review/SKILL.md` is the committed review rubric
 (verify-first, blocking-vs-suggestion, evidence rules, conventions). The
-reusable workflow checks out trusted assets from `randytarampi/dotfiles@main`
-and copies the skill into `.opencode/skills/` at runtime (`.opencode/` is
+  reusable workflow stages a fixed commit and copies the skill into
+  `.opencode/skills/` at runtime (`.opencode/` is
 gitignored).
 Copilot reads equivalent guidance from repo instructions. Tweak the rubric to
 match what you care about as a reviewer — it is the single place reviewers get

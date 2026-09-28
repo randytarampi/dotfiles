@@ -1,0 +1,289 @@
+name: Agentic review fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      trusted_owner:
+        description: "Repository owner permitted to request this lane"
+        required: true
+        type: string
+      trusted_ref:
+        description: "Immutable dotfiles commit containing the trusted verifier"
+        required: true
+        type: string
+      base_sha:
+        description: "Exact repository commit to use as the fix base"
+        required: true
+        type: string
+      allowed_paths:
+        description: "Newline-separated exact repository-relative paths approved for this fix"
+        required: true
+        type: string
+      prompt:
+        description: "Explicit, human-reviewed fix request"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    # Authentication is deliberately tied to the repository owner. Token scope
+    # is not a branch restriction; rulesets and these exact checks are.
+    if: github.repository_owner == 'randytarampi' && github.actor == github.repository_owner && inputs.trusted_owner == github.repository_owner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Validate the exact base commit
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.base_sha }}" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the exact base commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Authenticate the dispatching actor and base commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+          test "$(gh api user --jq .login)" = "${GITHUB_ACTOR}"
+          test "$(git rev-parse HEAD)" = "${{ inputs.base_sha }}"
+
+      - name: Validate exact approved paths
+        env:
+          ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          set -euo pipefail
+          test -n "${ALLOWED_PATHS}"
+          while IFS= read -r path; do
+            [[ -n "${path}" && "${path}" != /* && "${path}" != *..* && "${path}" != *$'\t'* ]]
+          done <<< "${ALLOWED_PATHS}"
+
+      - name: Reject gitlinks before agent writes
+        run: |
+          set -euo pipefail
+          if ! git ls-files --stage | awk '$1 == "160000" { found=1 } END { exit found }'; then
+            echo "Refusing to run with a gitlink (mode 160000) in the tree." >&2
+            exit 1
+          fi
+
+      - name: Stage and verify trusted review assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
+        run: |
+          set -euo pipefail
+          [[ "${TRUSTED_REF}" =~ ^[0-9a-f]{40}$ ]]
+          trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
+          rm -rf "${trusted_root}"
+          mkdir -p "${trusted_root}"
+          git -C "${trusted_root}" init --quiet
+          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${TRUSTED_REF}"
+          git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${TRUSTED_REF}"
+          python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
+          printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
+
+      - name: Build trusted codegraph index
+        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
+
+      - name: Install and verify the pinned OpenCode CLI
+        env:
+          OPENCODE_VERSION: "1.18.33"
+        run: |
+          set -euo pipefail
+          npm install --global "opencode-ai@${OPENCODE_VERSION}"
+          command -v opencode
+          version_output="$(opencode --version)"
+          version_pattern="(^|[^0-9])${OPENCODE_VERSION//./\\.}([^0-9]|$)"
+          [[ "${version_output}" =~ ${version_pattern} ]]
+
+      - name: Generate the requested fix with the OpenCode CLI
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENCODE_CONFIG: ${{ env.TRUSTED_DOTFILES }}/configs/opencode/ci/opencode.json
+          FIX_PROMPT: ${{ inputs.prompt }}
+        run: |
+          set -euo pipefail
+          generator_prompt=$'Modify only the approved workspace files for this request. Do not commit, push, create a branch, comment, or create a pull request. Return successfully after making workspace edits.\n\nRequest:\n'"${FIX_PROMPT}"
+          opencode run --auto --model opencode/big-pickle --dir "${GITHUB_WORKSPACE}" "${generator_prompt}"
+
+      - name: Inventory and stage the exact generated patch
+        id: patch
+        env:
+          ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          set -euo pipefail
+          is_allowed_path() {
+            local candidate="$1" allowed
+            while IFS= read -r allowed; do
+              [[ "${candidate}" == "${allowed}" ]] && return 0
+            done <<< "${ALLOWED_PATHS}"
+            return 1
+          }
+          mapfile -t changed_paths < <(
+            { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u
+          )
+          ((${#changed_paths[@]} > 0))
+          for path in "${changed_paths[@]}"; do
+            if ! is_allowed_path "${path}"; then
+              echo "Generated patch contains disallowed path: ${path}" >&2
+              exit 1
+            fi
+          done
+          for path in "${changed_paths[@]}"; do
+            if [[ -z "$(git ls-files --error-unmatch -- "${path}" 2>/dev/null)" ]]; then
+              git add -N -- "${path}"
+            fi
+          done
+          if ! git diff --raw | awk '$2 ~ /^160000$/ || $3 ~ /^160000$/ { found=1 } END { exit found }'; then
+            echo "Refusing to stage a diff containing a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+          patch_file="${RUNNER_TEMP}/agentic-review-fix-${GITHUB_RUN_ID}.patch"
+          git diff --binary --no-ext-diff -- "${changed_paths[@]}" > "${patch_file}"
+          test -s "${patch_file}"
+          printf 'patch_file=%s\n' "${patch_file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload explicitly staged patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-review-fix-${{ github.run_id }}
+          path: ${{ steps.patch.outputs.patch_file }}
+          if-no-files-found: error
+
+  publish:
+    needs: generate
+    if: needs.generate.result == 'success'
+    runs-on: ubuntu-latest
+    environment: agentic-review-fix
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Validate publication inputs
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.base_sha }}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "agentic-review-bot/${GITHUB_RUN_ID}" =~ ^agentic-review-bot/[0-9]+$ ]]
+
+      - name: Check out the exact base commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download staged patch
+        uses: actions/download-artifact@v4
+        with:
+          name: agentic-review-fix-${{ github.run_id }}
+          path: "${{ runner.temp }}/agentic-review-fix"
+
+      - name: Record the current bot branch tip
+        run: |
+          set -euo pipefail
+          publish_branch="agentic-review-bot/${GITHUB_RUN_ID}"
+          remote_tip="$(git ls-remote --heads origin "refs/heads/${publish_branch}" | awk 'NR == 1 { print $1 }')"
+          if [[ -n "${remote_tip}" ]]; then
+            [[ "${remote_tip}" =~ ^[0-9a-f]{40}$ ]]
+            git fetch --no-tags origin "refs/heads/${publish_branch}"
+            test "$(git rev-parse FETCH_HEAD)" = "${remote_tip}"
+            printf 'BOT_BRANCH_EXISTS=true\n' >> "${GITHUB_ENV}"
+            printf 'BOT_BRANCH_EXPECTED_TIP=%s\n' "${remote_tip}" >> "${GITHUB_ENV}"
+          else
+            printf 'BOT_BRANCH_EXISTS=false\n' >> "${GITHUB_ENV}"
+          fi
+
+      - name: Validate exact paths and gitlinks before writing
+        env:
+          ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          set -euo pipefail
+          is_allowed_path() {
+            local candidate="$1" allowed
+            while IFS= read -r allowed; do
+              [[ "${candidate}" == "${allowed}" ]] && return 0
+            done <<< "${ALLOWED_PATHS}"
+            return 1
+          }
+          test "$(git rev-parse HEAD)" = "${{ inputs.base_sha }}"
+          patch_file="${RUNNER_TEMP}/agentic-review-fix/agentic-review-fix-${GITHUB_RUN_ID}.patch"
+          test -f "${patch_file}"
+          while IFS= read -r path; do
+            if ! is_allowed_path "${path}"; then
+              echo "Patch contains disallowed path: ${path}" >&2
+              exit 1
+            fi
+          done < <(git apply --name-only "${patch_file}")
+          if grep -Eq '(^| )160000( |$)' "${patch_file}"; then
+            echo "Refusing to apply a patch containing mode 160000." >&2
+            exit 1
+          fi
+          if ! git ls-files --stage | awk '$1 == "160000" { found=1 } END { exit found }'; then
+            echo "Refusing to publish a tree containing a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+
+      - name: Apply and explicitly stage the validated patch
+        env:
+          ALLOWED_PATHS: ${{ inputs.allowed_paths }}
+        run: |
+          set -euo pipefail
+          is_allowed_path() {
+            local candidate="$1" allowed
+            while IFS= read -r allowed; do
+              [[ "${candidate}" == "${allowed}" ]] && return 0
+            done <<< "${ALLOWED_PATHS}"
+            return 1
+          }
+          patch_file="${RUNNER_TEMP}/agentic-review-fix/agentic-review-fix-${GITHUB_RUN_ID}.patch"
+          mapfile -t patch_paths < <(git apply --name-only "${patch_file}")
+          git apply --check "${patch_file}"
+          git apply "${patch_file}"
+          git add -- "${patch_paths[@]}"
+          for path in "${patch_paths[@]}"; do
+            if ! is_allowed_path "${path}"; then
+              echo "Staged disallowed path: ${path}" >&2
+              exit 1
+            fi
+          done
+          if ! git ls-files --stage | awk '$1 == "160000" { found=1 } END { exit found }'; then
+            echo "Refusing to publish a tree containing a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+          git diff --cached --check
+
+      - name: Publish a unique bot branch and create or update its draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          publish_branch="agentic-review-bot/${GITHUB_RUN_ID}"
+          [[ "${publish_branch}" =~ ^agentic-review-bot/[0-9]+$ ]]
+          test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+          git config user.name "agentic-review-bot[bot]"
+          git config user.email "agentic-review-bot[bot]@users.noreply.github.com"
+          git commit -m "fix: apply requested agentic review change"
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
+            git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" origin "HEAD:refs/heads/${publish_branch}"
+          else
+            git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push origin "HEAD:refs/heads/${publish_branch}"
+          fi
+          existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"
+          if [[ -n "${existing_pr}" ]]; then
+            gh pr edit "${existing_pr}" --title "fix: agentic review request" --body "Generated by the approved manual agentic review fix lane."
+          else
+            gh pr create --draft --base main --head "${publish_branch}" --title "fix: agentic review request" --body "Generated by the approved manual agentic review fix lane."
+          fi
