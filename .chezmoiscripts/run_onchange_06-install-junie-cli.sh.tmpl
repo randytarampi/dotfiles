@@ -18,6 +18,8 @@ source "${LIB_DIR}/env.sh"
 # junie-local-model: {{ env "DOTFILES_JUNIE_LOCAL_MODEL" | default "0" }}
 # scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
 # scripts/lib/model_stamp.py: {{ include "scripts/lib/model_stamp.py" | sha256sum }}
+# scripts/lib/model_catalogues.py: {{ include "scripts/lib/model_catalogues.py" | sha256sum }}
+# scripts/refresh-model-catalogues.py: {{ include "scripts/refresh-model-catalogues.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_JUNIE_CLI_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
