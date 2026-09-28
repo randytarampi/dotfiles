@@ -142,6 +142,34 @@ def test_verify_ci_assets_reports_missing_and_valid_assets(tmp_path, capsys):
         sys.argv = original_argv
 
 
+def test_verify_ci_assets_accepts_explicit_root_and_manifest(tmp_path, capsys):
+    module = load_script("verify-ci-assets")
+    import hashlib
+    import sys
+
+    root = tmp_path / "trusted-root"
+    root.mkdir()
+    asset = root / "asset.txt"
+    asset.write_text("trusted")
+    manifest = tmp_path / "trusted-manifest.json"
+    manifest.write_text(
+        '{"assets": {"asset.txt": "' + hashlib.sha256(b"trusted").hexdigest() + '"}}'
+    )
+    original_argv = sys.argv
+    sys.argv = [
+        "verify-ci-assets.py",
+        "--root",
+        str(root),
+        "--manifest",
+        str(manifest),
+    ]
+    try:
+        assert module.main() == 0
+        assert "verified (1 assets)" in capsys.readouterr().out
+    finally:
+        sys.argv = original_argv
+
+
 def test_brewfile_completeness_maps_categories_and_rejects_missing_files(
     tmp_path, monkeypatch
 ):
