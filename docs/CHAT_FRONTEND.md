@@ -452,7 +452,7 @@ Two security notes for MCP registration (accepted, documented boundaries):
 Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode
 Zen, Ollama Cloud) are **reconciler-managed**: set the provider's
 upstream-native API key in `~/.env` and the next `make deploy` adds/updates
-   the bare `<provider>` connection with the same ownership guarantees as local
+the bare `<provider>` connection with the same ownership guarantees as local
 engines. No admin-UI entry is needed for these. A brand-new provider that the
 reconciler does not know yet needs a small `compute_desired_state()` /
 ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic
