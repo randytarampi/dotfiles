@@ -491,7 +491,7 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 ### Replacement procedure (when a referenced ID disappears)
 
 1. Confirm against the live catalog (`opencode models <provider> --refresh`); do not substitute from memory or docs.
-2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (e.g. `ling-3.0-flash-fin-free` looks like an orchestrator candidate but its 32K output cap and text-only input disqualify it; `muse-spark-1.2-contributor-free`'s multimodality is what allowed dropping the Zen observer.)
+2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (Historical/retired example: `ling-3.0-flash-fin-free` looked like an orchestrator candidate but its 32K output cap and text-only input disqualified it; `muse-spark-1.2-contributor-free`'s multimodality is what allowed dropping the Zen observer.)
 3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, tier-registry tests, and the tier docs — the same 6-way sync rule as [docs/MODEL_UPDATES.md](MODEL_UPDATES.md).
 4. Re-run: `make check-slim-invariants test-tier-registry check-model-drift` and a `configure-opencode.py` dry-run for the affected preset.
 5. Record the churn event in [docs/MODEL_UPDATES.md](MODEL_UPDATES.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
@@ -522,7 +522,7 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **anthropic**: synthesizer `claude-opus-5` (xhigh variant)
 - **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-5.6-sol` (high variant; councillors α sol, β terra, γ luna)
 - **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free)
-- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-fin:free)
+- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-sante:free)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
 

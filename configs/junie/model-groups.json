@@ -86,11 +86,11 @@
     },
     "openrouter-glm": {
       "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-fin:free"
+      "primaryModel": "inclusionai/ling-3.0-flash-sante:free"
     },
     "openrouter-nemotron": {
       "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-fin:free",
+      "primaryModel": "inclusionai/ling-3.0-flash-sante:free",
       "fasterModel": "inclusionai/ling-3.0-flash-sante:free",
       "fasterProvider": "openrouter"
     },
