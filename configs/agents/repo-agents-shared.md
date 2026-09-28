@@ -6,7 +6,7 @@ These policies apply to work in every repository.
 
 - Run the repository's canonical verification command before claiming success.
 - If verification fails, fix it before reporting the work as complete.
-- Verify from the committed tree, never the working tree: when the tree is dirty, stash first (or verify `git show HEAD:<file>`) so in-flight content cannot satisfy a check the commit would fail.
+- Verify from the committed tree, never in-flight working-tree content: use a clean dedicated worktree or verify `git show HEAD:<file>` rather than stashing or cleaning another lane's changes.
 - Treat a lane's verification claim as unproven until it is independently re-run: re-execute the repo's verify command (and `actionlint` on workflow changes) before accepting it.
 - A service environment schema change is not complete in one surface: when adding, removing, or renaming a key in a generated `service.env`, update the generating `*_service_env_sync()` emitter, the verification script's required-names/expected set, and the env-sync test asserting the key schema — all in the same change.
 - Do not sleep-poll CI or specialist lanes; dispatch feedback-addressing work while checks run in the background and reconcile results when they land.
@@ -18,6 +18,14 @@ These policies apply to work in every repository.
 - Keep one concern per commit.
 - Use Conventional Commits (`type(scope): description`).
 - Never push unless the user explicitly authorizes it.
+
+### Git worktrees
+
+- Use a dedicated Git worktree for non-trivial, risky, or parallel work. Keep the primary checkout as an integration lane, especially when it has pre-existing dirt.
+- One writer owns one branch and one worktree. Never attach the same branch to multiple worktrees or dispatch another writer into an owned lane.
+- Before work starts, record the expected dirty state. Preserve it: do not use `git stash`, `git clean`, `git reset`, or broad staging to clear another lane's work.
+- Stage explicit paths only. Validate from the intended committed worktree state, not from unrelated changes in the primary checkout.
+- Before removing a worktree, confirm it has no uncommitted changes and ask for explicit approval. Do not prune unrelated or stale worktree records opportunistically.
 
 ### Writing and ambiguity
 

@@ -19,6 +19,11 @@ configs/opencode/acp-agents.json
 # Deepwork progress state (kept git-local; OpenCode-readable via .ignore)
 .slim/deepwork/
 
+# BEGIN oh-my-opencode-slim worktrees
+.slim/worktrees/
+.slim/worktrees.json
+# END oh-my-opencode-slim worktrees
+
 # Gemini CLI GitHub Action runtime state (gha-creds are OAuth artifacts)
 .gemini/
 gha-creds-*.json
