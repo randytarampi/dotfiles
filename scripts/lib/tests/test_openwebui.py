@@ -148,6 +148,49 @@ def test_collision_wrong_endpoint_is_fail_closed():
     )
 
 
+def test_shared_identity_prefixes_are_not_collisions(monkeypatch):
+    """Two managed prefixes on one identity must both converge (Meridian case).
+
+    With ANTHROPIC_BASE_URL pointed at the Meridian proxy, the 'anthropic'
+    cloud connection and 'meridian' resolve to the same URL/type pair. The
+    identity map tracks every owner, so neither managed entry is skipped as
+    a fail-closed collision.
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:3456")
+    url = "http://127.0.0.1:3456"
+    desired = {
+        "openai": [],
+        "anthropic": [
+            _entry("meridian", url, kind="anthropic", key=""),
+            _entry("anthropic", url, kind="anthropic", key="sk-proxy"),
+        ],
+        "ollama": [],
+    }
+    current = [
+        _entry("meridian", url, kind="anthropic", key=""),
+        _entry("anthropic", url, kind="anthropic", key="sk-proxy"),
+    ]
+    result = openwebui.reconcile(current, [], desired)
+    assert result.status == "clean"
+    assert {item["action"] for item in result.plan.entries} == {"keep"}
+
+    # A managed entry whose identity is shared but whose prefix no longer has
+    # desired state still converges to delete, not skip.
+    desired_no_anthropic = {
+        "openai": [],
+        "anthropic": [_entry("meridian", url, kind="anthropic", key="")],
+        "ollama": [],
+    }
+    result = openwebui.reconcile(current, [], desired_no_anthropic)
+    assert result.status == "clean"
+    actions = {
+        item["entry"]["config"]["prefix_id"]: item["action"]
+        for item in result.plan.entries
+    }
+    assert actions["anthropic"] == "delete"
+    assert actions["meridian"] == "keep"
+
+
 def test_key_rotation_enable_flip_and_dual_protocol_updates():
     catalogue = openwebui.ownership_catalogue()
     url = catalogue["om" + "lx"]["url"]

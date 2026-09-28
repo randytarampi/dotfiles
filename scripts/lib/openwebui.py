@@ -506,9 +506,13 @@ def reconcile(
         + desired.get("ollama", [])
     )
     desired_by_prefix = {_identity(item): item for item in desired_entries}
-    catalogue_by_identity = {
-        _catalogue_identity(owner): prefix for prefix, owner in catalogue.items()
-    }
+    catalogue_by_identity = {}
+    for prefix, owner in catalogue.items():
+        # Multiple managed prefixes can legitimately share one identity: with
+        # ANTHROPIC_BASE_URL pointed at the Meridian proxy, the 'anthropic'
+        # cloud connection and 'meridian' resolve to the same URL/type pair.
+        # Track every owner so one of them does not fail closed as a collision.
+        catalogue_by_identity.setdefault(_catalogue_identity(owner), set()).add(prefix)
     current = []
     snapshots = {}
     for collection, source in (("openai", current_openai), ("ollama", current_ollama)):
@@ -540,12 +544,13 @@ def reconcile(
             existing.get("url", ""), config.get("connection_type"), collection
         )
         identity_owner = catalogue_by_identity.get(current_identity)
+        identity_owner_set = identity_owner or set()
         expected_identity = owner and current_identity == _catalogue_identity(owner)
         if _managed(existing):
             if (
                 not owner
                 or not expected_identity
-                or (identity_owner and identity_owner != prefix)
+                or (identity_owner_set and prefix not in identity_owner_set)
             ):
                 collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
@@ -586,7 +591,10 @@ def reconcile(
             # Legacy dw-* entries migrate only when their endpoint/type still
             # belongs to the current catalogue.  A stale legacy entry is
             # removed rather than adopted as an unrelated user connection.
-            target = identity_owner
+            # Ambiguous identities (multiple owners) have no migration target.
+            target = (
+                next(iter(identity_owner_set)) if len(identity_owner_set) == 1 else None
+            )
             migrated = desired_by_prefix.get(target) if target else None
             if target and migrated is not None:
                 if target in seen:
@@ -615,10 +623,12 @@ def reconcile(
                         "entry": copy.deepcopy(existing),
                     }
                 )
-        elif identity_owner:
+        elif identity_owner_set:
             # A new-style prefix without the marker is adoptable on sight only
             # when both its endpoint/type and prefix agree with the catalogue.
-            if identity_owner != prefix:
+            # Ambiguous identities cannot prove prefix agreement.
+            adoptable = len(identity_owner_set) == 1 and prefix in identity_owner_set
+            if not adoptable:
                 if prefix in desired_by_prefix:
                     collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
