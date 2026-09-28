@@ -511,6 +511,7 @@ def main():
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
             "lsp": True,
+            "compaction": {"auto": False},
             "provider": {},
             "plugin": [
                 configured_plugins[0],

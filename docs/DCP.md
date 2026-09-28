@@ -15,6 +15,24 @@ exist.
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
+## Compaction ownership
+
+The generated `opencode.json` sets `"compaction": {"auto": false}`. Native
+automatic compaction is therefore disabled so DCP is the sole automatic
+compactor. Manual `/compact` remains available.
+
+DCP's quiet-related keys are intentionally not set; this is a deliberate user
+decision even though the documented keys exist. No experimental keys or DCP
+namespace is added to `opencode.json`.
+
+The previously reported LSP noise is closed as documentation-only: the Python
+import-resolution messages are pre-existing editor artefacts, `py_compile` is
+the ground truth, and no upstream suppression keys exist. `lsp` therefore
+remains `true`.
+
+The `startId not available` message is plugin/OpenCode lifecycle behaviour and
+has no upstream configuration remedy.
+
 ---
 
 ## OpenCode Config Paths
