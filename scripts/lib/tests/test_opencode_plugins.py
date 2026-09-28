@@ -133,3 +133,8 @@ def test_plan_agent_is_disabled_but_not_plannotator_planning_agent():
     assert '"plan": {"disable": True}' in source
     planning_block = source.split('"planningAgents":', 1)[1].split("]", 1)[0]
     assert '"plan"' not in planning_block
+
+
+def test_generated_global_config_disables_native_auto_compaction():
+    source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
+    assert '"compaction": {"auto": False}' in source

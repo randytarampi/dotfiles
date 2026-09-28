@@ -461,6 +461,18 @@ def check_opencode_orphan_files():
         managed_config = {}
     managed_keys = set(managed_config) if isinstance(managed_config, dict) else set()
 
+    compaction = (
+        managed_config.get("compaction") if isinstance(managed_config, dict) else None
+    )
+    if not isinstance(compaction, dict) or compaction.get("auto") is not False:
+        print(
+            "  \u2717 OpenCode compaction: expected opencode.json "
+            '"compaction": {"auto": false}'
+        )
+        exit_code = 1
+    else:
+        print("  \u2713 OpenCode compaction: native auto-compaction disabled")
+
     for path in sorted(opencode_dir.glob("*.jsonc")):
         if path.name == "dcp.jsonc":
             continue

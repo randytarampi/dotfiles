@@ -114,3 +114,21 @@ def test_backup_timer_rejects_prefix_sharing_and_unrelated_repository_paths(
         assert not VERIFY_CONFIG.backup_timer_repo_path_is_allowed(
             ["/usr/bin/make", "-C", str(path), "openwebui-backup"], paths
         )
+
+
+def test_opencode_compaction_is_required_when_gate_runs(tmp_path, monkeypatch):
+    opencode_dir = tmp_path / ".config" / "opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "dcp.jsonc").write_text('{"compress": {}}', encoding="utf-8")
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+
+    managed = opencode_dir / "opencode.json"
+    managed.write_text('{"compaction": {"auto": false}}', encoding="utf-8")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
+
+    managed.write_text('{"compaction": {"auto": "false"}}', encoding="utf-8")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
+
+    managed.write_text("{}", encoding="utf-8")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
