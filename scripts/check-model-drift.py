@@ -8,8 +8,6 @@ import json
 import os
 import re
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -19,6 +17,11 @@ import logger
 from env import load_env
 from model_stamp import is_stale
 from local_engines import active_engines, iter_engine_models_strict, resolve_engine
+from model_catalogues import (
+    endpoint_models_url,
+    get_models as fetch_models,
+    load_allowlists,
+)
 
 REPO_ROOT = SCRIPT_DIR.parent
 DRIFT_STATS = {"checked": 0, "skipped": 0}
@@ -37,6 +40,10 @@ ALLOWLISTS = {
         "openrouter",
     )
 }
+
+
+def get_models(url: str, api_key: str = ""):
+    return fetch_models(url, api_key, stats=DRIFT_STATS)
 
 
 def iter_models(value):
@@ -64,68 +71,9 @@ def resolve_profile_api_key(value: object) -> str | None:
     return value
 
 
-def get_models(url: str, api_key: str = "") -> set[str] | None:
-    DRIFT_STATS["checked"] += 1
-    try:
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-        request = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(request, timeout=3) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        return {str(item.get("id")) for item in data.get("data", []) if item.get("id")}
-    except urllib.error.HTTPError as exc:
-        if exc.code in {401, 403, 404}:
-            DRIFT_STATS["checked"] -= 1
-            DRIFT_STATS["skipped"] += 1
-            logger.warning(
-                "Could not authenticate to %s (HTTP %s) — skipping", url, exc.code
-            )
-        else:
-            DRIFT_STATS["checked"] -= 1
-            DRIFT_STATS["skipped"] += 1
-            logger.warning("Could not reach %s — skipping (%s)", url, exc)
-        return None
-    except Exception as exc:
-        DRIFT_STATS["checked"] -= 1
-        DRIFT_STATS["skipped"] += 1
-        logger.warning("Could not reach %s — skipping (%s)", url, exc)
-        return None
-
-
-def endpoint_models_url(base_url: str) -> str:
-    base_url = base_url.rstrip("/")
-    for suffix in ("/chat/completions", "/responses"):
-        if base_url.endswith(suffix):
-            base_url = base_url[: -len(suffix)]
-            break
-    if not base_url.endswith("/v1"):
-        base_url += "/v1"
-    return base_url + "/models"
-
-
-def load_allowlists() -> dict[str, set[str]]:
-    result = {}
-    for provider, path in ALLOWLISTS.items():
-        if not path.exists():
-            logger.warning("Missing %s model allowlist — skipping", path)
-            continue
-        try:
-            models = json.loads(path.read_text(encoding="utf-8")).get("models", {})
-            values = set(models) if isinstance(models, dict) else set()
-            if isinstance(models, dict):
-                values.update(
-                    item.get("name")
-                    for item in models.values()
-                    if isinstance(item, dict) and item.get("name")
-                )
-            result[provider] = values
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("Could not read %s — skipping (%s)", path, exc)
-    return result
-
-
 def check_slim(data: dict) -> list[str]:
     violations = []
-    allowlists = load_allowlists()
+    allowlists = load_allowlists(ALLOWLISTS)
     for model in set(iter_models(data)):
         if model.startswith("_local:") or any(
             model.startswith(f"{provider}/") for provider in active_engines()

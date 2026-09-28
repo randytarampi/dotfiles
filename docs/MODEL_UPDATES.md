@@ -82,6 +82,25 @@ model announcement that affects your presets; `make verify` warns when the
 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
 for the automated check.
 
+## Scheduled catalogue inventory
+
+`refresh-model-catalogues.yml` runs weekly at 06:00 UTC Monday and can also be
+started with `workflow_dispatch`. Its read-only refresh job queries the
+authenticated OpenCode Zen catalogue with `OPENCODE_API_KEY`; HTTP 401/403 and
+network failures produce an `unavailable` timestamped artefact and never modify
+an allowlist. Manual dispatches are restricted to the authenticated repository
+owner on the default branch, and the publisher validates the complete diff
+against that branch. The protected `model-catalogue-publish` environment gates
+publication, but does not protect the refresh secret; the actor and
+default-branch checks bound that secret exposure.
+
+The refresh keeps only entries whose numeric pricing values are all zero and
+writes evidence to
+`artifacts/model-catalogues/opencode-zen-free.json`. This is inventory for a
+human-reviewed update, not an allowlist writer: do not consume it by changing
+model catalogues, slim presets, Junie groups, CI configuration, or fallbacks
+without following this document's normal review flow.
+
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
 
 - Added to ollama-cloud allowlist: `deepseek-v4.1-flash`, `glm-5.1`, `nemotron-3-super` (catalogue verified 2026-09-12 vs ollama.com/search?c=cloud).

@@ -1,0 +1,156 @@
+name: Refresh model catalogues
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate the trusted manual dispatch boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+            test "$(gh api user --jq .login)" = "${GITHUB_ACTOR}"
+            test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+          fi
+
+      - name: Check out the triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Refresh the review-only Zen inventory
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: python3 scripts/refresh-model-catalogues.py
+
+      - name: Upload the catalogue artefact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: model-catalogue-${{ github.run_id }}
+          path: artifacts/model-catalogues/opencode-zen-free.json
+          if-no-files-found: error
+
+  publish:
+    needs: refresh
+    if: needs.refresh.result == 'success'
+    runs-on: ubuntu-latest
+    environment: model-catalogue-publish
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Validate publication inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          base_sha="${GITHUB_SHA}"
+          [[ "${base_sha}" =~ ^[0-9a-f]{40}$ ]]
+          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
+          [[ "${publish_branch}" =~ ^model-catalogue-bot/[0-9]+$ ]]
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+            test "$(gh api user --jq .login)" = "${GITHUB_ACTOR}"
+            test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+          fi
+
+      - name: Check out the exact base commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download the catalogue artefact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: model-catalogue-${{ github.run_id }}
+          path: "${{ runner.temp }}/model-catalogue"
+
+      - name: Record the current bot branch tip
+        run: |
+          set -euo pipefail
+          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
+          remote_tip="$(git ls-remote --heads origin "refs/heads/${publish_branch}" | awk 'NR == 1 { print $1 }')"
+          if [[ -n "${remote_tip}" ]]; then
+            [[ "${remote_tip}" =~ ^[0-9a-f]{40}$ ]]
+            git fetch --no-tags origin "refs/heads/${publish_branch}"
+            test "$(git rev-parse FETCH_HEAD)" = "${remote_tip}"
+            printf 'BOT_BRANCH_EXISTS=true\n' >> "${GITHUB_ENV}"
+            printf 'BOT_BRANCH_EXPECTED_TIP=%s\n' "${remote_tip}" >> "${GITHUB_ENV}"
+          else
+            printf 'BOT_BRANCH_EXISTS=false\n' >> "${GITHUB_ENV}"
+            printf 'BOT_BRANCH_EXPECTED_TIP=\n' >> "${GITHUB_ENV}"
+          fi
+
+      - name: Validate and stage the exact artefact path
+        run: |
+          set -euo pipefail
+          allowed_path="artifacts/model-catalogues/opencode-zen-free.json"
+          artifact_path="${RUNNER_TEMP}/model-catalogue/opencode-zen-free.json"
+          test -f "${artifact_path}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          mkdir -p "$(dirname "${allowed_path}")"
+          cp "${artifact_path}" "${allowed_path}"
+          mapfile -t changed_paths < <(
+            { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u
+          )
+          ((${#changed_paths[@]} == 1))
+          [[ "${changed_paths[0]}" == "${allowed_path}" ]]
+          git add -- "${allowed_path}"
+          if ! git diff --cached --raw | awk '$2 ~ /^160000$/ || $3 ~ /^160000$/ { found=1 } END { exit found }'; then
+            echo "Refusing to stage a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+          if ! git ls-files --stage | awk '$1 == "160000" { found=1 } END { exit found }'; then
+            echo "Refusing to publish a tree containing a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+
+      - name: Publish the bot branch and create or update its draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
+          [[ "${publish_branch}" =~ ^model-catalogue-bot/[0-9]+$ ]]
+          git config user.name "model-catalogue-bot[bot]"
+          git config user.email "model-catalogue-bot[bot]@users.noreply.github.com"
+          git commit -m "chore: refresh model catalogue artefact"
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
+          fi
+          git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+          mapfile -t published_paths < <(git diff --name-only "origin/${DEFAULT_BRANCH}...HEAD")
+          ((${#published_paths[@]} == 1))
+          [[ "${published_paths[0]}" == "artifacts/model-catalogues/opencode-zen-free.json" ]]
+          if ! git diff --raw "origin/${DEFAULT_BRANCH}...HEAD" | awk '$2 ~ /^160000$/ || $3 ~ /^160000$/ { found=1 } END { exit found }'; then
+            echo "Refusing to publish a commit containing a gitlink (mode 160000)." >&2
+            exit 1
+          fi
+          git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push \
+            --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" \
+            origin "HEAD:refs/heads/${publish_branch}"
+          existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"
+          if [[ -n "${existing_pr}" ]]; then
+            gh pr edit "${existing_pr}" --title "chore: refresh model catalogue" --body "Generated review-only OpenCode Zen inventory artefact."
+          else
+            gh pr create --draft --base main --head "${publish_branch}" --title "chore: refresh model catalogue" --body "Generated review-only OpenCode Zen inventory artefact."
+          fi
