@@ -191,7 +191,11 @@ frontend.
   marked entry only when its endpoint/connection type matches the expected
   values, and fails closed on ownership collisions (report and abort rather
   than delete an unrelated connection). Unmanaged admin-created entries are
-  preserved via read-merge-write.
+  preserved via read-merge-write. An identity may be owned by more than one
+  prefix (e.g. `anthropic` and `meridian` sharing the Meridian proxy URL
+  when `ANTHROPIC_BASE_URL` is set); identity is membership evidence only —
+  a prefix adopts or converges on it, but identity alone never picks a
+  single owner.
   Admin-UI connection changes persist in the database until the next
   reconciliation, which may then overwrite managed entries — never
   unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
@@ -286,7 +290,11 @@ The reconciler manages bare provider-name prefixes: `ollama` (native), `omlx`,
 prefix. An unmarked entry with a catalogue-matching identity and prefix is
 adopted and marked on the next reconcile. A legacy `dw-*` entry is migrated in
 place — prefix rewritten and marker added — when its endpoint and connection
-type match the catalogue; a legacy entry matching nothing is removed. Other
+type match the catalogue identity owned by a single prefix; a legacy entry on
+an identity shared by multiple prefixes (e.g. `anthropic` and `meridian` when
+`ANTHROPIC_BASE_URL` points at the Meridian proxy) has no single migration
+target and is removed, with its desired state added as a fresh connection; a
+legacy entry matching nothing is removed. Other
 unmanaged entries remain untouched.
 
 oMLX is reconciled as an OpenAI-compatible connection only; it no longer gets

@@ -496,6 +496,22 @@ def _catalogue_identity(owner):
     )
 
 
+def _catalogue_by_identity(catalogue):
+    """Map each catalogue identity to the set of prefixes that own it.
+
+    Multiple managed prefixes can legitimately share one identity: with
+    ANTHROPIC_BASE_URL pointed at the Meridian proxy, the 'anthropic' cloud
+    connection and 'meridian' resolve to the same URL/type pair. Tracking
+    every owner keeps one of them from failing closed as a collision. The
+    result must be treated as a membership set; identity alone cannot pick
+    a single owner.
+    """
+    by_identity = {}
+    for prefix, owner in catalogue.items():
+        by_identity.setdefault(_catalogue_identity(owner), set()).add(prefix)
+    return by_identity
+
+
 def reconcile(
     current_openai, current_ollama, desired, *, namespace=MANAGED_PREFIX_NAMESPACE
 ):
@@ -506,13 +522,7 @@ def reconcile(
         + desired.get("ollama", [])
     )
     desired_by_prefix = {_identity(item): item for item in desired_entries}
-    catalogue_by_identity = {}
-    for prefix, owner in catalogue.items():
-        # Multiple managed prefixes can legitimately share one identity: with
-        # ANTHROPIC_BASE_URL pointed at the Meridian proxy, the 'anthropic'
-        # cloud connection and 'meridian' resolve to the same URL/type pair.
-        # Track every owner so one of them does not fail closed as a collision.
-        catalogue_by_identity.setdefault(_catalogue_identity(owner), set()).add(prefix)
+    catalogue_by_identity = _catalogue_by_identity(catalogue)
     current = []
     snapshots = {}
     for collection, source in (("openai", current_openai), ("ollama", current_ollama)):
@@ -543,15 +553,10 @@ def reconcile(
         current_identity = _ownership_identity(
             existing.get("url", ""), config.get("connection_type"), collection
         )
-        identity_owner = catalogue_by_identity.get(current_identity)
-        identity_owner_set = identity_owner or set()
+        identity_owner_set = catalogue_by_identity.get(current_identity) or set()
         expected_identity = owner and current_identity == _catalogue_identity(owner)
         if _managed(existing):
-            if (
-                not owner
-                or not expected_identity
-                or (identity_owner_set and prefix not in identity_owner_set)
-            ):
+            if not owner or not expected_identity:
                 collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
                     {
@@ -625,10 +630,11 @@ def reconcile(
                 )
         elif identity_owner_set:
             # A new-style prefix without the marker is adoptable on sight only
-            # when both its endpoint/type and prefix agree with the catalogue.
-            # Ambiguous identities cannot prove prefix agreement.
-            adoptable = len(identity_owner_set) == 1 and prefix in identity_owner_set
-            if not adoptable:
+            # when its endpoint/type and prefix agree with the catalogue.
+            # Adoption targets the entry's own prefix, so membership in the
+            # owner set is the whole test — shared identities (e.g. the
+            # Meridian-proxy 'anthropic'/'meridian' pair) adopt just the same.
+            if prefix not in identity_owner_set:
                 if prefix in desired_by_prefix:
                     collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
@@ -796,10 +802,9 @@ def reconcile_via_api(client, desired):
             if owner is not None and identity == _catalogue_identity(owner):
                 return True
             if prefix.startswith(MANAGED_PREFIX_NAMESPACE):
-                by_identity = {
-                    _catalogue_identity(owner): catalogue_prefix
-                    for catalogue_prefix, owner in catalogue.items()
-                }
+                # Membership-only use: a shared identity has multiple owners,
+                # and all we need here is that *some* catalogue entry claims it.
+                by_identity = _catalogue_by_identity(catalogue)
                 return by_identity.get(identity) is not None
             return False
 

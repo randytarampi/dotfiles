@@ -191,6 +191,101 @@ def test_shared_identity_prefixes_are_not_collisions(monkeypatch):
     assert actions["meridian"] == "keep"
 
 
+def test_shared_identity_unmarked_entry_is_adopted(monkeypatch):
+    """Unmarked entries on a shared identity adopt by their own prefix.
+
+    With ANTHROPIC_BASE_URL at the Meridian proxy, an unmarked `meridian` or
+    `anthropic` connection sits on an identity owned by two prefixes. Adoption
+    targets the entry's own prefix, so membership is the whole test — both
+    converge to their desired state (docs/CHAT_FRONTEND.md adoption rule).
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:3456")
+    url = "http://127.0.0.1:3456"
+    for prefix, key in (("meridian", ""), ("anthropic", "sk-proxy")):
+        desired = {
+            "openai": [],
+            "anthropic": [
+                _entry(prefix, url, kind="anthropic", key=key),
+            ],
+            "ollama": [],
+        }
+        result = openwebui.reconcile(
+            [_entry(prefix, url, kind="anthropic", key=key, managed=False)],
+            [],
+            desired,
+        )
+        assert result.status == "clean"
+        entry = result.plan.entries[0]
+        assert entry["action"] == "update"
+        assert entry["entry"]["config"]["prefix_id"] == prefix
+        assert entry["entry"]["config"]["managed_by"] == "dotfiles"
+
+
+def test_shared_identity_unmarked_foreign_prefix_fails_closed(monkeypatch):
+    """An unmarked desired prefix at an identity it does not own stays closed.
+
+    `openai` is not an owner of the Meridian identity, so an unmarked entry
+    squatting that prefix there is a genuine collision.
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:3456")
+    url = "http://127.0.0.1:3456"
+    desired = {
+        "openai": [_entry("openai", url, kind="anthropic", key="sk-proxy")],
+        "anthropic": [],
+        "ollama": [],
+    }
+    result = openwebui.reconcile(
+        [_entry("openai", url, kind="anthropic", key="sk-proxy", managed=False)],
+        [],
+        desired,
+    )
+    assert result.status == "collision"
+    assert result.plan.entries[0]["action"] == "keep"
+
+
+def test_shared_identity_legacy_entry_migrates_to_single_owner(monkeypatch):
+    """Legacy dw-* on a shared identity migrates only to a single owner.
+
+    Ambiguous identities have no migration target (identity alone cannot pick
+    one), so the stale entry is removed and the desired entry is added.
+    Both converge to the same persisted state.
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:3456")
+    url = "http://127.0.0.1:3456"
+    desired_meridian = _entry("meridian", url, kind="anthropic", key="")
+    result = openwebui.reconcile(
+        [_entry("dw-anthropic", url, kind="anthropic", key="old", managed=False)],
+        [],
+        {
+            "openai": [],
+            "anthropic": [
+                _entry("meridian", url, kind="anthropic", key=""),
+                _entry("anthropic", url, kind="anthropic", key="sk-proxy"),
+            ],
+            "ollama": [],
+        },
+    )
+    assert result.status == "clean"
+    actions = [item["action"] for item in result.plan.entries]
+    assert "delete" in actions  # stale dw-* removed
+    adds = [item for item in result.plan.entries if item["action"] == "add"]
+    assert {item["entry"]["config"]["prefix_id"] for item in adds} == {
+        "meridian",
+        "anthropic",
+    }
+
+    # Single-owner identity still migrates in place (unchanged contract).
+    omlx_url = openwebui.ownership_catalogue()["omlx"]["url"]
+    result = openwebui.reconcile(
+        [_entry("dw-omlx-openai", omlx_url, key="old", managed=False)],
+        [],
+        {"openai": [_entry("omlx", omlx_url)], "anthropic": [], "ollama": []},
+    )
+    assert result.status == "clean"
+    assert result.plan.entries[0]["action"] == "update"
+    assert result.plan.entries[0]["entry"]["config"]["prefix_id"] == "omlx"
+
+
 def test_key_rotation_enable_flip_and_dual_protocol_updates():
     catalogue = openwebui.ownership_catalogue()
     url = catalogue["om" + "lx"]["url"]
