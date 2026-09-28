@@ -99,6 +99,12 @@ for the automated check.
  - oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.
  - Tier-selection alignment (commits `d59ec3e`, `0d8510a`, `858cd39`): oMLX models now classify on the same basis as Ollama models — discovery derives real `size_gb`, MLX-style names parse parameter counts (first size token wins; `4bit`/`8bit` quant suffixes never match), and MoE status infers from `A<n>B` markers when server metadata omits it, so dense-beats-MoE reasoning ordering works identically (`omlx/Qwen3.8-27B-MLX-4bit` tops reasoning; `gemma-4-12B` classifies lightweight/vision instead of Qwen misreading as lightweight). The merged pool prefers the oMLX entry for engine-equivalent models — same `(family, params)` identity, e.g. `omlx/gemma-4-12B-it-MLX-8bit` over `ollama/gemma4:12b-mxfp8` — while distinct models are kept. `DOTFILES_ROLE_MODELS` now bridges into `configure-pi.py` (mirroring `configure-opencode-tier.py`), and applied role overrides log after materialization for auditability.
 
+## 2026-09-28: OpenRouter Ling model retirement
+
+- OpenRouter retired `inclusionai/ling-3.0-flash-fin:free`; the verified replacement is `inclusionai/ling-3.0-flash-sante:free`.
+- Updated the OpenRouter allowlist, Junie model groups, CI OpenCode catalogue, and free-tier explorer/council surfaces.
+- Role topology and assignments were preserved apart from this identifier replacement; the existing Sante faster-model setting remains unchanged.
+
 ## free preset (cross-provider free tier)
 
 The `free` preset distributes work across free offerings from three

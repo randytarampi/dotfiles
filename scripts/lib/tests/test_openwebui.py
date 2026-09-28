@@ -1065,7 +1065,7 @@ def test_catalogue_curated_names_resolve_to_live_prefixed_ids(
         "_curated_cloud_models",
         lambda: [
             "google/gemini-2.5-flash",
-            "openrouter/inclusionai/ling-3.0-flash-fin:free",
+            "openrouter/inclusionai/ling-3.0-flash-sante:free",
         ],
     )
 
@@ -1081,7 +1081,7 @@ def test_catalogue_curated_names_resolve_to_live_prefixed_ids(
             return {
                 "data": [
                     {"id": "google.models/gemini-2.5-flash"},
-                    {"id": "openrouter.inclusionai/ling-3.0-flash-fin:free"},
+                    {"id": "openrouter.inclusionai/ling-3.0-flash-sante:free"},
                 ]
             }
 
@@ -1095,7 +1095,7 @@ def test_catalogue_curated_names_resolve_to_live_prefixed_ids(
     assert module._reconcile_catalogue(client) == 0
     assert set(client.current["MODEL_ORDER_LIST"]) == {
         "google.models/gemini-2.5-flash",
-        "openrouter.inclusionai/ling-3.0-flash-fin:free",
+        "openrouter.inclusionai/ling-3.0-flash-sante:free",
     }
     assert "Dropping" not in caplog.text
 
