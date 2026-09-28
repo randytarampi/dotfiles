@@ -54,6 +54,109 @@ CADDY_CHECK_PATHS = (
 )
 
 
+def get_backup_timer_repo_paths(local_checkout: Path) -> list[str]:
+    """Return checkout paths that a deployed backup timer may legitimately use."""
+    repo_paths: list[str] = []
+    local_path = local_checkout.expanduser()
+    if local_path.is_absolute():
+        try:
+            repo_paths.append(str(local_path.resolve(strict=True)))
+        except OSError:
+            pass
+
+    chezmoi_bin = shutil.which("chezmoi")
+    if chezmoi_bin:
+        try:
+            # Fixed-argument invocation of a resolved binary with no
+            # operator-controlled input — B603/B607 do not apply.
+            probe = subprocess.run(  # nosec B603, B607
+                [chezmoi_bin, "source-path"],
+                capture_output=True,
+                text=True,
+            )
+            source_path = probe.stdout.strip()
+            if probe.returncode == 0 and source_path:
+                source = Path(source_path).expanduser()
+                if source.is_absolute() and source.exists():
+                    repo_paths.append(str(source.resolve(strict=True)))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+
+    try:
+        git_bin = shutil.which("git")
+        if not git_bin:
+            return list(dict.fromkeys(repo_paths))
+        worktrees = subprocess.run(
+            [
+                git_bin,
+                "-C",
+                str(local_path),
+                "worktree",
+                "list",
+                "--porcelain",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        worktrees = None
+
+    if worktrees is not None and worktrees.returncode == 0:
+        for record in worktrees.stdout.split("\n\n"):
+            lines = record.splitlines()
+            if any(
+                line == "prunable" or line.startswith("prunable ") for line in lines
+            ):
+                continue
+            worktree_line = next(
+                (line for line in lines if line.startswith("worktree ")), None
+            )
+            if worktree_line is None:
+                continue
+            worktree = worktree_line.removeprefix("worktree ").strip()
+            if not worktree or "\x00" in worktree:
+                continue
+            path = Path(worktree).expanduser()
+            if path.is_absolute() and path.exists():
+                try:
+                    repo_paths.append(str(path.resolve(strict=True)))
+                except OSError:
+                    continue
+
+    return list(dict.fromkeys(repo_paths))
+
+
+def backup_timer_repo_path_is_allowed(
+    program_arguments: list[str], repo_paths: list[str]
+) -> bool:
+    """Check the exact ``make -C`` operand against known repository paths."""
+    command_path = None
+    token_sequences = [program_arguments]
+    while token_sequences and command_path is None:
+        tokens = token_sequences.pop()
+        for index, argument in enumerate(tokens[:-2]):
+            if Path(argument).name == "make" and tokens[index + 1] == "-C":
+                command_path = Path(tokens[index + 2]).expanduser()
+                break
+        for index, argument in enumerate(tokens[:-1]):
+            if argument != "-c":
+                continue
+            try:
+                token_sequences.append(shlex.split(tokens[index + 1]))
+            except ValueError:
+                return False
+    if command_path is None or not command_path.is_absolute():
+        return False
+    try:
+        normalized_command_path = command_path.resolve(strict=True)
+        allowed_paths = {
+            Path(path).expanduser().resolve(strict=True) for path in repo_paths
+        }
+    except OSError:
+        return False
+    return normalized_command_path in allowed_paths
+
+
 def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -1254,9 +1357,10 @@ def main():
                         "  \u2717 Open WebUI backup timer: continuous-run keys must be absent"
                     )
                     exit_code = 1
-                arguments = " ".join(
+                program_arguments = [
                     str(item) for item in timer.get("ProgramArguments", [])
-                )
+                ]
+                arguments = " ".join(program_arguments)
                 if (
                     "--noprofile --norc" not in arguments
                     or "env -i" not in arguments
@@ -1276,29 +1380,13 @@ def main():
                     exit_code = 1
                 log_path = str(HOME / ".local/share/openwebui/logs/backup-timer.log")
                 timer_text = backup_timer.read_text(encoding="utf-8")
-                # The deployed timer invokes make in the *deployed* checkout
-                # (chezmoi source dir), which can differ from the checkout
-                # running this verifier — resolve it via chezmoi, falling back
-                # to this file's checkout. Accept EITHER path: a worktree-
-                # generated plist legitimately points at this checkout.
-                repo_paths = []
-                chezmoi_bin = shutil.which("chezmoi")
-                if chezmoi_bin:
-                    # Fixed-argument invocation of a resolved binary with no
-                    # operator-controlled input — B603/B607 do not apply.
-                    probe = subprocess.run(  # nosec B603, B607
-                        [chezmoi_bin, "source-path"],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if probe.returncode == 0 and probe.stdout.strip():
-                        repo_paths.append(probe.stdout.strip())
                 local_checkout = str(Path(__file__).resolve().parent.parent)
-                if local_checkout not in repo_paths:
-                    repo_paths.append(local_checkout)
+                repo_paths = get_backup_timer_repo_paths(Path(local_checkout))
                 if (
                     "openwebui-backup" not in arguments
-                    or not any(p in arguments for p in repo_paths)
+                    or not backup_timer_repo_path_is_allowed(
+                        program_arguments, repo_paths
+                    )
                     or log_path not in timer_text
                 ):
                     print(
