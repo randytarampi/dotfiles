@@ -9,7 +9,7 @@ source "$LIB_DIR/common.sh"
 # shellcheck disable=SC1091
 source "$LIB_DIR/common_args.sh"
 export COMMON_USAGE="$0"
-export COMMON_HELP_TEXT="Update Plannotator CLI only when the installed version is older than the latest release."
+export COMMON_HELP_TEXT="Install the pinned Plannotator CLI release when the installed version differs."
 export COMMON_STRICT=1
 parse_common_args "$@"
 
@@ -60,27 +60,19 @@ if command -v plannotator >/dev/null 2>&1; then
   CURRENT="$(plannotator --version 2>/dev/null | awk '{print $NF}')"
 fi
 
-CURL_ARGS=(-fsSL "https://api.github.com/repos/backnotprop/plannotator/releases/latest")
-if [[ -n "${GH_TOKEN:-}" ]]; then
-  CURL_ARGS+=(-H "Authorization: Bearer ${GH_TOKEN}")
-fi
-LATEST_TAG="$(curl "${CURL_ARGS[@]}" 2>/dev/null |
-  python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)"
-if [[ -z "$LATEST_TAG" && -n "${GH_TOKEN:-}" ]]; then
-  LATEST_TAG="$(curl -fsSL "https://api.github.com/repos/backnotprop/plannotator/releases/latest" 2>/dev/null |
-    python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)"
-fi
-LATEST="${LATEST_TAG#v}"
+PLANNOTATOR_VERSION="0.27.21"
+# This is an upgrade-to-pin operation, not a latest-release check. Moving the
+# pin is a deliberate source edit that must update both installer contracts.
 
 install_plannotator() {
   info "Installing/updating plannotator..."
   if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "Linux" ]]; then
-    if ! curl -fsSL https://plannotator.ai/install.sh | bash -s -- --no-extras --model-invocable none 2>&1; then
+    if ! curl -fsSL https://plannotator.ai/install.sh | bash -s -- --version "${PLANNOTATOR_VERSION}" --no-extras --model-invocable none 2>&1; then
       warn "plannotator install fetch failed (network error?) — try again with: curl -fsSL https://plannotator.ai/install.sh | bash"
       return 1
     fi
   elif [[ "$(uname -s)" == *"MINGW"* ]] || [[ "$(uname -s)" == *"MSYS"* ]] || [[ "$(uname -s)" == *"CYGWIN"* ]]; then
-    if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://plannotator.ai/install.ps1')" 2>&1; then
+    if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "\$script = irm 'https://plannotator.ai/install.ps1'; & ([scriptblock]::Create(\$script)) -Version '${PLANNOTATOR_VERSION}'" 2>&1; then
       warn "plannotator install fetch failed (network error?) — try again manually"
       return 1
     fi
@@ -93,14 +85,11 @@ install_plannotator() {
 INSTALL_FAILED=0
 if [[ -z "$CURRENT" ]]; then
   install_plannotator || INSTALL_FAILED=1
-elif [[ -z "$LATEST_TAG" ]]; then
-  warn "Could not fetch latest Plannotator version — skipping update check"
-  exit 0
-elif [[ "$CURRENT" == "$LATEST" ]] || version_ge "$CURRENT" "$LATEST"; then
-  ok "Plannotator ${CURRENT} is up to date — skipping install"
+elif [[ "$CURRENT" == "$PLANNOTATOR_VERSION" ]]; then
+  ok "Plannotator ${CURRENT} matches pinned version — skipping install"
   exit 0
 else
-  info "Updating Plannotator ${CURRENT} → ${LATEST}"
+  info "Updating Plannotator ${CURRENT} → pinned ${PLANNOTATOR_VERSION}"
   install_plannotator || INSTALL_FAILED=1
 fi
 

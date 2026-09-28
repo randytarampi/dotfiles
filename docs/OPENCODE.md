@@ -62,27 +62,35 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
 ## Fleet Plugins
 
 The generated `plugin` array in `opencode.json` (via `scripts/configure-opencode.py`,
-mirrored in `.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`)
-currently registers:
+mirrored in `.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`) is
+driven by the pinned canonical manifest at
+`configs/opencode/opencode-plugins.json`:
 
 | Plugin | Purpose |
 |--------|---------|
-| `oh-my-opencode-slim@latest` | Orchestrator agent suite (deepwork, skills distribution) |
-| `@tarquinen/opencode-dcp@latest` | Dynamic context pruning / compress tool |
-| `@plannotator/opencode@latest` | Interactive plan/code review UI |
-| `opencode-plugin-openspec@latest` | OpenSpec planning agent |
-| `opencode-vibeguard@latest` | Secrets redaction before LLM requests |
-| `@ramtinj95/opencode-tokenscope@latest` | Token usage/cost reporting |
-| `opencode-planning-with-files@latest` | Persistent planning state (task_plan/findings/progress) |
-| `@slkiser/opencode-quota@latest` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`) |
-| `opencode-mem@latest` | Persistent project/user memory with vector search |
+| `oh-my-opencode-slim@2.2.24` | Orchestrator agent suite (deepwork, skills distribution) |
+| `@tarquinen/opencode-dcp@latest` | Core dynamic context pruning; TUI entry is owned separately |
+| `@plannotator/opencode@0.27.21` | Interactive plan/code review UI |
+| `opencode-plugin-openspec@0.1.4` | OpenSpec planning agent |
+| `opencode-vibeguard@0.1.0` | Secrets redaction before LLM requests |
+| `@ramtinj95/opencode-tokenscope@1.8.1` | Token usage/cost reporting |
+| `opencode-planning-with-files@1.0.1` | Persistent planning state (task_plan/findings/progress) |
+| `@slkiser/opencode-quota@4.10.2` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`) |
+| `opencode-mem@2.26.0` | Persistent project/user memory with vector search |
 | Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
+
+DCP is intentionally excluded from the canonical manifest because it has dual
+ownership: the pinned manifest contract does not govern its legacy core entry,
+while `configure-opencode-dcp.py` owns its `/dcp` TUI entry in `tui.json`.
+Voice remains TUI-owned and is configured by `configure-opencode-voice.py`.
 
 `planning-with-files` is additionally distributed as a **skill to every
 configured tool** via `configs/skills/skills.core.json` +
 `scripts/configure-skills.py` (canonical cache `~/.local/share/dotfiles/skills`,
 symlinked to `~/.agents`, OpenCode, Claude, Codex, Cursor, Junie, Copilot,
 Pi, Cortex, and Antigravity skill directories).
+The installed `skills` CLI currently supports no source version constraint, so
+the manifest records that limitation rather than inventing an unsupported key.
 
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
 > (1.18.32). Live validation confirmed all load on v1; upstream `v2`
@@ -95,6 +103,6 @@ Pi, Cortex, and Antigravity skill directories).
 
 `@ramtinj95/opencode-tokenscope` is an OpenCode plugin for analyzing token usage and costs:
 
-- **Install**: `opencode plugin @ramtinj95/opencode-tokenscope@latest --global` (via `scripts/install-opencode.sh`)
+- **Install**: `opencode plugin @ramtinj95/opencode-tokenscope@1.8.1 --global` (via the canonical plugin manifest)
 - **Usage**: Run `/tokenscope` in OpenCode UI to analyze token usage and costs for the current session
 - **Config**: Added to the `plugin` array in `opencode.json` by `scripts/configure-opencode.py`

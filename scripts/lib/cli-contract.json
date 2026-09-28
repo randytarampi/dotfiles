@@ -758,7 +758,9 @@
       ],
       "enforcement": "strict",
       "accepted_flags": [
-        "--help"
+        "--help",
+        "--check-installed",
+        "--cache-dir"
       ],
       "positional_operand": null,
       "child_scripts": []
