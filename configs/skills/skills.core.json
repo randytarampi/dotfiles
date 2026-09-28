@@ -1,6 +1,7 @@
 {
   "$schema": "https://skills.sh/schema.json",
   "version": 1,
+  "$comment": "skills CLI 1.7.0 has no package version or revision constraint for source entries; planning-with-files remains source-managed until skills-lock support is adopted.",
   "profiles": {
     "core": {
       "description": "Core skills always active for all agents and all repos — iamhumans, find-skills, codegraph, plannotator, key mattpocock engineering skills, cross-cutting tools",

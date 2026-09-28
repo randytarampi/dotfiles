@@ -38,6 +38,7 @@ from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from local_engines import engine_gate_active, local_provider_block, resolve_engine
+from opencode_plugins import plugin_specs
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
@@ -382,6 +383,13 @@ def main():
         "~/AppData/Local/Temp/**": "allow",
     }
 
+    configured_plugins = plugin_specs()
+    plannotator = next(
+        plugin
+        for plugin in configured_plugins
+        if plugin.startswith("@plannotator/opencode@")
+    )
+
     if args.mode == "project":
         # Project configs must be self-sufficient: emit every provider the
         # selected preset references, and reset disabled_providers so an
@@ -505,15 +513,14 @@ def main():
             "lsp": True,
             "provider": {},
             "plugin": [
-                "oh-my-opencode-slim@latest",
+                configured_plugins[0],
                 "@tarquinen/opencode-dcp@latest",
                 [
-                    "@plannotator/opencode@latest",
+                    plannotator,
                     {
                         "workflow": "plan-agent",
                         "planningAgents": [
                             "orchestrator",
-                            "plan",
                             "council",
                             "claude",
                             "codex",
@@ -524,12 +531,7 @@ def main():
                         ],
                     },
                 ],
-                "opencode-plugin-openspec@latest",
-                "opencode-vibeguard@latest",
-                "@ramtinj95/opencode-tokenscope@latest",
-                "opencode-planning-with-files@latest",
-                "@slkiser/opencode-quota@latest",
-                "opencode-mem@latest",
+                *configured_plugins[2:],
             ],
             "agent": {
                 "build": {"disable": True},

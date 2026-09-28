@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "plugins": [
+    "oh-my-opencode-slim@2.2.24",
+    "@plannotator/opencode@0.27.21",
+    "opencode-plugin-openspec@0.1.4",
+    "opencode-vibeguard@0.1.0",
+    "@ramtinj95/opencode-tokenscope@1.8.1",
+    "opencode-planning-with-files@1.0.1",
+    "@slkiser/opencode-quota@4.10.2",
+    "opencode-mem@2.26.0"
+  ],
+  "excluded": {
+    "@tarquinen/opencode-dcp": "TUI-owned; configure-opencode-dcp.py writes tui.json.",
+    "@renjfk/opencode-voice": "TUI-owned; configure-opencode-voice.py writes tui.json."
+  }
+}

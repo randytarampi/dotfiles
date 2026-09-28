@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -21,30 +22,42 @@ if ! command -v opencode >/dev/null 2>&1; then
   exit 0
 fi
 
+# Read the checked-in manifest. DCP and voice are TUI-owned and deliberately
+# absent from the canonical manifest; their configure scripts own tui.json.
+PLUGIN_MANIFEST="{{ .chezmoi.sourceDir }}/configs/opencode/opencode-plugins.json"
+PLUGIN_SPECS=()
+while IFS= read -r plugin; do
+  PLUGIN_SPECS+=("$plugin")
+done < <(
+  PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 - "$PLUGIN_MANIFEST" <<'PY'
+import sys
+from opencode_plugins import plugin_specs
+for plugin in plugin_specs(sys.argv[1]):
+    print(plugin)
+PY
+)
+
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
 # --background-subagents=yes enables background subagents during install
 # Pipe 'n' to skip the "Star the repo on GitHub?" prompt
 info "Installing oh-my-opencode-slim..."
+OH_MY_PLUGIN="${PLUGIN_SPECS[0]}"
 if command -v bun &>/dev/null; then
-  echo n | bunx oh-my-opencode-slim@latest install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  echo n | bunx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
 else
-  echo n | npx oh-my-opencode-slim@latest install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  echo n | npx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
 fi
 ok "oh-my-opencode-slim installed"
 
-# Plugin definitions matching ~/.config/opencode/opencode.json
+# Plugin definitions matching ~/.config/opencode/opencode.json. The dedicated
+# oh-my installer above is the first manifest entry and is not an opencode plugin.
 # opencode plugin <module> --global — installs the plugin and updates global config
 PLUGINS=(
   "@tarquinen/opencode-dcp@latest"
-  "@plannotator/opencode@latest"
-  "opencode-plugin-openspec@latest"
-  "opencode-vibeguard@latest"
-  "@ramtinj95/opencode-tokenscope@latest"
-  "@renjfk/opencode-voice@latest"
-  "opencode-planning-with-files@latest"
-  "@slkiser/opencode-quota@latest"
-  "opencode-mem@latest"
 )
+for plugin in "${PLUGIN_SPECS[@]}"; do
+  [[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")
+done
 
 for plugin in "${PLUGINS[@]}"; do
   if opencode plugin "${plugin}" --global 2>/dev/null; then
