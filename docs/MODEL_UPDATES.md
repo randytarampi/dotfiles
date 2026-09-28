@@ -99,6 +99,13 @@ for the automated check.
  - oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.
  - Tier-selection alignment (commits `d59ec3e`, `0d8510a`, `858cd39`): oMLX models now classify on the same basis as Ollama models — discovery derives real `size_gb`, MLX-style names parse parameter counts (first size token wins; `4bit`/`8bit` quant suffixes never match), and MoE status infers from `A<n>B` markers when server metadata omits it, so dense-beats-MoE reasoning ordering works identically (`omlx/Qwen3.8-27B-MLX-4bit` tops reasoning; `gemma-4-12B` classifies lightweight/vision instead of Qwen misreading as lightweight). The merged pool prefers the oMLX entry for engine-equivalent models — same `(family, params)` identity, e.g. `omlx/gemma-4-12B-it-MLX-8bit` over `ollama/gemma4:12b-mxfp8` — while distinct models are kept. `DOTFILES_ROLE_MODELS` now bridges into `configure-pi.py` (mirroring `configure-opencode-tier.py`), and applied role overrides log after materialization for auditability.
 
+## 2026-09-28: OpenRouter free-preset churn — ling fin:free retired
+
+- OpenRouter retired `inclusionai/ling-3.0-flash-fin:free` (the paid `fin` variant remains, no longer `:free`). Verified against the live catalog (`GET /api/v1/models`, 2026-09-28): `sante:free` retained, `fin` paid-only.
+- Swapped to `inclusionai/ling-3.0-flash-sante:free` in lockstep: `oh-my-opencode-slim.json` (free-preset explorer + council γ, 3 refs), `openrouter-models.json` + `ci/opencode.json` allowlists, Junie `model-groups.json` (`openrouter-glm`/`openrouter-nemotron` primaries), `docs/TIERS.md` free councillor, `docs/AGENTIC-REVIEW.md` explorer. Historical example in TIERS.md replacement-procedure note retains the retired ID.
+- Junie generated profiles regenerated via `configure-jetbrains-ai.py`; `make check-model-drift` clean afterward.
+- Test fixtures using the old ID as sample data (curated-catalogue tests) intentionally unchanged — they are offline samples, not live-catalog pins.
+
 ## free preset (cross-provider free tier)
 
 The `free` preset distributes work across free offerings from three

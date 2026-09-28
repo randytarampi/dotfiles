@@ -749,7 +749,7 @@
       "orchestrator": {"model": "opencode/big-pickle", "variant": "high", "temperature": 0.4, "skills": ["*"], "mcps": ["*", "!context7"]},
       "oracle": {"model": "opencode/big-pickle", "variant": "max", "temperature": 0.4, "skills": ["simplify"]},
       "librarian": {"model": "google/gemini-3.5-flash-lite", "temperature": 0.2, "mcps": ["context7", "gh_grep"]},
-      "explorer": {"model": "openrouter/inclusionai/ling-3.0-flash-fin:free", "temperature": 0.2},
+      "explorer": {"model": "openrouter/inclusionai/ling-3.0-flash-sante:free", "temperature": 0.2},
       "designer": {"model": "google/gemini-3.8-flash", "variant": "medium", "temperature": 0.3},
       "fixer": {"model": "opencode/nemotron-3.5-lightning-free", "variant": "high", "temperature": 0.2},
       "observer": {"model": "google/gemini-3.8-flash", "variant": "low", "temperature": 0.2},
@@ -907,7 +907,7 @@
       "free": {
         "alpha": {"model": "opencode/big-pickle"},
         "beta": {"model": "google/gemini-3.8-flash"},
-        "gamma": {"model": "openrouter/inclusionai/ling-3.0-flash-fin:free"}
+        "gamma": {"model": "openrouter/inclusionai/ling-3.0-flash-sante:free"}
       }
     }
   },
@@ -1368,7 +1368,7 @@
           "free": {
             "alpha": {"model": "opencode/big-pickle"},
             "beta": {"model": "google/gemini-3.8-flash"},
-            "gamma": {"model": "openrouter/inclusionai/ling-3.0-flash-fin:free"},
+            "gamma": {"model": "openrouter/inclusionai/ling-3.0-flash-sante:free"},
             "council": {"model": "opencode/big-pickle", "variant": "max"}
           }
         }
