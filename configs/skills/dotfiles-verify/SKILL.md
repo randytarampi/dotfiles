@@ -1,6 +1,10 @@
 ---
 name: dotfiles-verify
-description: Verify dotfiles repo work before claiming it's done. Use when working on the dotfiles repo, before reporting completion, when running make verify, or when checking Python formatting. Triggers on: "verify", "make verify", "black", "format", "pycache", "check-cli-contract", "done", "finished", "before commit".
+description: >-
+  Verify dotfiles repository changes before reporting completion. Use when
+  running make verify, checking Python formatting, or validating work before
+  saying it is done. Triggers include verify, make verify, black, format,
+  pycache, check-cli-contract, done, finished, and before commit.
 ---
 
 # Dotfiles Verify

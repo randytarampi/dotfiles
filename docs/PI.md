@@ -10,7 +10,8 @@ extensible, and configured from the shared OpenCode tier registry.
 | `~/.pi/agent/settings.json` | Defaults, packages, skills, and subagents |
 | `~/.pi/agent/models.json` | Provider and model definitions |
 | `~/.pi/agent/auth.json` | Environment-variable API-key references |
-| `~/.pi/agent/mcp.json` | Generated MCP servers |
+| `~/.pi/agent/mcp.json` | Pi's built-in MCP servers |
+| `~/.pi/agent/mcp-adapter.json` | `pi-mcp-adapter` settings, imports, and overrides |
 | `~/.pi/agent/agents/` | Custom subagents (delegation uses pi-subagents built-ins) |
 
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
@@ -42,10 +43,39 @@ so the fallback is fully local. `local-*` tiers skip that duplicate
 configuration, omit `@pi--local` from the ACP registry, and clean stale
 fallback files on deploy.
 
-`pi-mcp-adapter` reads the generated MCP file and `pi-acp` exposes Pi to
-OpenCode's ACP registry. Packages include `pi-web-access`, `pi-subagents`,
-`@plannotator/pi-extension`, and `pi-skills`. Skills are linked into
+The repository generates and manages `~/.pi/agent/mcp.json` for Pi's built-in
+MCP support. `configs/mcp/global-mcps.json` registers Pi with that
+`mcp_path`; `configure-mcps.py` reconciles every registered tool by default,
+and `configure-all.sh` invokes that reconciliation during MCP configuration.
+
+Pi 0.87.1's local package documentation and the installed `pi-mcp-adapter`
+confirm that the adapter reads `mcp-adapter.json` for its own settings,
+imports, and overrides, and no longer reads Pi's `mcp.json`. The repository
+does not manage `~/.pi/agent/mcp-adapter.json`. Migrating the repository's
+generated servers to the adapter would require a separately approved
+source/config migration; that is a recorded future decision and is out of
+scope for PR 8.
+
+Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`,
+and the repo's configured `rpiv-*` extensions. Skills are linked into
 `~/.pi/agent/skills` by the shared reconciler.
+
+### Skill collision status
+
+The repo-local `dotfiles-verify` skill uses valid folded YAML frontmatter and
+keeps its description below Pi's 1,024-character limit. `iamhumans` is sourced
+from `hoainho/iamhumans` in `configs/skills/skills.core.json`, so its skill
+file is external and is not edited here. Plannotator skills are likewise
+external (or preinstalled), and the canvas skill is outside this repository;
+those descriptions are therefore limitations rather than repo changes.
+
+### Package decisions
+
+`pi-edit-session-in-place` is the only optional Pi package approved for this
+configuration. The rewind hook is not enabled. The following packages are
+explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`,
+`pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and
+`pi-model-switch`.
 
 ```sh
 pi
