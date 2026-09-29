@@ -9,7 +9,7 @@ package-mode = false
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.0"
-pytest-cov = "^6.0"
+pytest-cov = "^7.1"
 
 [tool.poetry.group.tooling.dependencies]
 black = "^26.5"
