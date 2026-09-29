@@ -38,7 +38,7 @@ from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from local_engines import engine_gate_active, local_provider_block, resolve_engine
-from opencode_plugins import plugin_specs
+from opencode_plugins import active_plugin_specs, plugin_specs
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
@@ -383,7 +383,14 @@ def main():
         "~/AppData/Local/Temp/**": "allow",
     }
 
-    configured_plugins = plugin_specs()
+    configured_plugins = active_plugin_specs()
+    for plugin in set(plugin_specs()) - set(configured_plugins):
+        logger.info(
+            "%s='%s' — skipping optional OpenCode plugin: %s",
+            "DOTFILES_RUN_OPENCODE_MEMORY_SETUP",
+            "0",
+            plugin,
+        )
     plannotator = next(
         plugin
         for plugin in configured_plugins

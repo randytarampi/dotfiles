@@ -196,6 +196,11 @@ CHECKS = [
         ],
     ),
     (
+        "DOTFILES_RUN_OPENCODE_MEMORY_SETUP",
+        "OpenCode memory config",
+        [HOME / ".config/opencode/opencode-mem.jsonc"],
+    ),
+    (
         "DOTFILES_RUN_MCP_SETUP",
         "MCP configs",
         [
@@ -474,7 +479,7 @@ def check_opencode_orphan_files():
         print("  \u2713 OpenCode compaction: native auto-compaction disabled")
 
     for path in sorted(opencode_dir.glob("*.jsonc")):
-        if path.name == "dcp.jsonc":
+        if path.name in {"dcp.jsonc", "opencode-mem.jsonc"}:
             continue
 
         try:

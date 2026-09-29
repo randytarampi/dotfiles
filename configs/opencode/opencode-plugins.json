@@ -11,6 +11,9 @@
     "@slkiser/opencode-quota@4.10.2",
     "opencode-mem@2.26.0"
   ],
+  "gated": {
+    "opencode-mem@2.26.0": "DOTFILES_RUN_OPENCODE_MEMORY_SETUP"
+  },
   "excluded": {
     "@tarquinen/opencode-dcp": "TUI-owned; configure-opencode-dcp.py writes tui.json.",
     "@renjfk/opencode-voice": "TUI-owned; configure-opencode-voice.py writes tui.json."

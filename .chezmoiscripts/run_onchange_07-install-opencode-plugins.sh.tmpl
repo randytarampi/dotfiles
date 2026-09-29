@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
+# opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -31,11 +32,15 @@ while IFS= read -r plugin; do
 done < <(
   PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 - "$PLUGIN_MANIFEST" <<'PY'
 import sys
-from opencode_plugins import plugin_specs
-for plugin in plugin_specs(sys.argv[1]):
+from opencode_plugins import active_plugin_specs
+for plugin in active_plugin_specs(sys.argv[1]):
     print(plugin)
 PY
 )
+
+if [[ "${DOTFILES_RUN_OPENCODE_MEMORY_SETUP:-0}" != "1" ]]; then
+  info "DOTFILES_RUN_OPENCODE_MEMORY_SETUP='${DOTFILES_RUN_OPENCODE_MEMORY_SETUP:-0}' — skipping optional OpenCode plugin setup"
+fi
 
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
 # --background-subagents=yes enables background subagents during install

@@ -648,7 +648,7 @@ Quota/usage/cost surfaces for OpenCode sessions.
 
 Persistent project/user memory with vector search.
 
-- OpenCode plugin: `opencode-mem@2.26.0` (config-registered)
+- OpenCode plugin: `opencode-mem@2.26.0` (opt-in via `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`; managed `~/.config/opencode/opencode-mem.jsonc`)
 - Upstream: https://github.com/tickernelz/opencode-mem
 
 ### OpenSpec

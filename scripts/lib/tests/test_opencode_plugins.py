@@ -17,16 +17,28 @@ def load_checker():
 
 def test_manifest_matches_config_and_install_template():
     checker = load_checker()
-    manifest = checker.load_manifest()["plugins"]
+    full_manifest = checker.load_manifest()["plugins"]
+    assert "opencode-mem@2.26.0" in full_manifest
+    manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
     assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
     assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
 
 
+def test_gated_plugins_are_excluded_until_explicitly_enabled(monkeypatch):
+    checker = load_checker()
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "0")
+    inactive = checker.active_plugin_specs()
+    assert "opencode-mem@2.26.0" not in inactive
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
+    active = checker.active_plugin_specs()
+    assert "opencode-mem@2.26.0" in active
+
+
 @pytest.mark.parametrize("field", ["install", "config"])
 def test_missing_extra_and_mismatch_failures(field):
     checker = load_checker()
-    manifest = checker.load_manifest()["plugins"]
+    manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
     actual = expected[:-1] + ["unexpected@9.9.9"]
     kwargs = {"install_plugins": expected, "config_plugins": expected}
@@ -55,7 +67,7 @@ def test_real_consumer_drift_is_detected(tmp_path, filename, parser, replacement
         ),
         encoding="utf-8",
     )
-    manifest = checker.load_manifest()["plugins"]
+    manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
     actual = (
         checker.parse_install_plugins(mutated)
@@ -64,7 +76,7 @@ def test_real_consumer_drift_is_detected(tmp_path, filename, parser, replacement
     )
     assert (
         checker.check_consistency(
-            checker.load_manifest()["plugins"],
+            checker.active_plugin_specs(),
             actual if parser == "install" else expected,
             actual if parser == "config" else expected,
         )
@@ -95,7 +107,7 @@ def test_consumer_order_mutation_fails(tmp_path):
         1,
     )
     mutated.write_text(text, encoding="utf-8")
-    expected = checker.load_manifest()["plugins"]
+    expected = checker.active_plugin_specs()
     actual = checker.parse_config_plugins(mutated)
     assert (
         checker.check_consistency(
@@ -107,7 +119,7 @@ def test_consumer_order_mutation_fails(tmp_path):
 
 def test_presence_is_opt_in(tmp_path):
     checker = load_checker()
-    manifest_specs = checker.load_manifest()["plugins"]
+    manifest_specs = checker.active_plugin_specs()
     specs = [manifest_specs[0], "@tarquinen/opencode-dcp@latest", *manifest_specs[1:]]
     assert checker.check_consistency(manifest_specs, specs, specs) == 0
     assert (
