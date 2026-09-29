@@ -124,6 +124,30 @@ section in an existing file. Keep repository-specific guidance below the
 shared section. Use `make check-repo-guidance REPO_PATH=/path/to/repository`
 to detect drift, and `--dry-run` to preview a stamp.
 
+### Cross-repo stamping procedure
+
+Use the [`make stamp-repo-guidance` target](../Makefile) with each companion
+repository:
+
+```sh
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/lwip
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/slamscan
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/pseudoimage
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/pseudolocalize
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/pwa
+make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/me
+```
+
+The target applies the [shared guidance source](../configs/agents/repo-agents-shared.md)
+and rewrites only the `DOTFILES_REPO_GUIDANCE`-marked block; repo-owned prose
+above and below those markers is never touched.
+
+The companion stamps predate the current shared guidance and still describe
+stash-based verification. Also, `slamscan`, `pseudoimage`, and `pseudolocalize`
+have `AGENTS.md` line 3 referring to Yarn 4.17 while their `package.json` and
+`.yarnrc.yml` specify 4.18.0. That stale line is repo-owned prose outside the
+stamped block and must be fixed separately by each repository maintainer.
+
 ## Makefile Targets
 
 | Target | What it does | When to use |
