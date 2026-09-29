@@ -42,6 +42,7 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/configure-acp-agents.py: {{ include "scripts/configure-acp-agents.py" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
+# opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 # scripts/verify-slim-invariants.py: {{ include "scripts/verify-slim-invariants.py" | sha256sum }}
 
 # Load environment for API keys (must happen before gate)

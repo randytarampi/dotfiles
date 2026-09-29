@@ -3,7 +3,7 @@
 # Caller example:
 #   jobs:
 #     review:
-#       uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
+#       uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@82d10e4d2b6c495796466a80c04621b9ff3b4433
 #       secrets: inherit
 #
 # Labels: review-opencode, review-junie, review-gemini, review-copilot, and
@@ -43,6 +43,10 @@ on:
         required: false
         type: string
         default: ""
+      trusted_ref:
+        description: "Required immutable 40-hex dotfiles commit containing trusted review assets"
+        required: true
+        type: string
     secrets:
       OPENCODE_API_KEY:
         required: false
@@ -207,7 +211,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -216,10 +220,11 @@ jobs:
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${{ github.workflow_sha }}"
+          trusted_sha="${TRUSTED_REF}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
@@ -230,7 +235,7 @@ jobs:
           python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
           printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Cache codegraph index
-        uses: actions/cache@v6
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
         with:
           path: .codegraph
           key: codegraph-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
@@ -288,7 +293,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -296,10 +301,11 @@ jobs:
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${{ github.workflow_sha }}"
+          trusted_sha="${TRUSTED_REF}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
@@ -324,7 +330,7 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      - uses: JetBrains/junie-github-action@v1
+      - uses: JetBrains/junie-github-action@3c08594c219ef187ab0df0db4e2ac3222a163593 # v1
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           prompt: ${{ needs.parse.outputs.prompt != '' && needs.parse.outputs.prompt || env.CODE_REVIEW_PROMPT }}
@@ -343,7 +349,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -352,10 +358,11 @@ jobs:
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${{ github.workflow_sha }}"
+          trusted_sha="${TRUSTED_REF}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
@@ -387,7 +394,7 @@ jobs:
           } >> "$GITHUB_ENV"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
       - id: gemini
-        uses: google-github-actions/run-gemini-cli@v0
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0
         env:
           GEMINI_CLI_TRUST_WORKSPACE: "true"
         with:
@@ -450,7 +457,7 @@ jobs:
     steps:
       - id: junie_app_token
         if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
           JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
@@ -461,7 +468,7 @@ jobs:
           permission-pull-requests: write
       - id: opencode_app_token
         if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         env:
           OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
           OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
@@ -472,7 +479,7 @@ jobs:
           permission-pull-requests: write
       - id: gemini_app_token
         if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         env:
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
           GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
@@ -483,7 +490,7 @@ jobs:
           permission-pull-requests: write
       - id: fallback_app_token
         if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

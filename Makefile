@@ -147,7 +147,7 @@ check-ci-assets: ## Verify CI/local-only asset hashes
 	@python3 scripts/verify-ci-assets.py
 
 update-ci-assets: ## Regenerate configs/review/assets-manifest.json after editing CI/local-only assets
-	@python3 -c "import json, hashlib; from pathlib import Path; root = Path('.'); assets = ['configs/review/code-review-prompt.md', 'scripts/run-local-review.sh', 'scripts/ci-codegraph.sh', 'configs/opencode/ci/opencode.json', 'scripts/onboard-agentic-review.py']; manifest = {'assets': {a: hashlib.sha256((root / a).read_bytes()).hexdigest() for a in assets}}; Path('configs/review/assets-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')"
+	@python3 -c "import json, hashlib; from pathlib import Path; root = Path('.'); assets = ['configs/review/code-review-prompt.md', '.github/skills/code-review/SKILL.md', 'scripts/run-local-review.sh', 'scripts/ci-codegraph.sh', 'scripts/verify-ci-assets.py', 'configs/opencode/ci/opencode.json', 'scripts/onboard-agentic-review.py']; manifest = {'assets': {a: hashlib.sha256((root / a).read_bytes()).hexdigest() for a in assets}}; Path('configs/review/assets-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')"
 	@python3 scripts/verify-ci-assets.py
 
 check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example

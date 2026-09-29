@@ -12,6 +12,9 @@
 # Local Python development environment
 .venv/
 coverage.lcov
+__pycache__/
+*.py[cod]
+__TRUSTED_DOTFILES__/
 
 # Generated ACP agent config (emitted by configure-acp-agents.py)
 configs/opencode/acp-agents.json
@@ -32,3 +35,4 @@ gha-creds-*.json
 !configs/opencode/ci/
 !configs/opencode/ci/opencode.json
 .coverage.*
+.coverage*

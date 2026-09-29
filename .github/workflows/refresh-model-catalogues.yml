@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
+    inputs:
+      trusted_ref:
+        description: "Immutable 40-hex commit containing the trusted catalogue workflow"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      TRUSTED_SHA: ${{ inputs.trusted_ref }}
     steps:
       - name: Validate the trusted manual dispatch boundary
         env:
@@ -22,14 +29,14 @@ jobs:
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
-            test "$(gh api user --jq .login)" = "${GITHUB_ACTOR}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
           fi
+          [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
       - name: Check out the triggering commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.TRUSTED_SHA }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -51,29 +58,28 @@ jobs:
     runs-on: ubuntu-latest
     environment: model-catalogue-publish
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
+    env:
+      TRUSTED_SHA: ${{ inputs.trusted_ref }}
     steps:
       - name: Validate publication inputs
         env:
-          GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          base_sha="${GITHUB_SHA}"
-          [[ "${base_sha}" =~ ^[0-9a-f]{40}$ ]]
           publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
           [[ "${publish_branch}" =~ ^model-catalogue-bot/[0-9]+$ ]]
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
-            test "$(gh api user --jq .login)" = "${GITHUB_ACTOR}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
           fi
+          [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
       - name: Check out the exact base commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.TRUSTED_SHA }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -105,7 +111,7 @@ jobs:
           allowed_path="artifacts/model-catalogues/opencode-zen-free.json"
           artifact_path="${RUNNER_TEMP}/model-catalogue/opencode-zen-free.json"
           test -f "${artifact_path}"
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD)" = "${TRUSTED_SHA}"
           mkdir -p "$(dirname "${allowed_path}")"
           cp "${artifact_path}" "${allowed_path}"
           mapfile -t changed_paths < <(
@@ -123,9 +129,16 @@ jobs:
             exit 1
           fi
 
+      - id: publish_app_token
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: Publish the bot branch and create or update its draft PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.publish_app_token.outputs.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
