@@ -52,7 +52,9 @@ repository instructions.
   It declares trigger events and permissions, forwards raw event JSON, and
   filters bot senders in defence in depth. Trigger parsing is centralized in
   the reusable workflow, so parser improvements arrive through the dotfiles
-  ref without downstream workflow changes.
+  ref. Because the ref is immutable, downstream callers must be re-onboarded
+  whenever the trusted workflow revision advances; the onboarding script writes
+  the new ref and matching `trusted_ref` together.
 - `.github/workflows/agentic-review.yml` — reusable `workflow_call` workflow.
   Its first `parse` job handles dispatcher-mode event JSON and direct
   passthrough calls. Downstream repos carry only the stable stub installed from
@@ -61,26 +63,30 @@ repository instructions.
   ```yaml
   jobs:
     review:
-      uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
+      uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@<immutable-40-hex-sha>
       with:
         agents: "opencode,junie,gemini,copilot"
+        trusted_ref: <same-immutable-40-hex-sha>
       secrets: inherit
   ```
 
-  To adopt elsewhere, run `scripts/onboard-agentic-review.py`. It installs the
-  stable stub and points its `uses:` reference at the selected dotfiles ref.
-  Re-onboarding is only needed when trigger events or permissions change.
+  To adopt elsewhere, run `scripts/onboard-agentic-review.py --ref <40-hex-sha>`.
+  It installs the stable stub and writes the same immutable SHA into both the
+  reusable workflow `uses:` pin and `trusted_ref`; mutable refs such as `@main`
+  are not accepted.
+  Re-onboarding is required whenever the trusted workflow revision advances,
+  as well as when trigger events or permissions change.
   The CI OpenCode lane runs the explicitly selected model with all three
   provider keys available. The repo's local fallback policy is a runtime
   plugin concern and is not part of the CI config.
   OpenCode, Junie, and Gemini stage the trusted dotfiles commit identified by
-  the reusable workflow's immutable `github.workflow_sha` and verify its asset
-  manifest before using prompts, configuration, skills, or `ci-codegraph.sh`.
+  the caller-provided immutable `trusted_ref` and verify its asset manifest
+  before using prompts, configuration, skills, or `ci-codegraph.sh`.
   Copilot setup accepts an explicit 40-character dotfiles commit SHA for the
   same reason; PR content never participates in prompt-file loading.
 - Security posture: minimal `permissions` per job, `sender.type != 'Bot'`
-  filter, per-PR `concurrency` cancel-in-progress, actions pinned to moving
-  major tags (OpenCode pinned to its release SHA — it publishes no major tag),
+  filter, per-PR `concurrency` cancel-in-progress, and SHA-pinned third-party
+  actions,
   read-only MCP tool allowlists, no `pull_request_target`. Normal OpenCode,
   Junie, and Gemini lanes have `contents: read`, do not persist checkout
   credentials, and cannot push. The separate manual fix lane is
@@ -89,8 +95,9 @@ repository instructions.
   exact-path allowlist on a unique `agentic-review-bot/<run-id>` branch and
   opens or updates an idempotent draft PR. It is dotfiles-only and is not
   installed by the onboarding script. The Copilot lane stays orchestration-only
-  — Copilot's own write-back is governed by repo Settings → Copilot → Agent
-  permissions, not by this workflow.
+  — Junie may commit and push only through the separate, manually approved fix
+  lane; the normal Junie review lane is read-only. Copilot's own write-back is
+  governed by repo Settings → Copilot → Agent permissions, not by this workflow.
 
 ## Manual fix lane
 
@@ -243,10 +250,11 @@ on:
     - cron: "0 12 * * 1"
 jobs:
   weekly:
-    uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
-    with:
-      agents: "opencode"
-      prompt: "Weekly repository hygiene pass: stale branches, failing CI, dependency drift."
+     uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@<immutable-40-hex-sha>
+     with:
+       agents: "opencode"
+       trusted_ref: <same-immutable-40-hex-sha>
+       prompt: "Weekly repository hygiene pass: stale branches, failing CI, dependency drift."
     secrets: inherit
 ```
 
@@ -257,14 +265,9 @@ profile is follow-up work; dispatcher gating is the primary control.
 
 ## Predictability
 
-Push-capable agent lanes configure a per-lane git identity before running the
-agent: `opencode-agent[bot]`, `junie-agent[bot]`, or `gemini-agent[bot]`. This
-makes commits attributable and avoids runner failures caused by an unset git
-identity. Downstream repositories may override the local git identity when
-needed. Junie keeps its bundled commit-and-push behaviour (`silent_mode` is
-unset — it gates the bundled commit steps); `skip_feedback` suppresses the
-action's own status comments so the notify job's standardized messaging stands
-alone.
+All normal reviewer lanes are read-only: they do not commit, push, or alter the
+checkout. Any write-capable automation is isolated behind an explicit workflow,
+protected environment, exact path checks, and a GitHub App installation token.
 
 ## Copilot lane prerequisites
 

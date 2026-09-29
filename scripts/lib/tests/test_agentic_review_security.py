@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -9,7 +10,16 @@ def read(path):
 
 def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.count('trusted_sha="${{ github.workflow_sha }}"') == 3
+    assert workflow.count('trusted_sha="${TRUSTED_REF}"') == 3
+    assert workflow.count("TRUSTED_REF: ${{ inputs.trusted_ref }}") == 3
+    assert "github.workflow_sha" not in workflow
+    assert (
+        'description: "Required immutable 40-hex dotfiles commit containing trusted review assets"'
+        in workflow
+    )
+    assert "required: true\n        type: string" in workflow
+    assert 'required: false\n        default: ""' not in workflow
+    assert "inputs.trusted_ref || github.sha" not in workflow
     assert 'trusted_sha="b144' not in workflow
     assert workflow.count("rev-parse HEAD") == 3
     assert workflow.count("verify-ci-assets.py") == 3
@@ -41,7 +51,7 @@ def test_dispatcher_is_read_only_and_fix_lane_is_manual_and_allowlisted():
     assert "160000" in fix
     assert "environment: agentic-review-fix" in fix
     assert "needs: generate" in fix
-    assert "actions/upload-artifact@v4" in fix
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in fix
     assert "gh pr create --draft" in fix
     assert "trusted_ref" in copilot
     assert 'trusted_sha="b144' not in copilot
@@ -84,3 +94,25 @@ def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
         '--force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}"'
         in publisher
     )
+
+
+def test_generated_companion_passes_the_same_immutable_sha_to_the_reusable_workflow():
+    trusted_sha = "0123456789abcdef0123456789abcdef01234567"
+    generated = read("configs/review/dispatcher-stub.yml").replace(
+        "__REF__", trusted_sha
+    )
+    assert f"agentic-review.yml@{trusted_sha}" in generated
+    assert f"trusted_ref: {trusted_sha}" in generated
+    assert generated.count(trusted_sha) == 3
+    reusable = read(".github/workflows/agentic-review.yml")
+    assert "trusted_ref:" in reusable
+    assert "type: string" in reusable
+    incompatible = generated.replace(
+        f"trusted_ref: {trusted_sha}", "trusted_ref: deadbeef"
+    )
+    pin_match = re.search(r"agentic-review\.yml@([0-9a-f]{40})", incompatible)
+    trusted_match = re.search(r"trusted_ref: ([0-9a-f]+)", incompatible)
+    assert pin_match and trusted_match
+    pin = pin_match.group(1)
+    trusted = trusted_match.group(1)
+    assert pin != trusted

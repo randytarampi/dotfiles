@@ -2,6 +2,7 @@
 """Install the reusable agentic-review dispatcher in another repository."""
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -41,9 +42,10 @@ Shared assets:
   The code-review skill is installed to .github/skills/ (read natively by
   Copilot code review; copied into .opencode/skills/ for the OpenCode lane).
 Dispatcher:
-  The installed dispatcher is a stable stub; trigger parsing and improvements
-  arrive automatically through the configured dotfiles ref. Re-onboarding is
-  only needed when trigger events or permissions change.
+  The installed dispatcher is a stable stub. Pass the latest trusted workflow
+  commit with --ref; the generated output uses that same immutable SHA for both
+  the reusable-workflow pin and trusted_ref. Re-onboarding is only needed when
+  trigger events or permissions change, or when advancing the trusted SHA.
 Fix lane:
   agentic-review-fix.yml is intentionally dotfiles-only and is not distributed
   to downstream repositories. It requires owner authentication and the
@@ -68,7 +70,9 @@ def main():
     add_common_args(parser, no_backup=True)
     parser.add_argument("--repo", required=True, help="Target repository root")
     parser.add_argument(
-        "--ref", default="main", help="Dotfiles ref used by the reusable workflow"
+        "--ref",
+        required=True,
+        help="Immutable 40-hex dotfiles commit used by both the workflow pin and trusted_ref",
     )
     parser.add_argument(
         "--workflows-only",
@@ -77,8 +81,8 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.ref or any(char in args.ref for char in "\r\n"):
-        parser.error("--ref must be a non-empty single-line value")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.ref):
+        parser.error("--ref must be a 40-character lowercase hexadecimal commit SHA")
     if not SOURCE.is_file():
         logger.critical(f"Dispatcher source does not exist: {SOURCE}")
         return 1

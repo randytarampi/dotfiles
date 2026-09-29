@@ -16,6 +16,14 @@ def test_refresh_workflow_is_weekly_and_has_manual_dispatch():
     assert 'GITHUB_EVENT_NAME}" == "workflow_dispatch"' in workflow
     assert 'GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}' in workflow
     assert 'GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}' in workflow
+    assert "gh api user" not in workflow
+    assert "TRUSTED_SHA" in workflow
+    assert (
+        "required: true"
+        in workflow.split("workflow_dispatch:", 1)[1].split("permissions:", 1)[0]
+    )
+    assert "create-github-app-token@" in workflow
+    assert "GH_TOKEN: ${{ github.token }}" not in workflow.split("  publish:", 1)[1]
 
 
 def test_publish_permissions_and_environment_are_isolated():
@@ -24,8 +32,11 @@ def test_publish_permissions_and_environment_are_isolated():
     assert "contents: write" not in refresh
     assert "pull-requests: write" not in refresh
     assert "environment: model-catalogue-publish" in publish
-    assert "contents: write" in publish
-    assert "pull-requests: write" in publish
+    assert "contents: read" in publish
+    assert "pull-requests: read" in publish
+    assert "permission-contents: write" in publish
+    assert "permission-pull-requests: write" in publish
+    assert 'test "$(git rev-parse HEAD)" = "${TRUSTED_SHA}"' in publish
     assert 'push origin "HEAD:refs/heads/main"' not in publish
 
 
