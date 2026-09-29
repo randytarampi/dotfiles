@@ -13,7 +13,7 @@ LIB_DIR = Path(__file__).resolve().parent / "lib"
 if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
-from opencode_plugins import load_plugin_manifest
+from opencode_plugins import active_plugin_specs, is_pinned_spec, load_plugin_manifest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_SCRIPT = (
@@ -36,7 +36,7 @@ def parse_install_plugins(path, manifest_path=MANIFEST):
     """
     text = Path(path).read_text(encoding="utf-8")
     if (
-        "from opencode_plugins import plugin_specs" not in text
+        "from opencode_plugins import active_plugin_specs" not in text
         or "PLUGIN_SPECS" not in text
     ):
         raise ValueError("install template does not consume the canonical manifest")
@@ -65,7 +65,7 @@ def parse_install_plugins(path, manifest_path=MANIFEST):
         value = line.strip().strip('"')
         if value.startswith("@") or value.startswith("opencode-"):
             literals.append(value)
-    specs = load_manifest(manifest_path)["plugins"]
+    specs = active_plugin_specs(manifest_path)
     return [specs[0]] + literals + specs[1:]
 
 
@@ -79,7 +79,7 @@ def _plugin_value(value):
 
 def parse_config_plugins(path):
     tree = ast.parse(Path(path).read_text(encoding="utf-8"), filename=str(path))
-    manifest_plugins = load_manifest()["plugins"]
+    manifest_plugins = active_plugin_specs()
     environment = {
         "configured_plugins": manifest_plugins,
         "plannotator": next(
@@ -112,7 +112,7 @@ def parse_config_plugins(path):
 def _config_consumes_manifest(path=CONFIG_SCRIPT):
     text = Path(path).read_text(encoding="utf-8")
     return (
-        "from opencode_plugins import plugin_specs" in text
+        "from opencode_plugins import active_plugin_specs" in text
         and "configured_plugins" in text
     )
 
@@ -203,7 +203,8 @@ def main():
     parser.add_argument("--cache-dir", type=Path, default=None)
     args = parser.parse_args()
     try:
-        manifest_plugins = load_manifest()["plugins"]
+        load_manifest()  # Validate the complete canonical manifest, including gated entries.
+        manifest_plugins = active_plugin_specs()
         if not _config_consumes_manifest():
             raise ValueError("config generator does not consume the canonical manifest")
         install_plugins = parse_install_plugins(INSTALL_SCRIPT)

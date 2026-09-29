@@ -19,6 +19,7 @@ shell startup. These are the canonical opt-out levers:
 | pi | `PI_TELEMETRY=0`, `PI_SKIP_VERSION_CHECK=1` | `~/.pi/agent/settings.json`: `enableInstallTelemetry: false`, `enableAnalytics: false` | env var + config injection |
 | cline | `CLINE_OTEL_TELEMETRY_ENABLED=false`, `OTEL_SDK_DISABLED=true` | VS Code extension settings | env var (OTel SDK) |
 | opencode | — | — | no known telemetry collection |
+| opencode-mem | `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1` | `~/.config/opencode/opencode-mem.jsonc` | Opt-in, local-only memory and embeddings; remote embeddings require an explicit egress decision |
 | copilot | — | — | no local opt-out (org/enterprise policy) |
 | cursor | — | — | no local opt-out (account dashboard) |
 | agy (Antigravity) | — | — | no local opt-out (Google account policy) |

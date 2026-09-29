@@ -92,6 +92,13 @@ Pi, Cortex, and Antigravity skill directories).
 The installed `skills` CLI currently supports no source version constraint, so
 the manifest records that limitation rather than inventing an unsupported key.
 
+### Memory opt-in
+
+`opencode-mem` is controlled by `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1` and
+defaults to off. The managed `opencode-mem.jsonc` configuration uses loopback web hosting, local
+embeddings, and inherited OpenCode model routing. Remote embedding endpoints
+are deliberately absent and require an explicit egress decision.
+
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
 > (1.18.32). Live validation confirmed all load on v1; upstream `v2`
 > builds do not exist yet for `opencode-planning-with-files`,

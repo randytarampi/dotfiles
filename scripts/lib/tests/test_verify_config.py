@@ -132,3 +132,25 @@ def test_opencode_compaction_is_required_when_gate_runs(tmp_path, monkeypatch):
 
     managed.write_text("{}", encoding="utf-8")
     assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
+
+
+def test_adopted_opencode_memory_config_is_not_an_orphan(tmp_path, monkeypatch):
+    opencode_dir = tmp_path / ".config" / "opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "dcp.jsonc").write_text('{"compress": {}}', encoding="utf-8")
+    (opencode_dir / "opencode-mem.jsonc").write_text(
+        '{"webServerHost": "127.0.0.1", "embeddingModel": "local", "opencodeModel": "inherit"}',
+        encoding="utf-8",
+    )
+    (opencode_dir / "opencode.json").write_text(
+        '{"compaction": {"auto": false}}', encoding="utf-8"
+    )
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
+    assert any(
+        gate == "DOTFILES_RUN_OPENCODE_MEMORY_SETUP"
+        and any(path.name == "opencode-mem.jsonc" for path in paths)
+        for gate, _description, paths in VERIFY_CONFIG.CHECKS
+    )

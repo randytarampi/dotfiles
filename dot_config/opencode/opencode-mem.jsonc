@@ -1,0 +1,12 @@
+{
+  "storagePath": "~/.opencode-mem/data",
+  "embeddingModel": "Xenova/nomic-embed-text-v1",
+  "webServerEnabled": true,
+  "webServerPort": 4747,
+  "webServerHost": "127.0.0.1",
+  "opencodeModel": "inherit",
+  "autoCaptureEnabled": true,
+  "memory": {
+    "defaultScope": "project"
+  }
+}
