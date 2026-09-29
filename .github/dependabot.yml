@@ -5,8 +5,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    labels:
+      - "github_actions"
+    groups:
+      codeql-actions:
+        patterns:
+          - "github/codeql-action*"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    labels:
+      - "python"
