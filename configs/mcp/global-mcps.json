@@ -311,7 +311,7 @@
       ]
     },
     "pi": {
-      "mcp_path": "~/.pi/agent/mcp.json",
+      "mcp_path": "~/.pi/agent/mcp-adapter.json",
       "project_mcp_path": ".pi/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [

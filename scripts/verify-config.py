@@ -230,6 +230,7 @@ CHECKS = [
         "MCP configs",
         [
             HOME / ".config/opencode/mcp",
+            HOME / ".pi/agent/mcp-adapter.json",
         ],
     ),
     (

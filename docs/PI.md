@@ -10,8 +10,7 @@ extensible, and configured from the shared OpenCode tier registry.
 | `~/.pi/agent/settings.json` | Defaults, packages, skills, and subagents |
 | `~/.pi/agent/models.json` | Provider and model definitions |
 | `~/.pi/agent/auth.json` | Environment-variable API-key references |
-| `~/.pi/agent/mcp.json` | Pi's built-in MCP servers |
-| `~/.pi/agent/mcp-adapter.json` | `pi-mcp-adapter` settings, imports, and overrides |
+| `~/.pi/agent/mcp-adapter.json` | Adapter-owned MCP servers, settings, imports, and overrides |
 | `~/.pi/agent/agents/` | Custom subagents (delegation uses pi-subagents built-ins) |
 
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to
@@ -43,18 +42,20 @@ so the fallback is fully local. `local-*` tiers skip that duplicate
 configuration, omit `@pi--local` from the ACP registry, and clean stale
 fallback files on deploy.
 
-The repository generates and manages `~/.pi/agent/mcp.json` for Pi's built-in
-MCP support. `configs/mcp/global-mcps.json` registers Pi with that
+The repository generates and manages `~/.pi/agent/mcp-adapter.json` as the
+adapter-owned MCP file. `configs/mcp/global-mcps.json` registers Pi with that
 `mcp_path`; `configure-mcps.py` reconciles every registered tool by default,
 and `configure-all.sh` invokes that reconciliation during MCP configuration.
 
-Pi 0.87.1's local package documentation and the installed `pi-mcp-adapter`
-confirm that the adapter reads `mcp-adapter.json` for its own settings,
-imports, and overrides, and no longer reads Pi's `mcp.json`. The repository
-does not manage `~/.pi/agent/mcp-adapter.json`. Migrating the repository's
-generated servers to the adapter would require a separately approved
-source/config migration; that is a recorded future decision and is out of
-scope for PR 8.
+Pi 0.87.1's startup guidance and adapter contract confirm that the adapter
+reads `mcp-adapter.json` for its own settings, imports, and overrides, and no
+longer reads Pi's `mcp.json`.
+The migration is complete: when MCP setup is enabled, the writer migrates an
+old `mcp.json` into `mcp-adapter.json`, merges both files with adapter entries
+winning duplicate server names, appends old-only servers, and removes the old
+file only after the content is accounted for. Pi's project `.pi/mcp.json`
+remains built-in Pi configuration; the installed adapter package provides no
+documented project-level adapter-file equivalent.
 
 Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`,
 and the repo's configured `rpiv-*` extensions. Skills are linked into

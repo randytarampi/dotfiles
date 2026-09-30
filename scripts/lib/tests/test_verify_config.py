@@ -194,3 +194,11 @@ def test_adopted_opencode_memory_config_is_not_an_orphan(tmp_path, monkeypatch):
         and any(path.name == "opencode-mem.jsonc" for path in paths)
         for gate, _description, paths in VERIFY_CONFIG.CHECKS
     )
+
+
+def test_mcp_checks_include_pi_adapter_path():
+    assert any(
+        gate == "DOTFILES_RUN_MCP_SETUP"
+        and any(path.name == "mcp-adapter.json" for path in paths)
+        for gate, _description, paths in VERIFY_CONFIG.CHECKS
+    )

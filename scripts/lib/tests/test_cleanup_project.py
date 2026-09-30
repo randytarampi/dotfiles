@@ -138,6 +138,9 @@ class RoundTripTests(unittest.TestCase):
         # pi step
         (root / ".pi" / "agent" / "settings.json").write_text("{}", encoding="utf-8")
         (root / ".pi" / "agent" / "models.json").write_text("{}", encoding="utf-8")
+        (root / ".pi" / "mcp.json").write_text(
+            json.dumps({"mcpServers": {"context7": {}}}), encoding="utf-8"
+        )
         # mcps step (cursor merge with only known template servers)
         (root / ".cursor" / "mcp.json").write_text(
             json.dumps({"mcpServers": {"context7": {}, "codegraph": {}}}),
