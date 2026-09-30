@@ -8,6 +8,7 @@ import os
 import argparse
 import subprocess
 import json
+from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -27,8 +28,10 @@ from cli_helpers import (
     forward_model_override_args,
     parse_skip,
 )
+from generation_lock import with_generation_lock
 
 
+@with_generation_lock("configure-jetbrains-ai")
 def main():
     parser = argparse.ArgumentParser(
         description="Configure JetBrains AI tools (Junie, AI Assistant)."
@@ -42,6 +45,15 @@ def main():
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
+    source_root = Path(SCRIPT_DIR).resolve().parent
+    logger.info("config source: %s/configs", source_root)
+    chezmoi_source = os.environ.get("CHEZMOI_SOURCE_DIR")
+    if chezmoi_source and Path(chezmoi_source).resolve() != source_root:
+        logger.warning(
+            "config source root %s differs from CHEZMOI_SOURCE_DIR %s; nested-worktree provenance detected",
+            source_root,
+            Path(chezmoi_source).resolve(),
+        )
     failures = 0
 
     skipped = parse_skip(args.skip, ["models", "dirs"])
@@ -130,4 +142,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
