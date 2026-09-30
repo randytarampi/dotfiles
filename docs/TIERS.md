@@ -21,9 +21,9 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud only (`glm-5.3` synthesizer) | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | General development |
 | **pro-plus-anthropic** | Ollama Cloud + OpenAI + Anthropic | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
@@ -140,7 +140,7 @@ orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
-`openai/gpt-5.6-sol`, and γ `openai/gpt-5.6-luna` (model-default variants).
+`openai/gpt-6.1-sol`, and γ `openai/gpt-6-luna` (model-default variants).
 Fallbacks are `openai/gpt-5.6-terra` for orchestrator,
 `ollama-cloud/glm-5.3` for oracle, `ollama-cloud/deepseek-v4.1-flash` for
 librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
@@ -150,17 +150,17 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `claude-sonnet-5` | — |
+| orchestrator | `claude-sonnet-5-5` | — |
 | oracle | `claude-fable-5-1` | xhigh |
 | librarian | `gpt-5.6-luna` | low |
 | explorer | `claude-haiku-4-5` | low |
-| designer | `claude-sonnet-5` | medium |
+| designer | `claude-sonnet-5-5` | medium |
 | fixer | `gpt-5.6-luna` | high |
 | observer | `claude-haiku-4-5` | low |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
-`openai/gpt-5.6-sol`, and γ `anthropic/claude-sonnet-5` (model-default
+`openai/gpt-6.1-sol`, and γ `anthropic/claude-sonnet-5-5` (model-default
 variants). Fallbacks follow the configured cross-provider chains: Terra then
 Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku then
 `ollama-cloud/deepseek-v4.1-flash` for librarian; Luna then
@@ -174,15 +174,15 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `claude-sonnet-5` | — |
+| orchestrator | `claude-sonnet-5-5` | — |
 | oracle | `claude-fable-5-1` | xhigh |
 | librarian | `claude-haiku-4-5` | low |
 | explorer | `claude-haiku-4-5` | low |
-| designer | `claude-sonnet-5` | medium |
+| designer | `claude-sonnet-5-5` | medium |
 | fixer | `claude-haiku-4-5` | high |
 | observer | `claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `claude-sonnet-5`, gamma `claude-opus-5`. Council synthesizer uses `claude-opus-5` with xhigh variant. Orchestrator now uses `claude-sonnet-5` (swapped from opus-5 for cost optimization). Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `claude-sonnet-5-5`, gamma `claude-opus-5-5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Orchestrator now uses `claude-sonnet-5-5` (swapped from opus-5 for cost optimization). Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Plus-Anthropic Tier (`plus-anthropic`)
 
@@ -194,11 +194,11 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | oracle | `anthropic/claude-fable-5-1` | xhigh |
 | librarian | `openai/gpt-5.6-luna` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
-| designer | `anthropic/claude-sonnet-5` | medium |
+| designer | `anthropic/claude-sonnet-5-5` | medium |
 | fixer | `anthropic/claude-haiku-4-5` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-5.6-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Local-Pro Tier (`local-pro`)
 
@@ -551,17 +551,19 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 |-------|-----------------|----------------|-------|
 | `nemotron-3-ultra` | retired | — | Replaced in cloud council seats by `deepseek-v4.1-flash` |
 | `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
-| `claude-opus-5` | `high` | `xhigh` | Opus defaults to high reasoning; council gamma/synthesizer (xhigh), meridian-opus profile |
+| `claude-opus-5-5` | `high` | `xhigh` | Opus defaults to high reasoning; council gamma/synthesizer (xhigh), meridian-opus-5-5 profile |
 | `claude-opus-4-8` | `high` | `xhigh` | Legacy model retained as a degraded fallback |
 | `claude-opus-4-6` | standard | — | Legacy model retained in registry only; no active Anthropic preset roles |
-| `claude-sonnet-5` | standard | — | Used for orchestrator (no variant), designer (medium), council beta (no variant), plus-anthropic council fallback; no synth role (opus-5) |
+| `claude-sonnet-5-5` | standard | — | Used for orchestrator (no variant), designer (medium), council beta (no variant), plus-anthropic council fallback; no synth role (opus-5-5) |
 | `claude-fable-5-1` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Catalog-only legacy model; no active tier role |
 | `gpt-5.6-terra` | standard | `high` | Primary balanced model; orchestrator default, oracle uses high |
-| `gpt-5.6-sol` | standard | `high` | Primary flagship model; oracle uses high, council uses high |
-| `gpt-5.6-luna` | standard | `high` | Primary lightweight model; librarian/explorer use low, fixer uses high |
+| `gpt-6.1-sol` | standard | `high` | Primary flagship generation; oracle/council use high; gpt-5.6-sol remains a retained legacy fallback |
+| `gpt-6-luna` | standard | `high` | Primary efficient/high-volume generation; librarian/explorer use low, fixer uses high; gpt-5.6-luna remains a retained legacy fallback |
+| `gpt-5.6-sol` | standard | `high` | Retained legacy flagship fallback generation |
+| `gpt-5.6-luna` | standard | `high` | Retained legacy efficient/high-volume fallback generation |
 | `deepseek-v4-flash` | retired | — | Historical catalogue entry; removed from active registry |
 | `glm-5.2` | standard | max | 1M context; supports High/Max thinking effort; orchestrator uses max, oracle fallback uses max, other fallbacks use standard |
 | `glm-5.3-flash` | standard | max | 320B/18B MoE, 1M context, vision (images+video), always-on tunable thinking; orchestrator uses max (replaces glm-5.2 as primary orchestrator in pro/pro-plus); glm-5.2 remains as secondary fallback |
@@ -574,6 +576,6 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `deepseek-v4.1-flash` | standard | — | Active Ollama Cloud council/fallback model |
 | `glm-5.1` | retired | — | Historical catalogue entry; removed from active registry |
 | `nemotron-3-super` | standard | — | 120B total/12B active MoE; catalogue-only addition |
-| `gpt-5.4` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; plus council γ re-anchored to gpt-5.6-terra per OpenAI guidance; API-key use unaffected |
+| `gpt-5.4` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; plus council γ re-anchored to gpt-6-luna per OpenAI guidance; API-key use unaffected |
 | `gpt-5.4-mini` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; removed from plus librarian/explorer/observer chains and pro-plus-anthropic librarian fallback (OpenAI's mapped replacement gpt-5.6-luna is already those roles' primary); remains in omo-slim-* observer chains; API-key use unaffected |
 | `gpt-5.4-nano` | standard | `high` | Legacy nano; now a degraded fallback when gpt-5.6-luna is unavailable |

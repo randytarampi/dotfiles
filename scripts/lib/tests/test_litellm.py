@@ -33,9 +33,12 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     entries = litellm_config.compute_model_list()
     aliases = {entry["model_name"] for entry in entries}
     assert "openai/default" in aliases
+    assert any(
+        entry["litellm_params"].get("model") == "openai/gpt-6-luna" for entry in entries
+    )
     assert "anthropic/default" not in aliases
     monkeypatch.setattr(litellm_config, "is_meridian_configured", lambda: True)
-    assert "meridian/claude-sonnet-5" in {
+    assert "meridian/claude-sonnet-5-5" in {
         entry["model_name"] for entry in litellm_config.compute_model_list()
     }
 
@@ -207,7 +210,7 @@ def test_litellm_keyed_local_and_meridian_shapes(monkeypatch):
         item["litellm_params"].get("api_key") == "os.environ/OMLX_API_KEY"
         for item in keyed
     )
-    assert any(item["model_name"] == "meridian/claude-sonnet-5" for item in keyed)
+    assert any(item["model_name"] == "meridian/claude-sonnet-5-5" for item in keyed)
 
 
 def test_google_uses_native_adapter(monkeypatch):

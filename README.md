@@ -532,11 +532,11 @@ Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-sol`, `gpt-5.6-luna`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only (`sonnet-5`, `fable-5-1`, `haiku-4-5`, `opus-5`) | Anthropic-first workflow |
+| **anthropic** | Anthropic only (`sonnet-5-5`, `fable-5-1`, `haiku-4-5`, `opus-5-5`) | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI only | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
@@ -583,8 +583,8 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **plus** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
-| **plus-anthropic** | `gpt-5.6-luna` via OpenAI | OpenAI STT |
+| **plus** | `gpt-6-luna` via OpenAI | OpenAI STT |
+| **plus-anthropic** | `gpt-6-luna` via OpenAI | OpenAI STT |
 | **anthropic** | Meridian proxy or `claude-haiku-4-5` | whisper-cli (local), OpenAI STT if key available |
 
 **Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
@@ -672,10 +672,10 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | Profile | Provider | Primary | Faster | Temp |
 |---------|----------|---------|--------|------|
 | `pro` | cloud | `glm-5.3-flash` | `gemma4:31b` | 0.7 |
-| `pro-plus` | cloud | `glm-5.3-flash` | `gpt-5.6-luna` (openai) | 0.7 |
-| `pro-plus-anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
-| `anthropic` | meridian | `claude-sonnet-5` | `claude-haiku-4-5` | 1 |
-| `plus` | openai | `gpt-5.6-terra` | `gpt-5.6-luna` | 1 |
+| `pro-plus` | cloud | `glm-5.3-flash` | `gpt-6-luna` (openai) | 0.7 |
+| `pro-plus-anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-4-5` | 1 |
+| `anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-4-5` | 1 |
+| `plus` | openai | `gpt-5.6-terra` | `gpt-6-luna` | 1 |
 | `plus-anthropic` | openai | `gpt-5.6-terra` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
@@ -683,8 +683,11 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `local-nano` | local | `_local:code-gen` | — | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
 | `meridian-opus` | meridian | `claude-opus-5` | — | 1 |
-| `meridian-sonnet` | meridian | `claude-sonnet-5` | — | 1 |
+| `meridian-sonnet` | meridian | `claude-sonnet-5-5` | — | 1 |
 | `meridian-haiku` | meridian | `claude-haiku-4-5-20251001` | — | 1 |
+| `meridian-opus-5-5` | meridian | `claude-opus-5-5` | — | 1 |
+| `openai-gpt-6-luna` | openai | `gpt-6-luna` | — | 1 |
+| `openai-gpt-6.1-sol` | openai | `gpt-6.1-sol` | — | 1 |
 | `meridian-fable` | meridian | `claude-fable-5-1` | — | 1 |
 
 Local Ollama profiles resolve model IDs dynamically via the shared tier registry. For local tiers, an MoE code-gen model is also reused for lightweight and vision categories when applicable. Cloud profiles use registry-defined IDs. Temperatures follow Junie's recommendations.

@@ -219,13 +219,13 @@ def get_voice_config(
         if use_meridian:
             voice_config = {
                 "endpoint": get_meridian_base_url(),
-                "model": "claude-sonnet-5",
+                "model": "claude-sonnet-5-5",
                 "apiKeyEnv": "MERIDIAN_API_KEY",
             }
         else:
             voice_config = {
                 "endpoint": get_provider_base_url("anthropic"),
-                "model": "claude-sonnet-5",
+                "model": "claude-sonnet-5-5",
                 "apiKeyEnv": "ANTHROPIC_API_KEY",
             }
 
@@ -233,7 +233,7 @@ def get_voice_config(
         # OpenAI or Ollama Cloud + OpenAI STT
         voice_config = {
             "endpoint": get_provider_base_url("openai"),
-            "model": "gpt-5.6-luna",
+            "model": "gpt-6-luna",
             "apiKeyEnv": "OPENAI_API_KEY",
         }
 
