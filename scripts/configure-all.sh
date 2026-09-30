@@ -11,6 +11,7 @@ LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/common_args.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/litellm_service.sh"
 
 export COMMON_USAGE="$0 [options]"
