@@ -6,7 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
+import shutil
+import subprocess  # nosec B404 - fixed-argument launchctl/systemctl probes only
 import sys
 import urllib.parse
 import urllib.error
@@ -52,22 +53,32 @@ def _is_loopback_url(value: str) -> bool:
 
 def _loaded() -> bool:
     if sys.platform != "darwin":
+        executable = shutil.which("systemctl")
+        if not executable:
+            return False
         try:
-            result = subprocess.run(
-                ["systemctl", "--user", "is-active", "litellm.service"],
-                capture_output=True,
-                text=True,
-                check=False,
+            result = (
+                subprocess.run(  # nosec B603/B607 - fixed arguments, PATH-resolved tool
+                    [executable, "--user", "is-active", "litellm.service"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
             )
             return result.returncode == 0
         except OSError:
             return False
+    executable = shutil.which("launchctl")
+    if not executable:
+        return False
     try:
-        result = subprocess.run(
-            ["launchctl", "print", f"gui/{os.getuid()}/{LABEL}"],
-            capture_output=True,
-            text=True,
-            check=False,
+        result = (
+            subprocess.run(  # nosec B603/B607 - fixed arguments, PATH-resolved tool
+                [executable, "print", f"gui/{os.getuid()}/{LABEL}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
         )
         return result.returncode == 0
     except OSError:
@@ -75,10 +86,14 @@ def _loaded() -> bool:
 
 
 def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        return 0, None, "unsafe-scheme"
     request = urllib.request.Request(url, method="GET")
     if key:
         request.add_header("Authorization", f"Bearer {key}")
     try:
+        # nosec B310 - URLs are loopback-gated by diagnose() before reaching _request
         with urllib.request.urlopen(request, timeout=3) as response:
             payload = response.read().decode("utf-8", errors="replace")
             try:
@@ -87,7 +102,8 @@ def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
                 return response.status, None, "invalid-json"
     except urllib.error.HTTPError as error:
         return error.code, None, "http-error"
-    except (urllib.error.URLError, OSError) as error:
+    # URLError subclasses OSError; one clause covers both (qlty S5713).
+    except OSError as error:
         return 0, None, type(error).__name__
 
 

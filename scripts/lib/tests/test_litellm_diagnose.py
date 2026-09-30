@@ -19,7 +19,7 @@ def setup_home(tmp_path, monkeypatch, *, with_key=True, subname="litellm"):
     root.mkdir(parents=True, exist_ok=True)
     (root / "config.yaml").write_text("config")
     if with_key:
-        (root / "service.env").write_text("LITELLM_MASTER_KEY='sk-test-secret'\n")
+        (root / "service.env").write_text("LITELLM_MASTER_KEY='dtf-not-a-real-key'\n")
 
 
 def test_gate_off_lifecycle(tmp_path, monkeypatch):
@@ -38,7 +38,7 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
     code, summary = MODULE.diagnose()
     assert code == 0
     assert "HEALTHY" in summary
-    assert "sk-test-secret" not in summary
+    assert "dtf-not-a-real-key" not in summary
 
 
 def test_auth_failure_is_classified(monkeypatch, tmp_path):
