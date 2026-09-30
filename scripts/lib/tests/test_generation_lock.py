@@ -10,7 +10,7 @@ try:
 except ImportError:  # pragma: no cover - Windows test path
     fcntl = None
 
-import generation_lock
+import generation_lock  # noqa: E402 - platform-conditional lock import precedes this loader.
 
 
 def test_help_does_not_create_lock_file(tmp_path, monkeypatch):

@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover - exercised on Windows CI
 import logger
 
 
-def with_generation_lock(name: str):
+def with_generation_lock(_name: str):
     lock_path = Path.home() / ".cache" / "dotfiles" / "generation.lock"
 
     def decorate(function):
@@ -40,7 +40,7 @@ def with_generation_lock(name: str):
                         _fcntl.flock(handle.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
                     else:
                         _msvcrt.locking(handle.fileno(), _msvcrt.LK_NBLCK, 1)
-                except (BlockingIOError, OSError):
+                except OSError:
                     logger.critical(
                         "Generation lock %s is held by another process (pid unknown); refusing concurrent writes.",
                         lock_path,
