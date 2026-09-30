@@ -1,4 +1,5 @@
 import os
+import json
 import shlex
 import subprocess
 from pathlib import Path
@@ -18,6 +19,8 @@ def hermetic_environment(monkeypatch):
                 "ANTHROPIC_",
                 "GEMINI_",
                 "OPENROUTER_",
+                "OPENCODE_",
+                "OLLAMA_",
                 "MERIDIAN_",
                 "OMLX_",
             )
@@ -219,3 +222,99 @@ def test_google_uses_native_adapter(monkeypatch):
     google = next(item for item in entries if item["model_name"] == "google/default")
     assert google["litellm_params"]["model"].startswith("gemini/")
     assert "api_base" not in google["litellm_params"]
+
+
+@pytest.mark.parametrize(
+    "env_name, provider, model, api_base",
+    [
+        ("OPENAI_API_KEY", "openai", "openai/gpt-6-luna", "https://api.openai.com/v1"),
+        (
+            "ANTHROPIC_API_KEY",
+            "anthropic",
+            "anthropic/claude-sonnet-5-5",
+            "https://api.anthropic.com",
+        ),
+        (
+            "OPENROUTER_API_KEY",
+            "openrouter",
+            "openrouter/openai/gpt-4o",
+            "https://openrouter.ai/api/v1",
+        ),
+        (
+            "OPENCODE_API_KEY",
+            "opencode",
+            "openai/gpt-6-luna",
+            "https://opencode.ai/zen/v1",
+        ),
+        (
+            "OLLAMA_API_KEY",
+            "ollama-cloud",
+            "openai/gpt-oss:120b",
+            "https://ollama.com/v1",
+        ),
+    ],
+)
+def test_cloud_provider_routes_use_recorded_upstreams(
+    monkeypatch, env_name, provider, model, api_base
+):
+    monkeypatch.setenv(env_name, "test-key")
+    entry = next(
+        item
+        for item in litellm_config.compute_model_list()
+        if item["model_name"] == f"{provider}/default"
+    )
+    params = entry["litellm_params"]
+    assert params["model"] == model
+    assert params["api_base"] == api_base
+    assert params["api_key"] == f"os.environ/{env_name}"
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {
+            "model_name": "bad",
+            "litellm_params": {"api_base": "http://127.0.0.1:4000/v1"},
+        },
+        {"model_name": "bad", "litellm_params": {"api_base": "~/.mozart/mozart.json"}},
+        {"model_name": "bad", "litellm_params": {"model": "mozart-router/default"}},
+    ],
+)
+def test_render_rejects_mozart_and_self_routing(entry):
+    with pytest.raises(litellm_config.RoutingInvariantError):
+        litellm_config.render_config(entries=[entry])
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {
+            "model_name": "openai/wolf.mozart-v1",
+            "litellm_params": {"model": "openai/wolf.mozart-v1"},
+        },
+        {
+            "model_name": "alias-mozart-router-v1",
+            "litellm_params": {"model": "openai/ordinary-model"},
+        },
+    ],
+)
+def test_render_allows_legitimate_substrings(entry):
+    assert "model_list:" in litellm_config.render_config(entries=[entry])
+
+
+def test_generator_uses_litellm_port_override():
+    entry = {
+        "model_name": "bad",
+        "litellm_params": {"api_base": "http://127.0.0.1:4100/v1"},
+    }
+    with pytest.raises(litellm_config.RoutingInvariantError):
+        litellm_config.render_config(environ={"LITELLM_PORT": "4100"}, entries=[entry])
+
+
+def test_mozart_template_has_no_litellm_gateway():
+    template = Path(__file__).resolve().parents[3] / "configs/mozart-router/mozart.json"
+    config = json.loads(template.read_text(encoding="utf-8"))
+    assert all(
+        "127.0.0.1:4000" not in json.dumps(gateway)
+        for gateway in config.get("gateways", {}).values()
+    )
