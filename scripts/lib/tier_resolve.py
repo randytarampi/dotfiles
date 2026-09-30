@@ -289,9 +289,20 @@ def resolve_roles_from_list(
         }:
             continue
 
+        # Probe before assigning a category so capabilities reported by
+        # `ollama show` (including audio) participate in classification.
+        details = get_cached_model_details(model_name, provider)
+        if isinstance(model, dict):
+            model = dict(model)
+            model["capabilities"] = sorted(
+                set(model.get("capabilities", []))
+                | set(details.get("capabilities", []))
+            )
+
         if isinstance(model, dict) and (
             model.get("model_type") in {"audio_stt", "audio_tts", "audio_sts"}
             or "audio" in model.get("capabilities", [])
+            or "audio" in details.get("capabilities", [])
         ):
             category = "audio"
         else:

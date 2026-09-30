@@ -341,6 +341,19 @@ def test_resolve_roles_does_not_union_without_equivalents():
     assert resolved.get("audio") is None
 
 
+def test_resolve_roles_uses_probed_audio_capability_for_gemma4():
+    models = [{"name": "gemma4:12b-mxfp8", "size_gb": 12.0, "provider": "ollama"}]
+
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        return_value={"param_count": 12, "capabilities": ["completion", "audio"]},
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(models)
+
+    assert resolved["audio"] == "ollama/gemma4:12b-mxfp8"
+
+
 def test_resolve_roles_keeps_audio_only_omlx_models_in_audio_category():
     models = [
         {
