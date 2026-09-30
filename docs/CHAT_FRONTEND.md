@@ -269,7 +269,7 @@ frontend.
 6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
   reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
   directly. LiteLLM becomes a documented
-   escalation if provider count, aliasing, fallbacks, budgets, or per-client keys
+   escalation if provider count, aliasing or fallback behaviour
    grow — it is *not* part of the initial build (avoids over-layering; Mozart
    already exists for the OpenCode side).
 7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs
@@ -361,8 +361,10 @@ explicitly pointed at it): a separate, loopback-only OpenAI-compatible
   gateway on port 4000 for other local clients. Open WebUI, OpenCode and Pi each
   have an independent canary gate, each requiring the main LiteLLM gate. Its
   pinned config is generated from the repo registries and provider keys, with
-  PostgreSQL-backed virtual keys, budgets and spend accounting. There is
-no Caddy route; only clients on the machine consume it.
+  All clients authenticate with the single `LITELLM_MASTER_KEY`, sourced from
+  the mode-600 `~/.local/share/litellm/service.env`; there are no virtual keys,
+  per-client budgets or spend-accounting claims. There is no Caddy route; only
+  clients on the machine consume it.
 
 The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping
 is the canary path: verify one client, then roll back by setting its gate to `0`
@@ -555,7 +557,7 @@ connection and MCP credentials.
   Agent Flows, scheduled jobs, telemetry note
 - Jan README (features, OpenAI-compatible server, mlx-server)
 - egoist/waku README + GitHub API metadata
-- LiteLLM docs: proxy quick start, configs, virtual keys, endpoint matrix;
+- LiteLLM docs: proxy quick start, configs and endpoint matrix;
   licence (MIT core / enterprise dir)
 - OpenRouter docs: pricing (5.5% platform fee), BYOK, privacy/provider-logging
 - Anthropic Consumer Terms (effective 2025-10-08)

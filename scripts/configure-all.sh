@@ -11,6 +11,7 @@ LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/common_args.sh"
+source "$LIB_DIR/litellm_service.sh"
 
 export COMMON_USAGE="$0 [options]"
 export COMMON_HELP_TEXT="Run all AI tool configure scripts in dependency order.
@@ -566,6 +567,7 @@ if ! step_skipped litellm; then
   if [[ "$COMMON_DRY_RUN" == "1" ]]; then
     run_step "LiteLLM configuration dry-run" python3 "$SCRIPT_DIR/configure-litellm.py" --dry-run
   elif [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" ]]; then
+    litellm_require_database_url
     run_step "LiteLLM service environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"
     run_step "LiteLLM configuration" python3 "$SCRIPT_DIR/configure-litellm.py"
     run_step "LiteLLM provider environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"

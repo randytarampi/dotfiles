@@ -25,7 +25,6 @@ from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
-from litellm_clients import client_uses_litellm, litellm_endpoint
 from tier_resolve import get_model_details
 from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
 import tier_registry
@@ -667,10 +666,18 @@ def main():
     }
     providers["openai"] = {
         "baseUrl": (
-            litellm_endpoint() if client_uses_litellm("pi") else BASE_URLS["openai"]
+            f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+            if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+            and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
+            else BASE_URLS["openai"]
         ),
         "api": "openai-completions",
-        "apiKey": "$OPENAI_API_KEY",
+        "apiKey": (
+            "$LITELLM_MASTER_KEY"
+            if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+            and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
+            else "$OPENAI_API_KEY"
+        ),
         "models": [],
     }
     skipped_providers = []

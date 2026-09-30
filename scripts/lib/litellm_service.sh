@@ -2,6 +2,9 @@
 
 litellm_service_domain() { printf 'gui/%s\n' "${UID:-$(id -u)}"; }
 litellm_service_plist() { printf '%s\n' "$HOME/Library/LaunchAgents/com.litellm.proxy.plist"; }
+litellm_require_database_url() {
+  [[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
+}
 
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp

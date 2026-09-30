@@ -10,6 +10,14 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def loaded_service(monkeypatch):
+    monkeypatch.setattr(MODULE, "_loaded", lambda: True)
+
+
 def setup_home(tmp_path, monkeypatch, *, with_key=True, subname="litellm"):
     home = tmp_path / subname
     home.mkdir(parents=True, exist_ok=True)
@@ -39,7 +47,7 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
 
     def request(url, key=""):
         calls.append((url, key))
-        return 200, {"data": []}, ""
+        return (200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")
 
     monkeypatch.setattr(MODULE, "_request", request)
     code, summary = MODULE.diagnose()
@@ -63,7 +71,8 @@ def test_master_key_flag_precedes_environment_and_service_env(monkeypatch, tmp_p
     monkeypatch.setattr(
         MODULE,
         "_request",
-        lambda url, key="": calls.append((url, key)) or (200, {}, ""),
+        lambda url, key="": calls.append((url, key))
+        or ((200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")),
     )
 
     code, summary = MODULE.diagnose("flag-key")
@@ -112,7 +121,7 @@ def test_no_key_does_not_send_models_request(monkeypatch, tmp_path):
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "MISSING-OR-INVALID-MASTER-KEY" in summary
-    assert calls == []
+    assert [url.rsplit("/", 1)[-1] for url, _ in calls] == ["liveliness"]
 
 
 def test_db_less_auth_backend_rejection(monkeypatch, tmp_path):
@@ -174,4 +183,4 @@ def test_proxy_unavailable_and_provider_failure(monkeypatch, tmp_path):
         MODULE, "_request", lambda url, key="": (500, {"error": "provider"}, "")
     )
     code, summary = MODULE.diagnose()
-    assert code == 1 and "PROVIDER-FAILURE" in summary
+    assert code == 1 and "PROXY-UNAVAILABLE" in summary

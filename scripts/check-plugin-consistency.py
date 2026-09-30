@@ -221,6 +221,10 @@ def main():
     parser.add_argument("--check-installed", action="store_true")
     parser.add_argument("--cache-dir", type=Path, default=None)
     args = parser.parse_args()
+    if args.cache_dir is not None and not (
+        args.check_installed or os.environ.get("DOTFILES_CHECK_PLUGIN_INSTALL") == "1"
+    ):
+        parser.error("--cache-dir requires --check-installed")
     try:
         load_manifest()  # Validate the complete canonical manifest, including gated entries.
         manifest_plugins = active_plugin_specs()

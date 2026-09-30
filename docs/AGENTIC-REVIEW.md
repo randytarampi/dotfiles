@@ -310,7 +310,7 @@ For an explicitly local review, use for example:
 
 ## Onboard another repo
 
-Run `scripts/onboard-agentic-review.py --repo <path> [--ref <ref>]` to install the
+Run `scripts/onboard-agentic-review.py --repo <path> --ref <ref>` to install the
 stable dispatcher stub and Copilot setup workflow. The helper is idempotent, creates backups
 when replacing existing workflows (disable with `--no-backup`), and supports
 `--dry-run` and `--workflows-only`. The shared prompt and skills are checked out

@@ -63,4 +63,6 @@ def test_refresher_uses_shared_catalogue_fetcher_without_duplicate_http_code():
     shared = read("scripts/lib/model_catalogues.py")
     assert "from model_catalogues import get_catalogue" in refresher
     assert "urllib.request" not in refresher
-    assert "urllib.request.urlopen" in shared
+    # W8B-A: all shared-fetch HTTP goes through model_catalogues.open_same_origin
+    # (redirect-gated); direct urllib.request.urlopen calls no longer exist.
+    assert "open_same_origin" in shared

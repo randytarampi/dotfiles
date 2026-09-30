@@ -18,6 +18,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from cli_helpers import add_common_args  # noqa: E402
+from model_catalogues import open_same_origin  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 LABEL = "com.litellm.proxy"
@@ -93,9 +94,7 @@ def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
     if key:
         request.add_header("Authorization", f"Bearer {key}")
     try:
-        with urllib.request.urlopen(  # nosec B310 - URLs are loopback-gated by diagnose() before reaching _request
-            request, timeout=3
-        ) as response:
+        with open_same_origin(request, timeout=3) as response:
             payload = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(payload), ""
@@ -117,6 +116,8 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         return 0, "LITELLM: GATE-OFF; artifact=%s" % artifact
     loaded = _loaded()
     base = _base_url(env)
+    if not loaded:
+        return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
     if not _is_loopback_url(base):
         return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
     key = (
@@ -124,15 +125,21 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         or os.environ.get("LITELLM_MASTER_KEY", "").strip()
         or env.get("LITELLM_MASTER_KEY", "")
     )
+    liveliness = _request(f"{base}/health/liveliness")
+    if not (200 <= liveliness[0] < 300 and isinstance(liveliness[1], dict)):
+        return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
     if not key:
         return (
             1,
             f"LITELLM: MISSING-OR-INVALID-MASTER-KEY; artifact={artifact}; loaded={loaded}",
         )
-    liveliness = _request(f"{base}/health/liveliness")
     readiness = _request(f"{base}/health/readiness", key)
     models = _request(f"{base}/v1/models", key)
-    if liveliness[0] == 0 or readiness[0] == 0:
+    models_shape = isinstance(models[1], dict) and isinstance(
+        models[1].get("data"), list
+    )
+    readiness_shape = isinstance(readiness[1], dict)
+    if liveliness[0] == 0 or readiness[0] == 0 or not readiness_shape:
         return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
     if models[0] in {401, 403}:
         return (
@@ -158,6 +165,7 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         200 <= liveliness[0] < 300
         and 200 <= readiness[0] < 300
         and 200 <= models[0] < 300
+        and models_shape
     ):
         return 0, f"LITELLM: HEALTHY; artifact={artifact}; loaded={loaded}"
     return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
