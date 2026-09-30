@@ -91,6 +91,15 @@
   },
   "scripts": [
     {
+      "path": "scripts/litellm-diagnose.py",
+      "capabilities": ["public", "inspect"],
+      "enforcement": "strict",
+      "failure_policy": "report",
+      "accepted_flags": ["--help", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-acp-agents.py",
       "capabilities": [
         "public",

@@ -11,6 +11,7 @@ Exit codes:
 
 import os
 import sys
+import importlib.util
 import json
 import platform
 import re
@@ -1202,6 +1203,27 @@ def main():
     litellm_unit = HOME / ".config/systemd/user/litellm.service"
     expected_litellm_port = os.environ.get("LITELLM_PORT", "4000")
     if litellm_gate:
+        diagnostic_path = Path(__file__).with_name("litellm-diagnose.py")
+        diagnostic_spec = importlib.util.spec_from_file_location(
+            "litellm_diagnose", diagnostic_path
+        )
+        if diagnostic_spec and diagnostic_spec.loader:
+            diagnostic_module = importlib.util.module_from_spec(diagnostic_spec)
+            diagnostic_spec.loader.exec_module(diagnostic_module)
+            diagnostic_code, diagnostic_summary = diagnostic_module.diagnose()
+            # Runtime health is not configuration drift: the doctor verifies
+            # deployed artifacts regenerate cleanly, not that a live service is
+            # up (regeneration cannot start a stopped launchd service). Surface
+            # the classification as a visible warning instead of silently
+            # folding it into the exit code — the silent fold reported
+            # "missing output files" with no offending ✗ line.
+            symbol = "\u2713" if diagnostic_code == 0 else "\u26a0"
+            print(f"  {symbol} LiteLLM diagnostic: {diagnostic_summary}")
+            if diagnostic_code:
+                print(
+                    "  \u26a0 LiteLLM runtime is not healthy; run "
+                    "'make litellm-diagnose' for the read-only report"
+                )
         service_artifact = litellm_plist if sys.platform == "darwin" else litellm_unit
         litellm_paths = [
             (litellm_root / "venv/bin/litellm", "LiteLLM executable"),
