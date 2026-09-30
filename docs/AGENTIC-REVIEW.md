@@ -84,12 +84,15 @@ repository instructions.
   before using prompts, configuration, skills, or `ci-codegraph.sh`.
   Copilot setup accepts an explicit 40-character dotfiles commit SHA for the
   same reason; PR content never participates in prompt-file loading.
-- Security posture: minimal `permissions` per job, `sender.type != 'Bot'`
+- Security posture: minimal `permissions` per job, read-only `github.token` in
+  every agent lane, `sender.type != 'Bot'`
   filter, per-PR `concurrency` cancel-in-progress, and SHA-pinned third-party
   actions,
   read-only MCP tool allowlists, no `pull_request_target`. Normal OpenCode,
-  Junie, and Gemini lanes have `contents: read`, do not persist checkout
-  credentials, and cannot push. The separate manual fix lane is
+  Junie, and Gemini lanes have only `contents: read`, do not persist checkout
+  credentials, and cannot publish. Each lane hands its review body to `notify`
+  as a job output and review artifact; `notify` is the only job that publishes
+  PR comments, using only a narrowly scoped GitHub App token. The separate manual fix lane is
   owner-authenticated, generation-read-only, gated by the `agentic-review-fix`
   environment, validates paths and gitlinks, then publishes only the
   exact-path allowlist on a unique `agentic-review-bot/<run-id>` branch and
@@ -135,22 +138,25 @@ Set per repo (Settings → Secrets and variables → Actions):
 - `OPENROUTER_API_KEY` — OpenRouter (consumed by OpenCode's `free`
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
-Optional poster identities:
-
-- `JUNIE_BOT_TOKEN`, `OPENCODE_BOT_TOKEN`, `GEMINI_BOT_TOKEN` — fine-grained
-  PATs or GitHub App installation tokens, allowing standardized status comments
-  to be posted as the corresponding agent user.
 - Per-agent GitHub Apps: `JUNIE_APP_ID` + `JUNIE_APP_PRIVATE_KEY`,
   `OPENCODE_APP_ID` + `OPENCODE_APP_PRIVATE_KEY`, and `GEMINI_APP_ID` +
   `GEMINI_APP_PRIVATE_KEY`. These mirror the manual App setup described by
   `anthropics/claude-code-action` Option 2 and post as `<app-slug>[bot]`.
 - Fallback GitHub App: `APP_ID` + `APP_PRIVATE_KEY`. When a per-agent pair is
-  absent, this App is used for that lane, overriding `github-actions[bot]` for
-  the whole review action.
+  absent, this App is used for that lane.
 - App tokens are minted per notify job with a one-hour expiry. Each App must be
   installed on the consuming repository with Issues: write and Pull requests:
-  write permissions. Without any optional identity secret, comments use
+  write permissions. If no per-agent or fallback App is configured, `notify`
+  skips publication; it never falls back to `github.token` or
   `github-actions[bot]`.
+- OpenCode runs the version-pinned CLI directly with
+  `opencode run --print-logs --format default` and uploads its captured review.
+  The pinned GitHub action was not used because its `opencode github run`
+  integration has no output channel and can publish internally. The pinned
+  Junie action exposes the documented `silent_mode: "true"` input and
+  `junie_summary` output; that mode is enabled so Junie emits its summary
+  without attempting its normal feedback comments. Both summaries are
+  consumed by `notify`, which publishes the actual bodies.
   A poster account should not manually issue trigger comments: unlike
   `github-actions[bot]`, a PAT-backed user is not filtered as a bot and could
   retrigger the dispatcher.

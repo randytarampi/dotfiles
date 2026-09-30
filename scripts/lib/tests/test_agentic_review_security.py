@@ -35,6 +35,53 @@ def test_manifest_verification_precedes_codegraph_execution():
     assert workflow.index("verify-ci-assets.py") < workflow.index("ci-codegraph.sh")
 
 
+def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
+    workflow = read(".github/workflows/agentic-review.yml")
+    for job in ("opencode", "junie", "gemini"):
+        section = re.search(rf"(?ms)^  {job}:$(.*?)(?=^  \w)", workflow).group(1)
+        assert "permissions:\n      contents: read\n" in section
+        assert "contents: write" not in section
+        assert "pull-requests: write" not in section
+        assert "issues: write" not in section
+        assert "Upload " in section
+        assert (
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+            in section
+        )
+        assert "gh api" not in section
+        assert "gh pr comment" not in section
+    junie = re.search(r"(?ms)^  junie:$(.*?)(?=^  \w)", workflow).group(1)
+    assert 'silent_mode: "true"' in junie
+    assert "steps.junie.outputs.junie_summary" in junie
+    assert (
+        "outputs:\n      review: ${{ steps.opencode_review.outputs.review }}"
+        in workflow
+    )
+    assert (
+        "outputs:\n      review: ${{ steps.junie_review.outputs.review }}" in workflow
+    )
+    assert (
+        "outputs:\n      review: ${{ steps.gemini_review.outputs.review }}" in workflow
+    )
+    notify = workflow.split("  notify:\n", 1)[1]
+    assert (
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in notify
+    )
+    assert 'review_file="reviews/${agent}-review.md"' in notify
+    assert '$(<"${review_file}")' in notify
+    assert (
+        'gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}"'
+        in notify
+    )
+    assert "FALLBACK_TOKEN: ${{ github.token }}" not in notify
+    assert "GH_TOKEN: ${{ github.token }}" not in notify
+    assert "JUNIE_APP_TOKEN" in notify
+    assert "OPENCODE_APP_TOKEN" in notify
+    assert "GEMINI_APP_TOKEN" in notify
+    assert "github-actions[bot]" not in workflow
+    assert "*_BOT_TOKEN" not in workflow
+
+
 def test_dispatcher_is_read_only_and_fix_lane_is_manual_and_allowlisted():
     dispatcher = read("configs/review/dispatcher-stub.yml")
     generated = read(".github/workflows/agent-review.yml")
