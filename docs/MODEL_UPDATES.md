@@ -57,10 +57,10 @@ IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
 | `claude-opus-5` | `glm-5.3` | Council |
 | `claude-sonnet-5` | `glm-5.3-flash` | Orchestrator |
 | `claude-haiku-4.5` | `gemma4:31b` | Librarian, explorer, fixer |
-| `claude-sonnet-4.6` | `deepseek-v4-flash` | Utility |
+| `claude-sonnet-4.6` | `deepseek-v4.1-flash` | Utility |
 
 The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer,
-`kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4-flash`
+`kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4.1-flash`
 for fixer, and `glm-5.3` for council synthesis. This is cost-tier alignment,
 not proven capability parity. GLM-5.3-Flash and Gemma4 benchmark claims are
 vendor-reported. The pricing basis used was OpenRouter per-million-token
@@ -103,7 +103,7 @@ without following this document's normal review flow.
 
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
 
-- Added to ollama-cloud allowlist: `deepseek-v4.1-flash`, `glm-5.1`, `nemotron-3-super` (catalogue verified 2026-09-12 vs ollama.com/search?c=cloud).
+- Historical retired entry `glm-5.1` was removed from the active ollama-cloud registry; `deepseek-v4.1-flash` and `nemotron-3-super` remain active.
 - Added `gpt-6-astra` to openai allowlist (flagship, 1.05M ctx/128K output, per developers.openai.com/api/docs/models).
 - plus council γ: gpt-5.4 → gpt-5.6-terra. plus/plus-anthropic gpt-5.4-mini chain entries removed where OpenAI's mapped replacement (gpt-5.6-luna) equals the role primary; gpt-6-astra added as plus/plus-anthropic orchestrator/oracle fallback head. gpt-5.4-mini remains in omo-slim-* observer chains.
 - Dedup invariants enforced in `scripts/verify-slim-invariants.py`: primary-not-in-own-chain, no-repeat-in-chain.
@@ -112,7 +112,7 @@ without following this document's normal review flow.
 - oMLX runtime-management parity: persisted CacheSettings now cover enablement, SSD/hot-cache sizing, write-through mode, and initial cache blocks; the update lane verifies model presence and drift rather than attempting unsupported model pulls.
 - Unified local pool review: per-engine local distinctions were removed; `--local` agents and local Codex profiles are pool-driven, with per-engine provider blocks retained only for endpoint structure. This preserves an engine-agnostic local model selection path and leaves future engines to add discovery plus endpoint mapping.
 - Voice LLM model refresh: `configure-opencode-voice.py` plus-tier OpenAI voice LLM model gpt-5.4-mini → `gpt-5.6-luna` (mini retired 2026-08-31; OpenAI-directed replacement; STT remains `whisper-1`). This applies unless `DOTFILES_USE_LOCAL_OLLAMA` selects the local librarian override.
-- pro-plus-anthropic librarian fallback: removed `openai/gpt-5.4-mini` (retired 2026-08-31) — OpenAI's mapped replacement (`gpt-5.6-luna`) is already that role's primary, so the entry was redundant; `ollama-cloud/deepseek-v4-flash` fallback retained. Only remaining active slim-config `gpt-5.4-mini` references are the documented omo-slim-* observer chains.
+- pro-plus-anthropic librarian fallback: removed `openai/gpt-5.4-mini` (retired 2026-08-31) — OpenAI's mapped replacement (`gpt-5.6-luna`) is already that role's primary, so the entry was redundant; `ollama-cloud/deepseek-v4.1-flash` fallback retained. Only remaining active slim-config `gpt-5.4-mini` references are the documented omo-slim-* observer chains.
 - KV-cache type unification: `OLLAMA_KV_CACHE_TYPE` now drives both daemons from one canonical name — Ollama via the daemon env as before, oMLX via per-model TurboQuant KV mapping applied by Script 29 (`q8_0` → 8-bit, `q4_0` → 4-bit, `f16`/unset → per-model settings untouched). With TurboQuant 8-bit, all three installed MLX models fit at full 256k context concurrently (~80 GB vs the 107.5 GB engine ceiling; fp16 was infeasible at ~139 GB).
 - Model-selection parity: Codex (standalone + `~/.codex-local`) and the ACP `--local` agents now resolve winners from the merged pool of all gate-active engines (omlx winners route to the engine's endpoint, e.g. `claude--local` → oMLX's Anthropic-compatible `/v1/messages`), and Junie gains one selectable profile per chat-capable pool model (`local-<provider>-<slug>.json`, `fasterModel` chained same-engine) — all registry-driven with the N-engine contract; three consumers previously called Ollama-only resolvers. Standalone `configure-codex.py`/`configure-acp-agents.py`/`generate-jetbrains-profiles.py` now `load_env()` so gate/endpoint vars resolve outside `make deploy`.
  - oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.

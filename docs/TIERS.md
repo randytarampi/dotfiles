@@ -39,7 +39,7 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `deepseek-v4-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
 Every preset defines an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer: the hook strips images from the main conversation
@@ -117,7 +117,7 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | librarian | `gemma4:31b` | low |
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
-| fixer | `deepseek-v4-flash` | high |
+| fixer | `deepseek-v4.1-flash` | high |
 | observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
 
@@ -448,7 +448,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use `deepseek-v4.1-flash`, `deepseek-v4-flash`,
+Ollama Cloud presets use `deepseek-v4.1-flash`,
 `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` — the
 exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama
 Cloud Pro accounts
@@ -562,7 +562,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `gpt-5.6-terra` | standard | `high` | Primary balanced model; orchestrator default, oracle uses high |
 | `gpt-5.6-sol` | standard | `high` | Primary flagship model; oracle uses high, council uses high |
 | `gpt-5.6-luna` | standard | `high` | Primary lightweight model; librarian/explorer use low, fixer uses high |
-| `deepseek-v4-flash` | standard | `high` | Upstream uses high for fixer (code execution) |
+| `deepseek-v4-flash` | retired | — | Historical catalogue entry; removed from active registry |
 | `glm-5.2` | standard | max | 1M context; supports High/Max thinking effort; orchestrator uses max, oracle fallback uses max, other fallbacks use standard |
 | `glm-5.3-flash` | standard | max | 320B/18B MoE, 1M context, vision (images+video), always-on tunable thinking; orchestrator uses max (replaces glm-5.2 as primary orchestrator in pro/pro-plus); glm-5.2 remains as secondary fallback |
 | `glm-5.3` | standard | max | 753B MoE flagship, 1M context, text-only; strictly dominates glm-5.2 on all 13 shared benchmarks; leads nemotron-3-ultra on GDPval-AA v2 (1769 vs 1448, NVIDIA vendor-reported); orchestrator/oracle fallbacks use max |
@@ -572,7 +572,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
 | `gpt-6-astra` | standard | — | Flagship degraded-fallback head for plus orchestrator/oracle chains; not a primary anchor; no model-specific variant policy (inherits each role's configured variant) |
 | `deepseek-v4.1-flash` | standard | — | Active Ollama Cloud council/fallback model |
-| `glm-5.1` | standard | — | Catalogue-only addition; agentic-engineering family sibling of glm-5.2/5.3 |
+| `glm-5.1` | retired | — | Historical catalogue entry; removed from active registry |
 | `nemotron-3-super` | standard | — | 120B total/12B active MoE; catalogue-only addition |
 | `gpt-5.4` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; plus council γ re-anchored to gpt-5.6-terra per OpenAI guidance; API-key use unaffected |
 | `gpt-5.4-mini` | standard | `high` | Retired from Codex (ChatGPT auth) 2026-08-31; removed from plus librarian/explorer/observer chains and pro-plus-anthropic librarian fallback (OpenAI's mapped replacement gpt-5.6-luna is already those roles' primary); remains in omo-slim-* observer chains; API-key use unaffected |
