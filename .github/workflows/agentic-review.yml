@@ -10,8 +10,8 @@
 # review-all request the corresponding reviewer(s). Mention triggers are parsed
 # by caller dispatch workflows; dispatcher-mode parsing is centralized here.
 # trigger_tokens is comma-separated and aligned with agents for standardized messaging.
-# Optional *_BOT_TOKEN secrets let each lane post as a distinct GitHub user; without
-# them, notifications use github-actions[bot].
+# Review lanes only generate review content. The notify job is the sole publisher
+# and uses a GitHub App token when one is configured.
 
 name: Agentic review
 
@@ -55,12 +55,6 @@ on:
       GEMINI_API_KEY:
         required: false
       OPENROUTER_API_KEY:
-        required: false
-      JUNIE_BOT_TOKEN:
-        required: false
-      OPENCODE_BOT_TOKEN:
-        required: false
-      GEMINI_BOT_TOKEN:
         required: false
       JUNIE_APP_ID:
         required: false
@@ -202,14 +196,15 @@ jobs:
   # trusted repo actors; keep provider keys minimal and never add write
   # permissions beyond pull-requests/issues here.
   opencode:
+    outputs:
+      review: ${{ steps.opencode_review.outputs.review }}
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
     runs-on: ubuntu-latest
-    # Normal review lanes never modify the checkout or push commits.
+    # The review agent receives a read-only GitHub token. Publication is handled
+    # by the separate notify job with an explicitly minted App token.
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -266,32 +261,48 @@ jobs:
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
       - name: Run OpenCode review
-        uses: anomalyco/opencode/github@16747470f976aca3d362ad730bcd3fe82ecc2c9a # v1.18.29
+        id: opencode_review
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           OPENCODE_CONFIG: ${{ env.TRUSTED_DOTFILES }}/configs/opencode/ci/opencode.json
-        with:
-          model: opencode/big-pickle
-          use_github_token: "true"
-          prompt: |
-            ${{ needs.parse.outputs.prompt != '' && format('{0}
+          REVIEW_FILE: ${{ runner.temp }}/opencode-review.md
+        run: |
+          set -euo pipefail
+          opencode run --print-logs --format default \
+            --model opencode/big-pickle \
+            "${{ needs.parse.outputs.prompt != '' && format('{0}
 
             ---
 
-            {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+            {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}" \
+            >"${REVIEW_FILE}" 2>&1
+          delim="OPENCODE_REVIEW_$(openssl rand -hex 8)"
+          {
+            printf 'review<<%s\n' "${delim}"
+            cat "${REVIEW_FILE}"
+            printf '%s\n' "${delim}"
+          } >>"${GITHUB_OUTPUT}"
+      - name: Upload OpenCode review
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: opencode-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/opencode-review.md
+          if-no-files-found: ignore
 
   junie:
+    outputs:
+      review: ${{ steps.junie_review.outputs.review }}
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',junie,')
     runs-on: ubuntu-latest
-    # Normal review lanes never modify the checkout or push commits.
+    # The review agent receives a read-only GitHub token. Publication is handled
+    # by the separate notify job with an explicitly minted App token.
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -330,24 +341,48 @@ jobs:
             cat "$prompt_file"
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      - uses: JetBrains/junie-github-action@3c08594c219ef187ab0df0db4e2ac3222a163593 # v1
+      - id: junie
+        uses: JetBrains/junie-github-action@3c08594c219ef187ab0df0db4e2ac3222a163593 # v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           prompt: ${{ needs.parse.outputs.prompt != '' && needs.parse.outputs.prompt || env.CODE_REVIEW_PROMPT }}
           attach_github_context_to_custom_prompt: "true"
-          use_single_comment: "true"
-          # Keep feedback enabled: Junie's give-feedback steps are the mechanism
-          # that posts review content. The notify job adds the standardized status.
+          silent_mode: "true"
+      - name: Save Junie review
+        id: junie_review
+        if: always()
+        env:
+          JUNIE_REVIEW: ${{ steps.junie.outputs.junie_summary }}
+          REVIEW_FILE: ${{ runner.temp }}/junie-review.md
+        run: |
+          set -euo pipefail
+          printf '%s' "${JUNIE_REVIEW}" >"${REVIEW_FILE}"
+          delim="JUNIE_REVIEW_$(openssl rand -hex 8)"
+          {
+            printf 'review<<%s\n' "${delim}"
+            cat "${REVIEW_FILE}"
+            printf '%s\n' "${delim}"
+          } >>"${GITHUB_OUTPUT}"
+      - name: Upload Junie review
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junie-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/junie-review.md
+          if-no-files-found: ignore
 
   gemini:
+    outputs:
+      review: ${{ steps.gemini_review.outputs.review }}
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')
     runs-on: ubuntu-latest
-    # Normal review lanes never modify the checkout or push commits.
+    # The review agent receives a read-only GitHub token. Publication is handled
+    # by the separate notify job with an explicitly minted App token.
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -405,17 +440,28 @@ jobs:
             ---
 
             {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
-      - name: Post Gemini review
-        if: steps.gemini.outputs.summary != '' && needs.parse.outputs.pr_number != ''
+      - name: Save Gemini review
+        id: gemini_review
+        if: always()
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           GEMINI_SUMMARY: ${{ steps.gemini.outputs.summary }}
+          REVIEW_FILE: ${{ runner.temp }}/gemini-review.md
         run: |
-          review_file="${RUNNER_TEMP}/gemini-review.md"
-          printf '%s' "${GEMINI_SUMMARY}" > "${review_file}"
-          gh pr comment "${PR_NUMBER}" --body-file "${review_file}"
-
+          set -euo pipefail
+          printf '%s' "${GEMINI_SUMMARY}" >"${REVIEW_FILE}"
+          delim="GEMINI_REVIEW_$(openssl rand -hex 8)"
+          {
+            printf 'review<<%s\n' "${delim}"
+            cat "${REVIEW_FILE}"
+            printf '%s\n' "${delim}"
+          } >>"${GITHUB_OUTPUT}"
+      - name: Upload Gemini review
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gemini-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/gemini-review.md
+          if-no-files-found: ignore
   copilot:
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',copilot,')
@@ -499,13 +545,15 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-issues: write
           permission-pull-requests: write
-      - name: Update standardized agent status comments
+      - name: Download review bodies
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "*-review-${{ github.run_id }}"
+          path: reviews
+          merge-multiple: true
+      - name: Publish review bodies
         env:
-          GH_TOKEN: ${{ github.token }}
-          FALLBACK_TOKEN: ${{ github.token }}
-          JUNIE_BOT_TOKEN: ${{ secrets.JUNIE_BOT_TOKEN }}
-          OPENCODE_BOT_TOKEN: ${{ secrets.OPENCODE_BOT_TOKEN }}
-          GEMINI_BOT_TOKEN: ${{ secrets.GEMINI_BOT_TOKEN }}
           JUNIE_APP_TOKEN: ${{ steps.junie_app_token.outputs.token }}
           OPENCODE_APP_TOKEN: ${{ steps.opencode_app_token.outputs.token }}
           GEMINI_APP_TOKEN: ${{ steps.gemini_app_token.outputs.token }}
@@ -540,28 +588,28 @@ jobs:
             esac
             marker="<!-- agent-review:${agent} -->"
             case "${agent}" in
-              junie) poster_token="${JUNIE_BOT_TOKEN:-${JUNIE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
-              opencode) poster_token="${OPENCODE_BOT_TOKEN:-${OPENCODE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
-              gemini) poster_token="${GEMINI_BOT_TOKEN:-${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-${FALLBACK_TOKEN}}}}" ;;
-              *) poster_token="${FALLBACK_TOKEN}" ;;
+              junie) poster_token="${JUNIE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
+              opencode) poster_token="${OPENCODE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
+              gemini) poster_token="${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
+              *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
             esac
-            if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
-              status="Copilot review requested."
-            elif [[ "${agent}" == "junie" && -n "${TOKENS}" && "${result}" == "success" ]]; then
-              status="Junie work completed — see the workflow logs."
-            elif [[ "${result}" == "success" ]]; then
-              case "${agent}" in
-                opencode) status="OpenCode review completed — see the agent's review comment above." ;;
-                junie) status="Junie review completed — see the agent's comment above." ;;
-                gemini) status="Gemini review completed — see the agent's comment above." ;;
-                *) status="${agent} review completed." ;;
-              esac
-            else
-              status="${token} review FAILED."
+            if [[ -z "${poster_token}" ]]; then
+              echo "No publication App token is configured for ${agent}; skipping review publication." >&2
+              continue
             fi
-            body="$(printf '%s\n\n%s\n\n%s' \
-              "${marker}" "${status}" \
-              "See the [workflow logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}).")"
+            if [[ "${result}" == "success" ]]; then
+              review_file="reviews/${agent}-review.md"
+              if [[ -s "${review_file}" ]]; then
+                body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
+              else
+                body="$(printf '%s\n\n%s' "${marker}" "${token} review completed without a review body.")"
+              fi
+            else
+              body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
+            fi
+            if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
+              body="$(printf '%s\n\n%s' "${marker}" "Copilot review requested.")"
+            fi
             comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
             if [[ -n "${comment_id}" ]]; then
               GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
