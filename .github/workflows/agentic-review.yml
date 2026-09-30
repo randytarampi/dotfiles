@@ -269,15 +269,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           OPENCODE_CONFIG: ${{ env.TRUSTED_DOTFILES }}/configs/opencode/ci/opencode.json
           REVIEW_FILE: ${{ runner.temp }}/opencode-review.md
+          # Env indirection keeps event-derived prompt interpolation out of the
+          # run script (zizmor template-injection). \n escapes keep the env
+          # value a single line; format() renders the literal newline.
+          EFFECTIVE_PROMPT: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
         run: |
           set -euo pipefail
           opencode run --print-logs --format default \
             --model opencode/big-pickle \
-            "${{ needs.parse.outputs.prompt != '' && format('{0}
-
-            ---
-
-            {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}" \
+            "$EFFECTIVE_PROMPT" \
             >"${REVIEW_FILE}" 2>&1
           delim="OPENCODE_REVIEW_$(openssl rand -hex 8)"
           {
@@ -345,9 +345,12 @@ jobs:
         uses: JetBrains/junie-github-action@3c08594c219ef187ab0df0db4e2ac3222a163593 # v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Env indirection keeps event-derived prompt interpolation out of the
+          # action input expression (zizmor template-injection).
+          EVENT_PROMPT: ${{ needs.parse.outputs.prompt || '' }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          prompt: ${{ needs.parse.outputs.prompt != '' && needs.parse.outputs.prompt || env.CODE_REVIEW_PROMPT }}
+          prompt: ${{ env.EVENT_PROMPT != '' && env.EVENT_PROMPT || env.CODE_REVIEW_PROMPT }}
           attach_github_context_to_custom_prompt: "true"
           silent_mode: "true"
       - name: Save Junie review
@@ -432,14 +435,13 @@ jobs:
         uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0
         env:
           GEMINI_CLI_TRUST_WORKSPACE: "true"
+          # Env indirection keeps event-derived prompt interpolation out of the
+          # action input expression (zizmor template-injection). \n escapes keep
+          # the env value a single line; format() renders the literal newline.
+          GEMINI_EFFECTIVE_PROMPT: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
-            ${{ needs.parse.outputs.prompt != '' && format('{0}
-
-            ---
-
-            {1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
+          prompt: ${{ env.GEMINI_EFFECTIVE_PROMPT }}
       - name: Save Gemini review
         id: gemini_review
         if: always()
