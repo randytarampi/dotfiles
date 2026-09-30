@@ -14,7 +14,6 @@ source "$LIB_DIR/litellm_service.sh"
 # database fingerprint: {{ env "DATABASE_URL" | sha256sum | trunc 12 }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
-[[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py"
 if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
   if [[ "{{ .chezmoi.os }}" == "linux" ]]; then
@@ -29,6 +28,11 @@ if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM; preserved venv/data"
   exit 0
 fi
+
+# Gate-on path only: the DB-backed deployment needs its connection string up
+# front. Gate-off machines (CI, unconfigured homes) exit above and never hit
+# this requirement.
+[[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
 
 LITELLM_HOME="$HOME/.local/share/litellm"
 VENV="$LITELLM_HOME/venv"

@@ -33,14 +33,14 @@ def setup_bin_symlinks(source_dir=None, *, dry_run=False):
     if not dotfiles_scripts.is_symlink() and not dotfiles_scripts.is_dir():
         if dry_run:
             logger.info(
-                "[DRY RUN] Would create scripts symlink: %s → %s",
+                "[DRY RUN] Would create scripts symlink: %s -> %s",
                 dotfiles_scripts,
                 source_scripts,
             )
         else:
             dotfiles_scripts.symlink_to(source_scripts)
             logger.info(
-                "Created scripts symlink: %s → %s", dotfiles_scripts, source_scripts
+                "Created scripts symlink: %s -> %s", dotfiles_scripts, source_scripts
             )
 
     if dry_run:
@@ -62,23 +62,23 @@ def setup_bin_symlinks(source_dir=None, *, dry_run=False):
         if not target_link.is_symlink():
             if dry_run:
                 logger.info(
-                    "[DRY RUN] Would create symlink: %s → %s", target_link, script
+                    "[DRY RUN] Would create symlink: %s -> %s", target_link, script
                 )
             else:
                 target_link.symlink_to(script)
-                logger.info("Created symlink: %s → %s", target_link, script)
+                logger.info("Created symlink: %s -> %s", target_link, script)
             created += 1
         else:
             current_target = os.readlink(target_link)
             if current_target != str(script):
                 if dry_run:
                     logger.info(
-                        "[DRY RUN] Would update symlink: %s → %s", target_link, script
+                        "[DRY RUN] Would update symlink: %s -> %s", target_link, script
                     )
                 else:
                     target_link.unlink()
                     target_link.symlink_to(script)
-                    logger.info("Updated symlink: %s → %s", target_link, script)
+                    logger.info("Updated symlink: %s -> %s", target_link, script)
                 created += 1
             else:
                 skipped += 1
@@ -90,11 +90,11 @@ def setup_bin_symlinks(source_dir=None, *, dry_run=False):
         if not Path(target).is_file():
             if dry_run:
                 logger.info(
-                    "[DRY RUN] Would remove stale symlink: %s → %s", link, target
+                    "[DRY RUN] Would remove stale symlink: %s -> %s", link, target
                 )
             else:
                 link.unlink()
-                logger.info("Removed stale symlink: %s → %s", link, target)
+                logger.info("Removed stale symlink: %s -> %s", link, target)
             removed += 1
 
     logger.info(

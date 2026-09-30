@@ -35,7 +35,7 @@ ok "Configuration directories created."
 for secret_file in "$HOME/.gnupg/gpg.conf" "$HOME/.gnupg/gpg-agent.conf"; do
   if [[ -f "$secret_file" ]]; then
     chmod 600 "$secret_file"
-    info "Set permissions: $secret_file → 600"
+    info "Set permissions: $secret_file -> 600"
   fi
 done
 chmod 700 "$HOME/.gnupg" 2>/dev/null || true
