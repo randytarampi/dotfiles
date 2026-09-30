@@ -60,7 +60,10 @@ from cli_helpers import (
 )
 from generation_lock import with_generation_lock
 from provider_endpoints import PROVIDER_ENDPOINTS
-from litellm_clients import client_uses_litellm, litellm_endpoint
+from litellm_clients import (  # noqa: E402  # sys.path bootstrap above is intentional.
+    client_uses_litellm,
+    litellm_endpoint,
+)
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
