@@ -58,6 +58,21 @@ model_list:
     )
 
 
+def test_litellm_client_gate_requires_main_gate():
+    assert VERIFY_CONFIG.litellm_client_gate_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "0",
+            "DOTFILES_PI_USE_LITELLM": "1",
+        }
+    ) == ["DOTFILES_PI_USE_LITELLM"]
+    assert not VERIFY_CONFIG.litellm_client_gate_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_PI_USE_LITELLM": "1",
+        }
+    )
+
+
 def test_backup_timer_accepts_current_and_valid_sibling_worktrees(
     tmp_path, monkeypatch
 ):

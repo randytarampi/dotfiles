@@ -237,6 +237,7 @@ def render_config(environ=None, entries=None):
             "  telemetry: false",
             "general_settings:",
             "  master_key: os.environ/LITELLM_MASTER_KEY",
+            "  database_url: os.environ/DATABASE_URL",
             "",
         ]
     )

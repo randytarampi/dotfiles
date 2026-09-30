@@ -138,6 +138,8 @@ def diagnose() -> tuple[int, str]:
             f"LITELLM: MISSING-OR-INVALID-MASTER-KEY; artifact={artifact}; loaded={loaded}",
         )
     if models[0] == 400:
+        # Retain this branch for legacy DB-less deployments. New gate-on
+        # deployments require DATABASE_URL, so this is not an expected path.
         # DB-less LiteLLM rejects authenticated model requests with HTTP 400
         # (its known no_db_connection auth-backend rejection path). Real
         # HTTPError responses surface as (400, None, "http-error") from

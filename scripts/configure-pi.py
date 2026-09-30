@@ -25,6 +25,7 @@ from discover_models import list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
+from litellm_clients import client_uses_litellm, litellm_endpoint
 from tier_resolve import get_model_details
 from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
 import tier_registry
@@ -665,7 +666,9 @@ def main():
         "models": [],
     }
     providers["openai"] = {
-        "baseUrl": BASE_URLS["openai"],
+        "baseUrl": (
+            litellm_endpoint() if client_uses_litellm("pi") else BASE_URLS["openai"]
+        ),
         "api": "openai-completions",
         "apiKey": "$OPENAI_API_KEY",
         "models": [],

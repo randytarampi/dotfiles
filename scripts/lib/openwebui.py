@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, urlunsplit
 import constants
 from local_engines import LOCAL_ENGINES, active_engines, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
+from litellm_clients import client_uses_litellm, litellm_endpoint
 
 MANAGED_PREFIX_NAMESPACE = "dw-"
 MANAGED_MARKER_KEY = "managed_by"
@@ -138,6 +139,11 @@ def ownership_catalogue():
             "connection_type": connection_type,
             "collection": "openai",
         }
+    if client_uses_litellm("openwebui"):
+        endpoint = litellm_endpoint()
+        for identity in catalogue.values():
+            identity["url"] = endpoint
+            identity["urls"] = {endpoint}
     return catalogue
 
 
@@ -211,6 +217,13 @@ def compute_desired_state():
                     "openai",
                 )
             )
+    if client_uses_litellm("openwebui"):
+        endpoint = litellm_endpoint()
+        key = os.environ.get("LITELLM_MASTER_KEY", "")
+        for collection in desired.values():
+            for connection in collection:
+                connection["url"] = endpoint
+                connection["key"] = key
     return desired
 
 

@@ -60,6 +60,7 @@ from cli_helpers import (
 )
 from generation_lock import with_generation_lock
 from provider_endpoints import PROVIDER_ENDPOINTS
+from litellm_clients import client_uses_litellm, litellm_endpoint
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -149,6 +150,15 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
     """Register a local-engine provider in any generated config branch."""
     if block:
         config["provider"][provider] = block
+
+
+def apply_litellm_client_gate(config: dict) -> None:
+    """Point OpenCode's OpenAI-compatible surface at LiteLLM for the canary."""
+    if not client_uses_litellm("opencode"):
+        return
+    provider = config.setdefault("provider", {}).setdefault("openai", {})
+    provider.setdefault("options", {})["baseURL"] = litellm_endpoint()
+    provider["options"]["apiKey"] = "{env:LITELLM_MASTER_KEY}"
 
 
 @with_generation_lock("configure-opencode")
@@ -786,6 +796,8 @@ def main():
             existing_server.update(server_config)
         else:
             config["server"] = server_config
+
+    apply_litellm_client_gate(config)
 
     # Write opencode.json
     output_path = os.path.join(config_dir_path, "opencode.json")

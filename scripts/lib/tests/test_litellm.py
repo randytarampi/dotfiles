@@ -2,11 +2,20 @@ import os
 import json
 import shlex
 import subprocess
+from io import BytesIO
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
 
 import litellm_config
+from litellm_clients import client_uses_litellm, litellm_endpoint
+
+CONFIGURE_SPEC = spec_from_file_location(
+    "configure_litellm", Path(__file__).resolve().parents[2] / "configure-litellm.py"
+)
+CONFIGURE = module_from_spec(CONFIGURE_SPEC)
+CONFIGURE_SPEC.loader.exec_module(CONFIGURE)
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +107,61 @@ def test_render_uses_environment_references_and_no_inline_keys(monkeypatch):
     assert "do-not-render" not in rendered
     assert "api_key: os.environ/OPENAI_API_KEY" in rendered
     assert "master_key: os.environ/LITELLM_MASTER_KEY" in rendered
+    assert "database_url: os.environ/DATABASE_URL" in rendered
+
+
+@pytest.mark.parametrize("client", ["openwebui", "opencode", "pi"])
+def test_client_gate_requires_main_gate_and_honours_port(monkeypatch, client):
+    monkeypatch.setenv(f"DOTFILES_{client.upper()}_USE_LITELLM", "1")
+    monkeypatch.setenv("LITELLM_PORT", "4100")
+    assert not client_uses_litellm(
+        client,
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "0",
+            f"DOTFILES_{client.upper()}_USE_LITELLM": "1",
+        },
+    )
+    assert client_uses_litellm(
+        client,
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            f"DOTFILES_{client.upper()}_USE_LITELLM": "1",
+        },
+    )
+    assert litellm_endpoint() == "http://127.0.0.1:4100/v1"
+
+
+def test_provision_key_is_idempotent_and_refuses_remote(monkeypatch, tmp_path):
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-" + "x" * 20)
+    calls = []
+
+    class Response(BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def fake_urlopen(request, timeout=10):
+        calls.append(
+            (
+                request.method,
+                request.full_url,
+                json.loads(request.data) if request.data else None,
+            )
+        )
+        if request.full_url.endswith("/key/list"):
+            return Response(b'{"keys": [{"key_alias": "key_pi_pro", "key": "sk-old"}]}')
+        return Response(b"{}")
+
+    monkeypatch.setattr(CONFIGURE.urllib.request, "urlopen", fake_urlopen)
+    assert CONFIGURE.provision_key("pi", "pro") == "updated"
+    assert calls[-1][0:2] == ("POST", "http://127.0.0.1:4000/key/update")
+    monkeypatch.setenv("LITELLM_BASE_URL", "https://remote.example")
+    with pytest.raises(ValueError):
+        CONFIGURE.provision_key("pi", "pro")
 
 
 def test_render_is_idempotent(tmp_path):
