@@ -21,7 +21,9 @@ import logger
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
-from meridian_path import resolve_meridian_plugin_path
+from meridian_path import (
+    resolve_meridian_plugin_path,
+)  # noqa: E402  # loader bootstraps scripts/lib.
 
 
 def main():

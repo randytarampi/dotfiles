@@ -61,8 +61,9 @@ def test_contention_returns_nonzero(tmp_path, monkeypatch):
 
 
 def test_subprocess_contention_exits_nonzero(tmp_path, monkeypatch):
-    if fcntl is None:
-        pytest.skip("fcntl unavailable; Windows locking is covered separately")
+    posix_lock = fcntl
+    if posix_lock is None:
+        pytest.skip("POSIX lock backend unavailable")
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     lock_path = tmp_path / ".cache/dotfiles/generation.lock"
     lock_path.parent.mkdir(parents=True)
@@ -78,7 +79,7 @@ def main():
 raise SystemExit(main())
 """
     with lock_path.open("a+") as held:
-        fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        posix_lock.flock(held.fileno(), posix_lock.LOCK_EX | posix_lock.LOCK_NB)
         result = subprocess.run(
             [sys.executable, "-c", code],
             cwd=Path.cwd(),
