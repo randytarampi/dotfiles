@@ -1,8 +1,10 @@
 import argparse
 import importlib.util
+import json
 import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -93,7 +95,7 @@ class TierRegistryTests(unittest.TestCase):
                 expected_model = (
                     "muse-spark-1.2-contributor-free"
                     if tier == "omo-slim-opencode-zen-free"
-                    else "gpt-5.6-luna"
+                    else "gpt-6-luna"
                 )
                 self.assertEqual(config["model"], expected_model)
 
@@ -118,11 +120,47 @@ class TierRegistryTests(unittest.TestCase):
         data = registry()
         self.assertEqual(
             data["presets"]["pro-plus"]["observer"]["model"],
-            "openai/gpt-5.6-luna",
+            "openai/gpt-6-luna",
         )
         roles = tier_registry.materialize_role_models(data, "pro-plus", {})
         self.assertIn("observer", roles)
         self.assertIn("orchestrator", roles)
+
+    def test_wave4_openai_primary_generation_mapping(self):
+        data = registry()
+        for tier in ("plus", "omo-slim-openai", "omo-slim-thirty-dollars"):
+            self.assertEqual(
+                data["presets"][tier]["orchestrator"]["model"], "openai/gpt-5.6-terra"
+            )
+            self.assertEqual(
+                data["presets"][tier]["oracle"]["model"], "openai/gpt-6.1-sol"
+            )
+            self.assertEqual(
+                data["presets"][tier]["librarian"]["model"], "openai/gpt-6-luna"
+            )
+        self.assertEqual(
+            data["council"]["presets"]["plus"]["alpha"]["model"], "openai/gpt-6.1-sol"
+        )
+
+    def test_wave4_anthropic_and_junie_group_mapping(self):
+        data = registry()
+        self.assertEqual(
+            data["presets"]["anthropic"]["council"]["model"],
+            "anthropic/claude-opus-5-5",
+        )
+        self.assertEqual(
+            data["council"]["presets"]["anthropic"]["gamma"]["model"],
+            "anthropic/claude-opus-5-5",
+        )
+        groups = json.loads(
+            (
+                Path(__file__).resolve().parents[3] / "configs/junie/model-groups.json"
+            ).read_text()
+        )["groups"]
+        self.assertEqual(groups["meridian-sonnet"]["primaryModel"], "claude-sonnet-5-5")
+        self.assertEqual(groups["openai-gpt-6.1-sol"]["primaryModel"], "gpt-6.1-sol")
+        self.assertEqual(groups["openai-gpt-6-luna"]["primaryModel"], "gpt-6-luna")
+        self.assertEqual(groups["meridian-opus-5-5"]["primaryModel"], "claude-opus-5-5")
 
     def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
         data = registry()

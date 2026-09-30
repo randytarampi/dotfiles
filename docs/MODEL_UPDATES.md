@@ -145,3 +145,8 @@ three locations must contain the same preset name. Keep fallback arrays
 provider-deduplicated, avoid the role primary in its fallback, and leave the
 council fallback empty. The repeatable workflow is in
 [`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md).
+
+
+## 2026-09-30 — Wave 4 model registry update
+
+Added `claude-sonnet-5-5`, `claude-opus-5-5`, `gpt-6-luna`, and `gpt-6.1-sol` to the provider registries and tier candidates. Evidence: models.dev + `opencode models --refresh` verified; direct provider probes unavailable (keys absent). Older generations remain in fallback chains.

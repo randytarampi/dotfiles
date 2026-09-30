@@ -72,7 +72,7 @@ def build_profiles_config(ollama_model, local_model=""):
     )
     return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
-model = "claude-sonnet-5"
+model = "claude-sonnet-5-5"
 model_provider = "meridian"
 model_reasoning_effort = "high"
 
@@ -207,7 +207,7 @@ def build_summary_lines(config, config_path, ollama_cloud_model, note, local_mod
             f"  • ollama-cloud model: {ollama_cloud_model} ({note})",
             "",
             "Switch providers at runtime:",
-            "  codex -c model_provider=meridian -m claude-sonnet-5",
+            "  codex -c model_provider=meridian -m claude-sonnet-5-5",
             f"  codex -c model_provider=ollama-cloud -m {ollama_cloud_model}",
             f"  codex -c model_provider={provider} -m {model}",
             "",

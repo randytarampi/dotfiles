@@ -120,8 +120,8 @@ def compute_model_list(environ=None):
     if is_meridian_configured() and environ.get("MERIDIAN_API_KEY", "").strip():
         entries.append(
             _entry(
-                "meridian/claude-sonnet-5",
-                "anthropic/claude-sonnet-5",
+                "meridian/claude-sonnet-5-5",
+                "anthropic/claude-sonnet-5-5",
                 api_base=get_meridian_base_url(),
                 key_env="MERIDIAN_API_KEY",
             )
@@ -130,12 +130,12 @@ def compute_model_list(environ=None):
     clouds = {
         "openai": (
             "OPENAI_API_KEY",
-            "openai/gpt-5.6-luna",
+            "openai/gpt-6-luna",
             "https://api.openai.com/v1",
         ),
         "anthropic": (
             "ANTHROPIC_API_KEY",
-            "anthropic/claude-sonnet-5",
+            "anthropic/claude-sonnet-5-5",
             "https://api.anthropic.com",
         ),
         "google": (
@@ -150,7 +150,7 @@ def compute_model_list(environ=None):
         ),
         "opencode": (
             PROVIDER_ENDPOINTS["opencode"]["apiKeyEnv"],
-            "openai/gpt-5.6-luna",
+            "openai/gpt-6-luna",
             PROVIDER_ENDPOINTS["opencode"]["baseUrl"],
         ),
         "ollama-cloud": (

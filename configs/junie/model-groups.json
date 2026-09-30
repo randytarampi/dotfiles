@@ -68,7 +68,7 @@
     },
     "meridian-sonnet": {
       "provider": "meridian",
-      "primaryModel": "claude-sonnet-5"
+      "primaryModel": "claude-sonnet-5-5"
     },
     "meridian-haiku": {
       "provider": "meridian",
@@ -97,6 +97,18 @@
     "copilot": {
       "provider": "github-copilot",
       "primaryModel": "copilot-model-id"
+    },
+    "meridian-opus-5-5": {
+      "provider": "meridian",
+      "primaryModel": "claude-opus-5-5"
+    },
+    "openai-gpt-6-luna": {
+      "provider": "openai",
+      "primaryModel": "gpt-6-luna"
+    },
+    "openai-gpt-6.1-sol": {
+      "provider": "openai",
+      "primaryModel": "gpt-6.1-sol"
     }
   }
 }
