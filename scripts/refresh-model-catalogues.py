@@ -139,7 +139,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         return refresh(args.output, dry_run=args.dry_run)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"refresh-model-catalogues: {exc}", file=sys.stderr)
         return 1
 
