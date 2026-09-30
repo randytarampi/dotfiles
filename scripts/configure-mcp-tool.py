@@ -10,6 +10,7 @@ import argparse
 import os
 import re
 import fnmatch
+import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
@@ -458,6 +459,78 @@ def merge_configs_to_file(fmt, mcp_path, output):
         logger.info(f"Overwrote file with configuration: {mcp_path}")
 
 
+def _atomic_write_json(path, data):
+    """Write JSON beside the destination and replace it atomically."""
+    directory = os.path.dirname(path) or "."
+    fd, temporary = tempfile.mkstemp(
+        prefix=".mcp-adapter-", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=4)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _combine_pi_mcp_documents(old_data, generated_data, adapter_data):
+    """Combine old, generated, and adapter documents in explicit precedence order."""
+    result = {}
+    for document in (old_data, generated_data, adapter_data):
+        if document:
+            result.update(document)
+    servers = {}
+    for document in (old_data, generated_data, adapter_data):
+        if not document:
+            continue
+        candidate = document.get("mcpServers", {})
+        if not isinstance(candidate, dict):
+            raise ValueError("Pi MCP files must contain object-valued mcpServers")
+        servers.update(candidate)
+    result["mcpServers"] = servers
+    return result
+
+
+def migrate_pi_mcp_config(old_path, adapter_path, generated_data=None, dry_run=False):
+    """Migrate Pi's old MCP file, retaining adapter-owned duplicate entries."""
+    old = os.path.abspath(os.path.expanduser(old_path))
+    adapter = os.path.abspath(os.path.expanduser(adapter_path))
+    if not os.path.isfile(old):
+        return False
+    with open(old, "r", encoding="utf-8") as handle:
+        old_data = json.load(handle)
+    adapter_data = {}
+    if os.path.isfile(adapter):
+        with open(adapter, "r", encoding="utf-8") as handle:
+            adapter_data = json.load(handle)
+    merged = _combine_pi_mcp_documents(old_data, generated_data, adapter_data)
+    if not dry_run:
+        os.makedirs(os.path.dirname(adapter), exist_ok=True)
+        _atomic_write_json(adapter, merged)
+        os.remove(old)
+    logger.info(f"Migrated Pi MCP config {old} → {adapter}")
+    return True
+
+
+def merge_pi_adapter_config(adapter_path, output):
+    """Write one atomic Pi adapter document with adapter precedence."""
+    generated = json.loads(output)
+    existing = {}
+    if os.path.isfile(adapter_path):
+        with open(adapter_path, "r", encoding="utf-8") as handle:
+            existing = json.load(handle)
+    merged = _combine_pi_mcp_documents({}, generated, existing)
+    _atomic_write_json(adapter_path, merged)
+    logger.info(f"Merged Pi MCP config into: {adapter_path}")
+
+
 def cmd_get_tool_config(args):
     cfg = get_tool_config(args.registry_file, args.tool)
     print(json.dumps(cfg))
@@ -545,6 +618,14 @@ def orchestrate_mcp_config(args):
 
     tool_config = get_tool_config(registry_file, args.tool)
 
+    if (
+        args.tool == "pi"
+        and args.mode == "global"
+        and os.environ.get("DOTFILES_RUN_MCP_SETUP", "0") != "1"
+    ):
+        logger.info("DOTFILES_RUN_MCP_SETUP is disabled — skipping Pi MCP migration")
+        return
+
     home = os.path.expanduser("~")
     mcp_path = tool_config.get("mcp_path", "").replace("~", home)
     project_mcp_path = tool_config.get(
@@ -610,6 +691,18 @@ def orchestrate_mcp_config(args):
         from file_utils import backup_file
 
         backup_file(resolved_mcp_path, enabled=True)
+
+    if args.tool == "pi":
+        old_path = os.path.join(os.path.dirname(resolved_mcp_path), "mcp.json")
+        generated_data = json.loads(output_content)
+        if args.mode == "global" and os.path.isfile(old_path):
+            migrate_pi_mcp_config(
+                old_path, resolved_mcp_path, generated_data=generated_data
+            )
+            return
+        if args.mode == "global":
+            merge_pi_adapter_config(resolved_mcp_path, output_content)
+            return
 
     merge_configs_to_file(format_type, resolved_mcp_path, output_content)
 
