@@ -9,6 +9,7 @@ Exit codes:
   1 — some files lack hash trigger references
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -46,6 +47,47 @@ NON_TRACKED_SCRIPTS = {
 HASH_PATTERN = re.compile(
     r'^#\s+([\w/.-]+):\s*\{\{\s*include\s+"([\w/.-]+)"\s*\|\s*sha256sum\s*\}\}'
 )
+GATE_PATTERN = re.compile(r"\$\{(DOTFILES_RUN_[A-Z0-9_]+)")
+ENV_FINGERPRINT_PATTERN = re.compile(r'env\s+"(DOTFILES_RUN_[A-Z0-9_]+)"')
+PYTHON_GATE_PATTERN = re.compile(
+    r"(?:os\.environ(?:\.get|\.setdefault)|os\.getenv|\b_gate)\(\s*['\"](DOTFILES_RUN_[A-Z0-9_]+)"
+)
+SCRIPT_REFERENCE_PATTERN = re.compile(r"scripts/[\w./-]+\.(?:sh|py)")
+
+
+def _child_script_gates(path: Path) -> set[str]:
+    """Extract gate reads from a delegated shell or Python child script."""
+    if not path.is_file():
+        return set()
+    content = path.read_text(encoding="utf-8")
+    return set(GATE_PATTERN.findall(content)) | set(
+        PYTHON_GATE_PATTERN.findall(content)
+    )
+
+
+def _referenced_children(template: Path) -> set[str]:
+    """Resolve direct template references and CLI-contract child scripts."""
+    contract_path = REPO_ROOT / "scripts/lib/cli-contract.json"
+    try:
+        entries = json.loads(contract_path.read_text(encoding="utf-8"))["scripts"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        entries = []
+    children = {entry["path"]: entry.get("child_scripts", []) for entry in entries}
+    content = template.read_text(encoding="utf-8")
+    direct = set()
+    for line in content.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        direct.update(SCRIPT_REFERENCE_PATTERN.findall(line))
+    resolved = set(direct)
+    pending = list(direct)
+    while pending:
+        current = pending.pop()
+        for child in children.get(current, []):
+            if child not in resolved:
+                resolved.add(child)
+                pending.append(child)
+    return resolved
 
 
 def find_hash_triggers():
@@ -66,6 +108,21 @@ def find_hash_triggers():
             script_triggers[script.name] = triggers
 
     return covered, script_triggers
+
+
+def find_missing_gate_fingerprints():
+    """Find direct and delegated env gates lacking hash fingerprints."""
+    missing = {}
+    for script in sorted(CHEZMOI_SCRIPTS.glob("run_onchange_*.sh.tmpl")):
+        content = script.read_text(encoding="utf-8")
+        gates = set(GATE_PATTERN.findall(content))
+        fingerprints = set(ENV_FINGERPRINT_PATTERN.findall(content))
+        for child in _referenced_children(script):
+            gates.update(_child_script_gates(REPO_ROOT / child))
+        absent = sorted(gates - fingerprints)
+        if absent:
+            missing[script.name] = absent
+    return missing
 
 
 def find_trackable_files():
@@ -105,6 +162,7 @@ def find_trackable_files():
 def main():
     covered, script_triggers = find_hash_triggers()
     trackable = find_trackable_files()
+    missing_gate_fingerprints = find_missing_gate_fingerprints()
 
     # Files that are trackable but not covered by any hash trigger
     uncovered = trackable - covered
@@ -116,14 +174,17 @@ def main():
     for script, triggers in sorted(script_triggers.items()):
         print(f"  {script}: {len(triggers)} trigger(s)")
 
-    if uncovered:
+    if uncovered or missing_gate_fingerprints:
         print(
             f"\n\u26a0\ufe0f  Files lacking hash trigger coverage ({len(uncovered)}):"
         )
         for f in sorted(uncovered):
             print(f"  \u2717 {f}")
-        print("\nThese files are inputs to configure scripts but are not referenced")
-        print("by any run_onchange_* hash trigger. Add them to the relevant script.")
+        if missing_gate_fingerprints:
+            print("\nTemplates with ungated env fingerprints:")
+            for script, gates in missing_gate_fingerprints.items():
+                print(f"  \u2717 {script}: {', '.join(gates)}")
+        print("\nThese inputs must be referenced by run_onchange_* hash triggers.")
         sys.exit(1)
     else:
         print(

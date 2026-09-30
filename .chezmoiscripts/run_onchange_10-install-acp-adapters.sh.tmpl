@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env delegated gate fingerprint: {{ env "DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP" | sha256sum }}
+# env delegated gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
 
 # ─── run_onchange_10-install-acp-adapters.sh.tmpl ──────────────────────────
 # Installs ACP (Agent Client Protocol) adapters for OpenCode:

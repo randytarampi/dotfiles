@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_OMLX_SETUP" | sha256sum }}
 
 # .chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl: {{ include ".chezmoiscripts/run_onchange_29-configure-omlx.sh.tmpl" | sha256sum }}
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
 
 # configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
