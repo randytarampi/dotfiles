@@ -35,11 +35,41 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(MODULE, "_loaded", lambda: True)
-    monkeypatch.setattr(MODULE, "_request", lambda url, key="": (200, {"data": []}, ""))
+    calls = []
+
+    def request(url, key=""):
+        calls.append((url, key))
+        return 200, {"data": []}, ""
+
+    monkeypatch.setattr(MODULE, "_request", request)
     code, summary = MODULE.diagnose()
     assert code == 0
     assert "HEALTHY" in summary
     assert "dtf-not-a-real-key" not in summary
+    assert [url.rsplit("/", 1)[-1] for url, _ in calls] == [
+        "liveliness",
+        "readiness",
+        "models",
+    ]
+    assert calls[0][1] == ""
+    assert all(key == "dtf-not-a-real-key" for _, key in calls[1:])
+
+
+def test_master_key_flag_precedes_environment_and_service_env(monkeypatch, tmp_path):
+    setup_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "environment-key")
+    calls = []
+    monkeypatch.setattr(
+        MODULE,
+        "_request",
+        lambda url, key="": calls.append((url, key)) or (200, {}, ""),
+    )
+
+    code, summary = MODULE.diagnose("flag-key")
+
+    assert code == 0 and "HEALTHY" in summary
+    assert all(key in {"", "flag-key"} for _, key in calls)
 
 
 def test_auth_failure_is_classified(monkeypatch, tmp_path):
@@ -56,6 +86,20 @@ def test_auth_failure_is_classified(monkeypatch, tmp_path):
         assert "MISSING-OR-INVALID-MASTER-KEY" in summary
 
 
+def test_models_400_is_classified_with_healthy_readiness(monkeypatch, tmp_path):
+    setup_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+
+    def request(url, key=""):
+        if url.endswith("/v1/models"):
+            return 400, None, "http-error"
+        return 200, {}, ""
+
+    monkeypatch.setattr(MODULE, "_request", request)
+    code, summary = MODULE.diagnose()
+    assert code == 1 and "MISSING-OR-INVALID-MASTER-KEY" in summary
+
+
 def test_no_key_does_not_send_models_request(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch, with_key=False)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
@@ -68,7 +112,7 @@ def test_no_key_does_not_send_models_request(monkeypatch, tmp_path):
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "MISSING-OR-INVALID-MASTER-KEY" in summary
-    assert not any(url.endswith("/v1/models") for url, _ in calls)
+    assert calls == []
 
 
 def test_db_less_auth_backend_rejection(monkeypatch, tmp_path):

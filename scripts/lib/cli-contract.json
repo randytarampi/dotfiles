@@ -95,7 +95,7 @@
       "capabilities": ["public", "inspect"],
       "enforcement": "strict",
       "failure_policy": "report",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": ["--help", "--dry-run", "--master-key"],
       "positional_operand": null,
       "child_scripts": []
     },
