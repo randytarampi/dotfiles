@@ -8,6 +8,7 @@ source "${LIB_DIR}/env.sh"
 
 # Hash triggers (re-run when cloud model registry changes):
 # configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
+# scripts/lib/ollama_cloud_models.py: {{ include "scripts/lib/ollama_cloud_models.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_OPENCODE_TOOLS_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -56,7 +57,7 @@ CONFIG_FILE="{{ .chezmoi.sourceDir }}/configs/opencode/ollama-cloud-models.json"
 if [ -f "$CONFIG_FILE" ]; then
   while IFS= read -r model; do
     ollama pull "${model}:cloud" 2>/dev/null || warn "Could not pull '${model}:cloud' — you may need 'ollama login' first"
-  done < <(python3 -c "import json; data=json.load(open('$CONFIG_FILE')); [print(m) for m in data['models']]" 2>/dev/null)
+  done < <(PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -m ollama_cloud_models --registry "$CONFIG_FILE" --pull-list 2>/dev/null)
 else
   warn "ollama-cloud-models.json not found at $CONFIG_FILE — skipping cloud model pull"
 fi
@@ -68,21 +69,7 @@ ok "Ollama Cloud model metadata pulled"
 # ---------------------------------------------------------------------------
 info "Cleaning up stale Ollama Cloud model stubs..."
 if command -v ollama &>/dev/null; then
-  expected_cloud=$(python3 -c "
-import json
-try:
-    data = json.load(open('$CONFIG_FILE'))
-    for m in data.get('models', {}):
-        print(f'{m}-cloud')
-        print(f'{m}:cloud')
-except Exception:
-    pass
-" 2>/dev/null | sort -u)
-  ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' | grep -E '(:cloud|-cloud)$' | while read -r stale; do
-    if ! echo "$expected_cloud" | grep -qxF "$stale"; then
-      ollama rm "$stale" 2>/dev/null && info "Removed stale cloud stub: $stale" || warn "Could not remove '$stale'"
-    fi
-  done
+  PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -m ollama_cloud_models --registry "$CONFIG_FILE" --cleanup || warn "Could not remove stale cloud stubs"
 fi
 ok "Stale cloud model stub cleanup complete"
 

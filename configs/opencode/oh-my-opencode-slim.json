@@ -51,7 +51,7 @@
         "mcps": []
       },
       "fixer": {
-        "model": "ollama-cloud/deepseek-v4-flash",
+        "model": "ollama-cloud/deepseek-v4-pro",
         "variant": "high",
         "skills": [],
         "mcps": [

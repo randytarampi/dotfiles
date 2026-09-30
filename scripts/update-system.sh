@@ -57,11 +57,25 @@ pull_ollama_models() {
   local failed=0 model
   while IFS= read -r model; do
     [[ -z "$model" ]] && continue
+    if ! ollama pull "${model}:cloud"; then
+      warn "ollama pull failed: ${model}:cloud"
+      failed=1
+    fi
+  done < <(
+    PYTHONPATH="$SCRIPT_DIR/lib" python3 -m ollama_cloud_models \
+      --registry "$SCRIPT_DIR/../configs/opencode/ollama-cloud-models.json" \
+      --pull-list
+  )
+  PYTHONPATH="$SCRIPT_DIR/lib" python3 -m ollama_cloud_models \
+    --registry "$SCRIPT_DIR/../configs/opencode/ollama-cloud-models.json" \
+    --cleanup || failed=1
+  while IFS= read -r model; do
+    [[ -z "$model" ]] && continue
     if ! ollama pull "$model"; then
       warn "ollama pull failed: $model"
       failed=1
     fi
-  done < <(ollama list 2>/dev/null | awk 'NR>1 && !/reviewer/ {print $1}')
+  done < <(ollama list 2>/dev/null | awk 'NR>1 && $1 !~ /(:cloud|-cloud)$/ {print $1}')
   return "$failed"
 }
 

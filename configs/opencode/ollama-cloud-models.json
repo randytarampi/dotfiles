@@ -18,14 +18,8 @@
     "glm-5.3-flash": {
       "name": "glm-5.3-flash"
     },
-    "glm-5.1": {
-      "name": "glm-5.1"
-    },
     "deepseek-v4-pro": {
       "name": "deepseek-v4-pro"
-    },
-    "deepseek-v4-flash": {
-      "name": "deepseek-v4-flash"
     },
     "deepseek-v4.1-flash": {
       "name": "deepseek-v4.1-flash"
@@ -50,9 +44,6 @@
     },
     "minimax-m2.7": {
       "name": "minimax-m2.7"
-    },
-    "qwen3.5:397b": {
-      "name": "qwen3.5:397b"
     },
     "gpt-oss:120b": {
       "name": "gpt-oss:120b"
