@@ -16,6 +16,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger
+from meridian_path import resolve_meridian_plugin_path
 from env import load_env
 from idea import resolve_idea_mcp_server
 from cli_helpers import add_common_args
@@ -134,29 +135,9 @@ def main():
 
     # 4. Meridian plugin path
     logger.info("Resolving Meridian plugin path...")
-    meridian_plugin_path = ""
-    npm_bin = shutil.which("npm")
-    if npm_bin:
-        try:
-            res = subprocess.run(
-                [npm_bin, "root", "-g"], capture_output=True, text=True, timeout=5
-            )
-            npm_root = res.stdout.strip()
-            if npm_root:
-                candidate = os.path.join(
-                    npm_root, "@rynfar/meridian/plugin/meridian.ts"
-                )
-                if os.path.isfile(candidate):
-                    meridian_plugin_path = candidate
-                    logger.info(f"Meridian plugin found at {meridian_plugin_path}")
-                else:
-                    logger.warning(
-                        "Meridian plugin not found at expected npm global path"
-                    )
-        except Exception:
-            pass
-    else:
-        logger.warning("npm not found — cannot resolve Meridian plugin path")
+    meridian_plugin_path = resolve_meridian_plugin_path() or ""
+    if not meridian_plugin_path:
+        logger.warning("Meridian plugin not found in configured Node installations")
 
     # 5. Additional MCP Template Vars
     logger.info("Resolving additional MCP environment variables...")
