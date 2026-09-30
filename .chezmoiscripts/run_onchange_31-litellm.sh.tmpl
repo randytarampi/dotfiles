@@ -8,10 +8,13 @@ source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
+# scripts/lib/litellm_clients.py: {{ include "scripts/lib/litellm_clients.py" | sha256sum }}
+# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
+# database fingerprint: {{ env "DATABASE_URL" | sha256sum | trunc 12 }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
+[[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py"
 if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
   if [[ "{{ .chezmoi.os }}" == "linux" ]]; then

@@ -194,6 +194,22 @@ def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
     return routing_config_text_is_safe(config_text, port=port)
 
 
+def litellm_client_gate_errors(environ=None):
+    """Return client gates that are enabled without the main gate."""
+    environ = environ or os.environ
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1":
+        return []
+    return [
+        gate
+        for gate in (
+            "DOTFILES_OPENWEBUI_USE_LITELLM",
+            "DOTFILES_OPENCODE_USE_LITELLM",
+            "DOTFILES_PI_USE_LITELLM",
+        )
+        if environ.get(gate, "0") == "1"
+    ]
+
+
 # Gate → list of (description, file path) checks
 CHECKS = [
     (
@@ -1206,6 +1222,17 @@ def main():
         print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
 
     litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+    for client_gate, label in (
+        ("DOTFILES_OPENWEBUI_USE_LITELLM", "Open WebUI"),
+        ("DOTFILES_OPENCODE_USE_LITELLM", "OpenCode"),
+        ("DOTFILES_PI_USE_LITELLM", "Pi"),
+    ):
+        if client_gate in litellm_client_gate_errors() and not litellm_gate:
+            print(
+                f"  \u2717 {label} LiteLLM client gate requires "
+                "DOTFILES_RUN_LITELLM_SETUP=1; direct routing remains active"
+            )
+            exit_code = 1
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
     litellm_unit = HOME / ".config/systemd/user/litellm.service"
@@ -1279,6 +1306,9 @@ def main():
                     "  \u2717 LiteLLM service env: provider allowlist does not match config refs"
                 )
                 exit_code = 1
+            if "DATABASE_URL" not in litellm_env_values:
+                print("  \u2717 LiteLLM service env: DATABASE_URL is required")
+                exit_code = 1
             master_key = litellm_env_values.get("LITELLM_MASTER_KEY", "")
             if not master_key.startswith("sk-") or len(master_key) < 16:
                 print("  \u2717 LiteLLM service env: invalid master-key shape")
@@ -1303,9 +1333,32 @@ def main():
             if (
                 "telemetry: false" not in config_text
                 or "master_key: os.environ/LITELLM_MASTER_KEY" not in config_text
+                or "database_url: os.environ/DATABASE_URL" not in config_text
             ):
                 print("  \u2717 LiteLLM config: telemetry/master-key policy mismatch")
                 exit_code = 1
+        if sys.platform == "darwin":
+            brew = shutil.which("brew")
+            if brew:
+                try:
+                    postgres = subprocess.run(
+                        [brew, "services", "list"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    started = any(
+                        "postgresql" in line and "started" in line
+                        for line in postgres.stdout.splitlines()
+                    )
+                    symbol = "\u2713" if started else "\u26a0"
+                    print(
+                        f"  {symbol} PostgreSQL brew service: {'started' if started else 'not started'} (diagnostic only)"
+                    )
+                except OSError:
+                    print(
+                        "  \u26a0 PostgreSQL brew service: status unavailable (diagnostic only)"
+                    )
         if sys.platform == "darwin" and litellm_plist.is_file():
             plist_mode = litellm_plist.stat().st_mode & 0o777
             plist_text = litellm_plist.read_text(encoding="utf-8")
