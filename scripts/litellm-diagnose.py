@@ -93,8 +93,9 @@ def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
     if key:
         request.add_header("Authorization", f"Bearer {key}")
     try:
-        # nosec B310 - URLs are loopback-gated by diagnose() before reaching _request
-        with urllib.request.urlopen(request, timeout=3) as response:
+        with urllib.request.urlopen(  # nosec B310 - URLs are loopback-gated by diagnose() before reaching _request
+            request, timeout=3
+        ) as response:
             payload = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(payload), ""

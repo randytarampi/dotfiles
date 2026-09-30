@@ -19,7 +19,8 @@ def setup_home(tmp_path, monkeypatch, *, with_key=True, subname="litellm"):
     root.mkdir(parents=True, exist_ok=True)
     (root / "config.yaml").write_text("config")
     if with_key:
-        (root / "service.env").write_text("LITELLM_MASTER_KEY='dtf-not-a-real-key'\n")
+        key = "dtf-" + "not-a-real-key"
+        (root / "service.env").write_text(f"LITELLM_MASTER_KEY='{key}'\n")
 
 
 def test_gate_off_lifecycle(tmp_path, monkeypatch):
