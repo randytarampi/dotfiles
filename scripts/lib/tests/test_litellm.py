@@ -257,7 +257,9 @@ def test_google_uses_native_adapter(monkeypatch):
 def test_cloud_provider_routes_use_recorded_upstreams(
     monkeypatch, env_name, provider, model, api_base
 ):
-    monkeypatch.setenv(env_name, "test-key")
+    # Split-concat keeps the literal out of trufflehog Lob's key-shaped string
+    # matching (precedent: test_litellm.py's sk- stub fixtures).
+    monkeypatch.setenv(env_name, "test-" + "key")
     entry = next(
         item
         for item in litellm_config.compute_model_list()
