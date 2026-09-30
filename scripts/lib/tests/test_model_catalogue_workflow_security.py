@@ -18,6 +18,8 @@ def test_refresh_workflow_is_weekly_and_has_manual_dispatch():
     assert 'GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}' in workflow
     assert "gh api user" not in workflow
     assert "TRUSTED_SHA" in workflow
+    assert workflow.count("TRUSTED_SHA: ${{ inputs.trusted_ref || github.sha }}") == 2
+    assert workflow.count('test -n "${TRUSTED_REF}"') == 2
     assert (
         "required: true"
         in workflow.split("workflow_dispatch:", 1)[1].split("permissions:", 1)[0]
@@ -42,7 +44,8 @@ def test_publish_permissions_and_environment_are_isolated():
 
 def test_publish_branch_and_patch_path_are_strictly_allowlisted():
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "^model-catalogue-bot/[0-9]+$" in workflow
+    assert "^model-catalogue-bot/[a-z0-9-]+$" in workflow
+    assert 'publish_branch="model-catalogue-bot/inventory"' in workflow
     assert "artifacts/model-catalogues/opencode-zen-free.json" in workflow
     assert "git ls-files --stage" in workflow
     assert "160000" in workflow

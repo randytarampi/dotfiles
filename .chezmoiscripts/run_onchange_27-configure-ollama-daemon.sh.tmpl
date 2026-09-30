@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_OLLAMA_DAEMON_SETUP" | sha256sum }}
 
 # Hash trigger: re-run when env template changes
 # dot_dotfiles/shell/.env.example: {{ include "dot_dotfiles/shell/.env.example" | sha256sum }}

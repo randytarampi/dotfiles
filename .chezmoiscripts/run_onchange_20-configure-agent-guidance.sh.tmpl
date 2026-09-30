@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_AGENT_GUIDANCE_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"

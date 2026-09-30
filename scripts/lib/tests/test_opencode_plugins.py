@@ -40,6 +40,7 @@ def test_missing_extra_and_mismatch_failures(field):
     checker = load_checker()
     manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
+    # trufflehog:ignore - synthetic package spec used only to test mismatch handling.
     actual = expected[:-1] + ["unexpected@9.9.9"]
     kwargs = {"install_plugins": expected, "config_plugins": expected}
     kwargs[f"{field}_plugins"] = actual
@@ -115,6 +116,17 @@ def test_consumer_order_mutation_fails(tmp_path):
         )
         == 1
     )
+
+
+def test_commented_manifest_import_fails_ast_consumer_check(tmp_path):
+    checker = load_checker()
+    mutated = tmp_path / "configure-opencode.py"
+    mutated.write_text(
+        "# from opencode_plugins import active_plugin_specs\n"
+        "configured_plugins = active_plugin_specs()\n",
+        encoding="utf-8",
+    )
+    assert not checker._config_consumes_manifest(mutated)
 
 
 def test_presence_is_opt_in(tmp_path):

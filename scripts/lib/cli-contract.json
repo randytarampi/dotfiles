@@ -427,6 +427,22 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/refresh-model-catalogues.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "failure_policy": "fail_fast",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--output"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-opencode.py",
       "capabilities": [
         "public",

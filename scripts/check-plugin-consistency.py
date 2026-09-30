@@ -13,7 +13,10 @@ LIB_DIR = Path(__file__).resolve().parent / "lib"
 if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
-from opencode_plugins import active_plugin_specs, is_pinned_spec, load_plugin_manifest
+from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
+    active_plugin_specs,
+    load_plugin_manifest,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_SCRIPT = (
@@ -110,10 +113,26 @@ def parse_config_plugins(path):
 
 
 def _config_consumes_manifest(path=CONFIG_SCRIPT):
-    text = Path(path).read_text(encoding="utf-8")
-    return (
-        "from opencode_plugins import active_plugin_specs" in text
-        and "configured_plugins" in text
+    tree = ast.parse(Path(path).read_text(encoding="utf-8"), filename=str(path))
+    imported_names = set()
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom) or node.module != "opencode_plugins":
+            continue
+        for alias in node.names:
+            if alias.name == "active_plugin_specs":
+                imported_names.add(alias.asname or alias.name)
+    if not imported_names:
+        return False
+    return any(
+        isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "configured_plugins"
+            for target in node.targets
+        )
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id in imported_names
+        for node in ast.walk(tree)
     )
 
 

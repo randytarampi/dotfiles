@@ -16,20 +16,25 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.catalogue_status.outputs.status }}
     permissions:
       contents: read
     env:
-      TRUSTED_SHA: ${{ inputs.trusted_ref }}
+      TRUSTED_REF: ${{ inputs.trusted_ref }}
+      TRUSTED_SHA: ${{ inputs.trusted_ref || github.sha }}
     steps:
       - name: Validate the trusted manual dispatch boundary
         env:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+            test -n "${TRUSTED_REF}"
           fi
           [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
@@ -41,9 +46,26 @@ jobs:
           fetch-depth: 1
 
       - name: Refresh the review-only Zen inventory
+        id: refresh_catalogue
+        continue-on-error: true
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: python3 scripts/refresh-model-catalogues.py
+
+      - name: Classify catalogue refresh result
+        id: catalogue_status
+        if: always()
+        env:
+          REFRESH_OUTCOME: ${{ steps.refresh_catalogue.outcome }}
+        run: |
+          set -euo pipefail
+          status="$(jq -r '.status // empty' artifacts/model-catalogues/opencode-zen-free.json)"
+          [[ -n "${status}" ]]
+          printf 'status=%s\n' "${status}" >> "${GITHUB_OUTPUT}"
+          if [[ "${status}" == "unavailable" ]]; then
+            exit 0
+          fi
+          [[ "${REFRESH_OUTCOME}" == "success" ]]
 
       - name: Upload the catalogue artefact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -54,25 +76,28 @@ jobs:
 
   publish:
     needs: refresh
-    if: needs.refresh.result == 'success'
+    if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
     runs-on: ubuntu-latest
     environment: model-catalogue-publish
     permissions:
       contents: read
       pull-requests: read
     env:
-      TRUSTED_SHA: ${{ inputs.trusted_ref }}
+      TRUSTED_REF: ${{ inputs.trusted_ref }}
+      TRUSTED_SHA: ${{ inputs.trusted_ref || github.sha }}
     steps:
       - name: Validate publication inputs
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TRUSTED_REF: ${{ inputs.trusted_ref }}
         run: |
           set -euo pipefail
-          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
-          [[ "${publish_branch}" =~ ^model-catalogue-bot/[0-9]+$ ]]
+          publish_branch="model-catalogue-bot/inventory"
+          [[ "${publish_branch}" =~ ^model-catalogue-bot/[a-z0-9-]+$ ]]
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+            test -n "${TRUSTED_REF}"
           fi
           [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
@@ -92,7 +117,7 @@ jobs:
       - name: Record the current bot branch tip
         run: |
           set -euo pipefail
-          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
+          publish_branch="model-catalogue-bot/inventory"
           remote_tip="$(git ls-remote --heads origin "refs/heads/${publish_branch}" | awk 'NR == 1 { print $1 }')"
           if [[ -n "${remote_tip}" ]]; then
             [[ "${remote_tip}" =~ ^[0-9a-f]{40}$ ]]
@@ -142,8 +167,10 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          publish_branch="model-catalogue-bot/${GITHUB_RUN_ID}"
-          [[ "${publish_branch}" =~ ^model-catalogue-bot/[0-9]+$ ]]
+          # One stable branch and one open draft PR make semantically equivalent
+          # catalogue updates idempotent across sequential or concurrent runs.
+          publish_branch="model-catalogue-bot/inventory"
+          [[ "${publish_branch}" =~ ^model-catalogue-bot/[a-z0-9-]+$ ]]
           git config user.name "model-catalogue-bot[bot]"
           git config user.email "model-catalogue-bot[bot]@users.noreply.github.com"
           git commit -m "chore: refresh model catalogue artefact"

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_DDNS_SETUP" | sha256sum }}
 
 # configs/caddy/ddns-zones.example.json: {{ include "configs/caddy/ddns-zones.example.json" | sha256sum }}
 # scripts/configure-ddns.py: {{ include "scripts/configure-ddns.py" | sha256sum }}

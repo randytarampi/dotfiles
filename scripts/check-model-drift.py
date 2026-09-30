@@ -13,11 +13,11 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
-import logger
+import logger  # noqa: E402  # sys.path is bootstrapped for shared repo libraries.
 from env import load_env
 from model_stamp import is_stale
 from local_engines import active_engines, iter_engine_models_strict, resolve_engine
-from model_catalogues import (
+from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is intentional.
     endpoint_models_url,
     get_models as fetch_models,
     load_allowlists,

@@ -97,7 +97,7 @@ def get_backup_timer_repo_paths(local_checkout: Path) -> list[str]:
             ],
             capture_output=True,
             text=True,
-        )
+        )  # nosec B603 - git_bin and all arguments above are repository-controlled.
     except (OSError, subprocess.SubprocessError):
         worktrees = None
 

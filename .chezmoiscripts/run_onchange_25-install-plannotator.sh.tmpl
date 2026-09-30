@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_PLANNOTATOR_PASTE_SETUP" | sha256sum }}
 
 # dot_config/plannotator/config.json.tmpl: {{ include "dot_config/plannotator/config.json.tmpl" | sha256sum }}
 # scripts/install-plannotator.sh: {{ include "scripts/install-plannotator.sh" | sha256sum }}

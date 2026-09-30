@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_WEB_SETUP" | sha256sum }}
 
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}

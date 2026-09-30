@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# env delegated gate fingerprint: {{ env "DOTFILES_RUN_PLANNOTATOR_SETUP" | sha256sum }}
 
 # scripts/update-plannotator.sh: {{ include "scripts/update-plannotator.sh" | sha256sum }}
 

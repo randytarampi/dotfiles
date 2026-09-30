@@ -38,7 +38,10 @@ from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from local_engines import engine_gate_active, local_provider_block, resolve_engine
-from opencode_plugins import active_plugin_specs, plugin_specs
+from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
+    active_plugin_specs,
+    plugin_specs,
+)
 from models_dev import (
     fetch_models_dev,
     get_ollama_context_length,
