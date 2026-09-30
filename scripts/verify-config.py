@@ -1343,7 +1343,11 @@ def main():
             if brew:
                 try:
                     postgres = subprocess.run(
-                        [brew, "services", "list"],
+                        [
+                            brew,
+                            "services",
+                            "list",
+                        ],  # nosec B603 - brew is PATH-resolved; fixed diagnostic arguments
                         capture_output=True,
                         text=True,
                         check=False,

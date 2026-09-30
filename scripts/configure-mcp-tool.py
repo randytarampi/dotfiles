@@ -515,7 +515,7 @@ def migrate_pi_mcp_config(old_path, adapter_path, generated_data=None, dry_run=F
         os.makedirs(os.path.dirname(adapter), exist_ok=True)
         _atomic_write_json(adapter, merged)
         os.remove(old)
-    logger.info(f"Migrated Pi MCP config {old} → {adapter}")
+    logger.info(f"Migrated Pi MCP config {old} -> {adapter}")
     return True
 
 
@@ -675,7 +675,7 @@ def orchestrate_mcp_config(args):
     output_content = format_configs_to_str(format_type, mcp_defs)
 
     if args.dry_run:
-        print(f"# --- {args.tool} ({args.mode}) → {resolved_mcp_path} ---")
+        print(f"# --- {args.tool} ({args.mode}) -> {resolved_mcp_path} ---")
         if args.show_secrets:
             print(output_content)
         else:
