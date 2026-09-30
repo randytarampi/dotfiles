@@ -53,10 +53,11 @@ if [[ ! -x "$VENV/bin/python" ]]; then
   mkdir -p "$LITELLM_HOME"
   "$PYTHON_BIN" -m venv "$VENV" || die "Failed to create LiteLLM virtual environment"
 fi
-if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}"; then
+# LiteLLM's auth/database error path imports Prisma at request time.
+if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0"; then
   warn "LiteLLM install failed; retrying once"
   sleep 2
-  "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" || die "Failed to install litellm[proxy]==${VERSION}"
+  "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" || die "Failed to install litellm[proxy]==${VERSION}"
 fi
 mkdir -p "$DATA" "$LOGS"
 chmod 700 "$DATA" "$LOGS"
