@@ -22,6 +22,9 @@ import shlex
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).with_name("lib")))
+from litellm_routing import routing_config_text_is_safe
+
 HOME = Path.home()
 OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
     r"^\d+(?:\.\d+)?(?:KB|MB|GB)$", re.IGNORECASE
@@ -184,6 +187,11 @@ def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
         valid_entries += 1
 
     return valid_entries > 0, valid_entries
+
+
+def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
+    """Return false when LiteLLM config points at Mozart or its own port."""
+    return routing_config_text_is_safe(config_text, port=port)
 
 
 # Gate → list of (description, file path) checks
@@ -1253,6 +1261,13 @@ def main():
                 exit_code = 1
         if (litellm_root / "config.yaml").is_file():
             config_text = (litellm_root / "config.yaml").read_text(encoding="utf-8")
+            try:
+                routing_port = int(expected_litellm_port)
+            except ValueError:
+                routing_port = 4000
+            if not validate_litellm_routing_text(config_text, routing_port):
+                print("  \u2717 LiteLLM config: Mozart/self-routing loop detected")
+                exit_code = 1
             refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
             expected_env = {
                 "LITELLM_MASTER_KEY",

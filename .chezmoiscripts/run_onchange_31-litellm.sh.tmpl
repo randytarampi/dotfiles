@@ -7,6 +7,7 @@ source "$LIB_DIR/env.sh"
 source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
+# scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
 

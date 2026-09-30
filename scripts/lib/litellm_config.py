@@ -16,6 +16,7 @@ from constants import (
 )
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
+from litellm_routing import routing_entries_are_safe
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,18 @@ LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "ollama-cloud")
 
 class LiveCatalogueError(Exception):
     """A provider's live model catalogue could not be enumerated."""
+
+
+class RoutingInvariantError(ValueError):
+    """The generated routing table would create a local proxy loop."""
+
+
+def validate_routing_entries(entries, *, port=4000):
+    """Reject entries that route LiteLLM back through Mozart or itself."""
+    # Single shared validator: generator and doctor must not keep parallel
+    # field-selection implementations that could drift apart (Oracle L2).
+    if not routing_entries_are_safe(entries, port=port):
+        raise RoutingInvariantError("refusing LiteLLM routing loop")
 
 
 def _model_name(item):
@@ -184,6 +197,11 @@ def compute_model_list(environ=None):
             entries.append(
                 _entry(f"{provider}/default", model, api_base=base_url, key_env=key_env)
             )
+    try:
+        routing_port = int(environ.get("LITELLM_PORT", "4000"))
+    except (TypeError, ValueError):
+        routing_port = 4000
+    validate_routing_entries(entries, port=routing_port)
     return entries
 
 
@@ -191,6 +209,11 @@ def render_config(environ=None, entries=None):
     environ = environ or os.environ
     if entries is None:
         entries = compute_model_list(environ)
+    try:
+        routing_port = int(environ.get("LITELLM_PORT", "4000"))
+    except (TypeError, ValueError):
+        routing_port = 4000
+    validate_routing_entries(entries, port=routing_port)
     lines = ["model_list:" if entries else "model_list: []"]
     for entry in entries:
         params = entry["litellm_params"]

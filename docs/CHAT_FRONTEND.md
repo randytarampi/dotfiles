@@ -365,6 +365,9 @@ registries and provider keys, with stateless master-key auth and no database:
 virtual keys, budgets, and spend accounting are deliberate non-goals. There is
 no Caddy route; only clients on the machine consume it.
 
+The generated routing table rejects Mozart and LiteLLM self-targets; client-specific
+gates for Open WebUI, OpenCode, and Pi are L3-pending and do not wire clients yet.
+
 Telemetry is explicitly disabled: upstream defaults `litellm.telemetry=True`
 (anonymous PostHog usage events), and the generated config sets
 `litellm_settings.telemetry: false` (verified opt-out; disposition recorded in

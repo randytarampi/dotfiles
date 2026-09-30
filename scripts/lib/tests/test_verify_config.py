@@ -33,6 +33,31 @@ def _mock_git_and_chezmoi(monkeypatch, current, worktree_output, source):
     monkeypatch.setattr(VERIFY_CONFIG.subprocess, "run", fake_run)
 
 
+def test_litellm_routing_validation_is_structural_and_port_aware():
+    safe = """
+# .mozart and http://127.0.0.1:4000 are comments, not routing
+model_list:
+  - model_name: openai/wolf.mozart-v1
+    litellm_params:
+      model: openai/wolf.mozart-v1
+      api_base: http://evil.localhost:4000/v1
+"""
+    assert VERIFY_CONFIG.validate_litellm_routing_text(safe)
+    assert not VERIFY_CONFIG.validate_litellm_routing_text(
+        'model_list:\n  - litellm_params:\n      api_base: "http://LOCALHOST:4000/v1"\n'
+    )
+    assert not VERIFY_CONFIG.validate_litellm_routing_text(
+        'model_list:\n  - litellm_params:\n      gateway: "localhost:4000"\n'
+    )
+    assert VERIFY_CONFIG.validate_litellm_routing_text(
+        'model_list:\n  - litellm_params:\n      api_base: "http://127.0.0.1:40000/v1"\n'
+    )
+    assert not VERIFY_CONFIG.validate_litellm_routing_text(
+        'model_list:\n  - litellm_params:\n      api_base: "http://[::1]:4100/v1"\n',
+        port=4100,
+    )
+
+
 def test_backup_timer_accepts_current_and_valid_sibling_worktrees(
     tmp_path, monkeypatch
 ):
