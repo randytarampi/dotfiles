@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help
+.PHONY: help litellm-diagnose
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
@@ -353,6 +353,9 @@ litellm-stop: ## Stop LiteLLM gateway
 	@if [ "$$(uname)" = "Darwin" ]; then . scripts/lib/litellm_service.sh && litellm_service_stop; elif [ "$$(uname)" = "Linux" ]; then systemctl --user stop litellm.service 2>/dev/null || true; fi
 
 litellm-restart: litellm-stop litellm-start ## Restart LiteLLM gateway
+
+litellm-diagnose: ## Diagnose LiteLLM health and authentication state
+	@$(LOAD_ENV); python3 scripts/litellm-diagnose.py
 
 openwebui-backup-timer-start: ## Start the gated Open WebUI backup timer
 	@$(LOAD_ENV); if [ "$${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" != "1" ] || [ "$${DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP:-0}" != "1" ]; then echo "Open WebUI backup timer gates are off — skipping"; exit 0; fi; \
