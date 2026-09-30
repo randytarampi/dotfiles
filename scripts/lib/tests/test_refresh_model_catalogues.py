@@ -11,7 +11,7 @@ SPEC = importlib.util.spec_from_file_location(
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
-import model_catalogues as CATALOGUES
+import model_catalogues as CATALOGUES  # noqa: E402  # loader bootstraps scripts/lib.
 
 
 def test_zero_price_filter_requires_numeric_zero_entries():
