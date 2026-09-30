@@ -3,6 +3,7 @@ set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_WEB_SETUP" | sha256sum }}
 
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
+# scripts/lib/opencode_service.sh: {{ include "scripts/lib/opencode_service.sh" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
@@ -12,14 +13,21 @@ source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
 # shellcheck disable=SC1091
 source "${LIB_DIR}/caddy_helpers.sh"
+# shellcheck disable=SC1091
+source "${LIB_DIR}/opencode_service.sh"
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 
 OS_NAME="{{ .chezmoi.os }}"
 
 if [[ "$OS_NAME" == "darwin" ]]; then
+  PLIST_DIR="$(caddy_launch_agents_dir)"
   if [[ "${DOTFILES_RUN_OPENCODE_WEB_SETUP:-0}" != "1" ]]; then
     info "DOTFILES_RUN_OPENCODE_WEB_SETUP='${DOTFILES_RUN_OPENCODE_WEB_SETUP:-0}' — skipping OpenCode web LaunchAgent"
+    LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain)"
+    opencode_service_stop "$LAUNCHCTL_DOMAIN"
+    rm -f "$PLIST_DIR/com.opencode.web.plist"
+    info "Removed stale com.opencode.web LaunchAgent state"
     exit 0
   fi
 
@@ -28,7 +36,6 @@ if [[ "$OS_NAME" == "darwin" ]]; then
     exit 0
   fi
 
-  PLIST_DIR="$(caddy_launch_agents_dir)"
   PLIST_PATH="$PLIST_DIR/com.opencode.web.plist"
   # launchd requires absolute path — bare "opencode" fails with EX_CONFIG (78)
   OPENCODE_BIN="$(command -v opencode)"
@@ -68,13 +75,8 @@ EOF
 
   LAUNCHCTL_DOMAIN="$(caddy_launchctl_domain)"
   launchctl enable "$LAUNCHCTL_DOMAIN/com.opencode.web" 2>/dev/null || warn "Failed to enable com.opencode.web"
-  if launchctl print "$LAUNCHCTL_DOMAIN/com.opencode.web" >/dev/null 2>&1; then
-    info "Unloading existing com.opencode.web..."
-    launchctl bootout "$LAUNCHCTL_DOMAIN/com.opencode.web" 2>/dev/null || warn "Failed to bootout com.opencode.web"
-    sleep 2
-  fi
   info "Loading com.opencode.web..."
-  BOOTSTRAP_OUTPUT=$(launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" 2>&1) && ok "com.opencode.web loaded" || warn "Failed to bootstrap com.opencode.web: $BOOTSTRAP_OUTPUT"
+  opencode_service_start "$LAUNCHCTL_DOMAIN" "$PLIST_PATH" "${OPENCODE_SERVER_PORT:-4096}"
 
   ok "OpenCode web LaunchAgent setup complete"
 else
