@@ -28,7 +28,9 @@ from cli_helpers import (
     forward_model_override_args,
     parse_skip,
 )
-from generation_lock import with_generation_lock
+from generation_lock import (
+    with_generation_lock,
+)  # noqa: E402  # loader bootstraps scripts/lib.
 
 
 @with_generation_lock("configure-jetbrains-ai")

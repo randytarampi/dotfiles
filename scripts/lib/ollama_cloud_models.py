@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404 - calls use fixed Ollama subcommands and validated names.
 from pathlib import Path
 
 
@@ -27,7 +27,7 @@ def stale_managed_stubs(installed: list[str], managed: set[str]) -> list[str]:
 
 
 def installed_models(ollama: str) -> list[str]:
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 - executable and args are controlled.
         [ollama, "list"], capture_output=True, text=True, check=False
     )
     return [line.split()[0] for line in result.stdout.splitlines()[1:] if line.split()]
@@ -39,7 +39,12 @@ def cleanup_stale(path: Path, ollama: str | None = None) -> int:
         return 0
     failed = 0
     for name in stale_managed_stubs(installed_models(ollama), managed_models(path)):
-        if subprocess.run([ollama, "rm", name], check=False).returncode != 0:
+        if (
+            subprocess.run(  # nosec B603 - model name comes from the validated registry/list.
+                [ollama, "rm", name], check=False
+            ).returncode
+            != 0
+        ):
             failed = 1
     return failed
 
