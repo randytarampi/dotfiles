@@ -10,7 +10,8 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
-import pytest
+# noqa: E402  # pytest import follows the module bootstrap above, as in
+import pytest  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
