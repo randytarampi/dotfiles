@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - npm root invocation uses fixed arguments.
 from pathlib import Path
 
 import logger
@@ -45,7 +45,15 @@ def _global_npm_root() -> Path | None:
         return None
     try:
         result = subprocess.run(
-            [npm, "root", "-g"], capture_output=True, text=True, timeout=5, check=False
+            [
+                npm,
+                "root",
+                "-g",
+            ],  # nosec B603 - npm path is resolved from PATH with fixed args.
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None
