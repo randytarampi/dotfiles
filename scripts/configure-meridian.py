@@ -21,6 +21,7 @@ import logger
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
+from meridian_path import resolve_meridian_plugin_path
 
 
 def main():
@@ -62,22 +63,7 @@ def main():
         )
 
     # Resolve plugin path
-    meridian_plugin_path = ""
-    npm_bin = shutil.which("npm")
-    if npm_bin:
-        try:
-            result = subprocess.run(
-                [npm_bin, "root", "-g"], capture_output=True, text=True, timeout=5
-            )
-            npm_root = result.stdout.strip()
-            if npm_root:
-                candidate = os.path.join(
-                    npm_root, "@rynfar", "meridian", "plugin", "meridian.ts"
-                )
-                if os.path.isfile(candidate):
-                    meridian_plugin_path = candidate
-        except Exception:
-            pass
+    meridian_plugin_path = resolve_meridian_plugin_path()
 
     if not meridian_plugin_path:
         logger.critical(

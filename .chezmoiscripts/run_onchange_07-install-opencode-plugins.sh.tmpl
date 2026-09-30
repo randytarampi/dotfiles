@@ -4,6 +4,7 @@ set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
+# scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
 # opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
@@ -77,16 +78,7 @@ done
 
 # The meridian plugin is installed globally via npm and referenced by local path.
 # No opencode plugin install needed — it's already at its nvm global path.
-# Dynamically resolve meridian path from nvm default node version
-NVM_DIR="$HOME/.nvm"
-MERIDIAN_PATH=""
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-  . "$NVM_DIR/nvm.sh" --no-use
-  DEFAULT_VERSION=$(nvm version default 2>/dev/null || echo "")
-  if [ -n "$DEFAULT_VERSION" ]; then
-    MERIDIAN_PATH="$NVM_DIR/versions/node/$DEFAULT_VERSION/lib/node_modules/@rynfar/meridian/plugin/meridian.ts"
-  fi
-fi
+MERIDIAN_PATH="$(PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -m meridian_path 2>/dev/null || true)"
 if [[ -f "${MERIDIAN_PATH}" ]]; then
   ok "opencode plugin: meridian (already installed globally via npm)"
 else
