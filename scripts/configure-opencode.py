@@ -58,6 +58,7 @@ from cli_helpers import (
     forward_min_reasoning_embedding_arg,
     parse_skip,
 )
+from generation_lock import with_generation_lock
 from provider_endpoints import PROVIDER_ENDPOINTS
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
@@ -150,6 +151,7 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
         config["provider"][provider] = block
 
 
+@with_generation_lock("configure-opencode")
 def main():
     parser = argparse.ArgumentParser(
         description="Configure OpenCode json generator and orchestration."
@@ -166,6 +168,15 @@ def main():
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
+    source_root = Path(SCRIPT_DIR).resolve().parent
+    logger.info("config source: %s/configs", source_root)
+    chezmoi_source = os.environ.get("CHEZMOI_SOURCE_DIR")
+    if chezmoi_source and Path(chezmoi_source).resolve() != source_root:
+        logger.warning(
+            "config source root %s differs from CHEZMOI_SOURCE_DIR %s; refusing to hide nested-worktree provenance",
+            source_root,
+            Path(chezmoi_source).resolve(),
+        )
     skipped = parse_skip(args.skip, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     failures = 0
 
@@ -1031,4 +1042,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

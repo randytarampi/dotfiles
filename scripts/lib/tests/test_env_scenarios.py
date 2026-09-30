@@ -67,7 +67,15 @@ def run_configure(home, **values):
     # repo files, which on CI live under the real home, so check clean exits
     # only; failing runs are caught by the returncode assertions below.
     if result.returncode == 0:
-        assert str(Path.home()) not in combined_output(result)
+        # Configuration provenance lines intentionally name the checkout they
+        # read ("config source: <repo-root>/configs/...") as a clobber-diagnosis
+        # diagnostic; strip them the same way crash tracebacks are tolerated.
+        output = "\n".join(
+            line
+            for line in combined_output(result).splitlines()
+            if "config source:" not in line
+        )
+        assert str(Path.home()) not in output
     return result
 
 
