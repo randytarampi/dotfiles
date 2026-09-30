@@ -53,6 +53,9 @@ PYTHON_GATE_PATTERN = re.compile(
     r"(?:os\.environ(?:\.get|\.setdefault)|os\.getenv|\b_gate)\(\s*['\"](DOTFILES_RUN_[A-Z0-9_]+)"
 )
 SCRIPT_REFERENCE_PATTERN = re.compile(r"scripts/[\w./-]+\.(?:sh|py)")
+SOURCED_LIB_PATTERN = re.compile(
+    r"(?:source|\.|\s)\s+[^\n#]*?(scripts/lib/[\w.-]+\.sh)"
+)
 
 
 def _child_script_gates(path: Path) -> set[str]:
@@ -146,6 +149,12 @@ def find_trackable_files():
         rel = f"scripts/{f.name}"
         if rel not in NON_TRACKED_SCRIPTS:
             trackable.add(rel)
+
+    # Sourced shell libraries are inputs to their templates even though they
+    # are not top-level configure entrypoints.
+    for template in CHEZMOI_SCRIPTS.glob("run_onchange_*.sh.tmpl"):
+        content = template.read_text(encoding="utf-8")
+        trackable.update(SOURCED_LIB_PATTERN.findall(content))
 
     # All config files in configs/ (recursive)
     if CONFIGS_DIR.exists():

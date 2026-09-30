@@ -8,7 +8,7 @@ source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
-# scripts/lib/litellm_clients.py: {{ include "scripts/lib/litellm_clients.py" | sha256sum }}
+# scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
 # database fingerprint: {{ env "DATABASE_URL" | sha256sum | trunc 12 }}
@@ -32,7 +32,7 @@ fi
 # Gate-on path only: the DB-backed deployment needs its connection string up
 # front. Gate-off machines (CI, unconfigured homes) exit above and never hit
 # this requirement.
-[[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
+litellm_require_database_url
 
 LITELLM_HOME="$HOME/.local/share/litellm"
 VENV="$LITELLM_HOME/venv"

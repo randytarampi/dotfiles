@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_PI_SETUP" | sha256sum }}
+# LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/env.sh"

@@ -60,10 +60,6 @@ from cli_helpers import (
 )
 from generation_lock import with_generation_lock
 from provider_endpoints import PROVIDER_ENDPOINTS
-from litellm_clients import (  # noqa: E402  # sys.path bootstrap above is intentional.
-    client_uses_litellm,
-    litellm_endpoint,
-)
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -157,10 +153,15 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
 
 def apply_litellm_client_gate(config: dict) -> None:
     """Point OpenCode's OpenAI-compatible surface at LiteLLM for the canary."""
-    if not client_uses_litellm("opencode"):
+    if not (
+        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+        and os.environ.get("DOTFILES_OPENCODE_USE_LITELLM", "0") == "1"
+    ):
         return
     provider = config.setdefault("provider", {}).setdefault("openai", {})
-    provider.setdefault("options", {})["baseURL"] = litellm_endpoint()
+    provider.setdefault("options", {})[
+        "baseURL"
+    ] = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
     provider["options"]["apiKey"] = "{env:LITELLM_MASTER_KEY}"
 
 

@@ -21,12 +21,25 @@ from urllib.parse import urlsplit, urlunsplit
 import constants
 from local_engines import LOCAL_ENGINES, active_engines, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
-from litellm_clients import client_uses_litellm, litellm_endpoint
 
 MANAGED_PREFIX_NAMESPACE = "dw-"
 MANAGED_MARKER_KEY = "managed_by"
 MANAGED_MARKER_VALUE = "dotfiles"
 DISABLED_ENGINES_ENV = "DOTFILES_OPENWEBUI_DISABLED_ENGINES"
+
+
+def _litellm_master_key():
+    value = os.environ.get("LITELLM_MASTER_KEY", "").strip()
+    if value:
+        return value
+    path = os.path.expanduser("~/.local/share/litellm/service.env")
+    try:
+        for line in open(path, encoding="utf-8"):
+            if line.startswith("LITELLM_MASTER_KEY="):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
 
 
 def mask_secret(value):
@@ -139,8 +152,11 @@ def ownership_catalogue():
             "connection_type": connection_type,
             "collection": "openai",
         }
-    if client_uses_litellm("openwebui"):
-        endpoint = litellm_endpoint()
+    if (
+        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+        and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
+    ):
+        endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
         for identity in catalogue.values():
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
@@ -217,9 +233,12 @@ def compute_desired_state():
                     "openai",
                 )
             )
-    if client_uses_litellm("openwebui"):
-        endpoint = litellm_endpoint()
-        key = os.environ.get("LITELLM_MASTER_KEY", "")
+    if (
+        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+        and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
+    ):
+        endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+        key = _litellm_master_key()
         for collection in desired.values():
             for connection in collection:
                 connection["url"] = endpoint

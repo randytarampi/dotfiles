@@ -17,6 +17,7 @@ from constants import (
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
 from litellm_routing import routing_entries_are_safe
+from model_catalogues import open_same_origin
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,7 @@ def _live_catalogue(provider, key, base_url, timeout=10):
     )
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
-        with urllib.request.urlopen(  # nosec B310 — https scheme audited above
-            request, timeout=timeout
-        ) as response:
+        with open_same_origin(request, timeout=timeout) as response:
             payload = json.load(response)
     except (urllib.error.URLError, ValueError, TypeError, AttributeError) as error:
         raise LiveCatalogueError(

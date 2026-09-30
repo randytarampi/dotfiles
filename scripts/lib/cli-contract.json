@@ -918,7 +918,7 @@
       "path": "scripts/configure-litellm.py",
       "capabilities": ["public", "mutates"],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--provision-key", "--client", "--preset"],
+      "accepted_flags": ["--help", "--dry-run"],
       "positional_operand": null,
       "child_scripts": []
     }

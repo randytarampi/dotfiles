@@ -46,7 +46,15 @@ def plugin_specs(path=MANIFEST_PATH):
 
 
 def is_pinned_spec(spec: str) -> bool:
-    return "@" in spec and spec.rsplit("@", 1)[1] != "latest"
+    if "@" not in spec:
+        return False
+    version = spec.rsplit("@", 1)[1]
+    return bool(
+        re.fullmatch(
+            r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",
+            version,
+        )
+    )
 
 
 def active_plugin_specs(path=MANIFEST_PATH, environ=None):

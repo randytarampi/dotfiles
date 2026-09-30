@@ -37,6 +37,30 @@ TRUSTED_HTTPS_HOSTS = BASE_URL_HOSTS | {
 }
 
 
+def _origin(url):
+    parsed = urlsplit(url)
+    return (
+        parsed.scheme.lower(),
+        parsed.hostname.lower() if parsed.hostname else None,
+        parsed.port or (443 if parsed.scheme == "https" else 80),
+    )
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects that could forward a credential to another origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.URLError("cross-origin redirect rejected")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def open_same_origin(request, *, timeout=3):
+    return urllib.request.build_opener(SameOriginRedirectHandler()).open(
+        request, timeout=timeout
+    )
+
+
 def _configured_loopback_ports() -> frozenset[int]:
     ports = {int(MERIDIAN_DEFAULT_PORT), int(OLLAMA_LOCAL_DEFAULT_PORT), 8000}
     for variable in (MERIDIAN_PORT_ENV, OMLX_PORT_ENV, OLLAMA_LOCAL_PORT_ENV):
@@ -123,7 +147,7 @@ def get_catalogue(url: str, api_key: str = "", *, strict: bool = False):
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     request = urllib.request.Request(url, headers=headers, method="GET")
     # URL scheme, host, and local port are validated against fixed allowlists.
-    with urllib.request.urlopen(request, timeout=3) as response:  # nosec B310
+    with open_same_origin(request, timeout=3) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
