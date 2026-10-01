@@ -1305,15 +1305,21 @@
         "oracle": [
           "openai/gpt-6-astra"
         ],
-        "librarian": [],
-        "explorer": [],
+        "librarian": [
+          "openai/gpt-5.6-luna"
+        ],
+        "explorer": [
+          "openai/gpt-5.6-luna"
+        ],
         "fixer": [
           "openai/gpt-5.3-codex"
         ],
         "designer": [
           "openai/gpt-5.5"
         ],
-        "observer": [],
+        "observer": [
+          "openai/gpt-5.6-luna"
+        ],
         "council": []
       }
     },

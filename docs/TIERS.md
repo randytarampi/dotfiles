@@ -55,15 +55,15 @@ OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.co
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `gpt-5.6-terra` | high |
-| oracle | `gpt-5.6-sol` | high |
-| librarian | `gpt-5.6-luna` | low |
-| explorer | `gpt-5.6-luna` | low |
-| designer | `gpt-5.6-luna` | medium |
-| fixer | `gpt-5.6-luna` | high |
-| observer | `openai/gpt-5.6-luna` | low |
-| council | `gpt-5.6-sol` | high (α sol, β terra, γ luna) |
+| oracle | `gpt-6.1-sol` | high |
+| librarian | `gpt-6-luna` | low |
+| explorer | `gpt-6-luna` | low |
+| designer | `gpt-6-luna` | medium |
+| fixer | `gpt-6-luna` | high |
+| observer | `openai/gpt-6-luna` | low |
+| council | `gpt-6.1-sol` | high (α sol, β terra, γ luna) |
 
-Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. The explicit observer uses `openai/gpt-5.6-luna`.
+Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. The explicit observer uses `openai/gpt-6-luna`.
 
 ### Thirtydollars Tier (`omo-slim-thirty-dollars`)
 
@@ -72,14 +72,14 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `openai/gpt-5.6-terra` | medium |
-| oracle | `openai/gpt-5.6-sol` | high |
-| librarian / explorer | `openai/gpt-5.6-luna` | low |
+| oracle | `openai/gpt-6.1-sol` | high |
+| librarian / explorer | `openai/gpt-6-luna` | low |
 | designer | `github-copilot/gemini-3.5-flash` | — |
-| fixer | `openai/gpt-5.6-luna` | medium |
-| observer | `openai/gpt-5.6-luna` | low |
-| council | `openai/gpt-5.6-sol` | high (α sol, β terra, γ luna) |
+| fixer | `openai/gpt-6-luna` | medium |
+| observer | `openai/gpt-6-luna` | low |
+| council | `openai/gpt-6.1-sol` | high (α sol, β terra, γ luna) |
 
-Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-5.6-luna`. Requires GitHub Copilot auth via `/connect`.
+Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-6-luna`. Requires GitHub Copilot auth via `/connect`.
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
@@ -123,7 +123,7 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 
 Fallbacks are provider-deduplicated and retain one best alternative per role.
 The `pro` observer is `gemma4:31b`; the `pro-plus` observer is
-`openai/gpt-5.6-luna`, both with low variant. Pro fallbacks are `glm-5.3` for
+`openai/gpt-6-luna`, both with low variant. Pro fallbacks are `glm-5.3` for
 orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
 `kimi-k2.7-code` for fixer, and `glm-5.3-flash` for observer.
 
@@ -132,11 +132,11 @@ orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `glm-5.3-flash` | max |
-| oracle | `gpt-5.6-sol` | high |
-| librarian / explorer | `gpt-5.6-luna` | low |
+| oracle | `gpt-6.1-sol` | high |
+| librarian / explorer | `gpt-6-luna` | low |
 | designer | `gpt-5.6-terra` | medium |
-| fixer | `gpt-5.6-luna` | medium |
-| observer | `gpt-5.6-luna` | low |
+| fixer | `gpt-6-luna` | medium |
+| observer | `gpt-6-luna` | low |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
@@ -152,10 +152,10 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 |------|-------|---------|
 | orchestrator | `claude-sonnet-5-5` | — |
 | oracle | `claude-fable-5-1` | xhigh |
-| librarian | `gpt-5.6-luna` | low |
+| librarian | `gpt-6-luna` | low |
 | explorer | `claude-haiku-4-5` | low |
 | designer | `claude-sonnet-5-5` | medium |
-| fixer | `gpt-5.6-luna` | high |
+| fixer | `gpt-6-luna` | high |
 | observer | `claude-haiku-4-5` | low |
 | council | `glm-5.3` | max |
 
@@ -192,7 +192,7 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 |------|-------|---------|
 | orchestrator | `openai/gpt-5.6-terra` | — |
 | oracle | `anthropic/claude-fable-5-1` | xhigh |
-| librarian | `openai/gpt-5.6-luna` | low |
+| librarian | `openai/gpt-6-luna` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
 | designer | `anthropic/claude-sonnet-5-5` | medium |
 | fixer | `anthropic/claude-haiku-4-5` | high |
