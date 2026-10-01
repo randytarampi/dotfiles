@@ -219,7 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${TRUSTED_REF}"
+          trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
@@ -316,7 +316,7 @@ jobs:
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${TRUSTED_REF}"
+          trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
@@ -400,7 +400,7 @@ jobs:
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"
-          trusted_sha="${TRUSTED_REF}"
+          trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"
           [[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
