@@ -106,6 +106,17 @@ the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
 Its explicit observer is `google/gemini-3.8-flash`, with
 `opencode/mimo-v2.5-free` as the image-capable fallback.
 
+| Role | Model | Variant / Temp |
+|------|-------|----------------|
+| orchestrator | `big-pickle` | high, temp 0.4 |
+| oracle | `big-pickle` | max, temp 0.4 |
+| librarian | `gemini-3.5-flash-lite` | temp 0.2 |
+| explorer | `openrouter/inclusionai/ling-3.0-flash-sante:free` | temp 0.2 |
+| designer | `gemini-3.8-flash` | medium, temp 0.3 |
+| fixer | `nemotron-3.5-lightning-free` | high, temp 0.2 |
+| observer | `gemini-3.8-flash` | low, temp 0.2 |
+| council | `big-pickle` | max |
+
 ### Pro Tier (`pro`)
 
 Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tier alignment:
@@ -117,7 +128,7 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | librarian | `gemma4:31b` | low |
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
-| fixer | `deepseek-v4.1-flash` | high |
+| fixer | `deepseek-v4-pro` | high |
 | observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
 
@@ -157,6 +168,7 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 | designer | `claude-sonnet-5-5` | medium |
 | fixer | `gpt-6-luna` | high |
 | observer | `claude-haiku-4-5` | low |
+| council | `claude-opus-5-5` | xhigh |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
@@ -197,6 +209,7 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | designer | `anthropic/claude-sonnet-5-5` | medium |
 | fixer | `anthropic/claude-haiku-4-5` | high |
 | observer | `anthropic/claude-haiku-4-5` | low |
+| council | `anthropic/claude-opus-5-5` | xhigh |
 
 Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
