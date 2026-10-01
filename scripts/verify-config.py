@@ -189,6 +189,24 @@ def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
     return valid_entries > 0, valid_entries
 
 
+def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
+    """Validate an existing Caddyfile when the Caddy binary is available."""
+    caddy = shutil.which("caddy")
+    if not caddy or not path.is_file():
+        return None, ""
+    try:
+        result = subprocess.run(
+            [caddy, "validate", "--config", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        return False, str(error)
+    output = (result.stdout + result.stderr).strip()
+    return result.returncode == 0, output
+
+
 def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
     """Return false when LiteLLM config points at Mozart or its own port."""
     return routing_config_text_is_safe(config_text, port=port)
@@ -707,6 +725,17 @@ def main():
 
     # Machine-local Caddy v2 files should be present when Caddy is enabled.
     if caddy_gate:
+        caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
+        if caddyfile and caddyfile.is_file() and shutil.which("caddy"):
+            valid, output = validate_caddyfile(caddyfile)
+            if valid:
+                print(f"  \u2713 Caddyfile parses: {caddyfile}")
+            else:
+                print(f"  \u2717 Caddyfile validation failed: {caddyfile}")
+                if output:
+                    print(f"    {output}")
+                exit_code = 1
+
         caddy_local_checks = [
             (HOME / ".config/caddy/ddns-zones.json", "Caddy DDNS zones"),
         ]

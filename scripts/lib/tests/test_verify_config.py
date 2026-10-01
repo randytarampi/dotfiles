@@ -58,6 +58,33 @@ model_list:
     )
 
 
+def test_caddyfile_validation_runs_when_binary_is_available(tmp_path, monkeypatch):
+    caddyfile = tmp_path / "Caddyfile"
+    caddyfile.write_text("example.com {\n  respond ok\n}\n")
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=0, stdout="Valid configuration\n", stderr="")
+
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda name: "/usr/bin/caddy")
+    monkeypatch.setattr(VERIFY_CONFIG.subprocess, "run", fake_run)
+
+    valid, output = VERIFY_CONFIG.validate_caddyfile(caddyfile)
+
+    assert valid
+    assert "Valid configuration" in output
+    assert calls == [["/usr/bin/caddy", "validate", "--config", str(caddyfile)]]
+
+
+def test_caddyfile_validation_skips_without_binary(tmp_path, monkeypatch):
+    caddyfile = tmp_path / "Caddyfile"
+    caddyfile.write_text("invalid")
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda name: None)
+
+    assert VERIFY_CONFIG.validate_caddyfile(caddyfile) == (None, "")
+
+
 def test_litellm_client_gate_requires_main_gate():
     assert VERIFY_CONFIG.litellm_client_gate_errors(
         {
