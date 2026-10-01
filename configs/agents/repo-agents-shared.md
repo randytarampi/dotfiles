@@ -18,6 +18,7 @@ These policies apply to work in every repository.
 - Keep one concern per commit.
 - Use Conventional Commits (`type(scope): description`).
 - Never push unless the user explicitly authorizes it.
+- All PRs created from agent work — fixes, backlog clean-ups, dependency bumps, generated changes — are opened as draft (`gh pr create --draft`) and stay draft. Never mark your own PR ready for review; a human (you, or a colleague in the downstream pass) turns the draft into a reviewable PR when they're satisfied.
 
 ### Git worktrees
 
