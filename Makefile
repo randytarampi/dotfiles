@@ -167,6 +167,7 @@ check-categories: ## Verify Brewfile/wingetfile category registries are in sync
 
 check-slim-invariants: ## Verify oh-my-opencode-slim fallback arrays have no dupes
 	@python3 scripts/verify-slim-invariants.py
+	@python3 scripts/verify-tier-docs.py
 
 check-model-drift: ## Check deployed model configs against live catalogs
 	@$(LOAD_ENV); python3 scripts/check-model-drift.py
