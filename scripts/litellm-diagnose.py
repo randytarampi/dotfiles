@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import shutil
+import socket
 import subprocess  # nosec B404 - fixed-argument launchctl/systemctl probes only
 import sys
 import urllib.parse
@@ -18,7 +20,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from cli_helpers import add_common_args  # noqa: E402
-from model_catalogues import open_same_origin  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 LABEL = "com.litellm.proxy"
@@ -44,12 +45,25 @@ def _base_url(env: dict[str, str]) -> str:
 
 def _is_loopback_url(value: str) -> bool:
     parsed = urllib.parse.urlsplit(value)
-    return (
-        parsed.scheme == "http"
-        and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
-        and not parsed.username
-        and not parsed.password
-    )
+    if (
+        parsed.scheme != "http"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        return False
+    try:
+        addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(
+                parsed.hostname, parsed.port or 80, type=socket.SOCK_STREAM
+            )
+        }
+        return bool(addresses) and all(
+            ipaddress.ip_address(address).is_loopback for address in addresses
+        )
+    except (OSError, ValueError):
+        return False
 
 
 def _loaded() -> bool:
@@ -86,6 +100,11 @@ def _loaded() -> bool:
         return False
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme not in {"http", "https"}:
@@ -94,7 +113,8 @@ def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
     if key:
         request.add_header("Authorization", f"Bearer {key}")
     try:
-        with open_same_origin(request, timeout=3) as response:
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=3) as response:
             payload = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(payload), ""
@@ -137,6 +157,13 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         )
     readiness = _request(f"{base}/health/readiness", key)
     models = _request(f"{base}/v1/models", key)
+    if any(
+        status == 200 and parsed is None for status, parsed, _ in (readiness, models)
+    ):
+        return (
+            1,
+            f"LITELLM: PROXY-UNAVAILABLE; reason=invalid-json; artifact={artifact}; loaded={loaded}",
+        )
     models_shape = isinstance(models[1], dict) and isinstance(
         models[1].get("data"), list
     )

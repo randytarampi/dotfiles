@@ -64,6 +64,66 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
     assert all(key == "dtf-not-a-real-key" for _, key in calls[1:])
 
 
+def test_non_json_200_is_unhealthy(monkeypatch, tmp_path):
+    setup_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+
+    def request(url, key=""):
+        if url.endswith("/health/readiness"):
+            return 200, None, "invalid-json"
+        return (200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")
+
+    monkeypatch.setattr(MODULE, "_request", request)
+    code, summary = MODULE.diagnose()
+    assert code == 1
+    assert "reason=invalid-json" in summary
+
+
+def test_redirect_response_is_not_followed_and_is_unhealthy(monkeypatch, tmp_path):
+    setup_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    handlers = []
+
+    class Response:
+        status = 302
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"location": "https://remote.example"}'
+
+    class Opener:
+        def open(self, request, timeout):
+            return Response()
+
+    def build_opener(*args):
+        handlers.extend(args)
+        return Opener()
+
+    monkeypatch.setattr(MODULE.urllib.request, "build_opener", build_opener)
+    status, parsed, reason = MODULE._request(
+        "http://127.0.0.1:4000/health/readiness", "key"
+    )
+    assert (status, parsed, reason) == (302, {"location": "https://remote.example"}, "")
+    assert isinstance(handlers[0], MODULE._NoRedirectHandler)
+    assert (
+        handlers[0].redirect_request(
+            None, None, 302, "Found", {}, "https://remote.example"
+        )
+        is None
+    )
+
+    monkeypatch.setattr(
+        MODULE, "_request", lambda url, key="": (302, None, "http-error")
+    )
+    code, summary = MODULE.diagnose()
+    assert code == 1 and "PROXY-UNAVAILABLE" in summary
+
+
 def test_master_key_flag_precedes_environment_and_service_env(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
