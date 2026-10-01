@@ -150,6 +150,9 @@ openwebui_service_env_sync() {
 }
 
 openwebui_service_stop() {
+  local plist
+  plist="$(openwebui_service_plist)"
+  [[ -f "$plist" ]] || return 0
   launchctl bootout "$(openwebui_service_domain)/com.openwebui.web" 2>/dev/null || true
 }
 
@@ -281,6 +284,9 @@ openwebui_terminal_service_env_sync() {
 }
 
 openwebui_terminal_service_stop() {
+  local plist
+  plist="$(openwebui_terminal_service_plist)"
+  [[ -f "$plist" ]] || return 0
   launchctl bootout "$(openwebui_terminal_service_domain)/com.openwebui.terminal" 2>/dev/null || true
 }
 
@@ -358,6 +364,9 @@ openwebui_computer_service_env_sync() {
 }
 
 openwebui_computer_service_stop() {
+  local plist
+  plist="$(openwebui_computer_service_plist)"
+  [[ -f "$plist" ]] || return 0
   launchctl bootout "$(openwebui_computer_service_domain)/com.openwebui.computer" 2>/dev/null || true
 }
 

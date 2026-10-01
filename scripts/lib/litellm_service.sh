@@ -111,7 +111,12 @@ litellm_service_env_sync() {
   else mv "$tmp" "$service_env"; fi
 }
 
-litellm_service_stop() { launchctl bootout "$(litellm_service_domain)/com.litellm.proxy" 2>/dev/null || true; }
+litellm_service_stop() {
+  local plist
+  plist="$(litellm_service_plist)"
+  [[ -f "$plist" ]] || return 0
+  launchctl bootout "$(litellm_service_domain)/com.litellm.proxy" 2>/dev/null || true
+}
 
 litellm_service_start() {
   local domain plist bootstrap_ok=0 output
