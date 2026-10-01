@@ -126,7 +126,9 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         or env.get("LITELLM_MASTER_KEY", "")
     )
     liveliness = _request(f"{base}/health/liveliness")
-    if not (200 <= liveliness[0] < 300 and isinstance(liveliness[1], dict)):
+    # Litellm's liveliness endpoint returns the JSON string "I'm alive!",
+    # never a dict; accept any JSON body with a 2xx status.
+    if not (200 <= liveliness[0] < 300 and liveliness[1] is not None):
         return 1, f"LITELLM: PROXY-UNAVAILABLE; artifact={artifact}; loaded={loaded}"
     if not key:
         return (
