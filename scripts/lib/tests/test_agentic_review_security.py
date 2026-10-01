@@ -10,7 +10,7 @@ def read(path):
 
 def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.count('trusted_sha="${TRUSTED_REF}"') == 3
+    assert workflow.count('trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"') == 3
     assert workflow.count("TRUSTED_REF: ${{ inputs.trusted_ref }}") == 3
     assert "github.workflow_sha" not in workflow
     assert (
@@ -28,6 +28,14 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert "persist-credentials: true" not in workflow
     assert "contents: write" not in workflow
     assert "Configure git identity" not in workflow
+
+
+def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
+    workflow = read(".github/workflows/agentic-review.yml")
+    assert workflow.count("TRUSTED_REF: ${{ inputs.trusted_ref }}") == 3
+    assert workflow.count('trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"') == 3
+    assert "GITHUB_SHA" in workflow
+    assert '[[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]' in workflow
 
 
 def test_manifest_verification_precedes_codegraph_execution():

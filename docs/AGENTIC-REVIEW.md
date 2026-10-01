@@ -70,7 +70,7 @@ repository instructions.
       secrets: inherit
   ```
 
-  To adopt elsewhere, run `scripts/onboard-agentic-review.py --ref <40-hex-sha>`.
+  To adopt elsewhere, run `scripts/onboard-agentic-review.py --repo <path> --ref <40-hex-sha>`.
   It installs the stable stub and writes the same immutable SHA into both the
   reusable workflow `uses:` pin and `trusted_ref`; mutable refs such as `@main`
   are not accepted.
@@ -256,11 +256,11 @@ on:
     - cron: "0 12 * * 1"
 jobs:
   weekly:
-     uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@<immutable-40-hex-sha>
-     with:
-       agents: "opencode"
-       trusted_ref: <same-immutable-40-hex-sha>
-       prompt: "Weekly repository hygiene pass: stale branches, failing CI, dependency drift."
+    uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@<immutable-40-hex-sha>
+    with:
+      agents: "opencode"
+      trusted_ref: <same-immutable-40-hex-sha>
+      prompt: "Weekly repository hygiene pass: stale branches, failing CI, dependency drift."
     secrets: inherit
 ```
 
