@@ -324,7 +324,8 @@ automatically from `randytarampi/dotfiles`; manually create secrets and labels,
 then configure Copilot Settings → MCP servers as described above.
 
 > **Dispatcher recovery note:** The dispatcher is currently hand-unpinned: `uses:` tracks
-> `@main`, while `trusted_ref:` is `ece2d6b96077369e61ce218274a5131689ca3c55`.
+> `@main`, while `trusted_ref:` is SHA-anchored to a recent main revision (check
+> `.github/workflows/agent-review.yml` for the current value).
 > The original pin captured `357760a` from the deleted `fix/review-trust-refactor` branch,
 > making every dispatch fail with 0 jobs. Re-run `scripts/onboard-agentic-review.py --repo <path>
 > --ref <sha>` to restore full SHA pinning for both fields. Refresh `trusted_ref` whenever
