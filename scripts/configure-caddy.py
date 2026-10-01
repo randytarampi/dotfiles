@@ -285,6 +285,8 @@ def build_opencode_site_block(
             ["  @not_lan not remote_ip private_ranges", "  abort @not_lan", ""]
         )
     if auth_block:
+        if "basic_auth @not_omlx" in auth_block:
+            lines.extend(["  @not_omlx not path /omlx/*", ""])
         lines.extend([auth_block, ""])
     lines.extend(
         [
