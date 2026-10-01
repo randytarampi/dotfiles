@@ -41,6 +41,18 @@ def run_configure(home, **values):
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
         env[key] = str(home / key.removeprefix("XDG_").lower())
     env["DOTFILES_OPENCODE_TIER"] = "local"
+    # Hermeticity guard: configure-all's gate-off branches bootout LaunchAgent
+    # labels by name in the caller's real GUI domain, which would kill live
+    # LiteLLM/Open WebUI services on the test host. Shadow launchctl and
+    # systemctl with no-op stubs ahead of the inherited PATH so service
+    # lifecycle calls within scenarios cannot reach the real domain.
+    stub_bin = home / ".scenario-stubs"
+    stub_bin.mkdir(parents=True, exist_ok=True)
+    (stub_bin / "launchctl").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (stub_bin / "systemctl").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (stub_bin / "launchctl").chmod(0o755)
+    (stub_bin / "systemctl").chmod(0o755)
+    env["PATH"] = f"{stub_bin}:{env.get('PATH', '')}"
     (home / ".env").write_text(
         ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8"
     )
