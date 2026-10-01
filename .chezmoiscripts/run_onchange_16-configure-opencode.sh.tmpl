@@ -48,6 +48,7 @@ source "${LIB_DIR}/tier_args.sh"
 # opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 # env delegated gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_WEB_SETUP" | sha256sum }}
 # scripts/verify-slim-invariants.py: {{ include "scripts/verify-slim-invariants.py" | sha256sum }}
+# scripts/verify-tier-docs.py: {{ include "scripts/verify-tier-docs.py" | sha256sum }}
 
 # Load environment for API keys (must happen before gate)
 load_env || warn "\$HOME/.env not found, skipping env load"
