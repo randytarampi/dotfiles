@@ -88,6 +88,7 @@ node_modules
 .github-copilot
 .ollama
 .plannotator
+.qlty
 .vscode
 ## Jetbrains
 .ai
