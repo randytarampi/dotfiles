@@ -354,6 +354,28 @@ def test_resolve_roles_uses_probed_audio_capability_for_gemma4():
     assert resolved["audio"] == "ollama/gemma4:12b-mxfp8"
 
 
+def test_gemma4_vision_model_is_name_qualified_lightweight():
+    models = [
+        {
+            "name": "gemma4:12b-mxfp8",
+            "size_gb": 13.0,
+            "provider": "ollama",
+        }
+    ]
+    capabilities = ["completion", "vision", "audio", "tools", "thinking"]
+
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        return_value={"param_count": 12, "capabilities": capabilities},
+    ):
+        categorized = tier_resolve.resolve_roles_from_list(models)
+
+    assert categorized["lightweight"] == "ollama/gemma4:12b-mxfp8"
+    assert categorized["vision"] == "ollama/gemma4:12b-mxfp8"
+    assert categorized["audio"] == "ollama/gemma4:12b-mxfp8"
+
+
 def test_resolve_roles_keeps_audio_only_omlx_models_in_audio_category():
     models = [
         {

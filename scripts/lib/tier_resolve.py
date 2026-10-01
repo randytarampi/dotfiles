@@ -299,16 +299,33 @@ def resolve_roles_from_list(
                 | set(details.get("capabilities", []))
             )
 
+        name_lower = model_name.lower()
+        has_audio_capability = (
+            "audio" in model.get("capabilities", [])
+            if isinstance(model, dict)
+            else False
+        )
+        has_audio_capability = has_audio_capability or "audio" in details.get(
+            "capabilities", []
+        )
+        # Multimodal Gemma 4 models with tools can occupy the lightweight and
+        # vision buckets; they are also added to audio below. Keep audio-only
+        # Gemma 4 models in the audio category.
+        is_gemma4_vision_model = (
+            "gemma4" in name_lower
+            and "vision" in model.get("capabilities", [])
+            and "tools" in model.get("capabilities", [])
+            if isinstance(model, dict)
+            else False
+        )
         if isinstance(model, dict) and (
             model.get("model_type") in {"audio_stt", "audio_tts", "audio_sts"}
-            or "audio" in model.get("capabilities", [])
-            or "audio" in details.get("capabilities", [])
+            or (has_audio_capability and not is_gemma4_vision_model)
         ):
             category = "audio"
         else:
             category = None
 
-        name_lower = model_name.lower()
         if category is None and any(
             p in name_lower
             for p in ["r1", "reasoning", "deep-think", "think", "qwq", "reflection"]
@@ -331,7 +348,7 @@ def resolve_roles_from_list(
                 {"name": model_name, "size_gb": size_gb, "provider": provider}
             )
         elif category is None and any(
-            p in name_lower for p in ["mini", "small", "tiny", "phi", "smol"]
+            p in name_lower for p in ["mini", "small", "tiny", "phi", "smol", "gemma4"]
         ):
             category = "lightweight"
         elif category is None:
