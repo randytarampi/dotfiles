@@ -195,7 +195,7 @@ def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
     if not caddy or not path.is_file():
         return None, ""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - caddy is PATH-resolved; fixed arguments, no operator input.
             [caddy, "validate", "--config", str(path)],
             capture_output=True,
             text=True,
