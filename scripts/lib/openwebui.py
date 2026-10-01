@@ -157,7 +157,12 @@ def ownership_catalogue():
         and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
     ):
         endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+        # Ollama-native collection stays on direct routing: LiteLLM serves
+        # OpenAI-compatible traffic only, so its catalogue identity is not
+        # rewritten.
         for identity in catalogue.values():
+            if identity["collection"] == "ollama":
+                continue
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
     return catalogue
@@ -239,8 +244,10 @@ def compute_desired_state():
     ):
         endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
         key = _litellm_master_key()
-        for collection in desired.values():
-            for connection in collection:
+        # LiteLLM serves OpenAI-compatible traffic only; the Ollama-native
+        # collection cannot speak to it, so leave it on direct 11434 routing.
+        for collection in ("openai", "anthropic"):
+            for connection in desired.get(collection, []):
                 connection["url"] = endpoint
                 connection["key"] = key
     return desired
@@ -574,10 +581,19 @@ def reconcile(
         identity_owner = catalogue_by_identity.get(current_identity)
         expected_identity = owner and current_identity == _catalogue_identity(owner)
         if _managed(existing):
+            # owner == prefix and the entry's identity matches its catalogue
+            # owner: authoritative match. The reverse map is unreliable when
+            # multiple owners share one URL (LiteLLM canary collapses every
+            # provider onto the same endpoint), so only use it when the
+            # owner's own catalogue identity disagrees.
             if (
                 not owner
                 or not expected_identity
-                or (identity_owner and identity_owner != prefix)
+                or (
+                    identity_owner
+                    and identity_owner != prefix
+                    and not expected_identity
+                )
             ):
                 collisions.append(copy.deepcopy(existing))
                 plan.entries.append(
