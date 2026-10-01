@@ -68,7 +68,7 @@ driven by the pinned canonical manifest at
 
 | Plugin | Purpose |
 |--------|---------|
-| `oh-my-opencode-slim@2.2.24` | Orchestrator agent suite (deepwork, skills distribution) |
+| `oh-my-opencode-slim@3.0.1` | Orchestrator agent suite (deepwork, skills distribution) |
 | `@tarquinen/opencode-dcp@latest` | Core dynamic context pruning; TUI entry is owned separately |
 | `@plannotator/opencode@0.27.21` | Interactive plan/code review UI |
 | `opencode-plugin-openspec@0.1.4` | OpenSpec planning agent |
