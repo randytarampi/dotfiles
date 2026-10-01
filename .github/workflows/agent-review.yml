@@ -22,5 +22,5 @@ jobs:
     uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main
     with:
       event_json: ${{ toJson(github.event) }}
-      trusted_ref: 32f5136100dd048d784ef809b73717e083193fe8
+      trusted_ref: 35bc9d3b268386b076a69602fc0d0cb0ca5e7889
     secrets: inherit
