@@ -621,7 +621,7 @@ Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer
 Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode@0.27.21`) is already configured in global `opencode.json` from `configs/opencode/opencode-plugins.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
 
 The canonical pinned OpenCode plugin set is maintained in
-`configs/opencode/opencode-plugins.json`: `oh-my-opencode-slim@2.2.24`,
+`configs/opencode/opencode-plugins.json`: `oh-my-opencode-slim@3.0.1`,
 `@plannotator/opencode@0.27.21`, `opencode-plugin-openspec@0.1.4`,
 `opencode-vibeguard@0.1.0`, `@ramtinj95/opencode-tokenscope@1.8.1`,
 `opencode-planning-with-files@1.0.1`, `@slkiser/opencode-quota@4.10.2`, and
