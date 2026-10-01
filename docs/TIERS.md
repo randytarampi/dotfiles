@@ -21,9 +21,9 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud only (`glm-5.3` synthesizer) | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-6-sol`, `gpt-6.1-sol`, `gpt-6-luna`) | General development |
 | **pro-plus-anthropic** | Ollama Cloud + OpenAI + Anthropic | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-6-sol`, `gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
@@ -54,16 +54,16 @@ OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.co
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `gpt-5.6-terra` | high |
+| orchestrator | `gpt-6-sol` | high |
 | oracle | `gpt-6.1-sol` | high |
 | librarian | `gpt-6-luna` | low |
 | explorer | `gpt-6-luna` | low |
 | designer | `gpt-6-luna` | medium |
 | fixer | `gpt-6-luna` | high |
 | observer | `openai/gpt-6-luna` | low |
-| council | `gpt-6.1-sol` | high (α sol, β terra, γ luna) |
+| council | `gpt-6.1-sol` | high (α sol, β sol, γ luna) |
 
-Fallbacks cross to OpenCode Zen (terra→Zen terra for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. The explicit observer uses `openai/gpt-6-luna`.
+Fallbacks cross to OpenCode Zen (`gpt-6-sol` for orchestrator, big-pickle for oracle, nemotron-3.5-lightning-free elsewhere) so the preset still runs when OpenAI quota is exhausted. The explicit observer uses `openai/gpt-6-luna`.
 
 ### Thirtydollars Tier (`omo-slim-thirty-dollars`)
 
@@ -71,13 +71,13 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `openai/gpt-5.6-terra` | medium |
+| orchestrator | `openai/gpt-6-sol` | high |
 | oracle | `openai/gpt-6.1-sol` | high |
 | librarian / explorer | `openai/gpt-6-luna` | low |
 | designer | `github-copilot/gemini-3.5-flash` | — |
 | fixer | `openai/gpt-6-luna` | medium |
 | observer | `openai/gpt-6-luna` | low |
-| council | `openai/gpt-6.1-sol` | high (α sol, β terra, γ luna) |
+| council | `openai/gpt-6.1-sol` | high (α sol, β sol, γ luna) |
 
 Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-6-luna`. Requires GitHub Copilot auth via `/connect`.
 
@@ -94,7 +94,7 @@ Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my
 | observer | `mimo-v2.5-free` | low, temp 0.2 |
 | council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free) |
 
-Fallbacks point at OpenAI paid models (terra/luna) — free-tier failures degrade to paid capacity. The explicit observer uses `mimo-v2.5-free`; the Muse orchestrator is also multimodal. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
+Fallbacks point at OpenAI paid models (gpt-6-sol/luna) — free-tier failures degrade to paid capacity. The explicit observer uses `mimo-v2.5-free`; the Muse orchestrator is also multimodal. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -145,14 +145,14 @@ orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
 | orchestrator | `glm-5.3-flash` | max |
 | oracle | `gpt-6.1-sol` | high |
 | librarian / explorer | `gpt-6-luna` | low |
-| designer | `gpt-5.6-terra` | medium |
+| designer | `gpt-6-luna` | medium |
 | fixer | `gpt-6-luna` | medium |
 | observer | `gpt-6-luna` | low |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
 `openai/gpt-6.1-sol`, and γ `openai/gpt-6-luna` (model-default variants).
-Fallbacks are `openai/gpt-5.6-terra` for orchestrator,
+Fallbacks are `openai/gpt-6-sol` for orchestrator,
 `ollama-cloud/glm-5.3` for oracle, `ollama-cloud/deepseek-v4.1-flash` for
 librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 `ollama-cloud/glm-5.3-flash` for designer/observer.
@@ -173,11 +173,11 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
 `openai/gpt-6.1-sol`, and γ `anthropic/claude-sonnet-5-5` (model-default
-variants). Fallbacks follow the configured cross-provider chains: Terra then
+variants). Fallbacks follow the configured cross-provider chains: Sol then
 Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku then
 `ollama-cloud/deepseek-v4.1-flash` for librarian; Luna then
 `ollama-cloud/deepseek-v4.1-flash` for explorer; Haiku then
-`ollama-cloud/kimi-k2.7-code` for fixer; Terra then Flash for designer; and
+`ollama-cloud/kimi-k2.7-code` for fixer; Luna then Flash for designer; and
 Luna then Flash for observer.
 
 ### Anthropic Tier (`anthropic`)
@@ -202,7 +202,7 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `openai/gpt-5.6-terra` | — |
+| orchestrator | `openai/gpt-6-sol` | high |
 | oracle | `anthropic/claude-fable-5-1` | xhigh |
 | librarian | `openai/gpt-6-luna` | low |
 | explorer | `anthropic/claude-haiku-4-5` | low |
@@ -212,6 +212,22 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | council | `anthropic/claude-opus-5-5` | xhigh |
 
 Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+
+### Plus Tier (`plus`)
+
+OpenAI-only preset with a gpt-6 orchestrator and the existing gpt-6.1-sol oracle/council anchor:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator | `openai/gpt-6-sol` | high |
+| oracle | `openai/gpt-6.1-sol` | high |
+| librarian / explorer | `openai/gpt-6-luna` | low |
+| designer | `openai/gpt-6-luna` | medium |
+| fixer | `openai/gpt-6-luna` | medium |
+| observer | `openai/gpt-6-luna` | low |
+| council | `openai/gpt-6.1-sol` | high (α sol, β gpt-5.5, γ luna) |
+
+The orchestrator and oracle fall back to `openai/gpt-6-astra`; the remaining fallback chains are defined per role in `oh-my-opencode-slim.json`.
 
 ### Local-Pro Tier (`local-pro`)
 
@@ -473,20 +489,22 @@ models from each gateway's `/v1/models` endpoint.
 > [!IMPORTANT]
 > All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
 
-## OpenAI Models (gpt-6-astra / gpt-5.6 Family)
+## OpenAI Models (gpt-6 Generation)
 
-The gpt-5.6 family replaces the gpt-5.5/gpt-5.4 family as the primary OpenAI model line:
+The gpt-6 generation is the current OpenAI model line. Upstream oh-my-opencode-slim v3.0.1 maps orchestrator and council β to Sol, and designer and council γ to Luna:
 
 | Model | Role | Description |
 |-------|------|-------------|
 | `gpt-6-astra` | Flagship | Highest-capability reasoning/coding model (1.05M context, 128K max output); degraded-fallback head for orchestrator/oracle where chains exist. |
-| `gpt-5.6-terra` | Balanced | Primary orchestrator and general-purpose model. Replaces gpt-5.5 (balanced) as the default for orchestrator, librarian, and general roles. |
+| `gpt-6-sol` | Flagship | Current orchestrator and council β model; high reasoning effort. |
+| `gpt-6-luna` | Efficient | Designer and council γ model; also used for librarian, explorer, fixer, and observer roles. |
 | `gpt-5.6-sol` | Flagship | Primary oracle and deep reasoning model. Replaces gpt-5.5 (flagship) for oracle, council, and complex analysis. |
 | `gpt-5.6-luna` | Lightweight | Primary lightweight model for librarian, explorer, and fixer roles. Replaces gpt-5.4-mini and gpt-5.4-nano. |
+| `gpt-5.6-terra` | Retired from OpenAI | Absent from OpenAI's live catalog (2026-10-01); Zen still serves it. OpenAI references have migrated to gpt-6-sol or gpt-6-luna by role. |
 
-**Fallback chain**: When gpt-5.6 models are unavailable, `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; remaining chain entries (e.g. `gpt-5.5`, Anthropic models in `plus-anthropic`) follow each role's definition in `oh-my-opencode-slim.json`. The `plus` librarian/explorer/observer and `pro-plus-anthropic` librarian `gpt-5.4-mini` entries were removed because OpenAI's mapped replacement (`gpt-5.6-luna`) is already those roles' primary; `gpt-5.4-mini` remains in the `omo-slim-*` observer chains.
+**Fallback chain**: `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; `pro-plus` orchestrator falls back to `gpt-6-sol`, and `pro-plus-anthropic` orchestrator/designer use `gpt-6-sol`/`gpt-6-luna` before their retained cloud fallbacks. The `omo-slim-*` OpenAI orchestrators fall back to Zen's `gpt-6-sol`; `omo-slim-opencode-zen-free` uses OpenAI `gpt-6-sol`. Legacy gpt-5.5, gpt-5.6-sol/luna and gpt-5.4-mini references remain where explicitly configured.
 
-gpt-5.4 and gpt-5.4-mini were retired from Codex with ChatGPT sign-in on 2026-08-31 (OpenAI-directed replacement: gpt-5.4→gpt-5.6-terra, gpt-5.4-mini→gpt-5.6-luna). OpenAI API-key authentication is unaffected; `gpt-5.6` is an alias for `gpt-5.6-sol`.
+gpt-5.4 and gpt-5.4-mini were retired from Codex with ChatGPT sign-in on 2026-08-31 (OpenAI-directed replacement: gpt-5.4→gpt-5.6-terra, gpt-5.4-mini→gpt-5.6-luna). OpenAI API-key authentication is unaffected. As of 2026-10-01, gpt-5.6-terra is absent from OpenAI's live catalog and has been retired there; OpenCode Zen continues to serve it. Its OpenAI-side assignments have moved to gpt-6-sol/luna. The gpt-5.6-sol and gpt-5.6-luna entries remain legacy references.
 
 ## Catalog Churn Management
 
@@ -530,10 +548,10 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **pro**: synthesizer `glm-5.3` (max variant)
 - **pro-plus**: synthesizer `glm-5.3` (max variant)
 - **pro-plus-anthropic**: synthesizer `glm-5.3` (max variant)
-- **plus**: synthesizer `gpt-5.6-sol` (high variant)
+- **plus**: synthesizer `gpt-6.1-sol` (high variant)
 - **plus-anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
-- **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-5.6-sol` (high variant; councillors α sol, β terra, γ luna)
+- **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-6.1-sol` (high variant; councillors α sol, β sol, γ luna)
 - **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free)
 - **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-sante:free)
 
@@ -572,8 +590,9 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Catalog-only legacy model; no active tier role |
-| `gpt-5.6-terra` | standard | `high` | Primary balanced model; orchestrator default, oracle uses high |
-| `gpt-6.1-sol` | standard | `high` | Primary flagship generation; oracle/council use high; gpt-5.6-sol remains a retained legacy fallback |
+| `gpt-5.6-terra` | retired | — | Absent from OpenAI's live catalog since 2026-10-01; still served by OpenCode Zen |
+| `gpt-6-sol` | standard | `high` | Current orchestrator and council β; follows the gpt-6.1-sol high-reasoning policy |
+| `gpt-6.1-sol` | standard | `high` | Primary oracle/council model; gpt-5.6-sol remains a retained legacy fallback |
 | `gpt-6-luna` | standard | `high` | Primary efficient/high-volume generation; librarian/explorer use low, fixer uses high; gpt-5.6-luna remains a retained legacy fallback |
 | `gpt-5.6-sol` | standard | `high` | Retained legacy flagship fallback generation |
 | `gpt-5.6-luna` | standard | `high` | Retained legacy efficient/high-volume fallback generation |

@@ -150,3 +150,9 @@ council fallback empty. The repeatable workflow is in
 ## 2026-09-30 — Wave 4 model registry update
 
 Added `claude-sonnet-5-5`, `claude-opus-5-5`, `gpt-6-luna`, and `gpt-6.1-sol` to the provider registries and tier candidates. Evidence: models.dev + `opencode models --refresh` verified; direct provider probes unavailable (keys absent). Older generations remain in fallback chains.
+
+## 2026-10-01 — gpt-5.6-terra retirement from OpenAI
+
+- `gpt-5.6-terra` is absent from OpenAI's live catalog; it remains available from OpenCode Zen.
+- Replaced OpenAI-side references following upstream oh-my-opencode-slim v3.0.1 bundled mapping: orchestrator/council β → `gpt-6-sol`; designer/council γ → `gpt-6-luna`.
+- Kept the Zen `gpt-5.6-terra` allowlist entry and added `gpt-6-sol` to the Zen catalogue; removed terra from the OpenAI allowlist and added the OpenAI `gpt-6-sol` entry.
