@@ -98,6 +98,32 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
     assert "/omlx/*" not in caddy.build_route_block("/tmp/portal")
 
 
+def test_caddy_auth_matcher_is_defined_in_each_site_block(monkeypatch):
+    caddy = load_script("configure-caddy.py")
+    monkeypatch.setenv("OMLX_API_KEY", "secret")
+    auth = caddy.build_auth_block([("user", "hashed-password")]).replace(
+        "basic_auth {", "basic_auth @not_omlx {", 1
+    )
+    blocks = [
+        caddy.build_site_block(
+            "https://example.com", "0.0.0.0", "tls internal", auth, ""
+        ),
+        caddy.build_opencode_site_block(
+            "https://opencode.example.com", "0.0.0.0", "tls internal", auth, "4096"
+        ),
+    ]
+
+    assert len(blocks) == 2
+    for block in blocks:
+        lines = block.splitlines()
+        auth_index = next(
+            index
+            for index, line in enumerate(lines)
+            if "basic_auth @not_omlx {" in line
+        )
+        assert "  @not_omlx not path /omlx/*" in lines[:auth_index]
+
+
 def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
     codex = load_script("configure-codex.py")
     monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
