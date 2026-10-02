@@ -366,8 +366,8 @@ explicitly pointed at it): a separate, loopback-only OpenAI-compatible
   `opencode`, `pi`, `openwebui` and `junie` virtual keys by alias and records
   them in the mode-600 `~/.local/share/litellm/service.env` as
   `LITELLM_OPENCODE_KEY`, `LITELLM_PI_KEY`, `LITELLM_OPENWEBUI_KEY` and
-  `LITELLM_JUNIE_KEY`. WebUI uses the master key only until its per-app key is
-  provisioned. There is no Caddy route; only local clients consume the proxy.
+`LITELLM_JUNIE_KEY`. WebUI uses the master key only until its per-app key is
+provisioned. There is no Caddy route; only local clients consume the proxy.
 
 The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping
 is the canary path: verify one client, then roll back by setting its gate to `0`
@@ -397,6 +397,18 @@ so the secret is delivered to Pi without exporting it into the shell environment
 If the private key file is absent or unsafe, Pi keeps direct provider URLs and
 keys. Re-run `make deploy` after enabling the canary or rotating the key, then
 restart Pi to load the updated provider config.
+
+Junie's LiteLLM canary derives `clients/junie.key` from the Junie app-key entry
+in `service.env`. The Junie profile generator reads only that private key file
+and emits the literal Junie virtual key only into atomically written mode-600
+profiles in the shared mode-700 `~/.junie/models/` (`~/.ai/models/`) directory
+used by both Junie CLI and the IntelliJ IDE. This generated-profile location is
+an intentional credential-bearing runtime artifact; tracked
+`configs/junie/model-groups.json` contains only the key environment selector.
+After enabling/disabling the canary or rotating its key, run `make deploy`,
+restart Junie CLI sessions and reload/restart IntelliJ to consume regenerated
+profiles. Other providers keep their native environment-variable references;
+the complete LiteLLM `service.env` is never sourced into general shells.
 
 DB-less diagnostics retain the historical no-DB 400 classification for old
 deployments, but new gate-on deployments require `DATABASE_URL`.

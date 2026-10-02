@@ -7,16 +7,19 @@ source "$LIB_DIR/env.sh"
 source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
+# scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
+# scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
+# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_JUNIE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
 # database fingerprint: {{ env "DATABASE_URL" | sha256sum | trunc 12 }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
 CONFIGURE_SCRIPT="{{ .chezmoi.sourceDir }}/scripts/configure-litellm.py"
+JUNIE_CONFIGURE="{{ .chezmoi.sourceDir }}/scripts/configure-jetbrains-ai.py"
 if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
   if [[ "{{ .chezmoi.os }}" == "linux" ]]; then
     systemctl --user disable --now litellm.service 2>/dev/null || true
@@ -27,6 +30,9 @@ if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
     rm -f "$(litellm_service_plist)"
   fi
   pkill -f "$HOME/.local/share/litellm/venv/bin/litellm" 2>/dev/null || true
+  if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+    "$JUNIE_CONFIGURE" || die "Failed to regenerate Junie profiles after LiteLLM was disabled"
+  fi
   info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM; preserved venv/data"
   exit 0
 fi
@@ -90,6 +96,10 @@ EOF
   if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
     systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
     systemctl --user enable --now litellm.service || warn "systemd user LiteLLM start failed"
+    for _ in {1..30}; do
+      if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then break; fi
+      sleep 2
+    done
   else
     info "systemd user session unavailable; wrote litellm.service for later activation"
   fi
@@ -117,5 +127,9 @@ PLIST_EOF
   if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 && ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then
     warn "LiteLLM is still starting; configuration will retry on a later deploy"
   fi
-  "$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+fi
+
+"$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
+  "$JUNIE_CONFIGURE" || die "Failed to regenerate Junie profiles after LiteLLM key provisioning"
 fi

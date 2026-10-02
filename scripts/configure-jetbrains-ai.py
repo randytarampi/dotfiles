@@ -94,7 +94,6 @@ def main():
                 )
             continue_models = True
         else:
-            os.makedirs(target_dir, exist_ok=True)
             continue_models = True
         if continue_models:
             local_models = list_local_ollama_models()
@@ -138,9 +137,9 @@ def main():
         "",
         "JetBrains AI configure complete!",
     ]
-    logger.info("\n".join(summary_lines))
     if failures:
         raise SystemExit(1)
+    logger.info("\n".join(summary_lines))
 
 
 if __name__ == "__main__":

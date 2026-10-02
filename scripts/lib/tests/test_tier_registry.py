@@ -70,17 +70,24 @@ def test_junie_litellm_group_gate_replaces_only_eligible_groups():
     assert set(routed) == {"litellm-openai-one", "meridian-one", "copilot"}
 
 
-def test_junie_provider_config_reads_service_managed_key(tmp_path, monkeypatch):
-    env_path = tmp_path / "litellm" / "service.env"
-    env_path.parent.mkdir()
-    env_path.write_text("LITELLM_JUNIE_KEY='sk-junie'\n", encoding="utf-8")
-    monkeypatch.setattr(
-        generate_profiles.os.path,
-        "expanduser",
-        lambda _: str(env_path),
-    )
-    monkeypatch.delenv("LITELLM_JUNIE_KEY", raising=False)
+def test_junie_provider_config_reads_private_file_not_inherited_environment(
+    tmp_path, monkeypatch
+):
+    key_dir = tmp_path / ".local/share/litellm/clients"
+    key_dir.mkdir(parents=True, mode=0o700)
+    key_file = key_dir / "junie.key"
+    key_file.write_text("dummy-junie-key", encoding="utf-8")
+    key_dir.chmod(0o700)
+    key_file.chmod(0o600)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LITELLM_JUNIE_KEY", "stale-environment-value")
     assert generate_profiles.provider_key_available("LITELLM_JUNIE_KEY")
+    assert generate_profiles.read_junie_key() == "dummy-junie-key"
+    key_dir.chmod(0o755)
+    assert not generate_profiles.provider_key_available("LITELLM_JUNIE_KEY")
+    key_dir.chmod(0o700)
+    key_file.unlink()
+    assert not generate_profiles.provider_key_available("LITELLM_JUNIE_KEY")
 
 
 class TierRegistryTests(unittest.TestCase):

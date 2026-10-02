@@ -218,6 +218,27 @@ def test_opencode_key_file_missing_key_and_symlink_fail_closed(tmp_path):
     assert not (tmp_path / "outside").exists()
 
 
+def test_junie_key_file_is_idempotent_rotatable_and_symlink_safe(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_JUNIE_KEY='dummy-junie-one'\n", encoding="utf-8")
+    CONFIGURE._write_junie_key(service)
+    target = tmp_path / "clients/junie.key"
+    assert target.read_text(encoding="utf-8") == "dummy-junie-one"
+    assert target.parent.stat().st_mode & 0o777 == 0o700
+    assert target.stat().st_mode & 0o777 == 0o600
+    inode = target.stat().st_ino
+    CONFIGURE._write_junie_key(service)
+    assert target.stat().st_ino == inode
+    service.write_text("LITELLM_JUNIE_KEY='dummy-junie-two'\n", encoding="utf-8")
+    CONFIGURE._write_junie_key(service)
+    assert target.read_text(encoding="utf-8") == "dummy-junie-two"
+    target.unlink()
+    target.symlink_to(tmp_path / "outside")
+    CONFIGURE._write_junie_key(service)
+    assert target.is_symlink()
+    assert not (tmp_path / "outside").exists()
+
+
 def test_pi_key_file_is_private_idempotent_and_rotatable(tmp_path):
     service = tmp_path / "service.env"
     service.write_text("LITELLM_PI_KEY='dummy-one'\n", encoding="utf-8")
@@ -281,11 +302,19 @@ def test_existing_alias_recreates_file_from_service_env_without_generation(
 
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     service = tmp_path / "service.env"
-    service.write_text("LITELLM_OPENCODE_KEY='dummy-existing'\n", encoding="utf-8")
+    service.write_text(
+        "LITELLM_OPENCODE_KEY='dummy-existing'\n"
+        "LITELLM_JUNIE_KEY='dummy-junie-existing'\n",
+        encoding="utf-8",
+    )
     CONFIGURE.provision_app_keys("dummy-master", service, "http://127.0.0.1:4000")
     assert (tmp_path / "clients/opencode.key").read_text(encoding="utf-8") == (
         "dummy-existing"
     )
+    junie_key = tmp_path / "clients/junie.key"
+    assert junie_key.read_text(encoding="utf-8") == "dummy-junie-existing"
+    assert junie_key.parent.stat().st_mode & 0o777 == 0o700
+    assert junie_key.stat().st_mode & 0o777 == 0o600
 
 
 def test_app_key_provisioning_treats_400_generate_as_alias_exists(

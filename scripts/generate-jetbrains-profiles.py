@@ -6,9 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import re
-import shlex
+import stat
 import sys
+import tempfile
+import urllib.parse
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -43,6 +46,62 @@ LITELLM_ROUTED_PROVIDERS = {
     "openrouter",
     "opencode",
 }
+JUNIE_KEY_FILE = "~/.local/share/litellm/clients/junie.key"
+PROFILE_MANIFEST = ".dotfiles-generated-profiles.json"
+
+
+def read_junie_key() -> str:
+    """Read only Junie's private app key file; never source service.env."""
+    path = os.path.expanduser(JUNIE_KEY_FILE)
+    key_path = Path(path)
+    home = Path.home()
+    owner = getattr(os, "getuid", lambda: None)()
+    if owner is None:
+        return ""
+    if any(
+        component.is_symlink()
+        for component in (
+            home / ".local",
+            home / ".local/share",
+            home / ".local/share/litellm",
+            key_path.parent,
+            key_path,
+        )
+    ):
+        return ""
+    try:
+        directory_mode = stat.S_IMODE(key_path.parent.stat().st_mode)
+        file_stat = key_path.stat()
+        if (
+            directory_mode != 0o700
+            or key_path.parent.stat().st_uid != owner
+            or file_stat.st_uid != owner
+            or stat.S_IMODE(file_stat.st_mode) != 0o600
+            or not stat.S_ISREG(file_stat.st_mode)
+        ):
+            return ""
+        return key_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def valid_litellm_endpoint(value: str) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname == "127.0.0.1"
+        and port is not None
+        and 1 <= port <= 65535
+        and parsed.path in {"/v1", "/v1/"}
+        and not parsed.username
+        and not parsed.password
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 def select_model_groups(groups: dict, use_litellm: bool) -> dict:
@@ -88,37 +147,34 @@ def normalize_endpoint(base_url: str, api_type: str) -> str:
 
 
 def provider_key_available(key_env: str) -> bool:
+    if key_env == "LITELLM_JUNIE_KEY":
+        return bool(read_junie_key())
     if os.environ.get(key_env, "").strip():
         return True
-    if key_env != "LITELLM_JUNIE_KEY":
-        return False
-    try:
-        for line in open(
-            os.path.expanduser("~/.local/share/litellm/service.env"),
-            encoding="utf-8",
-        ):
-            if line.startswith(f"{key_env}="):
-                return bool(shlex.split(line.split("=", 1)[1].strip()))
-    except (OSError, ValueError):
-        pass
     return False
 
 
-def build_provider_configs(cfg: dict) -> dict:
+def build_provider_configs(cfg: dict, junie_key: str = "") -> dict:
     provider_configs = {}
     for name, definition in cfg.get("providers", {}).items():
         key_env = definition.get("apiKeyEnv", "")
-        has_key = provider_key_available(key_env) if key_env else False
+        if name == "litellm":
+            has_key = bool(junie_key)
+        else:
+            has_key = provider_key_available(key_env) if key_env else False
         if key_env and not has_key:
             logger.warning(
                 f"Provider {name}: {key_env} is unset — Junie refuses to load "
                 "profiles referencing an undefined variable"
             )
-        # Junie expands ${VAR_NAME} in apiKey at profile load; never embed
-        # the literal secret (profile files were world-readable). When the
-        # variable is unset, omit apiKey entirely — Junie refuses to load
-        # profiles referencing an undefined variable.
-        api_key = f"${{{key_env}}}" if key_env and has_key else ""
+        # LiteLLM is the sole exception: Junie does not inherit service.env,
+        # so its narrowly scoped app key is injected into private profiles.
+        # Other providers retain Junie's native ${VAR_NAME} expansion.
+        api_key = (
+            junie_key
+            if name == "litellm" and has_key
+            else f"${{{key_env}}}" if key_env and has_key else ""
+        )
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
         engine = resolve_engine(name)
@@ -144,6 +200,11 @@ def build_provider_configs(cfg: dict) -> dict:
         base_env = definition.get("baseUrlEnv", "")
         if base_env and os.environ.get(base_env, "").strip():
             base_url = os.environ[base_env].strip().rstrip("/")
+        if name == "litellm" and (not has_key or not valid_litellm_endpoint(base_url)):
+            logger.warning(
+                "LiteLLM Junie profile unavailable: private key or safe loopback endpoint missing"
+            )
+            continue
         base_url = normalize_endpoint(base_url, definition.get("apiType", ""))
         provider_config = {
             "baseUrl": base_url,
@@ -238,6 +299,117 @@ def append_pool_profile_specs(specs, pools=None):
                     provider,
                 )
             )
+
+
+def valid_profile_name(name: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) and ".." not in name)
+
+
+def prepare_profile_dir(target_dir: str, private_profiles: bool) -> Path:
+    target = Path(target_dir).expanduser()
+    if target.is_symlink():
+        raise OSError("unsafe symlink at Junie models directory")
+    home = Path.home()
+    ai_dir = home / ".ai"
+    junie_dir = home / ".junie"
+    default_target = home / ".junie" / "models"
+    if target.absolute() == default_target.absolute():
+        if junie_dir.is_symlink() and junie_dir.resolve() != ai_dir.resolve():
+            raise OSError("unsafe ~/.junie symlink target")
+        if target.resolve() != (ai_dir / "models").resolve():
+            raise OSError(
+                "Junie model output is not the canonical ~/.ai/models directory"
+            )
+    if private_profiles:
+        if getattr(os, "getuid", None) is None:
+            raise OSError(
+                "private Junie LiteLLM profiles require POSIX ownership controls"
+            )
+        expected = (ai_dir / "models").resolve()
+        if ai_dir.is_symlink() or target.resolve() != expected:
+            raise OSError(
+                "LiteLLM profiles require the canonical ~/.junie/models directory"
+            )
+        if junie_dir.is_symlink() and junie_dir.resolve() != ai_dir.resolve():
+            raise OSError("unsafe ~/.junie symlink target")
+    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target_stat = target.stat()
+    owner = getattr(os, "getuid", lambda: target_stat.st_uid)()
+    if not stat.S_ISDIR(target_stat.st_mode) or target_stat.st_uid != owner:
+        raise OSError("unsafe owner or type for Junie models directory")
+    os.chmod(target, 0o700)
+    return target
+
+
+def atomic_private_write(path: Path, content: str) -> None:
+    if path.is_symlink():
+        raise OSError(f"unsafe symlink at Junie profile: {path.name}")
+    fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        os.chmod(temp_path, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write(content)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def read_profile_manifest(target_dir: Path) -> set[str]:
+    manifest = target_dir / PROFILE_MANIFEST
+    if manifest.is_symlink():
+        raise OSError("unsafe Junie profile manifest symlink")
+    try:
+        metadata = manifest.stat()
+        owner = getattr(os, "getuid", lambda: None)()
+        if (
+            stat.S_IMODE(metadata.st_mode) != 0o600
+            or (owner is not None and metadata.st_uid != owner)
+            or not stat.S_ISREG(metadata.st_mode)
+        ):
+            raise OSError("unsafe Junie profile manifest owner or permissions")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return set()
+    if not isinstance(data, list) or any(
+        not isinstance(name, str)
+        or name.endswith(".json")
+        or not valid_profile_name(name)
+        for name in data
+    ):
+        raise ValueError("invalid Junie generated-profile manifest")
+    return set(data)
+
+
+def cleanup_profiles(
+    target_dir: Path,
+    previous: set[str],
+    generated: set[str],
+    legacy_litellm: set[str],
+    dry_run: bool,
+) -> None:
+    stale = (previous | legacy_litellm) - generated
+    for name in sorted(stale):
+        filename = name if name.endswith(".json") else f"{name}.json"
+        if not valid_profile_name(filename[:-5]):
+            continue
+        path = target_dir / filename
+        if not path.exists() and not path.is_symlink():
+            continue
+        if path.is_symlink() or not path.is_file():
+            raise OSError(f"unsafe stale Junie profile path: {filename}")
+        if dry_run:
+            logger.info(f"Would remove stale generated profile: {filename}")
+        else:
+            path.unlink()
+            logger.info(f"Removed stale generated profile: {filename}")
+
+
+def atomic_write_manifest(target_dir: Path, names: set[str]) -> None:
+    atomic_private_write(
+        target_dir / PROFILE_MANIFEST,
+        json.dumps(sorted(names), indent=2) + "\n",
+    )
 
 
 def main():
@@ -342,11 +514,16 @@ def main():
     if args.local_fallback_preset:
         logger.info(f"Using local fallback preset: {args.local_fallback_preset}")
 
-    groups = select_model_groups(
-        cfg.get("groups", {}),
+    litellm_gate = (
         os.environ.get(JUNIE_LITELLM_ENV, "0") == "1"
-        and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1",
+        and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
     )
+    junie_key = read_junie_key() if litellm_gate else ""
+    if litellm_gate and not junie_key:
+        logger.warning("Junie LiteLLM key file unavailable; keeping direct profiles")
+    providers = build_provider_configs(cfg, junie_key)
+    use_litellm = litellm_gate and bool(junie_key) and "litellm" in providers
+    groups = select_model_groups(cfg.get("groups", {}), use_litellm)
     specs = tier_specs + [
         (
             name,
@@ -360,7 +537,6 @@ def main():
     # Selection parity: one spec per chat-capable pool model (registry-driven,
     # N-engine contract) so every local model is selectable in JetBrains AI.
     append_pool_profile_specs(specs)
-    providers = build_provider_configs(cfg)
     ollama_model_names = [
         model["name"] if isinstance(model, dict) else str(model)
         for model in local_models
@@ -368,8 +544,13 @@ def main():
     ]
     temperatures = cfg.get("modelTemperatures", {})
     generated = set()
-    if not args.dry_run:
-        os.makedirs(target_dir, exist_ok=True)
+    generated_names = set()
+    if args.dry_run:
+        output_dir = Path(target_dir)
+        previous_generated = set()
+    else:
+        output_dir = prepare_profile_dir(target_dir, use_litellm)
+        previous_generated = read_profile_manifest(output_dir)
     logger.info("Generating JetBrains AI model profiles...")
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
@@ -430,35 +611,54 @@ def main():
                 faster_data.update(providers[faster_provider])
             data["fasterModel"] = faster_data
         output = json.dumps(data, indent=2) + "\n"
-        path = os.path.join(target_dir, f"{name}.json")
-        generated.add(os.path.basename(path))
+        if not valid_profile_name(name):
+            logger.error("Unsafe generated Junie profile name; refusing to write")
+            raise SystemExit(1)
+        filename = f"{name}.json"
+        path = output_dir / filename
+        generated.add(filename)
+        generated_names.add(name)
         if args.dry_run:
             logger.info(
                 f"Would configure: {name} → primary={primary} faster={faster or 'none'}"
             )
         else:
-            existing_output = None
-            if os.path.exists(path):
-                with open(path, encoding="utf-8") as file:
-                    existing_output = file.read()
+            if path.is_symlink():
+                raise OSError(f"unsafe symlink at Junie profile: {filename}")
+            if path.exists():
+                path_stat = path.stat()
+                expected_owner = getattr(os, "getuid", lambda: None)()
+                if (
+                    expected_owner is not None and path_stat.st_uid != expected_owner
+                ) or not stat.S_ISREG(path_stat.st_mode):
+                    raise OSError(f"unsafe owner or type for Junie profile: {filename}")
+                existing_output = path.read_text(encoding="utf-8")
+            else:
+                existing_output = None
             if existing_output == output:
+                os.chmod(path, 0o600)
                 logger.info(f"Unchanged: {name} ({primary})")
                 continue
-            with open(path, "w", encoding="utf-8") as file:
-                file.write(output)
-            os.chmod(path, 0o600)
+            atomic_private_write(path, output)
             logger.info(
                 f"Configured: {name} → primary={primary} faster={faster or 'none'}"
             )
 
-    if os.path.isdir(target_dir):
-        for existing in os.listdir(target_dir):
-            if existing.endswith(".json") and existing not in generated:
-                if args.dry_run:
-                    logger.info(f"Would remove stale: {existing}")
-                else:
-                    os.remove(os.path.join(target_dir, existing))
-                    logger.info(f"Removed stale: {existing}")
+    legacy_litellm = {
+        name
+        for name, group in cfg.get("groups", {}).items()
+        if group.get("provider") == "litellm"
+    }
+    if output_dir.is_dir():
+        cleanup_profiles(
+            output_dir,
+            previous_generated,
+            generated_names,
+            legacy_litellm,
+            args.dry_run,
+        )
+        if not args.dry_run:
+            atomic_write_manifest(output_dir, generated_names)
     logger.info(f"JetBrains AI models configured at {target_dir}")
     if not args.dry_run:
         try:

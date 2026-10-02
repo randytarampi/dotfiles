@@ -7,11 +7,24 @@ The shared tier registry in `scripts/lib/tier_registry.py` is the single source 
 Set `DOTFILES_JUNIE_USE_LITELLM=1` together with
 `DOTFILES_RUN_LITELLM_SETUP=1` to select the parallel `litellm-*` groups for
 externally authenticated providers. The LiteLLM provider uses the app-specific
-`LITELLM_JUNIE_KEY`. Meridian groups remain direct because Meridian speaks the
+`LITELLM_JUNIE_KEY`. The tracked `configs/junie/model-groups.json` keeps only
+the `apiKeyEnv` selector; no key is stored in tracked configuration. After
+LiteLLM provisions the key in its generated `service.env`, configuration
+derives `~/.local/share/litellm/clients/junie.key` with mode 600 in a mode-700
+directory. The generator reads that file directly (not `service.env` or an
+inherited environment variable) and places the Junie-only virtual key as a
+literal in the generated private profile JSON under `~/.junie/models/` (the
+shared `~/.ai/models/` directory). This is an intentional credential-bearing
+runtime artifact: keep the profile directory private, do not copy/share those
+profiles, and rotate via LiteLLM provisioning plus `make deploy`. Meridian groups remain direct because Meridian speaks the
 OpenAI Responses protocol at `/v1/responses`, which the LiteLLM proxy does not
 serve; Copilot remains direct because it uses its own authentication and profile
 shape. The gate defaults to `0`, and disabled mode emits the existing groups
 unchanged.
+
+After enabling, disabling or rotating the Junie LiteLLM key, regenerate profiles
+with `make deploy`. Restart Junie CLI sessions and reload/restart the IntelliJ
+IDE so both consumers reopen the shared profiles and pick up the new key.
 
 ### GitHub Copilot provider (experimental)
 
@@ -108,6 +121,10 @@ python3 scripts/configure-jetbrains-ai.py
 ```
 
 This generates profiles in `~/.junie/models/` and cleans up stale files.
+Generated files are atomically written with mode 600 and the shared models
+directory is kept at mode 700. Cleanup is limited to profiles recorded as
+generator-owned (plus known legacy `litellm-*` groups); unrelated user JSON
+profiles are preserved.
 
 `configure-jetbrains-ai.py` accepts `--local-fallback-preset`, repeated
 `--role-model`, repeated `--category-model`, and
