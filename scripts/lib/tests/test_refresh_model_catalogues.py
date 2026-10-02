@@ -132,6 +132,32 @@ def test_non_configured_loopback_port_is_rejected(monkeypatch):
         CATALOGUES._validate_catalogue_url("http://127.0.0.1:8101/v1/models")
 
 
+def test_litellm_default_loopback_port_requires_setup_gate(monkeypatch):
+    monkeypatch.delenv("LITELLM_PORT", raising=False)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+    with pytest.raises(ValueError):
+        CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
+
+
+def test_litellm_custom_port_requires_valid_gate_and_loopback(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_PORT", "4317")
+    CATALOGUES._validate_catalogue_url("http://localhost:4317/v1/models")
+    for value in ("0", "65536", "not-a-port", "-1"):
+        monkeypatch.setenv("LITELLM_PORT", value)
+        with pytest.raises(ValueError):
+            CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
+    monkeypatch.setenv("LITELLM_PORT", "4317")
+    for url in (
+        "http://proxy.example:4317/v1/models",
+        "http://user:pass@127.0.0.1:4317/v1/models",
+    ):
+        with pytest.raises(ValueError):
+            CATALOGUES._validate_catalogue_url(url)
+
+
 def test_unsafe_full_url_override_is_rejected(monkeypatch):
     for value in (
         "file:///tmp/models.json",

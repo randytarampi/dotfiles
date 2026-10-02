@@ -78,6 +78,17 @@ def _configured_loopback_ports() -> frozenset[int]:
     return frozenset(ports)
 
 
+def _configured_litellm_port() -> int | None:
+    """Return LiteLLM's local port only while its managed service is enabled."""
+    if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return None
+    value = os.environ.get("LITELLM_PORT", "4000").strip()
+    if not value.isdigit():
+        return None
+    port = int(value)
+    return port if 1 <= port <= 65535 else None
+
+
 def _configured_override_origins() -> tuple[frozenset[str], frozenset[tuple[str, int]]]:
     """Return trusted origins supplied through repository URL contracts."""
     https_hosts = set()
@@ -116,6 +127,7 @@ def _validate_catalogue_url(url: str, *, strict: bool = False) -> None:
     port = parsed.port
     credentials = parsed.username or parsed.password
     override_https_hosts, override_loopback_origins = _configured_override_origins()
+    litellm_port = _configured_litellm_port()
     strict_valid = (
         parsed.scheme == "https"
         and hostname == "opencode.ai"
@@ -134,6 +146,7 @@ def _validate_catalogue_url(url: str, *, strict: bool = False) -> None:
         and not credentials
         and (
             port in _configured_loopback_ports()
+            or (litellm_port is not None and port == litellm_port)
             or (hostname, port) in override_loopback_origins
         )
     )

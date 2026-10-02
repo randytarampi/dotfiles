@@ -198,7 +198,7 @@ def _profile_reference(path, provider_name, provider, model, field):
         key = None
         scope = f"unresolved-provider:{provider_name}"
     if scope == "inline-profile-key":
-        scope = f"inline-profile:{Path(path).name}:{provider_name}"
+        scope = f"inline-profile:{Path(path).resolve()}:{field}:{provider_name}"
     namespace = (
         _safe_endpoint_namespace(base_url)
         if base_url
@@ -288,8 +288,16 @@ def profile_models(path: Path) -> list[dict] | None:
             fallback_key = (
                 data.get("apiKey", "") if faster_provider_name == provider_name else ""
             )
-            faster_provider.setdefault("baseUrl", faster.get("baseUrl", fallback_base))
-            faster_provider.setdefault("apiKey", faster.get("apiKey", fallback_key))
+            faster_provider["baseUrl"] = faster.get(
+                "baseUrl", faster_provider.get("baseUrl", fallback_base)
+            )
+            if "apiKeyEnv" in faster:
+                faster_provider["apiKey"] = ""
+                faster_provider["apiKeyEnv"] = faster["apiKeyEnv"]
+            else:
+                faster_provider["apiKey"] = faster.get(
+                    "apiKey", faster_provider.get("apiKey", fallback_key)
+                )
             ref = _profile_reference(
                 path,
                 faster_provider_name,
@@ -454,6 +462,14 @@ def main() -> int:
     else:
         for violation in results["violations"]:
             logger.error("Model drift: %s", violation)
+        for item in junie_audit["results"]:
+            if item["outcome"] == Outcome.UNKNOWN.value:
+                logger.warning(
+                    "Junie model audit UNKNOWN at %s for credential %s: %s",
+                    item["endpoint_namespace"],
+                    item["credential_label"],
+                    item["reason"] or "catalogue unavailable",
+                )
         logger.info(
             "Model drift check complete: %d violation(s); checked %d provider endpoint(s), skipped %d",
             len(results["violations"]),
