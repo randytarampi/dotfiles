@@ -3,9 +3,6 @@
     "gpt-6-astra": {
       "name": "gpt-6-astra"
     },
-    "gpt-6-sol": {
-      "name": "gpt-6-sol"
-    },
     "gpt-5.5": {
       "name": "gpt-5.5"
     },

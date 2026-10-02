@@ -262,7 +262,7 @@
     },
     "plus": {
       "orchestrator": {
-        "model": "openai/gpt-6-sol",
+        "model": "openai/gpt-6.1-sol",
         "variant": "high",
         "skills": [
           "*"
@@ -327,7 +327,7 @@
     },
     "plus-anthropic": {
       "orchestrator": {
-        "model": "openai/gpt-6-sol",
+        "model": "openai/gpt-6.1-sol",
         "variant": "high",
         "skills": [
           "*"
@@ -717,7 +717,7 @@
     },
     "omo-slim-openai": {
       "orchestrator": {
-        "model": "openai/gpt-6-sol",
+        "model": "openai/gpt-6.1-sol",
         "variant": "high",
         "skills": [
           "*"
@@ -765,7 +765,7 @@
     },
     "omo-slim-thirty-dollars": {
       "orchestrator": {
-        "model": "openai/gpt-6-sol",
+        "model": "openai/gpt-6.1-sol",
         "variant": "high",
         "skills": [
           "*"
@@ -1054,7 +1054,7 @@
           "model": "openai/gpt-6.1-sol"
         },
         "beta": {
-          "model": "openai/gpt-6-sol"
+          "model": "openai/gpt-6-astra"
         },
         "gamma": {
           "model": "openai/gpt-6-luna"
@@ -1065,7 +1065,7 @@
           "model": "openai/gpt-6.1-sol"
         },
         "beta": {
-          "model": "openai/gpt-6-sol"
+          "model": "openai/gpt-6-astra"
         },
         "gamma": {
           "model": "openai/gpt-6-luna"
@@ -1169,7 +1169,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-6-sol"
+          "openai/gpt-6.1-sol"
         ],
         "oracle": [
           "ollama-cloud/glm-5.3"
@@ -1215,7 +1215,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-6-sol",
+          "openai/gpt-6.1-sol",
           "ollama-cloud/glm-5.3-flash"
         ],
         "oracle": [
@@ -1497,7 +1497,7 @@
               "model": "openai/gpt-6.1-sol"
             },
             "beta": {
-              "model": "openai/gpt-6-sol"
+              "model": "openai/gpt-6-astra"
             },
             "gamma": {
               "model": "openai/gpt-6-luna"
@@ -1511,7 +1511,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "opencode/gpt-6-sol"
+          "opencode/big-pickle"
         ],
         "oracle": [
           "google/gemini-3.8-flash"
@@ -1543,7 +1543,7 @@
               "model": "openai/gpt-6.1-sol"
             },
             "beta": {
-              "model": "openai/gpt-6-sol"
+              "model": "openai/gpt-6-astra"
             },
             "gamma": {
               "model": "openai/gpt-6-luna"
@@ -1557,7 +1557,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "opencode/gpt-6-sol"
+          "opencode/big-pickle"
         ],
         "oracle": [
           "google/gemini-3.8-flash"
@@ -1603,7 +1603,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "openai/gpt-6-sol"
+          "openai/gpt-6.1-sol"
         ],
         "oracle": [
           "openai/gpt-5.6-luna"

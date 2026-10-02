@@ -163,7 +163,7 @@ class TierRegistryTests(unittest.TestCase):
         data = registry()
         for tier in ("plus", "omo-slim-openai", "omo-slim-thirty-dollars"):
             self.assertEqual(
-                data["presets"][tier]["orchestrator"]["model"], "openai/gpt-6-sol"
+                data["presets"][tier]["orchestrator"]["model"], "openai/gpt-6.1-sol"
             )
             self.assertEqual(
                 data["presets"][tier]["oracle"]["model"], "openai/gpt-6.1-sol"
@@ -183,11 +183,11 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "high")
         self.assertEqual(
             data["_tiers"]["pro-plus"]["fallback"]["orchestrator"],
-            ["openai/gpt-6-sol"],
+            ["openai/gpt-6.1-sol"],
         )
         self.assertEqual(
             data["_tiers"]["pro-plus-anthropic"]["fallback"]["orchestrator"],
-            ["openai/gpt-6-sol", "ollama-cloud/glm-5.3-flash"],
+            ["openai/gpt-6.1-sol", "ollama-cloud/glm-5.3-flash"],
         )
         self.assertEqual(
             data["_tiers"]["pro-plus-anthropic"]["fallback"]["designer"],
@@ -200,18 +200,18 @@ class TierRegistryTests(unittest.TestCase):
         for tier in ("omo-slim-openai", "omo-slim-thirty-dollars"):
             self.assertEqual(
                 data["_tiers"][tier]["fallback"]["orchestrator"],
-                ["opencode/gpt-6-sol"],
+                ["opencode/big-pickle"],
             )
             self.assertEqual(
-                data["council"]["presets"][tier]["beta"]["model"], "openai/gpt-6-sol"
+                data["council"]["presets"][tier]["beta"]["model"], "openai/gpt-6-astra"
             )
             self.assertEqual(
                 data["_tiers"][tier]["council"]["presets"][tier]["beta"]["model"],
-                "openai/gpt-6-sol",
+                "openai/gpt-6-astra",
             )
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["orchestrator"],
-            ["openai/gpt-6-sol"],
+            ["openai/gpt-6.1-sol"],
         )
         self.assertNotIn("gpt-5.6-terra", json.dumps(data))
 
@@ -233,7 +233,8 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(groups["meridian-sonnet"]["primaryModel"], "claude-sonnet-5-5")
         self.assertEqual(groups["openai-gpt-6.1-sol"]["primaryModel"], "gpt-6.1-sol")
         self.assertEqual(groups["openai-gpt-6-luna"]["primaryModel"], "gpt-6-luna")
-        self.assertEqual(groups["openai-gpt-6-sol"]["primaryModel"], "gpt-6-sol")
+        self.assertNotIn("openai-gpt-6-sol", groups)
+        self.assertNotIn("litellm-openai-gpt-6-sol", groups)
         self.assertEqual(groups["meridian-opus-5-5"]["primaryModel"], "claude-opus-5-5")
 
     def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
