@@ -257,8 +257,12 @@ def get_ollama_modalities(model_name, models_dev_data):
     Returns:
       {"input": [...], "output": ["text"]} or None when text-only/unknown.
     """
-    if model_name.endswith(":cloud"):
-        catalog_name = model_name[: -len(":cloud")]
+    cloud_suffix = next(
+        (suffix for suffix in (":cloud", "-cloud") if model_name.endswith(suffix)),
+        None,
+    )
+    if cloud_suffix:
+        catalog_name = model_name[: -len(cloud_suffix)]
         catalog_meta = get_model_metadata("ollama-cloud", catalog_name, models_dev_data)
         if catalog_meta.get("modalities"):
             return catalog_meta["modalities"]

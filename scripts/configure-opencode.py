@@ -37,6 +37,8 @@ from opencode_config import (
 from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
+from discover_models import list_cloud_ollama_models
+from ollama_cloud_wire_ids import installed_cloud_stub
 from local_engines import engine_gate_active, local_provider_block, resolve_engine
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
@@ -252,6 +254,13 @@ def main():
 
     # Check if local Ollama daemon can proxy cloud models
     _, can_proxy_cloud = check_ollama_daemon()
+    installed_cloud_models = None
+    if can_proxy_cloud and args.mode == "global" and args.preset != "plus":
+        try:
+            installed_cloud_models = list_cloud_ollama_models()
+        except Exception as exc:
+            logger.warning("Could not list installed Ollama Cloud stubs: %s", exc)
+            installed_cloud_models = []
 
     # Generate MCP Config (unless --skip-mcp was passed)
     mcp_config = {}
@@ -734,15 +743,18 @@ def main():
                 combined_models = {}
                 if local_ollama and args.preset not in ["plus", "pro"]:
                     combined_models.update(local_ollama.get("models", {}))
-                # Add cloud models with :cloud suffix, enriched with
-                # models.dev metadata (looked up as ollama-cloud/<model>)
-                # and ground-truth context_length from `ollama show`.
+                # Add only exact cloud stubs reported by the daemon. Unmatched
+                # curated models retain their direct ollama-cloud route below.
+                direct_cloud_models = {}
                 for model_name in ollama_cloud_models:
-                    cloud_name = (
-                        f"{model_name}:cloud"
-                        if not model_name.endswith(":cloud")
-                        else model_name
+                    cloud_name = installed_cloud_stub(
+                        model_name, installed_cloud_models
                     )
+                    if cloud_name is None:
+                        direct_cloud_models[model_name] = build_model_entry(
+                            model_name, models_dev_data, "ollama-cloud"
+                        )
+                        continue
                     ctx = get_ollama_context_length(cloud_name)
                     # Resolve :cloud modalities from the models.dev catalog;
                     # the image hook routes attachments to the observer.
@@ -760,10 +772,20 @@ def main():
                         "npm": "@ai-sdk/openai-compatible",
                         "options": {"baseURL": get_ollama_local_base_url()},
                     }
-                    config["disabled_providers"].append("ollama-cloud")
                 elif local_ollama and args.preset not in ["plus", "pro"]:
                     # Cloud-capable but no cloud models pulled; keep local-only provider
                     config["provider"]["ollama"] = local_ollama
+                if direct_cloud_models and os.environ.get("OLLAMA_API_KEY", "").strip():
+                    config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
+                    logger.warning(
+                        "Some curated Ollama Cloud models have no unique installed local stub; retaining direct ollama-cloud route"
+                    )
+                else:
+                    config["disabled_providers"].append("ollama-cloud")
+                    if direct_cloud_models:
+                        logger.warning(
+                            "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset"
+                        )
             elif ollama_cloud_models and args.preset != "plus":
                 # Not cloud-capable: use direct ollama-cloud provider
                 enriched_cloud = {
