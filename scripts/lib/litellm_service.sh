@@ -6,6 +6,57 @@ litellm_require_database_url() {
   [[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
 }
 
+litellm_prisma_schema_matches() {
+  local venv="$1" source_schema="$2" packaged_schema="$3" temp_dir formatted result=1
+  [[ -f "$packaged_schema" ]] || return 1
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-prisma.XXXXXX")" || return 1
+  formatted="$temp_dir/schema.prisma"
+  if cp "$source_schema" "$formatted" &&
+    PATH="$venv/bin:$PATH" "$venv/bin/prisma" format --schema "$formatted" >/dev/null 2>&1 &&
+    cmp -s "$formatted" "$packaged_schema"; then
+    result=0
+  fi
+  rm -f "$formatted"
+  rmdir "$temp_dir" 2>/dev/null || true
+  return "$result"
+}
+
+litellm_ensure_prisma_client() {
+  local venv="${1:-}" python prisma schema packaged_schema
+  python="$venv/bin/python"
+  prisma="$venv/bin/prisma"
+  if [[ ! -x "$python" ]]; then
+    printf 'LiteLLM venv Python is unavailable for Prisma client check\n' >&2
+    return 1
+  fi
+  schema="$("$python" -c 'import site; from pathlib import Path; print(next((str(path) for root in site.getsitepackages() for path in [Path(root) / "litellm_proxy_extras" / "schema.prisma"] if path.is_file()), ""))' 2>/dev/null)" || schema=""
+  if [[ -z "$schema" || ! -f "$schema" ]]; then
+    printf 'LiteLLM Prisma schema is unavailable; refusing to start\n' >&2
+    return 1
+  fi
+  if [[ ! -x "$prisma" ]]; then
+    printf 'LiteLLM Prisma CLI is unavailable; refusing to start\n' >&2
+    return 1
+  fi
+  packaged_schema="$(dirname "$(dirname "$schema")")/prisma/schema.prisma"
+  if "$python" -c 'from prisma import Prisma' >/dev/null 2>&1 &&
+    litellm_prisma_schema_matches "$venv" "$schema" "$packaged_schema"; then
+    return 0
+  fi
+  if ! PATH="$venv/bin:$PATH" "$prisma" generate --schema "$schema" >/dev/null 2>&1; then
+    printf 'LiteLLM Prisma client generation failed; refusing to start\n' >&2
+    return 1
+  fi
+  if ! "$python" -c 'from prisma import Prisma' >/dev/null 2>&1; then
+    printf 'LiteLLM Prisma client remains unavailable after generation; refusing to start\n' >&2
+    return 1
+  fi
+  if ! litellm_prisma_schema_matches "$venv" "$schema" "$packaged_schema"; then
+    printf 'LiteLLM Prisma client schema still mismatches after generation; refusing to start\n' >&2
+    return 1
+  fi
+}
+
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
   local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL=""

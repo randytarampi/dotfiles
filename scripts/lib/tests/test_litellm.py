@@ -653,3 +653,134 @@ def test_mozart_template_has_no_litellm_gateway():
         "127.0.0.1:4000" not in json.dumps(gateway)
         for gateway in config.get("gateways", {}).values()
     )
+
+
+def _fake_prisma_venv(tmp_path):
+    venv = tmp_path / "venv"
+    bin_dir = venv / "bin"
+    bin_dir.mkdir(parents=True)
+    schema = venv / "lib/python3.12/site-packages/litellm_proxy_extras/schema.prisma"
+    schema.parent.mkdir(parents=True)
+    schema.write_text("// fixture schema\n", encoding="utf-8")
+    ready = tmp_path / "prisma-client-ready"
+    calls = tmp_path / "prisma-generate-calls"
+    python = bin_dir / "python"
+    python.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        'if [[ "$*" == *"site.getsitepackages"* ]]; then\n'
+        '  printf "%s\\n" "$FAKE_PRISMA_SCHEMA"\n'
+        "  exit 0\n"
+        "fi\n"
+        'if [[ "$*" == *"from prisma import Prisma"* ]]; then\n'
+        '  [[ -f "$FAKE_PRISMA_READY" ]] && exit 0\n'
+        "  exit 1\n"
+        "fi\n"
+        "exit 2\n",
+        encoding="utf-8",
+    )
+    prisma = bin_dir / "prisma"
+    prisma.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        'case ":$PATH:" in *":$FAKE_PRISMA_BIN:"*) ;; *) exit 3 ;; esac\n'
+        'if [[ "$1" == "format" && "$2" == "--schema" && -f "$3" ]]; then\n'
+        "  exit 0\n"
+        "fi\n"
+        '[[ "$1" == "generate" && "$2" == "--schema" && "$3" == "$FAKE_PRISMA_SCHEMA" ]] || exit 2\n'
+        'printf "%s\\n" called >> "$FAKE_PRISMA_CALLS"\n'
+        'if [[ "${FAKE_PRISMA_MODE:-success}" == "success" ]]; then\n'
+        '  touch "$FAKE_PRISMA_READY"\n'
+        '  mkdir -p "$(dirname "$FAKE_PRISMA_PACKAGED")"\n'
+        '  cp "$FAKE_PRISMA_SCHEMA" "$FAKE_PRISMA_PACKAGED"\n'
+        "fi\n"
+        '[[ "${FAKE_PRISMA_MODE:-success}" != "fail" ]]\n',
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+    prisma.chmod(0o755)
+    return venv, schema, ready, calls
+
+
+def _run_prisma_guard(venv, schema, ready, calls, **overrides):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "FAKE_PRISMA_SCHEMA": str(schema),
+        "FAKE_PRISMA_READY": str(ready),
+        "FAKE_PRISMA_CALLS": str(calls),
+        "FAKE_PRISMA_BIN": str(venv / "bin"),
+        "FAKE_PRISMA_PACKAGED": str(schema.parent.parent / "prisma/schema.prisma"),
+        **overrides,
+    }
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; litellm_ensure_prisma_client "$2"',
+            "prisma-test",
+            str(helper),
+            str(venv),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_litellm_prisma_guard_generates_missing_client_once(tmp_path):
+    venv, schema, ready, calls = _fake_prisma_venv(tmp_path)
+    first = _run_prisma_guard(venv, schema, ready, calls)
+    second = _run_prisma_guard(venv, schema, ready, calls)
+
+    assert first.returncode == 0
+    assert second.returncode == 0
+    assert ready.is_file()
+    assert calls.read_text(encoding="utf-8").splitlines() == ["called"]
+
+
+def test_litellm_prisma_guard_regenerates_stale_importable_client(tmp_path):
+    venv, schema, ready, calls = _fake_prisma_venv(tmp_path)
+    packaged = schema.parent.parent / "prisma/schema.prisma"
+    packaged.parent.mkdir()
+    packaged.write_text("// older generated schema\n", encoding="utf-8")
+    ready.touch()
+
+    result = _run_prisma_guard(venv, schema, ready, calls)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text(encoding="utf-8").splitlines() == ["called"]
+    assert packaged.read_text(encoding="utf-8") == schema.read_text(encoding="utf-8")
+
+
+def test_litellm_prisma_guard_fails_if_generation_does_not_create_client(tmp_path):
+    venv, schema, ready, calls = _fake_prisma_venv(tmp_path)
+    result = _run_prisma_guard(
+        venv, schema, ready, calls, FAKE_PRISMA_MODE="incomplete"
+    )
+
+    assert result.returncode != 0
+    assert "client remains unavailable" in result.stderr
+    assert not ready.exists()
+
+
+def test_litellm_prisma_guard_fails_if_schema_is_missing(tmp_path):
+    venv, schema, ready, calls = _fake_prisma_venv(tmp_path)
+    schema.unlink()
+
+    result = _run_prisma_guard(venv, schema, ready, calls)
+
+    assert result.returncode != 0
+    assert "schema is unavailable" in result.stderr
+    assert not calls.exists()
+
+
+def test_litellm_template_prepares_prisma_before_service_start():
+    template = (
+        Path(__file__).resolve().parents[3]
+        / ".chezmoiscripts/run_onchange_31-litellm.sh.tmpl"
+    ).read_text(encoding="utf-8")
+    prepare = template.index('litellm_ensure_prisma_client "$VENV"')
+    assert prepare < template.index("systemctl --user enable --now litellm.service")
+    assert prepare < template.index("litellm_service_start")
