@@ -464,6 +464,7 @@ def audit_client_providers():
         "pi": home / ".pi/agent/models.json",
     }
     inventories = {"opencode": {}, "pi": {}}
+    pi_provider_names: set[str] = set()
     active_clients = {}
     for client, path in sources.items():
         active = bool(
@@ -532,6 +533,8 @@ def audit_client_providers():
             )
             unknown = True
             continue
+        if client == "pi":
+            pi_provider_names = set(providers)
         disabled_providers = (
             data.get("disabled_providers", []) if client == "opencode" else []
         )
@@ -634,30 +637,29 @@ def audit_client_providers():
                 unknown = True
                 continue
             if not routed:
-                if isinstance(base, str) and base.startswith(("http://", "https://")):
-                    reports.append(
-                        {
-                            "outcome": Outcome.UNKNOWN.value,
-                            "client": client,
-                            "reference_path": str(path),
-                            "field": f"provider.{provider_name}",
-                            "wire_model_id": None,
-                            "reason": "DIRECT_NOT_PROXIED",
-                        }
-                    )
-                    unknown = True
+                options = provider.get("options", {})
+                if (
+                    client == "opencode"
+                    and provider_name in {"openai", "anthropic"}
+                    and isinstance(options, dict)
+                    and "baseURL" not in options
+                ):
+                    reason = "NATIVE_PROVIDER_NOT_PROXIED"
+                elif isinstance(base, str) and base.startswith(("http://", "https://")):
+                    reason = "DIRECT_NOT_PROXIED"
                 else:
-                    reports.append(
-                        {
-                            "outcome": Outcome.UNKNOWN.value,
-                            "client": client,
-                            "reference_path": str(path),
-                            "field": f"provider.{provider_name}",
-                            "wire_model_id": None,
-                            "reason": "malformed or missing provider URL",
-                        }
-                    )
-                    unknown = True
+                    reason = "malformed or missing provider URL"
+                reports.append(
+                    {
+                        "outcome": Outcome.UNKNOWN.value,
+                        "client": client,
+                        "reference_path": str(path),
+                        "field": f"provider.{provider_name}",
+                        "wire_model_id": None,
+                        "reason": reason,
+                    }
+                )
+                unknown = True
                 continue
             scope = f"{client}:{provider_name}"
             for model_id, model in model_pairs:
@@ -865,7 +867,7 @@ def audit_client_providers():
                         continue
                     if isinstance(model, str) and "/" in model and not provider:
                         qualified_provider = model.split("/", 1)[0]
-                        if qualified_provider in providers:
+                        if qualified_provider in pi_provider_names:
                             provider = qualified_provider
                     if not isinstance(provider, str) or not isinstance(model, str):
                         reports.append(
@@ -881,7 +883,7 @@ def audit_client_providers():
                         unknown = True
                         continue
                     qualified = model.split("/", 1)[0] if "/" in model else ""
-                    if qualified in providers:
+                    if qualified in pi_provider_names:
                         if explicit_provider and provider and qualified != provider:
                             reports.append(
                                 {
