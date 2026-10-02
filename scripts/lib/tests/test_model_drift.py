@@ -3,12 +3,20 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+from model_catalogues import load_allowlists
+
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "check-model-drift.py"
 SPEC = importlib.util.spec_from_file_location("check_model_drift", SCRIPT_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None
 DRIFT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DRIFT)
+
+
+def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
+    path = tmp_path / "openai.json"
+    path.write_text('{"models": {"real-id": {"name": "Pretty name"}}}')
+    assert load_allowlists({"openai": path}) == {"openai": {"real-id"}}
 
 
 def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):

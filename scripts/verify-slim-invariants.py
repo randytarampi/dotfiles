@@ -144,7 +144,7 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
             )
 
     groups = junie.get("groups", {})
-    supported_providers = set(junie.get("providers", {})) | {
+    supported_providers = set(MODEL_ALLOWLIST_PATHS) | {
         "litellm",
         "meridian",
         "ollama",

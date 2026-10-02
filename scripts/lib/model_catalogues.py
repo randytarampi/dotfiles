@@ -206,14 +206,8 @@ def load_allowlists(paths: dict[str, Path]) -> dict[str, set[str]]:
             continue
         try:
             models = json.loads(path.read_text(encoding="utf-8")).get("models", {})
-            values = set(models) if isinstance(models, dict) else set()
-            if isinstance(models, dict):
-                values.update(
-                    item.get("name")
-                    for item in models.values()
-                    if isinstance(item, dict) and item.get("name")
-                )
-            result[provider] = values
+            # Display names are not requestable provider model IDs.
+            result[provider] = set(models) if isinstance(models, dict) else set()
         except (OSError, json.JSONDecodeError) as exc:
             logger.warning("Could not read %s — skipping (%s)", path, exc)
     return result

@@ -5,6 +5,8 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "verify-slim-invariants.py"
 SPEC = importlib.util.spec_from_file_location("verify_slim_invariants", SCRIPT)
+assert SPEC is not None
+assert SPEC.loader is not None
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)
 
@@ -110,6 +112,20 @@ def test_unknown_provider_fails_closed_even_when_name_matches_catalogue():
     errors = run(
         groups,
         {"google": {"Pretty name"}, "ollama-cloud": {"cloud-default"}},
+    )
+    assert any("unknown provider 'googlle'" in error for error in errors)
+
+
+def test_unknown_provider_declared_in_junie_still_fails_closed():
+    errors = VERIFY._offline_model_parity_violations(
+        junie={
+            "providers": {"googlle": {}},
+            "groups": {
+                "mistyped": {"provider": "googlle", "primaryModel": "gemini-3.8-flash"}
+            },
+        },
+        allowlists={"google": {"gemini-3.8-flash"}, "ollama-cloud": {"cloud-default"}},
+        codex_source='DEFAULT_OLLAMA_CLOUD_MODEL = "cloud-default"',
     )
     assert any("unknown provider 'googlle'" in error for error in errors)
 
