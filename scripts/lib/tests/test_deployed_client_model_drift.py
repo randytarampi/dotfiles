@@ -316,6 +316,87 @@ def test_pi_settings_selections_use_matching_provider_and_strip_one_prefix(
     assert any(item["outcome"] == "MISSING" for item in report["results"])
 
 
+def test_qualified_pi_override_uses_its_provider_not_global_default(
+    tmp_path, monkeypatch
+):
+    client_home(tmp_path, monkeypatch)
+    write_pi(
+        tmp_path,
+        {
+            "providers": {
+                "omlx": pi_provider(tmp_path, "omlx", "Ornith-1.5-35B-A3B-MLX-4bit"),
+                "ollama": pi_provider(tmp_path, "ollama", "qwen3.8:27b-mlx"),
+            }
+        },
+    )
+    write_pi_settings(
+        tmp_path,
+        {
+            "defaultProvider": "omlx",
+            "defaultModel": "Ornith-1.5-35B-A3B-MLX-4bit",
+            "subagents": {
+                "defaultModel": "omlx/Ornith-1.5-35B-A3B-MLX-4bit",
+                "agentOverrides": {
+                    "oracle": {"model": "ollama/qwen3.8:27b-mlx"},
+                },
+            },
+        },
+    )
+    monkeypatch.setattr(
+        drift,
+        "get_catalogue",
+        lambda *_: {
+            "data": [
+                {"id": "Ornith-1.5-35B-A3B-MLX-4bit"},
+                {"id": "qwen3.8:27b-mlx"},
+            ]
+        },
+    )
+    report, violations = drift.audit_client_providers()
+    assert violations == []
+    assert report["complete"] is True
+
+
+def test_pi_explicit_provider_conflicting_with_qualified_model_is_unknown(
+    tmp_path, monkeypatch
+):
+    client_home(tmp_path, monkeypatch)
+    write_pi(
+        tmp_path,
+        {
+            "providers": {
+                "omlx": pi_provider(tmp_path, "omlx", "Ornith"),
+                "ollama": pi_provider(tmp_path, "ollama", "qwen3.8"),
+            }
+        },
+    )
+    write_pi_settings(
+        tmp_path,
+        {
+            "defaultProvider": "omlx",
+            "defaultModel": "Ornith",
+            "subagents": {
+                "agentOverrides": {
+                    "oracle": {"provider": "omlx", "model": "ollama/qwen3.8"}
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(
+        drift,
+        "get_catalogue",
+        lambda *_: {"data": [{"id": "Ornith"}, {"id": "qwen3.8"}]},
+    )
+    report, _ = drift.audit_client_providers()
+    assert report["complete"] is False
+    assert any(
+        item.get("field") == "subagents.agentOverrides.oracle.model"
+        and item["outcome"] == "UNKNOWN"
+        and item.get("reason") == "qualified model conflicts with explicit provider"
+        for item in report["results"]
+    )
+
+
 def test_opencode_disabled_providers_and_enabled_missing_provider(
     tmp_path, monkeypatch
 ):

@@ -818,6 +818,7 @@ def audit_client_providers():
                         "defaultModel",
                         settings.get("defaultProvider"),
                         settings.get("defaultModel"),
+                        "defaultProvider" in settings,
                     ),
                     (
                         "subagents.defaultModel",
@@ -825,6 +826,7 @@ def audit_client_providers():
                             "defaultProvider", settings.get("defaultProvider")
                         ),
                         subagents.get("defaultModel"),
+                        "defaultProvider" in subagents,
                     ),
                 ]
                 overrides = subagents.get("agentOverrides", {})
@@ -839,6 +841,7 @@ def audit_client_providers():
                                 ),
                             ),
                             value.get("model"),
+                            "provider" in value,
                         )
                         for role, value in overrides.items()
                         if isinstance(value, dict)
@@ -857,11 +860,13 @@ def audit_client_providers():
                         }
                     )
                     unknown = True
-                for field, provider, model in selections:
+                for field, provider, model, explicit_provider in selections:
                     if model is None:
                         continue
-                    if isinstance(model, str) and not provider and "/" in model:
-                        provider = model.split("/", 1)[0]
+                    if isinstance(model, str) and "/" in model and not provider:
+                        qualified_provider = model.split("/", 1)[0]
+                        if qualified_provider in providers:
+                            provider = qualified_provider
                     if not isinstance(provider, str) or not isinstance(model, str):
                         reports.append(
                             {
@@ -875,6 +880,22 @@ def audit_client_providers():
                         )
                         unknown = True
                         continue
+                    qualified = model.split("/", 1)[0] if "/" in model else ""
+                    if qualified in providers:
+                        if explicit_provider and provider and qualified != provider:
+                            reports.append(
+                                {
+                                    "outcome": Outcome.UNKNOWN.value,
+                                    "client": "pi",
+                                    "reference_path": str(settings_path),
+                                    "field": field,
+                                    "wire_model_id": model,
+                                    "reason": "qualified model conflicts with explicit provider",
+                                }
+                            )
+                            unknown = True
+                            continue
+                        provider = qualified
                     inventory = inventories["pi"].get(provider)
                     selected_id = (
                         model[len(provider) + 1 :]
