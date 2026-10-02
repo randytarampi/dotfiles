@@ -160,6 +160,31 @@ def test_direct_route_is_explicitly_not_proxied(tmp_path, monkeypatch):
     assert all(item["outcome"] != "MATCH" for item in report["results"])
 
 
+def test_opencode_native_provider_without_explicit_url_is_not_called_malformed(
+    tmp_path, monkeypatch
+):
+    client_home(tmp_path, monkeypatch, "opencode")
+    path = tmp_path / ".config/opencode/opencode.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"provider": {"openai": {"models": {"gpt-6.1-sol": {}}}}})
+    )
+    monkeypatch.setattr(
+        drift,
+        "get_catalogue",
+        lambda *_: pytest.fail("native provider should not use the proxy key"),
+    )
+    report, violations = drift.audit_client_providers()
+    assert not violations
+    assert any(
+        item.get("field") == "provider.openai"
+        and item["outcome"] == "UNKNOWN"
+        and item.get("reason") == "NATIVE_PROVIDER_NOT_PROXIED"
+        for item in report["results"]
+    )
+    assert report["complete"] is False
+
+
 def test_key_symlink_rejected(tmp_path, monkeypatch):
     key = client_home(tmp_path, monkeypatch)
     other = tmp_path / "other.key"
@@ -473,6 +498,27 @@ def test_missing_pi_settings_is_unknown_when_pi_routing_enabled(tmp_path, monkey
         for item in report["results"]
     )
     assert not report["complete"]
+
+
+def test_missing_pi_provider_file_with_existing_settings_remains_unknown(
+    tmp_path, monkeypatch
+):
+    client_home(tmp_path, monkeypatch)
+    write_pi_settings(
+        tmp_path,
+        {
+            "defaultProvider": "omlx",
+            "defaultModel": "Ornith",
+            "subagents": {"agentOverrides": {"oracle": {"model": "ollama/qwen3.8"}}},
+        },
+    )
+    report, violations = drift.audit_client_providers()
+    assert not violations
+    assert report["complete"] is False
+    assert any(
+        item.get("reason") == "enabled client config is missing"
+        for item in report["results"]
+    )
 
 
 @pytest.mark.parametrize("url", ["http://127.0.0.1:broken/v1", "http://[broken/v1"])
