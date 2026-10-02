@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 # 403) keep their single curated default alias instead.
 LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "ollama-cloud")
 
+# Per-client virtual keys provisioned in the LiteLLM proxy (alias → env var
+# name persisted in service.env). Shared source for configure-litellm.py
+# (provisioning) and verify-config.py (doctor allowlist).
+APP_KEYS = {
+    "opencode": "LITELLM_OPENCODE_KEY",
+    "pi": "LITELLM_PI_KEY",
+    "openwebui": "LITELLM_OPENWEBUI_KEY",
+    "junie": "LITELLM_JUNIE_KEY",
+}
+
 
 class LiveCatalogueError(Exception):
     """A provider's live model catalogue could not be enumerated."""

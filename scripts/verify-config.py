@@ -24,6 +24,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
+from litellm_config import APP_KEYS
 
 HOME = Path.home()
 OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
@@ -1326,14 +1327,23 @@ def main():
                 print("  \u2717 LiteLLM config: Mozart/self-routing loop detected")
                 exit_code = 1
             refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
-            expected_env = {
-                "LITELLM_MASTER_KEY",
-                "LITELLM_PORT",
-                "DISABLE_ADMIN_UI",
-            } | refs
-            if set(litellm_env_values) != expected_env:
+            core_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT", "DISABLE_ADMIN_UI"}
+            # Per-app virtual keys provisioned by configure-litellm.py are
+            # allowed to be absent (fresh installs before the first
+            # provisioning run) but never allow unexpected extras.
+            expected_env = core_env | set(APP_KEYS.values()) | refs
+            unexpected_env = set(litellm_env_values) - expected_env
+            missing_required = (core_env | refs) - set(litellm_env_values)
+            if unexpected_env:
                 print(
-                    "  \u2717 LiteLLM service env: provider allowlist does not match config refs"
+                    f"  ✗ LiteLLM service env: unexpected entries: "
+                    f"{', '.join(sorted(unexpected_env))}"
+                )
+                exit_code = 1
+            if missing_required:
+                print(
+                    f"  ✗ LiteLLM service env: missing required entries: "
+                    f"{', '.join(sorted(missing_required))}"
                 )
                 exit_code = 1
             if "DATABASE_URL" not in litellm_env_values:
