@@ -425,8 +425,11 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
         assert configure_opencode.build_local_provider("omlx", models) is None
 
 
-def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
+def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local(tmp_path):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key_file = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.write_text("dummy-key", encoding="utf-8")
     original = {
         "provider": {
             "openai": {"options": {"baseURL": "https://api.openai.com/v1"}},
@@ -442,6 +445,7 @@ def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
             "DOTFILES_OPENWEBUI_USE_LITELLM": "0",
             "OPENAI_API_KEY": "",
             "LITELLM_PORT": "4001",
+            "HOME": str(tmp_path),
         },
         clear=False,
     ):
@@ -452,7 +456,7 @@ def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
     for name in ("ollama", "omlx"):
         assert original["provider"][name]["options"] == {
             "baseURL": "http://127.0.0.1:4001/v1",
-            "apiKey": "{env:LITELLM_OPENCODE_KEY}",
+            "apiKey": "{file:" + str(key_file) + "}",
         }
 
     original["provider"]["openai"]["options"]["baseURL"] = "https://api.openai.com/v1"
@@ -463,13 +467,26 @@ def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
             "DOTFILES_OPENCODE_USE_LITELLM": "1",
             "OPENAI_API_KEY": "present",
             "LITELLM_PORT": "4001",
+            "HOME": str(tmp_path),
         },
         clear=False,
     ):
         configure_opencode.apply_litellm_client_gate(original)
     assert (
         original["provider"]["openai"]["options"]["apiKey"]
-        == "{env:LITELLM_OPENCODE_KEY}"
+        == "{file:" + str(key_file) + "}"
+    )
+
+    key_file.unlink()
+    original["provider"]["ollama"]["options"] = {"baseURL": "http://localhost:11434/v1"}
+    original["provider"]["omlx"]["options"] = {"baseURL": "http://localhost:8000/v1"}
+    with patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=False):
+        configure_opencode.apply_litellm_client_gate(original)
+    assert original["provider"]["ollama"]["options"]["baseURL"] == (
+        "http://localhost:11434/v1"
+    )
+    assert original["provider"]["omlx"]["options"]["baseURL"] == (
+        "http://localhost:8000/v1"
     )
 
 

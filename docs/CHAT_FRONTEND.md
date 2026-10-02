@@ -382,6 +382,13 @@ the fleet registry). Provider API keys reach the process through the mode-600
 service environment allowlist (sourced inside the scrubbed non-login wrapper),
 never through YAML, argv, or the plist.
 
+OpenCode's LiteLLM canary reads its app key from the mode-600 file
+`~/.local/share/litellm/clients/opencode.key`, atomically derived from the
+`LITELLM_OPENCODE_KEY` assignment in `service.env`. The service environment
+remains the generated-secret authority; this file is a narrowly scoped
+OpenCode delivery mechanism pending canonical-ownership review. Restart
+OpenCode after enabling the canary or rotating the key.
+
 DB-less diagnostics retain the historical no-DB 400 classification for old
 deployments, but new gate-on deployments require `DATABASE_URL`.
 Loopback-only binding limits exposure.

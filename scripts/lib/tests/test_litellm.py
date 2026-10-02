@@ -181,6 +181,55 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     assert path.stat().st_mode & 0o777 == 0o600
 
 
+def test_opencode_key_file_is_private_atomic_idempotent_and_rotatable(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_OPENCODE_KEY='dummy-one'\n", encoding="utf-8")
+    CONFIGURE._write_opencode_key(service)
+    target = tmp_path / "clients" / "opencode.key"
+    assert target.read_text(encoding="utf-8") == "dummy-one"
+    assert target.parent.stat().st_mode & 0o777 == 0o700
+    assert target.stat().st_mode & 0o777 == 0o600
+    inode = target.stat().st_ino
+    CONFIGURE._write_opencode_key(service)
+    assert target.stat().st_ino == inode
+    service.write_text("LITELLM_OPENCODE_KEY='dummy-two'\n", encoding="utf-8")
+    CONFIGURE._write_opencode_key(service)
+    assert target.read_text(encoding="utf-8") == "dummy-two"
+    assert target.stat().st_ino != inode
+
+
+def test_opencode_key_file_missing_key_and_symlink_fail_closed(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_PI_KEY='dummy'\n", encoding="utf-8")
+    CONFIGURE._write_opencode_key(service)
+    assert not (tmp_path / "clients").exists()
+    target_dir = tmp_path / "clients"
+    target_dir.mkdir()
+    target = target_dir / "opencode.key"
+    target.symlink_to(tmp_path / "outside")
+    service.write_text("LITELLM_OPENCODE_KEY='dummy'\n", encoding="utf-8")
+    CONFIGURE._write_opencode_key(service)
+    assert target.is_symlink()
+    assert not (tmp_path / "outside").exists()
+
+
+def test_existing_alias_recreates_file_from_service_env_without_generation(
+    tmp_path, monkeypatch
+):
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": alias} for alias in CONFIGURE.APP_KEYS]}
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_OPENCODE_KEY='dummy-existing'\n", encoding="utf-8")
+    CONFIGURE.provision_app_keys("dummy-master", service, "http://127.0.0.1:4000")
+    assert (tmp_path / "clients/opencode.key").read_text(encoding="utf-8") == (
+        "dummy-existing"
+    )
+
+
 def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     tmp_path, monkeypatch
 ):

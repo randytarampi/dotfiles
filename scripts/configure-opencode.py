@@ -159,17 +159,24 @@ def apply_litellm_client_gate(config: dict) -> None:
     ):
         return
     base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    key_path = Path("~/.local/share/litellm/clients/opencode.key").expanduser()
+    if not key_path.is_file() or key_path.is_symlink():
+        logger.warning(
+            "OpenCode LiteLLM key file unavailable; keeping direct providers"
+        )
+        return
+    key_ref = "{file:" + str(key_path.resolve()) + "}"
     providers = config.setdefault("provider", {})
     if os.environ.get("OPENAI_API_KEY", "").strip():
         provider = providers.setdefault("openai", {})
         provider.setdefault("options", {}).update(
-            {"baseURL": base_url, "apiKey": "{env:LITELLM_OPENCODE_KEY}"}
+            {"baseURL": base_url, "apiKey": key_ref}
         )
     for name in ("ollama", "omlx"):
         provider = providers.get(name)
         if provider is not None:
             provider.setdefault("options", {}).update(
-                {"baseURL": base_url, "apiKey": "{env:LITELLM_OPENCODE_KEY}"}
+                {"baseURL": base_url, "apiKey": key_ref}
             )
 
 

@@ -82,6 +82,43 @@ def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
             os.unlink(temp_path)
 
 
+def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the OpenCode app key without sourcing service.env."""
+    key = _service_env_value("LITELLM_OPENCODE_KEY", service_env_path)
+    if not key:
+        return
+    directory = service_env_path.parent
+    target_dir = directory / "clients"
+    target = target_dir / "opencode.key"
+    try:
+        if (
+            service_env_path.is_symlink()
+            or directory.is_symlink()
+            or target_dir.is_symlink()
+            or target.is_symlink()
+        ):
+            raise OSError("unsafe symlink in LiteLLM client-key path")
+        if dry_run:
+            return
+        directory.mkdir(parents=True, exist_ok=True)
+        target_dir.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(target_dir, 0o700)
+        if target.exists() and target.read_text(encoding="utf-8") == key:
+            os.chmod(target, 0o600)
+            return
+        fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=".opencode.key.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                output.write(key)
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, target)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+    except OSError as error:
+        logger.warning("Could not safely write OpenCode LiteLLM key file: %s", error)
+
+
 def provision_app_keys(master_key, service_env_path=None, api_base=None):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
     if not master_key:
@@ -137,6 +174,7 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
         if found:
             _persist_app_keys(service_env_path, found)
             logger.info("Provisioned %d LiteLLM app key(s)", len(found))
+        _write_opencode_key(service_env_path)
     except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
 
