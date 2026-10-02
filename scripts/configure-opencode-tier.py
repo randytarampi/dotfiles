@@ -23,18 +23,16 @@ from local_engines import engine_gate_active, resolve_engine
 from tier_resolve import resolve_roles_from_list, list_local_ollama_models
 from cli_helpers import add_common_args, add_model_override_args
 import tier_registry
+from ollama_cloud_wire_ids import (
+    proxied_cloud_ref,
+    rewrite_cloud_refs,
+    unresolved_cloud_model_ids,
+)
 
 
-def proxied_ollama_cloud_model(model_name: str) -> str:
-    """Rewrite ollama-cloud/<model> to ollama/<model>:cloud for local proxying."""
-    prefix = "ollama-cloud/"
-    if not isinstance(model_name, str) or not model_name.startswith(prefix):
-        return model_name
-
-    stripped = model_name[len(prefix) :]
-    if not stripped.endswith(":cloud"):
-        stripped = f"{stripped}:cloud"
-    return f"ollama/{stripped}"
+def proxied_ollama_cloud_model(model_name: str, installed_models=None) -> str:
+    """Rewrite a cloud ref only when its exact daemon stub is installed."""
+    return proxied_cloud_ref(model_name, installed_models)
 
 
 def _csv_env(name):
@@ -43,18 +41,14 @@ def _csv_env(name):
     ]
 
 
-def rewrite_ollama_cloud_models_for_proxy(value):
-    """Recursively rewrite model refs when Ollama Cloud is proxied locally."""
-    if isinstance(value, str):
-        return proxied_ollama_cloud_model(value)
-    if isinstance(value, list):
-        return [rewrite_ollama_cloud_models_for_proxy(item) for item in value]
-    if isinstance(value, dict):
-        return {
-            key: rewrite_ollama_cloud_models_for_proxy(item)
-            for key, item in value.items()
-        }
-    return value
+def rewrite_ollama_cloud_models_for_proxy(value, installed_models=None):
+    """Recursively rewrite installed model refs, retaining direct fallbacks."""
+    for model_id in sorted(unresolved_cloud_model_ids(value, installed_models)):
+        logger.warning(
+            "No unique installed Ollama Cloud stub for %s; preserving direct ollama-cloud route",
+            model_id,
+        )
+    return rewrite_cloud_refs(value, installed_models)
 
 
 def filter_omlx_models_for_gate(models):
@@ -151,6 +145,7 @@ def orchestrate_tier_switch(
             )
 
     cloud_role_models = {}
+    cloud_models_list = None
     _, can_proxy_cloud = check_ollama_daemon()
     if can_proxy_cloud:
         try:
@@ -167,6 +162,10 @@ def orchestrate_tier_switch(
                 )
         except Exception as e:
             logger.warning(f"Failed to discover cloud models via local proxy: {e}")
+    if can_proxy_cloud and not cloud_models_list:
+        logger.warning(
+            "No installed Ollama Cloud stubs discovered; preserving direct ollama-cloud model refs"
+        )
 
     tier_registry.apply_placeholder_overrides(local_role_models, category_models)
     fallback_role_models = local_role_models or cloud_role_models
@@ -280,7 +279,9 @@ def orchestrate_tier_switch(
                 else:
                     source_preset[role]["model"] = model
         if can_proxy_cloud:
-            source_preset = rewrite_ollama_cloud_models_for_proxy(source_preset)
+            source_preset = rewrite_ollama_cloud_models_for_proxy(
+                source_preset, cloud_models_list
+            )
         if "presets" not in target_config:
             target_config["presets"] = {}
         target_config["presets"][tier] = json.loads(json.dumps(source_preset))
@@ -296,7 +297,9 @@ def orchestrate_tier_switch(
     target_config["council"]["default_preset"] = source_council.get("default_preset")
     source_presets = json.loads(json.dumps(source_council.get("presets", {}) or {}))
     if can_proxy_cloud:
-        source_presets = rewrite_ollama_cloud_models_for_proxy(source_presets)
+        source_presets = rewrite_ollama_cloud_models_for_proxy(
+            source_presets, cloud_models_list
+        )
 
     for other_tier_name, other_tier_config in tiers_dict.items():
         other_council = other_tier_config.get("council", {})
@@ -307,7 +310,7 @@ def orchestrate_tier_switch(
                 council_preset = other_preset["council"]
                 if can_proxy_cloud:
                     council_preset = rewrite_ollama_cloud_models_for_proxy(
-                        council_preset
+                        council_preset, cloud_models_list
                     )
                 source_presets[other_tier_name]["council"] = council_preset
 
