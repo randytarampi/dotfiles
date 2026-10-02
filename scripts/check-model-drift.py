@@ -161,6 +161,12 @@ def check_local_engine_models() -> list[str]:
 def profile_models(path: Path) -> list[tuple[str, set[str], str | None]] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            logger.warning(
+                "Could not read Junie profile %s — skipping (JSON root is not an object)",
+                path,
+            )
+            return None
         if isinstance(data.get("providers"), dict) and isinstance(
             data.get("groups"), dict
         ):
@@ -214,7 +220,15 @@ def check_junie_profiles() -> list[str]:
     models_dir = Path(
         os.environ.get("JUNIE_MODELS_DIR", "~/.junie/models")
     ).expanduser()
-    paths = list(models_dir.glob("*.json")) if models_dir.is_dir() else []
+    paths = (
+        [
+            path
+            for path in models_dir.glob("*.json")
+            if path.name != ".dotfiles-generated-profiles.json"
+        ]
+        if models_dir.is_dir()
+        else []
+    )
     local_config = Path(
         os.environ.get("JUNIE_LOCAL_GROUPS", "~/.junie-local/model-groups.json")
     ).expanduser()
