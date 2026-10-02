@@ -20,18 +20,13 @@ import logger  # noqa: E402 (sys.path must be set up first)
 from cli_helpers import add_common_args  # noqa: E402
 from env import load_env  # noqa: E402
 from litellm_config import (  # noqa: E402
+    APP_KEYS,
     LiveCatalogueError,
     compute_model_list,
     write_config,
 )
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
-APP_KEYS = {
-    "opencode": "LITELLM_OPENCODE_KEY",
-    "pi": "LITELLM_PI_KEY",
-    "openwebui": "LITELLM_OPENWEBUI_KEY",
-    "junie": "LITELLM_JUNIE_KEY",
-}
 
 
 def _service_env_value(name, path):
