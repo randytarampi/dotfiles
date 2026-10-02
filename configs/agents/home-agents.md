@@ -17,9 +17,11 @@ These apply to every repo, every session.
 
 - **One concern per commit.** When closing out a session, commit each logical change individually — never batch unrelated changes into a single commit. If a session touched three concerns, that's three commits.
 - **Never push unless explicitly asked.** Default to local commits only. "Don't push anything yet" is the standing instruction; the user will say when to push.
+- Before any force-with-lease, finish the rebase and verify both a clean Git status and the expected tip. Never push mid-conflict.
 - **Don't commit until the plan is approved.** If the user hasn't approved a plan or explicitly said to proceed, give the plan first. Don't pre-emptively commit work-in-progress.
 - **Don't add repo artifacts for unapproved features.** This covers more than commits — don't add env vars, config entries, docs files, or other repo artifacts for a feature that hasn't been decided on. Prerequisite fixes that exist independently of the feature are fine; anything that only makes sense if the feature is chosen is not.
 - All PRs created from agent work — fixes, backlog clean-ups, dependency bumps, generated changes — are opened as draft (`gh pr create --draft`) and stay draft. Never mark your own PR ready for review; a human (you, or a colleague in the downstream pass) turns the draft into a reviewable PR when they're satisfied.
+- Don't auto-close a backlog issue with `Closes #N` when the PR fixes only a subset; track unresolved review threads individually.
 
 ### Verifying before declaring success
 
@@ -28,6 +30,8 @@ These apply to every repo, every session.
   - other repos: whatever the repo defines (`yarn test`, `yarn lerna run <job>`, `npm run build`, the repo's Makefile target, etc.)
 - If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
 - Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
+- For service or model-generator changes, run the generator twice; check service health and generated state, including keys, and confirm the second run is idempotent. A successful first run alone can hide failures such as an HTTP 400 from an invalid key list.
+- Tests for orchestration or service helpers must isolate `HOME` and `PATH` and stub real service/process commands such as `launchctl`, `systemctl` and `pkill`. After full verification, confirm live services survived; don't assume verification is non-mutating.
 
 ### Tone and style
 
