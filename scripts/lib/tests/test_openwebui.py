@@ -24,6 +24,7 @@ def hermetic_environment(monkeypatch):
         "GOOGLE_",
         "GEMINI_",
         "OPENWEBUI_",
+        "LITELLM_",
     )
     for name in list(os.environ):
         if name.startswith(prefixes):
@@ -84,6 +85,20 @@ def test_exact_native_and_cloud_endpoints(monkeypatch):
     assert {item["config"]["prefix_id"]: item for item in proxied["openai"]}[
         "ollama-cloud"
     ]["url"] == "https://ollama.com/v1"
+
+
+def test_litellm_client_key_prefers_service_key_then_master_fallback(
+    monkeypatch, tmp_path
+):
+    service_env = tmp_path / "service.env"
+    service_env.write_text(
+        "LITELLM_MASTER_KEY='master-key'\nLITELLM_OPENWEBUI_KEY='app-key'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(openwebui.os.path, "expanduser", lambda _: str(service_env))
+    assert openwebui._litellm_client_key("LITELLM_OPENWEBUI_KEY") == "app-key"
+    service_env.write_text("LITELLM_MASTER_KEY='master-key'\n", encoding="utf-8")
+    assert openwebui._litellm_client_key("LITELLM_OPENWEBUI_KEY") == "master-key"
 
 
 def test_dual_protocol_and_stable_ownership(monkeypatch):

@@ -42,6 +42,21 @@ def _litellm_master_key():
     return ""
 
 
+def _litellm_client_key(env_name):
+    value = os.environ.get(env_name, "").strip()
+    if value:
+        return value
+    path = os.path.expanduser("~/.local/share/litellm/service.env")
+    try:
+        for line in open(path, encoding="utf-8"):
+            if line.startswith(f"{env_name}="):
+                value = line.split("=", 1)[1].strip().strip("'\"")
+                return value or _litellm_master_key()
+    except OSError:
+        pass
+    return _litellm_master_key()
+
+
 def mask_secret(value):
     """Return an opaque rendering that distinguishes unset from set secrets."""
     if value is None or value == "":
@@ -243,7 +258,7 @@ def compute_desired_state():
         and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
     ):
         endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
-        key = _litellm_master_key()
+        key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
         # LiteLLM serves OpenAI-compatible traffic only; the Ollama-native
         # collection cannot speak to it, so leave it on direct 11434 routing.
         for collection in ("openai", "anthropic"):

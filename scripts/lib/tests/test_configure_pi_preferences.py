@@ -161,5 +161,22 @@ class BuildLocalProviderTest(unittest.TestCase):
         self.assertNotIn("apiKey", provider)
 
 
+def test_pi_litellm_gate_repoints_openai_and_local_providers():
+    providers = {
+        name: {"baseUrl": f"http://{name}", "apiKey": "old", "models": ["kept"]}
+        for name in ("openai", "ollama", "omlx")
+    }
+    with patch.dict(
+        os.environ,
+        {"DOTFILES_RUN_LITELLM_SETUP": "1", "DOTFILES_PI_USE_LITELLM": "1"},
+        clear=False,
+    ):
+        configure_pi.apply_litellm_provider_overrides(providers, "4002")
+    for provider in providers.values():
+        assert provider["baseUrl"] == "http://127.0.0.1:4002/v1"
+        assert provider["apiKey"] == "$LITELLM_PI_KEY"
+        assert provider["models"] == ["kept"]
+
+
 if __name__ == "__main__":
     unittest.main()

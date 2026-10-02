@@ -198,6 +198,19 @@ def build_local_provider(provider, model_ids):
     return provider_config
 
 
+def apply_litellm_provider_overrides(providers, port="4000"):
+    if not (
+        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+        and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
+    ):
+        return
+    endpoint = f"http://127.0.0.1:{port}/v1"
+    for provider in ("openai", "ollama", "omlx"):
+        if provider in providers:
+            providers[provider]["baseUrl"] = endpoint
+            providers[provider]["apiKey"] = "$LITELLM_PI_KEY"
+
+
 def local_chat_model_ids(models, provider):
     """Return chat-capable IDs for a registered local provider."""
     engine = resolve_engine(provider)
@@ -673,13 +686,14 @@ def main():
         ),
         "api": "openai-completions",
         "apiKey": (
-            "$LITELLM_MASTER_KEY"
+            "$LITELLM_PI_KEY"
             if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
             and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
             else "$OPENAI_API_KEY"
         ),
         "models": [],
     }
+    apply_litellm_provider_overrides(providers, os.environ.get("LITELLM_PORT", "4000"))
     skipped_providers = []
     skipped_provider_names = []
     emitted_providers = []

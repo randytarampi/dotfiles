@@ -425,6 +425,45 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
         assert configure_opencode.build_local_provider("omlx", models) is None
 
 
+def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    original = {
+        "provider": {
+            "openai": {"options": {"baseURL": "https://api.openai.com/v1"}},
+            "ollama": {"options": {"baseURL": "http://localhost:11434/v1"}},
+            "omlx": {"options": {"baseURL": "http://localhost:8000/v1"}},
+        }
+    }
+    with patch.dict(
+        os.environ,
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_OPENCODE_USE_LITELLM": "1",
+            "DOTFILES_OPENWEBUI_USE_LITELLM": "0",
+            "OPENAI_API_KEY": "",
+            "LITELLM_PORT": "4001",
+        },
+        clear=False,
+    ):
+        configure_opencode.apply_litellm_client_gate(original)
+    assert original["provider"]["openai"]["options"] == {
+        "baseURL": "https://api.openai.com/v1"
+    }
+    for name in ("ollama", "omlx"):
+        assert original["provider"][name]["options"] == {
+            "baseURL": "http://127.0.0.1:4001/v1",
+            "apiKey": "{env:LITELLM_OPENCODE_KEY}",
+        }
+
+    original["provider"]["openai"]["options"]["baseURL"] = "https://api.openai.com/v1"
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "present"}, clear=False):
+        configure_opencode.apply_litellm_client_gate(original)
+    assert (
+        original["provider"]["openai"]["options"]["apiKey"]
+        == "{env:LITELLM_OPENCODE_KEY}"
+    )
+
+
 def test_configure_opencode_local_provider_emits_modalities():
     """Vision-capable engine models must declare image input so OpenCode's
     client-side attachment gating accepts screenshots (registry-generic)."""
