@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate Pi agent configuration from the shared OpenCode tier registry."""
 
-import argparse, copy, json, os, shutil, subprocess, sys
+import argparse, copy, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -204,11 +204,23 @@ def apply_litellm_provider_overrides(providers, port="4000"):
         and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
     ):
         return
+    key_file = Path("~/.local/share/litellm/clients/pi.key").expanduser()
+    if (
+        any(
+            path.is_symlink()
+            for path in (key_file.parent.parent, key_file.parent, key_file)
+        )
+        or not key_file.is_file()
+    ):
+        logger.warning(
+            "Pi LiteLLM key file unavailable; keeping direct provider routes"
+        )
+        return
     endpoint = f"http://127.0.0.1:{port}/v1"
     for provider in ("openai", "ollama", "omlx"):
         if provider in providers:
             providers[provider]["baseUrl"] = endpoint
-            providers[provider]["apiKey"] = "$LITELLM_PI_KEY"
+            providers[provider]["apiKey"] = f"!cat {shlex.quote(str(key_file))}"
 
 
 def local_chat_model_ids(models, provider):

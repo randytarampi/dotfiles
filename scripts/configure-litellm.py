@@ -82,14 +82,14 @@ def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
             os.unlink(temp_path)
 
 
-def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
-    """Materialize the OpenCode app key without sourcing service.env."""
-    key = _service_env_value("LITELLM_OPENCODE_KEY", service_env_path)
+def _write_client_key(service_env_path: Path, client, env_name, dry_run=False) -> None:
+    """Materialize a per-client app key without sourcing service.env."""
+    key = _service_env_value(env_name, service_env_path)
     if not key:
         return
     directory = service_env_path.parent
     target_dir = directory / "clients"
-    target = target_dir / "opencode.key"
+    target = target_dir / f"{client}.key"
     try:
         if (
             service_env_path.is_symlink()
@@ -106,7 +106,7 @@ def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
         if target.exists() and target.read_text(encoding="utf-8") == key:
             os.chmod(target, 0o600)
             return
-        fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=".opencode.key.")
+        fd, temp_path = tempfile.mkstemp(dir=target_dir, prefix=f".{client}.key.")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as output:
                 output.write(key)
@@ -116,7 +116,17 @@ def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
     except OSError as error:
-        logger.warning("Could not safely write OpenCode LiteLLM key file: %s", error)
+        logger.warning("Could not safely write %s LiteLLM key file: %s", client, error)
+
+
+def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the OpenCode app key without sourcing service.env."""
+    _write_client_key(service_env_path, "opencode", "LITELLM_OPENCODE_KEY", dry_run)
+
+
+def _write_pi_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the Pi app key without sourcing service.env."""
+    _write_client_key(service_env_path, "pi", "LITELLM_PI_KEY", dry_run)
 
 
 def provision_app_keys(master_key, service_env_path=None, api_base=None):
@@ -175,6 +185,7 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
             _persist_app_keys(service_env_path, found)
             logger.info("Provisioned %d LiteLLM app key(s)", len(found))
         _write_opencode_key(service_env_path)
+        _write_pi_key(service_env_path)
     except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
 

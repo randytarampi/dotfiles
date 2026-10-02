@@ -389,6 +389,15 @@ remains the generated-secret authority; this file is a narrowly scoped
 OpenCode delivery mechanism pending canonical-ownership review. Restart
 OpenCode after enabling the canary or rotating the key.
 
+Pi's LiteLLM canary reads its app key from the mode-600 file
+`~/.local/share/litellm/clients/pi.key`, atomically derived from the
+`LITELLM_PI_KEY` assignment in the same generated `service.env` authority. Pi's
+provider config uses a command-backed API key (`!cat <absolute-key-file-path>`),
+so the secret is delivered to Pi without exporting it into the shell environment.
+If the private key file is absent or unsafe, Pi keeps direct provider URLs and
+keys. Re-run `make deploy` after enabling the canary or rotating the key, then
+restart Pi to load the updated provider config.
+
 DB-less diagnostics retain the historical no-DB 400 classification for old
 deployments, but new gate-on deployments require `DATABASE_URL`.
 Loopback-only binding limits exposure.
