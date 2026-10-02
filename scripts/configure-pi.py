@@ -230,6 +230,15 @@ def apply_litellm_provider_overrides(providers, port="4000"):
         raise RuntimeError(
             "Pi LiteLLM key file permissions are unsafe; refusing to generate canary config"
         )
+    client_dir = key_file.parent
+    directory_metadata = client_dir.stat()
+    if (
+        directory_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(directory_metadata.st_mode) & 0o077
+    ):
+        raise RuntimeError(
+            "Pi LiteLLM client directory permissions are unsafe; refusing to generate canary config"
+        )
     endpoint = f"http://127.0.0.1:{port}/v1"
     for provider in ("openai", "ollama", "omlx"):
         if provider in providers:
@@ -247,10 +256,13 @@ def litellm_cloud_aliases(port="4000"):
         ):
             raise ValueError("symlinked key path")
         metadata = key_file.stat()
+        directory_metadata = key_file.parent.stat()
         if (
             not key_file.is_file()
             or metadata.st_uid != os.getuid()
             or stat.S_IMODE(metadata.st_mode) != 0o600
+            or directory_metadata.st_uid != os.getuid()
+            or stat.S_IMODE(directory_metadata.st_mode) & 0o077
         ):
             raise ValueError("unsafe key file")
         key = key_file.read_text(encoding="utf-8").strip()
