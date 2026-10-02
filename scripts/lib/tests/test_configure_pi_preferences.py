@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import json
 import os
+import sys
 import shlex
 import tempfile
 import unittest
@@ -216,6 +217,137 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
     )
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: {"data": "bad"})
     assert configure_pi.litellm_cloud_aliases() == {"google": {}, "openrouter": {}}
+
+
+def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
+    agent_dir = Path(home) / "pi-agent"
+    agent_dir.mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1" if canary else "0")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1" if canary else "0")
+    monkeypatch.setenv("GEMINI_API_KEY", "direct-google-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "direct-openrouter-key")
+    key_file = Path(home) / ".local/share/litellm/clients/pi.key"
+    if key:
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.parent.chmod(0o700)
+        key_file.write_text("fixture-secret", encoding="utf-8")
+        key_file.chmod(0o600)
+    monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: catalogue)
+    monkeypatch.setattr(configure_pi, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(configure_pi, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(
+        configure_pi, "_ensure_packages", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["configure-pi.py", "--preset", "free", "--no-local-fallbacks"]
+    )
+    configure_pi.main()
+    return agent_dir
+
+
+def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
+    catalogue = {
+        "data": [
+            {"id": "google/models/gemini-3.8-flash"},
+            {"id": "google/models/gemini-3.5-flash-lite"},
+            {"id": "openrouter/inclusionai/ling-3.0-flash-sante:free"},
+        ]
+    }
+    out = _run_pi_main(tmp_path, catalogue, monkeypatch)
+    providers = json.loads((out / "models.json").read_text())["providers"]
+    settings = json.loads((out / "settings.json").read_text())
+    auth = json.loads((out / "auth.json").read_text())
+    proxy = providers["litellm"]
+    assert proxy["baseUrl"] == "http://127.0.0.1:4000/v1"
+    assert proxy["apiKey"] == f"!cat {tmp_path / '.local/share/litellm/clients/pi.key'}"
+    entries = {entry["id"]: entry for entry in proxy["models"]}
+    assert "google/models/gemini-3.8-flash" in entries
+    assert entries["google/models/gemini-3.8-flash"]["compat"] == {
+        "supportsStore": False
+    }
+    assert "compat" not in entries["openrouter/inclusionai/ling-3.0-flash-sante:free"]
+    assert "google" not in providers and "openrouter" not in providers
+    assert "google" not in auth and "openrouter" not in auth
+    overrides = settings["subagents"]["agentOverrides"]
+    assert (
+        overrides["researcher"]["model"]
+        == "litellm/google/models/gemini-3.5-flash-lite"
+    )
+    assert (
+        overrides["scout"]["model"]
+        == "litellm/openrouter/inclusionai/ling-3.0-flash-sante:free"
+    )
+    assert settings["defaultProvider"] + "/" + settings["defaultModel"] in {
+        f"{provider}/{entry['id']}"
+        for provider, config in providers.items()
+        for entry in config.get("models", [])
+    }
+    assert "litellm/google/models/gemini-3.8-flash" in settings["enabledModels"]
+    assert (
+        "litellm/openrouter/inclusionai/ling-3.0-flash-sante:free"
+        in settings["enabledModels"]
+    )
+    assert "fixture-secret" not in json.dumps([providers, settings, auth])
+
+
+def test_pi_main_partial_catalogue_and_gate_off_are_fail_closed_or_direct(
+    tmp_path, monkeypatch
+):
+    canary_home = tmp_path / "canary"
+    canary_home.mkdir()
+    out = _run_pi_main(
+        canary_home, {"data": [{"id": "google/models/gemini-3.8-flash"}]}, monkeypatch
+    )
+    providers = json.loads((out / "models.json").read_text())["providers"]
+    auth = json.loads((out / "auth.json").read_text())
+    settings = json.loads((out / "settings.json").read_text())
+    assert "google" not in providers and "openrouter" not in providers
+    assert "google" not in auth and "openrouter" not in auth
+    assert "scout" not in settings["subagents"]["agentOverrides"]
+    assert settings["defaultProvider"] + "/" + settings["defaultModel"] in {
+        f"{provider}/{entry['id']}"
+        for provider, config in providers.items()
+        for entry in config.get("models", [])
+    }
+    direct_home = tmp_path / "direct"
+    direct_home.mkdir()
+    direct = _run_pi_main(
+        direct_home, {"data": []}, monkeypatch, canary=False, key=False
+    )
+    direct_providers = json.loads((direct / "models.json").read_text())["providers"]
+    direct_auth = json.loads((direct / "auth.json").read_text())
+    assert "google" in direct_providers and "openrouter" in direct_providers
+    assert "google" in direct_auth and "openrouter" in direct_auth
+
+
+def test_pi_main_rejects_missing_or_insecure_client_key_before_output(
+    tmp_path, monkeypatch
+):
+    for case in ("missing", "directory-mode", "symlink"):
+        home = tmp_path / case
+        home.mkdir()
+        key_file = home / ".local/share/litellm/clients/pi.key"
+        if case != "missing":
+            key_file.parent.mkdir(parents=True)
+            if case == "symlink":
+                outside = home / "outside.key"
+                outside.write_text("fixture-secret", encoding="utf-8")
+                outside.chmod(0o600)
+                key_file.symlink_to(outside)
+                key_file.parent.chmod(0o700)
+            else:
+                key_file.write_text("fixture-secret", encoding="utf-8")
+                key_file.chmod(0o600)
+                key_file.parent.chmod(0o755)
+        with patch("sys.stderr"), unittest.TestCase().assertRaises(RuntimeError):
+            _run_pi_main(home, {"data": []}, monkeypatch, key=False)
+        output = home / "pi-agent"
+        assert not (output / "models.json").exists()
+        assert not (output / "settings.json").exists()
+        assert not (output / "auth.json").exists()
 
 
 if __name__ == "__main__":
