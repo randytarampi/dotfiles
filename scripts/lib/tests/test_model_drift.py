@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -72,3 +73,40 @@ def test_local_engine_drift_reports_missing_deployed_model(monkeypatch):
         assert DRIFT.check_local_engine_models() == [
             "omlx model missing is not present in the live catalogue"
         ]
+
+
+def test_junie_profile_scan_skips_manifest_and_non_object_json(tmp_path, monkeypatch):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / ".dotfiles-generated-profiles.json").write_text(
+        json.dumps(["generated-profile"]), encoding="utf-8"
+    )
+    (models_dir / "invalid-shape.json").write_text("[]", encoding="utf-8")
+    profile_path = models_dir / "actual-profile.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "baseUrl": "http://127.0.0.1:4000/v1/chat/completions",
+                "primaryModel": {"id": "legitimate-model-reference"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("JUNIE_MODELS_DIR", str(models_dir))
+    monkeypatch.setenv("JUNIE_LOCAL_GROUPS", str(tmp_path / "missing-groups.json"))
+    catalogue_requests = []
+
+    def empty_catalogue(url, api_key=""):
+        catalogue_requests.append(url)
+        return []
+
+    monkeypatch.setattr(DRIFT, "get_models", empty_catalogue)
+
+    violations = DRIFT.check_junie_profiles()
+
+    assert len(catalogue_requests) == 1
+    assert violations == [
+        f"{profile_path} points to missing model legitimate-model-reference at "
+        "http://127.0.0.1:4000/v1/chat/completions"
+    ]
+    assert DRIFT.profile_models(models_dir / "invalid-shape.json") is None
