@@ -147,3 +147,30 @@ def test_unknown_faster_provider_fails_closed():
         },
     )
     assert any("unknown provider 'googlle'" in error for error in errors)
+
+
+def test_litellm_proxy_group_rejects_direct_faster_provider():
+    groups = {
+        "google-gemini-flash": {
+            "provider": "google",
+            "primaryModel": "gemini-3.8-flash",
+            "fasterModel": "gemini-3.5-flash-lite",
+            "fasterProvider": "google",
+        },
+        "litellm-google-gemini-flash": {
+            "provider": "litellm",
+            "primaryModel": "google/models/gemini-3.8-flash",
+            "fasterModel": "google/models/gemini-3.5-flash-lite",
+            "fasterProvider": "google",
+        },
+    }
+    errors = run(
+        groups,
+        {
+            "google": {"gemini-3.8-flash", "gemini-3.5-flash-lite"},
+            "ollama-cloud": {"cloud-default"},
+        },
+    )
+    assert any(
+        "fasterProvider must be 'litellm' or absent" in error for error in errors
+    )

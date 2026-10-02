@@ -621,9 +621,18 @@ def main():
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
         provider = explicit_provider or model_provider(primary_ref)
-        faster_provider = explicit_faster or (
-            model_provider(faster_ref) if faster_ref else provider
-        )
+        if provider == "litellm":
+            if explicit_faster and explicit_faster != "litellm":
+                logger.error(
+                    f"LiteLLM profile {name} cannot use direct faster provider "
+                    f"'{explicit_faster}'"
+                )
+                raise SystemExit(1)
+            faster_provider = "litellm"
+        else:
+            faster_provider = explicit_faster or (
+                model_provider(faster_ref) if faster_ref else provider
+            )
         if not provider or provider not in providers:
             logger.warning(f"Unknown provider for {name} — skipping")
             continue

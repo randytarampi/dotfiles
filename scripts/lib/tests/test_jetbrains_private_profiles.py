@@ -123,6 +123,73 @@ def test_generated_litellm_profiles_are_private_and_share_cli_ide_directory(
     assert rotated["apiKey"] == "dummy-junie-key-two"
 
 
+def test_litellm_faster_model_stays_on_proxy_and_direct_group_stays_direct(
+    harness, monkeypatch
+):
+    _, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text())
+    config["providers"]["google"] = {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "apiType": "OpenAICompletion",
+        "apiKeyEnv": "GEMINI_API_KEY",
+    }
+    config["groups"].update(
+        {
+            "google-flash": {
+                "provider": "google",
+                "primaryModel": "gemini-3.8-flash",
+                "fasterModel": "gemini-3.5-flash-lite",
+                "fasterProvider": "google",
+            },
+            "litellm-google-flash": {
+                "provider": "litellm",
+                "primaryModel": "google/models/gemini-3.8-flash",
+                "fasterModel": "google/models/gemini-3.5-flash-lite",
+            },
+        }
+    )
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-google-key")
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {
+            "main-model",
+            "google/models/gemini-3.8-flash",
+            "google/models/gemini-3.5-flash-lite",
+        },
+    )
+
+    PROFILES.main()
+
+    proxy = json.loads((target / "litellm-google-flash.json").read_text())
+    assert proxy["fasterModel"]["id"] == "google/models/gemini-3.5-flash-lite"
+    assert "baseUrl" not in proxy["fasterModel"]
+    assert "apiKey" not in proxy["fasterModel"]
+    assert proxy["baseUrl"] == "http://127.0.0.1:4000/v1/chat/completions"
+    assert proxy["apiKey"] == "dummy-junie-key-one"
+    assert (target / "litellm-google-flash.json").stat().st_mode & 0o777 == 0o600
+
+    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "0")
+    PROFILES.main()
+    direct = json.loads((target / "google-flash.json").read_text())
+    assert direct["fasterModel"]["id"] == "gemini-3.5-flash-lite"
+    assert "baseUrl" not in direct["fasterModel"]
+    assert direct["baseUrl"].startswith("https://generativelanguage.googleapis.com/")
+
+
+def test_litellm_group_rejects_explicit_direct_faster_provider(harness, caplog):
+    _, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text())
+    config["groups"]["litellm-openai-faster"]["provider"] = "litellm"
+    config["groups"]["litellm-openai-faster"]["fasterProvider"] = "google"
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        PROFILES.main()
+    assert "cannot use direct faster provider 'google'" in caplog.text
+    assert not (target / "litellm-openai-faster.json").exists()
+
+
 def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
     harness, monkeypatch
 ):
