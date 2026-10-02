@@ -15,6 +15,11 @@ CONFIGURE_SPEC = spec_from_file_location(
 )
 CONFIGURE = module_from_spec(CONFIGURE_SPEC)
 CONFIGURE_SPEC.loader.exec_module(CONFIGURE)
+PI_SPEC = spec_from_file_location(
+    "configure_pi", Path(__file__).resolve().parents[2] / "configure-pi.py"
+)
+PI = module_from_spec(PI_SPEC)
+PI_SPEC.loader.exec_module(PI)
 
 
 @pytest.fixture(autouse=True)
@@ -211,6 +216,59 @@ def test_opencode_key_file_missing_key_and_symlink_fail_closed(tmp_path):
     CONFIGURE._write_opencode_key(service)
     assert target.is_symlink()
     assert not (tmp_path / "outside").exists()
+
+
+def test_pi_key_file_is_private_idempotent_and_rotatable(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_PI_KEY='dummy-one'\n", encoding="utf-8")
+    CONFIGURE._write_pi_key(service)
+    target = tmp_path / "clients" / "pi.key"
+    assert target.read_text(encoding="utf-8") == "dummy-one"
+    assert target.parent.stat().st_mode & 0o777 == 0o700
+    assert target.stat().st_mode & 0o777 == 0o600
+    inode = target.stat().st_ino
+    CONFIGURE._write_pi_key(service)
+    assert target.stat().st_ino == inode
+    service.write_text("LITELLM_PI_KEY='dummy-two'\n", encoding="utf-8")
+    CONFIGURE._write_pi_key(service)
+    assert target.read_text(encoding="utf-8") == "dummy-two"
+    assert target.stat().st_ino != inode
+
+
+def test_pi_provider_override_requires_private_file_and_uses_command_key(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    providers = {
+        name: {"baseUrl": f"https://{name}.example/v1", "apiKey": "direct"}
+        for name in ("openai", "ollama", "omlx")
+    }
+    PI.apply_litellm_provider_overrides(providers)
+    assert all(
+        provider["baseUrl"].startswith("https://") for provider in providers.values()
+    )
+    target = tmp_path / ".local/share/litellm/clients/pi.key"
+    target.parent.mkdir(parents=True)
+    target.write_text("dummy", encoding="utf-8")
+    PI.apply_litellm_provider_overrides(providers)
+    assert all(p["baseUrl"] == "http://127.0.0.1:4000/v1" for p in providers.values())
+    assert all(
+        p["apiKey"] == f"!cat {shlex.quote(str(target))}" for p in providers.values()
+    )
+
+
+def test_pi_provider_override_rejects_symlinked_key_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    directory = tmp_path / ".local/share/litellm/clients"
+    directory.mkdir(parents=True)
+    (directory / "pi.key").symlink_to(tmp_path / "outside")
+    providers = {"openai": {"baseUrl": "https://direct/v1", "apiKey": "direct"}}
+    PI.apply_litellm_provider_overrides(providers)
+    assert providers["openai"] == {"baseUrl": "https://direct/v1", "apiKey": "direct"}
 
 
 def test_existing_alias_recreates_file_from_service_env_without_generation(
