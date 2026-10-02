@@ -2,7 +2,10 @@ import contextlib
 import importlib.util
 import json
 import os
+import shlex
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import local_engines
@@ -166,16 +169,24 @@ def test_pi_litellm_gate_repoints_openai_and_local_providers():
         name: {"baseUrl": f"http://{name}", "apiKey": "old", "models": ["kept"]}
         for name in ("openai", "ollama", "omlx")
     }
-    with patch.dict(
-        os.environ,
-        {"DOTFILES_RUN_LITELLM_SETUP": "1", "DOTFILES_PI_USE_LITELLM": "1"},
-        clear=False,
-    ):
-        configure_pi.apply_litellm_provider_overrides(providers, "4002")
-    for provider in providers.values():
-        assert provider["baseUrl"] == "http://127.0.0.1:4002/v1"
-        assert provider["apiKey"] == "$LITELLM_PI_KEY"
-        assert provider["models"] == ["kept"]
+    with tempfile.TemporaryDirectory() as home:
+        key_file = Path(home) / ".local/share/litellm/clients/pi.key"
+        key_file.parent.mkdir(parents=True)
+        key_file.write_text("dummy-key", encoding="utf-8")
+        with patch.dict(
+            os.environ,
+            {
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "DOTFILES_PI_USE_LITELLM": "1",
+                "HOME": home,
+            },
+            clear=False,
+        ):
+            configure_pi.apply_litellm_provider_overrides(providers, "4002")
+        for provider in providers.values():
+            assert provider["baseUrl"] == "http://127.0.0.1:4002/v1"
+            assert provider["apiKey"] == f"!cat {shlex.quote(str(key_file))}"
+            assert provider["models"] == ["kept"]
 
 
 if __name__ == "__main__":
