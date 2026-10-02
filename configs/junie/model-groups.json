@@ -117,8 +117,8 @@
     },
     "litellm-google-gemini-flash": {
       "provider": "litellm",
-      "primaryModel": "google/gemini-3.8-flash",
-      "fasterModel": "google/gemini-3.5-flash-lite"
+      "primaryModel": "google/models/gemini-3.8-flash",
+      "fasterModel": "google/models/gemini-3.5-flash-lite"
     },
     "litellm-openrouter-glm": {
       "provider": "litellm",

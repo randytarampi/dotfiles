@@ -12,6 +12,7 @@ import stat
 import sys
 import tempfile
 import urllib.parse
+import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -20,6 +21,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 import tier_registry
+from model_catalogues import open_same_origin
 from ai_models import resolve_model
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
@@ -124,6 +126,62 @@ def select_model_groups(groups: dict, use_litellm: bool) -> dict:
             continue
         selected[name] = group
     return selected
+
+
+def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
+    """Read LiteLLM's model catalogue; None means availability is unknown."""
+    try:
+        parsed = urllib.parse.urlsplit(base_url)
+        port = parsed.port
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname != "127.0.0.1"
+            or port is None
+            or not 1 <= port <= 65535
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        origin = f"http://127.0.0.1:{port}"
+        request = urllib.request.Request(
+            f"{origin}/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            method="GET",
+        )
+        with open_same_origin(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            return None
+        if any(
+            not isinstance(entry, dict) or not isinstance(entry.get("id"), str)
+            for entry in data
+        ):
+            return None
+        return {entry["id"] for entry in data}
+    except Exception:
+        logger.warning(
+            "LiteLLM model catalogue unavailable; preserving managed profiles"
+        )
+        return None
+
+
+def filter_litellm_groups(groups: dict, available_models: set[str] | None) -> dict:
+    """Omit known-unavailable LiteLLM model groups; preserve on unknown catalogue."""
+    if available_models is None:
+        return groups
+    return {
+        name: group
+        for name, group in groups.items()
+        if group.get("provider") != "litellm"
+        or all(
+            model in available_models
+            for model in (group.get("primaryModel", ""), group.get("fasterModel", ""))
+            if model
+        )
+    }
 
 
 def normalize_endpoint(base_url: str, api_type: str) -> str:
@@ -524,6 +582,10 @@ def main():
     providers = build_provider_configs(cfg, junie_key)
     use_litellm = litellm_gate and bool(junie_key) and "litellm" in providers
     groups = select_model_groups(cfg.get("groups", {}), use_litellm)
+    if use_litellm:
+        groups = filter_litellm_groups(
+            groups, litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
+        )
     specs = tier_specs + [
         (
             name,
