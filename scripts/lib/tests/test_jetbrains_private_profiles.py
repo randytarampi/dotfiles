@@ -264,6 +264,7 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
             "omlx/local/faster",
             "omlx/pool/model",
             "omlx/pool/faster",
+            "omlx/pool/last",
             "openai/gpt-faster",
             "openai/gpt-present",
             "opencode/free-present",
@@ -273,8 +274,24 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     monkeypatch.setattr(
         PROFILES,
         "append_pool_profile_specs",
-        lambda specs: specs.append(
-            ("local-omlx-pool", "omlx/pool/model", "omlx/pool/faster", "omlx", "omlx")
+        lambda specs: specs.extend(
+            [
+                (
+                    "local-omlx-pool",
+                    "omlx/pool/model",
+                    "omlx/pool/faster",
+                    "omlx",
+                    "omlx",
+                ),
+                ("local-omlx-final", "omlx/pool/last", "", "omlx", "omlx"),
+                (
+                    "local-omlx-missing-fast",
+                    "omlx/pool/model",
+                    "omlx/pool/missing",
+                    "omlx",
+                    "omlx",
+                ),
+            ]
         ),
     )
 
@@ -294,6 +311,12 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     pool = json.loads((target / "local-omlx-pool.json").read_text())
     assert pool["id"] == "omlx/pool/model"
     assert pool["fasterModel"]["id"] == "omlx/pool/faster"
+    final = json.loads((target / "local-omlx-final.json").read_text())
+    assert final["id"] == "omlx/pool/last"
+    assert "fasterModel" not in final
+    missing_fast = json.loads((target / "local-omlx-missing-fast.json").read_text())
+    assert missing_fast["id"] == "omlx/pool/model"
+    assert "fasterModel" not in missing_fast
     assert not (target / "plus.json").exists()
     free = json.loads((target / "free.json").read_text())
     assert free["id"] == "opencode/free-present"
