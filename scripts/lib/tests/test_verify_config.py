@@ -229,3 +229,76 @@ def test_mcp_checks_include_pi_adapter_path():
         and any(path.name == "mcp-adapter.json" for path in paths)
         for gate, _description, paths in VERIFY_CONFIG.CHECKS
     )
+
+
+_LITELLM_POLICY_CONFIG = """
+litellm_settings:
+  telemetry: false
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+"""
+
+
+def _litellm_env(**overrides):
+    values = {
+        "LITELLM_MASTER_KEY": "sk-" + "x" * 20,
+        "LITELLM_PORT": "4000",
+        "DISABLE_ADMIN_UI": "False",
+        "DATABASE_URL": "postgresql://localhost/litellm",
+    }
+    values.update(overrides)
+    return values
+
+
+def test_litellm_service_env_accepts_pre_provisioning_state():
+    """Fresh installs: per-app virtual keys may be absent before first run."""
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(), _LITELLM_POLICY_CONFIG
+    )
+    assert problems == []
+
+
+def test_litellm_service_env_accepts_provisioned_per_app_keys():
+    env = _litellm_env(
+        **{name: "sk-" + "y" * 20 for name in VERIFY_CONFIG.APP_KEYS.values()}
+    )
+    problems = VERIFY_CONFIG.validate_litellm_service_env(env, _LITELLM_POLICY_CONFIG)
+    assert problems == []
+
+
+def test_litellm_service_env_rejects_unexpected_extras():
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(UNRELATED_VAR="x"), _LITELLM_POLICY_CONFIG
+    )
+    assert any("UNRELATED_VAR" in problem for problem in problems)
+
+
+def test_litellm_service_env_requires_core_and_config_refs():
+    config = _LITELLM_POLICY_CONFIG + "\n  api_key: os.environ/OPENROUTER_API_KEY\n"
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        {key: value for key, value in _litellm_env().items() if key != "DATABASE_URL"},
+        config,
+    )
+    assert any("DATABASE_URL" in problem for problem in problems)
+    assert any("OPENROUTER_API_KEY" in problem for problem in problems)
+
+
+def test_litellm_service_env_detects_master_key_port_drift():
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(LITELLM_MASTER_KEY="short"), _LITELLM_POLICY_CONFIG, "4100"
+    )
+    assert any("master-key shape" in problem for problem in problems)
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(), _LITELLM_POLICY_CONFIG, "4100"
+    )
+    assert any("LITELLM_PORT drift" in problem for problem in problems)
+
+
+def test_litellm_service_env_rejects_inline_api_keys_and_missing_policy():
+    problems = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(), _LITELLM_POLICY_CONFIG + "  api_key: sk-inline-secret\n"
+    )
+    assert any("inline api_key" in problem for problem in problems)
+    problems = VERIFY_CONFIG.validate_litellm_service_env({}, "")
+    assert any("telemetry/master-key policy" in problem for problem in problems)
