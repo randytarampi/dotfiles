@@ -163,7 +163,7 @@ def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
         return {entry["id"] for entry in data}
     except Exception:
         logger.warning(
-            "LiteLLM model catalogue unavailable; preserving managed profiles"
+            "LiteLLM model catalogue unavailable; exact model availability is unknown"
         )
         return None
 
@@ -301,6 +301,14 @@ def model_id(model_ref: str, provider_hint: str = "") -> str:
     if provider_hint and not model_ref.startswith(f"{provider_hint}/"):
         return model_ref
     return model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
+
+
+def litellm_alias(model_ref: str, provider: str) -> str:
+    """Return the exact LiteLLM wire alias for a direct provider model ref."""
+    model = model_id(model_ref, provider)
+    if provider == "google":
+        return f"google/models/{model.removeprefix('models/')}"
+    return f"{provider}/{model}"
 
 
 def lookup_model_temperature(model_name: str, overrides: dict) -> float | None:
@@ -582,14 +590,16 @@ def main():
     )
     junie_key = read_junie_key() if litellm_gate else ""
     if litellm_gate and not junie_key:
-        logger.warning("Junie LiteLLM key file unavailable; keeping direct profiles")
+        logger.warning(
+            "Junie LiteLLM key file unavailable; proxy-routed profiles will be omitted"
+        )
     providers = build_provider_configs(cfg, junie_key)
     use_litellm = litellm_gate and bool(junie_key) and "litellm" in providers
     groups = select_model_groups(cfg.get("groups", {}), use_litellm)
+    catalogue = None
     if use_litellm:
-        groups = filter_litellm_groups(
-            groups, litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
-        )
+        catalogue = litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
+        groups = filter_litellm_groups(groups, catalogue)
     specs = tier_specs + [
         (
             name,
@@ -602,7 +612,10 @@ def main():
     ]
     # Selection parity: one spec per chat-capable pool model (registry-driven,
     # N-engine contract) so every local model is selectable in JetBrains AI.
+    specs_before_pool = {name for name, *_ in specs}
     append_pool_profile_specs(specs)
+    pool_profile_names = {name for name, *_ in specs} - specs_before_pool
+    tier_names = set(registry.get("presets", {}))
     ollama_model_names = [
         model["name"] if isinstance(model, dict) else str(model)
         for model in local_models
@@ -621,6 +634,39 @@ def main():
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
         provider = explicit_provider or model_provider(primary_ref)
+        is_routed_spec = name in tier_names or name in pool_profile_names
+        route_primary = (
+            litellm_gate and is_routed_spec and provider in LITELLM_ROUTED_PROVIDERS
+        )
+        route_faster_provider = explicit_faster or (
+            model_provider(faster_ref) if faster_ref else provider
+        )
+        route_faster = (
+            litellm_gate
+            and is_routed_spec
+            and faster_ref
+            and route_faster_provider in LITELLM_ROUTED_PROVIDERS
+        )
+        if route_primary:
+            if catalogue is None:
+                logger.warning("Omitting %s: LiteLLM model catalogue unavailable", name)
+                continue
+            alias = litellm_alias(primary_ref, provider)
+            if alias not in catalogue:
+                logger.warning("Omitting %s: LiteLLM primary alias unavailable", name)
+                continue
+            provider = "litellm"
+            primary_ref = alias
+        if route_faster:
+            faster_alias = litellm_alias(faster_ref, route_faster_provider)
+            if catalogue is None or faster_alias not in catalogue:
+                logger.info(
+                    "Omitting faster model for %s: LiteLLM alias unavailable", name
+                )
+                faster_ref = ""
+            else:
+                faster_ref = faster_alias
+                explicit_faster = "litellm"
         if provider == "litellm":
             if explicit_faster and explicit_faster != "litellm":
                 logger.error(

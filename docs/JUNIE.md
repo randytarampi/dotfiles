@@ -16,7 +16,13 @@ inherited environment variable) and places the Junie-only virtual key as a
 literal in the generated private profile JSON under `~/.junie/models/` (the
 shared `~/.ai/models/` directory). This is an intentional credential-bearing
 runtime artifact: keep the profile directory private, do not copy/share those
-profiles, and rotate via LiteLLM provisioning plus `make deploy`. Meridian groups remain direct because Meridian speaks the
+profiles, and rotate via LiteLLM provisioning plus `make deploy`. With the
+canary enabled, tier and generated local-pool profiles for supported providers
+are routed only through exact aliases present in Junie's authenticated LiteLLM
+catalogue. Missing aliases or an unavailable catalogue omit the owned generated
+profile (and remove a stale manifest-owned profile); missing faster aliases omit
+only `fasterModel`. No eligible profile silently falls back to a direct endpoint.
+Named `litellm-*` groups keep their existing catalogue-filter behaviour. Meridian groups remain direct because Meridian speaks the
 OpenAI Responses protocol at `/v1/responses`, which the LiteLLM proxy does not
 serve; Copilot remains direct because it uses its own authentication and profile
 shape. The gate defaults to `0`, and disabled mode emits the existing groups

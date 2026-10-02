@@ -405,6 +405,12 @@ profiles in the shared mode-700 `~/.junie/models/` (`~/.ai/models/`) directory
 used by both Junie CLI and the IntelliJ IDE. This generated-profile location is
 an intentional credential-bearing runtime artifact; tracked
 `configs/junie/model-groups.json` contains only the key environment selector.
+When the canary is enabled, generated tier and local-pool profiles for supported
+providers use only exact aliases advertised by the authenticated LiteLLM model
+catalogue. Unavailable primary aliases omit the generated profile rather than
+falling back to a direct endpoint; unavailable faster aliases omit only the
+faster model. Meridian and Copilot retain their protocol/authentication
+exceptions, and gate-off generation retains direct routing.
 After enabling/disabling the canary or rotating its key, run `make deploy`,
 restart Junie CLI sessions and reload/restart IntelliJ to consume regenerated
 profiles. Other providers keep their native environment-variable references;
