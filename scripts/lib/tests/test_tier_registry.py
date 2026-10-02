@@ -90,6 +90,22 @@ def test_junie_provider_config_reads_private_file_not_inherited_environment(
     assert not generate_profiles.provider_key_available("LITELLM_JUNIE_KEY")
 
 
+def test_junie_tier_anthropic_models_use_meridian_bare_wire_ids():
+    assert generate_profiles.model_provider("anthropic/claude-sonnet-5-5") == "meridian"
+    assert (
+        generate_profiles.model_id("anthropic/claude-sonnet-5-5", "meridian")
+        == "claude-sonnet-5-5"
+    )
+    assert (
+        generate_profiles.model_id("anthropic/claude-haiku-4-5", "meridian")
+        == "claude-haiku-4-5"
+    )
+    assert (
+        generate_profiles.model_id("google/models/gemini-3.8-flash", "litellm")
+        == "google/models/gemini-3.8-flash"
+    )
+
+
 class TierRegistryTests(unittest.TestCase):
     def test_deprecated_model_override_flags_parse_as_new_destinations(self):
         parser = argparse.ArgumentParser()

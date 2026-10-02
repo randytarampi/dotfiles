@@ -294,6 +294,10 @@ def model_ref_provider(model_ref: str) -> str:
 
 
 def model_id(model_ref: str, provider_hint: str = "") -> str:
+    # Tier roles name Anthropic models with their source namespace, but Junie
+    # sends requests to Meridian, whose /v1/models catalogue uses bare IDs.
+    if provider_hint == "meridian" and model_ref.startswith("anthropic/"):
+        return model_ref[len("anthropic/") :]
     if provider_hint and not model_ref.startswith(f"{provider_hint}/"):
         return model_ref
     return model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
