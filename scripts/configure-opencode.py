@@ -158,11 +158,19 @@ def apply_litellm_client_gate(config: dict) -> None:
         and os.environ.get("DOTFILES_OPENCODE_USE_LITELLM", "0") == "1"
     ):
         return
-    provider = config.setdefault("provider", {}).setdefault("openai", {})
-    provider.setdefault("options", {})[
-        "baseURL"
-    ] = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
-    provider["options"]["apiKey"] = "{env:LITELLM_MASTER_KEY}"
+    base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    providers = config.setdefault("provider", {})
+    if os.environ.get("OPENAI_API_KEY", "").strip():
+        provider = providers.setdefault("openai", {})
+        provider.setdefault("options", {}).update(
+            {"baseURL": base_url, "apiKey": "{env:LITELLM_OPENCODE_KEY}"}
+        )
+    for name in ("ollama", "omlx"):
+        provider = providers.get(name)
+        if provider is not None:
+            provider.setdefault("options", {}).update(
+                {"baseURL": base_url, "apiKey": "{env:LITELLM_OPENCODE_KEY}"}
+            )
 
 
 @with_generation_lock("configure-opencode")
