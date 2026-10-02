@@ -7,7 +7,7 @@ import json
 import shlex
 import sys
 import tempfile
-import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -46,6 +46,11 @@ def _service_env_value(name, path):
 
 
 def _request_json(url, method, master_key, payload=None, timeout=5):
+    parsed_url = urllib.parse.urlsplit(url)
+    if parsed_url.scheme != "http" or parsed_url.hostname != "127.0.0.1":
+        raise ValueError(
+            "LiteLLM provisioning requests are restricted to loopback HTTP"
+        )
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
         url,
@@ -56,7 +61,8 @@ def _request_json(url, method, master_key, payload=None, timeout=5):
         },
         method=method,
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    # B310: URL scheme and host are constrained above to loopback HTTP.
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -122,12 +128,7 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
         if found:
             _persist_app_keys(service_env_path, found)
             logger.info("Provisioned %d LiteLLM app key(s)", len(found))
-    except (
-        OSError,
-        urllib.error.URLError,
-        urllib.error.HTTPError,
-        ValueError,
-    ) as error:
+    except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
 
 
