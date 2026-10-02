@@ -11,16 +11,39 @@ SPEC.loader.exec_module(VERIFY)
 
 def run(groups, catalogues):
     return VERIFY._offline_model_parity_violations(
-        junie={"groups": groups},
+        junie={
+            "providers": {
+                provider: {}
+                for provider in (
+                    "google",
+                    "openai",
+                    "openrouter",
+                    "ollama-cloud",
+                    "github-copilot",
+                    "opencode",
+                    "litellm",
+                    "meridian",
+                    "ollama",
+                    "omlx",
+                )
+            },
+            "groups": groups,
+        },
         allowlists=catalogues,
         codex_source='DEFAULT_OLLAMA_CLOUD_MODEL = "cloud-default"',
     )
 
 
-def test_allowlist_names_are_not_model_ids():
-    assert VERIFY._model_allowlists
+def test_allowlist_names_are_not_model_ids(tmp_path, monkeypatch):
+    path = tmp_path / "openai.json"
+    path.write_text('{"models": {"real-id": {"name": "Pretty name"}}}')
+    monkeypatch.setattr(VERIFY, "MODEL_ALLOWLIST_PATHS", {"openai": path})
+    assert VERIFY._model_allowlists() == {"openai": {"real-id"}}
     assert VERIFY._model_allowlist_violations(
         {"presets": {"x": {"task": {"model": "openai/Pretty name"}}}}
+    )
+    assert not VERIFY._model_allowlist_violations(
+        {"presets": {"x": {"task": {"model": "openai/real-id"}}}}
     )
 
 
@@ -75,3 +98,36 @@ def test_partial_or_misqualified_pair_fails():
     )
     assert any("does not match direct group" in error for error in errors)
     assert any("same/leaf" in error for error in errors)
+
+
+def test_unknown_provider_fails_closed_even_when_name_matches_catalogue():
+    groups = {
+        "misspelled-google": {
+            "provider": "googlle",
+            "primaryModel": "Pretty name",
+        }
+    }
+    errors = run(
+        groups,
+        {"google": {"Pretty name"}, "ollama-cloud": {"cloud-default"}},
+    )
+    assert any("unknown provider 'googlle'" in error for error in errors)
+
+
+def test_unknown_faster_provider_fails_closed():
+    groups = {
+        "group": {
+            "provider": "google",
+            "primaryModel": "gemini-3.8-flash",
+            "fasterProvider": "googlle",
+            "fasterModel": "gemini-3.5-flash-lite",
+        }
+    }
+    errors = run(
+        groups,
+        {
+            "google": {"gemini-3.8-flash", "gemini-3.5-flash-lite"},
+            "ollama-cloud": {"cloud-default"},
+        },
+    )
+    assert any("unknown provider 'googlle'" in error for error in errors)

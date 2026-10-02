@@ -144,6 +144,12 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
             )
 
     groups = junie.get("groups", {})
+    supported_providers = set(junie.get("providers", {})) | {
+        "litellm",
+        "meridian",
+        "ollama",
+        "omlx",
+    }
 
     def canonical(provider, model):
         if provider == "meridian":
@@ -170,6 +176,9 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
                 else group.get("fasterProvider", group.get("provider"))
             )
             path = f"configs/junie/model-groups.json groups.{name}.{field}"
+            if provider not in supported_providers:
+                violations.append(f"{path} references unknown provider {provider!r}")
+                continue
             if provider == "meridian":
                 # Bare Claude aliases are Meridian API identifiers, not Anthropic IDs.
                 continue
