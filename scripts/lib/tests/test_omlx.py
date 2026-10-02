@@ -456,7 +456,16 @@ def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local():
         }
 
     original["provider"]["openai"]["options"]["baseURL"] = "https://api.openai.com/v1"
-    with patch.dict(os.environ, {"OPENAI_API_KEY": "present"}, clear=False):
+    with patch.dict(
+        os.environ,
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_OPENCODE_USE_LITELLM": "1",
+            "OPENAI_API_KEY": "present",
+            "LITELLM_PORT": "4001",
+        },
+        clear=False,
+    ):
         configure_opencode.apply_litellm_client_gate(original)
     assert (
         original["provider"]["openai"]["options"]["apiKey"]
