@@ -112,7 +112,7 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
 
     def fake_request(url, method, master_key, payload=None, timeout=5):
         calls.append((url, method, payload))
-        if url.endswith("/key/list"):
+        if "/key/list" in url:
             return {"keys": [{"key_alias": "opencode"}]}
         if url.endswith("/key/generate"):
             return {"key": f"sk-generated-{payload['key_alias']}"}

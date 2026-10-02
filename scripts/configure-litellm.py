@@ -95,7 +95,11 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
     ).expanduser()
     try:
         _request_json(f"{api_base}/health/liveliness", "GET", master_key)
-        listing = _request_json(f"{api_base}/key/list", "GET", master_key)
+        # Default /key/list responses carry opaque hash strings; only
+        # return_full_object=true exposes key_alias for idempotency.
+        listing = _request_json(
+            f"{api_base}/key/list?return_full_object=true", "GET", master_key
+        )
         records = listing.get("keys", []) if isinstance(listing, dict) else []
         aliases = {
             item.get("key_alias")
@@ -108,12 +112,22 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
                 # The key-list endpoint intentionally does not reveal existing
                 # key material; preserve any locally stored key on disk.
                 continue
-            generated = _request_json(
-                f"{api_base}/key/generate",
-                "POST",
-                master_key,
-                {"key_alias": alias, "duration": None},
-            )
+            try:
+                generated = _request_json(
+                    f"{api_base}/key/generate",
+                    "POST",
+                    master_key,
+                    {"key_alias": alias, "duration": None},
+                )
+            except OSError as error:
+                # Some proxy versions reject duplicate aliases with 400 even
+                # when the list response hides key_alias — treat those as
+                # already-provisioned and keep the loop idempotent.
+                status = getattr(error, "code", None)
+                if status == 400:
+                    logger.info("LiteLLM key alias %s already exists; skipping", alias)
+                    continue
+                raise
             key = generated.get("key") if isinstance(generated, dict) else None
             if key:
                 found[env_name] = key
