@@ -135,6 +135,24 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     assert path.stat().st_mode & 0o777 == 0o600
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///tmp/unexpected",
+        "https://127.0.0.1:4000/key/list",
+        "http://example.test:4000/key/list",
+    ],
+)
+def test_litellm_provisioning_rejects_non_loopback_or_non_http_urls(url, monkeypatch):
+    monkeypatch.setattr(
+        CONFIGURE.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: pytest.fail("unsafe URL must not be opened"),
+    )
+    with pytest.raises(ValueError, match="restricted to loopback HTTP"):
+        CONFIGURE._request_json(url, "GET", "master")
+
+
 def test_render_uses_environment_references_and_no_inline_keys(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "do-not-render")
     rendered = litellm_config.render_config()
