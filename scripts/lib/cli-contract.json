@@ -872,6 +872,14 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/check-model-drift.py",
+      "capabilities": ["public"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--json", "--require-complete"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/check-fleet-coverage.py",
       "capabilities": [
         "public"

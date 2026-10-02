@@ -98,9 +98,9 @@ def test_junie_profile_scan_skips_manifest_and_non_object_json(tmp_path, monkeyp
 
     def empty_catalogue(url, api_key=""):
         catalogue_requests.append(url)
-        return []
+        return {"data": []}
 
-    monkeypatch.setattr(DRIFT, "get_models", empty_catalogue)
+    monkeypatch.setattr(DRIFT, "get_catalogue", empty_catalogue)
 
     violations = DRIFT.check_junie_profiles()
 
