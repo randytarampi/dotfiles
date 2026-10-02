@@ -219,6 +219,14 @@ The repo uses the upstream Plannotator paste env var names directly.
 5. Run `make caddy-validate` to verify the generated Caddyfile.
 6. If you use `tls internal`, run `caddy trust` once (or install the root CA manually) so browsers trust the local CA.
 
+If an unattended deploy has no passwordless sudo, Caddy's privileged setup
+warns and skips without blocking later scripts. Chezmoi can cache that skipped
+run; a subsequent ordinary `make deploy` may not retry it. From an interactive
+terminal, run `make caddy-setup` to rerender and retry only the privileged
+Caddy installer, including managed `/etc/hosts` entries and its LaunchDaemon.
+`make caddy-deploy` regenerates and restarts an existing installation but does
+not perform those setup steps.
+
 ## Migration notes
 
 The migration step decommissions the legacy dedicated-user setup:
