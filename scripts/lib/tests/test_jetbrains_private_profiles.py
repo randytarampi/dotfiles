@@ -190,6 +190,186 @@ def test_litellm_group_rejects_explicit_direct_faster_provider(harness, caplog):
     assert not (target / "litellm-openai-faster.json").exists()
 
 
+def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch):
+    _, target, _, groups_path = harness
+    target.mkdir(parents=True)
+    (target / "plus.json").write_text('{"id":"stale-direct"}', encoding="utf-8")
+    (target / PROFILES.PROFILE_MANIFEST).write_text(
+        json.dumps(["plus"]), encoding="utf-8"
+    )
+    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
+    config = json.loads(groups_path.read_text())
+    config["groups"] = {
+        "openai-custom": {"provider": "openai", "primaryModel": "custom/alias"},
+        "litellm-openai-custom": {
+            "provider": "litellm",
+            "primaryModel": "openai/custom/alias",
+        },
+    }
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    roles = {
+        "pro": ("ollama-cloud/llama:cloud", "ollama-cloud/qwen:cloud"),
+        "local-pro": ("omlx/local/model", "omlx/local/faster"),
+        "plus": ("openai/gpt-missing", "openai/gpt-faster"),
+        "free": ("opencode/free-present", "openai/gpt-faster-absent"),
+        "meridian": ("anthropic/claude-sonnet", "openai/gpt-present"),
+    }
+    registry = {"presets": {name: {} for name in roles}}
+    monkeypatch.setattr(PROFILES.tier_registry, "load_registry", lambda: registry)
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "materialize_role_models",
+        lambda _registry, tier, *_args: {
+            "orchestrator": roles[tier][0],
+            "librarian": roles[tier][1],
+        },
+    )
+    monkeypatch.setattr(PROFILES, "resolve_engine", lambda *_: None)
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            provider: {
+                "baseUrl": f"https://direct.example/{provider}/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": f"${{{provider.upper()}_KEY}}",
+            }
+            for provider in (
+                "litellm",
+                "ollama-cloud",
+                "omlx",
+                "openai",
+                "opencode",
+                "meridian",
+            )
+        }
+        | {
+            "litellm": {
+                "baseUrl": "http://127.0.0.1:4000/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "dummy-junie-key-one",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {
+            "ollama-cloud/llama:cloud",
+            "ollama-cloud/qwen:cloud",
+            "omlx/local/model",
+            "omlx/local/faster",
+            "omlx/pool/model",
+            "omlx/pool/faster",
+            "openai/gpt-faster",
+            "openai/gpt-present",
+            "opencode/free-present",
+            "openai/custom/alias",
+        },
+    )
+    monkeypatch.setattr(
+        PROFILES,
+        "append_pool_profile_specs",
+        lambda specs: specs.append(
+            ("local-omlx-pool", "omlx/pool/model", "omlx/pool/faster", "omlx", "omlx")
+        ),
+    )
+
+    PROFILES.main()
+
+    cloud = json.loads((target / "pro.json").read_text())
+    assert cloud["id"] == "ollama-cloud/llama:cloud"
+    assert cloud["fasterModel"]["id"] == "ollama-cloud/qwen:cloud"
+    assert (target / "pro.json").stat().st_mode & 0o777 == 0o600
+    local = json.loads((target / "local-pro.json").read_text())
+    assert local["id"] == "omlx/local/model"
+    assert local["fasterModel"]["id"] == "omlx/local/faster"
+    assert (target / "local-pro.json").stat().st_mode & 0o777 == 0o600
+    assert local["baseUrl"] == "http://127.0.0.1:4000/v1"
+    assert "baseUrl" not in local["fasterModel"]
+    assert "apiKey" not in local["fasterModel"]
+    pool = json.loads((target / "local-omlx-pool.json").read_text())
+    assert pool["id"] == "omlx/pool/model"
+    assert pool["fasterModel"]["id"] == "omlx/pool/faster"
+    assert not (target / "plus.json").exists()
+    free = json.loads((target / "free.json").read_text())
+    assert free["id"] == "opencode/free-present"
+    assert "fasterModel" not in free
+    meridian = json.loads((target / "meridian.json").read_text())
+    assert meridian["id"] == "claude-sonnet"
+    assert meridian["fasterModel"]["id"] == "openai/gpt-present"
+    assert meridian["fasterModel"]["baseUrl"] == "http://127.0.0.1:4000/v1"
+    assert (
+        json.loads((target / "litellm-openai-custom.json").read_text())["id"]
+        == "openai/custom/alias"
+    )
+
+    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "0")
+    PROFILES.main()
+    direct_cloud = json.loads((target / "pro.json").read_text())
+    assert direct_cloud["id"] == "llama:cloud"
+    assert direct_cloud["baseUrl"] == "https://direct.example/ollama-cloud/v1"
+
+
+def test_unknown_catalogue_omits_tiers_but_preserves_named_and_user_profiles(
+    harness, monkeypatch
+):
+    _, target, _, groups_path = harness
+    target.mkdir(parents=True)
+    user_profile = target / "custom-user.json"
+    user_profile.write_text('{"id":"user"}', encoding="utf-8")
+    config = json.loads(groups_path.read_text())
+    config["groups"] = {
+        "openai-custom": {"provider": "openai", "primaryModel": "custom/alias"},
+        "litellm-openai-custom": {
+            "provider": "litellm",
+            "primaryModel": "openai/custom/alias",
+        },
+    }
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "load_registry", lambda: {"presets": {"pro": {}}}
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "materialize_role_models",
+        lambda *_: {"orchestrator": "openai/gpt", "librarian": ""},
+    )
+    monkeypatch.setattr(PROFILES, "resolve_engine", lambda *_: None)
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "litellm": {
+                "baseUrl": "http://127.0.0.1:4000/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "dummy-junie-key-one",
+            },
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            },
+        },
+    )
+    monkeypatch.setattr(PROFILES, "litellm_catalogue_models", lambda *_: None)
+
+    PROFILES.main()
+
+    assert not (target / "pro.json").exists()
+    assert (
+        json.loads((target / "litellm-openai-custom.json").read_text())["id"]
+        == "openai/custom/alias"
+    )
+    assert json.loads(user_profile.read_text())["id"] == "user"
+
+
 def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
     harness, monkeypatch
 ):
