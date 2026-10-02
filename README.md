@@ -532,9 +532,9 @@ Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.
 | Tier | Providers | Best For |
 |------|-----------|----------|
 | **pro** | Ollama Cloud | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | General development |
+| **pro-plus** | Ollama Cloud + OpenAI (`gpt-6.1-sol`, `gpt-6-luna`) | General development |
 | **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-5.6-terra`, `gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
+| **plus** | OpenAI only (`gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
 | **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
 | **anthropic** | Anthropic only (`sonnet-5-5`, `fable-5-1`, `haiku-4-5`, `opus-5-5`) | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI only | OpenAI-first workflow |

@@ -156,3 +156,10 @@ Added `claude-sonnet-5-5`, `claude-opus-5-5`, `gpt-6-luna`, and `gpt-6.1-sol` to
 - `gpt-5.6-terra` is absent from OpenAI's live catalog; it remains available from OpenCode Zen.
 - Replaced OpenAI-side references following upstream oh-my-opencode-slim v3.0.1 bundled mapping: orchestrator/council β → `gpt-6-sol`; designer/council γ → `gpt-6-luna`.
 - Kept the Zen `gpt-5.6-terra` allowlist entry and added `gpt-6-sol` to the Zen catalogue; removed terra from the OpenAI allowlist and added the OpenAI `gpt-6-sol` entry.
+
+## 2026-10-02 — Active gpt-6-sol consolidation
+
+- Migrated active OpenAI tier orchestrators and council references from `gpt-6-sol` to `gpt-6.1-sol`; retained `gpt-6-astra` as a distinct fallback and council beta where replacing sol would otherwise duplicate its primary.
+- Removed obsolete `gpt-6-sol` entries from the OpenAI allowlist and Junie direct/LiteLLM groups. The provider catalogue still lists the model; this is policy-driven active consolidation, not provider retirement.
+- OpenCode Zen lists `gpt-6-sol` and `gpt-6.1-sol`, but minimal OpenCode inference to both returned “Model access is disabled.” Active Zen fallbacks therefore use verified `big-pickle`, not either Sol model.
+- Direct OpenAI inference remains unverified because `OPENAI_API_KEY` is absent. Catalogue presence does not establish entitlement.

@@ -111,10 +111,6 @@
       "provider": "openai",
       "primaryModel": "gpt-6-luna"
     },
-    "openai-gpt-6-sol": {
-      "provider": "openai",
-      "primaryModel": "gpt-6-sol"
-    },
     "openai-gpt-6.1-sol": {
       "provider": "openai",
       "primaryModel": "gpt-6.1-sol"
@@ -136,10 +132,6 @@
     "litellm-openai-gpt-6-luna": {
       "provider": "litellm",
       "primaryModel": "openai/gpt-6-luna"
-    },
-    "litellm-openai-gpt-6-sol": {
-      "provider": "litellm",
-      "primaryModel": "openai/gpt-6-sol"
     },
     "litellm-openai-gpt-6.1-sol": {
       "provider": "litellm",
