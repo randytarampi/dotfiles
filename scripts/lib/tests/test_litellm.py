@@ -2,6 +2,7 @@ import os
 import json
 import shlex
 import subprocess
+import urllib.error
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -133,6 +134,56 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     assert "LITELLM_PI_KEY=sk-generated-pi" in content
     assert "LITELLM_OPENCODE_KEY" not in content
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_app_key_provisioning_treats_400_generate_as_alias_exists(
+    tmp_path, monkeypatch
+):
+    """Proxy versions where /key/list hides key_alias: a 400 on generate
+    means the alias already exists — provisioning stays idempotent."""
+    generate_attempts = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        if "/key/list" in url:
+            return {"keys": []}
+        if url.endswith("/key/generate"):
+            alias = payload["key_alias"]
+            generate_attempts.append(alias)
+            raise urllib.error.HTTPError(url, 400, "Bad Request", None, None)
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    path = tmp_path / "service.env"
+    path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+
+    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
+
+    assert len(generate_attempts) == len(CONFIGURE.APP_KEYS)
+    # A 400 is not persisted as a key; the service env keeps its prior state.
+    assert not any(
+        name in path.read_text(encoding="utf-8") for name in CONFIGURE.APP_KEYS.values()
+    )
+
+
+def test_app_key_provisioning_defers_on_unexpected_generate_errors(
+    tmp_path, monkeypatch
+):
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        if "/key/list" in url:
+            return {"keys": []}
+        if url.endswith("/key/generate"):
+            raise urllib.error.HTTPError(url, 503, "Service Unavailable", None, None)
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    path = tmp_path / "service.env"
+    path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+
+    # Returns cleanly (the outer handler warns and defers), does not raise.
+    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
+    assert not any(
+        name in path.read_text(encoding="utf-8") for name in CONFIGURE.APP_KEYS.values()
+    )
 
 
 @pytest.mark.parametrize(
