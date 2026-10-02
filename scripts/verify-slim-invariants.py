@@ -166,6 +166,13 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
         return provider, model
 
     for name, group in groups.items():
+        if name.startswith("litellm-") and group.get("provider") == "litellm":
+            faster_provider = group.get("fasterProvider")
+            if faster_provider not in (None, "litellm"):
+                violations.append(
+                    f"configs/junie/model-groups.json groups.{name}.fasterProvider "
+                    f"must be 'litellm' or absent, not {faster_provider!r}"
+                )
         for field in ("primaryModel", "fasterModel"):
             model = group.get(field)
             if not model:
