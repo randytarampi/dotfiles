@@ -1,0 +1,77 @@
+"""Focused offline tests for provider-exact static model parity."""
+
+import importlib.util
+from pathlib import Path
+
+SCRIPT = Path(__file__).resolve().parents[2] / "verify-slim-invariants.py"
+SPEC = importlib.util.spec_from_file_location("verify_slim_invariants", SCRIPT)
+VERIFY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(VERIFY)
+
+
+def run(groups, catalogues):
+    return VERIFY._offline_model_parity_violations(
+        junie={"groups": groups},
+        allowlists=catalogues,
+        codex_source='DEFAULT_OLLAMA_CLOUD_MODEL = "cloud-default"',
+    )
+
+
+def test_allowlist_names_are_not_model_ids():
+    assert VERIFY._model_allowlists
+    assert VERIFY._model_allowlist_violations(
+        {"presets": {"x": {"task": {"model": "openai/Pretty name"}}}}
+    )
+
+
+def test_direct_and_litellm_google_pair_is_valid():
+    groups = {
+        "google-gemini-flash": {
+            "provider": "google",
+            "primaryModel": "gemini-3.8-flash",
+            "fasterModel": "gemini-3.5-flash-lite",
+            "fasterProvider": "google",
+        },
+        "litellm-google-gemini-flash": {
+            "provider": "litellm",
+            "primaryModel": "google/models/gemini-3.8-flash",
+            "fasterModel": "google/models/gemini-3.5-flash-lite",
+        },
+    }
+    assert (
+        run(
+            groups,
+            {
+                "google": {"gemini-3.8-flash", "gemini-3.5-flash-lite"},
+                "ollama-cloud": {"cloud-default"},
+            },
+        )
+        == []
+    )
+
+
+def test_partial_or_misqualified_pair_fails():
+    groups = {
+        "google-gemini-flash": {
+            "provider": "google",
+            "primaryModel": "gemini-3.8-flash",
+            "fasterModel": "gemini-3.5-flash-lite",
+            "fasterProvider": "google",
+        },
+        "litellm-google-gemini-flash": {
+            "provider": "litellm",
+            "primaryModel": "google/models/gemini-3.8-flash",
+            "fasterModel": "google/models/gemini-3.6-flash-lite",
+        },
+        "openrouter-x": {"provider": "openrouter", "primaryModel": "same/leaf"},
+    }
+    errors = run(
+        groups,
+        {
+            "google": {"gemini-3.8-flash", "gemini-3.5-flash-lite"},
+            "openrouter": set(),
+            "ollama-cloud": {"cloud-default"},
+        },
+    )
+    assert any("does not match direct group" in error for error in errors)
+    assert any("same/leaf" in error for error in errors)
