@@ -12,6 +12,11 @@
       "apiKeyEnv": "OPENAI_API_KEY",
       "baseUrlEnv": "OPENAI_BASE_URL"
     },
+    "litellm": {
+      "baseUrl": "http://127.0.0.1:4000/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "LITELLM_JUNIE_KEY"
+    },
     "meridian": {
       "baseUrl": "http://127.0.0.1:3456/v1/responses",
       "apiType": "OpenAIResponses",
@@ -113,6 +118,32 @@
     "openai-gpt-6.1-sol": {
       "provider": "openai",
       "primaryModel": "gpt-6.1-sol"
+    },
+    "litellm-google-gemini-flash": {
+      "provider": "litellm",
+      "primaryModel": "google/gemini-3.8-flash",
+      "fasterModel": "google/gemini-3.5-flash-lite"
+    },
+    "litellm-openrouter-glm": {
+      "provider": "litellm",
+      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+    },
+    "litellm-openrouter-nemotron": {
+      "provider": "litellm",
+      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante:free",
+      "fasterModel": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+    },
+    "litellm-openai-gpt-6-luna": {
+      "provider": "litellm",
+      "primaryModel": "openai/gpt-6-luna"
+    },
+    "litellm-openai-gpt-6-sol": {
+      "provider": "litellm",
+      "primaryModel": "openai/gpt-6-sol"
+    },
+    "litellm-openai-gpt-6.1-sol": {
+      "provider": "litellm",
+      "primaryModel": "openai/gpt-6.1-sol"
     }
   }
 }

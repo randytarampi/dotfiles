@@ -4,6 +4,15 @@
 
 The shared tier registry in `scripts/lib/tier_registry.py` is the single source of truth for tier → role → model mapping. OpenCode, Junie, and Pi consume the presets in `configs/opencode/oh-my-opencode-slim.json` through this registry. `configs/junie/model-groups.json` supplies Junie-specific profile metadata, provider endpoints (including Google, OpenRouter, and OpenCode Zen), and temperature overrides.
 
+Set `DOTFILES_JUNIE_USE_LITELLM=1` together with
+`DOTFILES_RUN_LITELLM_SETUP=1` to select the parallel `litellm-*` groups for
+externally authenticated providers. The LiteLLM provider uses the app-specific
+`LITELLM_JUNIE_KEY`. Meridian groups remain direct because Meridian speaks the
+OpenAI Responses protocol at `/v1/responses`, which the LiteLLM proxy does not
+serve; Copilot remains direct because it uses its own authentication and profile
+shape. The gate defaults to `0`, and disabled mode emits the existing groups
+unchanged.
+
 ### GitHub Copilot provider (experimental)
 
 The `github-copilot` provider and `copilot` group are experimental and require

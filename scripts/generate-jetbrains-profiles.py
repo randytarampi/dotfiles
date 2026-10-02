@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -32,6 +33,39 @@ from local_engines import (
     resolve_engine,
 )
 
+JUNIE_LITELLM_ENV = "DOTFILES_JUNIE_USE_LITELLM"
+LITELLM_ROUTED_PROVIDERS = {
+    "ollama",
+    "omlx",
+    "ollama-cloud",
+    "openai",
+    "google",
+    "openrouter",
+    "opencode",
+}
+
+
+def select_model_groups(groups: dict, use_litellm: bool) -> dict:
+    """Select direct groups or their LiteLLM equivalents, never both."""
+    if not use_litellm:
+        return {
+            name: group
+            for name, group in groups.items()
+            if group.get("provider") != "litellm"
+        }
+    selected = {}
+    for name, group in groups.items():
+        provider = group.get("provider")
+        if provider == "litellm":
+            continue
+        if provider in LITELLM_ROUTED_PROVIDERS:
+            routed_name = f"litellm-{name}"
+            if routed_name in groups:
+                selected[routed_name] = groups[routed_name]
+            continue
+        selected[name] = group
+    return selected
+
 
 def normalize_endpoint(base_url: str, api_type: str) -> str:
     """Return the full Junie endpoint for an OpenAI-compatible API type."""
@@ -53,11 +87,29 @@ def normalize_endpoint(base_url: str, api_type: str) -> str:
     return f"{base_url}{endpoint}" if endpoint else base_url
 
 
+def provider_key_available(key_env: str) -> bool:
+    if os.environ.get(key_env, "").strip():
+        return True
+    if key_env != "LITELLM_JUNIE_KEY":
+        return False
+    try:
+        for line in open(
+            os.path.expanduser("~/.local/share/litellm/service.env"),
+            encoding="utf-8",
+        ):
+            if line.startswith(f"{key_env}="):
+                return bool(shlex.split(line.split("=", 1)[1].strip()))
+    except (OSError, ValueError):
+        pass
+    return False
+
+
 def build_provider_configs(cfg: dict) -> dict:
     provider_configs = {}
     for name, definition in cfg.get("providers", {}).items():
         key_env = definition.get("apiKeyEnv", "")
-        if key_env and not os.environ.get(key_env):
+        has_key = provider_key_available(key_env) if key_env else False
+        if key_env and not has_key:
             logger.warning(
                 f"Provider {name}: {key_env} is unset — Junie refuses to load "
                 "profiles referencing an undefined variable"
@@ -66,7 +118,7 @@ def build_provider_configs(cfg: dict) -> dict:
         # the literal secret (profile files were world-readable). When the
         # variable is unset, omit apiKey entirely — Junie refuses to load
         # profiles referencing an undefined variable.
-        api_key = f"${{{key_env}}}" if key_env and os.environ.get(key_env) else ""
+        api_key = f"${{{key_env}}}" if key_env and has_key else ""
         host_alt = definition.get("hostEnvAlt", "")
         base_url = os.environ.get(host_alt, "").strip().rstrip("/") if host_alt else ""
         engine = resolve_engine(name)
@@ -290,6 +342,11 @@ def main():
     if args.local_fallback_preset:
         logger.info(f"Using local fallback preset: {args.local_fallback_preset}")
 
+    groups = select_model_groups(
+        cfg.get("groups", {}),
+        os.environ.get(JUNIE_LITELLM_ENV, "0") == "1"
+        and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1",
+    )
     specs = tier_specs + [
         (
             name,
@@ -298,7 +355,7 @@ def main():
             group.get("provider"),
             group.get("fasterProvider"),
         )
-        for name, group in cfg.get("groups", {}).items()
+        for name, group in groups.items()
     ]
     # Selection parity: one spec per chat-capable pool model (registry-driven,
     # N-engine contract) so every local model is selectable in JetBrains AI.

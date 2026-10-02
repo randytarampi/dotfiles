@@ -57,6 +57,32 @@ def registry():
     )
 
 
+def test_junie_litellm_group_gate_replaces_only_eligible_groups():
+    groups = {
+        "openai-one": {"provider": "openai"},
+        "litellm-openai-one": {"provider": "litellm"},
+        "meridian-one": {"provider": "meridian"},
+        "copilot": {"provider": "github-copilot"},
+    }
+    direct = generate_profiles.select_model_groups(groups, False)
+    assert set(direct) == {"openai-one", "meridian-one", "copilot"}
+    routed = generate_profiles.select_model_groups(groups, True)
+    assert set(routed) == {"litellm-openai-one", "meridian-one", "copilot"}
+
+
+def test_junie_provider_config_reads_service_managed_key(tmp_path, monkeypatch):
+    env_path = tmp_path / "litellm" / "service.env"
+    env_path.parent.mkdir()
+    env_path.write_text("LITELLM_JUNIE_KEY='sk-junie'\n", encoding="utf-8")
+    monkeypatch.setattr(
+        generate_profiles.os.path,
+        "expanduser",
+        lambda _: str(env_path),
+    )
+    monkeypatch.delenv("LITELLM_JUNIE_KEY", raising=False)
+    assert generate_profiles.provider_key_available("LITELLM_JUNIE_KEY")
+
+
 class TierRegistryTests(unittest.TestCase):
     def test_deprecated_model_override_flags_parse_as_new_destinations(self):
         parser = argparse.ArgumentParser()
