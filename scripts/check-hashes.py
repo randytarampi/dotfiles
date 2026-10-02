@@ -37,6 +37,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/check-model-drift.py",  # Makefile-only verification tool
     "scripts/check-heredocs.py",  # Makefile-only lint tool (heredoc validation)
+    "scripts/anchor-review-ref.py",  # Makefile-only workflow maintenance tool
     "scripts/ci-codegraph.sh",  # CI-only asset verified by check-ci-assets
     "scripts/run-local-review.sh",  # local-only asset verified by check-ci-assets
     "scripts/onboard-agentic-review.py",  # CI-only asset verified by check-ci-assets
