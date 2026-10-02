@@ -211,6 +211,13 @@ Recurring validation quirks — check these before diagnosing failures:
 
 Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md). Switch with: `scripts/configure-opencode-tier.py --preset <tier>`.
 
+Model changes must preserve exact provider/endpoint model IDs, update every affected
+configured consumer and proxy alias together, and check selected IDs against
+refreshed provider catalogues. A missing credential, HTTP 401/403, or an
+unreachable catalogue is **unknown**, not evidence of availability. Follow
+[docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) for the verification sequence;
+catalogue presence alone does not prove inference access.
+
 ---
 
 ## Secrets Management

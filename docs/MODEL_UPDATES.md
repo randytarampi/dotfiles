@@ -29,6 +29,8 @@ flowchart LR
 - [ ] Update `README.md` tier information, if a tier table or model summary is present.
 - [ ] Update `AGENTS.md` links/reference entries as needed; link to `docs/TIERS.md` rather than duplicating its tier table.
 - [ ] Sync `configs/junie/model-groups.json` providers, groups, primary/faster models, and temperature coverage.
+- [ ] Check every changed **wire ID** in the refreshed catalogue for its actual endpoint and credential scope. Keep configured IDs a curated subset of available IDs; do not copy the full catalogue. Preserve inner slashes, tags, and Ollama's distinct `:cloud`/`-cloud` installed stub names. Do not use another provider's matching leaf as evidence.
+- [ ] Check all consumers of that selection: OpenCode roles/council/fallbacks and provider blocks, Pi defaults/subagents/provider models, Junie direct and LiteLLM primary/faster profiles, LiteLLM aliases, Open WebUI curated models, Codex profiles and ACP model arguments. For Claude Code, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Cline and Antigravity, record any concrete repo-managed selectors; do not invent model IDs for native defaults. Cortex uses a separate provider catalogue.
 - [ ] If introducing a `DOTFILES_*` environment variable, document it in `.env.example`.
 - [ ] If adding config inputs, add their chezmoi hash triggers before verification.
 
@@ -39,12 +41,14 @@ flowchart LR
 > - Duplicating the tier table in `AGENTS.md` instead of linking to `docs/TIERS.md`.
 > - Forgetting to update `.env.example` when introducing a new `DOTFILES_*` environment variable.
 > - Not running `make check-hashes` after adding config inputs.
+> - Treating a checked-in allowlist, an unauthenticated 401/403, or a model-list entry as proof that an inference request works. A successful catalogue check proves membership only; test a harmless request (including image input for observer candidates) before calling a model usable.
 
 ## Verification
 
-1. Run `make verify` (lint, drift, doctor, hash checks, and dry-run).
-2. Run `make deploy` to rebuild generated configurations.
-3. Restart OpenCode if a preset changed; runtime-safe model fields alone may not require a restart.
+1. Run `make check-slim-invariants` for offline registry and tier-doc consistency, then `make check-model-drift` for live evidence. Use `python3 scripts/check-model-drift.py --json` to inspect endpoint-scoped `MATCH`, `MISSING` and `UNKNOWN` outcomes; if every required credential is available, add `--require-complete`. A default exit 0 with unknown endpoints is **not** a complete provider audit.
+2. Run `make verify` (lint, drift, doctor, hash checks and dry-run). A known missing alias fails even when other endpoints return 401/403; do not suppress it with another provider's matching model leaf.
+3. Run `make deploy` twice to rebuild generated OpenCode, Pi, Junie and LiteLLM configurations. Inspect their selected model IDs against the authenticated proxy catalogue using each scoped client key, check that the second run is idempotent, and confirm live services survived verification.
+4. Run a harmless text completion for new primaries; for observers verify an image request and consider contributor-tier image privacy. Restart OpenCode if the preset, providers or plugin config changed; an already-running session retains its old configuration.
 
 ## 2026-09-01: Anthropic/Ollama Cloud Equivalence Alignment
 
@@ -71,9 +75,13 @@ with Opus 5 at `$5/$25` (input/output).
 ## Drift check & sync reminder
 
 `make check-model-drift` validates checked-in model allowlists, live local
-Ollama models, and deployed Junie profile endpoints and model IDs. It warns
-when a live endpoint is unavailable, but reports catalog or deployed-profile
-model mismatches as drift.
+Ollama models, and deployed Junie profile endpoints and model IDs. Its live
+Junie comparison retains complete wire IDs and endpoint/credential identity;
+`google/models/gemini-3.8-flash` is not interchangeable with
+`google/gemini-3.8-flash` in LiteLLM, even if another provider offers the same
+leaf. A known missing alias is drift; missing keys, 401/403 and unreachable
+endpoints are reported as unknown, not accepted as a pass. The offline CI
+invariant cannot establish live catalogue access or inference entitlement.
 
 Successful profile generation by `scripts/generate-jetbrains-profiles.py`
 writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`.

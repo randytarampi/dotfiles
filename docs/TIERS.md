@@ -523,10 +523,10 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 
 ### Replacement procedure (when a referenced ID disappears)
 
-1. Confirm against the live catalog (`opencode models <provider> --refresh`); do not substitute from memory or docs.
-2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (Historical/retired example: `ling-3.0-flash-fin-free` looked like an orchestrator candidate but its 32K output cap and text-only input disqualified it. MiMo 2.6 advertised image input but failed live image probes; Muse 1.3 accepted a harmless image before becoming the Zen-free observer.)
-3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, tier-registry tests, and the tier docs — the same 6-way sync rule as [docs/MODEL_UPDATES.md](MODEL_UPDATES.md).
-4. Re-run: `make check-slim-invariants test-tier-registry check-model-drift` and a `configure-opencode.py` dry-run for the affected preset.
+1. Confirm the exact model ID against the live catalogue for its provider (`opencode models <provider> --refresh`); a 401/403 or unavailable endpoint is **unknown**, not a match. Keep inner slashes and distinguish direct-provider IDs from LiteLLM aliases and local `:cloud`/`-cloud` stubs.
+2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. Verify real inference, especially image input for observers. (Historical/retired example: `ling-3.0-flash-fin-free` had a 32K output cap and text-only input; MiMo 2.6 advertised image input but failed live probes, whereas Muse 1.3 accepted a harmless image.)
+3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, Junie/Pi/LiteLLM mappings, tier-registry tests, and the tier docs; see the complete [model update checklist](MODEL_UPDATES.md#checklist).
+4. Re-run `make check-slim-invariants test-tier-registry check-model-drift`, inspect `check-model-drift.py --json` for unknowns, and dry-run `configure-opencode.py` for the affected preset. A matching catalogue listing still needs a harmless inference probe.
 5. Record the churn event in [docs/MODEL_UPDATES.md](MODEL_UPDATES.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
 
 ### Stability expectations by tier class
