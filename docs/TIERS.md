@@ -491,15 +491,15 @@ models from each gateway's `/v1/models` endpoint.
 
 ## OpenAI Models (gpt-6 Generation)
 
-The gpt-6 generation is the current OpenAI model line. Upstream oh-my-opencode-slim v3.0.1 maps orchestrator and council β to Sol, and designer and council γ to Luna:
+The gpt-6 generation is the current OpenAI model line. This repo uses `gpt-6.1-sol` for OpenAI orchestrators and `gpt-6-astra` for distinct council β seats; designer and council γ use `gpt-6-luna`:
 
 | Model | Role | Description |
 |-------|------|-------------|
 | `gpt-6-astra` | Flagship | Highest-capability reasoning/coding model (1.05M context, 128K max output); degraded-fallback head for orchestrator/oracle where chains exist. |
 | `gpt-6.1-sol` | Flagship | Current orchestrator and council primary; high reasoning effort. |
 | `gpt-6-luna` | Efficient | Designer and council γ model; also used for librarian, explorer, fixer, and observer roles. |
-| `gpt-5.6-sol` | Flagship | Primary oracle and deep reasoning model. Replaces gpt-5.5 (flagship) for oracle, council, and complex analysis. |
-| `gpt-5.6-luna` | Lightweight | Primary lightweight model for librarian, explorer, and fixer roles. Replaces gpt-5.4-mini and gpt-5.4-nano. |
+| `gpt-5.6-sol` | Legacy flagship | Retained only where explicitly configured as a degraded fallback; current oracle and council primaries use newer models. |
+| `gpt-5.6-luna` | Legacy lightweight | Retained only where explicitly configured as a degraded fallback; current librarian, explorer, and fixer primaries use `gpt-6-luna`. |
 | `gpt-5.6-terra` | Retired from OpenAI | Absent from OpenAI's live catalog (2026-10-01); Zen still serves it. OpenAI references have migrated to gpt-6.1-sol or gpt-6-luna by role. |
 
 **Fallback chain**: `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; `pro-plus` orchestrator falls back to `gpt-6.1-sol`, while `pro-plus-anthropic` uses `gpt-6.1-sol` before its retained Ollama Cloud fallback. The `omo-slim-openai` and `omo-slim-thirty-dollars` orchestrators fall back to verified Zen `big-pickle`; `omo-slim-opencode-zen-free` uses OpenAI `gpt-6.1-sol`. Legacy gpt-5.5, gpt-5.6-sol/luna and gpt-5.4-mini references remain where explicitly configured.
