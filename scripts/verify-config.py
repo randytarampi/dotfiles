@@ -213,6 +213,73 @@ def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
     return routing_config_text_is_safe(config_text, port=port)
 
 
+def validate_litellm_service_env(
+    litellm_env_values: dict,
+    config_text: str,
+    expected_litellm_port: str = "4000",
+) -> list:
+    """Validate the LiteLLM service env against config refs and policy.
+
+    Returns human-readable problem strings (after the two-space/symbol
+    prefix shape used by check output); empty list means the artifact set
+    is valid. Core entries are required; the per-app virtual keys
+    (APP_KEYS) may be absent on fresh installs before the first
+    provisioning run; unexpected extras always fail.
+    """
+    problems = []
+    try:
+        routing_port = int(expected_litellm_port)
+    except ValueError:
+        routing_port = 4000
+    if not validate_litellm_routing_text(config_text, routing_port):
+        problems.append("LiteLLM config: Mozart/self-routing loop detected")
+    refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
+    core_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT", "DISABLE_ADMIN_UI"}
+    # Per-app virtual keys provisioned by configure-litellm.py are allowed
+    # to be absent (fresh installs before the first provisioning run) but
+    # never allow unexpected extras.
+    expected_env = core_env | set(APP_KEYS.values()) | refs
+    unexpected_env = set(litellm_env_values) - expected_env
+    missing_required = (core_env | refs) - set(litellm_env_values)
+    if unexpected_env:
+        problems.append(
+            "LiteLLM service env: unexpected entries: "
+            + ", ".join(sorted(unexpected_env))
+        )
+    if missing_required:
+        problems.append(
+            "LiteLLM service env: missing required entries: "
+            + ", ".join(sorted(missing_required))
+        )
+    if "DATABASE_URL" not in litellm_env_values:
+        problems.append("LiteLLM service env: DATABASE_URL is required")
+    master_key = litellm_env_values.get("LITELLM_MASTER_KEY", "")
+    if not master_key.startswith("sk-") or len(master_key) < 16:
+        problems.append("LiteLLM service env: invalid master-key shape")
+    if litellm_env_values.get("LITELLM_PORT") != expected_litellm_port:
+        problems.append("LiteLLM service env: LITELLM_PORT drift")
+    api_key_lines = [
+        line.strip()
+        for line in config_text.splitlines()
+        if line.strip().startswith("api_key:")
+    ]
+    if any(
+        not (
+            line.split(":", 1)[1].strip().startswith("os.environ/")
+            or line.split(":", 1)[1].strip() == "none"
+        )
+        for line in api_key_lines
+    ):
+        problems.append("LiteLLM config: inline api_key detected")
+    if (
+        "telemetry: false" not in config_text
+        or "master_key: os.environ/LITELLM_MASTER_KEY" not in config_text
+        or "database_url: os.environ/DATABASE_URL" not in config_text
+    ):
+        problems.append("LiteLLM config: telemetry/master-key policy mismatch")
+    return problems
+
+
 def litellm_client_gate_errors(environ=None):
     """Return client gates that are enabled without the main gate."""
     environ = environ or os.environ
@@ -1319,63 +1386,10 @@ def main():
                 exit_code = 1
         if (litellm_root / "config.yaml").is_file():
             config_text = (litellm_root / "config.yaml").read_text(encoding="utf-8")
-            try:
-                routing_port = int(expected_litellm_port)
-            except ValueError:
-                routing_port = 4000
-            if not validate_litellm_routing_text(config_text, routing_port):
-                print("  \u2717 LiteLLM config: Mozart/self-routing loop detected")
-                exit_code = 1
-            refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
-            core_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT", "DISABLE_ADMIN_UI"}
-            # Per-app virtual keys provisioned by configure-litellm.py are
-            # allowed to be absent (fresh installs before the first
-            # provisioning run) but never allow unexpected extras.
-            expected_env = core_env | set(APP_KEYS.values()) | refs
-            unexpected_env = set(litellm_env_values) - expected_env
-            missing_required = (core_env | refs) - set(litellm_env_values)
-            if unexpected_env:
-                print(
-                    f"  ✗ LiteLLM service env: unexpected entries: "
-                    f"{', '.join(sorted(unexpected_env))}"
-                )
-                exit_code = 1
-            if missing_required:
-                print(
-                    f"  ✗ LiteLLM service env: missing required entries: "
-                    f"{', '.join(sorted(missing_required))}"
-                )
-                exit_code = 1
-            if "DATABASE_URL" not in litellm_env_values:
-                print("  \u2717 LiteLLM service env: DATABASE_URL is required")
-                exit_code = 1
-            master_key = litellm_env_values.get("LITELLM_MASTER_KEY", "")
-            if not master_key.startswith("sk-") or len(master_key) < 16:
-                print("  \u2717 LiteLLM service env: invalid master-key shape")
-                exit_code = 1
-            if litellm_env_values.get("LITELLM_PORT") != expected_litellm_port:
-                print("  \u2717 LiteLLM service env: LITELLM_PORT drift")
-                exit_code = 1
-            api_key_lines = [
-                line.strip()
-                for line in config_text.splitlines()
-                if line.strip().startswith("api_key:")
-            ]
-            if any(
-                not (
-                    line.split(":", 1)[1].strip().startswith("os.environ/")
-                    or line.split(":", 1)[1].strip() == "none"
-                )
-                for line in api_key_lines
+            for problem in validate_litellm_service_env(
+                litellm_env_values, config_text, expected_litellm_port
             ):
-                print("  \u2717 LiteLLM config: inline api_key detected")
-                exit_code = 1
-            if (
-                "telemetry: false" not in config_text
-                or "master_key: os.environ/LITELLM_MASTER_KEY" not in config_text
-                or "database_url: os.environ/DATABASE_URL" not in config_text
-            ):
-                print("  \u2717 LiteLLM config: telemetry/master-key policy mismatch")
+                print(f"  \u2717 {problem}")
                 exit_code = 1
         if sys.platform == "darwin":
             brew = shutil.which("brew")
