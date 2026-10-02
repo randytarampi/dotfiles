@@ -3,7 +3,13 @@
 
 import argparse
 import os
+import json
+import shlex
 import sys
+import tempfile
+import urllib.error
+import urllib.request
+from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
@@ -20,6 +26,109 @@ from litellm_config import (  # noqa: E402
 )
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
+APP_KEYS = {
+    "opencode": "LITELLM_OPENCODE_KEY",
+    "pi": "LITELLM_PI_KEY",
+    "openwebui": "LITELLM_OPENWEBUI_KEY",
+    "junie": "LITELLM_JUNIE_KEY",
+}
+
+
+def _service_env_value(name, path):
+    try:
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            if line.startswith(f"{name}="):
+                values = shlex.split(line.split("=", 1)[1])
+                return values[0] if values else ""
+    except (OSError, ValueError):
+        pass
+    return ""
+
+
+def _request_json(url, method, master_key, payload=None, timeout=5):
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {master_key}",
+            "Content-Type": "application/json",
+        },
+        method=method,
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
+    values = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                name, value = line.split("=", 1)
+                values[name] = value
+    values.update({name: shlex.quote(value) for name, value in keys.items()})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.writelines(f"{name}={value}\n" for name, value in values.items())
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, path)
+        os.chmod(path, 0o600)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def provision_app_keys(master_key, service_env_path=None, api_base=None):
+    """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
+    if not master_key:
+        logger.warning("LiteLLM master key unavailable; skipping app-key provisioning")
+        return
+    api_base = (
+        api_base or f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}"
+    ).rstrip("/")
+    service_env_path = Path(
+        service_env_path or "~/.local/share/litellm/service.env"
+    ).expanduser()
+    try:
+        _request_json(f"{api_base}/health/liveliness", "GET", master_key)
+        listing = _request_json(f"{api_base}/key/list", "GET", master_key)
+        records = listing.get("keys", []) if isinstance(listing, dict) else []
+        aliases = {
+            item.get("key_alias")
+            for item in records
+            if isinstance(item, dict) and item.get("key_alias")
+        }
+        found = {}
+        for alias, env_name in APP_KEYS.items():
+            if alias in aliases:
+                # The key-list endpoint intentionally does not reveal existing
+                # key material; preserve any locally stored key on disk.
+                continue
+            generated = _request_json(
+                f"{api_base}/key/generate",
+                "POST",
+                master_key,
+                {"key_alias": alias, "duration": None},
+            )
+            key = generated.get("key") if isinstance(generated, dict) else None
+            if key:
+                found[env_name] = key
+                aliases.add(alias)
+            else:
+                logger.warning("LiteLLM did not return a key for alias %s", alias)
+        if found:
+            _persist_app_keys(service_env_path, found)
+            logger.info("Provisioned %d LiteLLM app key(s)", len(found))
+    except (
+        OSError,
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        ValueError,
+    ) as error:
+        logger.warning("LiteLLM app-key provisioning deferred: %s", error)
 
 
 def main():
@@ -56,6 +165,11 @@ def main():
             "updated" if changed else "unchanged",
             len(entries),
         )
+        service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
+        master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
+        if not master_key:
+            master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)
+        provision_app_keys(master_key, service_env_path)
         return 0
     except LiveCatalogueError as error:
         logger.error(
