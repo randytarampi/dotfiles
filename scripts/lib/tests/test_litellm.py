@@ -108,6 +108,51 @@ def test_local_registry_models_use_protocol_specific_entries(monkeypatch):
     )
 
 
+def test_ollama_cloud_stubs_are_routed_through_local_daemon_without_duplicates(
+    monkeypatch,
+):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["ollama"])
+    monkeypatch.setattr(
+        litellm_config,
+        "iter_engine_models",
+        lambda provider: [
+            {"name": "glm-5.3:cloud"},
+            {"name": "qwen3-cloud"},
+            {"name": "local-model"},
+        ],
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "list_cloud_ollama_models",
+        lambda: [{"name": "glm-5.3:cloud"}, {"name": "deepseek-cloud"}],
+    )
+    monkeypatch.setattr(
+        litellm_config, "get_ollama_local_base_url", lambda: "http://127.0.0.1:11434"
+    )
+
+    entries = litellm_config.compute_model_list()
+    aliases = [entry["model_name"] for entry in entries]
+    by_alias = {entry["model_name"]: entry for entry in entries}
+
+    assert aliases.count("ollama/glm-5.3:cloud") == 1
+    assert aliases.count("glm-5.3:cloud") == 1
+    assert {
+        "ollama/qwen3-cloud",
+        "qwen3-cloud",
+        "ollama/deepseek-cloud",
+        "deepseek-cloud",
+    } <= set(aliases)
+    assert {"ollama/local-model", "local-model"} <= set(aliases)
+    assert by_alias["ollama/glm-5.3:cloud"]["litellm_params"] == {
+        "model": "ollama/glm-5.3:cloud",
+        "api_base": "http://127.0.0.1:11434",
+    }
+    assert (
+        by_alias["glm-5.3:cloud"]["litellm_params"]
+        == by_alias["ollama/glm-5.3:cloud"]["litellm_params"]
+    )
+
+
 def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeypatch):
     calls = []
 
