@@ -67,6 +67,7 @@ if ! "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==
   sleep 2
   "$VENV/bin/python" -m pip install -q "litellm[proxy]==${VERSION}" "prisma==0.15.0" || die "Failed to install litellm[proxy]==${VERSION}"
 fi
+litellm_ensure_prisma_client "$VENV" || die "Failed to prepare LiteLLM Prisma client"
 mkdir -p "$DATA" "$LOGS"
 chmod 700 "$DATA" "$LOGS"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile LiteLLM service.env"
