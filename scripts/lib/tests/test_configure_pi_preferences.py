@@ -173,6 +173,8 @@ def test_pi_litellm_gate_repoints_openai_and_local_providers():
         key_file = Path(home) / ".local/share/litellm/clients/pi.key"
         key_file.parent.mkdir(parents=True)
         key_file.write_text("dummy-key", encoding="utf-8")
+        key_file.parent.chmod(0o700)
+        key_file.chmod(0o600)
         with patch.dict(
             os.environ,
             {
@@ -187,6 +189,33 @@ def test_pi_litellm_gate_repoints_openai_and_local_providers():
             assert provider["baseUrl"] == "http://127.0.0.1:4002/v1"
             assert provider["apiKey"] == f"!cat {shlex.quote(str(key_file))}"
             assert provider["models"] == ["kept"]
+
+
+def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeypatch):
+    key_file = tmp_path / ".local/share/litellm/clients/pi.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.parent.chmod(0o700)
+    key_file.write_text("never-log-this", encoding="utf-8")
+    key_file.chmod(0o600)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        configure_pi,
+        "get_catalogue",
+        lambda url, key: {
+            "data": [
+                {"id": "google/models/gemini-3.8-flash"},
+                {"id": "openrouter/inclusionai/ling-3.0-flash-sante:free"},
+            ]
+        },
+    )
+    routes = configure_pi.litellm_cloud_aliases()
+    assert routes["google"]["gemini-3.8-flash"] == "google/models/gemini-3.8-flash"
+    assert (
+        routes["openrouter"]["inclusionai/ling-3.0-flash-sante:free"]
+        == "openrouter/inclusionai/ling-3.0-flash-sante:free"
+    )
+    monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: {"data": "bad"})
+    assert configure_pi.litellm_cloud_aliases() == {"google": {}, "openrouter": {}}
 
 
 if __name__ == "__main__":
