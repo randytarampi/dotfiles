@@ -10,6 +10,7 @@ litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
   local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL=""
   local OMLX_API_KEY="" MERIDIAN_API_KEY="" OPENAI_API_KEY="" ANTHROPIC_API_KEY="" GEMINI_API_KEY="" OPENROUTER_API_KEY="" OPENCODE_API_KEY="" OLLAMA_API_KEY=""
+  local LITELLM_OPENCODE_KEY="" LITELLM_PI_KEY="" LITELLM_OPENWEBUI_KEY="" LITELLM_JUNIE_KEY=""
   mkdir -p "$(dirname "$service_env")"
   local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL=""
   local env_OMLX_API_KEY="" env_MERIDIAN_API_KEY="" env_OPENAI_API_KEY="" env_ANTHROPIC_API_KEY="" env_GEMINI_API_KEY="" env_OPENROUTER_API_KEY="" env_OPENCODE_API_KEY="" env_OLLAMA_API_KEY=""
@@ -103,6 +104,10 @@ litellm_service_env_sync() {
     [[ -n "${OPENROUTER_API_KEY:-}" ]] && printf 'OPENROUTER_API_KEY=%q\n' "$OPENROUTER_API_KEY"
     [[ -n "${OPENCODE_API_KEY:-}" ]] && printf 'OPENCODE_API_KEY=%q\n' "$OPENCODE_API_KEY"
     [[ -n "${OLLAMA_API_KEY:-}" ]] && printf 'OLLAMA_API_KEY=%q\n' "$OLLAMA_API_KEY"
+    [[ -n "${LITELLM_OPENCODE_KEY:-}" ]] && printf 'LITELLM_OPENCODE_KEY=%q\n' "$LITELLM_OPENCODE_KEY"
+    [[ -n "${LITELLM_PI_KEY:-}" ]] && printf 'LITELLM_PI_KEY=%q\n' "$LITELLM_PI_KEY"
+    [[ -n "${LITELLM_OPENWEBUI_KEY:-}" ]] && printf 'LITELLM_OPENWEBUI_KEY=%q\n' "$LITELLM_OPENWEBUI_KEY"
+    [[ -n "${LITELLM_JUNIE_KEY:-}" ]] && printf 'LITELLM_JUNIE_KEY=%q\n' "$LITELLM_JUNIE_KEY"
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then

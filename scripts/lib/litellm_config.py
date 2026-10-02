@@ -109,25 +109,34 @@ def compute_model_list(environ=None):
         if provider == "ollama":
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base
-            entries.extend(
-                _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
-                for model in models
-            )
+            for model in models:
+                params = _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
+                entries.extend(
+                    [params, _entry(model, f"ollama/{model}", api_base=base)]
+                )
             continue
         endpoint = local_endpoint_for(provider, "openai")
         if endpoint is None:
             continue
         base_url, key_env = endpoint
         key_env = key_env if key_env and environ.get(key_env, "").strip() else None
-        entries.extend(
-            _entry(
-                f"{provider}/{model}",
-                f"openai/{model}",
-                api_base=base_url,
-                key_env=key_env,
+        for model in models:
+            entries.extend(
+                [
+                    _entry(
+                        f"{provider}/{model}",
+                        f"openai/{model}",
+                        api_base=base_url,
+                        key_env=key_env,
+                    ),
+                    _entry(
+                        model,
+                        f"openai/{model}",
+                        api_base=base_url,
+                        key_env=key_env,
+                    ),
+                ]
             )
-            for model in models
-        )
 
     if is_meridian_configured() and environ.get("MERIDIAN_API_KEY", "").strip():
         entries.append(

@@ -97,6 +97,42 @@ def test_local_registry_models_use_protocol_specific_entries(monkeypatch):
     }
     assert aliases["omlx/model-a"]["litellm_params"]["model"] == "openai/model-a"
     assert aliases["ollama/model-b"]["litellm_params"]["model"] == "ollama/model-b"
+    assert (
+        aliases["model-a"]["litellm_params"]
+        == aliases["omlx/model-a"]["litellm_params"]
+    )
+    assert (
+        aliases["model-b"]["litellm_params"]
+        == aliases["ollama/model-b"]["litellm_params"]
+    )
+
+
+def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        calls.append((url, method, payload))
+        if url.endswith("/key/list"):
+            return {"keys": [{"key_alias": "opencode"}]}
+        if url.endswith("/key/generate"):
+            return {"key": f"sk-generated-{payload['key_alias']}"}
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    path = tmp_path / "service.env"
+    path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+
+    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
+
+    assert [c[2]["key_alias"] for c in calls if c[1] == "POST"] == [
+        "pi",
+        "openwebui",
+        "junie",
+    ]
+    content = path.read_text(encoding="utf-8")
+    assert "LITELLM_PI_KEY=sk-generated-pi" in content
+    assert "LITELLM_OPENCODE_KEY" not in content
+    assert path.stat().st_mode & 0o777 == 0o600
 
 
 def test_render_uses_environment_references_and_no_inline_keys(monkeypatch):
@@ -143,6 +179,37 @@ def test_litellm_env_sync_in_sparse_environment(tmp_path):
     env_text = env_path.read_text(encoding="utf-8")
     names = {line.split("=", 1)[0] for line in env_text.splitlines() if "=" in line}
     assert "DISABLE_ADMIN_UI" in names
+
+
+def test_litellm_env_sync_preserves_service_managed_app_keys(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key'\n"
+        "LITELLM_OPENCODE_KEY='sk-open-code'\n"
+        "LITELLM_PI_KEY='sk-pi'\n"
+        "LITELLM_OPENWEBUI_KEY='sk-webui'\n"
+        "LITELLM_JUNIE_KEY='sk-junie'\n",
+        encoding="utf-8",
+    )
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert result.returncode == 0
+    values = dict(
+        line.split("=", 1)
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    )
+    assert values["LITELLM_OPENCODE_KEY"] == "sk-open-code"
+    assert values["LITELLM_PI_KEY"] == "sk-pi"
+    assert values["LITELLM_OPENWEBUI_KEY"] == "sk-webui"
+    assert values["LITELLM_JUNIE_KEY"] == "sk-junie"
+    assert env_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_litellm_env_sync_disable_admin_ui_override(tmp_path):
@@ -217,6 +284,14 @@ def test_litellm_keyed_local_and_meridian_shapes(monkeypatch):
     )
     monkeypatch.setenv("OMLX_API_KEY", "omlx")
     keyed = litellm_config.compute_model_list()
+    keyed_by_name = {item["model_name"]: item for item in keyed}
+    assert keyed_by_name["omlx/local"]["litellm_params"]["api_key"] == (
+        "os.environ/OMLX_API_KEY"
+    )
+    assert (
+        keyed_by_name["local"]["litellm_params"]
+        == keyed_by_name["omlx/local"]["litellm_params"]
+    )
     assert any(
         item["litellm_params"].get("api_key") == "os.environ/OMLX_API_KEY"
         for item in keyed

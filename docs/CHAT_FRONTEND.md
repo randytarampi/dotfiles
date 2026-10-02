@@ -359,12 +359,15 @@ LiteLLM is an **optional, gate-off-by-default** gateway
 (`DOTFILES_RUN_LITELLM_SETUP`; nothing consumes it unless a client is
 explicitly pointed at it): a separate, loopback-only OpenAI-compatible
   gateway on port 4000 for other local clients. Open WebUI, OpenCode and Pi each
-  have an independent canary gate, each requiring the main LiteLLM gate. Its
-  pinned config is generated from the repo registries and provider keys, with
-  All clients authenticate with the single `LITELLM_MASTER_KEY`, sourced from
-  the mode-600 `~/.local/share/litellm/service.env`; there are no virtual keys,
-  per-client budgets or spend-accounting claims. There is no Caddy route; only
-  clients on the machine consume it.
+  have independent canary gates, each requiring the main LiteLLM gate. The
+  generated routing table includes prefixed and bare aliases for local Ollama
+  and oMLX models, allowing clients that use bare local IDs to route through the
+  proxy. After its health check succeeds, configuration idempotently provisions
+  `opencode`, `pi`, `openwebui` and `junie` virtual keys by alias and records
+  them in the mode-600 `~/.local/share/litellm/service.env` as
+  `LITELLM_OPENCODE_KEY`, `LITELLM_PI_KEY`, `LITELLM_OPENWEBUI_KEY` and
+  `LITELLM_JUNIE_KEY`. WebUI uses the master key only until its per-app key is
+  provisioned. There is no Caddy route; only local clients consume the proxy.
 
 The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping
 is the canary path: verify one client, then roll back by setting its gate to `0`
