@@ -99,10 +99,6 @@
       "fasterModel": "inclusionai/ling-3.0-flash-sante:free",
       "fasterProvider": "openrouter"
     },
-    "copilot": {
-      "provider": "github-copilot",
-      "primaryModel": "copilot-model-id"
-    },
     "meridian-opus-5-5": {
       "provider": "meridian",
       "primaryModel": "claude-opus-5-5"

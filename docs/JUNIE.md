@@ -26,12 +26,9 @@ After enabling, disabling or rotating the Junie LiteLLM key, regenerate profiles
 with `make deploy`. Restart Junie CLI sessions and reload/restart the IntelliJ
 IDE so both consumers reopen the shared profiles and pick up the new key.
 
-### GitHub Copilot provider (experimental)
-
-The `github-copilot` provider and `copilot` group are experimental and require
-`GITHUB_TOKEN`. They use GitHub Copilot's OpenAI Responses-compatible endpoint;
-validate the model ID and Junie compatibility before relying on the generated
-profile. The generator skips this group when the token is unavailable.
+The GitHub Copilot provider metadata is retained for a future verified setup;
+there is no active Junie Copilot model group until a usable model ID and profile
+compatibility are confirmed.
 
 ## Other CLI provider capabilities
 
