@@ -34,6 +34,13 @@ fi
 {{- if eq .chezmoi.os "darwin" }}
 
 if [[ "$(id -u)" -ne 0 ]]; then
+  if [[ ! -t 0 && ! -t 2 ]]; then
+    if ! sudo -n true 2>/dev/null; then
+      printf 'Caddy setup needs sudo; skipping in a noninteractive session. Run make caddy-setup in a terminal to retry.\n' >&2
+      exit 0
+    fi
+    exec sudo -n --preserve-env=BREW_BIN,DOTFILES_RUN_CADDY_SETUP,DOTFILES_LITELLM_UI_EXPOSED "$0" "$@"
+  fi
   exec sudo --preserve-env=BREW_BIN,DOTFILES_RUN_CADDY_SETUP,DOTFILES_LITELLM_UI_EXPOSED "$0" "$@"
 fi
 
@@ -179,6 +186,15 @@ caddy_reload "$CADDYFILE_PATH" || warn "Caddy reload reported issues"
 
 ok "Caddy setup complete."
 {{- else if eq .chezmoi.os "linux" }}
+
+if [[ "$(id -u)" -ne 0 && ! -t 0 && ! -t 2 ]]; then
+  if ! sudo -n true 2>/dev/null; then
+    printf 'Caddy setup needs sudo; skipping in a noninteractive session. Run make caddy-setup in a terminal to retry.\n' >&2
+    exit 0
+  fi
+  # Keep every later privileged command noninteractive, including apt and tee.
+  sudo() { command sudo -n "$@"; }
+fi
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 # shellcheck disable=SC1091

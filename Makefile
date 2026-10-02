@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref
+.PHONY: lint fix env drift migrate stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-setup caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref
 
 anchor-review-ref: ## Refresh the main review dispatcher's trusted_ref from reachable origin/main
 	@python3 scripts/anchor-review-ref.py $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
@@ -254,6 +254,11 @@ check-actionlint: ## Lint all GitHub Actions workflows
 
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
 	@bash scripts/migrate-acme-ddns.sh
+
+caddy-setup: ## Retry privileged Caddy setup after an unattended chezmoi skip (interactive sudo)
+	@$(LOAD_ENV); set -eu; tmp="$$(mktemp "$${TMPDIR:-/tmp}/dotfiles-caddy-setup.XXXXXX")"; trap 'rm -f "$$tmp"' EXIT; \
+		$(CHEZMOI) --source "$(CHEZMOI_SOURCE)" execute-template < .chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl > "$$tmp"; \
+		bash -n "$$tmp"; chmod 700 "$$tmp"; "$$tmp"
 
 caddy-deploy: ## Generate Caddyfile and restart Caddy (root LaunchDaemon)
 	@$(LOAD_ENV); python3 scripts/configure-caddy.py
