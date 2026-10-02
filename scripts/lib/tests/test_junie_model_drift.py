@@ -9,6 +9,7 @@ SCRIPT = Path(__file__).resolve().parents[2] / "check-model-drift.py"
 SPEC = importlib.util.spec_from_file_location("junie_model_drift", SCRIPT)
 DRIFT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DRIFT)
+import model_catalogues as CATALOGUES  # noqa: E402  # script bootstraps scripts/lib.
 
 
 @pytest.fixture(autouse=True)
@@ -265,3 +266,88 @@ def test_json_cli_reports_safe_provenance_and_require_complete(monkeypatch, caps
     output = json.loads(capsys.readouterr().out)
     assert output["junie_audit"] == audit
     assert "api-key-value" not in json.dumps(output)
+
+
+def test_managed_litellm_port_audit_keeps_proxy_aliases_exact(
+    isolated_home_path, monkeypatch
+):
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.delenv("LITELLM_PORT", raising=False)
+    write_profile(
+        isolated_home_path,
+        "litellm.json",
+        {"litellm": {"baseUrl": "http://127.0.0.1:4000/v1", "apiKey": "litellm-key"}},
+        {"primary": {"provider": "litellm", "primaryModel": "google/gemini-3.8-flash"}},
+    )
+
+    def validated_catalogue(url, _key):
+        CATALOGUES._validate_catalogue_url(url)
+        return {"data": [{"id": "google/models/gemini-3.8-flash"}]}
+
+    monkeypatch.setattr(DRIFT, "get_catalogue", validated_catalogue)
+    audit, violations = DRIFT.audit_junie_profiles()
+    assert audit["complete"] is True
+    assert audit["results"][0]["outcome"] == "MISSING"
+    assert violations
+
+
+def test_inline_primary_and_faster_credentials_keep_distinct_scopes(
+    isolated_home_path, monkeypatch
+):
+    (isolated_home_path / "inline.json").write_text(
+        json.dumps(
+            {
+                "baseUrl": "https://models.example/v1",
+                "apiKey": "primary-private-value",
+                "primaryModel": {"id": "provider/primary"},
+                "fasterModel": {
+                    "id": "provider/faster",
+                    "apiKey": "faster-private-value",
+                },
+            }
+        )
+    )
+    calls = []
+
+    def fetch(url, key):
+        calls.append(key)
+        return {"data": [{"id": "provider/primary"}, {"id": "provider/faster"}]}
+
+    monkeypatch.setattr(DRIFT, "get_catalogue", fetch)
+    audit, violations = DRIFT.audit_junie_profiles()
+    assert set(calls) == {"primary-private-value", "faster-private-value"}
+    assert len({item["credential_label"] for item in audit["results"]}) == 2
+    assert "primary-private-value" not in json.dumps(audit)
+    assert "faster-private-value" not in json.dumps(audit)
+    assert not violations
+
+
+def test_default_text_output_warns_on_unknown_without_key_material(monkeypatch, caplog):
+    monkeypatch.setattr(DRIFT, "load_env", lambda: None)
+    monkeypatch.setattr(DRIFT, "check_slim", lambda _: [])
+    monkeypatch.setattr(DRIFT, "check_local_engine_models", lambda: [])
+    monkeypatch.setattr(DRIFT, "is_stale", lambda: (False, 0))
+    monkeypatch.setattr(
+        DRIFT,
+        "audit_junie_profiles",
+        lambda: (
+            {
+                "complete": False,
+                "results": [
+                    {
+                        "outcome": "UNKNOWN",
+                        "endpoint_namespace": "http://127.0.0.1:4000/v1/models",
+                        "credential_label": "env:LITELLM_KEY",
+                        "reason": "catalogue request failed",
+                    }
+                ],
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr("sys.argv", [str(SCRIPT)])
+    assert DRIFT.main() == 0
+    assert "UNKNOWN" in caplog.text
+    assert "env:LITELLM_KEY" in caplog.text
+    assert "catalogue request failed" in caplog.text
+    assert "secret" not in caplog.text
