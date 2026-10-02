@@ -266,13 +266,16 @@ def test_pi_provider_override_requires_private_file_and_uses_command_key(
         name: {"baseUrl": f"https://{name}.example/v1", "apiKey": "direct"}
         for name in ("openai", "ollama", "omlx")
     }
-    PI.apply_litellm_provider_overrides(providers)
+    with pytest.raises(RuntimeError):
+        PI.apply_litellm_provider_overrides(providers)
     assert all(
         provider["baseUrl"].startswith("https://") for provider in providers.values()
     )
     target = tmp_path / ".local/share/litellm/clients/pi.key"
     target.parent.mkdir(parents=True)
     target.write_text("dummy", encoding="utf-8")
+    target.parent.chmod(0o700)
+    target.chmod(0o600)
     PI.apply_litellm_provider_overrides(providers)
     assert all(p["baseUrl"] == "http://127.0.0.1:4000/v1" for p in providers.values())
     assert all(
@@ -288,8 +291,8 @@ def test_pi_provider_override_rejects_symlinked_key_file(tmp_path, monkeypatch):
     directory.mkdir(parents=True)
     (directory / "pi.key").symlink_to(tmp_path / "outside")
     providers = {"openai": {"baseUrl": "https://direct/v1", "apiKey": "direct"}}
-    PI.apply_litellm_provider_overrides(providers)
-    assert providers["openai"] == {"baseUrl": "https://direct/v1", "apiKey": "direct"}
+    with pytest.raises(RuntimeError):
+        PI.apply_litellm_provider_overrides(providers)
 
 
 def test_existing_alias_recreates_file_from_service_env_without_generation(

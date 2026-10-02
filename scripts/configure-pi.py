@@ -3,6 +3,7 @@
 
 import argparse, copy, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
+import stat
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
@@ -36,6 +37,7 @@ from ollama_cloud_wire_ids import (
     unresolved_cloud_model_ids,
 )
 import tier_registry
+from model_catalogues import get_catalogue
 
 # pi-skills is not an npm package; skills are provisioned through settings["skills"].
 # Keep this mechanism for future packages shipped with pi-core.
@@ -220,15 +222,68 @@ def apply_litellm_provider_overrides(providers, port="4000"):
         )
         or not key_file.is_file()
     ):
-        logger.warning(
-            "Pi LiteLLM key file unavailable; keeping direct provider routes"
+        raise RuntimeError(
+            "Pi LiteLLM key file unavailable; refusing to generate canary config"
         )
-        return
+    metadata = key_file.stat()
+    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise RuntimeError(
+            "Pi LiteLLM key file permissions are unsafe; refusing to generate canary config"
+        )
     endpoint = f"http://127.0.0.1:{port}/v1"
     for provider in ("openai", "ollama", "omlx"):
         if provider in providers:
             providers[provider]["baseUrl"] = endpoint
             providers[provider]["apiKey"] = f"!cat {shlex.quote(str(key_file))}"
+
+
+def litellm_cloud_aliases(port="4000"):
+    """Return checked-in cloud aliases confirmed by LiteLLM, or empty on UNKNOWN."""
+    key_file = Path("~/.local/share/litellm/clients/pi.key").expanduser()
+    try:
+        if any(
+            path.is_symlink()
+            for path in (key_file.parent.parent, key_file.parent, key_file)
+        ):
+            raise ValueError("symlinked key path")
+        metadata = key_file.stat()
+        if (
+            not key_file.is_file()
+            or metadata.st_uid != os.getuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise ValueError("unsafe key file")
+        key = key_file.read_text(encoding="utf-8").strip()
+        if not key:
+            raise ValueError("empty key")
+        catalogue = get_catalogue(f"http://127.0.0.1:{port}/v1/models", key)
+        data = catalogue.get("data") if isinstance(catalogue, dict) else None
+        if not isinstance(data, list) or any(
+            not isinstance(item, dict) or not isinstance(item.get("id"), str)
+            for item in data
+        ):
+            raise ValueError("malformed catalogue")
+        available = {item["id"] for item in data}
+    except Exception:
+        logger.warning(
+            "Pi LiteLLM cloud catalogue unavailable; Google/OpenRouter availability is UNKNOWN"
+        )
+        return {"google": {}, "openrouter": {}}
+    return {
+        provider: {
+            model_id: alias
+            for model_id in provider_models(provider)
+            if (
+                alias := (
+                    f"google/models/{model_id}"
+                    if provider == "google"
+                    else f"openrouter/{model_id}"
+                )
+            )
+            in available
+        }
+        for provider in ("google", "openrouter")
+    }
 
 
 def local_chat_model_ids(models, provider):
@@ -500,6 +555,19 @@ def main():
         category_models,
         args.role_models,
     )
+    cloud_routes = (
+        litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
+        if litellm_canary_enabled("pi")
+        else None
+    )
+    if cloud_routes is not None:
+        for role, model_ref in list(role_models.items()):
+            if not isinstance(model_ref, str):
+                continue
+            source, separator, model_id = model_ref.partition("/")
+            if source in cloud_routes and separator:
+                alias = cloud_routes[source].get(model_id)
+                role_models[role] = f"litellm/{alias}" if alias else None
     if any(
         isinstance(model, str) and model.startswith("github-copilot/")
         for model in role_models.values()
@@ -737,11 +805,16 @@ def main():
         ),
         "models": [],
     }
-    apply_litellm_provider_overrides(providers, os.environ.get("LITELLM_PORT", "4000"))
+    if pi_litellm_canary:
+        apply_litellm_provider_overrides(
+            providers, os.environ.get("LITELLM_PORT", "4000")
+        )
     skipped_providers = []
     skipped_provider_names = []
     emitted_providers = []
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
+        if pi_litellm_canary and provider in ("google", "openrouter"):
+            continue
         key_env = endpoint["apiKeyEnv"]
         if not os.environ.get(key_env, "").strip():
             skipped_providers.append(f"{provider} ({key_env})")
@@ -764,6 +837,22 @@ def main():
             "Providers skipped because API keys are unavailable: %s",
             ", ".join(skipped_providers),
         )
+    if pi_litellm_canary:
+        routes = cloud_routes or {"google": {}, "openrouter": {}}
+        entries = []
+        for provider_name in ("google", "openrouter"):
+            for alias in routes[provider_name].values():
+                entry = model_entry(alias, provider="litellm")
+                if provider_name == "google":
+                    entry["compat"] = {"supportsStore": False}
+                entries.append(entry)
+        if entries:
+            providers["litellm"] = {
+                "baseUrl": f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+                "api": "openai-completions",
+                "apiKey": f"!cat {shlex.quote(str(Path('~/.local/share/litellm/clients/pi.key').expanduser()))}",
+                "models": entries,
+            }
     skipped_role_overrides = {}
     builtin_roles = {builtin: role for role, builtin in ROLE_TO_BUILTIN.items()}
     for builtin, override in list(settings["subagents"]["agentOverrides"].items()):
@@ -803,10 +892,8 @@ def main():
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},
     }
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
-        auth[provider] = {
-            "type": "api_key",
-            "key": f"${endpoint['apiKeyEnv']}",
-        }
+        if not (pi_litellm_canary and provider in ("google", "openrouter")):
+            auth[provider] = {"type": "api_key", "key": f"${endpoint['apiKeyEnv']}"}
     # Derive enabledModels from actual provider model IDs instead of hardcoding
     # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [
@@ -818,6 +905,9 @@ def main():
     # - API models (family-variant) → glob on the family prefix (e.g. "claude-*")
     prefixes: set[str] = set()
     for mid in all_model_ids:
+        if mid.startswith(("google/models/", "openrouter/")):
+            prefixes.add(f"litellm/{mid}")
+            continue
         if ":cloud" in mid:
             # Strip ":cloud" suffix, then glob on the family prefix
             base = mid.replace(":cloud", "")

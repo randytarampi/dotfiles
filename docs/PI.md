@@ -27,6 +27,14 @@ key env var is unset — oMLX no-key mode accepts any bearer token. oMLX itself
 stays loopback-only in no-key mode; Caddy owns external exposure. When the key
 env var is set, the provider block references it (`$OMLX_API_KEY`).
 
+When both `DOTFILES_RUN_LITELLM_SETUP=1` and `DOTFILES_PI_USE_LITELLM=1`, Google
+and OpenRouter model routes are proxied through the authenticated loopback
+LiteLLM catalogue. Pi emits only checked-in aliases confirmed by that
+catalogue; unavailable or unreachable catalogue entries are omitted as
+UNKNOWN, with no direct-provider fallback. Google models disable Pi's `store`
+compatibility field; this setting is Google-specific. This narrow routing does
+not cover Zen, Keyless OpenAI/Anthropic, or Meridian.
+
 Two runtime notes:
 
 - Pi does not load `~/.env` itself. The referenced variable must be exported
