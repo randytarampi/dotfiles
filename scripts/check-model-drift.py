@@ -11,6 +11,7 @@ import sys
 import urllib.error
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
+import stat
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
@@ -24,6 +25,7 @@ from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is inte
     get_catalogue,
     get_models as fetch_models,
     load_allowlists,
+    _configured_litellm_port,
 )
 from model_references import (
     Catalogue,
@@ -421,6 +423,489 @@ def check_junie_profiles() -> list[str]:
     return audit_junie_profiles()[1]
 
 
+def _client_key(client: str) -> str | None:
+    """Read only the authorised, private client key; never evaluate config commands."""
+    home = Path.home()
+    root = home / ".local/share/litellm/clients"
+    target = root / f"{client}.key"
+    try:
+        current = home
+        for component in (".local", "share", "litellm", "clients"):
+            current = current / component
+            if (
+                current.is_symlink()
+                or not current.is_dir()
+                or current.stat().st_uid != os.getuid()
+            ):
+                return None
+        if target.is_symlink() or not target.is_file():
+            return None
+        info = target.stat()
+        if stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
+            return None
+        if root.resolve() != root or target.resolve() != target:
+            return None
+        value = target.read_text(encoding="utf-8").strip()
+        return value or None
+    except (OSError, RuntimeError):
+        return None
+
+
+def audit_client_providers():
+    """Audit deployed OpenCode and Pi models routed through managed LiteLLM."""
+    home = Path.home()
+    port = _configured_litellm_port()
+    endpoint_url = f"http://127.0.0.1:{port}/v1/models" if port else ""
+    reports = []
+    violations = []
+    unknown = False
+    sources = {
+        "opencode": home / ".config/opencode/opencode.json",
+        "pi": home / ".pi/agent/models.json",
+    }
+    inventories = {"opencode": {}, "pi": {}}
+    active_clients = {}
+    for client, path in sources.items():
+        active = bool(
+            port
+            and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+            and os.environ.get(f"DOTFILES_{client.upper()}_USE_LITELLM", "0") == "1"
+        )
+        active_clients[client] = active
+        if not active:
+            reports.append(
+                {
+                    "outcome": Outcome.SKIPPED_INACTIVE.value,
+                    "client": client,
+                    "reference_path": str(path),
+                    "field": "client gate",
+                    "wire_model_id": None,
+                    "reason": "client LiteLLM routing is inactive",
+                }
+            )
+            continue
+        if not path.exists():
+            reports.append(
+                {
+                    "outcome": Outcome.UNKNOWN.value,
+                    "client": client,
+                    "reference_path": str(path),
+                    "field": "<config>",
+                    "wire_model_id": None,
+                    "reason": "enabled client config is missing",
+                }
+            )
+            unknown = True
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        key = _client_key(client)
+        client_refs = []
+        if not isinstance(data, dict):
+            reports.append(
+                {
+                    "outcome": "UNKNOWN",
+                    "client": client,
+                    "reference_path": str(path),
+                    "field": "<config>",
+                    "wire_model_id": None,
+                    "reason": "malformed client config",
+                }
+            )
+            unknown = True
+            continue
+        providers = (
+            data.get("provider") if client == "opencode" else data.get("providers")
+        )
+        if not isinstance(providers, dict) or not providers:
+            reports.append(
+                {
+                    "outcome": "UNKNOWN",
+                    "client": client,
+                    "reference_path": str(path),
+                    "field": "provider",
+                    "wire_model_id": None,
+                    "reason": "malformed provider inventory",
+                }
+            )
+            unknown = True
+            continue
+        disabled_providers = (
+            data.get("disabled_providers", []) if client == "opencode" else []
+        )
+        if not isinstance(disabled_providers, list) or any(
+            not isinstance(name, str) for name in disabled_providers
+        ):
+            reports.append(
+                {
+                    "outcome": Outcome.UNKNOWN.value,
+                    "client": client,
+                    "reference_path": str(path),
+                    "field": "disabled_providers",
+                    "wire_model_id": None,
+                    "reason": "malformed disabled provider list",
+                }
+            )
+            unknown = True
+            disabled_providers = []
+        for provider_name in disabled_providers:
+            if provider_name not in providers:
+                reports.append(
+                    {
+                        "outcome": Outcome.SKIPPED_INACTIVE.value,
+                        "client": client,
+                        "reference_path": str(path),
+                        "field": f"provider.{provider_name}",
+                        "wire_model_id": None,
+                        "reason": "provider disabled",
+                    }
+                )
+        for provider_name, provider in providers.items():
+            if not isinstance(provider, dict):
+                reports.append(
+                    {
+                        "outcome": "UNKNOWN",
+                        "client": client,
+                        "reference_path": str(path),
+                        "field": f"provider.{provider_name}",
+                        "wire_model_id": None,
+                        "reason": "malformed provider",
+                    }
+                )
+                unknown = True
+                continue
+            if provider_name in disabled_providers or provider.get("disabled") is True:
+                reports.append(
+                    {
+                        "outcome": Outcome.SKIPPED_INACTIVE.value,
+                        "client": client,
+                        "reference_path": str(path),
+                        "field": f"provider.{provider_name}",
+                        "wire_model_id": None,
+                        "reason": "provider disabled",
+                    }
+                )
+                continue
+            base = (
+                provider.get("options", {}).get("baseURL")
+                if client == "opencode"
+                and isinstance(provider.get("options", {}), dict)
+                else provider.get("baseUrl")
+            )
+            try:
+                parsed = urlsplit(base) if isinstance(base, str) else None
+                routed = bool(
+                    parsed
+                    and port
+                    and parsed.scheme == "http"
+                    and parsed.hostname == "127.0.0.1"
+                    and parsed.port == port
+                    and parsed.path.rstrip("/") == "/v1"
+                    and not parsed.username
+                    and not parsed.password
+                    and not parsed.query
+                    and not parsed.fragment
+                )
+            except ValueError:
+                parsed = None
+                routed = False
+            model_map = provider.get("models")
+            if client == "pi" and isinstance(model_map, list):
+                model_pairs = [
+                    (m.get("id"), m) for m in model_map if isinstance(m, dict)
+                ]
+                if len(model_pairs) != len(model_map):
+                    unknown = True
+            elif isinstance(model_map, dict):
+                model_pairs = [(name, item) for name, item in model_map.items()]
+            else:
+                reports.append(
+                    {
+                        "outcome": "UNKNOWN",
+                        "client": client,
+                        "reference_path": str(path),
+                        "field": f"provider.{provider_name}.models",
+                        "wire_model_id": None,
+                        "reason": "malformed model inventory",
+                    }
+                )
+                unknown = True
+                continue
+            if not routed:
+                if isinstance(base, str) and base.startswith(("http://", "https://")):
+                    reports.append(
+                        {
+                            "outcome": Outcome.UNKNOWN.value,
+                            "client": client,
+                            "reference_path": str(path),
+                            "field": f"provider.{provider_name}",
+                            "wire_model_id": None,
+                            "reason": "DIRECT_NOT_PROXIED",
+                        }
+                    )
+                    unknown = True
+                else:
+                    reports.append(
+                        {
+                            "outcome": Outcome.UNKNOWN.value,
+                            "client": client,
+                            "reference_path": str(path),
+                            "field": f"provider.{provider_name}",
+                            "wire_model_id": None,
+                            "reason": "malformed or missing provider URL",
+                        }
+                    )
+                    unknown = True
+                continue
+            scope = f"{client}:{provider_name}"
+            for model_id, model in model_pairs:
+                if (
+                    not isinstance(model_id, str)
+                    or not model_id
+                    or not isinstance(model, dict)
+                ):
+                    unknown = True
+                    reports.append(
+                        {
+                            "outcome": "UNKNOWN",
+                            "client": client,
+                            "reference_path": str(path),
+                            "field": f"provider.{provider_name}.models",
+                            "wire_model_id": None,
+                            "reason": "malformed model entry",
+                        }
+                    )
+                    continue
+                client_refs.append(
+                    (
+                        provider_name,
+                        model_id,
+                        f"provider.{provider_name}.models.{model_id}",
+                        scope,
+                    )
+                )
+                inventories[client].setdefault(provider_name, set()).add(model_id)
+        # Check each provider's credential expression and query independently.
+        authorised = str(home / ".local/share/litellm/clients" / f"{client}.key")
+        expected = (
+            "{file:" + authorised + "}"
+            if client == "opencode"
+            else "!cat " + authorised
+        )
+        for provider_name in sorted({item[0] for item in client_refs}):
+            provider = providers[provider_name]
+            options = provider.get("options", {})
+            raw = (
+                options.get("apiKey")
+                if client == "opencode" and isinstance(options, dict)
+                else provider.get("apiKey")
+            )
+            provider_refs = [item for item in client_refs if item[0] == provider_name]
+            if raw != expected or key is None:
+                for _, model_id, source, scope in provider_refs:
+                    reports.append(
+                        {
+                            "outcome": Outcome.UNKNOWN.value,
+                            "client": client,
+                            "endpoint_label": "litellm:127.0.0.1",
+                            "credential_label": scope,
+                            "reference_path": str(path),
+                            "field": source,
+                            "wire_model_id": model_id,
+                            "reason": "authorised client key missing or unsupported reference",
+                        }
+                    )
+                unknown = True
+                continue
+            endpoint = EndpointIdentity(
+                "litellm:127.0.0.1", f"{client}:{provider_name}"
+            )
+            refs = [
+                ModelReference(endpoint, model_id, str(path), field)
+                for _, model_id, field, _ in provider_refs
+            ]
+            try:
+                DRIFT_STATS["checked"] += 1
+                payload = get_catalogue(endpoint_url, key)
+                ids = payload.get("data") if isinstance(payload, dict) else None
+                if not isinstance(ids, list) or any(
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("id"), str)
+                    or not item["id"]
+                    for item in ids
+                ):
+                    raise ValueError("malformed catalogue")
+                catalogue = Catalogue(True, frozenset(item["id"] for item in ids))
+            except urllib.error.HTTPError as exc:
+                catalogue = Catalogue(
+                    False, http_status=exc.code, reason=f"HTTP {exc.code}"
+                )
+                DRIFT_STATS["skipped"] += 1
+            except Exception:
+                catalogue = Catalogue(False, reason="catalogue unavailable")
+                DRIFT_STATS["skipped"] += 1
+            for result in compare_references(refs, {endpoint: catalogue}).results:
+                ref = result.reference
+                reports.append(
+                    {
+                        "outcome": result.outcome.value,
+                        "client": client,
+                        "endpoint_label": "litellm:127.0.0.1",
+                        "credential_label": endpoint.credential_scope,
+                        "reference_path": ref.source,
+                        "field": ref.field,
+                        "wire_model_id": ref.wire_id,
+                        "http_status": catalogue.http_status,
+                        "reason": result.reason or catalogue.reason,
+                    }
+                )
+                if result.outcome == Outcome.MISSING:
+                    violations.append(
+                        f"{client} {ref.source} points to missing proxy model {ref.wire_id}"
+                    )
+                if result.outcome == Outcome.UNKNOWN:
+                    unknown = True
+    settings_path = home / ".pi/agent/settings.json"
+    if active_clients["pi"]:
+        if not settings_path.exists():
+            reports.append(
+                {
+                    "outcome": Outcome.UNKNOWN.value,
+                    "client": "pi",
+                    "reference_path": str(settings_path),
+                    "field": "<settings>",
+                    "wire_model_id": None,
+                    "reason": "enabled Pi settings are missing",
+                }
+            )
+            unknown = True
+        else:
+            try:
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                settings = None
+            if not isinstance(settings, dict):
+                reports.append(
+                    {
+                        "outcome": Outcome.UNKNOWN.value,
+                        "client": "pi",
+                        "reference_path": str(settings_path),
+                        "field": "<settings>",
+                        "wire_model_id": None,
+                        "reason": "malformed Pi settings",
+                    }
+                )
+                unknown = True
+            else:
+                subagents = settings.get("subagents", {})
+                if not isinstance(subagents, dict):
+                    reports.append(
+                        {
+                            "outcome": Outcome.UNKNOWN.value,
+                            "client": "pi",
+                            "reference_path": str(settings_path),
+                            "field": "subagents",
+                            "wire_model_id": None,
+                            "reason": "malformed Pi subagents settings",
+                        }
+                    )
+                    unknown = True
+                    subagents = {}
+                selections = [
+                    (
+                        "defaultModel",
+                        settings.get("defaultProvider"),
+                        settings.get("defaultModel"),
+                    ),
+                    (
+                        "subagents.defaultModel",
+                        subagents.get(
+                            "defaultProvider", settings.get("defaultProvider")
+                        ),
+                        subagents.get("defaultModel"),
+                    ),
+                ]
+                overrides = subagents.get("agentOverrides", {})
+                if isinstance(overrides, dict):
+                    selections.extend(
+                        (
+                            f"subagents.agentOverrides.{role}.model",
+                            value.get(
+                                "provider",
+                                subagents.get(
+                                    "defaultProvider", settings.get("defaultProvider")
+                                ),
+                            ),
+                            value.get("model"),
+                        )
+                        for role, value in overrides.items()
+                        if isinstance(value, dict)
+                    )
+                    if any(not isinstance(value, dict) for value in overrides.values()):
+                        unknown = True
+                else:
+                    reports.append(
+                        {
+                            "outcome": Outcome.UNKNOWN.value,
+                            "client": "pi",
+                            "reference_path": str(settings_path),
+                            "field": "subagents.agentOverrides",
+                            "wire_model_id": None,
+                            "reason": "malformed agent override map",
+                        }
+                    )
+                    unknown = True
+                for field, provider, model in selections:
+                    if model is None:
+                        continue
+                    if isinstance(model, str) and not provider and "/" in model:
+                        provider = model.split("/", 1)[0]
+                    if not isinstance(provider, str) or not isinstance(model, str):
+                        reports.append(
+                            {
+                                "outcome": Outcome.UNKNOWN.value,
+                                "client": "pi",
+                                "reference_path": str(settings_path),
+                                "field": field,
+                                "wire_model_id": None,
+                                "reason": "malformed model selection",
+                            }
+                        )
+                        unknown = True
+                        continue
+                    inventory = inventories["pi"].get(provider)
+                    selected_id = (
+                        model[len(provider) + 1 :]
+                        if model.startswith(provider + "/")
+                        else model
+                    )
+                    if inventory is None:
+                        outcome = Outcome.UNKNOWN
+                        reason = "selected provider has no audited model inventory"
+                        unknown = True
+                    elif selected_id not in inventory:
+                        outcome = Outcome.MISSING
+                        reason = "selection absent from matching provider inventory"
+                        violations.append(
+                            f"Pi {field} selects a model absent from provider {provider} inventory"
+                        )
+                    else:
+                        continue
+                    reports.append(
+                        {
+                            "outcome": outcome.value,
+                            "client": "pi",
+                            "reference_path": str(settings_path),
+                            "field": field,
+                            "wire_model_id": model,
+                            "reason": reason,
+                        }
+                    )
+    return {"results": reports, "complete": not unknown}, violations
+
+
 def main() -> int:
     load_env()
     parser = argparse.ArgumentParser(
@@ -432,7 +917,7 @@ def main() -> int:
     parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="Exit nonzero when Junie catalogue evidence is incomplete",
+        help="Exit nonzero when catalogue evidence is incomplete",
     )
     args = parser.parse_args()
     results = {"violations": [], "warnings": []}
@@ -447,6 +932,8 @@ def main() -> int:
         results["violations"].append(f"Could not read slim config: {exc}")
     junie_audit, junie_violations = audit_junie_profiles()
     results["violations"].extend(junie_violations)
+    client_audit, client_violations = audit_client_providers()
+    results["violations"].extend(client_violations)
     stale, age = is_stale()
     if stale:
         age_text = "never" if age is None else f"{age:.0f}"
@@ -458,6 +945,7 @@ def main() -> int:
         logger.warning(results["warnings"][-1])
     if args.json:
         results["junie_audit"] = junie_audit
+        results["client_audit"] = client_audit
         print(json.dumps(results, indent=2))
     else:
         for violation in results["violations"]:
@@ -470,6 +958,15 @@ def main() -> int:
                     item["credential_label"],
                     item["reason"] or "catalogue unavailable",
                 )
+        for item in client_audit["results"]:
+            if item["outcome"] == Outcome.UNKNOWN.value:
+                logger.warning(
+                    "%s model audit UNKNOWN at %s for credential %s: %s",
+                    item.get("client"),
+                    item.get("endpoint_label", "direct"),
+                    item.get("credential_label", "unavailable"),
+                    item.get("reason") or "catalogue unavailable",
+                )
         logger.info(
             "Model drift check complete: %d violation(s); checked %d provider endpoint(s), skipped %d",
             len(results["violations"]),
@@ -479,7 +976,10 @@ def main() -> int:
     return (
         1
         if results["violations"]
-        or (args.require_complete and not junie_audit["complete"])
+        or (
+            args.require_complete
+            and not (junie_audit["complete"] and client_audit["complete"])
+        )
         else 0
     )
 
