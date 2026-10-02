@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 
 def installed_cloud_stub(model_id: str, installed_models: list | None) -> str | None:
     """Return the unique installed cloud stub for a model ID, if unambiguous.
@@ -85,3 +87,49 @@ def unresolved_cloud_model_ids(value, installed_models: list | None) -> set[str]
             )
         )
     return set()
+
+
+def litellm_canary_enabled(client: str) -> bool:
+    """Whether this client is explicitly routed through the LiteLLM canary."""
+    gate = {
+        "opencode": "DOTFILES_OPENCODE_USE_LITELLM",
+        "pi": "DOTFILES_PI_USE_LITELLM",
+    }.get(client)
+    return bool(
+        gate
+        and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+        and os.environ.get(gate, "0") == "1"
+    )
+
+
+def direct_cloud_route_allowed(client: str) -> bool:
+    """Direct Ollama Cloud is forbidden while a client LiteLLM canary is on."""
+    return not litellm_canary_enabled(client)
+
+
+def fail_closed_cloud_refs(value, unavailable_model_ids: set[str]):
+    """Replace unresolved direct cloud references with an explicit no-model ID."""
+    prefix = "ollama-cloud/"
+    if isinstance(value, str) and value.startswith(prefix):
+        if value[len(prefix) :] in unavailable_model_ids:
+            return "ollama/no-model-available"
+        return value
+    if isinstance(value, list):
+        return [fail_closed_cloud_refs(item, unavailable_model_ids) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: fail_closed_cloud_refs(item, unavailable_model_ids)
+            for key, item in value.items()
+        }
+    return value
+
+
+def fail_closed_all_cloud_refs(value):
+    """Replace all direct Ollama Cloud refs when direct routing is forbidden."""
+    if isinstance(value, str) and value.startswith("ollama-cloud/"):
+        return "ollama/no-model-available"
+    if isinstance(value, list):
+        return [fail_closed_all_cloud_refs(item) for item in value]
+    if isinstance(value, dict):
+        return {key: fail_closed_all_cloud_refs(item) for key, item in value.items()}
+    return value

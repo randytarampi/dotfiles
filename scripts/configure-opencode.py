@@ -38,7 +38,10 @@ from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from discover_models import list_cloud_ollama_models
-from ollama_cloud_wire_ids import installed_cloud_stub
+from ollama_cloud_wire_ids import (
+    direct_cloud_route_allowed,
+    installed_cloud_stub,
+)
 from local_engines import engine_gate_active, local_provider_block, resolve_engine
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
@@ -499,12 +502,18 @@ def main():
         # merged local+cloud `ollama` block, so configs remain portable across
         # machines whether or not the local daemon proxies cloud.
         if "ollama-cloud" in needed_providers and ollama_cloud_models:
-            config["provider"]["ollama-cloud"] = {
-                "models": {
-                    mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
-                    for mid in ollama_cloud_models
+            if not direct_cloud_route_allowed("opencode"):
+                config["disabled_providers"].append("ollama-cloud")
+                logger.warning(
+                    "Direct ollama-cloud provider omitted under OpenCode LiteLLM canary; project cloud refs are unavailable unless locally proxied"
+                )
+            else:
+                config["provider"]["ollama-cloud"] = {
+                    "models": {
+                        mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
+                        for mid in ollama_cloud_models
+                    }
                 }
-            }
         if "ollama" in needed_providers and local_ollama:
             config["provider"]["ollama"] = local_ollama
         for provider, block in local_engine_providers.items():
@@ -775,7 +784,12 @@ def main():
                 elif local_ollama and args.preset not in ["plus", "pro"]:
                     # Cloud-capable but no cloud models pulled; keep local-only provider
                     config["provider"]["ollama"] = local_ollama
-                if direct_cloud_models and os.environ.get("OLLAMA_API_KEY", "").strip():
+                litellm_canary = not direct_cloud_route_allowed("opencode")
+                if (
+                    direct_cloud_models
+                    and os.environ.get("OLLAMA_API_KEY", "").strip()
+                    and not litellm_canary
+                ):
                     config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
                     logger.warning(
                         "Some curated Ollama Cloud models have no unique installed local stub; retaining direct ollama-cloud route"
@@ -783,16 +797,30 @@ def main():
                 else:
                     config["disabled_providers"].append("ollama-cloud")
                     if direct_cloud_models:
-                        logger.warning(
-                            "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset"
-                        )
+                        unavailable_ids = ", ".join(sorted(direct_cloud_models))
+                        if litellm_canary:
+                            logger.warning(
+                                "Ollama Cloud models unavailable through the LiteLLM canary (no unique installed local stub; direct bypass disabled): %s",
+                                unavailable_ids,
+                            )
+                        else:
+                            logger.warning(
+                                "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset: %s",
+                                unavailable_ids,
+                            )
             elif ollama_cloud_models and args.preset != "plus":
                 # Not cloud-capable: use direct ollama-cloud provider
-                enriched_cloud = {
-                    mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
-                    for mid in ollama_cloud_models
-                }
-                config["provider"]["ollama-cloud"] = {"models": enriched_cloud}
+                if not direct_cloud_route_allowed("opencode"):
+                    config["disabled_providers"].append("ollama-cloud")
+                    logger.warning(
+                        "Direct ollama-cloud provider omitted under OpenCode LiteLLM canary; cloud refs are unavailable"
+                    )
+                else:
+                    enriched_cloud = {
+                        mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
+                        for mid in ollama_cloud_models
+                    }
+                    config["provider"]["ollama-cloud"] = {"models": enriched_cloud}
                 if local_ollama and args.preset not in ["plus", "pro"]:
                     config["provider"]["ollama"] = local_ollama
             elif local_ollama and args.preset not in ["plus", "pro"]:

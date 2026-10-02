@@ -25,6 +25,9 @@ from cli_helpers import add_common_args, add_model_override_args
 import tier_registry
 from ollama_cloud_wire_ids import (
     proxied_cloud_ref,
+    fail_closed_cloud_refs,
+    fail_closed_all_cloud_refs,
+    litellm_canary_enabled,
     rewrite_cloud_refs,
     unresolved_cloud_model_ids,
 )
@@ -43,12 +46,23 @@ def _csv_env(name):
 
 def rewrite_ollama_cloud_models_for_proxy(value, installed_models=None):
     """Recursively rewrite installed model refs, retaining direct fallbacks."""
-    for model_id in sorted(unresolved_cloud_model_ids(value, installed_models)):
+    unresolved = unresolved_cloud_model_ids(value, installed_models)
+    for model_id in sorted(unresolved):
         logger.warning(
-            "No unique installed Ollama Cloud stub for %s; preserving direct ollama-cloud route",
+            "No unique installed Ollama Cloud stub for %s",
             model_id,
         )
-    return rewrite_cloud_refs(value, installed_models)
+    rewritten = rewrite_cloud_refs(value, installed_models)
+    if litellm_canary_enabled("opencode"):
+        if unresolved:
+            logger.warning(
+                "Unavailable Ollama Cloud refs fail closed under the OpenCode LiteLLM canary"
+            )
+            return fail_closed_cloud_refs(rewritten, unresolved)
+        # The daemon is unavailable or the list failed; there is no safe local
+        # route to substitute, and direct cloud routing is forbidden.
+        return fail_closed_all_cloud_refs(rewritten)
+    return rewritten
 
 
 def filter_omlx_models_for_gate(models):
@@ -146,6 +160,7 @@ def orchestrate_tier_switch(
 
     cloud_role_models = {}
     cloud_models_list = None
+    opencode_litellm_canary = litellm_canary_enabled("opencode")
     _, can_proxy_cloud = check_ollama_daemon()
     if can_proxy_cloud:
         try:
@@ -278,7 +293,7 @@ def orchestrate_tier_switch(
                     del source_preset[role]
                 else:
                     source_preset[role]["model"] = model
-        if can_proxy_cloud:
+        if can_proxy_cloud or opencode_litellm_canary:
             source_preset = rewrite_ollama_cloud_models_for_proxy(
                 source_preset, cloud_models_list
             )
@@ -296,7 +311,7 @@ def orchestrate_tier_switch(
         target_config["council"] = {}
     target_config["council"]["default_preset"] = source_council.get("default_preset")
     source_presets = json.loads(json.dumps(source_council.get("presets", {}) or {}))
-    if can_proxy_cloud:
+    if can_proxy_cloud or opencode_litellm_canary:
         source_presets = rewrite_ollama_cloud_models_for_proxy(
             source_presets, cloud_models_list
         )
@@ -308,7 +323,7 @@ def orchestrate_tier_switch(
             other_preset = other_presets[other_tier_name]
             if "council" in other_preset and other_tier_name in source_presets:
                 council_preset = other_preset["council"]
-                if can_proxy_cloud:
+                if can_proxy_cloud or opencode_litellm_canary:
                     council_preset = rewrite_ollama_cloud_models_for_proxy(
                         council_preset, cloud_models_list
                     )

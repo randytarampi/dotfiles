@@ -28,7 +28,10 @@ from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from tier_resolve import get_model_details
 from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
 from ollama_cloud_wire_ids import (
+    direct_cloud_route_allowed,
+    fail_closed_cloud_refs,
     installed_cloud_stubs,
+    litellm_canary_enabled,
     rewrite_cloud_refs,
     unresolved_cloud_model_ids,
 )
@@ -593,13 +596,19 @@ def main():
         cloud = json.load(f).get("models", {})
     _, proxy = check_ollama_daemon()
     installed_cloud_models = list_cloud_ollama_models() if proxy else None
-    if proxy:
+    pi_litellm_canary = litellm_canary_enabled("pi")
+    if proxy or pi_litellm_canary:
         role_models = rewrite_cloud_refs(role_models, installed_cloud_models)
         unresolved = unresolved_cloud_model_ids(role_models, installed_cloud_models)
         for model_id in sorted(unresolved):
             logger.warning(
-                "No unique installed Ollama Cloud stub for %s; preserving direct ollama-cloud route",
+                "No unique installed Ollama Cloud stub for %s",
                 model_id,
+            )
+        if pi_litellm_canary and unresolved:
+            role_models = fail_closed_cloud_refs(role_models, unresolved)
+            logger.warning(
+                "Unavailable Ollama Cloud role refs fail closed under the Pi LiteLLM canary"
             )
     compaction_tokens = _compaction_tokens(local_refs)
 
@@ -693,7 +702,7 @@ def main():
             for stub in installed_cloud_stubs(cloud, installed_cloud_models)
         ]
     direct_cloud_ids = unresolved_cloud_model_ids(role_models, installed_cloud_models)
-    if not proxy or direct_cloud_ids:
+    if direct_cloud_route_allowed("pi") and (not proxy or direct_cloud_ids):
         direct_ids = sorted(direct_cloud_ids) if proxy else list(cloud)
         providers["ollama-cloud"] = {
             "baseUrl": BASE_URLS["ollama-cloud"],
@@ -701,6 +710,11 @@ def main():
             "apiKey": "$OLLAMA_API_KEY",
             "models": [model_entry(model_id) for model_id in direct_ids],
         }
+    elif pi_litellm_canary and direct_cloud_ids:
+        logger.warning(
+            "Direct Ollama Cloud provider omitted under Pi LiteLLM canary; unresolved model IDs: %s",
+            ", ".join(sorted(direct_cloud_ids)),
+        )
     providers["meridian"] = {
         "baseUrl": get_meridian_base_url(),
         "api": "openai-responses",
