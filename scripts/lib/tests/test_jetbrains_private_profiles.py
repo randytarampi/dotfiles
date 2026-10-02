@@ -377,8 +377,9 @@ def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
     target.mkdir(parents=True)
     target.chmod(0o700)
     (target / "litellm-openai-main.json").write_text("stale", encoding="utf-8")
+    (target / "openai-main.json").write_text("stale direct", encoding="utf-8")
     (target / PROFILES.PROFILE_MANIFEST).write_text(
-        json.dumps(["litellm-openai-main"]), encoding="utf-8"
+        json.dumps(["litellm-openai-main", "openai-main"]), encoding="utf-8"
     )
     (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
     (target / "manual.json").write_text('{"user": true}', encoding="utf-8")
@@ -387,8 +388,35 @@ def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
     PROFILES.main()
 
     assert not (target / "litellm-openai-main.json").exists()
+    assert not (target / "openai-main.json").exists()
     assert (target / "manual.json").read_text(encoding="utf-8") == '{"user": true}'
-    assert (target / "openai-main.json").exists()
+
+
+def test_gate_on_with_invalid_litellm_endpoint_omits_direct_groups_but_keeps_meridian(
+    harness, monkeypatch
+):
+    _, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text())
+    config["providers"]["litellm"]["baseUrl"] = "https://invalid.example/v1"
+    config["providers"]["meridian"] = {
+        "baseUrl": "http://127.0.0.1:3456/v1/responses",
+        "apiType": "OpenAIResponses",
+        "apiKeyEnv": "MERIDIAN_API_KEY",
+    }
+    config["groups"]["meridian-opus"] = {
+        "provider": "meridian",
+        "primaryModel": "claude-opus",
+    }
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+
+    PROFILES.main()
+
+    assert not (target / "openai-main.json").exists()
+    assert not (target / "openai-faster.json").exists()
+    assert not any(target.glob("litellm-*.json"))
+    assert (
+        json.loads((target / "meridian-opus.json").read_text())["id"] == "claude-opus"
+    )
 
 
 def test_unsafe_key_path_and_endpoint_fail_closed(harness, monkeypatch):

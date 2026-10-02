@@ -596,6 +596,13 @@ def main():
     providers = build_provider_configs(cfg, junie_key)
     use_litellm = litellm_gate and bool(junie_key) and "litellm" in providers
     groups = select_model_groups(cfg.get("groups", {}), use_litellm)
+    if litellm_gate and not use_litellm:
+        groups = {
+            name: group
+            for name, group in groups.items()
+            if group.get("provider") not in LITELLM_ROUTED_PROVIDERS
+            and group.get("provider") != "litellm"
+        }
     catalogue = None
     if use_litellm:
         catalogue = litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
