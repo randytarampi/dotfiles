@@ -73,6 +73,34 @@ def render_zone_config(zone_id: str, records: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+def add_wildcard_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Ensure local/shush wildcard A and AAAA records accompany zone apexes."""
+    expanded = [dict(record) for record in records]
+    existing = {
+        (str(record.get("name", "")).rstrip("."), str(record.get("type", "")).upper())
+        for record in expanded
+    }
+    for record in records:
+        name = str(record.get("name", "")).strip()
+        record_type = str(record.get("type", "")).strip().upper()
+        if record_type not in {"A", "AAAA"} or not name.startswith(
+            ("local.", "shush.")
+        ):
+            continue
+        wildcard_name = f"*.{name}"
+        identity = (wildcard_name.rstrip("."), record_type)
+        if identity not in existing:
+            expanded.append(
+                {
+                    "name": wildcard_name,
+                    "type": record_type,
+                    "ttl": record.get("ttl", 300),
+                }
+            )
+            existing.add(identity)
+    return expanded
+
+
 def main() -> None:
     args = parse_args()
 
@@ -148,6 +176,7 @@ def main() -> None:
 
             records.append({"name": name, "type": record_type, "ttl": ttl_value})
 
+        records = add_wildcard_records(records)
         config_path = config_dir / f"zone-{zone_id}.yml"
         config_text = render_zone_config(zone_id, records)
         if args.dry_run:

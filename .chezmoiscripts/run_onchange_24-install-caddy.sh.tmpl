@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_LITELLM_UI_EXPOSED" | default "0" | sha256sum }}
 
 # configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
+# scripts/lib/caddy_domains.py: {{ include "scripts/lib/caddy_domains.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
@@ -32,7 +34,7 @@ fi
 {{- if eq .chezmoi.os "darwin" }}
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  exec sudo --preserve-env=BREW_BIN,DOTFILES_RUN_CADDY_SETUP "$0" "$@"
+  exec sudo --preserve-env=BREW_BIN,DOTFILES_RUN_CADDY_SETUP,DOTFILES_LITELLM_UI_EXPOSED "$0" "$@"
 fi
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
@@ -84,7 +86,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$(
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -92,35 +94,18 @@ from pathlib import Path
 script_dir = os.environ["SCRIPT_DIR"]
 sys.path.insert(0, os.path.join(script_dir, "lib"))
 
-from caddy_domains import load_domains
+from caddy_domains import build_hosts_entries, load_domains
 
 zones_path = Path(
     os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json"))
 )
 domains = load_domains(zones_path)
-access_mode = os.environ.get("CADDY_ACCESS", "localhost")
-openwebui_enabled = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
-
-entries: list[str] = []
-marker = "# dotfiles-caddy-managed"
-
-entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
-entries.append(f"::1\t\topencode.localhost\t{marker}")
-if openwebui_enabled:
-    entries.append(f"127.0.0.1\tchat.localhost\t{marker}")
-    entries.append(f"::1\t\tchat.localhost\t{marker}")
-
-if access_mode == "localhost":
-    served_domains = [domain for domain in domains if domain.startswith("local.")]
-else:
-    served_domains = domains
-
-for domain in served_domains:
-    entries.append(f"127.0.0.1\t{domain}\t{marker}")
-    entries.append(f"::1\t\t{domain}\t{marker}")
-    entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
-    if openwebui_enabled:
-        entries.append(f"127.0.0.1\tchat.{domain}\t{marker}")
+entries = build_hosts_entries(
+    domains,
+    os.environ.get("CADDY_ACCESS", "localhost"),
+    openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
+    litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+)
 
 for entry in entries:
     print(entry)
@@ -249,7 +234,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$({
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -257,25 +242,16 @@ from pathlib import Path
 script_dir = os.environ["SCRIPT_DIR"]
 sys.path.insert(0, os.path.join(script_dir, "lib"))
 from caddy_domains import load_domains
+from caddy_domains import build_hosts_entries
 
 zones_path = Path(os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")))
 domains = load_domains(zones_path)
-access_mode = os.environ.get("CADDY_ACCESS", "localhost")
-openwebui_enabled = os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1"
-entries: list[str] = []
-marker = "# dotfiles-caddy-managed"
-entries.append(f"127.0.0.1\topencode.localhost\t{marker}")
-entries.append(f"::1\t\topencode.localhost\t{marker}")
-if openwebui_enabled:
-    entries.append(f"127.0.0.1\tchat.localhost\t{marker}")
-    entries.append(f"::1\t\tchat.localhost\t{marker}")
-served_domains = [domain for domain in domains if domain.startswith("local.")] if access_mode == "localhost" else domains
-for domain in served_domains:
-    entries.append(f"127.0.0.1\t{domain}\t{marker}")
-    entries.append(f"::1\t\t{domain}\t{marker}")
-    entries.append(f"127.0.0.1\topencode.{domain}\t{marker}")
-    if openwebui_enabled:
-        entries.append(f"127.0.0.1\tchat.{domain}\t{marker}")
+entries = build_hosts_entries(
+    domains,
+    os.environ.get("CADDY_ACCESS", "localhost"),
+    openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
+    litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+)
 for entry in entries:
     print(entry)
 PY
