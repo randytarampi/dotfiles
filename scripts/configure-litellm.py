@@ -129,6 +129,11 @@ def _write_pi_key(service_env_path: Path, dry_run=False) -> None:
     _write_client_key(service_env_path, "pi", "LITELLM_PI_KEY", dry_run)
 
 
+def _write_junie_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the Junie app key without sourcing service.env."""
+    _write_client_key(service_env_path, "junie", "LITELLM_JUNIE_KEY", dry_run)
+
+
 def provision_app_keys(master_key, service_env_path=None, api_base=None):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
     if not master_key:
@@ -186,6 +191,7 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
             logger.info("Provisioned %d LiteLLM app key(s)", len(found))
         _write_opencode_key(service_env_path)
         _write_pi_key(service_env_path)
+        _write_junie_key(service_env_path)
     except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
 
