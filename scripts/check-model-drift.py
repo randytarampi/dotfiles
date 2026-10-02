@@ -8,7 +8,9 @@ import json
 import os
 import re
 import sys
+import urllib.error
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
@@ -19,8 +21,17 @@ from model_stamp import is_stale
 from local_engines import active_engines, iter_engine_models_strict, resolve_engine
 from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is intentional.
     endpoint_models_url,
+    get_catalogue,
     get_models as fetch_models,
     load_allowlists,
+)
+from model_references import (
+    Catalogue,
+    EndpointIdentity,
+    ModelReference,
+    Outcome,
+    compare_references,
+    google_direct_id,
 )
 
 REPO_ROOT = SCRIPT_DIR.parent
@@ -61,14 +72,17 @@ def iter_models(value):
                 yield from iter_models(child)
 
 
-def resolve_profile_api_key(value: object) -> str | None:
-    """Resolve Junie-native ${VAR} references without treating them literally."""
+def resolve_profile_api_key(value: object) -> tuple[str | None, str]:
+    """Resolve only literal and ${ENV} key forms; never evaluate shell syntax."""
     if not isinstance(value, str):
-        return ""
+        return "", "anonymous"
     match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value)
     if match:
-        return os.environ.get(match.group(1))
-    return value
+        name = match.group(1)
+        return os.environ.get(name), f"env:{name}"
+    if value.startswith("!") or "$(`" in value or "$(" in value:
+        return None, "unsupported-profile-expression"
+    return (value, "inline-profile-key") if value else ("", "anonymous")
 
 
 def check_slim(data: dict) -> list[str]:
@@ -158,7 +172,48 @@ def check_local_engine_models() -> list[str]:
     return violations
 
 
-def profile_models(path: Path) -> list[tuple[str, set[str], str | None]] | None:
+def _safe_endpoint_namespace(base_url: str) -> str:
+    parsed = urlsplit(endpoint_models_url(base_url))
+    try:
+        host = parsed.hostname or "unknown-host"
+        if parsed.port:
+            host += f":{parsed.port}"
+    except ValueError:
+        host = "invalid-host"
+    return urlunsplit((parsed.scheme, host, parsed.path.rstrip("/"), "", ""))
+
+
+def _profile_reference(path, provider_name, provider, model, field):
+    if not isinstance(model, str) or not model:
+        return None
+    provider = provider if isinstance(provider, dict) else {}
+    base_url = provider.get("baseUrl")
+    if not isinstance(base_url, str):
+        base_url = ""
+    raw_key = provider.get("apiKey", "")
+    if raw_key == "" and provider.get("apiKeyEnv"):
+        raw_key = "${" + str(provider["apiKeyEnv"]) + "}"
+    key, scope = resolve_profile_api_key(raw_key)
+    if not base_url:
+        key = None
+        scope = f"unresolved-provider:{provider_name}"
+    if scope == "inline-profile-key":
+        scope = f"inline-profile:{Path(path).name}:{provider_name}"
+    namespace = (
+        _safe_endpoint_namespace(base_url)
+        if base_url
+        else f"unresolved-provider:{provider_name}"
+    )
+    endpoint = EndpointIdentity(namespace, scope)
+    return {
+        "endpoint": endpoint,
+        "base_url": base_url,
+        "api_key": key,
+        "reference": ModelReference(endpoint, model, str(path), field),
+    }
+
+
+def profile_models(path: Path) -> list[dict] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
@@ -174,49 +229,83 @@ def profile_models(path: Path) -> list[tuple[str, set[str], str | None]] | None:
             for group in data["groups"].values():
                 if not isinstance(group, dict):
                     continue
-                provider = data["providers"].get(group.get("provider", ""), {})
-                ids = {
-                    str(group[key]).split("/", 1)[-1]
-                    for key in ("primaryModel", "fasterModel")
-                    if isinstance(group.get(key), str)
-                }
-                if isinstance(provider, dict):
-                    api_key = resolve_profile_api_key(provider.get("apiKey", ""))
-                    if api_key is None:
-                        api_key = os.environ.get(provider.get("apiKeyEnv", ""), "")
-                    entries.append((provider.get("baseUrl", ""), ids, api_key))
+                provider_name = group.get("provider", "")
+                provider = data["providers"].get(provider_name, {})
+                for key, field in (
+                    ("primaryModel", "primaryModel"),
+                    ("fasterModel", "fasterModel"),
+                ):
+                    model = group.get(key)
+                    if not isinstance(model, str):
+                        continue
+                    selected_provider = provider_name
+                    if key == "fasterModel":
+                        selected_provider = group.get("fasterProvider", provider_name)
+                    ref = _profile_reference(
+                        path,
+                        selected_provider,
+                        data["providers"].get(selected_provider, {}),
+                        model,
+                        field,
+                    )
+                    if ref:
+                        entries.append(ref)
             return entries
-        models = set()
+        providers = data.get("providers", {})
+        provider_name = data.get("provider", "default")
+        provider = (
+            providers.get(provider_name, {}) if isinstance(providers, dict) else {}
+        )
+        if not provider:
+            provider = data
+        entries = []
         primary = data.get("primaryModel")
         if isinstance(primary, dict) and primary.get("id"):
-            models.add(primary["id"])
-        entries = [
-            (
-                data.get("baseUrl", ""),
-                models,
-                resolve_profile_api_key(data.get("apiKey", "")),
+            primary_provider = dict(provider)
+            primary_provider.setdefault("baseUrl", data.get("baseUrl", ""))
+            primary_provider.setdefault("apiKey", data.get("apiKey", ""))
+            ref = _profile_reference(
+                path, provider_name, primary_provider, primary["id"], "primaryModel.id"
             )
-        ]
+            if ref:
+                entries.append(ref)
         faster = data.get("fasterModel")
         if isinstance(faster, dict) and faster.get("id"):
-            faster_base = faster.get("baseUrl", data.get("baseUrl", ""))
-            if faster_base == data.get("baseUrl", ""):
-                models.add(faster["id"])
-            else:
-                entries.append(
-                    (
-                        faster_base,
-                        {faster["id"]},
-                        resolve_profile_api_key(faster.get("apiKey", "")),
-                    )
-                )
+            faster_provider_name = faster.get(
+                "provider", data.get("fasterProvider", provider_name)
+            )
+            faster_provider = (
+                providers.get(faster_provider_name, {})
+                if isinstance(providers, dict)
+                else {}
+            )
+            if not faster_provider and faster_provider_name == provider_name:
+                faster_provider = provider
+            faster_provider = dict(faster_provider)
+            fallback_base = (
+                data.get("baseUrl", "") if faster_provider_name == provider_name else ""
+            )
+            fallback_key = (
+                data.get("apiKey", "") if faster_provider_name == provider_name else ""
+            )
+            faster_provider.setdefault("baseUrl", faster.get("baseUrl", fallback_base))
+            faster_provider.setdefault("apiKey", faster.get("apiKey", fallback_key))
+            ref = _profile_reference(
+                path,
+                faster_provider_name,
+                faster_provider,
+                faster["id"],
+                "fasterModel.id",
+            )
+            if ref:
+                entries.append(ref)
         return entries
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Could not read Junie profile %s — skipping (%s)", path, exc)
         return None
 
 
-def check_junie_profiles() -> list[str]:
+def audit_junie_profiles():
     models_dir = Path(
         os.environ.get("JUNIE_MODELS_DIR", "~/.junie/models")
     ).expanduser()
@@ -234,38 +323,94 @@ def check_junie_profiles() -> list[str]:
     ).expanduser()
     if local_config.exists():
         paths.append(local_config)
-    grouped = {}
+    references = []
+    keys = {}
+    base_urls = {}
     for path in paths:
         result = profile_models(path)
         if result:
-            for base_url, models, api_key in result:
-                grouped.setdefault(base_url, []).append((path, models, api_key))
-    violations = []
-    for base_url, profiles in grouped.items():
-        if not base_url:
-            logger.warning("Junie profile group has no baseUrl — skipping")
-            continue
-        if any(api_key is None for _, _, api_key in profiles):
-            DRIFT_STATS["skipped"] += 1
-            logger.warning(
-                "Junie profile at %s references an unset API key — skipping", base_url
+            for entry in result:
+                reference = entry["reference"]
+                references.append(reference)
+                keys[reference.endpoint] = entry["api_key"]
+                base_urls[reference.endpoint] = entry["base_url"]
+    catalogues = {}
+    for endpoint in sorted({reference.endpoint for reference in references}):
+        api_key = keys[endpoint]
+        if api_key is None:
+            catalogues[endpoint] = Catalogue(
+                False, reason="credential is unset or uses an unsupported expression"
             )
+            DRIFT_STATS["skipped"] += 1
             continue
-        api_key = next((entry[2] for entry in profiles if entry[2]), "")
-        models = get_models(endpoint_models_url(base_url), api_key)
-        if models is None:
-            continue
+        url = endpoint_models_url(base_urls[endpoint])
+        DRIFT_STATS["checked"] += 1
+        try:
+            payload = get_catalogue(url, api_key)
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("data"), list
+            ):
+                raise ValueError("malformed catalogue response")
+            ids = set()
+            for item in payload["data"]:
+                if (
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("id"), str)
+                    or not item["id"]
+                ):
+                    raise ValueError("malformed catalogue response")
+                ids.add(item["id"])
+            catalogues[endpoint] = Catalogue(True, frozenset(ids))
+        except urllib.error.HTTPError as exc:
+            DRIFT_STATS["skipped"] += 1
+            catalogues[endpoint] = Catalogue(
+                False, http_status=exc.code, reason=f"HTTP {exc.code}"
+            )
+        except Exception as exc:
+            DRIFT_STATS["skipped"] += 1
+            reason = (
+                "malformed catalogue response"
+                if isinstance(exc, ValueError)
+                else "catalogue request failed"
+            )
+            catalogues[endpoint] = Catalogue(False, reason=reason)
         # Catalog ID shapes vary by provider (Meridian serves bare ids, Google's
         # OpenAI-compat catalog prefixes with "models/", profiles may carry
         # provider prefixes like "anthropic/..."). Compare on the last segment.
-        catalog_ids = {m.rsplit("/", 1)[-1] for m in models}
-        for path, profile_ids, _ in profiles:
-            normalized = {m.rsplit("/", 1)[-1] for m in profile_ids}
-            for model in sorted(normalized - catalog_ids):
-                violations.append(
-                    f"{path} points to missing model {model} at {base_url}"
-                )
-    return violations
+
+    def normalize(endpoint, wire_id):
+        if "generativelanguage.googleapis.com" in endpoint.namespace:
+            return google_direct_id(wire_id)
+        return wire_id
+
+    comparison = compare_references(references, catalogues, normalize_id=normalize)
+    report = []
+    violations = []
+    for result in comparison.results:
+        item = result.reference
+        catalogue = catalogues.get(item.endpoint)
+        report.append(
+            {
+                "outcome": result.outcome.value,
+                "endpoint_namespace": item.endpoint.namespace,
+                "credential_label": item.endpoint.credential_scope,
+                "reference_path": item.source,
+                "field": item.field,
+                "wire_model_id": item.wire_id,
+                "http_status": catalogue.http_status if catalogue else None,
+                "reason": result.reason or (catalogue.reason if catalogue else None),
+            }
+        )
+        if result.outcome == Outcome.MISSING:
+            violations.append(
+                f"{item.source} points to missing model {item.wire_id} at "
+                f"{base_urls[item.endpoint]}"
+            )
+    return {"results": report, "complete": comparison.complete}, violations
+
+
+def check_junie_profiles() -> list[str]:
+    return audit_junie_profiles()[1]
 
 
 def main() -> int:
@@ -275,6 +420,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--json", action="store_true", help="Print machine-readable results"
+    )
+    parser.add_argument(
+        "--require-complete",
+        action="store_true",
+        help="Exit nonzero when Junie catalogue evidence is incomplete",
     )
     args = parser.parse_args()
     results = {"violations": [], "warnings": []}
@@ -287,7 +437,8 @@ def main() -> int:
         # same live set; deployed Junie profile checks validate concrete IDs.
     except (OSError, json.JSONDecodeError) as exc:
         results["violations"].append(f"Could not read slim config: {exc}")
-    results["violations"].extend(check_junie_profiles())
+    junie_audit, junie_violations = audit_junie_profiles()
+    results["violations"].extend(junie_violations)
     stale, age = is_stale()
     if stale:
         age_text = "never" if age is None else f"{age:.0f}"
@@ -298,6 +449,7 @@ def main() -> int:
         )
         logger.warning(results["warnings"][-1])
     if args.json:
+        results["junie_audit"] = junie_audit
         print(json.dumps(results, indent=2))
     else:
         for violation in results["violations"]:
@@ -308,7 +460,12 @@ def main() -> int:
             DRIFT_STATS["checked"],
             DRIFT_STATS["skipped"],
         )
-    return 1 if results["violations"] else 0
+    return (
+        1
+        if results["violations"]
+        or (args.require_complete and not junie_audit["complete"])
+        else 0
+    )
 
 
 if __name__ == "__main__":
