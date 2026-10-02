@@ -675,7 +675,7 @@ def main():
                 faster_ref = faster_alias
                 explicit_faster = "litellm"
         if provider == "litellm":
-            if explicit_faster and explicit_faster != "litellm":
+            if faster_ref and explicit_faster and explicit_faster != "litellm":
                 logger.error(
                     f"LiteLLM profile {name} cannot use direct faster provider "
                     f"'{explicit_faster}'"
