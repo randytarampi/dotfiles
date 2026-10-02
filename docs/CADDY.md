@@ -73,6 +73,21 @@ and `public` when you intentionally want internet-reachable exposure.
 `CADDY_HTTPS_PORT` defaults to `443` for the root LaunchDaemon. When set to
 `443`, site addresses render as `https://host` (no explicit port).
 
+### LiteLLM administration UI
+
+`DOTFILES_LITELLM_UI_EXPOSED` defaults to `0`. When enabled with
+`CADDY_ACCESS=lan` or `public`, Caddy serves the LiteLLM UI at
+`litellm.<domain>` for each configured `local.*` and `shush.*` domain. The site
+uses the existing Caddy Basic Auth users and keeps the `@not_lan` abort in LAN
+mode. Only `/ui`, `/ui/*` and `/logo/*` are proxied to LiteLLM. `/v1`, `/v1/*`,
+`/key/*` and `/health/*` return 403; other paths are not proxied. In
+`localhost` mode no LiteLLM site is generated.
+
+The DDNS generator adds wildcard A/AAAA record sets for `*.local.*` and
+`*.shush.*` alongside those zone apexes. Managed `/etc/hosts` entries map the
+four `litellm.*` hosts to loopback only while this UI gate is enabled in `lan` or
+`public` mode.
+
 ## Machine-local config files
 
 Create these files on each machine; they are not tracked in the repo:
@@ -147,6 +162,7 @@ manually if you prefer to manage Keychain trust yourself.
 | Variable | Purpose |
 |----------|---------|
 | `CADDY_ACCESS` | Access mode: `localhost`, `lan`, or `public`. |
+| `DOTFILES_LITELLM_UI_EXPOSED` | Optional LiteLLM UI Caddy site; requires `lan` or `public` access mode. |
 | `CADDY_HTTPS_PORT` | HTTPS listen port (default `443`). |
 | `CADDY_ZONES_CONFIG` | Machine-local DDNS zone config (`~/.config/caddy/ddns-zones.json`). |
 | `CADDY_BIND_IP` | Auto: `ipconfig getifaddr en0`, fallback `0.0.0.0`. |

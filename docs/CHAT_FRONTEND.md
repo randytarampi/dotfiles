@@ -371,7 +371,9 @@ explicitly pointed at it): a separate, loopback-only OpenAI-compatible
 
 The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping
 is the canary path: verify one client, then roll back by setting its gate to `0`
-for direct provider routing. LiteLLM is never a Mozart gateway and has no Caddy route.
+for direct provider routing. LiteLLM is never a Mozart gateway. The proxy API stays
+loopback-only; an optional Caddy site can expose only its authenticated UI when
+`DOTFILES_LITELLM_UI_EXPOSED=1` and `CADDY_ACCESS` is `lan` or `public`.
 
 Telemetry is explicitly disabled: upstream defaults `litellm.telemetry=True`
 (anonymous PostHog usage events), and the generated config sets

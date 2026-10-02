@@ -420,6 +420,77 @@ def build_openwebui_site_blocks(
     return blocks
 
 
+def build_litellm_site_block(
+    site_label: str,
+    bind_ip: str,
+    tls_line: str,
+    auth_block: str,
+    port: str,
+    lan_only: bool = False,
+) -> str:
+    """Build a Basic-authenticated, UI-only LiteLLM site."""
+    if "basic_auth @not_omlx" not in auth_block:
+        auth_block = auth_block.replace("basic_auth {", "basic_auth @not_omlx {", 1)
+    lines = [f"{site_label} {{", f"  bind {bind_ip}", f"  {tls_line}", ""]
+    if lan_only:
+        lines.extend(
+            ["  @not_lan not remote_ip private_ranges", "  abort @not_lan", ""]
+        )
+    lines.extend(
+        [
+            "  route {",
+            "    @not_omlx not path /omlx/*",
+            "    @litellm_restricted path /v1 /v1/* /key/* /health/*",
+            "    respond @litellm_restricted 403",
+            "",
+            "    # Caddy auth config",
+        ]
+    )
+    lines.extend(f"  {line}" for line in auth_block.splitlines())
+    lines.extend(
+        [
+            "",
+            "    @litellm_ui path /ui /ui/* /logo/*",
+            "    handle @litellm_ui {",
+            f"      reverse_proxy 127.0.0.1:{port}",
+            "    }",
+            "  }",
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_litellm_site_blocks(
+    domains: list[str],
+    access_mode: str,
+    ui_exposed: bool,
+    bind_ip: str,
+    cert_fullchain: str,
+    cert_key: str,
+    auth_block: str,
+    port: str,
+    https_port: str,
+) -> list[str]:
+    if not ui_exposed or access_mode not in {"lan", "public"}:
+        return []
+    blocks = []
+    for domain in domains:
+        if not domain.startswith(("local.", "shush.")):
+            continue
+        blocks.append(
+            build_litellm_site_block(
+                build_site_label(f"litellm.{domain}", https_port),
+                bind_ip,
+                f"tls {cert_fullchain} {cert_key}",
+                auth_block,
+                port,
+                lan_only=access_mode == "lan",
+            )
+        )
+    return blocks
+
+
 def build_caddyfile(
     domains: list[str],
     access_mode: str,
@@ -510,6 +581,17 @@ def build_caddyfile(
             https_port=https_port,
             public_opt_in=os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1",
         )
+    litellm_sites = build_litellm_site_blocks(
+        domains=domains,
+        access_mode=access_mode,
+        ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+        bind_ip=bind_ip,
+        cert_fullchain=cert_fullchain,
+        cert_key=cert_key,
+        auth_block=external_auth_block,
+        port=os.environ.get("LITELLM_PORT", "4000").strip() or "4000",
+        https_port=https_port,
+    )
 
     template_path = (
         Path(__file__).resolve().parent.parent / "configs" / "caddy" / "Caddyfile.tmpl"
@@ -523,6 +605,7 @@ def build_caddyfile(
         domain_sites="\n\n".join(domain_blocks),
         opencode_sites="\n\n".join(opencode_sites),
         openwebui_sites="\n\n".join(openwebui_sites),
+        litellm_sites="\n\n".join(litellm_sites),
         localhost_block="\n\n".join(localhost_blocks),
     )
 
