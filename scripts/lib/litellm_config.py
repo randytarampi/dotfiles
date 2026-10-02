@@ -14,6 +14,7 @@ from constants import (
     get_ollama_local_base_url,
     is_meridian_configured,
 )
+from discover_models import list_cloud_ollama_models
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS
 from litellm_routing import routing_entries_are_safe
@@ -119,11 +120,14 @@ def compute_model_list(environ=None):
         if provider == "ollama":
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base
-            for model in models:
+            cloud_models = [_model_name(item) for item in list_cloud_ollama_models()]
+            # The regular engine pool excludes cloud stubs, but tolerate mixed
+            # pools and preserve one pair of aliases per installed model.
+            ollama_models = list(dict.fromkeys(models + cloud_models))
+            for model in ollama_models:
                 params = _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
-                entries.extend(
-                    [params, _entry(model, f"ollama/{model}", api_base=base)]
-                )
+                bare = _entry(model, f"ollama/{model}", api_base=base)
+                entries.extend([params, bare])
             continue
         endpoint = local_endpoint_for(provider, "openai")
         if endpoint is None:
