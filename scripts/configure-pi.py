@@ -21,12 +21,17 @@ from constants import (
     get_meridian_base_url,
     get_ollama_local_base_url,
 )
-from discover_models import list_local_ollama_models
+from discover_models import list_cloud_ollama_models, list_local_ollama_models
 from file_utils import backup_file, write_text_file
 from opencode_config import get_available_tiers
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from tier_resolve import get_model_details
 from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
+from ollama_cloud_wire_ids import (
+    installed_cloud_stubs,
+    rewrite_cloud_refs,
+    unresolved_cloud_model_ids,
+)
 import tier_registry
 
 # pi-skills is not an npm package; skills are provisioned through settings["skills"].
@@ -583,6 +588,19 @@ def main():
         }
         if (engine := resolve_engine(provider)) and engine.get("provider_config")
     }
+    cloud_path = ROOT / "configs/opencode/ollama-cloud-models.json"
+    with cloud_path.open(encoding="utf-8") as f:
+        cloud = json.load(f).get("models", {})
+    _, proxy = check_ollama_daemon()
+    installed_cloud_models = list_cloud_ollama_models() if proxy else None
+    if proxy:
+        role_models = rewrite_cloud_refs(role_models, installed_cloud_models)
+        unresolved = unresolved_cloud_model_ids(role_models, installed_cloud_models)
+        for model_id in sorted(unresolved):
+            logger.warning(
+                "No unique installed Ollama Cloud stub for %s; preserving direct ollama-cloud route",
+                model_id,
+            )
     compaction_tokens = _compaction_tokens(local_refs)
 
     orchestrator_model = role_models["orchestrator"]
@@ -669,19 +687,19 @@ def main():
         provider_config = build_local_provider(provider, model_ids)
         if provider_config:
             providers[provider] = provider_config
-    cloud_path = ROOT / "configs/opencode/ollama-cloud-models.json"
-    with cloud_path.open(encoding="utf-8") as f:
-        cloud = json.load(f).get("models", {})
-    cloud_models = [model_entry(k) for k in cloud]
-    running, proxy = check_ollama_daemon()
     if proxy:
-        providers["ollama"]["models"] += [model_entry(k + ":cloud") for k in cloud]
-    else:
+        providers["ollama"]["models"] += [
+            model_entry(stub)
+            for stub in installed_cloud_stubs(cloud, installed_cloud_models)
+        ]
+    direct_cloud_ids = unresolved_cloud_model_ids(role_models, installed_cloud_models)
+    if not proxy or direct_cloud_ids:
+        direct_ids = sorted(direct_cloud_ids) if proxy else list(cloud)
         providers["ollama-cloud"] = {
             "baseUrl": BASE_URLS["ollama-cloud"],
             "api": "openai-completions",
             "apiKey": "$OLLAMA_API_KEY",
-            "models": cloud_models,
+            "models": [model_entry(model_id) for model_id in direct_ids],
         }
     providers["meridian"] = {
         "baseUrl": get_meridian_base_url(),
