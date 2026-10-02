@@ -327,9 +327,18 @@ then configure Copilot Settings → MCP servers as described above.
 > `@main`, while `trusted_ref:` is SHA-anchored to a recent main revision (check
 > `.github/workflows/agent-review.yml` for the current value).
 > The original pin captured `357760a` from the deleted `fix/review-trust-refactor` branch,
-> making every dispatch fail with 0 jobs. Re-run `scripts/onboard-agentic-review.py --repo <path>
-> --ref <sha>` to restore full SHA pinning for both fields. Refresh `trusted_ref` whenever
-> `agentic-review.yml` or `configs/review/` assets change on main.
+> making every dispatch fail with 0 jobs.
+> The dispatcher intentionally uses the reusable workflow at `@main`; `trusted_ref`
+> independently pins the trusted review assets to an immutable commit. Run
+> `make anchor-review-ref` from the local `main` branch to fetch `origin/main` and
+> update only `trusted_ref`. The fetched commit must be reachable from local `main`;
+> fetch/ancestry failures stop without changing the workflow. This deliberately
+> does not require the fetched commit to equal `HEAD`, since the anchoring change
+> itself advances `HEAD`. Use `make anchor-review-ref DRY_RUN=1` to preview; dry-run
+> does not fetch or modify Git refs and fails with guidance if the remote commit is
+> not already available locally. The
+> helper never changes the `uses: ...@main` dispatcher pin; do not use the
+> onboarding generator to update this repository's dispatcher.
 
 ## What this does not cover
 
