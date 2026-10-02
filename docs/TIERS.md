@@ -83,18 +83,18 @@ Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copi
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
-Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator re-anchored to `muse-spark-1.2-contributor-free` after upstream's `x-preview-f-free` left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`):
+Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator and observer use image-tested `muse-spark-1.3-contributor-free` after older free IDs left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`):
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
-| orchestrator | `muse-spark-1.2-contributor-free` | high, temp 0.4 |
+| orchestrator | `muse-spark-1.3-contributor-free` | high, temp 0.4 |
 | oracle | `big-pickle` | max, temp 0.4 |
 | librarian / explorer / fixer | `nemotron-3.5-lightning-free` | low — / high (fixer), temp 0.2 |
-| designer | `mimo-v2.5-free` | medium, temp 0.3 |
-| observer | `mimo-v2.5-free` | low, temp 0.2 |
-| council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free) |
+| designer | `mimo-v2.6-flash-free` | medium, temp 0.3 |
+| observer | `muse-spark-1.3-contributor-free` | low, temp 0.2 |
+| council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free) |
 
-Fallbacks point at OpenAI paid models (gpt-6.1-sol/luna) — free-tier failures degrade to paid capacity. The explicit observer uses `mimo-v2.5-free`; the Muse orchestrator is also multimodal. `muse-spark-1.2-contributor-free` is the Meta **contributor tier**: free because Meta may train on prompts and completions sent through it — avoid pointing confidential work at this preset (documented in [docs/OPENCODE.md](OPENCODE.md)).
+Fallbacks point at OpenAI paid models (gpt-6.1-sol/luna) — free-tier failures degrade to paid capacity. Muse 1.3 serves both orchestrator and observer because a harmless image request succeeded; this reduces role diversity. MiMo 2.6 answered text requests but its image path failed or timed out, so it serves only text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta may train on prompts, screenshots and completions sent through it. The user explicitly accepted that risk for the Zen-free observer; avoid this preset for confidential work (see [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -103,8 +103,10 @@ OpenRouter `:free` catalog. North Mini Code serves exploration and council
 gamma, with provider-deduplicated cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
 
-Its explicit observer is `google/gemini-3.8-flash`, with
-`opencode/mimo-v2.5-free` as the image-capable fallback.
+Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image
+fallback was removed after live image probes failed; local vision alternatives
+are appended when available. It does not send this preset's observer images to
+a contributor-tier model.
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -128,7 +130,7 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | librarian | `gemma4:31b` | low |
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
-| fixer | `deepseek-v4-pro` | high |
+| fixer | `kimi-k2.7-code` | high |
 | observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
 
@@ -136,7 +138,7 @@ Fallbacks are provider-deduplicated and retain one best alternative per role.
 The `pro` observer is `gemma4:31b`; the `pro-plus` observer is
 `openai/gpt-6-luna`, both with low variant. Pro fallbacks are `glm-5.3` for
 orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
-`kimi-k2.7-code` for fixer, and `glm-5.3-flash` for observer.
+`deepseek-v4.1-flash` for fixer, and `glm-5.3-flash` for observer.
 
 ### Pro-Plus Tier (`pro-plus`)
 
@@ -522,7 +524,7 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 ### Replacement procedure (when a referenced ID disappears)
 
 1. Confirm against the live catalog (`opencode models <provider> --refresh`); do not substitute from memory or docs.
-2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (Historical/retired example: `ling-3.0-flash-fin-free` looked like an orchestrator candidate but its 32K output cap and text-only input disqualified it; `muse-spark-1.2-contributor-free`'s multimodality is what allowed dropping the Zen observer.)
+2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. (Historical/retired example: `ling-3.0-flash-fin-free` looked like an orchestrator candidate but its 32K output cap and text-only input disqualified it. MiMo 2.6 advertised image input but failed live image probes; Muse 1.3 accepted a harmless image before becoming the Zen-free observer.)
 3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, tier-registry tests, and the tier docs — the same 6-way sync rule as [docs/MODEL_UPDATES.md](MODEL_UPDATES.md).
 4. Re-run: `make check-slim-invariants test-tier-registry check-model-drift` and a `configure-opencode.py` dry-run for the affected preset.
 5. Record the churn event in [docs/MODEL_UPDATES.md](MODEL_UPDATES.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
@@ -539,7 +541,7 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 
 - Invariant 1 keeps a primary out of its own chain, invariant 3 prevents repeats within a chain, and invariant 7 permits at most one fallback entry per provider. Chains may be empty, in which case static degraded mode is unavailable without local fallbacks; runtime local alternatives are appended by default.
 - Free-tier roles degrade to paid capacity rather than breaking.
-- `muse-spark-1.2-contributor-free` and other contributor tiers may train on prompts/completions upstream — documented in the tier section above and [docs/OPENCODE.md](OPENCODE.md); treat free-tier presets as non-confidential workflows.
+- `muse-spark-1.3-contributor-free` and other contributor tiers may train on prompts, images and completions upstream — documented in the tier section above and [docs/OPENCODE.md](OPENCODE.md); treat contributor presets as non-confidential workflows.
 
 ## Council Synthesizers
 
@@ -552,7 +554,7 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **plus-anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-6.1-sol` (high variant; councillors α sol, β astra, γ luna)
-- **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.5-free)
+- **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free)
 - **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-sante:free)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
@@ -589,7 +591,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-fable-5-1` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
 | `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
-| `deepseek-v4-pro` | standard | `max` | Catalog-only legacy model; no active tier role |
+| `deepseek-v4-pro` | standard | `max` | Installed Cloud stub remains managed, but the bare direct LiteLLM alias is absent; no active tier role uses it. |
 | `gpt-5.6-terra` | retired | — | Absent from OpenAI's live catalog since 2026-10-01; still served by OpenCode Zen |
 | `gpt-6.1-sol` | standard | `high` | Current orchestrator, oracle and council anchor; gpt-5.6-sol remains a retained legacy fallback |
 | `gpt-6-luna` | standard | `high` | Primary efficient/high-volume generation; librarian/explorer use low, fixer uses high; gpt-5.6-luna remains a retained legacy fallback |
@@ -601,7 +603,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `glm-5.3` | standard | max | 753B MoE flagship, 1M context, text-only; strictly dominates glm-5.2 on all 13 shared benchmarks; leads nemotron-3-ultra on GDPval-AA v2 (1769 vs 1448, NVIDIA vendor-reported); orchestrator/oracle fallbacks use max |
 | `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
-| `kimi-k2.7-code` | standard | none | Active fixer fallback in the refreshed `_tiers` (all three cloud presets); mandatory thinking (cannot disable) |
+| `kimi-k2.7-code` | standard | none | Active pro-tier fixer and fallback in the other cloud presets; mandatory thinking (cannot disable) |
 | `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
 | `gpt-6-astra` | standard | — | Flagship degraded-fallback head for plus orchestrator/oracle chains; not a primary anchor; no model-specific variant policy (inherits each role's configured variant) |
 | `deepseek-v4.1-flash` | standard | — | Active Ollama Cloud council/fallback model |

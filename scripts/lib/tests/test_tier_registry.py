@@ -126,7 +126,7 @@ class TierRegistryTests(unittest.TestCase):
             ):
                 config = configure_voice.get_voice_config(tier)
                 expected_model = (
-                    "muse-spark-1.2-contributor-free"
+                    "muse-spark-1.3-contributor-free"
                     if tier == "omo-slim-opencode-zen-free"
                     else "gpt-6-luna"
                 )
@@ -242,12 +242,36 @@ class TierRegistryTests(unittest.TestCase):
         preset = data["presets"]["omo-slim-opencode-zen-free"]
         self.assertEqual(
             preset["orchestrator"]["model"],
-            "opencode/muse-spark-1.2-contributor-free",
+            "opencode/muse-spark-1.3-contributor-free",
         )
-        self.assertEqual(preset["observer"]["model"], "opencode/mimo-v2.5-free")
+        self.assertEqual(
+            preset["observer"]["model"], "opencode/muse-spark-1.3-contributor-free"
+        )
+        self.assertEqual(preset["designer"]["model"], "opencode/mimo-v2.6-flash-free")
+        self.assertEqual(
+            data["_tiers"]["omo-slim-opencode-zen-free"]["council"]["presets"][
+                "omo-slim-opencode-zen-free"
+            ]["gamma"]["model"],
+            "opencode/mimo-v2.6-flash-free",
+        )
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["observer"],
             ["openai/gpt-5.6-luna"],
+        )
+
+    def test_catalogue_audit_keeps_free_observer_images_off_contributor_models(self):
+        data = registry()
+        self.assertEqual(
+            data["presets"]["pro"]["fixer"]["model"], "ollama-cloud/kimi-k2.7-code"
+        )
+        self.assertEqual(
+            data["_tiers"]["pro"]["fallback"]["fixer"],
+            ["ollama-cloud/deepseek-v4.1-flash"],
+        )
+        self.assertEqual(data["_tiers"]["free"]["fallback"]["observer"], [])
+        self.assertEqual(
+            data["_tiers"]["free"]["fallback"]["fixer"],
+            ["opencode/mimo-v2.6-flash-free"],
         )
 
     def test_provider_dedupe_flags_duplicate_provider(self):

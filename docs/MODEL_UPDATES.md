@@ -163,3 +163,9 @@ Added `claude-sonnet-5-5`, `claude-opus-5-5`, `gpt-6-luna`, and `gpt-6.1-sol` to
 - Removed obsolete `gpt-6-sol` entries from the OpenAI allowlist and Junie direct/LiteLLM groups. The provider catalogue still lists the model; this is policy-driven active consolidation, not provider retirement.
 - OpenCode Zen lists `gpt-6-sol` and `gpt-6.1-sol`, but minimal OpenCode inference to both returned “Model access is disabled.” Active Zen fallbacks therefore use verified `big-pickle`, not either Sol model.
 - Direct OpenAI inference remains unverified because `OPENAI_API_KEY` is absent. Catalogue presence does not establish entitlement.
+
+## 2026-10-02 — Provider-exact active model repair
+
+- The pro fixer previously requested `ollama-cloud/deepseek-v4-pro`, which the authenticated LiteLLM catalogue does not expose as that exact ID. Its dated `:0813` alias completed a test request, but the managed local Cloud stub still uses `deepseek-v4-pro:cloud`; rather than invent a variant-to-stub mapping, the pro fixer now uses verified `ollama-cloud/kimi-k2.7-code` with verified `ollama-cloud/deepseek-v4.1-flash` as fallback.
+- Refreshed Zen listings no longer contain `muse-spark-1.2-contributor-free` or `mimo-v2.5-free`. `muse-spark-1.3-contributor-free` succeeded on text and a harmless 256-pixel red-square image; the user accepted contributor-tier image training risk **only** for the Zen-free observer. `mimo-v2.6-flash-free` answered text, but its image path failed or timed out and is used only for text-oriented designer/council/fixer fallbacks.
+- The separate cross-provider `free` preset keeps Google as its observer. Its broken Zen image fallback was removed instead of extending contributor-tier screenshot exposure without permission; local vision alternatives remain available when installed. Catalogue presence and a metadata image flag alone do not establish working image inference.

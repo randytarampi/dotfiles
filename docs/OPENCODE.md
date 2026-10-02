@@ -16,9 +16,9 @@ with local deviations noted in [docs/TIERS.md](TIERS.md):
 
 | Preset | Providers | Observer | Fallback policy |
 |--------|-----------|----------|------------------|
-| `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | Explicit (`openai/gpt-5.6-luna`) | OpenCode Zen, including paid GPT-5.6-Terra fallback |
-| `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Explicit (`openai/gpt-5.6-luna`) | OpenCode Zen, including paid GPT-5.6-Terra fallback; Copilot designer falls back to OpenCode Zen Gemini |
-| `omo-slim-opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Explicit (`opencode/mimo-v2.5-free`) | OpenAI GPT-5.6 models |
+| `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | Explicit (`openai/gpt-6-luna`) | OpenCode Zen (`big-pickle` orchestrator, `nemotron-3.5-lightning-free` other roles) |
+| `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Explicit (`openai/gpt-6-luna`) | OpenCode Zen; Copilot designer falls back to Zen Gemini |
+| `omo-slim-opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Explicit (`opencode/muse-spark-1.3-contributor-free`) | OpenAI GPT-6.1 Sol / GPT-5.6 Luna |
 
 All presets define an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer; the hook strips them from the main conversation
@@ -29,11 +29,13 @@ alternative is `/connect`, which stores authentication in OpenCode's
 `auth.json`; a key is not required for the generated provider block. GitHub
 Copilot authentication uses the `/connect` GitHub device flow.
 
-The Zen free preset uses the currently listed `muse-spark-1.2-contributor-free`
-for its multimodal orchestrator and `nemotron-3.5-lightning-free` for fixer;
-these replace upstream names that are not present in the local Zen catalog.
-The contributor-free tier means the upstream provider (Meta) may train on
-prompts and completions, so use caution for privacy-sensitive work. Free-tier
+The Zen free preset uses the currently listed `muse-spark-1.3-contributor-free`
+for both orchestrator and image-tested observer, `mimo-v2.6-flash-free` for
+text-oriented designer work, and `nemotron-3.5-lightning-free` for fixer.
+MiMo's image path failed or timed out in a live probe, despite catalogue
+metadata advertising image input; do not use it as the observer. The
+contributor-free tier means Meta may train on prompts, images and completions;
+do not use this preset for confidential work. Free-tier
 IDs churn: `x-preview-f-free` and `hy3-free` were removed between 2026-08 and
 2026-09.
 
