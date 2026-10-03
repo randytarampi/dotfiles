@@ -216,6 +216,55 @@ def test_malformed_endpoint_namespace_fails_closed_for_google_normalization():
     assert DRIFT._normalize_junie_wire_id(endpoint, wire_id) == wire_id
 
 
+@pytest.mark.parametrize(
+    "base_url", ["http://[broken/v1", "http://127.0.0.1:broken/v1"]
+)
+def test_malformed_profile_endpoint_is_unknown_without_fetch_and_preserves_other_missing(
+    isolated_home_path, monkeypatch, base_url
+):
+    write_profile(
+        isolated_home_path,
+        "mixed-malformed-url.json",
+        {
+            "broken": {"baseUrl": base_url, "apiKey": "dummy-malformed-key"},
+            "good": {
+                "baseUrl": "https://models.example/v1",
+                "apiKey": "dummy-good-key",
+            },
+        },
+        {
+            "bad-endpoint": {
+                "provider": "broken",
+                "primaryModel": "provider/unsafe",
+            },
+            "known-missing": {
+                "provider": "good",
+                "primaryModel": "provider/missing",
+            },
+        },
+    )
+    calls = []
+
+    def fetch(url, key):
+        calls.append((url, key))
+        return {"data": []}
+
+    monkeypatch.setattr(DRIFT, "get_catalogue", fetch)
+    audit, violations = DRIFT.audit_junie_profiles()
+    by_id = {item["wire_model_id"]: item for item in audit["results"]}
+    assert audit["complete"] is False
+    assert by_id["provider/unsafe"]["outcome"] == "UNKNOWN"
+    assert by_id["provider/unsafe"]["endpoint_namespace"] == "invalid-endpoint"
+    assert by_id["provider/unsafe"]["credential_label"].startswith("inline-profile:")
+    assert by_id["provider/missing"]["outcome"] == "MISSING"
+    assert calls == [("https://models.example/v1/models", "dummy-good-key")]
+    assert any("provider/missing" in violation for violation in violations)
+    serialized = json.dumps(audit)
+    assert base_url not in serialized
+    assert "dummy-malformed-key" not in serialized
+    assert "dummy-good-key" not in serialized
+
+
 @pytest.mark.parametrize("payload", [None, [], {"data": [{}]}, {"not_data": []}])
 def test_malformed_catalogues_unknown_but_empty_data_is_missing(
     isolated_home_path, monkeypatch, payload
