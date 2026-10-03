@@ -12,6 +12,8 @@ These policies apply to work in every repository.
 - For service or model-generator changes, run the generator twice; check service health and generated state, including keys, and confirm the second run is idempotent. A successful first run alone can hide failures such as an HTTP 400 from an invalid key list.
 - Tests for orchestration or service helpers must isolate `HOME` and `PATH` and stub real service/process commands such as `launchctl`, `systemctl` and `pkill`. After full verification, confirm live services survived; don't assume verification is non-mutating.
 - Do not sleep-poll CI or specialist lanes; dispatch feedback-addressing work while checks run in the background and reconcile results when they land.
+- At implementation-lane start, confirm the base/worktree state, available runtime and declared dependencies; agree on a red-before/green-after acceptance check, its validation owner, and a checkpoint/stop scope. Do not begin edits when a required runtime is unavailable.
+- If a check blocks, inspect persisted files and process/service state first, attempt bounded recovery inside the agreed scope, then report the blocker to the validation owner. Do not silently weaken acceptance criteria or expand into adjacent work.
 - Stage explicit file paths, never `git add -A`: tooling temp files (coverage fragments, caches) land in untracked state and get swept into wholesale staging.
 - Prefer REST (`gh api repos/OWNER/REPO/...`) for label/metadata operations; `gh pr` GraphQL subcommands may fail on tokens without `read:org`.
 
