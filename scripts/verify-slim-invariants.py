@@ -31,6 +31,7 @@ Exit codes:
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +46,17 @@ MODEL_ALLOWLIST_PATHS = {
     "google": REPO_ROOT / "configs" / "opencode" / "google-models.json",
     "openrouter": REPO_ROOT / "configs" / "opencode" / "openrouter-models.json",
 }
+SUPPORTED_JUNIE_PROVIDERS = frozenset(MODEL_ALLOWLIST_PATHS) | {
+    "litellm",
+    "meridian",
+    "ollama",
+    "omlx",
+}
+LITELLM_MODEL_PREFIXES = (
+    ("google/models/", "google"),
+    ("openrouter/", "openrouter"),
+    ("openai/", "openai"),
+)
 
 
 def _model(cfg):
@@ -128,91 +140,60 @@ def _model_allowlist_violations(data):
     return violations
 
 
-def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=None):
-    """Check managed Junie and Codex model references against curated catalogues."""
-    allowlists = allowlists if allowlists is not None else _model_allowlists()
-    if junie is None:
-        junie_path = REPO_ROOT / "configs" / "junie" / "model-groups.json"
-        with open(junie_path, encoding="utf-8") as f:
-            junie = json.load(f)
-    violations = []
+def _canonical_model_reference(provider, model):
+    """Normalize direct/proxy Junie wire IDs without collapsing provider scope."""
+    if provider == "meridian":
+        return "meridian", model
+    if provider == "litellm":
+        for prefix, catalogue in LITELLM_MODEL_PREFIXES:
+            if model.startswith(prefix):
+                return catalogue, model[len(prefix) :]
+        return None
+    return provider, model
 
-    def require(provider, model, path):
-        if model not in allowlists.get(provider, set()):
-            violations.append(
-                f"{path} = {model!r} is not in {provider} model allowlist"
-            )
 
-    groups = junie.get("groups", {})
-    supported_providers = set(MODEL_ALLOWLIST_PATHS) | {
-        "litellm",
-        "meridian",
-        "ollama",
-        "omlx",
-    }
-
-    def canonical(provider, model):
-        if provider == "meridian":
-            return ("meridian", model)
-        if provider == "litellm":
-            for prefix, catalogue in (
-                ("google/models/", "google"),
-                ("openrouter/", "openrouter"),
-                ("openai/", "openai"),
-            ):
-                if model.startswith(prefix):
-                    return catalogue, model[len(prefix) :]
-            return None
-        return provider, model
-
-    for name, group in groups.items():
-        if name.startswith("litellm-") and group.get("provider") == "litellm":
-            faster_provider = group.get("fasterProvider")
-            if faster_provider not in (None, "litellm"):
-                violations.append(
-                    f"configs/junie/model-groups.json groups.{name}.fasterProvider "
-                    f"must be 'litellm' or absent, not {faster_provider!r}"
+def _check_junie_model_reference(name, group, field, allowlists, violations):
+    model = group.get(field)
+    if not model:
+        return
+    provider = group.get("provider")
+    if field == "fasterModel":
+        provider = group.get("fasterProvider", provider)
+    path = f"configs/junie/model-groups.json groups.{name}.{field}"
+    if provider not in SUPPORTED_JUNIE_PROVIDERS:
+        violations.append(f"{path} references unknown provider {provider!r}")
+        return
+    if provider == "meridian":
+        # Bare Claude aliases are Meridian API identifiers, not Anthropic IDs.
+        return
+    if provider == "litellm":
+        for prefix, catalogue in LITELLM_MODEL_PREFIXES:
+            if model.startswith(prefix):
+                _require_allowlisted_model(
+                    catalogue, model[len(prefix) :], path, allowlists, violations
                 )
-        for field in ("primaryModel", "fasterModel"):
-            model = group.get(field)
-            if not model:
-                continue
-            provider = (
-                group.get("provider")
-                if field == "primaryModel"
-                else group.get("fasterProvider", group.get("provider"))
-            )
-            path = f"configs/junie/model-groups.json groups.{name}.{field}"
-            if provider not in supported_providers:
-                violations.append(f"{path} references unknown provider {provider!r}")
-                continue
-            if provider == "meridian":
-                # Bare Claude aliases are Meridian API identifiers, not Anthropic IDs.
-                continue
-            if provider == "litellm":
-                for prefix, catalogue in (
-                    ("google/models/", "google"),
-                    ("openrouter/", "openrouter"),
-                    ("openai/", "openai"),
-                ):
-                    if model.startswith(prefix):
-                        require(catalogue, model[len(prefix) :], path)
-                        break
-                else:
-                    violations.append(
-                        f"{path} = {model!r} has no supported LiteLLM provider prefix"
-                    )
-                continue
-            if provider in (
-                "google",
-                "openai",
-                "openrouter",
-                "ollama-cloud",
-                "github-copilot",
-                "opencode",
-            ):
-                require(provider, model, path)
+                return
+        violations.append(
+            f"{path} = {model!r} has no supported LiteLLM provider prefix"
+        )
+        return
+    if provider in {
+        "google",
+        "openai",
+        "openrouter",
+        "ollama-cloud",
+        "github-copilot",
+        "opencode",
+    }:
+        _require_allowlisted_model(provider, model, path, allowlists, violations)
 
+
+def _require_allowlisted_model(provider, model, path, allowlists, violations):
+    if model not in allowlists.get(provider, set()):
+        violations.append(f"{path} = {model!r} is not in {provider} model allowlist")
+
+
+def _check_litellm_group_pairings(groups, violations):
     for name, proxy_group in groups.items():
         if not name.startswith("litellm-"):
             continue
@@ -226,44 +207,71 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
         for field in ("primaryModel", "fasterModel"):
             direct_model = direct_group.get(field)
             proxy_model = proxy_group.get(field)
-            if bool(direct_model) != bool(proxy_model):
+            if not direct_model and not proxy_model:
+                continue
+            if not direct_model or not proxy_model:
                 violations.append(
                     f"groups.{name}.{field} and groups.{direct_name}.{field} are not paired"
                 )
                 continue
-            if direct_model and canonical(
-                (
-                    direct_group.get("fasterProvider", direct_group.get("provider"))
-                    if field == "fasterModel"
-                    else direct_group.get("provider")
-                ),
-                direct_model,
-            ) != canonical("litellm", proxy_model):
+            direct_provider = direct_group.get("provider")
+            if field == "fasterModel":
+                direct_provider = direct_group.get("fasterProvider", direct_provider)
+            if _canonical_model_reference(
+                direct_provider, direct_model
+            ) != _canonical_model_reference("litellm", proxy_model):
                 violations.append(
                     f"groups.{name}.{field} = {proxy_model!r} does not match direct group {direct_name!r} {field} = {direct_model!r}"
                 )
 
+
+def _check_codex_default_model(source, allowlists, violations):
+    match = re.search(
+        r"^DEFAULT_OLLAMA_CLOUD_MODEL = ['\"]([^'\"]+)", source, re.MULTILINE
+    )
+    if not match:
+        violations.append(
+            "scripts/configure-codex.py has no DEFAULT_OLLAMA_CLOUD_MODEL"
+        )
+        return
+    _require_allowlisted_model(
+        "ollama-cloud",
+        match.group(1),
+        "scripts/configure-codex.py DEFAULT_OLLAMA_CLOUD_MODEL",
+        allowlists,
+        violations,
+    )
+
+
+def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=None):
+    """Check managed Junie and Codex model references against curated catalogues."""
+    allowlists = allowlists if allowlists is not None else _model_allowlists()
+    if junie is None:
+        junie_path = REPO_ROOT / "configs" / "junie" / "model-groups.json"
+        with open(junie_path, encoding="utf-8") as f:
+            junie = json.load(f)
+    violations = []
+    groups = junie.get("groups", {})
+
+    for name, group in groups.items():
+        if name.startswith("litellm-") and group.get("provider") == "litellm":
+            faster_provider = group.get("fasterProvider")
+            if faster_provider not in (None, "litellm"):
+                violations.append(
+                    f"configs/junie/model-groups.json groups.{name}.fasterProvider "
+                    f"must be 'litellm' or absent, not {faster_provider!r}"
+                )
+        for field in ("primaryModel", "fasterModel"):
+            _check_junie_model_reference(name, group, field, allowlists, violations)
+
+    _check_litellm_group_pairings(groups, violations)
     codex_path = REPO_ROOT / "scripts" / "configure-codex.py"
     source = (
         codex_source
         if codex_source is not None
         else codex_path.read_text(encoding="utf-8")
     )
-    import re
-
-    match = re.search(
-        r"^DEFAULT_OLLAMA_CLOUD_MODEL = [\'\"]([^\'\"]+)", source, re.MULTILINE
-    )
-    if not match:
-        violations.append(
-            "scripts/configure-codex.py has no DEFAULT_OLLAMA_CLOUD_MODEL"
-        )
-    else:
-        require(
-            "ollama-cloud",
-            match.group(1),
-            "scripts/configure-codex.py DEFAULT_OLLAMA_CLOUD_MODEL",
-        )
+    _check_codex_default_model(source, allowlists, violations)
     return violations
 
 
