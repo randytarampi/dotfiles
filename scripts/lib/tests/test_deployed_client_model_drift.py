@@ -10,6 +10,9 @@ SPEC = importlib.util.spec_from_file_location("model_drift", SCRIPT)
 drift = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(drift)
 
+FAKE_PI_KEY = "fake-" + "key-never-reported"
+FAKE_OPENCODE_KEY = "fake-" + "opencode-key"
+
 
 def client_home(tmp_path, monkeypatch, client="pi"):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -18,7 +21,7 @@ def client_home(tmp_path, monkeypatch, client="pi"):
     keys = tmp_path / ".local/share/litellm/clients"
     keys.mkdir(parents=True)
     key = keys / f"{client}.key"
-    key.write_text("fake-key-never-reported")
+    key.write_text(FAKE_PI_KEY)
     key.chmod(0o600)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("LITELLM_PORT", "4000")
@@ -78,12 +81,12 @@ def test_scoped_same_url_and_cross_provider_collision(tmp_path, monkeypatch):
     )
     report, violations = drift.audit_client_providers()
     assert len(calls) == 2
-    assert all(call[1] == "fake-key-never-reported" for call in calls)
+    assert all(call[1] == FAKE_PI_KEY for call in calls)
     assert [
         entry["outcome"] for entry in report["results"] if entry.get("wire_model_id")
     ] == ["MISSING", "MISSING"]
     assert len(violations) == 2
-    assert "fake-key-never-reported" not in json.dumps(report)
+    assert FAKE_PI_KEY not in json.dumps(report)
 
 
 def test_known_missing_survives_auth_unknown(tmp_path, monkeypatch):
@@ -230,7 +233,7 @@ def test_pi_role_override_inventory_mismatch(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(drift, "get_catalogue", lambda *_: {"data": [{"id": "listed"}]})
-    report, violations = drift.audit_client_providers()
+    report, _ = drift.audit_client_providers()
     assert any("MISSING" in item["outcome"] for item in report["results"])
     assert any(
         item["field"] == "subagents.agentOverrides.coder.model"
@@ -247,7 +250,7 @@ def test_opencode_provider_key_alias_and_disabled_provider(tmp_path, monkeypatch
     key_dir = tmp_path / ".local/share/litellm/clients"
     key_dir.mkdir(parents=True)
     key = key_dir / "opencode.key"
-    key.write_text("fake-opencode-key")
+    key.write_text(FAKE_OPENCODE_KEY)
     key.chmod(0o600)
     monkeypatch.setattr(drift, "_configured_litellm_port", lambda: 4000)
     config = tmp_path / ".config/opencode/opencode.json"
@@ -277,7 +280,7 @@ def test_opencode_provider_key_alias_and_disabled_provider(tmp_path, monkeypatch
         "MATCH",
         "SKIPPED_INACTIVE",
     }
-    assert "fake-opencode-key" not in json.dumps(report)
+    assert FAKE_OPENCODE_KEY not in json.dumps(report)
 
 
 @pytest.mark.parametrize("bad_first", [True, False])
@@ -332,7 +335,7 @@ def test_pi_settings_selections_use_matching_provider_and_strip_one_prefix(
         "get_catalogue",
         lambda *_: {"data": [{"id": "ollama/inner/name"}, {"id": "omlx/inner/name"}]},
     )
-    report, violations = drift.audit_client_providers()
+    report, _ = drift.audit_client_providers()
     assert any(
         item["field"] == "subagents.agentOverrides.coder.model"
         and item["outcome"] == "MISSING"
