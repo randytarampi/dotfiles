@@ -33,7 +33,7 @@ from model_references import (  # noqa: E402  # sys.path bootstrap above is inte
     ModelReference,
     Outcome,
     compare_references,
-    google_direct_id,
+    google_direct_id,  # noqa: E402  # imported after scripts/lib path bootstrap.
 )
 
 REPO_ROOT = SCRIPT_DIR.parent
