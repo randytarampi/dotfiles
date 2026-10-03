@@ -21,48 +21,21 @@ from poetry_readiness import (  # noqa: E402 -- import follows intentional lib b
 )
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Check Poetry tooling readiness in an existing dotfiles worktree",
-        allow_abbrev=False,
-    )
-    parser.add_argument("worktree", help="Existing dotfiles worktree path")
-    parser.add_argument(
-        "--expected-base", help="Full local base commit SHA required as an ancestor"
-    )
-    parser.add_argument(
-        "--expected-branch", help="Require this checked-out branch name"
-    )
-    parser.add_argument(
-        "--allow-dirty", action="store_true", help="Report but allow existing changes"
-    )
-    parser.add_argument(
-        "--install", action="store_true", help="Install Poetry tooling and test groups"
-    )
-    add_common_args(parser)
-    args = parser.parse_args(argv)
-    if args.expected_base and not re.fullmatch(
-        r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", args.expected_base
-    ):
-        parser.error("--expected-base must be a full hexadecimal commit SHA")
-
-    path = Path(args.worktree).expanduser().resolve()
+def _prepare_worktree(path, args):
     if not path.is_dir():
-        print("Not ready: worktree path does not exist or is not a directory.")
-        return 1
+        return None, "Not ready: worktree path does not exist or is not a directory."
     git_executable = shutil.which("git")
     if git_executable is None:
-        print("Not ready: Git executable is unavailable on PATH.")
-        return 1
+        return None, "Not ready: Git executable is unavailable on PATH."
     root_error = validate_git_root(path, git_executable)
     if root_error:
-        print(f"Not ready: {root_error}")
-        return 1
+        return None, f"Not ready: {root_error}"
     project_error, requires_python = validate_project(path, git_executable)
     if project_error:
-        print("Not ready: Git checkout is not the dotfiles project.")
-        print(project_error)
-        return 1
+        return (
+            None,
+            "Not ready: Git checkout is not the dotfiles project.\n" + project_error,
+        )
 
     state, state_error = inspect_git_state(
         path,
@@ -72,23 +45,18 @@ def main(argv=None):
         args.allow_dirty,
     )
     if state is None:
-        print(f"Not ready: {state_error}")
-        return 1
+        return None, f"Not ready: {state_error}"
     print(f"Worktree: {path}\nBranch: {state['branch']}\nHEAD: {state['commit']}")
     dirty_paths = state["dirty_paths"]
     print("Existing changes: " + (", ".join(dirty_paths) if dirty_paths else "none"))
     if state_error:
-        print(f"Not ready: {state_error}")
-        return 1
+        return None, f"Not ready: {state_error}"
     if state["base"]:
         print(f"Expected base: {state['base']} (ancestor verified locally)")
+    return requires_python, None
 
-    pin_path = path / ".python-version"
-    requested_pin = (
-        pin_path.read_text(encoding="utf-8").strip()
-        if pin_path.is_file()
-        else "unspecified"
-    )
+
+def _check_python_environment(path, requested_pin, requires_python, args):
     print(f"Requested Python pin: {requested_pin}")
     poetry_executable = shutil.which("poetry")
     if poetry_executable is None:
@@ -134,6 +102,45 @@ def main(argv=None):
         return 1
     print("Ready: Git worktree and Poetry tooling checks passed.")
     return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Check Poetry tooling readiness in an existing dotfiles worktree",
+        allow_abbrev=False,
+    )
+    parser.add_argument("worktree", help="Existing dotfiles worktree path")
+    parser.add_argument(
+        "--expected-base", help="Full local base commit SHA required as an ancestor"
+    )
+    parser.add_argument(
+        "--expected-branch", help="Require this checked-out branch name"
+    )
+    parser.add_argument(
+        "--allow-dirty", action="store_true", help="Report but allow existing changes"
+    )
+    parser.add_argument(
+        "--install", action="store_true", help="Install Poetry tooling and test groups"
+    )
+    add_common_args(parser)
+    args = parser.parse_args(argv)
+    if args.expected_base and not re.fullmatch(
+        r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", args.expected_base
+    ):
+        parser.error("--expected-base must be a full hexadecimal commit SHA")
+
+    path = Path(args.worktree).expanduser().resolve()
+    requires_python, worktree_error = _prepare_worktree(path, args)
+    if worktree_error:
+        print(worktree_error)
+        return 1
+    pin_path = path / ".python-version"
+    requested_pin = (
+        pin_path.read_text(encoding="utf-8").strip()
+        if pin_path.is_file()
+        else "unspecified"
+    )
+    return _check_python_environment(path, requested_pin, requires_python, args)
 
 
 if __name__ == "__main__":
