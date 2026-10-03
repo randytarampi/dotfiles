@@ -36,6 +36,8 @@ NON_TRACKED_SCRIPTS = {
     "scripts/verify-iterm2.py",  # Makefile-only verification tool
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
+    "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
+    "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/check-model-drift.py",  # Makefile-only verification tool
     "scripts/check-heredocs.py",  # Makefile-only lint tool (heredoc validation)
     "scripts/anchor-review-ref.py",  # Makefile-only workflow maintenance tool
