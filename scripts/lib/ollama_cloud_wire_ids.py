@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+CLOUD_MODEL_PREFIX = "ollama-cloud/"
+
 
 def installed_cloud_stub(model_id: str, installed_models: list | None) -> str | None:
     """Return the unique installed cloud stub for a model ID, if unambiguous.
@@ -41,7 +43,7 @@ def installed_cloud_stubs(model_ids, installed_models: list | None) -> list[str]
 
 def proxied_cloud_ref(model_ref: str, installed_models: list | None) -> str:
     """Rewrite a direct Ollama Cloud ref only when its exact stub is installed."""
-    prefix = "ollama-cloud/"
+    prefix = CLOUD_MODEL_PREFIX
     if not isinstance(model_ref, str) or not model_ref.startswith(prefix):
         return model_ref
     model_id = model_ref[len(prefix) :]
@@ -66,7 +68,7 @@ def rewrite_cloud_refs(value, installed_models: list | None):
 def unresolved_cloud_model_ids(value, installed_models: list | None) -> set[str]:
     """Return direct cloud IDs lacking a unique installed local stub."""
     if isinstance(value, str):
-        prefix = "ollama-cloud/"
+        prefix = CLOUD_MODEL_PREFIX
         if value.startswith(prefix):
             model_id = value[len(prefix) :]
             return (
@@ -109,7 +111,7 @@ def direct_cloud_route_allowed(client: str) -> bool:
 
 def fail_closed_cloud_refs(value, unavailable_model_ids: set[str]):
     """Replace unresolved direct cloud references with an explicit no-model ID."""
-    prefix = "ollama-cloud/"
+    prefix = CLOUD_MODEL_PREFIX
     if isinstance(value, str) and value.startswith(prefix):
         if value[len(prefix) :] in unavailable_model_ids:
             return "ollama/no-model-available"
@@ -126,7 +128,7 @@ def fail_closed_cloud_refs(value, unavailable_model_ids: set[str]):
 
 def fail_closed_all_cloud_refs(value):
     """Replace all direct Ollama Cloud refs when direct routing is forbidden."""
-    if isinstance(value, str) and value.startswith("ollama-cloud/"):
+    if isinstance(value, str) and value.startswith(CLOUD_MODEL_PREFIX):
         return "ollama/no-model-available"
     if isinstance(value, list):
         return [fail_closed_all_cloud_refs(item) for item in value]
