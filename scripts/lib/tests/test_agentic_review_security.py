@@ -52,10 +52,7 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
         assert "pull-requests: write" not in section
         assert "issues: write" not in section
         assert "Upload " in section
-        assert (
-            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-            in section
-        )
+        assert "actions/upload-artifact@v7" in section
         assert "gh api" not in section
         assert "gh pr comment" not in section
     junie = re.search(r"(?ms)^  junie:$(.*?)(?=^  \w)", workflow).group(1)
@@ -72,9 +69,7 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
         "outputs:\n      review: ${{ steps.gemini_review.outputs.review }}" in workflow
     )
     notify = workflow.split("  notify:\n", 1)[1]
-    assert (
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in notify
-    )
+    assert "actions/download-artifact@v8" in notify
     assert 'review_file="reviews/${agent}-review.md"' in notify
     assert '$(<"${review_file}")' in notify
     assert (
@@ -106,7 +101,7 @@ def test_dispatcher_is_read_only_and_fix_lane_is_manual_and_allowlisted():
     assert "160000" in fix
     assert "environment: agentic-review-fix" in fix
     assert "needs: generate" in fix
-    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in fix
+    assert "actions/upload-artifact@v7" in fix
     assert "gh pr create --draft" in fix
     assert "trusted_ref" in copilot
     assert 'trusted_sha="b144' not in copilot
