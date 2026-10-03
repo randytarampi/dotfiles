@@ -38,7 +38,16 @@ jobs:
           rm -rf "${trusted_root}"
           mkdir -p "${trusted_root}"
           git -C "${trusted_root}" init --quiet
-          git -C "${trusted_root}" -c http.extraheader="Authorization: Bearer ${GITHUB_TOKEN}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
+          git_auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\r\n')"
+          printf '::add-mask::%s\n' "${git_auth}"
+          unset GITHUB_TOKEN GIT_CONFIG_PARAMETERS
+          GIT_CONFIG_NOSYSTEM=1 \
+            GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="Authorization: Basic ${git_auth}" \
+            GIT_TERMINAL_PROMPT=0 \
+            git -C "${trusted_root}" fetch --depth=1 https://github.com/randytarampi/dotfiles.git "${trusted_sha}"
           git -C "${trusted_root}" checkout --quiet --detach FETCH_HEAD
           test "$(git -C "${trusted_root}" rev-parse HEAD)" = "${trusted_sha}"
           python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
