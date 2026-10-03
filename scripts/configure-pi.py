@@ -8,27 +8,43 @@ import stat
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
-import logger
-from env import load_env
-from cli_helpers import (
+import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
+from env import load_env  # noqa: E402 -- local import follows bootstrap.
+from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
     add_common_args,
     add_model_override_args,
     add_min_reasoning_embedding_arg,
 )
-from constants import (
+from constants import (  # noqa: E402 -- local import follows bootstrap.
     BASE_URLS,
     check_ollama_daemon,
-    check_omlx_daemon,
     get_meridian_base_url,
     get_ollama_local_base_url,
 )
-from discover_models import list_cloud_ollama_models, list_local_ollama_models
-from file_utils import backup_file, write_text_file
-from opencode_config import get_available_tiers
-from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
-from tier_resolve import get_model_details
-from local_engines import engine_gate_active, local_endpoint_for, resolve_engine
-from ollama_cloud_wire_ids import (
+from discover_models import (  # noqa: E402 -- local import follows bootstrap.
+    list_cloud_ollama_models,
+    list_local_ollama_models,
+)
+from file_utils import (  # noqa: E402 -- local import follows bootstrap.
+    backup_file,
+    write_text_file,
+)
+from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
+    get_available_tiers,
+)
+from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
+    PROVIDER_ENDPOINTS,
+    provider_models,
+)
+from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
+    get_model_details,
+)
+from local_engines import (  # noqa: E402 -- local import follows bootstrap.
+    engine_gate_active,
+    local_endpoint_for,
+    resolve_engine,
+)
+from ollama_cloud_wire_ids import (  # noqa: E402 -- local import follows bootstrap.
     direct_cloud_route_allowed,
     fail_closed_cloud_refs,
     installed_cloud_stubs,
@@ -36,8 +52,10 @@ from ollama_cloud_wire_ids import (
     rewrite_cloud_refs,
     unresolved_cloud_model_ids,
 )
-import tier_registry  # noqa: E402 -- scripts/lib is added to sys.path above.
-from model_catalogues import get_catalogue  # noqa: E402 -- scripts/lib bootstrap.
+import tier_registry  # noqa: E402 -- local import follows bootstrap.
+from model_catalogues import (  # noqa: E402 -- local import follows bootstrap.
+    get_catalogue,
+)
 
 # pi-skills is not an npm package; skills are provisioned through settings["skills"].
 # Keep this mechanism for future packages shipped with pi-core.

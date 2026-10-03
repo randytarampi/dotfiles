@@ -22,38 +22,45 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
-from constants import (
-    get_provider_base_url,
+import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
+from constants import (  # noqa: E402 -- local import follows bootstrap.
     check_ollama_daemon,
     get_ollama_local_base_url,
 )
-from opencode_config import (
+from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
     get_preset_providers,
     get_slim_config_path,
 )
-from env import load_env
-from caddy_domains import load_domains
-from tier_resolve import list_local_ollama_models
-from discover_models import list_cloud_ollama_models
+from env import load_env  # noqa: E402 -- local import follows bootstrap.
+from caddy_domains import load_domains  # noqa: E402 -- local import follows bootstrap.
+from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
+    list_local_ollama_models,
+)
+from discover_models import (  # noqa: E402 -- local import follows bootstrap.
+    list_cloud_ollama_models,
+)
 from ollama_cloud_wire_ids import (  # noqa: E402 -- scripts/lib bootstrap.
     direct_cloud_route_allowed,
     installed_cloud_stub,
 )
-from local_engines import engine_gate_active, local_provider_block, resolve_engine
+from local_engines import (  # noqa: E402 -- local import follows bootstrap.
+    engine_gate_active,
+    local_provider_block,
+    resolve_engine,
+)
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
     plugin_specs,
 )
-from models_dev import (
+from models_dev import (  # noqa: E402 -- local import follows bootstrap.
     fetch_models_dev,
     get_ollama_context_length,
     get_ollama_modalities,
     build_model_entry,
 )
-from cli_helpers import (
+from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
     add_common_args,
     add_skip_arg,
     add_model_override_args,
@@ -63,8 +70,12 @@ from cli_helpers import (
     forward_min_reasoning_embedding_arg,
     parse_skip,
 )
-from generation_lock import with_generation_lock
-from provider_endpoints import PROVIDER_ENDPOINTS
+from generation_lock import (  # noqa: E402 -- local import follows bootstrap.
+    with_generation_lock,
+)
+from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
+    PROVIDER_ENDPOINTS,
+)
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 

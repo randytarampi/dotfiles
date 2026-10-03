@@ -16,13 +16,26 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
-from opencode_config import get_available_tiers, get_slim_config_path
-from constants import check_ollama_daemon
-from local_engines import engine_gate_active, resolve_engine
-from tier_resolve import resolve_roles_from_list, list_local_ollama_models
-from cli_helpers import add_common_args, add_model_override_args
-import tier_registry
+import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
+from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
+    get_available_tiers,
+)
+from constants import (  # noqa: E402 -- local import follows bootstrap.
+    check_ollama_daemon,
+)
+from local_engines import (  # noqa: E402 -- local import follows bootstrap.
+    engine_gate_active,
+    resolve_engine,
+)
+from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
+    resolve_roles_from_list,
+    list_local_ollama_models,
+)
+from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
+    add_common_args,
+    add_model_override_args,
+)
+import tier_registry  # noqa: E402 -- local import follows bootstrap.
 from ollama_cloud_wire_ids import (  # noqa: E402 -- sibling libs require sys.path bootstrap.
     proxied_cloud_ref,
     fail_closed_cloud_refs,
