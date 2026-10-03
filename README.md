@@ -675,8 +675,8 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `pro-plus` | cloud | `glm-5.3-flash` | `gpt-6-luna` (openai) | 0.7 |
 | `pro-plus-anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-4-5` | 1 |
 | `anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-4-5` | 1 |
-| `plus` | openai | `gpt-5.6-terra` | `gpt-6-luna` | 1 |
-| `plus-anthropic` | openai | `gpt-5.6-terra` | `claude-haiku-4-5` (meridian) | 1 |
+| `plus` | openai | `gpt-6.1-sol` | `gpt-6-luna` | 1 |
+| `plus-anthropic` | openai | `gpt-6.1-sol` | `claude-haiku-4-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
