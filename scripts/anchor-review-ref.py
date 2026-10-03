@@ -4,7 +4,8 @@
 import argparse
 import os
 import re
-import subprocess
+import shutil
+import subprocess  # nosec B404 - fixed-argument git invocations only.
 import sys
 import tempfile
 from pathlib import Path
@@ -14,8 +15,18 @@ DISPATCHER = ROOT / ".github/workflows/agent-review.yml"
 
 
 def git(*args):
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        raise FileNotFoundError("git executable is unavailable on PATH")
     return subprocess.run(
-        ["git", *args], cwd=ROOT, check=True, text=True, capture_output=True
+        [
+            git_executable,
+            *args,
+        ],  # nosec B603 - PATH-resolved git, fixed args, no shell.
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
     ).stdout.strip()
 
 
