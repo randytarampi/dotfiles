@@ -36,8 +36,8 @@ from ollama_cloud_wire_ids import (
     rewrite_cloud_refs,
     unresolved_cloud_model_ids,
 )
-import tier_registry
-from model_catalogues import get_catalogue
+import tier_registry  # noqa: E402 -- scripts/lib is added to sys.path above.
+from model_catalogues import get_catalogue  # noqa: E402 -- scripts/lib bootstrap.
 
 # pi-skills is not an npm package; skills are provisioned through settings["skills"].
 # Keep this mechanism for future packages shipped with pi-core.
@@ -257,25 +257,28 @@ def litellm_cloud_aliases(port="4000"):
             raise ValueError("symlinked key path")
         metadata = key_file.stat()
         directory_metadata = key_file.parent.stat()
-        if (
-            not key_file.is_file()
-            or metadata.st_uid != os.getuid()
-            or stat.S_IMODE(metadata.st_mode) != 0o600
-            or directory_metadata.st_uid != os.getuid()
-            or stat.S_IMODE(directory_metadata.st_mode) & 0o077
-        ):
+        if not key_file.is_file():
+            raise ValueError("missing key file")
+        if metadata.st_uid != os.getuid():
+            raise ValueError("key file has the wrong owner")
+        if stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise ValueError("key file has unsafe permissions")
+        if directory_metadata.st_uid != os.getuid():
+            raise ValueError("client directory has the wrong owner")
+        if stat.S_IMODE(directory_metadata.st_mode) & 0o077:
             raise ValueError("unsafe key file")
         key = key_file.read_text(encoding="utf-8").strip()
         if not key:
             raise ValueError("empty key")
         catalogue = get_catalogue(f"http://127.0.0.1:{port}/v1/models", key)
         data = catalogue.get("data") if isinstance(catalogue, dict) else None
-        if not isinstance(data, list) or any(
-            not isinstance(item, dict) or not isinstance(item.get("id"), str)
-            for item in data
-        ):
+        if not isinstance(data, list):
             raise ValueError("malformed catalogue")
-        available = {item["id"] for item in data}
+        available = set()
+        for item in data:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                raise ValueError("malformed catalogue")
+            available.add(item["id"])
     except Exception:
         logger.warning(
             "Pi LiteLLM cloud catalogue unavailable; Google/OpenRouter availability is UNKNOWN"
