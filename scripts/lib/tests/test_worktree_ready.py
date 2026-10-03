@@ -1,18 +1,15 @@
-import importlib.util
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import worktree_readiness
+
 SCRIPT = Path(__file__).resolve().parents[2] / "verify-worktree-ready.py"
 REPO_ROOT = SCRIPT.parents[1]
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
-READY_SPEC = importlib.util.spec_from_file_location("worktree_ready", SCRIPT)
-assert READY_SPEC is not None and READY_SPEC.loader is not None
-READY = importlib.util.module_from_spec(READY_SPEC)
-READY_SPEC.loader.exec_module(READY)
 
 
 def fixture(
@@ -187,7 +184,11 @@ def test_dirty_wrong_branch_and_unavailable_base_refuse_without_touching_files(
             "feature/test",
         )
         assert result.returncode == 1
-        assert expected in result.stdout
+        if label == "dirty":
+            assert expected in result.stdout
+            assert "Existing changes: dirty.txt" in result.stdout
+        else:
+            assert expected in result.stdout
         assert not calls.exists()
         assert (project / "dirty.txt").read_text(encoding="utf-8") == "preserve me\n"
 
@@ -196,7 +197,10 @@ def test_dry_run_and_failed_install_do_not_write_target_files(tmp_path):
     project, calls, env, _poetry = fixture(tmp_path, install_ok=False)
     dry_run = invoke(project, env, "--dry-run")
     assert dry_run.returncode == 1
-    assert "would run poetry install" in dry_run.stdout
+    assert "cannot import" in dry_run.stdout
+    preview = invoke(project, env, "--install", "--dry-run")
+    assert preview.returncode == 1
+    assert "would run poetry install" in preview.stdout
     assert not calls.exists()
     failure = invoke(project, env, "--install")
     assert failure.returncode == 1
@@ -227,7 +231,7 @@ def test_subprocess_runner_applies_finite_timeout(monkeypatch):
         observed.update(kwargs)
         raise subprocess.TimeoutExpired("stub", kwargs["timeout"])
 
-    monkeypatch.setattr(READY.subprocess, "run", timeout)
-    result = READY.run(["stub"], timeout=7)
+    monkeypatch.setattr(worktree_readiness.subprocess, "run", timeout)
+    result = worktree_readiness.run(["stub"], timeout=7)
     assert isinstance(result, subprocess.TimeoutExpired)
     assert observed["timeout"] == 7
