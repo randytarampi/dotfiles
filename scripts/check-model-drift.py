@@ -27,7 +27,7 @@ from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is inte
     load_allowlists,
     _configured_litellm_port,
 )
-from model_references import (
+from model_references import (  # noqa: E402  # sys.path bootstrap above is intentional.
     Catalogue,
     EndpointIdentity,
     ModelReference,
@@ -388,12 +388,9 @@ def audit_junie_profiles():
         # OpenAI-compat catalog prefixes with "models/", profiles may carry
         # provider prefixes like "anthropic/..."). Compare on the last segment.
 
-    def normalize(endpoint, wire_id):
-        if "generativelanguage.googleapis.com" in endpoint.namespace:
-            return google_direct_id(wire_id)
-        return wire_id
-
-    comparison = compare_references(references, catalogues, normalize_id=normalize)
+    comparison = compare_references(
+        references, catalogues, normalize_id=_normalize_junie_wire_id
+    )
     report = []
     violations = []
     for result in comparison.results:
@@ -417,6 +414,17 @@ def audit_junie_profiles():
                 f"{base_urls[item.endpoint]}"
             )
     return {"results": report, "complete": comparison.complete}, violations
+
+
+def _normalize_junie_wire_id(endpoint, wire_id):
+    """Normalize Google's catalogue prefix only for its exact endpoint host."""
+    try:
+        hostname = urlsplit(endpoint.namespace).hostname
+    except (TypeError, ValueError):
+        return wire_id
+    if hostname == "generativelanguage.googleapis.com":
+        return google_direct_id(wire_id)
+    return wire_id
 
 
 def check_junie_profiles() -> list[str]:

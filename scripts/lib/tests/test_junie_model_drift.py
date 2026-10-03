@@ -10,6 +10,7 @@ SPEC = importlib.util.spec_from_file_location("junie_model_drift", SCRIPT)
 DRIFT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DRIFT)
 import model_catalogues as CATALOGUES  # noqa: E402  # script bootstraps scripts/lib.
+from model_references import EndpointIdentity  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -177,6 +178,42 @@ def test_direct_google_models_prefix_is_only_normalized_for_google_host(
     assert audit["complete"] is True
     assert audit["results"][0]["outcome"] == "MATCH"
     assert not violations
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://api.example/v1/generativelanguage.googleapis.com",
+        "https://api.example/v1?next=generativelanguage.googleapis.com",
+        "https://generativelanguage.googleapis.com" + "@attacker.example/v1",
+        "https://generativelanguage.googleapis.com.attacker.example/v1",
+    ],
+)
+def test_google_prefix_is_not_normalized_for_foreign_url_parts(
+    isolated_home_path, monkeypatch, base_url
+):
+    write_profile(
+        isolated_home_path,
+        "foreign-google-lookalike.json",
+        {"direct": {"baseUrl": base_url, "apiKey": "fake"}},
+        {"tier": {"provider": "direct", "primaryModel": "models/gemini-3.8-flash"}},
+    )
+    monkeypatch.setattr(
+        DRIFT,
+        "get_catalogue",
+        lambda *_: {"data": [{"id": "gemini-3.8-flash"}]},
+    )
+    audit, violations = DRIFT.audit_junie_profiles()
+    assert audit["results"][0]["outcome"] == "MISSING"
+    assert violations
+
+
+def test_malformed_endpoint_namespace_fails_closed_for_google_normalization():
+    endpoint = EndpointIdentity(
+        "https://[malformed/generativelanguage.googleapis.com", "test"
+    )
+    wire_id = "models/gemini-3.8-flash"
+    assert DRIFT._normalize_junie_wire_id(endpoint, wire_id) == wire_id
 
 
 @pytest.mark.parametrize("payload", [None, [], {"data": [{}]}, {"not_data": []}])
