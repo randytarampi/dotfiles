@@ -259,10 +259,13 @@ check-actionlint: ## Lint all GitHub Actions workflows
 caddy-migrate: ## One-time: decommission existing dedicated-user acme/ddns setup
 	@bash scripts/migrate-acme-ddns.sh
 
+# This target alone supplies the internal retry-context marker to the template.
 caddy-setup: ## Retry privileged Caddy setup after an unattended chezmoi skip (interactive sudo)
-	@$(LOAD_ENV); set -eu; tmp="$$(mktemp "$${TMPDIR:-/tmp}/dotfiles-caddy-setup.XXXXXX")"; trap 'rm -f "$$tmp"' EXIT; \
+	@$(LOAD_ENV); set -eu; if [ "$${DOTFILES_RUN_CADDY_SETUP:-0}" != "1" ]; then printf 'Caddy setup gate is off — skipping retry.\n'; exit 0; fi; \
+		if [ "$(DRY_RUN)" = "1" ]; then printf 'Would render and run the explicit Caddy setup retry.\n'; exit 0; fi; \
+		tmp="$$(mktemp "$${TMPDIR:-/tmp}/dotfiles-caddy-setup.XXXXXX")"; trap 'rm -f "$$tmp"' EXIT; \
 		$(CHEZMOI) --source "$(CHEZMOI_SOURCE)" execute-template < .chezmoiscripts/run_onchange_24-install-caddy.sh.tmpl > "$$tmp"; \
-		bash -n "$$tmp"; chmod 700 "$$tmp"; "$$tmp"
+		bash -n "$$tmp"; chmod 700 "$$tmp"; CADDY_EXPLICIT_RETRY=1 "$$tmp"
 
 caddy-deploy: ## Generate Caddyfile and restart Caddy (root LaunchDaemon)
 	@$(LOAD_ENV); python3 scripts/configure-caddy.py
