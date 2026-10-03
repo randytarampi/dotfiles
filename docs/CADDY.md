@@ -224,6 +224,10 @@ warns and skips without blocking later scripts. Chezmoi can cache that skipped
 run; a subsequent ordinary `make deploy` may not retry it. From an interactive
 terminal, run `make caddy-setup` to rerender and retry only the privileged
 Caddy installer, including managed `/etc/hosts` entries and its LaunchDaemon.
+If this explicit retry is still noninteractive and passwordless sudo is
+unavailable, the target fails nonzero instead of reporting success. With the
+Caddy gate off it remains a no-op; `DRY_RUN=1` only previews the retry and does
+not render or execute the installer.
 `make caddy-deploy` regenerates and restarts an existing installation but does
 not perform those setup steps.
 
