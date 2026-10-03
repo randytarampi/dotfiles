@@ -12,6 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT / ".github/workflows/agent-review.yml"
+sys.path.insert(0, str(ROOT / "scripts" / "lib"))
+
+from cli_helpers import add_common_args  # noqa: E402 -- repository library bootstrap.
 
 
 def git(*args):
@@ -51,9 +54,7 @@ def atomic_write(path, content):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without writing"
-    )
+    add_common_args(parser)
     args = parser.parse_args()
     try:
         branch = git("branch", "--show-current")
