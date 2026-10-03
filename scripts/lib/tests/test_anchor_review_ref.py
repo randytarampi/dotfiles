@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,6 +48,24 @@ def test_changes_only_trusted_ref_and_preserves_yaml(monkeypatch, tmp_path):
     assert result.count("trusted_ref:") == 1
 
 
+def test_git_uses_path_resolved_executable_and_fixed_argv(monkeypatch):
+    observed = {}
+    executable = "/usr/bin/git"
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return SimpleNamespace(stdout="ok\n")
+
+    monkeypatch.setattr(ANCHOR.shutil, "which", lambda name: executable)
+    monkeypatch.setattr(ANCHOR.subprocess, "run", fake_run)
+    assert ANCHOR.git("status", "--short") == "ok"
+    assert observed["command"] == [executable, "status", "--short"]
+    assert observed["kwargs"]["cwd"] == ANCHOR.ROOT
+    assert observed["kwargs"]["check"] is True
+    assert "shell" not in observed["kwargs"]
+
+
 def test_uses_fetched_head_not_stale_origin_main(monkeypatch, tmp_path):
     source = (
         "uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main\ntrusted_ref: "
@@ -56,23 +75,12 @@ def test_uses_fetched_head_not_stale_origin_main(monkeypatch, tmp_path):
     target = tmp_path / "workflow.yml"
     target.write_text(source)
     monkeypatch.setattr(ANCHOR, "DISPATCHER", target)
-    monkeypatch.setattr(
-        ANCHOR,
-        "git",
-        lambda *args: (
-            "main"
-            if args == ("branch", "--show-current")
-            else (
-                "b" * 40
-                if args == ("rev-parse", "--verify", "FETCH_HEAD^{commit}")
-                else (
-                    "a" * 40
-                    if args == ("rev-parse", "--verify", "origin/main^{commit}")
-                    else ""
-                )
-            )
-        ),
-    )
+    git_outputs = {
+        ("branch", "--show-current"): "main",
+        ("rev-parse", "--verify", "FETCH_HEAD^{commit}"): "b" * 40,
+        ("rev-parse", "--verify", "origin/main^{commit}"): "a" * 40,
+    }
+    monkeypatch.setattr(ANCHOR, "git", lambda *args: git_outputs.get(args, ""))
     assert ANCHOR.main() == 0
     assert target.read_text() == source
 
@@ -86,19 +94,11 @@ def test_idempotent_when_current_anchor_matches(monkeypatch, tmp_path):
     target = tmp_path / "workflow.yml"
     target.write_text(source)
     monkeypatch.setattr(ANCHOR, "DISPATCHER", target)
-    monkeypatch.setattr(
-        ANCHOR,
-        "git",
-        lambda *args: (
-            "main"
-            if args == ("branch", "--show-current")
-            else (
-                "b" * 40
-                if args == ("rev-parse", "--verify", "FETCH_HEAD^{commit}")
-                else ""
-            )
-        ),
-    )
+    git_outputs = {
+        ("branch", "--show-current"): "main",
+        ("rev-parse", "--verify", "FETCH_HEAD^{commit}"): "b" * 40,
+    }
+    monkeypatch.setattr(ANCHOR, "git", lambda *args: git_outputs.get(args, ""))
     assert ANCHOR.main() == 0
     assert target.read_text() == source
 
