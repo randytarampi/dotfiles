@@ -206,7 +206,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -230,7 +230,7 @@ jobs:
           python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
           printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Cache codegraph index
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+        uses: actions/cache@v4
         with:
           path: .codegraph
           key: codegraph-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
@@ -287,7 +287,7 @@ jobs:
           } >>"${GITHUB_OUTPUT}"
       - name: Upload OpenCode review
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: opencode-review-${{ github.run_id }}
           path: ${{ runner.temp }}/opencode-review.md
@@ -304,7 +304,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -342,7 +342,7 @@ jobs:
             printf '%s\n' "$delim"
           } >> "$GITHUB_ENV"
       - id: junie
-        uses: JetBrains/junie-github-action@3c08594c219ef187ab0df0db4e2ac3222a163593 # v1
+        uses: JetBrains/junie-github-action@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Env indirection keeps event-derived prompt interpolation out of the
@@ -370,7 +370,7 @@ jobs:
           } >>"${GITHUB_OUTPUT}"
       - name: Upload Junie review
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: junie-review-${{ github.run_id }}
           path: ${{ runner.temp }}/junie-review.md
@@ -387,7 +387,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
           persist-credentials: false
@@ -432,7 +432,7 @@ jobs:
           } >> "$GITHUB_ENV"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
       - id: gemini
-        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0
+        uses: google-github-actions/run-gemini-cli@v0
         env:
           GEMINI_CLI_TRUST_WORKSPACE: "true"
           # Env indirection keeps event-derived prompt interpolation out of the
@@ -459,7 +459,7 @@ jobs:
           } >>"${GITHUB_OUTPUT}"
       - name: Upload Gemini review
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: gemini-review-${{ github.run_id }}
           path: ${{ runner.temp }}/gemini-review.md
@@ -505,7 +505,7 @@ jobs:
     steps:
       - id: junie_app_token
         if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        uses: actions/create-github-app-token@v2
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
           JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
@@ -516,7 +516,7 @@ jobs:
           permission-pull-requests: write
       - id: opencode_app_token
         if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        uses: actions/create-github-app-token@v2
         env:
           OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
           OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
@@ -527,7 +527,7 @@ jobs:
           permission-pull-requests: write
       - id: gemini_app_token
         if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        uses: actions/create-github-app-token@v2
         env:
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
           GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
@@ -538,7 +538,7 @@ jobs:
           permission-pull-requests: write
       - id: fallback_app_token
         if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        uses: actions/create-github-app-token@v2
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
@@ -549,7 +549,7 @@ jobs:
           permission-pull-requests: write
       - name: Download review bodies
         if: always()
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@v8
         with:
           pattern: "*-review-${{ github.run_id }}"
           path: reviews

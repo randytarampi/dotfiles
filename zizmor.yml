@@ -1,0 +1,20 @@
+# The repository intentionally updates external action refs at verified majors.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        actions/checkout: ref-pin
+        actions/setup-python: ref-pin
+        actions/cache: ref-pin
+        actions/upload-artifact: ref-pin
+        actions/download-artifact: ref-pin
+        actions/create-github-app-token: ref-pin
+        github/codeql-action/init: ref-pin
+        github/codeql-action/analyze: ref-pin
+        JetBrains/junie-github-action: ref-pin
+        google-github-actions/run-gemini-cli: ref-pin
+        coverallsapp/github-action: ref-pin
+        qltysh/qlty-action/coverage: ref-pin
+        # This is the sole owned reusable-workflow exception: its path follows
+        # main, while the separate trusted_ref pins verified review assets.
+        randytarampi/dotfiles/.github/workflows/agentic-review.yml: any

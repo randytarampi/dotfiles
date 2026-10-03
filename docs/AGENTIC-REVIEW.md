@@ -86,8 +86,8 @@ repository instructions.
   same reason; PR content never participates in prompt-file loading.
 - Security posture: minimal `permissions` per job, read-only `github.token` in
   every agent lane, `sender.type != 'Bot'`
-  filter, per-PR `concurrency` cancel-in-progress, and SHA-pinned third-party
-  actions,
+  filter, per-PR `concurrency` cancel-in-progress, and verified floating-major
+  refs for third-party actions,
   read-only MCP tool allowlists, no `pull_request_target`. Normal OpenCode,
   Junie, and Gemini lanes have only `contents: read`, do not persist checkout
   credentials, and cannot publish. Each lane hands its review body to `notify`
@@ -101,6 +101,20 @@ repository instructions.
   — Junie may commit and push only through the separate, manually approved fix
   lane; the normal Junie review lane is read-only. Copilot's own write-back is
   governed by repo Settings → Copilot → Agent permissions, not by this workflow.
+
+### Action version policy
+
+External actions, including third-party actions, use verified floating major
+tags (`@vN`). Major tags can move; this intentionally accepts compatible
+upstream changes in exchange for updates without manual SHA churn. The
+repository-scoped `zizmor.yml` ref-pin policies and offline action-ref
+tests enforce this choice, and weekly Dependabot updates remain enabled.
+
+The owned dispatcher is the sole exception: it invokes this repository's
+reusable review workflow at `@main`. Its `trusted_ref` remains a 40-character
+immutable commit verified against the review-asset manifest. The scoped Zizmor
+exception is guarded by the test that restricts that `@main` use to the
+dispatcher only.
 
 ## Manual fix lane
 

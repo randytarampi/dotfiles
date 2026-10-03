@@ -20,7 +20,7 @@ jobs:
       # Grants the Qlty coverage step's OIDC exchange (me/-proven pattern).
       id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       # Poetry must be on PATH before setup-python: the action's cache: poetry
       # mode invokes poetry to derive cache keys, so install it first (pinned
       # to the poetry.lock generator version).
@@ -32,7 +32,7 @@ jobs:
           else
             python -m pip install poetry==2.4.3
           fi
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: poetry
@@ -72,7 +72,7 @@ jobs:
       - name: Shell tests
         run: make test-shell
       - name: Upload coverage
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        uses: coverallsapp/github-action@v2
         with:
           file: coverage.lcov
           format: lcov
@@ -87,7 +87,7 @@ jobs:
       - name: Upload coverage to Qlty
         if: ${{ success() }}
         continue-on-error: true
-        uses: qltysh/qlty-action/coverage@c9b09987143d1e4ac955f4803c7bea742102feb5 # v2
+        uses: qltysh/qlty-action/coverage@v2
         with:
           oidc: true
           files: coverage.lcov
@@ -106,8 +106,8 @@ jobs:
     # (5e48340, 389ab47, f237cb6) following the chezmoi 2.72.2 +
     # interpreters + cygpath fixes; the portability probe period is over.
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install deploy tooling (Ubuntu)
@@ -202,9 +202,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - name: Finish coverage upload
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        uses: coverallsapp/github-action@v2
         with:
           parallel-finished: true
         env:

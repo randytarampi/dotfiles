@@ -21,7 +21,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout target repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -44,7 +44,7 @@ jobs:
           python3 "${trusted_root}/scripts/verify-ci-assets.py" --root "${trusted_root}" --manifest "${trusted_root}/configs/review/assets-manifest.json"
           printf 'TRUSTED_DOTFILES=%s\n' "${trusted_root}" >> "${GITHUB_ENV}"
       - name: Cache codegraph index
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+        uses: actions/cache@v4
         with:
           path: .codegraph
           key: codegraph-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
