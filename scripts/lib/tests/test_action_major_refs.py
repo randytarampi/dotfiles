@@ -9,7 +9,22 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
 OWNED_REF = "randytarampi/dotfiles/.github/workflows/agentic-review.yml@main"
+# Major tags intentionally accept ASCII digits only.
 MAJOR_REF = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@v[0-9]+\Z")
+
+
+def _job_level_refs(path, job_name, job):
+    reusable = job.get("uses")
+    if isinstance(reusable, str):
+        yield path, f"jobs.{job_name}.uses", reusable
+
+
+def _step_refs(path, job_name, steps):
+    if not isinstance(steps, list):
+        return
+    for index, step in enumerate(steps):
+        if isinstance(step, dict) and isinstance(step.get("uses"), str):
+            yield path, f"jobs.{job_name}.steps[{index}].uses", step["uses"]
 
 
 def action_refs():
@@ -22,15 +37,8 @@ def action_refs():
         for job_name, job in jobs.items():
             if not isinstance(job, dict):
                 continue
-            reusable = job.get("uses")
-            if isinstance(reusable, str):
-                yield path, f"jobs.{job_name}.uses", reusable
-            steps = job.get("steps", [])
-            if not isinstance(steps, list):
-                continue
-            for index, step in enumerate(steps):
-                if isinstance(step, dict) and isinstance(step.get("uses"), str):
-                    yield path, f"jobs.{job_name}.steps[{index}].uses", step["uses"]
+            yield from _job_level_refs(path, job_name, job)
+            yield from _step_refs(path, job_name, job.get("steps", []))
 
 
 def is_approved_ref(path, value):
@@ -41,10 +49,6 @@ def is_approved_ref(path, value):
 
 def test_refs_major_only():
     refs = list(action_refs())
-    workflow_files = {path.name for path in WORKFLOWS.glob("*.yml")} | {
-        path.name for path in WORKFLOWS.glob("*.yaml")
-    }
-    assert len(workflow_files) == 8
     assert refs
     assert all(is_approved_ref(path, ref) for path, _, ref in refs), refs
     assert [ref for _, _, ref in refs].count(OWNED_REF) == 1
@@ -78,6 +82,7 @@ def test_refs_reject_nonmajors():
         "actions/checkout@v7.1",
         "actions/checkout@feature/new-release",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/checkout@v٧",
     )
     assert all(is_approved_ref(".github/workflows/ci.yml", ref) for ref in good)
     assert not any(is_approved_ref(".github/workflows/ci.yml", ref) for ref in bad)
@@ -112,12 +117,49 @@ def test_zizmor_policies_scoped():
 
 def write_fixture_workflow(tmp_path, monkeypatch, name, content):
     workflow_dir = tmp_path / ".github" / "workflows"
-    workflow_dir.mkdir(parents=True)
+    workflow_dir.mkdir(parents=True, exist_ok=True)
     path = workflow_dir / name
     path.write_text(content, encoding="utf-8")
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
     monkeypatch.setattr(sys.modules[__name__], "WORKFLOWS", workflow_dir)
     return path
+
+
+def test_workflow_inventory_change(tmp_path, monkeypatch):
+    first = write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "first.yml",
+        "jobs:\n  first:\n    steps:\n      - uses: actions/checkout@v7\n",
+    )
+    first_refs = list(action_refs())
+    assert first_refs == [
+        (
+            ".github/workflows/first.yml",
+            "jobs.first.steps[0].uses",
+            "actions/checkout@v7",
+        )
+    ]
+
+    second = write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "second.yaml",
+        "jobs:\n  second:\n    uses: actions/setup-python@v7\n",
+    )
+    expanded_refs = list(action_refs())
+    assert expanded_refs == first_refs + [
+        (
+            ".github/workflows/second.yaml",
+            "jobs.second.uses",
+            "actions/setup-python@v7",
+        )
+    ]
+    assert all(is_approved_ref(path, ref) for path, _, ref in expanded_refs)
+
+    second.unlink()
+    assert list(action_refs()) == first_refs
+    assert first.is_file()
 
 
 def test_quoted_inline_refs(tmp_path, monkeypatch):
