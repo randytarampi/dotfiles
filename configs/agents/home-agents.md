@@ -28,6 +28,7 @@ These apply to every repo, every session.
 - **Run the repo's standard verify command before claiming a change is done.** Don't report "done" or "working" based on reasoning alone — execute the actual check.
   - dotfiles: `make verify`
   - other repos: whatever the repo defines (`yarn test`, `yarn lerna run <job>`, `npm run build`, the repo's Makefile target, etc.)
+- For the dotfiles-specific verification sequence and blocked-tool handling, use the installed `dotfiles-verify` skill or its source in the dotfiles repository.
 - If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
 - Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
 - For service or model-generator changes, run the generator twice; check service health and generated state, including keys, and confirm the second run is idempotent. A successful first run alone can hide failures such as an HTTP 400 from an invalid key list.
@@ -42,6 +43,11 @@ These apply to every repo, every session.
 ### Semantic ambiguity
 
 - **When a flag or option name is semantically ambiguous, ask before implementing.** A wrong guess costs a full revert+refix cycle. Ask the user to clarify the intended semantics before dispatching implementation. Don't guess when the cost of being wrong is high.
+
+### Focused execution and status
+
+- Start with the decisive reproduction or check before advancing a speculative root cause. Report only material progress, a decision, or a blocker; do not narrate internal deliberation or ambient job-board state.
+- When blocked, inspect the persisted source and worktree state, try bounded recovery within the agreed scope, and stop for direction rather than expanding the task.
 
 ### Delegation discipline
 
