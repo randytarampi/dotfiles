@@ -22,7 +22,7 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger
+import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
 from constants import (
     get_provider_base_url,
     check_ollama_daemon,
@@ -38,7 +38,7 @@ from env import load_env
 from caddy_domains import load_domains
 from tier_resolve import list_local_ollama_models
 from discover_models import list_cloud_ollama_models
-from ollama_cloud_wire_ids import (
+from ollama_cloud_wire_ids import (  # noqa: E402 -- scripts/lib bootstrap.
     direct_cloud_route_allowed,
     installed_cloud_stub,
 )
@@ -183,6 +183,72 @@ def apply_litellm_client_gate(config: dict) -> None:
             provider.setdefault("options", {}).update(
                 {"baseURL": base_url, "apiKey": key_ref}
             )
+
+
+def _build_ollama_cloud_model_maps(
+    cloud_models, installed_models, models_dev_data, local_ollama, preset
+):
+    """Separate installed proxy aliases from curated direct-only cloud IDs."""
+    combined_models = {}
+    if local_ollama and preset not in ["plus", "pro"]:
+        combined_models.update(local_ollama.get("models", {}))
+    direct_cloud_models = {}
+    for model_name in cloud_models:
+        cloud_name = installed_cloud_stub(model_name, installed_models)
+        if cloud_name is None:
+            direct_cloud_models[model_name] = build_model_entry(
+                model_name, models_dev_data, "ollama-cloud"
+            )
+            continue
+        context_length = get_ollama_context_length(cloud_name)
+        # Resolve :cloud modalities from models.dev; attachments route to observer.
+        combined_models[cloud_name] = build_model_entry(
+            cloud_name,
+            models_dev_data,
+            "ollama-cloud",
+            ollama_context=context_length,
+            modalities=get_ollama_modalities(cloud_name, models_dev_data),
+        )
+    return combined_models, direct_cloud_models
+
+
+def _register_ollama_cloud_routes(
+    config, combined_models, direct_cloud_models, local_ollama, preset
+):
+    """Register installed stubs and preserve the existing guarded direct fallback."""
+    if combined_models:
+        config["provider"]["ollama"] = {
+            "models": combined_models,
+            "name": "Ollama",
+            "npm": "@ai-sdk/openai-compatible",
+            "options": {"baseURL": get_ollama_local_base_url()},
+        }
+    elif local_ollama and preset not in ["plus", "pro"]:
+        config["provider"]["ollama"] = local_ollama
+
+    litellm_canary = not direct_cloud_route_allowed("opencode")
+    direct_key = os.environ.get("OLLAMA_API_KEY", "").strip()
+    if direct_cloud_models and direct_key and not litellm_canary:
+        config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
+        logger.warning(
+            "Some curated Ollama Cloud models have no unique installed local stub; retaining direct ollama-cloud route"
+        )
+        return
+
+    config["disabled_providers"].append("ollama-cloud")
+    if not direct_cloud_models:
+        return
+    unavailable_ids = ", ".join(sorted(direct_cloud_models))
+    if litellm_canary:
+        logger.warning(
+            "Ollama Cloud models unavailable through the LiteLLM canary (no unique installed local stub; direct bypass disabled): %s",
+            unavailable_ids,
+        )
+    else:
+        logger.warning(
+            "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset: %s",
+            unavailable_ids,
+        )
 
 
 @with_generation_lock("configure-opencode")
@@ -749,65 +815,22 @@ def main():
                 config["provider"]["openai"] = {"models": enriched_openai}
             if can_proxy_cloud and ollama_cloud_models and args.preset != "plus":
                 # Unified: merge local + cloud Ollama under single provider
-                combined_models = {}
-                if local_ollama and args.preset not in ["plus", "pro"]:
-                    combined_models.update(local_ollama.get("models", {}))
                 # Add only exact cloud stubs reported by the daemon. Unmatched
                 # curated models retain their direct ollama-cloud route below.
-                direct_cloud_models = {}
-                for model_name in ollama_cloud_models:
-                    cloud_name = installed_cloud_stub(
-                        model_name, installed_cloud_models
-                    )
-                    if cloud_name is None:
-                        direct_cloud_models[model_name] = build_model_entry(
-                            model_name, models_dev_data, "ollama-cloud"
-                        )
-                        continue
-                    ctx = get_ollama_context_length(cloud_name)
-                    # Resolve :cloud modalities from the models.dev catalog;
-                    # the image hook routes attachments to the observer.
-                    combined_models[cloud_name] = build_model_entry(
-                        cloud_name,
-                        models_dev_data,
-                        "ollama-cloud",
-                        ollama_context=ctx,
-                        modalities=get_ollama_modalities(cloud_name, models_dev_data),
-                    )
-                if combined_models:
-                    config["provider"]["ollama"] = {
-                        "models": combined_models,
-                        "name": "Ollama",
-                        "npm": "@ai-sdk/openai-compatible",
-                        "options": {"baseURL": get_ollama_local_base_url()},
-                    }
-                elif local_ollama and args.preset not in ["plus", "pro"]:
-                    # Cloud-capable but no cloud models pulled; keep local-only provider
-                    config["provider"]["ollama"] = local_ollama
-                litellm_canary = not direct_cloud_route_allowed("opencode")
-                if (
-                    direct_cloud_models
-                    and os.environ.get("OLLAMA_API_KEY", "").strip()
-                    and not litellm_canary
-                ):
-                    config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
-                    logger.warning(
-                        "Some curated Ollama Cloud models have no unique installed local stub; retaining direct ollama-cloud route"
-                    )
-                else:
-                    config["disabled_providers"].append("ollama-cloud")
-                    if direct_cloud_models:
-                        unavailable_ids = ", ".join(sorted(direct_cloud_models))
-                        if litellm_canary:
-                            logger.warning(
-                                "Ollama Cloud models unavailable through the LiteLLM canary (no unique installed local stub; direct bypass disabled): %s",
-                                unavailable_ids,
-                            )
-                        else:
-                            logger.warning(
-                                "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset: %s",
-                                unavailable_ids,
-                            )
+                combined_models, direct_cloud_models = _build_ollama_cloud_model_maps(
+                    ollama_cloud_models,
+                    installed_cloud_models,
+                    models_dev_data,
+                    local_ollama,
+                    args.preset,
+                )
+                _register_ollama_cloud_routes(
+                    config,
+                    combined_models,
+                    direct_cloud_models,
+                    local_ollama,
+                    args.preset,
+                )
             elif ollama_cloud_models and args.preset != "plus":
                 # Not cloud-capable: use direct ollama-cloud provider
                 if not direct_cloud_route_allowed("opencode"):

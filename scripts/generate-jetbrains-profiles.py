@@ -19,9 +19,9 @@ LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger
+import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
 import tier_registry
-from model_catalogues import open_same_origin
+from model_catalogues import open_same_origin  # noqa: E402 -- scripts/lib bootstrap.
 from ai_models import resolve_model
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
@@ -133,16 +133,15 @@ def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
     try:
         parsed = urllib.parse.urlsplit(base_url)
         port = parsed.port
-        if (
-            parsed.scheme != "http"
-            or parsed.hostname != "127.0.0.1"
-            or port is None
-            or not 1 <= port <= 65535
-            or parsed.username
-            or parsed.password
-            or parsed.query
-            or parsed.fragment
-        ):
+        if parsed.scheme != "http":
+            return None
+        if parsed.hostname != "127.0.0.1":
+            return None
+        if port is None or not 1 <= port <= 65535:
+            return None
+        if parsed.username or parsed.password:
+            return None
+        if parsed.query or parsed.fragment:
             return None
         origin = f"http://127.0.0.1:{port}"
         request = urllib.request.Request(
@@ -155,12 +154,15 @@ def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, list):
             return None
-        if any(
-            not isinstance(entry, dict) or not isinstance(entry.get("id"), str)
-            for entry in data
-        ):
-            return None
-        return {entry["id"] for entry in data}
+        ids = set()
+        for entry in data:
+            if not isinstance(entry, dict):
+                return None
+            model_id = entry.get("id")
+            if not isinstance(model_id, str):
+                return None
+            ids.add(model_id)
+        return ids
     except Exception:
         logger.warning(
             "LiteLLM model catalogue unavailable; exact model availability is unknown"
