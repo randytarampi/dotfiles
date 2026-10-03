@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 
 import pytest
 
@@ -154,9 +153,6 @@ def test_real_target_authorized_stops_at_platform_seam_twice(platform, tmp_path)
     assert list(fixture.temp.iterdir()) == []
 
 
-@pytest.mark.skipif(
-    sys.platform != "darwin", reason="Darwin interactive sudo prompt path"
-)
 def test_interactive_darwin_uses_precise_preserve_env_without_dispatch(tmp_path):
     fixture = harness.new_fixture(tmp_path, "darwin", "1", "interactive")
     result = harness.run_render_with_pty("darwin", fixture)
