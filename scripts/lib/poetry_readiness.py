@@ -140,7 +140,13 @@ def _read_toml_section(source, section, wanted_keys):
 
 
 def check_poetry_environment(
-    path, poetry_executable, requires_python, *, install=False, dry_run=False
+    path,
+    poetry_executable,
+    requires_python,
+    *,
+    requested_pin="unspecified",
+    install=False,
+    dry_run=False,
 ):
     """Validate Poetry metadata/imports, optionally installing declared groups."""
     metadata = run([poetry_executable, "check", "--lock"], cwd=path, timeout=60)
@@ -154,26 +160,12 @@ def check_poetry_environment(
         )
         return None, f"Poetry rejected project metadata or lock ({status})."
     runtime, error = probe_poetry(path, poetry_executable)
-    version_mismatch = False
     if runtime is not None:
-        try:
-            from packaging.version import InvalidVersion, Version
-
-            version_mismatch = not requires_python.contains(
-                Version(runtime[0]), prereleases=True
-            )
-        except ImportError:
-            return runtime, "Python requirement parser 'packaging' is unavailable."
-        except InvalidVersion:
-            return (
-                runtime,
-                f"Poetry reported an unparseable Python version: {runtime[0]}.",
-            )
-        if version_mismatch:
-            return (
-                runtime,
-                f"Poetry interpreter {runtime[0]} does not satisfy project requires-python '{requires_python}'.",
-            )
+        compatibility_error = _runtime_compatibility_error(
+            runtime[0], requires_python, requested_pin
+        )
+        if compatibility_error:
+            return runtime, compatibility_error
     if runtime is not None and error is None:
         return runtime, error
     if dry_run or not install:
@@ -196,20 +188,29 @@ def check_poetry_environment(
         return None, f"Poetry dependency installation failed ({status})."
     runtime, error = probe_poetry(path, poetry_executable)
     if runtime is not None:
-        try:
-            from packaging.version import InvalidVersion, Version
-
-            compatible = requires_python.contains(Version(runtime[0]), prereleases=True)
-        except ImportError:
-            return runtime, "Python requirement parser 'packaging' is unavailable."
-        except InvalidVersion:
-            return (
-                runtime,
-                f"Poetry reported an unparseable Python version: {runtime[0]}.",
-            )
-        if not compatible:
-            return (
-                runtime,
-                f"Poetry interpreter {runtime[0]} does not satisfy project requires-python '{requires_python}'.",
-            )
+        error = (
+            _runtime_compatibility_error(runtime[0], requires_python, requested_pin)
+            or error
+        )
     return runtime, error
+
+
+def _runtime_compatibility_error(actual, requires_python, requested_pin):
+    """Check the project range and pinned family before any dependency install."""
+    try:
+        from packaging.version import InvalidVersion, Version
+    except ImportError:
+        return "Python requirement parser 'packaging' is unavailable."
+    try:
+        version = Version(actual)
+        preferred = Version(requested_pin) if requested_pin != "unspecified" else None
+    except InvalidVersion:
+        return f"Unparseable Python version: Poetry reported {actual}, pin is {requested_pin}."
+    error = None
+    if not requires_python.contains(version, prereleases=True):
+        error = f"Poetry interpreter {actual} does not satisfy project requires-python '{requires_python}'."
+    elif preferred is not None and version.release[:2] != preferred.release[:2]:
+        actual_family = ".".join(str(part) for part in version.release[:2])
+        pin_family = ".".join(str(part) for part in preferred.release[:2])
+        error = f"Poetry runtime family {actual_family} differs from pin family {pin_family}; select the pinned Python family for Poetry."
+    return error
