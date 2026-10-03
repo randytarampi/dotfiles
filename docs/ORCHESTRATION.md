@@ -106,6 +106,38 @@ sequenceDiagram
     Configure->>Configure: configure-skills.py
 ```
 
+### Delegated worktree readiness preflight
+
+Before handing implementation to a child in an existing checkout, run
+`make worktree-ready WORKTREE="/absolute/path/to/worktree"`. The helper verifies
+that the path is the root of this dotfiles Git project, reports its branch,
+HEAD and dirty paths without changing them, and checks that Poetry can import
+`yaml`, `pytest` and `black`. A dirty worktree is reported and refused unless
+the caller explicitly uses `ALLOW_DIRTY=1`; no files are cleaned, stashed or
+reset. Supply `EXPECTED_BASE` (a full SHA available locally) and/or
+`EXPECTED_BRANCH` when the task requires them; base validation never fetches
+remotes.
+
+Check-only is the default and fails when tooling is missing. To explicitly
+prepare the target checkout, use `INSTALL=1` to run
+`poetry install --no-root --with tooling,test`. `INSTALL=1 DRY_RUN=1` previews
+that install without invoking it or writing files. The helper reports the
+Poetry interpreter's actual executable/version alongside the checkout's
+`.python-version` request and does not change pyenv/global pins. It does not
+inspect environment variables or credentials. Sibling worktrees are supported
+only when explicitly authorized by the parent task for this dotfiles/chezmoi
+repository; this helper does not create nested worktrees or alter other
+checkouts. See the source-of-truth repository playbook in `AGENTS.md` for
+delegation and worktree authorization policy.
+
+Example (replace the illustrative SHA with a locally available full commit ID):
+
+```sh
+make worktree-ready WORKTREE="/tmp/dotfiles-task" INSTALL=1 \
+  EXPECTED_BASE="0123456789abcdef0123456789abcdef01234567" \
+  EXPECTED_BRANCH="feature/task"
+```
+
 ## Repository agent guidance
 
 `configs/agents/repo-agents-shared.md` is the source for the common policy

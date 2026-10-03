@@ -880,6 +880,21 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/verify-worktree-ready.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--install",
+        "--dry-run",
+        "--expected-base",
+        "--expected-branch",
+        "--allow-dirty"
+      ],
+      "positional_operand": "worktree",
+      "child_scripts": []
+    },
+    {
       "path": "scripts/check-fleet-coverage.py",
       "capabilities": [
         "public"

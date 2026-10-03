@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help litellm-diagnose
+.PHONY: help litellm-diagnose worktree-ready
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
@@ -8,6 +8,10 @@ help: ## Show this help
 
 anchor-review-ref: ## Refresh the main review dispatcher's trusted_ref from reachable origin/main
 	@python3 scripts/anchor-review-ref.py $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
+
+worktree-ready: ## Check or install Python tooling in an existing WORKTREE (INSTALL=1; DRY_RUN=1 previews)
+	@test -n "$(WORKTREE)" || { echo "WORKTREE is required (existing dotfiles worktree path)"; exit 2; }
+	@python3 scripts/verify-worktree-ready.py "$(WORKTREE)" $(if $(filter 1,$(INSTALL)),--install,) $(if $(filter 1,$(DRY_RUN)),--dry-run,) $(if $(EXPECTED_BASE),--expected-base "$(EXPECTED_BASE)",) $(if $(EXPECTED_BRANCH),--expected-branch "$(EXPECTED_BRANCH)",) $(if $(filter 1,$(ALLOW_DIRTY)),--allow-dirty,)
 
 SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
