@@ -394,9 +394,13 @@ Pi's LiteLLM canary reads its app key from the mode-600 file
 `LITELLM_PI_KEY` assignment in the same generated `service.env` authority. Pi's
 provider config uses a command-backed API key (`!cat <absolute-key-file-path>`),
 so the secret is delivered to Pi without exporting it into the shell environment.
-If the private key file is absent or unsafe, Pi keeps direct provider URLs and
-keys. Re-run `make deploy` after enabling the canary or rotating the key, then
-restart Pi to load the updated provider config.
+If the private key file is absent or unsafe, Pi configuration fails before
+writing generated config; it does not emit direct Google/OpenRouter routes or
+auth entries as a fallback. Existing files remain untouched on that pre-write
+failure. An unknown/unavailable LiteLLM catalogue omits unconfirmed cloud
+aliases and their role overrides rather than generating direct providers. Re-run
+`make deploy` after enabling the canary or rotating the key, then restart Pi to
+load the updated provider config.
 
 Junie's LiteLLM canary derives `clients/junie.key` from the Junie app-key entry
 in `service.env`. The Junie profile generator reads only that private key file
