@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
+from cli_helpers import add_common_args  # noqa: E402 -- repository library bootstrap.
 from worktree_readiness import (  # noqa: E402 -- import follows intentional lib bootstrap.
     inspect_git_state,
     validate_git_root,
@@ -38,9 +39,7 @@ def main(argv=None):
     parser.add_argument(
         "--install", action="store_true", help="Install Poetry tooling and test groups"
     )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report planned install without mutation"
-    )
+    add_common_args(parser)
     args = parser.parse_args(argv)
     if args.expected_base and not re.fullmatch(
         r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", args.expected_base
@@ -59,7 +58,7 @@ def main(argv=None):
     if root_error:
         print(f"Not ready: {root_error}")
         return 1
-    project_error = validate_project(path, git_executable)
+    project_error, requires_python = validate_project(path, git_executable)
     if project_error:
         print("Not ready: Git checkout is not the dotfiles project.")
         print(project_error)
@@ -100,11 +99,29 @@ def main(argv=None):
     runtime, environment_error = check_poetry_environment(
         path,
         poetry_executable,
+        requires_python,
         install=args.install,
         dry_run=args.dry_run,
     )
-    if runtime is None:
-        if args.dry_run and args.install and environment_error:
+    if runtime is not None:
+        print(f"Poetry interpreter: {runtime[0]} ({runtime[1]})")
+        preferred_family = re.match(r"^(\d+)\.(\d+)", requested_pin)
+        actual_family = re.match(r"^(\d+)\.(\d+)", runtime[0])
+        if (
+            preferred_family
+            and actual_family
+            and preferred_family.groups() != actual_family.groups()
+        ):
+            print(
+                f"Warning: actual Poetry runtime family {actual_family.group(0)} "
+                f"differs from preferred .python-version family {preferred_family.group(0)}; "
+                "the project requires-python specifier is the compatibility gate."
+            )
+    if environment_error:
+        installable_failure = environment_error.startswith(
+            "Could not locate the Poetry environment"
+        ) or environment_error.startswith("Poetry interpreter cannot import")
+        if args.dry_run and args.install and installable_failure:
             print(
                 f"{environment_error} Dry run: would run poetry install "
                 "--no-root --with tooling,test."
@@ -112,7 +129,9 @@ def main(argv=None):
         else:
             print(f"Not ready: {environment_error}")
         return 1
-    print(f"Poetry interpreter: {runtime[0]} ({runtime[1]})")
+    if runtime is None:
+        print("Not ready: Poetry interpreter readiness could not be established.")
+        return 1
     print("Ready: Git worktree and Poetry tooling checks passed.")
     return 0
 
