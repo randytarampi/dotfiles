@@ -35,6 +35,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/show-categories.py",  # Makefile-only category management tool
     "scripts/verify-iterm2.py",  # Makefile-only verification tool
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
+    "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
     "scripts/check-model-drift.py",  # Makefile-only verification tool
     "scripts/check-heredocs.py",  # Makefile-only lint tool (heredoc validation)
     "scripts/anchor-review-ref.py",  # Makefile-only workflow maintenance tool
