@@ -41,6 +41,7 @@ DRIFT_STATS = {"checked": 0, "skipped": 0}
 MALFORMED_CATALOGUE_REASON = "malformed catalogue response"
 CATALOGUE_UNAVAILABLE_REASON = "catalogue unavailable"
 LITELLM_ENDPOINT_LABEL = "litellm:127.0.0.1"
+INVALID_ENDPOINT_NAMESPACE = "invalid-endpoint"
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 # Google/OpenRouter entries are checked for internal allowlist membership only;
 # they are not queried against live catalogs. Refresh via free-preset skill.
@@ -178,13 +179,13 @@ def check_local_engine_models() -> list[str]:
 
 
 def _safe_endpoint_namespace(base_url: str) -> str:
-    parsed = urlsplit(endpoint_models_url(base_url))
     try:
+        parsed = urlsplit(endpoint_models_url(base_url))
         host = parsed.hostname or "unknown-host"
         if parsed.port:
             host += f":{parsed.port}"
     except ValueError:
-        host = "invalid-host"
+        return INVALID_ENDPOINT_NAMESPACE
     return urlunsplit((parsed.scheme, host, parsed.path.rstrip("/"), "", ""))
 
 
@@ -209,6 +210,8 @@ def _profile_reference(path, provider_name, provider, model, field):
         if base_url
         else f"unresolved-provider:{provider_name}"
     )
+    if namespace == INVALID_ENDPOINT_NAMESPACE:
+        key = None
     endpoint = EndpointIdentity(namespace, scope)
     return {
         "endpoint": endpoint,
