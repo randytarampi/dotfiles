@@ -226,10 +226,24 @@ def test_linux_missing_boundary_probe_fails_closed_before_libraries(tmp_path):
     _assert_no_package_or_library_events(fixture)
 
 
-def test_makefile_retry_marker_guard_fails_safely_without_target_mutation():
+@pytest.mark.parametrize("platform", ("darwin", "linux"))
+def test_missing_makefile_retry_marker_returns_nonretry_skip(platform, tmp_path):
+    fixture = harness.new_fixture(tmp_path, platform, "1", "unavailable")
     text = harness.makefile_text()
     marker = "CADDY_EXPLICIT_RETRY=1"
-    assert marker in text
-    missing = text.replace(marker, "MISSING_RETRY_MARKER", 1)
-    with pytest.raises(AssertionError):
-        assert marker in missing and missing != text
+    assert text.count(marker) == 1
+    copy = fixture.root / "Makefile.no-marker"
+    copy.write_text(text.replace(marker, "CADDY_EXPLICIT_RETRY=0", 1))
+
+    result = harness.run_make(fixture, "-f", str(copy))
+
+    assert result.returncode == 0, result.stderr
+    assert "skipping in a noninteractive session" in result.stderr
+    assert [
+        event["argv"] for event in harness.events_named(fixture, "sudo_preflight")
+    ] == [["-n", "true"]]
+    assert harness.events_named(fixture, "controlled_render")
+    assert harness.events_named(fixture, "make_syntax_check")
+    assert harness.events_named(fixture, "make_rm")
+    _assert_no_package_or_library_events(fixture)
+    assert list(fixture.temp.iterdir()) == []

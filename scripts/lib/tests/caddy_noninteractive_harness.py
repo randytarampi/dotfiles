@@ -195,8 +195,7 @@ def run_fixture_utility(action: str, args: list[str], fixture: CaddyFixture) -> 
             record_event(fixture, "make_execute", args)
             command = [str(BASH), str(path)]
             env = fixture.env.copy()
-            if path.name.startswith("dotfiles-caddy-setup."):
-                env["CADDY_EXPLICIT_RETRY"] = "1"
+            env["CADDY_EXPLICIT_RETRY"] = os.environ.get("CADDY_EXPLICIT_RETRY", "0")
         return subprocess.run(command, env=env, timeout=10, check=False).returncode
     if action == "chmod":
         if len(args) != 2 or args[0] != "700":
