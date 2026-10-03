@@ -89,7 +89,7 @@ def test_scoped_same_url_and_cross_provider_collision(tmp_path, monkeypatch):
     assert FAKE_PI_KEY not in json.dumps(report)
 
 
-def test_known_missing_survives_auth_unknown(tmp_path, monkeypatch):
+def test_missing_and_auth_unknown(tmp_path, monkeypatch):
     client_home(tmp_path, monkeypatch)
     write_pi(
         tmp_path,
@@ -211,7 +211,7 @@ def test_key_symlink_rejected(tmp_path, monkeypatch):
     assert "fake" not in json.dumps(report)
 
 
-def test_pi_role_override_inventory_mismatch(tmp_path, monkeypatch):
+def test_pi_role_override_missing(tmp_path, monkeypatch):
     client_home(tmp_path, monkeypatch)
     write_pi(
         tmp_path,
