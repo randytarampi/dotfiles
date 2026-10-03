@@ -1,6 +1,7 @@
 """Guard floating-major action refs and the owned dispatcher exception."""
 
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -13,12 +14,23 @@ MAJOR_REF = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@v[0-9]+\Z"
 
 def action_refs():
     for workflow in sorted((*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml"))):
-        for line_number, line in enumerate(
-            workflow.read_text(encoding="utf-8").splitlines(), start=1
-        ):
-            match = re.match(r"\s*(?:-\s*)?uses:\s*([^\s#]+)", line)
-            if match:
-                yield workflow.relative_to(ROOT).as_posix(), line_number, match.group(1)
+        document = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
+        jobs = document.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        path = workflow.relative_to(ROOT).as_posix()
+        for job_name, job in jobs.items():
+            if not isinstance(job, dict):
+                continue
+            reusable = job.get("uses")
+            if isinstance(reusable, str):
+                yield path, f"jobs.{job_name}.uses", reusable
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            for index, step in enumerate(steps):
+                if isinstance(step, dict) and isinstance(step.get("uses"), str):
+                    yield path, f"jobs.{job_name}.steps[{index}].uses", step["uses"]
 
 
 def is_approved_ref(path, value):
@@ -96,3 +108,95 @@ def test_zizmor_policies_scoped():
     owned = "randytarampi/dotfiles/.github/workflows/agentic-review.yml"
     assert policies[owned] == "any"
     assert set(policies) == expected | {owned}
+
+
+def write_fixture_workflow(tmp_path, monkeypatch, name, content):
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    path = workflow_dir / name
+    path.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "WORKFLOWS", workflow_dir)
+    return path
+
+
+def test_quoted_inline_refs(tmp_path, monkeypatch):
+    write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "inline.yml",
+        "jobs:\n"
+        "  quoted:\n"
+        "    steps:\n"
+        '      - {uses: "actions/checkout@v7"}\n'
+        "      - {uses: 'google-github-actions/run-gemini-cli@v0'}\n"
+        "      - uses: actions/setup-python@v7\n"
+        "        with:\n"
+        "          uses: actions/checkout@main\n",
+    )
+
+    refs = list(action_refs())
+
+    assert [ref for _, _, ref in refs] == [
+        "actions/checkout@v7",
+        "google-github-actions/run-gemini-cli@v0",
+        "actions/setup-python@v7",
+    ]
+    assert [position for _, position, _ in refs] == [
+        "jobs.quoted.steps[0].uses",
+        "jobs.quoted.steps[1].uses",
+        "jobs.quoted.steps[2].uses",
+    ]
+
+
+def test_inline_branch_rejected(tmp_path, monkeypatch):
+    write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "branch.yml",
+        "jobs:\n  check:\n    steps:\n      - {uses: actions/checkout@main}\n",
+    )
+
+    refs = list(action_refs())
+
+    assert refs == [
+        (
+            ".github/workflows/branch.yml",
+            "jobs.check.steps[0].uses",
+            "actions/checkout@main",
+        )
+    ]
+    assert not is_approved_ref(refs[0][0], refs[0][2])
+
+
+def test_owned_ref_wrong_file(tmp_path, monkeypatch):
+    write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "other.yml",
+        f"jobs:\n  call:\n    uses: {OWNED_REF}\n",
+    )
+
+    ref = next(action_refs())
+
+    assert ref[1] == "jobs.call.uses"
+    assert not is_approved_ref(ref[0], ref[2])
+
+
+def test_comments_and_inputs_ignored(tmp_path, monkeypatch):
+    write_fixture_workflow(
+        tmp_path,
+        monkeypatch,
+        "comment.yml",
+        "# uses: actions/checkout@main\n"
+        "jobs:\n"
+        "  run:\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v7\n"
+        "        with:\n"
+        "          uses: actions/checkout@main\n",
+    )
+
+    refs = list(action_refs())
+
+    assert [ref for _, _, ref in refs] == ["actions/checkout@v7"]
