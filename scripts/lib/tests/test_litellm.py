@@ -158,6 +158,96 @@ def test_ollama_cloud_stubs_are_routed_through_local_daemon_without_duplicates(
     )
 
 
+def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["omlx", "ollama"])
+    discovered = {
+        "omlx": ["shared", "omlx-zeta", "omlx-alpha", "omlx-alpha"],
+        "ollama": ["shared-cloud", "local-zeta", "shared", "shared-cloud"],
+    }
+    monkeypatch.setattr(
+        litellm_config,
+        "iter_engine_models",
+        lambda provider: [{"name": name} for name in discovered[provider]],
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "local_endpoint_for",
+        lambda provider, protocol: (
+            ("http://127.0.0.1:8000/v1", "OMLX_API_KEY") if provider == "omlx" else None
+        ),
+    )
+    cloud_models = [{"name": name} for name in ("shared-cloud", "cloud-alpha")]
+    monkeypatch.setattr(
+        litellm_config, "list_cloud_ollama_models", lambda: cloud_models
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "get_ollama_local_base_url",
+        lambda: "http://127.0.0.1:11434/v1",
+    )
+    catalogue = ["router-alpha", "router-zeta"]
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
+    environ = {
+        "LITELLM_PORT": "4400",
+        "OMLX_API_KEY": "test-omlx-key",
+        "OPENROUTER_API_KEY": "test-openrouter-key",
+    }
+
+    first_entries = litellm_config.compute_model_list(environ)
+    first_config = litellm_config.render_config(environ, first_entries)
+    config_path = tmp_path / "config.yaml"
+    assert litellm_config.write_config(config_path, environ, first_entries) is True
+    first_bytes = config_path.read_bytes()
+
+    discovered["omlx"].reverse()
+    discovered["ollama"].reverse()
+    cloud_models.reverse()
+    second_entries = litellm_config.compute_model_list(environ)
+    second_config = litellm_config.render_config(environ, second_entries)
+    assert second_entries == first_entries
+    assert second_config == first_config
+    assert litellm_config.write_config(config_path, environ, second_entries) is False
+    assert config_path.read_bytes() == first_bytes
+
+    aliases = [entry["model_name"] for entry in second_entries]
+    assert aliases[:8] == [
+        "omlx/omlx-alpha",
+        "omlx-alpha",
+        "omlx/omlx-alpha",
+        "omlx-alpha",
+        "omlx/omlx-zeta",
+        "omlx-zeta",
+        "omlx/shared",
+        "shared",
+    ]
+    assert aliases[8:18] == [
+        "ollama/cloud-alpha",
+        "cloud-alpha",
+        "ollama/local-zeta",
+        "local-zeta",
+        "ollama/shared",
+        "shared",
+        "ollama/shared-cloud",
+        "shared-cloud",
+        "openrouter/router-alpha",
+        "openrouter/router-zeta",
+    ]
+    assert aliases.count("omlx/omlx-alpha") == 2
+    assert aliases.count("omlx-alpha") == 2
+    by_alias = {entry["model_name"]: entry for entry in second_entries}
+    assert by_alias["omlx/shared"]["litellm_params"] == {
+        "model": "openai/shared",
+        "api_base": "http://127.0.0.1:8000/v1",
+        "api_key": "os.environ/OMLX_API_KEY",
+    }
+    assert by_alias["ollama/shared-cloud"]["litellm_params"] == {
+        "model": "ollama/shared-cloud",
+        "api_base": "http://127.0.0.1:11434",
+    }
+    assert aliases.index("shared") == 7
+    assert aliases.index("shared", 8) == 13
+
+
 def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeypatch):
     calls = []
 

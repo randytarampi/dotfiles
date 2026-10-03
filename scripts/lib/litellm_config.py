@@ -116,14 +116,14 @@ def compute_model_list(environ=None):
     environ = environ or os.environ
     entries = []
     for provider in active_engines():
-        models = _safe_models(provider)
+        models = sorted(_safe_models(provider))
         if provider == "ollama":
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base
             cloud_models = [_model_name(item) for item in list_cloud_ollama_models()]
             # The regular engine pool excludes cloud stubs, but tolerate mixed
             # pools and preserve one pair of aliases per installed model.
-            ollama_models = list(dict.fromkeys(models + cloud_models))
+            ollama_models = sorted(dict.fromkeys(models + cloud_models))
             for model in ollama_models:
                 params = _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
                 bare = _entry(model, f"ollama/{model}", api_base=base)
