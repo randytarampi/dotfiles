@@ -1,7 +1,6 @@
 """Read-only Git and Poetry probes shared by the worktree readiness CLI."""
 
-import shutil
-import subprocess
+import subprocess  # nosec B404 - only fixed argv probes use PATH-resolved executables.
 from pathlib import Path
 
 

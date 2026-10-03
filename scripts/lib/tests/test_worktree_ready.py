@@ -29,7 +29,9 @@ def fixture(
     contract.write_text("{}\n", encoding="utf-8")
     (project / ".python-version").write_text("3.13.13\n", encoding="utf-8")
     (project / "pyproject.toml").write_text(
-        '[project]\nname = "dotfiles"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[project]\nname = "dotfiles"\nversion = "0.1.0"\n'
+        'requires-python = ">=3.10"\n',
+        encoding="utf-8",
     )
     (project / "poetry.lock").write_text(
         '[[package]]\nname = "pytest"\nversion = "9.0.0"\n\n'
@@ -60,8 +62,8 @@ def fixture(
     python = venv / "bin/python"
     python.write_text(
         "#!/bin/sh\n"
-        '[ "$FAKE_IMPORTS" = "1" ] || [ -f "$FAKE_READY" ] || exit 1\n'
-        'printf "%s\\n%s\\n" "$FAKE_PY_VERSION" "$FAKE_PYTHON"\n',
+        'printf "%s\\n%s\\n" "$FAKE_PY_VERSION" "$FAKE_PYTHON"\n'
+        '[ "$FAKE_IMPORTS" = "1" ] || [ -f "$FAKE_READY" ] || exit 1\n',
         encoding="utf-8",
     )
     python.chmod(0o755)
@@ -216,12 +218,69 @@ def test_non_project_and_missing_poetry_fail_before_install(tmp_path):
     assert invalid.returncode == 1
     assert "not the dotfiles project" in invalid.stdout.lower()
     assert not calls.exists()
-    (project / "pyproject.toml").write_text('[project]\nname = "dotfiles"\n')
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "dotfiles"\nversion = "0.1.0"\n'
+        'requires-python = ">=3.10"\n',
+        encoding="utf-8",
+    )
     poetry.unlink()
     missing = invoke(project, env, "--install")
     assert missing.returncode == 1
     assert "Poetry executable is unavailable" in missing.stdout
     assert not calls.exists()
+
+
+def test_poetry_patch_drift_is_ready_and_major_minor_drift_warns(tmp_path):
+    project, _calls, env, _poetry = fixture(tmp_path / "patch", imports=True)
+    patch_drift = invoke(project, env)
+    assert patch_drift.returncode == 0
+    assert "Requested Python pin: 3.13.13" in patch_drift.stdout
+    assert "Poetry interpreter: 3.13.16" in patch_drift.stdout
+    assert "differs from preferred pin family" not in patch_drift.stdout
+
+    other_project, _calls, other_env, _poetry = fixture(
+        tmp_path / "minor", imports=True
+    )
+    other_env["FAKE_PY_VERSION"] = "3.14.8"
+    minor_drift = invoke(other_project, other_env)
+    assert minor_drift.returncode == 0
+    assert "Warning: actual Poetry runtime family 3.14 differs" in minor_drift.stdout
+    assert "requires-python specifier is the compatibility gate" in minor_drift.stdout
+
+
+def test_poetry_rejects_runtime_below_minimum_and_malformed_requirement(tmp_path):
+    project, calls, env, _poetry = fixture(tmp_path / "below", imports=True)
+    env["FAKE_PY_VERSION"] = "3.9.13"
+    below_floor = invoke(project, env, "--install")
+    assert below_floor.returncode == 1
+    assert "does not satisfy project requires-python '>=3.10'" in below_floor.stdout
+    assert not calls.exists()
+
+    malformed_project, malformed_calls, malformed_env, _poetry = fixture(
+        tmp_path / "malformed", imports=True
+    )
+    pyproject = malformed_project / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dotfiles"\nversion = "0.1.0"\n'
+        'requires-python = "not a spec"\n',
+        encoding="utf-8",
+    )
+    malformed = invoke(malformed_project, malformed_env, "--install")
+    assert malformed.returncode == 1
+    assert "malformed requires-python specifier" in malformed.stdout
+    assert not malformed_calls.exists()
+
+
+def test_poetry_missing_or_unparseable_interpreter_version_fails_read_only(
+    tmp_path,
+):
+    for index, version in enumerate(("", "not-a-version")):
+        project, calls, env, _poetry = fixture(tmp_path / str(index), imports=True)
+        env["FAKE_PY_VERSION"] = version
+        result = invoke(project, env)
+        assert result.returncode == 1
+        assert "unparseable Python version" in result.stdout
+        assert not calls.exists()
 
 
 def test_subprocess_runner_applies_finite_timeout(monkeypatch):

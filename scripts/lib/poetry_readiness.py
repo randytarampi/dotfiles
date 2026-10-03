@@ -1,6 +1,6 @@
 """Poetry metadata and interpreter readiness probes."""
 
-import re
+import ast
 from pathlib import Path
 
 from worktree_readiness import is_timeout, run
@@ -32,13 +32,13 @@ def probe_poetry(path, poetry_executable):
                 [
                     str(interpreter),
                     "-c",
-                    "import sys, yaml, pytest, black; print(sys.version.split()[0]); print(sys.executable)",
+                    "import sys; print(sys.version.split()[0]); print(sys.executable); import yaml, pytest, black",
                 ],
                 cwd=path,
             )
             if is_timeout(probe):
                 error = "Timed out while probing Poetry interpreter imports."
-            elif isinstance(probe, Exception) or probe.returncode != 0:
+            elif isinstance(probe, Exception):
                 error = "Poetry interpreter cannot import required modules: yaml, pytest, black."
             else:
                 lines = probe.stdout.splitlines()
@@ -48,6 +48,8 @@ def probe_poetry(path, poetry_executable):
                     )
                 else:
                     runtime = (lines[0], lines[1])
+                    if probe.returncode != 0:
+                        error = "Poetry interpreter cannot import required modules: yaml, pytest, black."
     return runtime, error
 
 
@@ -72,6 +74,7 @@ def _validate_tracked_metadata(path, git_executable):
 def validate_project(path, git_executable):
     """Require tracked Poetry metadata and this repository's project identity."""
     error = _validate_tracked_metadata(path, git_executable)
+    requires_python = None
     if error is None:
         try:
             project_text = (path / "pyproject.toml").read_text(encoding="utf-8")
@@ -79,26 +82,66 @@ def validate_project(path, git_executable):
         except OSError:
             error = "Poetry project metadata or lock file is malformed."
         else:
-            project_section = re.search(
-                r"(?ms)^\[project\]\s*(.*?)(?=^\[|\Z)", project_text
+            project, project_error = _read_toml_section(
+                project_text, "[project]", {"name", "requires-python"}
             )
-            has_dotfiles_project = project_section and re.search(
-                r'(?m)^name\s*=\s*["\']dotfiles["\']\s*$',
-                project_section.group(1),
+            metadata, lock_error = _read_toml_section(
+                lock_text, "[metadata]", {"lock-version"}
             )
-            valid_lock = re.search(r"(?m)^\[metadata\]\s*$", lock_text)
-            valid_lock = valid_lock and re.search(
-                r'(?m)^lock-version\s*=\s*["\']\d', lock_text
-            )
-            valid_lock = valid_lock and re.search(
-                r"(?m)^\[\[package\]\]\s*$", lock_text
-            )
-            if not has_dotfiles_project or not valid_lock:
+            has_package = "[[package]]" in {
+                line.strip() for line in lock_text.splitlines()
+            }
+            if project_error or lock_error:
+                error = "Poetry project metadata or lock file is malformed."
+            elif project.get("name") != "dotfiles" or not has_package:
                 error = "Git checkout does not contain valid dotfiles Poetry project metadata."
-    return error
+            elif not isinstance(project.get("requires-python"), str):
+                error = "pyproject.toml is missing the required requires-python string."
+            else:
+                requirement = project["requires-python"]
+                try:
+                    from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+                    requires_python = SpecifierSet(requirement)
+                except ImportError:
+                    error = "Python requirement parser 'packaging' is unavailable."
+                except InvalidSpecifier:
+                    error = (
+                        "pyproject.toml contains a malformed requires-python specifier."
+                    )
+    return error, requires_python
 
 
-def check_poetry_environment(path, poetry_executable, *, install=False, dry_run=False):
+def _read_toml_section(source, section, wanted_keys):
+    """Read selected single-line TOML string keys without regex parsing."""
+    values = {}
+    current_section = None
+    error = None
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped
+            continue
+        if current_section != section:
+            continue
+        key, separator, raw_value = line.partition("=")
+        if not separator or key.strip() not in wanted_keys:
+            continue
+        try:
+            value = ast.literal_eval(raw_value.strip())
+        except (SyntaxError, ValueError):
+            error = f"Invalid TOML string for {section}.{key.strip()}."
+            break
+        if not isinstance(value, str):
+            error = f"Expected a TOML string for {section}.{key.strip()}."
+            break
+        values[key.strip()] = value
+    return values, error
+
+
+def check_poetry_environment(
+    path, poetry_executable, requires_python, *, install=False, dry_run=False
+):
     """Validate Poetry metadata/imports, optionally installing declared groups."""
     metadata = run([poetry_executable, "check", "--lock"], cwd=path, timeout=60)
     if is_timeout(metadata):
@@ -111,9 +154,31 @@ def check_poetry_environment(path, poetry_executable, *, install=False, dry_run=
         )
         return None, f"Poetry rejected project metadata or lock ({status})."
     runtime, error = probe_poetry(path, poetry_executable)
-    if runtime is not None or dry_run:
+    version_mismatch = False
+    if runtime is not None:
+        try:
+            from packaging.version import InvalidVersion, Version
+
+            version_mismatch = not requires_python.contains(
+                Version(runtime[0]), prereleases=True
+            )
+        except ImportError:
+            return runtime, "Python requirement parser 'packaging' is unavailable."
+        except InvalidVersion:
+            return (
+                runtime,
+                f"Poetry reported an unparseable Python version: {runtime[0]}.",
+            )
+        if version_mismatch:
+            return (
+                runtime,
+                f"Poetry interpreter {runtime[0]} does not satisfy project requires-python '{requires_python}'.",
+            )
+    if runtime is not None and error is None:
         return runtime, error
-    if not install:
+    if dry_run or not install:
+        return runtime, error
+    if runtime is not None and not error.startswith("Poetry interpreter cannot import"):
         return runtime, error
     result = run(
         [poetry_executable, "install", "--no-root", "--with", "tooling,test"],
@@ -129,4 +194,22 @@ def check_poetry_environment(path, poetry_executable, *, install=False, dry_run=
             else "command could not run"
         )
         return None, f"Poetry dependency installation failed ({status})."
-    return probe_poetry(path, poetry_executable)
+    runtime, error = probe_poetry(path, poetry_executable)
+    if runtime is not None:
+        try:
+            from packaging.version import InvalidVersion, Version
+
+            compatible = requires_python.contains(Version(runtime[0]), prereleases=True)
+        except ImportError:
+            return runtime, "Python requirement parser 'packaging' is unavailable."
+        except InvalidVersion:
+            return (
+                runtime,
+                f"Poetry reported an unparseable Python version: {runtime[0]}.",
+            )
+        if not compatible:
+            return (
+                runtime,
+                f"Poetry interpreter {runtime[0]} does not satisfy project requires-python '{requires_python}'.",
+            )
+    return runtime, error
