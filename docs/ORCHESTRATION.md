@@ -123,7 +123,12 @@ prepare the target checkout, use `INSTALL=1` to run
 `poetry install --no-root --with tooling,test`. `INSTALL=1 DRY_RUN=1` previews
 that install without invoking it or writing files. The helper reports the
 Poetry interpreter's actual executable/version alongside the checkout's
-`.python-version` request and does not change pyenv/global pins. It does not
+`.python-version` request and does not change pyenv/global pins. The runtime must
+satisfy the project's `requires-python` range and match the pin's major/minor
+family. Patch drift within that family is allowed with an explicit warning,
+including when a Homebrew-linked pyenv entry resolves to a newer patch. A family
+mismatch fails before dependency installation; install mode does not select a
+different interpreter automatically. It does not
 inspect environment variables or credentials. Sibling worktrees are supported
 only when explicitly authorized by the parent task for this dotfiles/chezmoi
 repository; this helper does not create nested worktrees or alter other

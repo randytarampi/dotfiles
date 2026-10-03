@@ -230,22 +230,37 @@ def test_non_project_and_missing_poetry_fail_before_install(tmp_path):
     assert not calls.exists()
 
 
-def test_poetry_patch_drift_is_ready_and_major_minor_drift_warns(tmp_path):
+def test_poetry_patch_drift_warns_and_major_minor_drift_is_not_ready(tmp_path):
     project, _calls, env, _poetry = fixture(tmp_path / "patch", imports=True)
     patch_drift = invoke(project, env)
     assert patch_drift.returncode == 0
     assert "Requested Python pin: 3.13.13" in patch_drift.stdout
     assert "Poetry interpreter: 3.13.16" in patch_drift.stdout
-    assert "differs from preferred pin family" not in patch_drift.stdout
+    assert (
+        "Warning: Poetry patch version 3.13.16 differs from pin 3.13.13"
+        in patch_drift.stdout
+    )
 
     other_project, _calls, other_env, _poetry = fixture(
         tmp_path / "minor", imports=True
     )
     other_env["FAKE_PY_VERSION"] = "3.14.8"
-    minor_drift = invoke(other_project, other_env)
-    assert minor_drift.returncode == 0
-    assert "Warning: actual Poetry runtime family 3.14 differs" in minor_drift.stdout
-    assert "requires-python specifier is the compatibility gate" in minor_drift.stdout
+    minor_drift = invoke(other_project, other_env, "--install")
+    assert minor_drift.returncode == 1
+    assert (
+        "Not ready: Poetry runtime family 3.14 differs from pin family 3.13"
+        in minor_drift.stdout
+    )
+    assert "Ready: Git worktree" not in minor_drift.stdout
+    assert not _calls.exists()
+    other_env["FAKE_IMPORTS"] = "0"
+    assert invoke(other_project, other_env, "--install").returncode == 1
+    assert not _calls.exists()
+
+    env["FAKE_PY_VERSION"] = "3.13.13"
+    exact = invoke(project, env)
+    assert exact.returncode == 0
+    assert "Warning: Poetry patch version" not in exact.stdout
 
 
 def test_poetry_rejects_runtime_below_minimum_and_malformed_requirement(tmp_path):
@@ -279,7 +294,7 @@ def test_poetry_missing_or_unparseable_interpreter_version_fails_read_only(
         env["FAKE_PY_VERSION"] = version
         result = invoke(project, env)
         assert result.returncode == 1
-        assert "unparseable Python version" in result.stdout
+        assert "unparseable python version" in result.stdout.lower()
         assert not calls.exists()
 
 

@@ -68,6 +68,7 @@ def _check_python_environment(path, requested_pin, requires_python, args):
         path,
         poetry_executable,
         requires_python,
+        requested_pin=requested_pin,
         install=args.install,
         dry_run=args.dry_run,
     )
@@ -78,12 +79,12 @@ def _check_python_environment(path, requested_pin, requires_python, args):
         if (
             preferred_family
             and actual_family
-            and preferred_family.groups() != actual_family.groups()
+            and preferred_family.groups() == actual_family.groups()
+            and requested_pin != runtime[0]
         ):
             print(
-                f"Warning: actual Poetry runtime family {actual_family.group(0)} "
-                f"differs from preferred .python-version family {preferred_family.group(0)}; "
-                "the project requires-python specifier is the compatibility gate."
+                f"Warning: Poetry patch version {runtime[0]} differs from pin {requested_pin}; "
+                "the pinned major/minor family matches."
             )
     if environment_error:
         installable_failure = environment_error.startswith(
