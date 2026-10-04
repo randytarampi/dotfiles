@@ -97,6 +97,38 @@ def test_refreshes_copilot_setup_default_and_fallback_with_dispatcher(
     assert dispatcher.read_text() == dispatcher_source.replace(copilot_sha, "d" * 40)
 
 
+def test_rejects_mismatched_copilot_fallback(monkeypatch, tmp_path):
+    default_sha = "c" * 40
+    other_sha = "e" * 40
+    ANCHOR.COPILOT_SETUP.write_text(
+        f"default: {default_sha}\n"
+        f"TRUSTED_REF: ${{{{ inputs.trusted_ref || '{other_sha}' }}}}\n"
+        f"# note {default_sha}\n"
+    )
+    dispatcher = tmp_path / "agent-review.yml"
+    dispatcher.write_text(
+        "uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main\n"
+        f"trusted_ref: {default_sha}\n"
+    )
+    monkeypatch.setattr(ANCHOR, "DISPATCHER", dispatcher)
+    monkeypatch.setattr(
+        ANCHOR,
+        "git",
+        lambda *args: (
+            "main"
+            if args == ("branch", "--show-current")
+            else (
+                "d" * 40
+                if args == ("rev-parse", "--verify", "FETCH_HEAD^{commit}")
+                else ""
+            )
+        ),
+    )
+    assert ANCHOR.main() == 1
+    assert default_sha in ANCHOR.COPILOT_SETUP.read_text()
+    assert "d" * 40 not in ANCHOR.COPILOT_SETUP.read_text()
+
+
 def test_git_uses_path_resolved_executable_and_fixed_argv(monkeypatch):
     observed = {}
     executable = "/usr/bin/git"
