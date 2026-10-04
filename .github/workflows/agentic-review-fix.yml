@@ -109,7 +109,7 @@ jobs:
 
       - name: Install and verify the pinned OpenCode CLI
         env:
-          OPENCODE_VERSION: "1.18.33"
+          OPENCODE_VERSION: "1.18.34"
         run: |
           set -euo pipefail
           npm install --global "opencode-ai@${OPENCODE_VERSION}"

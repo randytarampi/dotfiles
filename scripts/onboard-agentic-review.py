@@ -53,7 +53,7 @@ Fix lane:
   base_sha must be an existing 40-hex commit, and allowed_paths must list every
   exact file permitted to change (one path per line); each run publishes a
   unique agentic-review-bot/<run-id> branch. The generator installs and verifies
-  the pinned OpenCode CLI (opencode-ai@1.18.33); reruns use an exact-ref
+  the pinned OpenCode CLI (opencode-ai@1.18.34); reruns use an exact-ref
   force-with-lease guarded by the previously observed remote tip.
 Usage:
   Mention plus text requests an ad-hoc task; review labels request the standard review.
