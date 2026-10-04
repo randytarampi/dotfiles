@@ -548,7 +548,7 @@ jobs:
     steps:
       - id: junie_app_token
         if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
           JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
@@ -559,7 +559,7 @@ jobs:
           permission-pull-requests: write
       - id: opencode_app_token
         if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         env:
           OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
           OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
@@ -570,7 +570,7 @@ jobs:
           permission-pull-requests: write
       - id: gemini_app_token
         if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         env:
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
           GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
@@ -581,7 +581,7 @@ jobs:
           permission-pull-requests: write
       - id: fallback_app_token
         if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
