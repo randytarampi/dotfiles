@@ -90,7 +90,7 @@ def test_review_lane_installs_the_same_pinned_opencode_cli_as_fix():
     fix = read(".github/workflows/agentic-review-fix.yml")
     opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
     assert 'npm install --global "opencode-ai@${OPENCODE_VERSION}"' in opencode
-    assert 'OPENCODE_VERSION: "1.18.33"' in opencode
+    assert 'OPENCODE_VERSION: "1.18.34"' in opencode
     assert "command -v opencode" in opencode
     assert "opencode --version" in opencode
     assert "version_pattern=" in opencode
@@ -98,7 +98,7 @@ def test_review_lane_installs_the_same_pinned_opencode_cli_as_fix():
     assert opencode.index(
         "Install and verify the pinned OpenCode CLI"
     ) < opencode.index("Run OpenCode review")
-    assert 'OPENCODE_VERSION: "1.18.33"' in fix
+    assert 'OPENCODE_VERSION: "1.18.34"' in fix
 
 
 def test_multiline_review_outputs_keep_closers_on_their_own_line():
@@ -141,7 +141,7 @@ def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
     assert 'npm install --global "opencode-ai@${OPENCODE_VERSION}"' in generator
     assert "command -v opencode" in generator
     assert "opencode --version" in generator
-    assert 'OPENCODE_VERSION: "1.18.33"' in generator
+    assert 'OPENCODE_VERSION: "1.18.34"' in generator
     assert "version_pattern=" in generator
     assert '[[ "${version_output}" =~ ${version_pattern} ]]' in generator
     assert "git commit" not in generator
