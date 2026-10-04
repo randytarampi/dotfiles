@@ -4,13 +4,11 @@ These policies apply to work in every repository.
 
 ### Verification
 
-- Run the repository's canonical verification command before claiming success.
-- If verification fails, fix it before reporting the work as complete.
-- Verify from the committed tree, never in-flight working-tree content: use a clean dedicated worktree or verify `git show HEAD:<file>` rather than stashing or cleaning another lane's changes.
-- Treat a lane's verification claim as unproven until it is independently re-run: re-execute the repo's verify command (and `actionlint` on workflow changes) before accepting it.
+- Agree on outcome, acceptance checks, delivery state, permissions, and validation owner at lane start. Use focused red/green checks while implementing; the validation owner independently inspects each lane and runs its decisive targeted reproduction. Run one canonical integrated verification on the stable intended state before completion, push or release. Re-run when relevant code, inputs or runtime invalidate evidence. Required checks and normal coverage remain mandatory; failures block delivery.
+- Report execution only from actual tool results and persisted state where applicable; never simulate calls, results or transcripts. Resolve contradictory claims from actual Git/remote HEAD, index and CI state. Keep status factual and concise; PID-alive/busy is not progress evidence.
+- For each lane, record objective, role, absolute path, base SHA, owned files, validation owner, checkpoint and stop conditions. Reuse only for the same objective and role. Use the existing runtime preflight, test the thinnest observable acceptance slice first, and stop to reassess if infrastructure dwarfs behaviour. Agree on a checkpoint and bounded stop budget; change approach after two failed attempts. Take over only after confirming termination and inspecting partial state. Never overlap writers or clean destructively.
 - A service environment schema change is not complete in one surface: when adding, removing, or renaming a key in a generated `service.env`, update the generating `*_service_env_sync()` emitter, the verification script's required-names/expected set, and the env-sync test asserting the key schema — all in the same change.
-- For service or model-generator changes, run the generator twice; check service health and generated state, including keys, and confirm the second run is idempotent. A successful first run alone can hide failures such as an HTTP 400 from an invalid key list.
-- Tests for orchestration or service helpers must isolate `HOME` and `PATH` and stub real service/process commands such as `launchctl`, `systemctl` and `pkill`. After full verification, confirm live services survived; don't assume verification is non-mutating.
+- For service or model-generator changes, use the real consumer and credential path, capture baseline before the first run, run twice and check service health, generated state/keys and idempotence. Isolate `HOME` and `PATH`, stub real service/process commands in tests, and confirm live services survived verification. Dotfiles command detail is in the `dotfiles-verify` skill.
 - Do not sleep-poll CI or specialist lanes; dispatch feedback-addressing work while checks run in the background and reconcile results when they land.
 - At implementation-lane start, confirm the base/worktree state, available runtime and declared dependencies; agree on a red-before/green-after acceptance check, its validation owner, and a checkpoint/stop scope. Do not begin edits when a required runtime is unavailable.
 - If a check blocks, inspect persisted files and process/service state first, attempt bounded recovery inside the agreed scope, then report the blocker to the validation owner. Do not silently weaken acceptance criteria or expand into adjacent work.
@@ -28,11 +26,8 @@ These policies apply to work in every repository.
 
 ### Git worktrees
 
-- Use a dedicated Git worktree for non-trivial, risky, or parallel work. Keep the primary checkout as an integration lane, especially when it has pre-existing dirt.
-- One writer owns one branch and one worktree. Never attach the same branch to multiple worktrees or dispatch another writer into an owned lane.
-- Before work starts, record the expected dirty state. Preserve it: do not use `git stash`, `git clean`, `git reset`, or broad staging to clear another lane's work.
-- Stage explicit paths only. Validate from the intended committed worktree state, not from unrelated changes in the primary checkout.
-- Before removing a worktree, confirm it has no uncommitted changes and ask for explicit approval. Do not prune unrelated or stale worktree records opportunistically.
+- Use worktrees for meaningful isolation or parallelism, not every small edit. One writer owns one branch and worktree; never attach a branch to multiple worktrees or dispatch into an owned lane. Preserve pre-existing dirty state; never stash, clean, reset or broadly stage another lane's work. Stage explicit paths only.
+- In the approved lane, record agent ownership, path, branch, and creation/integration/teardown consent. Finishing includes retirement: remove unused agent-owned clean trees under that standing consent. Preserve unique committed branches. Before removing dirty saved work, create a private verified archive with restore instructions and obtain explicit dirty-removal consent. Never remove primary, user-owned or unknown trees; touch no user stashes, add no verification stash, and do not opportunistically prune or delete branches. Directory access is not integration/deletion consent. Follow the existing worktree skill's nested `.slim/worktrees` default where applicable; dotfiles sibling worktrees need one explicit approved exception, not an implicit default. See `docs/ORCHESTRATION.md` for dotfiles preflight/location details.
 
 ### Writing and ambiguity
 
@@ -41,29 +36,19 @@ These policies apply to work in every repository.
 
 ### Delegation and planning
 
-- For unknown scope, delegate bounded discovery first; read expected edit targets directly.
+- For unknown scope, delegate bounded discovery first; read expected edit targets directly. At the outset agree the outcome and a few acceptance checks, delivery state, and permission boundaries. Classify new asks as blocking now, next batch or future, honouring explicit user overrides. Finalisation freezes scope to correctness and required CI until delivery.
 - When changing AI tooling, assess every configured tool up front and enumerate the full tool fleet.
 - Keep repository-specific facts and implementation details in the repository's own guidance and documentation.
-- Dispatch discipline: never dispatch onto a repo another lane may own. When a background signal contradicts the Job Board, or the board shows `error`/unknown for a session, verify the repository's tip and dirty state directly before re-dispatching — a stale or ambiguous board signal is not proof a session is gone.
-- Brief lanes with the repository's expected dirty state at dispatch time (pre-existing modifications to preserve, intentional uncommitted files), so preflight stops are reserved for genuine drift.
-- Run lanes under the repository's pinned Node version (check `.nvmrc`); never the machine default.
-- Never run long `sleep`/poll loops in the orchestrator shell; dispatch a read-only watcher lane and end the turn.
-- Watcher lanes run to terminal state and report conclusions; don't return on a first in-progress poll.
-- Specialist sessions cannot load skills — inline the relevant skill's workflow in the dispatch prompt.
+- Never dispatch onto a repo another lane may own. Verify actual tip, dirty state and process/tool evidence before re-dispatch or takeover; ambiguous status is not proof a session ended. Respect the repository's pinned runtime. Scope capability assumptions (including image support or specialist skill access) to the specific tool/version verified.
 
 ### API verification notes
 
-- Verified live 2026-09-05; recheck these facts before debugging around them.
-- GitHub Actions `startup_failure` runs expose no check-run, job or annotation API artifacts; use the Actions UI.
-- GitHub environment REST responses may omit required reviewers; trust a release run's `waiting` state or the Settings UI, and verify GraphQL types against the schema.
-- GitHub Actions allowlists match the full `owner/repo/path@ref`; audit every `uses:` entry, including subpaths and aliases.
-- AppVeyor build-job logs are raw text, not JSON.
-- Coveralls badges can be stale; use project build JSON for current coverage.
-- Unpublished npm versions cannot be republished; release a higher version.
+- Verified dotfiles rulesets API facts: `rules` and `bypass_actors` must be JSON arrays; omit `integration_id` from `required_status_checks`; set workflow `permissions` at workflow or job level, never step level. Re-introspect current tool/API behaviour before relying on it.
 
 ### Communication
 
-- Image and screenshot inputs are not supported in agent lanes; ask for text, a description, or a probed artifact (`pdftotext`, `xxd`) instead of accepting an unreadable file.
+- Distinguish required CI, fresh current-head review, review comments and owner-accepted trade-offs. Record findings as fixed, declined by owner, or deferred. Resolve stale requested changes or absent bot reviews at one bounded owner decision point, not endless loops. Agent PRs remain draft by default; never fake approval, bypass rulesets, or push/mark ready/merge without explicit user authority. An explicit override is recorded, not represented as bot approval.
+- Image/screenshot support depends on the specific agent and version; verify the capability before relying on it. Ask for a text description or probe an artifact when the lane cannot read it.
 
 ### Artifacts
 

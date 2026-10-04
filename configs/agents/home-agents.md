@@ -25,14 +25,11 @@ These apply to every repo, every session.
 
 ### Verifying before declaring success
 
-- **Run the repo's standard verify command before claiming a change is done.** Don't report "done" or "working" based on reasoning alone — execute the actual check.
-  - dotfiles: `make verify`
-  - other repos: whatever the repo defines (`yarn test`, `yarn lerna run <job>`, `npm run build`, the repo's Makefile target, etc.)
-- For the dotfiles-specific verification sequence and blocked-tool handling, use the installed `dotfiles-verify` skill or its source in the dotfiles repository.
-- If the verify command fails, fix it before reporting success. Don't hand back work that the user will immediately find broken by running the same command themselves.
-- Skip this only for docs-only or trivially mechanical changes (whitespace, typos, renames) where verification adds no signal.
-- For service or model-generator changes, run the generator twice; check service health and generated state, including keys, and confirm the second run is idempotent. A successful first run alone can hide failures such as an HTTP 400 from an invalid key list.
-- Tests for orchestration or service helpers must isolate `HOME` and `PATH` and stub real service/process commands such as `launchctl`, `systemctl` and `pkill`. After full verification, confirm live services survived; don't assume verification is non-mutating.
+- At the start, agree on the outcome, a few acceptance checks, delivery state (local, draft, or merged), and permission boundaries. Choose the lightest workflow with one coherent owner; parallelize only independently owned work. Classify new requests as blocking now, next batch, or future, while respecting an explicit user override. Finalisation freezes scope: address correctness and required CI only until the agreed outcome is delivered.
+- Verify honestly: claim work only when supported by actual tool results and persisted state where applicable. Never simulate tool calls, results, or transcripts. When reports conflict, actual Git/remote HEAD, index, and CI state prevail. Keep status material and factual (command, exit, HEAD, outcome); do not present status as proof. Do not claim Markdown can repair host or adapter liveness.
+- For each lane, record objective, role, absolute path, base SHA, owned files, validation owner, checkpoint and stop conditions. Reuse a lane only for the same objective and role. At start, use the repository's existing runtime preflight; test the thinnest observable acceptance slice before adding harnesses or frameworks. If infrastructure dwarfs behaviour, stop and reassess the test seam. Agree on a checkpoint; seek first evidence within about five minutes when appropriate, set a bounded stop budget, and change approach after two failed attempts rather than repeating or expanding scope. A live PID or busy status is not evidence of progress. Before takeover, confirm termination and inspect actual partial state; never overlap writers or clean destructively.
+- Run focused red/green checks during implementation. The validation owner independently inspects each lane and runs its decisive targeted reproduction. Then run one canonical integrated verification on the stable intended state before claiming completion, pushing or releasing. Rerun only when relevant code, inputs or runtime invalidate the evidence. Required checks and normal coverage remain mandatory; failures are blockers, not grounds to weaken global rules. For dotfiles mechanics and blocked-tool handling, use the `dotfiles-verify` skill and `docs/ORCHESTRATION.md` in the dotfiles repository.
+- For service or model-generator changes, use the real consumer and credential path, capture a baseline before the first run, run twice and check health, generated state/keys and idempotence. Isolate `HOME` and `PATH`, stub real service/process commands in tests, and confirm live services survived verification.
 
 ### Tone and style
 
@@ -47,33 +44,21 @@ These apply to every repo, every session.
 ### Focused execution and status
 
 - Start with the decisive reproduction or check before advancing a speculative root cause. Report only material progress, a decision, or a blocker; do not narrate internal deliberation or ambient job-board state.
-- When blocked, inspect the persisted source and worktree state, try bounded recovery within the agreed scope, and stop for direction rather than expanding the task.
+- When blocked, inspect persisted source and worktree state, try bounded recovery within the agreed scope, and stop for direction rather than expanding the task.
 
 ### Delegation discipline
 
-For changes requiring exploration of unknown scope, delegate bounded discovery first. Use direct reads for files you expect to edit, reconcile, or verify. If scope is unclear after two discovery calls, or discovery spans multiple subsystems, delegate one bounded exploration task. Request concise file:line findings, avoid full file dumps in parent context.
-
-Never run two write-capable subagent lanes that commit concurrently to one repository, even with disjoint file scopes: git staging and HEAD are process-global, so parallel commits race — work is lost to staging conflicts, finished edits strand in stashes, and commit boundaries cross-contaminate. Dispatch committing lanes one at a time, serialize their commits from the orchestrator, or isolate parallel writers in separate git worktrees.
-
-Dispatch background specialists before ending a turn when user input may arrive: a foreground or in-turn dispatch loses in-flight specialist work when the turn is interrupted. After an interruption, verify the repository's tip and dirty state directly before re-dispatching (a specialist's stashes and partial commits are recoverable only after verification — three incidents on 2026-09-22).
-
-Verify a specialist's file-change report by reading the touched files before reconciling a phase — completion summaries can misattribute work, report a different phase's content, or overstate what landed (five incidents on 2026-09-26 during the Open WebUI integration; a `git status --porcelain` + targeted grep of the claimed files settles it in seconds). When a report and the tree disagree, trust the tree.
-
-### Context compression
-
-**Compress early, in small ranges.** Compress small conversation ranges right after a lane closes instead of batching large ranges at the context limit — stale message-range IDs fail with 'not available in the current conversation context' before they execute. On a stale-range rejection, re-derive the oldest still-visible ID and retry with that range; do not retry the same range.
+Use bounded, independently owned lanes only when useful; inspect actual changed files and persisted state before reconciling a report. Git/worktree cleanup follows the repository lifecycle contract in the shared guidance and orchestration reference: record ownership/path/branch and creation, integration and teardown consent in the approved lane; retire unused agent-owned trees under that consent. Preserve unique committed branches. Before removing dirty saved work, make a private verified archive with restore instructions and obtain explicit dirty-removal consent. Never remove primary, user-owned or unknown trees, touch user stashes, add verification stashes, or opportunistically prune/delete branches. Directory access is not integration or deletion consent. Use the existing worktree skill's nested `.slim/worktrees` default where applicable; dotfiles sibling locations require one explicit approved exception, not a new default.
 
 ### Third-party tool claims
 
-Before building on a third-party tool's documented behaviour (env vars, config keys, CLI flags), verify it locally with the tool's own introspection (`--help`, `dump-config`, `config show`, a scratch-directory probe) — research claims can be wrong or version-stale, and a two-minute probe beats a wrong implementation (2026-09-22: chezmoi silently ignores `CHEZMOI_CONFIG`; qlty silently ignores `qlty.toml` `[[plugin]] exclude_patterns` — bandit scoping belongs in `.bandit`, which the driver actually reads).
+Before building on third-party tool behaviour (env vars, config keys, CLI flags), verify locally with the tool's introspection (`--help`, `dump-config`, `config show`, or a scratch probe); documentation can be stale. Scope capability assumptions to the specific tool/version verified, not universal claims.
 
-### GitHub rulesets API notes
-
-- Verified live 2026-09-22 (dotfiles rulesets 23831217/23837328): `rules` and `bypass_actors` must be real JSON arrays in the rulesets REST call — `-F 'key[0]=...'` form-encoding yields 422 "not of type array"; `required_status_checks` entries must OMIT `integration_id` entirely (explicit `null` returns 422 "data matches no possible input"); the job-level `permissions` key is valid only at job level in workflow YAML, not step level (actionlint catches it); `qlty config show` reveals a plugin's actual driver invocation (e.g. bandit reads `--ini .bandit`).
+For GitHub rulesets API details, see `configs/agents/repo-agents-shared.md` in the dotfiles repository: `rules` and `bypass_actors` must be JSON arrays; omit `integration_id` from `required_status_checks`; set workflow `permissions` at workflow or job level, never step level.
 
 ### Planning scope
 
-When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront — not just the obvious ones. If a plan covers some tools but not others, the user will ask about the missing ones. Enumerate all configured tools (OpenCode, Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Pi, Junie, Cline, Cortex, Antigravity) in the initial plan rather than discovering them through rejection cycles.
+When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront, not just the obvious ones. The configured fleet is documented in `docs/CAPABILITY_MATRIX.md`.
 
 > Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/ORCHESTRATION.md`.
 

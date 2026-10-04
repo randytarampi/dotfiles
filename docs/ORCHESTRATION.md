@@ -132,8 +132,12 @@ different interpreter automatically. It does not
 inspect environment variables or credentials. Sibling worktrees are supported
 only when explicitly authorized by the parent task for this dotfiles/chezmoi
 repository; this helper does not create nested worktrees or alter other
-checkouts. See the source-of-truth repository playbook in `AGENTS.md` for
-delegation and worktree authorization policy.
+checkouts. See [shared repository guidance](../configs/agents/repo-agents-shared.md)
+for lane ownership, worktree location, consent, preservation and retirement
+policy. This preflight does not grant sibling-worktree creation or cleanup
+consent; obtain approval in the lane before creating one. The existing worktree
+skill's nested `.slim/worktrees` location remains the default where applicable;
+chezmoi tasks using sibling worktrees require an explicit approved exception.
 
 Example (replace the illustrative SHA with a locally available full commit ID):
 

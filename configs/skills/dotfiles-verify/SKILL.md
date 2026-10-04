@@ -31,7 +31,7 @@ black path/to/touched.py [other/touched.py ...]
 make verify
 ```
 
-For code or configuration changes, run the complete `make verify`; it must exit 0 at the repository's normal test-coverage threshold. Do not lower the coverage floor to make a targeted run pass. A targeted pytest selection should use `--no-cov` so it does not compare partial coverage with the global threshold. If required tooling or declared test dependencies are unavailable, stop and report BLOCKED; do not omit that component or call the result verified. For documentation-only or trivially mechanical edits, use the relevant documentation checks and state clearly that full verification was not run.
+For code or configuration changes, run the complete `make verify` once on the stable intended state; it must exit 0 at the repository's normal test-coverage threshold. Focused red/green checks during implementation and independent targeted lane checks do not replace this final integrated check. Rerun it when relevant code, inputs or runtime invalidate the evidence, not for unrelated edits. Do not lower the coverage floor to make a targeted run pass. A targeted pytest selection should use `--no-cov` so it does not compare partial coverage with the global threshold. If required tooling or declared test dependencies are unavailable, stop and report BLOCKED; do not omit that component or call the result verified. For documentation-only or trivially mechanical edits, use relevant documentation checks and state clearly that full verification was not run.
 
 ## 3. Add targeted checks only when useful
 
@@ -42,3 +42,4 @@ For code or configuration changes, run the complete `make verify`; it must exit 
 - Do not unconditionally remove `__pycache__` or other ignored artifacts; they are not source changes or verification failures.
 - If `make verify` fails, fix the issue before reporting success. Do not pipe it through output truncation and then report the pipeline's status as the verify status. Prefer direct invocation; if a wrapper must capture output, inspect `make verify`'s own exit code and retain the diagnostic output.
 - If Black or another required tool is missing, report BLOCKED and arrange the documented environment before continuing; never silently skip formatting.
+- For service/model-generator changes, use the real consumer and credential path and capture a baseline before the first run. Run twice; check health, generated state including keys, and idempotence. Service/orchestration tests isolate `HOME` and `PATH` and stub process/service commands. Confirm live services survived verification; verification may mutate runtime state.
