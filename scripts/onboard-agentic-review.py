@@ -23,6 +23,23 @@ def build_workflow(ref):
     return content.replace("__REF__", ref)
 
 
+def build_copilot_workflow(ref):
+    content = COPILOT_SOURCE.read_text(encoding="utf-8")
+    matches = list(
+        re.finditer(r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$", content)
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            "Copilot setup workflow must contain one pinned trusted_ref default"
+        )
+    trusted_ref = matches[0].group(1)
+    if content.count(trusted_ref) != 2:
+        raise ValueError(
+            "Copilot setup workflow must use its pinned trusted_ref default for automatic runs"
+        )
+    return content.replace(trusted_ref, ref)
+
+
 def checklist():
     return """Agentic review onboarding checklist:
 
@@ -31,8 +48,8 @@ Secrets:
 Labels:
   review-opencode, review-junie, review-gemini, review-copilot, review-all
 Copilot setup:
-  Run copilot-setup-steps.yml once via workflow_dispatch, supplying the immutable
-  dotfiles commit SHA that contains the trusted verifier.
+  Automatic setup uses the immutable trusted SHA baked into the workflow.
+  Manual workflow_dispatch can optionally override it with a trusted dotfiles SHA.
   In Settings → Copilot → MCP servers, add the read-only local codegraph server:
     codegraph serve --mcp
   Use the COPILOT_MCP_* prefix for Copilot MCP secrets.
@@ -43,9 +60,9 @@ Shared assets:
   Copilot code review; copied into .opencode/skills/ for the OpenCode lane).
 Dispatcher:
   The installed dispatcher is a stable stub. Pass the latest trusted workflow
-  commit with --ref; the generated output uses that same immutable SHA for both
-  the reusable-workflow pin and trusted_ref. Re-onboarding is only needed when
-  trigger events or permissions change, or when advancing the trusted SHA.
+  commit with --ref; the generated output uses that same immutable SHA for the
+  reusable-workflow pin and Copilot setup default. Re-onboarding is only needed
+  when trigger events or permissions change, or when advancing the trusted SHA.
 Fix lane:
   agentic-review-fix.yml is intentionally dotfiles-only and is not distributed
   to downstream repositories. It requires owner authentication and the
@@ -72,7 +89,7 @@ def main():
     parser.add_argument(
         "--ref",
         required=True,
-        help="Immutable 40-hex dotfiles commit used by both the workflow pin and trusted_ref",
+        help="Immutable 40-hex dotfiles commit used by the dispatcher and Copilot setup",
     )
     parser.add_argument(
         "--workflows-only",
@@ -99,8 +116,8 @@ def main():
         return 1
 
     try:
-        copilot_content = COPILOT_SOURCE.read_text(encoding="utf-8")
-    except OSError as exc:
+        copilot_content = build_copilot_workflow(args.ref)
+    except (OSError, ValueError) as exc:
         logger.critical(f"Could not read Copilot setup workflow: {exc}")
         return 1
 

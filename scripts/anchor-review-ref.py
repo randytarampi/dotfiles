@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT / ".github/workflows/agent-review.yml"
+COPILOT_SETUP = ROOT / ".github/workflows/copilot-setup-steps.yml"
 sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 
 from cli_helpers import add_common_args  # noqa: E402 -- repository library bootstrap.
@@ -106,18 +107,40 @@ def main():
             raise ValueError(
                 "dispatcher must contain exactly one SHA-valued trusted_ref"
             )
+        copilot_content = COPILOT_SETUP.read_text(encoding="utf-8")
+        copilot_matches = list(
+            re.finditer(
+                r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$",
+                copilot_content,
+            )
+        )
+        if len(copilot_matches) != 1:
+            raise ValueError(
+                "Copilot setup must contain exactly one SHA-valued trusted_ref default"
+            )
+        copilot_sha = copilot_matches[0].group(1)
+        if copilot_content.count(copilot_sha) != 2:
+            raise ValueError(
+                "Copilot setup must use the default trusted_ref for automatic runs"
+            )
         updated = re.sub(
             r"(?m)^(\s*trusted_ref:\s*)[0-9a-f]{40}(\s*(?:#.*)?)$",
             lambda match: f"{match.group(1)}{sha}{match.group(2)}",
             content,
         )
-        if updated == content:
+        updated_copilot = copilot_content.replace(copilot_sha, sha)
+        if updated == content and updated_copilot == copilot_content:
             print(f"trusted_ref already anchored to {sha}")
         elif args.dry_run:
-            print(f"[DRY RUN] Would set trusted_ref to {sha} in {DISPATCHER}")
+            print(
+                f"[DRY RUN] Would set trusted_ref to {sha} in {DISPATCHER} and {COPILOT_SETUP}"
+            )
         else:
-            atomic_write(DISPATCHER, updated)
-            print(f"Updated trusted_ref to {sha} in {DISPATCHER}")
+            if updated != content:
+                atomic_write(DISPATCHER, updated)
+            if updated_copilot != copilot_content:
+                atomic_write(COPILOT_SETUP, updated_copilot)
+            print(f"Updated trusted refs to {sha} in {DISPATCHER} and {COPILOT_SETUP}")
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
         print(f"anchor-review-ref: {exc}", file=sys.stderr)
         return 1

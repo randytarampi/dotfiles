@@ -132,6 +132,29 @@ def test_dispatcher_is_read_only_and_fix_lane_is_manual_and_allowlisted():
     assert 'trusted_sha="b144' not in copilot
 
 
+def test_copilot_setup_has_a_pinned_default_for_automatic_runs():
+    copilot = read(".github/workflows/copilot-setup-steps.yml")
+    dispatcher = read(".github/workflows/agent-review.yml")
+    pin = re.search(r"(?m)^\s*trusted_ref: ([0-9a-f]{40})$", dispatcher).group(1)
+    assert "workflow_dispatch:" in copilot
+    assert f"default: {pin}" in copilot
+    assert "required: false" in copilot
+    assert f"TRUSTED_REF: ${{{{ inputs.trusted_ref || '{pin}' }}}}" in copilot
+    assert 'trusted_sha="${TRUSTED_REF}"' in copilot
+    assert '[[ "${trusted_sha}" =~ ^[0-9a-f]{40}$ ]]' in copilot
+    assert "Authorization: Basic ${git_auth}" in copilot
+    assert "inputs.trusted_ref || github.sha" not in copilot
+    assert 'trusted_sha="${TRUSTED_REF:-${GITHUB_SHA}}"' not in copilot
+    assert (
+        "push:\n    paths:\n      - .github/workflows/copilot-setup-steps.yml"
+        in copilot
+    )
+    assert (
+        "pull_request:\n    paths:\n      - .github/workflows/copilot-setup-steps.yml"
+        in copilot
+    )
+
+
 def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
     fix = read(".github/workflows/agentic-review-fix.yml")
     generator, publisher = fix.split("  publish:", 1)
