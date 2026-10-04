@@ -17,6 +17,31 @@ sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 
 from cli_helpers import add_common_args  # noqa: E402 -- repository library bootstrap.
 
+_COPILOT_DEFAULT_RE = re.compile(r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$")
+_COPILOT_FALLBACK_RE = re.compile(
+    r"TRUSTED_REF:\s*\$\{\{\s*inputs\.trusted_ref\s*\|\|\s*'([0-9a-f]{40})'\s*\}\}"
+)
+
+
+def pinned_copilot_trusted_ref(content):
+    """Return the pinned SHA after checking default and automatic-run fallback match."""
+    defaults = list(_COPILOT_DEFAULT_RE.finditer(content))
+    if len(defaults) != 1:
+        raise ValueError(
+            "Copilot setup must contain exactly one SHA-valued trusted_ref default"
+        )
+    copilot_sha = defaults[0].group(1)
+    fallbacks = list(_COPILOT_FALLBACK_RE.finditer(content))
+    if len(fallbacks) != 1 or fallbacks[0].group(1) != copilot_sha:
+        raise ValueError(
+            "Copilot setup must use the default trusted_ref for automatic runs"
+        )
+    if content.count(copilot_sha) != 2:
+        raise ValueError(
+            "Copilot setup must use the default trusted_ref for automatic runs"
+        )
+    return copilot_sha
+
 
 def git(*args):
     git_executable = shutil.which("git")
@@ -108,21 +133,7 @@ def main():
                 "dispatcher must contain exactly one SHA-valued trusted_ref"
             )
         copilot_content = COPILOT_SETUP.read_text(encoding="utf-8")
-        copilot_matches = list(
-            re.finditer(
-                r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$",
-                copilot_content,
-            )
-        )
-        if len(copilot_matches) != 1:
-            raise ValueError(
-                "Copilot setup must contain exactly one SHA-valued trusted_ref default"
-            )
-        copilot_sha = copilot_matches[0].group(1)
-        if copilot_content.count(copilot_sha) != 2:
-            raise ValueError(
-                "Copilot setup must use the default trusted_ref for automatic runs"
-            )
+        copilot_sha = pinned_copilot_trusted_ref(copilot_content)
         updated = re.sub(
             r"(?m)^(\s*trusted_ref:\s*)[0-9a-f]{40}(\s*(?:#.*)?)$",
             lambda match: f"{match.group(1)}{sha}{match.group(2)}",

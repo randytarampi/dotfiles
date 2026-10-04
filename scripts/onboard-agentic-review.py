@@ -23,20 +23,35 @@ def build_workflow(ref):
     return content.replace("__REF__", ref)
 
 
-def build_copilot_workflow(ref):
-    content = COPILOT_SOURCE.read_text(encoding="utf-8")
-    matches = list(
-        re.finditer(r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$", content)
-    )
-    if len(matches) != 1:
+_COPILOT_DEFAULT_RE = re.compile(r"(?m)^[ \t]*default:[ \t]*([0-9a-f]{40})[ \t]*$")
+_COPILOT_FALLBACK_RE = re.compile(
+    r"TRUSTED_REF:\s*\$\{\{\s*inputs\.trusted_ref\s*\|\|\s*'([0-9a-f]{40})'\s*\}\}"
+)
+
+
+def pinned_copilot_trusted_ref(content):
+    """Return the pinned SHA after checking default and automatic-run fallback match."""
+    defaults = list(_COPILOT_DEFAULT_RE.finditer(content))
+    if len(defaults) != 1:
         raise ValueError(
             "Copilot setup workflow must contain one pinned trusted_ref default"
         )
-    trusted_ref = matches[0].group(1)
+    trusted_ref = defaults[0].group(1)
+    fallbacks = list(_COPILOT_FALLBACK_RE.finditer(content))
+    if len(fallbacks) != 1 or fallbacks[0].group(1) != trusted_ref:
+        raise ValueError(
+            "Copilot setup workflow must use its pinned trusted_ref default for automatic runs"
+        )
     if content.count(trusted_ref) != 2:
         raise ValueError(
             "Copilot setup workflow must use its pinned trusted_ref default for automatic runs"
         )
+    return trusted_ref
+
+
+def build_copilot_workflow(ref):
+    content = COPILOT_SOURCE.read_text(encoding="utf-8")
+    trusted_ref = pinned_copilot_trusted_ref(content)
     return content.replace(trusted_ref, ref)
 
 
