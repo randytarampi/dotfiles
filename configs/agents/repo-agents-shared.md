@@ -6,9 +6,10 @@ These policies apply to work in every repository.
 
 - **Delivery gate.** Same delivery gate and order as the home lifecycle; repo-specific hard rules follow.
 - The validation owner independently inspects each lane and re-runs its decisive targeted check (`actionlint` for workflow changes).
-- Then run one canonical integrated verification before completion, push or release. In dotfiles, use `make verify`; elsewhere, use the repository's documented command.
+- For code or configuration changes, run one canonical integrated verification before completion, push or release. In dotfiles, use `make verify`; elsewhere, use the repository's documented command.
 - Verify the stable intended committed state, using a clean verify worktree or committed `HEAD` checks. Unrelated dirty working-tree content is not proof; if the agreed delivery is intentionally local and uncommitted, label it and verify that exact tree.
-- Re-run checks only when relevant code, inputs or runtime invalidate the evidence. Required checks and normal coverage remain mandatory; failures block delivery.
+- For documentation-only or trivially mechanical changes, run relevant documentation checks and state that full integrated verification was not run.
+- Re-run checks only when relevant code, inputs or runtime invalidate the evidence. Required CI remains mandatory; normal coverage remains mandatory when integrated verification applies. Failures block delivery.
 - Report execution only from actual tool results and persisted state; never simulate calls, results or transcripts. Actual Git/remote `HEAD`, index and CI state prevail over conflicting reports; status or a live PID is not progress proof.
 - Record each lane's objective, role, absolute path, base SHA, owned files, validation owner, checkpoint and stop conditions. Reuse it only for the same objective and role.
 - Use the existing runtime preflight and prove the thinnest observable acceptance slice first. If infrastructure dwarfs behaviour, stop and reassess the test seam.
@@ -40,7 +41,7 @@ These policies apply to work in every repository.
 - Retire unused agent-owned clean trees only under recorded teardown consent. Preserve unique committed branches.
 - Before removing dirty saved work, create a private verified archive with restore instructions and obtain explicit dirty-removal consent.
 - Never remove primary, user-owned or unknown trees; touch no user stashes, add no verification stash, and do not opportunistically prune worktrees or delete branches.
-- Directory access is not integration or deletion consent. Follow the existing worktree skill's nested `.slim/worktrees` default; dotfiles sibling worktrees need one explicit approved exception. See `docs/ORCHESTRATION.md` for dotfiles preflight/location details.
+- Directory access is not integration or deletion consent. Follow the existing worktree skill's nested `.slim/worktrees` default; dotfiles sibling worktrees need one explicit approved exception. See `docs/ORCHESTRATION.md` in the dotfiles repository for preflight/location details.
 
 ### Writing and ambiguity
 
@@ -58,7 +59,7 @@ These policies apply to work in every repository.
 
 ### API verification notes
 
-- Verified dotfiles rulesets API facts: `rules` and `bypass_actors` must be JSON arrays; omit `integration_id` from `required_status_checks`; set workflow `permissions` at workflow or job level, never step level. Re-introspect current tool/API behaviour before relying on it.
+- Verified dotfiles rulesets API facts: `rules` and `bypass_actors` must be JSON arrays; omit `integration_id` from `required_status_checks` only when checks from any source are acceptable; otherwise, set it to the trusted integration ID (do not send `null`). Set workflow `permissions` at workflow or job level, never step level. Re-introspect current tool/API behaviour before relying on it.
 
 ### Communication
 
