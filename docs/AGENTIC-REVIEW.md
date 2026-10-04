@@ -54,7 +54,7 @@ repository instructions.
   the reusable workflow, so parser improvements arrive through the dotfiles
   ref. Because the ref is immutable, downstream callers must be re-onboarded
   whenever the trusted workflow revision advances; the onboarding script writes
-  the new ref and matching `trusted_ref` together.
+  the new ref and matching `trusted_ref` and Copilot setup default together.
 - `.github/workflows/agentic-review.yml` — reusable `workflow_call` workflow.
   Its first `parse` job handles dispatcher-mode event JSON and direct
   passthrough calls. Downstream repos carry only the stable stub installed from
@@ -71,9 +71,9 @@ repository instructions.
   ```
 
   To adopt elsewhere, run `scripts/onboard-agentic-review.py --repo <path> --ref <40-hex-sha>`.
-  It installs the stable stub and writes the same immutable SHA into both the
-  reusable workflow `uses:` pin and `trusted_ref`; mutable refs such as `@main`
-  are not accepted.
+  It installs the stable stub and writes the same immutable SHA into the reusable
+  workflow `uses:` pin, `trusted_ref`, and Copilot setup default; mutable refs
+  such as `@main` are not accepted.
   Re-onboarding is required whenever the trusted workflow revision advances,
   as well as when trigger events or permissions change.
   The CI OpenCode lane runs the explicitly selected model with all three
@@ -82,8 +82,9 @@ repository instructions.
   OpenCode, Junie, and Gemini stage the trusted dotfiles commit identified by
   the caller-provided immutable `trusted_ref` and verify its asset manifest
   before using prompts, configuration, skills, or `ci-codegraph.sh`.
-  Copilot setup accepts an explicit 40-character dotfiles commit SHA for the
-  same reason; PR content never participates in prompt-file loading.
+  Copilot setup uses a baked-in immutable 40-character dotfiles SHA for automatic
+  runs and accepts an optional manual-dispatch override; PR content never
+  participates in prompt-file loading.
 - Security posture: minimal `permissions` per job, read-only `github.token` in
   every agent lane, `sender.type != 'Bot'`
   filter, per-PR `concurrency` cancel-in-progress, and verified floating-major
@@ -133,7 +134,7 @@ lane. The owner must provide:
 
 The generator runs `opencode run` directly with a read-only token and only
 edits its workspace. It installs the repository-pinned OpenCode CLI
-(`opencode-ai@1.18.33`) and verifies both its executable and reported version;
+(`opencode-ai@1.18.34`) and verifies both its executable and reported version;
 it does not commit, push, or create a PR. After the
 `agentic-review-fix` environment approval, the publisher creates the unique
 `agentic-review-bot/<run-id>` branch. On reruns it records the current remote
@@ -337,18 +338,24 @@ when replacing existing workflows (disable with `--no-backup`), and supports
 automatically from `randytarampi/dotfiles`; manually create secrets and labels,
 then configure Copilot Settings → MCP servers as described above.
 
+The supplied immutable SHA seeds the Copilot workflow's automatic default;
+manual dispatch accepts an optional override.
+
 > **Dispatcher recovery note:** The dispatcher is currently hand-unpinned: `uses:` tracks
 > `@main`, while `trusted_ref:` is SHA-anchored to a recent main revision (check
-> `.github/workflows/agent-review.yml` for the current value).
+> `.github/workflows/agent-review.yml` and
+> `.github/workflows/copilot-setup-steps.yml` for the
+> current values).
 > The original pin captured `357760a` from the deleted `fix/review-trust-refactor` branch,
 > making every dispatch fail with 0 jobs.
 > The dispatcher intentionally uses the reusable workflow at `@main`; `trusted_ref`
 > independently pins the trusted review assets to an immutable commit. Run
 > `make anchor-review-ref` from the local `main` branch to fetch `origin/main` and
-> update only `trusted_ref`. The fetched commit must be reachable from local `main`;
-> fetch/ancestry failures stop without changing the workflow. This deliberately
-> does not require the fetched commit to equal `HEAD`, since the anchoring change
-> itself advances `HEAD`. Use `make anchor-review-ref DRY_RUN=1` to preview; dry-run
+> update the dispatcher `trusted_ref` and Copilot setup's trusted SHA default
+> and automatic-run fallback together. The fetched commit must be reachable from
+> local `main`; fetch/ancestry failures stop without changing either workflow.
+> This deliberately does not require the fetched commit to equal `HEAD`, since
+> the anchoring change itself advances `HEAD`. Use `make anchor-review-ref DRY_RUN=1` to preview; dry-run
 > does not fetch or modify Git refs and fails with guidance if the remote commit is
 > not already available locally. The
 > helper never changes the `uses: ...@main` dispatcher pin; do not use the

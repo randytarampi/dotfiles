@@ -15,6 +15,17 @@ def test_cli_args(monkeypatch):
     monkeypatch.setattr("sys.argv", [str(SCRIPT)])
 
 
+@pytest.fixture(autouse=True)
+def test_copilot_setup_path(monkeypatch, tmp_path_factory):
+    path = tmp_path_factory.mktemp("copilot-setup") / "copilot-setup-steps.yml"
+    trusted_ref = "b" * 40
+    path.write_text(
+        f"default: {trusted_ref}\n"
+        f"TRUSTED_REF: ${{{{ inputs.trusted_ref || '{trusted_ref}' }}}}\n"
+    )
+    monkeypatch.setattr(ANCHOR, "COPILOT_SETUP", path)
+
+
 def test_changes_only_trusted_ref_and_preserves_yaml(monkeypatch, tmp_path):
     source = (
         "# keep\njobs:\n  review:\n    uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main\n    with:\n      trusted_ref: "
@@ -46,6 +57,44 @@ def test_changes_only_trusted_ref_and_preserves_yaml(monkeypatch, tmp_path):
     result = target.read_text()
     assert result == source.replace("a" * 40, "b" * 40)
     assert result.count("trusted_ref:") == 1
+
+
+def test_refreshes_copilot_setup_default_and_fallback_with_dispatcher(
+    monkeypatch, tmp_path
+):
+    copilot_sha = "c" * 40
+    source = (
+        f"default: {copilot_sha}\n"
+        f"TRUSTED_REF: ${{{{ inputs.trusted_ref || '{copilot_sha}' }}}}\n"
+    )
+    ANCHOR.COPILOT_SETUP.write_text(source)
+    dispatcher = tmp_path / "agent-review.yml"
+    dispatcher_source = (
+        "uses: randytarampi/dotfiles/.github/workflows/agentic-review.yml@main\n"
+        f"trusted_ref: {copilot_sha}\n"
+    )
+    dispatcher.write_text(dispatcher_source)
+    monkeypatch.setattr(ANCHOR, "DISPATCHER", dispatcher)
+    monkeypatch.setattr(
+        ANCHOR,
+        "git",
+        lambda *args: (
+            "main"
+            if args == ("branch", "--show-current")
+            else (
+                "d" * 40
+                if args == ("rev-parse", "--verify", "FETCH_HEAD^{commit}")
+                else ""
+            )
+        ),
+    )
+    assert ANCHOR.main() == 0
+    updated = ANCHOR.COPILOT_SETUP.read_text()
+    assert updated.count("d" * 40) == 2
+    assert f"default: {'d' * 40}" in updated
+    assert f"inputs.trusted_ref || '{'d' * 40}'" in updated
+    assert copilot_sha not in updated
+    assert dispatcher.read_text() == dispatcher_source.replace(copilot_sha, "d" * 40)
 
 
 def test_git_uses_path_resolved_executable_and_fixed_argv(monkeypatch):

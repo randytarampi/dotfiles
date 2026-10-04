@@ -11,8 +11,15 @@ on:
     inputs:
       trusted_ref:
         description: "Immutable dotfiles commit containing the trusted verifier"
-        required: true
+        required: false
+        default: 87a17ef5ed0cfd780efef3cbefa218b109d8d000
         type: string
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
 
 jobs:
   copilot-setup-steps:
@@ -29,7 +36,7 @@ jobs:
       - name: Stage and verify trusted dotfiles scripts
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TRUSTED_REF: ${{ inputs.trusted_ref }}
+          TRUSTED_REF: ${{ inputs.trusted_ref || '87a17ef5ed0cfd780efef3cbefa218b109d8d000' }}
         run: |
           set -euo pipefail
           trusted_root="${RUNNER_TEMP}/trusted-dotfiles"

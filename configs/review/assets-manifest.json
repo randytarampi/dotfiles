@@ -6,6 +6,6 @@
     "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
     "scripts/verify-ci-assets.py": "cb7d903fe640802b97a820409f0718eb422172f07aff9d82ecabc8fd7164bb22",
     "configs/opencode/ci/opencode.json": "ba2ed2d5c5524cfdf5315bc12aadbb4d24e2eef56300e7696075c9ca5cf8ac8c",
-    "scripts/onboard-agentic-review.py": "e33fe9e87ef4c58adad5f49013bf50a8a7e347a0261fc425918336eadfe54a71"
+    "scripts/onboard-agentic-review.py": "6f659790d0e62690e367a730223c8abb0b226a052ca38dd3b116b4ea36aac74c"
   }
 }
