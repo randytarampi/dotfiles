@@ -85,6 +85,31 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
     assert "*_BOT_TOKEN" not in workflow
 
 
+def test_review_lane_installs_the_same_pinned_opencode_cli_as_fix():
+    workflow = read(".github/workflows/agentic-review.yml")
+    fix = read(".github/workflows/agentic-review-fix.yml")
+    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
+    assert 'npm install --global "opencode-ai@${OPENCODE_VERSION}"' in opencode
+    assert 'OPENCODE_VERSION: "1.18.33"' in opencode
+    assert "command -v opencode" in opencode
+    assert "opencode --version" in opencode
+    assert "version_pattern=" in opencode
+    assert '[[ "${version_output}" =~ ${version_pattern} ]]' in opencode
+    assert opencode.index(
+        "Install and verify the pinned OpenCode CLI"
+    ) < opencode.index("Run OpenCode review")
+    assert 'OPENCODE_VERSION: "1.18.33"' in fix
+
+
+def test_multiline_review_outputs_keep_closers_on_their_own_line():
+    workflow = read(".github/workflows/agentic-review.yml")
+    # Bodies may lack a trailing newline (printf '%s'); always force a newline
+    # before the GITHUB_OUTPUT / GITHUB_ENV closer so Actions can parse it.
+    assert workflow.count("printf '\\n%s\\n'") >= 6
+    assert "printf '%s' \"${JUNIE_REVIEW}\"" in workflow
+    assert "printf '%s' \"${GEMINI_SUMMARY}\"" in workflow
+
+
 def test_dispatcher_is_read_only_and_fix_lane_is_manual_and_allowlisted():
     dispatcher = read("configs/review/dispatcher-stub.yml")
     generated = read(".github/workflows/agent-review.yml")

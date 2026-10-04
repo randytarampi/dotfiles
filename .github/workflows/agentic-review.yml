@@ -249,6 +249,16 @@ jobs:
         run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
       - name: Install code-review skill
         run: mkdir -p .opencode/skills/code-review && cp "${TRUSTED_DOTFILES}/.github/skills/code-review/SKILL.md" .opencode/skills/code-review/SKILL.md
+      - name: Install and verify the pinned OpenCode CLI
+        env:
+          OPENCODE_VERSION: "1.18.33"
+        run: |
+          set -euo pipefail
+          npm install --global "opencode-ai@${OPENCODE_VERSION}"
+          command -v opencode
+          version_output="$(opencode --version)"
+          version_pattern="(^|[^0-9])${OPENCODE_VERSION//./\\.}([^0-9]|$)"
+          [[ "${version_output}" =~ ${version_pattern} ]]
       - name: Load review prompt
         run: |
           prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
@@ -267,7 +277,8 @@ jobs:
           {
             printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
             cat "$prompt_file"
-            printf '%s\n' "$delim"
+            # Keep the closer on its own line even if the prompt lacks a trailing newline.
+            printf '\n%s\n' "$delim"
           } >> "$GITHUB_ENV"
       - name: Run OpenCode review
         id: opencode_review
@@ -292,7 +303,8 @@ jobs:
           {
             printf 'review<<%s\n' "${delim}"
             cat "${REVIEW_FILE}"
-            printf '%s\n' "${delim}"
+            # Keep the closer on its own line even if the review body lacks a trailing newline.
+            printf '\n%s\n' "${delim}"
           } >>"${GITHUB_OUTPUT}"
       - name: Upload OpenCode review
         if: always()
@@ -357,7 +369,8 @@ jobs:
           {
             printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
             cat "$prompt_file"
-            printf '%s\n' "$delim"
+            # Keep the closer on its own line even if the prompt lacks a trailing newline.
+            printf '\n%s\n' "$delim"
           } >> "$GITHUB_ENV"
       - id: junie
         uses: JetBrains/junie-github-action@v1
@@ -384,7 +397,8 @@ jobs:
           {
             printf 'review<<%s\n' "${delim}"
             cat "${REVIEW_FILE}"
-            printf '%s\n' "${delim}"
+            # Keep the closer on its own line even if the review body lacks a trailing newline.
+            printf '\n%s\n' "${delim}"
           } >>"${GITHUB_OUTPUT}"
       - name: Upload Junie review
         if: always()
@@ -455,7 +469,8 @@ jobs:
           {
             printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
             cat "$prompt_file"
-            printf '%s\n' "$delim"
+            # Keep the closer on its own line even if the prompt lacks a trailing newline.
+            printf '\n%s\n' "$delim"
           } >> "$GITHUB_ENV"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
       - id: gemini
@@ -482,7 +497,8 @@ jobs:
           {
             printf 'review<<%s\n' "${delim}"
             cat "${REVIEW_FILE}"
-            printf '%s\n' "${delim}"
+            # Keep the closer on its own line even if the review body lacks a trailing newline.
+            printf '\n%s\n' "${delim}"
           } >>"${GITHUB_OUTPUT}"
       - name: Upload Gemini review
         if: always()
