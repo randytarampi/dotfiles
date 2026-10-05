@@ -91,6 +91,28 @@
   },
   "scripts": [
     {
+      "path": "scripts/litellm-costs.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--window",
+        "--start",
+        "--end",
+        "--by",
+        "--client",
+        "--model",
+        "--json",
+        "--endpoint"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/litellm-diagnose.py",
       "capabilities": ["public", "inspect"],
       "enforcement": "strict",
