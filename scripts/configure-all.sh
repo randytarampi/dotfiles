@@ -488,6 +488,10 @@ if ! step_skipped codegraph && [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]
     else
       info "Configuring CodeGraph MCP..."
       run_step "CodeGraph configuration" codegraph install -y --target auto --location global
+      # Normalize the nested 'mcp.servers' wrapper codegraph CLI 1.6.2 writes
+      # (opencode v1 expects flat top-level 'mcp'; scripts/lib/normalize_mcp_json.py)
+      python3 "$SCRIPT_DIR/lib/normalize_mcp_json.py" ||
+        warn "CodeGraph MCP normalization failed — opencode.json may contain a stale 'mcp.servers' wrapper"
     fi
   else
     warn "codegraph CLI not found — skipping CodeGraph MCP configuration"

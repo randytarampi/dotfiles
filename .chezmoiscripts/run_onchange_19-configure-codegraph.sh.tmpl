@@ -10,6 +10,7 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when CodeGraph config changes):
 # configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
 # scripts/configure-codegraph.py: {{ include "scripts/configure-codegraph.py" | sha256sum }}
+# scripts/lib/normalize_mcp_json.py: {{ include "scripts/lib/normalize_mcp_json.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_CODEGRAPH_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -32,6 +33,12 @@ if codegraph install -y --target auto --location global >/dev/null 2>&1; then
 else
   warn "codegraph install failed — you can run 'codegraph install' manually"
 fi
+
+# Normalize any nested 'mcp.servers' wrapper the CLI may have written.
+# codegraph CLI 1.6.2 emits an undocumented nested snippet shape; opencode v1
+# expects a flat top-level 'mcp' map (https://opencode.ai/docs/mcp-servers/).
+python3 "$LIB_DIR/normalize_mcp_json.py" ||
+  warn "CodeGraph MCP normalization failed — opencode.json may contain a stale 'mcp.servers' wrapper"
 
 # Batch-initialize per-project .codegraph/ indexes (separate gate from MCP registration)
 if [[ "${DOTFILES_RUN_CODEGRAPH_INDEX_SETUP:-0}" == "1" ]]; then
