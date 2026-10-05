@@ -39,6 +39,8 @@ NON_TRACKED_SCRIPTS = {
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/check-model-drift.py",  # Makefile-only verification tool
+    "scripts/litellm-costs.py",  # Makefile-only verification tool
+    "scripts/lib/litellm_cost.py",  # Library of the costs CLI; not deployed config input
     "scripts/check-heredocs.py",  # Makefile-only lint tool (heredoc validation)
     "scripts/anchor-review-ref.py",  # Makefile-only workflow maintenance tool
     "scripts/ci-codegraph.sh",  # CI-only asset verified by check-ci-assets
