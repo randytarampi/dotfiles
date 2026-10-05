@@ -40,6 +40,13 @@ def _service_env_value(name, path):
     return ""
 
 
+def _database_url_configured():
+    return bool(
+        os.environ.get("LITELLM_DATABASE_URL", "").strip()
+        or os.environ.get("DATABASE_URL", "").strip()
+    )
+
+
 def _request_json(url, method, master_key, payload=None, timeout=5):
     parsed_url = urllib.parse.urlsplit(url)
     if parsed_url.scheme != "http" or parsed_url.hostname != "127.0.0.1":
@@ -207,8 +214,8 @@ def main():
     if os.environ.get(GATE_ENV, "0") != "1":
         logger.info("%s is not enabled; skipping LiteLLM setup", GATE_ENV)
         return 0
-    if not os.environ.get("DATABASE_URL", "").strip():
-        logger.error("DATABASE_URL is required when LiteLLM is enabled")
+    if not _database_url_configured():
+        logger.error("LITELLM_DATABASE_URL is required when LiteLLM is enabled")
         return 1
     config_path = os.path.expanduser("~/.local/share/litellm/config.yaml")
     try:

@@ -421,7 +421,7 @@ profiles. Other providers keep their native environment-variable references;
 the complete LiteLLM `service.env` is never sourced into general shells.
 
 DB-less diagnostics retain the historical no-DB 400 classification for old
-deployments, but new gate-on deployments require `DATABASE_URL`.
+deployments, but new gate-on deployments require `LITELLM_DATABASE_URL`.
 Loopback-only binding limits exposure.
 
 #### Platform completion (Phase 4f)

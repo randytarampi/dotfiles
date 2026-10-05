@@ -3,7 +3,7 @@
 litellm_service_domain() { printf 'gui/%s\n' "${UID:-$(id -u)}"; }
 litellm_service_plist() { printf '%s\n' "$HOME/Library/LaunchAgents/com.litellm.proxy.plist"; }
 litellm_require_database_url() {
-  [[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is required when LiteLLM is enabled"
+  [[ -n "${LITELLM_DATABASE_URL:-}${DATABASE_URL:-}" ]] || die "LITELLM_DATABASE_URL is required when LiteLLM is enabled"
 }
 
 litellm_prisma_schema_matches() {
@@ -59,12 +59,44 @@ litellm_ensure_prisma_client() {
 
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
-  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL=""
-  local OMLX_API_KEY="" MERIDIAN_API_KEY="" OPENAI_API_KEY="" ANTHROPIC_API_KEY="" GEMINI_API_KEY="" OPENROUTER_API_KEY="" OPENCODE_API_KEY="" OLLAMA_API_KEY=""
+  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL=""
   local LITELLM_OPENCODE_KEY="" LITELLM_PI_KEY="" LITELLM_OPENWEBUI_KEY="" LITELLM_JUNIE_KEY=""
+  local config_path
+  config_path="$(dirname "$service_env")/config.yaml"
+  # Provider credentials are exactly what the generated config references via
+  # os.environ/<KEY>, so new providers need no edits here. Before the first
+  # config write, fall back to the bootstrap set captured historically.
+  local -a provider_keys=()
+  if [[ -f "$config_path" ]]; then
+    local ref
+    for ref in $(
+      grep -o 'os\.environ/[A-Z][A-Z0-9_]*' "$config_path" 2>/dev/null |
+        sed 's|os\.environ/||' | sort -u
+    ); do
+      case "$ref" in
+      LITELLM_MASTER_KEY | LITELLM_PORT | DISABLE_ADMIN_UI | DATABASE_URL) continue ;;
+      LITELLM_OPENCODE_KEY | LITELLM_PI_KEY | LITELLM_OPENWEBUI_KEY | LITELLM_JUNIE_KEY) continue ;;
+      *) provider_keys+=("$ref") ;;
+      esac
+    done
+  fi
+  if [[ ! -f "$config_path" ]]; then
+    provider_keys=(
+      OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY
+      GEMINI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY OLLAMA_API_KEY
+    )
+  fi
   mkdir -p "$(dirname "$service_env")"
-  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL=""
-  local env_OMLX_API_KEY="" env_MERIDIAN_API_KEY="" env_OPENAI_API_KEY="" env_ANTHROPIC_API_KEY="" env_GEMINI_API_KEY="" env_OPENROUTER_API_KEY="" env_OPENCODE_API_KEY="" env_OLLAMA_API_KEY=""
+  # Provider names are discovered from config.yaml; shadow each one locally
+  # before sourcing either env file so values cannot persist in caller scope.
+  local key
+  for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
+    case "$key" in
+    [A-Z][A-Z0-9_]*) local "$key" ;;
+    *) continue ;;
+    esac
+  done
+  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
@@ -73,50 +105,40 @@ litellm_service_env_sync() {
   env_LITELLM_PORT="$LITELLM_PORT"
   env_DISABLE_ADMIN_UI="$DISABLE_ADMIN_UI"
   env_DATABASE_URL="$DATABASE_URL"
-  env_OMLX_API_KEY="$OMLX_API_KEY"
-  env_MERIDIAN_API_KEY="$MERIDIAN_API_KEY"
-  env_OPENAI_API_KEY="$OPENAI_API_KEY"
-  env_ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
-  env_GEMINI_API_KEY="$GEMINI_API_KEY"
-  env_OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
-  env_OPENCODE_API_KEY="$OPENCODE_API_KEY"
-  env_OLLAMA_API_KEY="$OLLAMA_API_KEY"
+  env_LITELLM_DATABASE_URL="$LITELLM_DATABASE_URL"
+  # Capture provider credentials from ~/.env, then clear them so values
+  # sourced from service.env below can never win; the captured HOME values
+  # are restored afterwards.
+  for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
+    case "$key" in
+    [A-Z][A-Z0-9_]*) ;;
+    *) continue ;;
+    esac
+    eval "local env_${key}=\"\${${key}-}\""
+    unset "$key"
+  done
   if [[ -f "$service_env" ]]; then
     # shellcheck disable=SC1090
     source "$service_env"
   fi
-  [[ -n "$env_LITELLM_MASTER_KEY" ]] && LITELLM_MASTER_KEY="$env_LITELLM_MASTER_KEY"
-  [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
-  [[ -n "$env_DISABLE_ADMIN_UI" ]] && DISABLE_ADMIN_UI="$env_DISABLE_ADMIN_UI"
-  [[ -n "$env_DATABASE_URL" ]] && DATABASE_URL="$env_DATABASE_URL"
-  [[ -n "$env_OMLX_API_KEY" ]] && OMLX_API_KEY="$env_OMLX_API_KEY"
-  [[ -n "$env_MERIDIAN_API_KEY" ]] && MERIDIAN_API_KEY="$env_MERIDIAN_API_KEY"
-  [[ -n "$env_OPENAI_API_KEY" ]] && OPENAI_API_KEY="$env_OPENAI_API_KEY"
-  [[ -n "$env_ANTHROPIC_API_KEY" ]] && ANTHROPIC_API_KEY="$env_ANTHROPIC_API_KEY"
-  [[ -n "$env_GEMINI_API_KEY" ]] && GEMINI_API_KEY="$env_GEMINI_API_KEY"
-  [[ -n "$env_OPENROUTER_API_KEY" ]] && OPENROUTER_API_KEY="$env_OPENROUTER_API_KEY"
-  [[ -n "$env_OPENCODE_API_KEY" ]] && OPENCODE_API_KEY="$env_OPENCODE_API_KEY"
-  # Unset the service-file values FIRST so ~/.env-captured values win
-  # below; then restore captured ~/.env values for keys whose os.environ/
-  # references are present in the generated config (the unset loop removes
-  # the rest). This keeps referenced provider keys in service.env.
-  unset OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY OLLAMA_API_KEY LITELLM_PORT
-  [[ -n "$env_LITELLM_PORT" ]] && LITELLM_PORT="$env_LITELLM_PORT"
-  [[ -n "$env_OMLX_API_KEY" ]] && OMLX_API_KEY="$env_OMLX_API_KEY"
-  [[ -n "$env_MERIDIAN_API_KEY" ]] && MERIDIAN_API_KEY="$env_MERIDIAN_API_KEY"
-  [[ -n "$env_OPENAI_API_KEY" ]] && OPENAI_API_KEY="$env_OPENAI_API_KEY"
-  [[ -n "$env_ANTHROPIC_API_KEY" ]] && ANTHROPIC_API_KEY="$env_ANTHROPIC_API_KEY"
-  [[ -n "$env_GEMINI_API_KEY" ]] && GEMINI_API_KEY="$env_GEMINI_API_KEY"
-  [[ -n "$env_OPENROUTER_API_KEY" ]] && OPENROUTER_API_KEY="$env_OPENROUTER_API_KEY"
-  [[ -n "$env_OPENCODE_API_KEY" ]] && OPENCODE_API_KEY="$env_OPENCODE_API_KEY"
-  [[ -n "$env_OLLAMA_API_KEY" ]] && OLLAMA_API_KEY="$env_OLLAMA_API_KEY"
-  local config_path
-  config_path="$(dirname "$service_env")/config.yaml"
-  if [[ -f "$config_path" ]]; then
-    for provider_key in OMLX_API_KEY MERIDIAN_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY OLLAMA_API_KEY; do
-      grep -Fq "os.environ/${provider_key}" "$config_path" || unset "$provider_key"
-    done
-  fi
+  for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
+    case "$key" in
+    [A-Z][A-Z0-9_]*) unset "$key" ;;
+    *) continue ;;
+    esac
+  done
+  if [[ -n "$env_LITELLM_MASTER_KEY" ]]; then LITELLM_MASTER_KEY="$env_LITELLM_MASTER_KEY"; fi
+  if [[ -n "$env_LITELLM_PORT" ]]; then LITELLM_PORT="$env_LITELLM_PORT"; fi
+  if [[ -n "$env_DISABLE_ADMIN_UI" ]]; then DISABLE_ADMIN_UI="$env_DISABLE_ADMIN_UI"; fi
+  if [[ -n "$env_DATABASE_URL" ]]; then DATABASE_URL="$env_DATABASE_URL"; fi
+  if [[ -n "$env_LITELLM_DATABASE_URL" ]]; then DATABASE_URL="$env_LITELLM_DATABASE_URL"; fi
+  for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
+    case "$key" in
+    [A-Z][A-Z0-9_]*) ;;
+    *) continue ;;
+    esac
+    eval "if [[ -n \"\$env_${key}\" ]]; then ${key}=\"\$env_${key}\"; fi"
+  done
   LITELLM_PORT="${LITELLM_PORT:-4000}"
   # DB-free deployments cannot complete a UI login (it mints a DB-backed
   # session key), so the Admin UI is disabled by default to avoid a
@@ -146,15 +168,14 @@ litellm_service_env_sync() {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
     printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
-    [[ -n "$DATABASE_URL" ]] && printf 'DATABASE_URL=%q\n' "$DATABASE_URL"
-    [[ -n "${OMLX_API_KEY:-}" ]] && printf 'OMLX_API_KEY=%q\n' "$OMLX_API_KEY"
-    [[ -n "${MERIDIAN_API_KEY:-}" ]] && printf 'MERIDIAN_API_KEY=%q\n' "$MERIDIAN_API_KEY"
-    [[ -n "${OPENAI_API_KEY:-}" ]] && printf 'OPENAI_API_KEY=%q\n' "$OPENAI_API_KEY"
-    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && printf 'ANTHROPIC_API_KEY=%q\n' "$ANTHROPIC_API_KEY"
-    [[ -n "${GEMINI_API_KEY:-}" ]] && printf 'GEMINI_API_KEY=%q\n' "$GEMINI_API_KEY"
-    [[ -n "${OPENROUTER_API_KEY:-}" ]] && printf 'OPENROUTER_API_KEY=%q\n' "$OPENROUTER_API_KEY"
-    [[ -n "${OPENCODE_API_KEY:-}" ]] && printf 'OPENCODE_API_KEY=%q\n' "$OPENCODE_API_KEY"
-    [[ -n "${OLLAMA_API_KEY:-}" ]] && printf 'OLLAMA_API_KEY=%q\n' "$OLLAMA_API_KEY"
+    if [[ -n "$DATABASE_URL" ]]; then printf 'DATABASE_URL=%q\n' "$DATABASE_URL"; fi
+    for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
+      case "$key" in
+      [A-Z][A-Z0-9_]*) ;;
+      *) continue ;;
+      esac
+      eval "if [[ -n \"\${${key}-}\" ]]; then printf '${key}=%q\\n' \"\${${key}}\"; fi"
+    done
     [[ -n "${LITELLM_OPENCODE_KEY:-}" ]] && printf 'LITELLM_OPENCODE_KEY=%q\n' "$LITELLM_OPENCODE_KEY"
     [[ -n "${LITELLM_PI_KEY:-}" ]] && printf 'LITELLM_PI_KEY=%q\n' "$LITELLM_PI_KEY"
     [[ -n "${LITELLM_OPENWEBUI_KEY:-}" ]] && printf 'LITELLM_OPENWEBUI_KEY=%q\n' "$LITELLM_OPENWEBUI_KEY"

@@ -590,6 +590,165 @@ def test_litellm_env_sync_disable_admin_ui_override(tmp_path):
     assert sync({}, None)["DISABLE_ADMIN_UI"] == "True"
 
 
+def test_litellm_env_sync_database_url_precedence(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("DATABASE_URL='persisted'\n", encoding="utf-8")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "DATABASE_URL='legacy'\nLITELLM_DATABASE_URL='new'\n", encoding="utf-8"
+    )
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "DATABASE_URL=new" in env_path.read_text(encoding="utf-8")
+
+
+def test_litellm_env_sync_removes_missing_or_empty_provider_keys(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    config_path = root / "config.yaml"
+    config_path.write_text("api_key: os.environ/COHERE_API_KEY\n", encoding="utf-8")
+
+    def sync(home_env):
+        env_path.write_text("COHERE_API_KEY=stale\n", encoding="utf-8")
+        (tmp_path / ".env").write_text(home_env, encoding="utf-8")
+        script = (
+            f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+            f"source {shlex.quote(str(helper))}; "
+            f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+        )
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        return env_path.read_text(encoding="utf-8")
+
+    assert "COHERE_API_KEY=" not in sync("")
+    assert "COHERE_API_KEY=" not in sync("COHERE_API_KEY=''\n")
+
+
+def test_litellm_env_sync_removes_provider_from_same_shell_scope(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    (root / "config.yaml").write_text(
+        "api_key: os.environ/COHERE_API_KEY\n", encoding="utf-8"
+    )
+    (tmp_path / ".env").write_text("COHERE_API_KEY='cohere-test'\n", encoding="utf-8")
+    script = f"""\
+source {shlex.quote(str(helper))}
+litellm_service_env_sync {shlex.quote(str(env_path))} || exit 1
+if ! grep -q '^COHERE_API_KEY=cohere-test$' {shlex.quote(str(env_path))}; then
+  printf 'first sync did not persist expected credential\n' >&2
+  exit 1
+fi
+: > {shlex.quote(str(tmp_path / ".env"))}
+litellm_service_env_sync {shlex.quote(str(env_path))} || exit 1
+if [[ -n "${{COHERE_API_KEY:-}}" ]]; then
+  printf 'provider credential leaked across sync calls\n' >&2
+  exit 1
+fi
+"""
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_litellm_env_sync_local_only_config_does_not_copy_bootstrap_keys(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    (root / "config.yaml").write_text("model: local/model\n", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "OPENAI_API_KEY='bootstrap-secret'\n", encoding="utf-8"
+    )
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OPENAI_API_KEY" not in env_path.read_text(encoding="utf-8")
+
+
+def test_litellm_env_sync_is_byte_identical_on_repeated_runs(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    (root / "config.yaml").write_text(
+        "api_key: os.environ/COHERE_API_KEY\n", encoding="utf-8"
+    )
+    (tmp_path / ".env").write_text("COHERE_API_KEY='cohere-test'\n", encoding="utf-8")
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    first = None
+    for run in range(2):
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        if run == 0:
+            first = env_path.read_bytes()
+        else:
+            assert env_path.read_bytes() == first
+
+
+def test_litellm_env_sync_database_url_legacy_precedes_persisted(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("DATABASE_URL='persisted'\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("DATABASE_URL='legacy'\n", encoding="utf-8")
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "DATABASE_URL=legacy" in env_path.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("openssl_body", ["return 1", ":"])
 def test_litellm_master_key_generation_rejects_failure_or_empty(tmp_path, openssl_body):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
