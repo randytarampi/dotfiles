@@ -100,6 +100,45 @@ def test_litellm_client_gate_requires_main_gate():
     )
 
 
+def test_litellm_ui_contradiction_requires_enabled_ui():
+    # Main gate off: never an error, regardless of switches.
+    assert not VERIFY_CONFIG.litellm_ui_contradiction_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "0",
+            "DOTFILES_LITELLM_UI_EXPOSED": "1",
+        }
+    )
+    # Gate on, UI exposed, service default disables it: contradiction.
+    assert VERIFY_CONFIG.litellm_ui_contradiction_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_LITELLM_UI_EXPOSED": "1",
+        }
+    )
+    # Explicit override re-enables the UI: no contradiction.
+    assert not VERIFY_CONFIG.litellm_ui_contradiction_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_LITELLM_UI_EXPOSED": "1",
+            "LITELLM_DISABLE_ADMIN_UI": "False",
+        }
+    )
+    # Persisted False is drift: generation resets to True without an override.
+    assert VERIFY_CONFIG.litellm_ui_contradiction_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_LITELLM_UI_EXPOSED": "1",
+        }
+    )
+    assert not VERIFY_CONFIG.litellm_ui_contradiction_errors(
+        {
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_LITELLM_UI_EXPOSED": "1",
+            "LITELLM_DISABLE_ADMIN_UI": "False",
+        },
+    )
+
+
 def test_backup_timer_accepts_current_and_valid_sibling_worktrees(
     tmp_path, monkeypatch
 ):
@@ -265,6 +304,14 @@ def test_litellm_service_env_accepts_provisioned_per_app_keys():
     )
     problems = VERIFY_CONFIG.validate_litellm_service_env(env, _LITELLM_POLICY_CONFIG)
     assert problems == []
+
+
+def test_litellm_service_env_validation_stays_on_service_database_name():
+    env = _litellm_env(LITELLM_DATABASE_URL="postgresql://localhost/litellm")
+    env.pop("DATABASE_URL")
+    problems = VERIFY_CONFIG.validate_litellm_service_env(env, _LITELLM_POLICY_CONFIG)
+    assert any("DATABASE_URL" in problem for problem in problems)
+    assert any("unexpected entries" in problem for problem in problems)
 
 
 def test_litellm_service_env_rejects_unexpected_extras():

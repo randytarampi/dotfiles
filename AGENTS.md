@@ -281,7 +281,8 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
 | [docs/TIERS.md](docs/TIERS.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
 | [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
-| [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, JSON config convention |
+| [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, and JSON config convention |
+| [docs/LITELLM.md](docs/LITELLM.md) | LiteLLM proxy gateway config, keys, env contract |
 | [docs/MERIDIAN.md](docs/MERIDIAN.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
 | [docs/VOICE.md](docs/VOICE.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
 | [docs/JUNIE.md](docs/JUNIE.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |

@@ -177,7 +177,7 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
         )
     if models[0] == 400:
         # Retain this branch for legacy DB-less deployments. New gate-on
-        # deployments require DATABASE_URL, so this is not an expected path.
+        # deployments require LITELLM_DATABASE_URL, so this is not an expected path.
         # DB-less LiteLLM rejects authenticated model requests with HTTP 400
         # (its known no_db_connection auth-backend rejection path). The
         # auth-backend 400 path is likewise a master-key/auth problem. Real

@@ -296,6 +296,30 @@ def litellm_client_gate_errors(environ=None):
     ]
 
 
+def litellm_ui_contradiction_errors(environ=None):
+    """Return an error when the UI is both disabled and exposed.
+
+    The Caddy UI site (DOTFILES_LITELLM_UI_EXPOSED=1) is only useful when
+    the proxy serves /ui — i.e. when LITELLM_DISABLE_ADMIN_UI does not
+    disable the Admin UI. Only reports when
+    the main LiteLLM gate is on.
+    """
+    environ = environ or os.environ
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return []
+    if environ.get("DOTFILES_LITELLM_UI_EXPOSED", "") != "1":
+        return []
+    override = environ.get("LITELLM_DISABLE_ADMIN_UI", "").strip().lower()
+    effective_disabled = override or "True"
+    if effective_disabled.lower() in {"true", "1", "yes"}:
+        return [
+            "LiteLLM Admin UI is disabled while DOTFILES_LITELLM_UI_EXPOSED=1; "
+            "set LITELLM_DISABLE_ADMIN_UI=False to serve the UI, or unset "
+            "DOTFILES_LITELLM_UI_EXPOSED"
+        ]
+    return []
+
+
 # Gate → list of (description, file path) checks
 CHECKS = [
     (
@@ -1320,6 +1344,7 @@ def main():
         print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
 
     litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+    litellm_root = HOME / ".local/share/litellm"
     for client_gate, label in (
         ("DOTFILES_OPENWEBUI_USE_LITELLM", "Open WebUI"),
         ("DOTFILES_OPENCODE_USE_LITELLM", "OpenCode"),
@@ -1331,6 +1356,9 @@ def main():
                 "DOTFILES_RUN_LITELLM_SETUP=1; direct routing remains active"
             )
             exit_code = 1
+    for error in litellm_ui_contradiction_errors():
+        print(f"  \u2717 {error}")
+        exit_code = 1
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
     litellm_unit = HOME / ".config/systemd/user/litellm.service"

@@ -56,6 +56,7 @@ from preset_migration import TIER_VALUE_MIGRATIONS, migrate_preset_value
 # - v1 defaults and localhost-only modes map to CADDY_ACCESS='localhost'
 # - v1 auth/zone env vars are removed because they now live in config files
 MIGRATIONS = [
+    ("DATABASE_URL", "LITELLM_DATABASE_URL", None),
     ("DOTFILES_LOCAL_FALLBACK_ROLES", "DOTFILES_ROLE_MODELS", None),
     ("DOTFILES_LOCAL_FALLBACK_PLACEHOLDERS", "DOTFILES_CATEGORY_MODELS", None),
     (
