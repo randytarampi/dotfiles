@@ -1,5 +1,6 @@
 import os
 import json
+import io
 import shlex
 import subprocess
 import urllib.error
@@ -9,6 +10,8 @@ from pathlib import Path
 import pytest
 
 import litellm_config
+
+LIVE_CATALOGUE = litellm_config._live_catalogue
 
 CONFIGURE_SPEC = spec_from_file_location(
     "configure_litellm", Path(__file__).resolve().parents[2] / "configure-litellm.py"
@@ -36,6 +39,9 @@ def hermetic_environment(monkeypatch):
                 "OLLAMA_",
                 "MERIDIAN_",
                 "OMLX_",
+                "COHERE_",
+                "HF_TOKEN",
+                "CEREBRAS_",
             )
         ):
             monkeypatch.delenv(name, raising=False)
@@ -48,9 +54,11 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     monkeypatch.setenv("MERIDIAN_API_KEY", "meridian")
     entries = litellm_config.compute_model_list()
     aliases = {entry["model_name"] for entry in entries}
-    assert "openai/default" in aliases
+    assert "openai/default" not in aliases
+    assert all(entry["model_name"].startswith("meridian/") for entry in entries)
     assert any(
-        entry["litellm_params"].get("model") == "openai/gpt-6-luna" for entry in entries
+        "openai/gpt-6-luna: UNKNOWN" in note
+        for note in litellm_config.last_generation_notes
     )
     assert "anthropic/default" not in aliases
     monkeypatch.setattr(litellm_config, "is_meridian_configured", lambda: True)
@@ -74,14 +82,506 @@ def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
         )
         assert "api_base" in aliases["openrouter/m1"]["litellm_params"]
     else:
-        assert "openrouter/default" in aliases
+        assert "openrouter/default" not in aliases
+        assert not aliases
+        assert any(
+            "openrouter: UNKNOWN" in note
+            for note in litellm_config.last_generation_notes
+        )
 
 
-def test_live_catalogue_failure_aborts_model_list(monkeypatch):
+def test_live_catalogue_failure_is_recorded_and_other_providers_continue(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
-    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: None)
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-stub")
+    monkeypatch.setenv("GEMINI_API_KEY", "google-stub")
+
+    def catalogue(provider, *args):
+        if provider == "openrouter":
+            raise litellm_config.LiveCatalogueError("stub outage")
+        return ["available-model"]
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", catalogue)
+    entries = litellm_config.compute_model_list()
+    assert "google/models/available-model" in {item["model_name"] for item in entries}
+    assert any(
+        "openrouter: UNKNOWN" in note for note in litellm_config.last_generation_notes
+    )
+
+
+def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    allowlist = json.loads(
+        (root / "configs/opencode/anthropic-models.json").read_text()
+    )["models"]
+    monkeypatch.setattr(litellm_config, "is_meridian_configured", lambda: True)
+    entries = litellm_config.compute_model_list({"MERIDIAN_API_KEY": "test-key"})
+    aliases = {entry["model_name"] for entry in entries}
+    missing = sorted(
+        f"meridian/{model}" for model in allowlist if f"meridian/{model}" not in aliases
+    )
+    assert not missing, f"Uncovered canonical identities: {missing}"
+
+
+def test_qualified_model_alias_survives_bare_alias_collision(monkeypatch):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["omlx", "ollama"])
+    monkeypatch.setattr(
+        litellm_config,
+        "iter_engine_models",
+        lambda provider: ["foo" if provider == "omlx" else "omlx/foo"],
+    )
+    monkeypatch.setattr(litellm_config, "list_cloud_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "local_endpoint_for",
+        lambda provider, proto: (
+            ("http://127.0.0.1:11427/v1", None) if provider == "omlx" else None
+        ),
+    )
+    entries = litellm_config.compute_model_list({})
+    aliases = [item["model_name"] for item in entries]
+    assert aliases.count("omlx/foo") == 1
+    surviving = next(item for item in entries if item["model_name"] == "omlx/foo")
+    assert surviving["litellm_params"]["model"] == "openai/foo"
+
+
+@pytest.mark.parametrize(
+    "provider,key,api_base,wire_prefix,model_id",
+    [
+        (
+            "cohere",
+            "COHERE_API_KEY",
+            "https://api.cohere.ai",
+            "cohere_chat/",
+            "command-r",
+        ),
+        (
+            "huggingface",
+            "HF_TOKEN",
+            "https://router.huggingface.co",
+            "huggingface/",
+            "org/model",
+        ),
+    ],
+)
+def test_live_catalogue_key_providers_generate_only_with_keys(
+    monkeypatch, provider, key, api_base, wire_prefix, model_id
+):
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [model_id])
+    entries = litellm_config.compute_model_list({key: "test-key"})
+    alias = f"{wire_prefix}{model_id}"
+    entry = next(item for item in entries if item["model_name"] == alias)
+    assert entry["litellm_params"]["model"] == alias
+    assert "api_base" not in entry["litellm_params"]
+    assert entry["litellm_params"]["api_key"] == f"os.environ/{key}"
+    assert not any(
+        item["model_name"].startswith(wire_prefix)
+        for item in litellm_config.compute_model_list({"UNRELATED": ""})
+    )
+
+
+def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    refs = litellm_config._registry_model_refs()
+    opencode_allowlist = json.loads(
+        (root / "configs/opencode/opencode-models.json").read_text()
+    )["models"]
+    keys = {
+        "openai": "OPENAI_API_KEY",
+        "google": "GEMINI_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "ollama-cloud": "OLLAMA_API_KEY",
+        "opencode": "OPENCODE_API_KEY",
+    }
+    # Expected identities are parsed independently from the source files.
+    junie = json.loads((root / "configs/junie/model-groups.json").read_text())
+    slim = json.loads((root / "configs/opencode/oh-my-opencode-slim.json").read_text())
+    expected = set()
+    prefixes = (
+        "openai/",
+        "google/models/",
+        "openrouter/",
+        "ollama-cloud/",
+        "opencode/",
+    )
+
+    def independent_walk(value):
+        if isinstance(value, dict):
+            provider = value.get("provider")
+            for field, provider_field in (
+                ("primaryModel", "provider"),
+                ("fasterModel", "fasterProvider"),
+                ("model", "provider"),
+            ):
+                model = value.get(field)
+                actual_provider = value.get(provider_field) or provider
+                if not isinstance(model, str) or model.startswith(
+                    ("http://", "https://", "_local:")
+                ):
+                    continue
+                if actual_provider in (
+                    "openai",
+                    "google",
+                    "openrouter",
+                    "ollama-cloud",
+                    "opencode",
+                ):
+                    prefix = {
+                        "openai": "openai/",
+                        "google": "google/models/",
+                        "openrouter": "openrouter/",
+                        "ollama-cloud": "ollama-cloud/",
+                        "opencode": "opencode/",
+                    }[actual_provider]
+                    expected.add(
+                        model
+                        if model.startswith(prefix)
+                        else f"{prefix}{model.removeprefix('models/') if actual_provider == 'google' else model}"
+                    )
+                elif model.startswith(prefixes):
+                    expected.add(model)
+            for field, child in value.items():
+                if field == "fallback":
+                    independent_fallback(child)
+                elif field not in ("primaryModel", "fasterModel", "model"):
+                    independent_walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                independent_walk(child)
+
+    def independent_fallback(value):
+        if isinstance(value, str) and value.startswith(prefixes):
+            expected.add(value)
+        elif isinstance(value, (dict, list)):
+            values = value.values() if isinstance(value, dict) else value
+            for child in values:
+                independent_fallback(child)
+
+    independent_walk(junie)
+    independent_walk(slim)
+    docs = (root / "docs/TIERS.md").read_text()
+    import re
+
+    in_tier_table = False
+    for line in docs.splitlines():
+        if line.startswith("### "):
+            in_tier_table = " Tier" in line
+        if in_tier_table and "|" in line:
+            expected.update(
+                re.findall(
+                    r"`((?:ollama-cloud|opencode|openrouter|google/models|openai)/[A-Za-z0-9._:/-]+)`",
+                    line,
+                )
+            )
+    assert "https://example.com/openai/ignored" not in expected
+    assert "_local:placeholder" not in expected
+    assert any(ref.startswith("openrouter/inclusionai/") for ref in expected)
+    verified = {
+        ref
+        for ref in expected
+        if ref.startswith(("openai/", "google/models/", "openrouter/"))
+    }
+    verified.update(
+        ref
+        for ref in expected
+        if ref.startswith("opencode/") and ref.split("/", 1)[1] in opencode_allowlist
+    )
+    catalogue_ids = {
+        "google": [
+            ref.split("/", 2)[2] for ref in verified if ref.startswith("google/models/")
+        ],
+        "openrouter": [
+            ref.split("/", 1)[1] for ref in verified if ref.startswith("openrouter/")
+        ],
+        "openai": [
+            ref.split("/", 1)[1] for ref in verified if ref.startswith("openai/")
+        ],
+        "ollama-cloud": [],
+    }
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda provider, *args: catalogue_ids.get(provider, []),
+    )
+    environ = {key: "test-key" for key in keys.values()}
+    entries = litellm_config.compute_model_list(environ)
+    aliases = {item["model_name"] for item in entries}
+    unknown = sorted(expected - verified)
+    print(f"UNKNOWN registry IDs: {unknown}")
+    assert not (
+        verified - aliases
+    ), f"Uncovered identities: {sorted(verified - aliases)}"
+    assert any(
+        "UNKNOWN registry reference" in note
+        for note in litellm_config.last_generation_notes
+    )
+    assert any(
+        note.startswith("ollama-cloud/") and "UNKNOWN" in note
+        for note in litellm_config.last_generation_notes
+    )
+    for ref in expected:
+        if ref in verified:
+            assert ref in aliases, f"confirmed identity missing: {ref}"
+        else:
+            assert any(
+                note.startswith(f"{ref}: UNKNOWN")
+                for note in litellm_config.last_generation_notes
+            ), ref
+
+
+def test_registry_collector_handles_fallback_and_provider_owned_nested_id():
+    fixture = {
+        "groups": {"owned": {"provider": "openrouter", "primaryModel": "openai/gpt-x"}},
+        "_tiers": {"tier": {"fallback": [["openai/gpt-5.4-mini"]]}},
+    }
+    assert litellm_config._collect_model_refs(fixture) == {
+        "openrouter/openai/gpt-x",
+        "openai/gpt-5.4-mini",
+    }
+
+
+def test_markdown_model_collector_uses_captured_model_cell_refs():
+    fixture = """### Example Tier
+| Role | Model |
+| --- | --- |
+| main | `openrouter/vendor/model-x` |
+| ignored | `https://example.com/openai/nope` |
+| placeholder | `_local:code` |
+"""
+    assert litellm_config._markdown_model_refs(fixture) == {"openrouter/vendor/model-x"}
+
+
+def test_model_field_collector_uses_faster_provider_not_primary():
+    fixture = {
+        "groups": {
+            "route": {
+                "provider": "openai",
+                "primaryModel": "primary-model",
+                "fasterProvider": "google",
+                "fasterModel": "faster-model",
+                "url": "https://example.com/openai/ignored",
+                "placeholder": "_local:code",
+            }
+        }
+    }
+    refs = litellm_config._collect_model_refs(fixture)
+    assert refs == {"openai/primary-model", "google/models/faster-model"}
+
+
+@pytest.mark.parametrize(
+    "provider,key",
+    [
+        ("openai", "OPENAI_API_KEY"),
+        ("opencode", "OPENCODE_API_KEY"),
+        ("cerebras", "CEREBRAS_API_KEY"),
+    ],
+)
+def test_empty_provider_sources_never_emit_default_aliases(monkeypatch, provider, key):
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
+    monkeypatch.setattr(litellm_config, "provider_models", lambda name: [])
+    entries = litellm_config.compute_model_list({key: "test-key"})
+    assert not any(item["model_name"].endswith("/default") for item in entries)
+    assert not any(item["model_name"].startswith(f"{provider}/") for item in entries)
+
+
+def test_cerebras_catalogue_entry_has_no_api_base(monkeypatch):
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["model-x"])
+    entries = litellm_config.compute_model_list({"CEREBRAS_API_KEY": "test-key"})
+    entry = next(item for item in entries if item["model_name"] == "cerebras/model-x")
+    assert entry["litellm_params"]["model"] == "cerebras/model-x"
+    assert "api_base" not in entry["litellm_params"]
+
+
+@pytest.mark.parametrize(
+    "provider,key",
+    [("cohere", "COHERE_API_KEY"), ("huggingface", "HF_TOKEN")],
+)
+def test_new_catalogue_failure_is_local_and_visible(monkeypatch, provider, key):
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda name, *args: (
+            (_ for _ in ()).throw(litellm_config.LiveCatalogueError("stub failure"))
+            if name == provider
+            else ["other-model"]
+        ),
+    )
+    entries = litellm_config.compute_model_list(
+        {key: "test-key", "GEMINI_API_KEY": "google-key"}
+    )
+    assert not any(item["model_name"].startswith("cohere_chat/") for item in entries)
+    assert not any(item["model_name"].startswith("huggingface/") for item in entries)
+    assert any(item["model_name"] == "google/models/other-model" for item in entries)
+    assert any(
+        f"{provider}: UNKNOWN" in note for note in litellm_config.last_generation_notes
+    )
+
+
+def test_cohere_catalogue_uses_chat_filter_and_paginates(monkeypatch):
+    pages = [
+        {
+            "models": [
+                {"name": "chat-one", "endpoints": ["chat"]},
+                {"name": "embed-only", "endpoints": ["embed"]},
+                {
+                    "name": "deprecated-chat",
+                    "endpoints": ["chat"],
+                    "is_deprecated": True,
+                },
+            ],
+            "next_page_token": "page-2",
+        },
+        {"models": [{"name": "chat-two", "endpoints": ["chat"]}]},
+    ]
+    urls = []
+
+    def response(request, timeout):
+        urls.append(request.full_url)
+        return io.BytesIO(json.dumps(pages.pop(0)).encode())
+
+    monkeypatch.setattr(litellm_config, "open_same_origin", response)
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    result = litellm_config._live_catalogue("cohere", "key", "https://api.cohere.ai")
+    assert result == ["chat-one", "chat-two"]
+    assert "page_size=1000" in urls[0]
+    assert "page_token=page-2" in urls[1]
+
+
+def test_malformed_cohere_catalogue_yields_note_and_no_entries(monkeypatch):
+    monkeypatch.setenv("COHERE_API_KEY", "test-key")
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(b'{"wrong": []}'),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    entries = litellm_config.compute_model_list()
+    assert not any(item["model_name"].startswith("cohere_chat/") for item in entries)
+    assert any(
+        "cohere: UNKNOWN" in note for note in litellm_config.last_generation_notes
+    )
+
+
+@pytest.mark.parametrize(
+    "payloads,cap",
+    [
+        ([{"models": [], "next_page_token": "repeat"}] * 2, 20),
+        ([{"models": [], "next_page_token": f"page-{i}"} for i in range(2)], 2),
+    ],
+)
+def test_cohere_catalogue_rejects_repeated_token_and_page_cap(
+    monkeypatch, payloads, cap
+):
+    pages = list(payloads)
+    monkeypatch.setattr(litellm_config, "COHERE_CATALOGUE_MAX_PAGES", cap)
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(json.dumps(pages.pop(0)).encode()),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
     with pytest.raises(litellm_config.LiveCatalogueError):
-        litellm_config.compute_model_list()
+        litellm_config._live_catalogue("cohere", "key", "https://api.cohere.ai")
+
+
+def test_cohere_catalogue_rejects_non_string_page_token(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(b'{"models": [], "next_page_token": 7}'),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    with pytest.raises(litellm_config.LiveCatalogueError, match="must be a string"):
+        litellm_config._live_catalogue("cohere", "key", "https://api.cohere.ai")
+
+
+def test_openai_registry_reference_requires_key_and_confirmed_catalogue(monkeypatch):
+    requested = sorted(
+        ref.split("/", 1)[1]
+        for ref in litellm_config._registry_model_refs()
+        if ref.startswith("openai/")
+    )
+    assert requested
+    model_id = requested[0]
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
+    before = litellm_config.compute_model_list({"OPENAI_API_KEY": "test-key"})
+    assert not any(item["model_name"] == f"openai/{model_id}" for item in before)
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda provider, *args: [model_id] if provider == "openai" else [],
+    )
+    entries = litellm_config.compute_model_list({"OPENAI_API_KEY": "test-key"})
+    assert any(item["model_name"] == f"openai/{model_id}" for item in entries)
+    assert not any(item["model_name"] == "openai/default" for item in entries)
+    unkeyed = litellm_config.compute_model_list({"UNRELATED": ""})
+    assert not any(item["model_name"].startswith("openai/") for item in unkeyed)
+    assert any(
+        f"openai/{model_id}: UNKNOWN OPENAI_API_KEY is unset" in note
+        for note in litellm_config.last_generation_notes
+    )
+
+
+def test_bare_alias_ambiguity_is_removed_in_either_provider_order(monkeypatch):
+    monkeypatch.setattr(litellm_config, "iter_engine_models", lambda provider: ["same"])
+    monkeypatch.setattr(litellm_config, "list_cloud_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "local_endpoint_for",
+        lambda *_: ("http://127.0.0.1:11427/v1", None),
+    )
+    monkeypatch.setattr(
+        litellm_config, "get_ollama_local_base_url", lambda: "http://127.0.0.1:11434/v1"
+    )
+    generated = []
+    for order in (["ollama", "omlx"], ["omlx", "ollama"]):
+        monkeypatch.setattr(litellm_config, "active_engines", lambda order=order: order)
+        entries = litellm_config.compute_model_list({"UNRELATED": ""})
+        aliases = {entry["model_name"] for entry in entries}
+        assert {"ollama/same", "omlx/same"} <= aliases
+        assert "same" not in aliases
+        generated.append(entries)
+    assert generated[0] == generated[1]
+
+
+def test_cohere_service_key_syncs_from_config_reference(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    (root / "config.yaml").write_text("api_key: os.environ/COHERE_API_KEY\n")
+    (tmp_path / ".env").write_text("COHERE_API_KEY='cohere-test-key'\n")
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "COHERE_API_KEY=cohere-test-key" in env_path.read_text()
+    (tmp_path / ".env").write_text("")
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "COHERE_API_KEY=" not in env_path.read_text()
+
+
+def test_generation_notes_persist_atomically_with_private_mode(tmp_path):
+    path = tmp_path / "litellm" / "last_generation_notes.json"
+    CONFIGURE._persist_generation_notes(["openai/model: UNKNOWN"], path)
+    assert json.loads(path.read_text()) == ["openai/model: UNKNOWN"]
+    assert path.stat().st_mode & 0o777 == 0o600
 
 
 def test_local_registry_models_use_protocol_specific_entries(monkeypatch):
@@ -210,30 +710,24 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
     assert config_path.read_bytes() == first_bytes
 
     aliases = [entry["model_name"] for entry in second_entries]
-    assert aliases[:8] == [
-        "omlx/omlx-alpha",
-        "omlx-alpha",
+    assert set(aliases) == {
         "omlx/omlx-alpha",
         "omlx-alpha",
         "omlx/omlx-zeta",
         "omlx-zeta",
         "omlx/shared",
-        "shared",
-    ]
-    assert aliases[8:18] == [
         "ollama/cloud-alpha",
         "cloud-alpha",
         "ollama/local-zeta",
         "local-zeta",
         "ollama/shared",
-        "shared",
         "ollama/shared-cloud",
         "shared-cloud",
         "openrouter/router-alpha",
         "openrouter/router-zeta",
-    ]
-    assert aliases.count("omlx/omlx-alpha") == 2
-    assert aliases.count("omlx-alpha") == 2
+    }
+    assert aliases.count("omlx/omlx-alpha") == 1
+    assert aliases.count("omlx-alpha") == 1
     by_alias = {entry["model_name"]: entry for entry in second_entries}
     assert by_alias["omlx/shared"]["litellm_params"] == {
         "model": "openai/shared",
@@ -244,8 +738,7 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
         "model": "ollama/shared-cloud",
         "api_base": "http://127.0.0.1:11434",
     }
-    assert aliases.index("shared") == 7
-    assert aliases.index("shared", 8) == 13
+    assert "shared" not in aliases
 
 
 def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeypatch):
@@ -482,7 +975,7 @@ def test_render_uses_environment_references_and_no_inline_keys(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "do-not-render")
     rendered = litellm_config.render_config()
     assert "do-not-render" not in rendered
-    assert "api_key: os.environ/OPENAI_API_KEY" in rendered
+    assert "api_key: os.environ/OPENAI_API_KEY" not in rendered
     assert "master_key: os.environ/LITELLM_MASTER_KEY" in rendered
     assert "database_url: os.environ/DATABASE_URL" in rendered
 
@@ -803,38 +1296,43 @@ def test_litellm_keyed_local_and_meridian_shapes(monkeypatch):
 
 def test_google_uses_native_adapter(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "gemini")
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["gemini-3.8-flash"]
+    )
     entries = litellm_config.compute_model_list()
-    google = next(item for item in entries if item["model_name"] == "google/default")
+    google = next(
+        item
+        for item in entries
+        if item["model_name"] == "google/models/gemini-3.8-flash"
+    )
     assert google["litellm_params"]["model"].startswith("gemini/")
-    assert "api_base" not in google["litellm_params"]
+    # Native gemini/ adapter must NOT receive the OpenAI-compatible
+    # generativelanguage /v1beta/openai base URL (vertex_llm_base.py builds
+    # .../openai/models/<id>:generateContent from it — wrong path for the
+    # native adapter). api_base is omitted so LiteLLM uses its native
+    # GenerativeLanguage defaults.
+    assert not google["litellm_params"].get("api_base")
 
 
 @pytest.mark.parametrize(
     "env_name, provider, model, api_base",
     [
-        ("OPENAI_API_KEY", "openai", "openai/gpt-6-luna", "https://api.openai.com/v1"),
-        (
-            "ANTHROPIC_API_KEY",
-            "anthropic",
-            "anthropic/claude-sonnet-5-5",
-            "https://api.anthropic.com",
-        ),
         (
             "OPENROUTER_API_KEY",
             "openrouter",
-            "openrouter/openai/gpt-4o",
+            "openrouter/test-model",
             "https://openrouter.ai/api/v1",
         ),
         (
             "OPENCODE_API_KEY",
             "opencode",
-            "openai/gpt-6-luna",
+            "openai/big-pickle",
             "https://opencode.ai/zen/v1",
         ),
         (
             "OLLAMA_API_KEY",
             "ollama-cloud",
-            "openai/gpt-oss:120b",
+            "openai/test-model",
             "https://ollama.com/v1",
         ),
     ],
@@ -845,14 +1343,25 @@ def test_cloud_provider_routes_use_recorded_upstreams(
     # Split-concat keeps the literal out of trufflehog Lob's key-shaped string
     # matching (precedent: test_litellm.py's sk- stub fixtures).
     monkeypatch.setenv(env_name, "test-" + "key")
+    model_id = model.split("/", 1)[-1]
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [model_id])
+    alias = f"{provider}/default"
+    if provider == "opencode":
+        alias = "opencode/big-pickle"
+    else:
+        alias = f"{provider}/{model_id}"
     entry = next(
         item
         for item in litellm_config.compute_model_list()
-        if item["model_name"] == f"{provider}/default"
+        if item["model_name"] == alias
     )
     params = entry["litellm_params"]
-    assert params["model"] == model
-    assert params["api_base"] == api_base
+    expected_wire = f"openai/{model_id}" if provider == "openrouter" else model
+    assert params["model"] == expected_wire
+    if provider == "cerebras":
+        assert "api_base" not in params
+    else:
+        assert params["api_base"] == api_base
     assert params["api_key"] == f"os.environ/{env_name}"
 
 

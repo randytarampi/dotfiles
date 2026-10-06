@@ -25,8 +25,35 @@ from litellm_config import (  # noqa: E402
     compute_model_list,
     write_config,
 )
+import litellm_config  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
+GENERATION_NOTES_PATH = Path(
+    "~/.local/share/litellm/last_generation_notes.json"
+).expanduser()
+
+
+def _persist_generation_notes(notes, path=None):
+    """Atomically persist coverage diagnostics for the separately-run doctor."""
+    target = Path(path or GENERATION_NOTES_PATH)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(dir=target.parent, prefix=".litellm-notes.")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(list(notes), handle)
+            handle.write("\n")
+        os.replace(temp_path, target)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _service_env_value(name, path):
@@ -222,6 +249,8 @@ def main():
         # Compute the snapshot once: write_config reuses it instead of
         # re-enumerating provider catalogues a second time per deploy.
         entries = compute_model_list()
+        for note in litellm_config.last_generation_notes:
+            logger.warning("LiteLLM coverage: %s", note)
         if args.dry_run:
             master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
             logger.info(
@@ -232,6 +261,7 @@ def main():
             )
             return 0
         changed = write_config(config_path, entries=entries)
+        _persist_generation_notes(litellm_config.last_generation_notes)
         logger.info(
             "LiteLLM config %s (%d model entries)",
             "updated" if changed else "unchanged",

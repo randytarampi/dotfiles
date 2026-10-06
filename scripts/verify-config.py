@@ -24,6 +24,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
+import litellm_config
 from litellm_config import APP_KEYS
 
 HOME = Path.home()
@@ -211,6 +212,20 @@ def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
 def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
     """Return false when LiteLLM config points at Mozart or its own port."""
     return routing_config_text_is_safe(config_text, port=port)
+
+
+LITELLM_NOTES_PATH = HOME / ".local/share/litellm/last_generation_notes.json"
+
+
+def litellm_coverage_warnings(path=None):
+    """Read persisted generation notes; never discover models during doctor."""
+    try:
+        notes = json.loads(Path(path or LITELLM_NOTES_PATH).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(notes, list) or any(not isinstance(note, str) for note in notes):
+        return []
+    return [f"LiteLLM coverage: {note}" for note in notes]
 
 
 def validate_litellm_service_env(
@@ -1364,6 +1379,8 @@ def main():
     litellm_unit = HOME / ".config/systemd/user/litellm.service"
     expected_litellm_port = os.environ.get("LITELLM_PORT", "4000")
     if litellm_gate:
+        for warning in litellm_coverage_warnings():
+            print(f"  ⚠ {warning}")
         diagnostic_path = Path(__file__).with_name("litellm-diagnose.py")
         diagnostic_spec = importlib.util.spec_from_file_location(
             "litellm_diagnose", diagnostic_path
