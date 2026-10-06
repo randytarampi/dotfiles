@@ -10,6 +10,23 @@ The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `~/.local/share/litellm/service.env`, written with mode `600`. A master key is
 generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied.
 
+### Two-mode client contract
+
+`DOTFILES_USE_LITELLM_PROXY` defaults to `0`. In direct mode, clients keep the
+canonical model identity and Ollama Cloud uses `https://ollama.com/v1` with
+`OLLAMA_API_KEY`; local daemon `:cloud` stubs remain a separate voice/pull
+consumer and never replace a model identity. In proxy mode (`1`), routing is
+gateway-only: `DOTFILES_RUN_LITELLM_SETUP=1`, each client key file, and every
+exact gateway alias are required. Missing prerequisites are configuration
+errors, never a direct-routing fallback.
+
+Client adapters map canonical identities at their boundary through
+`scripts/lib/litellm_aliases.py`; tier registries remain transport-neutral.
+The old Open WebUI, OpenCode, Pi and Junie canaries migrate by OR: any active
+truthy legacy value enables the new gate only when the new value is absent. An
+explicit `DOTFILES_USE_LITELLM_PROXY` value always wins. Run `make migrate`
+after pulling this change.
+
 LiteLLM requires Postgres for key, spend-tracking, and UI state. Set
 `LITELLM_DATABASE_URL`; setup translates it to `DATABASE_URL` in `service.env`,
 matching the unchanged `database_url: os.environ/DATABASE_URL` config reference.

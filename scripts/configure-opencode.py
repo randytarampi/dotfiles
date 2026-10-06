@@ -24,9 +24,10 @@ if LIB_DIR not in sys.path:
 
 import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
 from constants import (  # noqa: E402 -- local import follows bootstrap.
-    check_ollama_daemon,
+    get_litellm_proxy_mode,
     get_ollama_local_base_url,
 )
+from litellm_aliases import resolve_alias  # noqa: E402
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
@@ -37,13 +38,6 @@ from env import load_env  # noqa: E402 -- local import follows bootstrap.
 from caddy_domains import load_domains  # noqa: E402 -- local import follows bootstrap.
 from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
     list_local_ollama_models,
-)
-from discover_models import (  # noqa: E402 -- local import follows bootstrap.
-    list_cloud_ollama_models,
-)
-from ollama_cloud_wire_ids import (  # noqa: E402 -- scripts/lib bootstrap.
-    direct_cloud_route_allowed,
-    installed_cloud_stub,
 )
 from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     engine_gate_active,
@@ -168,65 +162,92 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
 
 
 def apply_litellm_client_gate(config: dict) -> None:
-    """Point OpenCode's OpenAI-compatible surface at LiteLLM for the canary."""
-    if not (
-        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-        and os.environ.get("DOTFILES_OPENCODE_USE_LITELLM", "0") == "1"
-    ):
+    """Map canonical model references to gateway-only or direct transports."""
+    if not get_litellm_proxy_mode():
         return
+    if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        raise RuntimeError(
+            "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+        )
     base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
     key_path = Path("~/.local/share/litellm/clients/opencode.key").expanduser()
     if not key_path.is_file() or key_path.is_symlink():
-        logger.warning(
-            "OpenCode LiteLLM key file unavailable; keeping direct providers"
-        )
-        return
-    key_ref = "{file:" + str(key_path.resolve()) + "}"
+        raise RuntimeError(f"OpenCode LiteLLM key file is unavailable: {key_path}")
     providers = config.setdefault("provider", {})
-    if os.environ.get("OPENAI_API_KEY", "").strip():
-        provider = providers.setdefault("openai", {})
-        provider.setdefault("options", {}).update(
-            {"baseURL": base_url, "apiKey": key_ref}
-        )
-    for name in ("ollama", "omlx"):
-        provider = providers.get(name)
-        if provider is not None:
-            provider.setdefault("options", {}).update(
-                {"baseURL": base_url, "apiKey": key_ref}
+    source_provider_names = set(providers)
+    models = {}
+    for provider_name, provider in providers.items():
+        for model_id, model in (provider.get("models", {}) or {}).items():
+            identity = (
+                f"google/models/{model_id.removeprefix('models/')}"
+                if provider_name == "google"
+                else f"{provider_name}/{model_id}"
             )
+            models[identity] = {
+                **model,
+                "id": identity,
+                "name": model.get("name", identity),
+            }
+    resolution = resolve_alias(
+        "openai/gpt-6-luna",
+        True,
+        client_key=key_path.resolve(),
+        gateway_url=base_url,
+    )
+    config["provider"] = {
+        "litellm": {
+            "name": "LiteLLM",
+            "npm": "@ai-sdk/openai-compatible",
+            "options": {
+                "baseURL": resolution["base_url"],
+                "apiKey": resolution["api_key"],
+            },
+            "models": models,
+        }
+    }
+
+    def rewrite(value):
+        if isinstance(value, dict):
+            return {key: rewrite(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [rewrite(child) for child in value]
+        if (
+            isinstance(value, str)
+            and "/" in value
+            and not value.startswith(("http://", "https://"))
+        ):
+            owner, model_id = value.split("/", 1)
+            if owner in source_provider_names:
+                if value not in models:
+                    raise RuntimeError(
+                        f"OpenCode gateway alias is not configured for canonical model {value}"
+                    )
+                return resolve_alias(
+                    value, True, client_key=key_path.resolve(), gateway_url=base_url
+                )["model"]
+        return value
+
+    for key in list(config):
+        if key != "provider":
+            config[key] = rewrite(config[key])
 
 
-def _build_ollama_cloud_model_maps(
-    cloud_models, installed_models, models_dev_data, local_ollama, preset
-):
-    """Separate installed proxy aliases from curated direct-only cloud IDs."""
+def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
+    """Keep local models local and cloud identities on the canonical cloud route."""
     combined_models = {}
     if local_ollama and preset not in ["plus", "pro"]:
         combined_models.update(local_ollama.get("models", {}))
-    direct_cloud_models = {}
-    for model_name in cloud_models:
-        cloud_name = installed_cloud_stub(model_name, installed_models)
-        if cloud_name is None:
-            direct_cloud_models[model_name] = build_model_entry(
-                model_name, models_dev_data, "ollama-cloud"
-            )
-            continue
-        context_length = get_ollama_context_length(cloud_name)
-        # Resolve :cloud modalities from models.dev; attachments route to observer.
-        combined_models[cloud_name] = build_model_entry(
-            cloud_name,
-            models_dev_data,
-            "ollama-cloud",
-            ollama_context=context_length,
-            modalities=get_ollama_modalities(cloud_name, models_dev_data),
-        )
+    direct_cloud_models = {
+        model_name: build_model_entry(model_name, models_dev_data, "ollama-cloud")
+        for model_name in cloud_models
+    }
     return combined_models, direct_cloud_models
 
 
 def _register_ollama_cloud_routes(
     config, combined_models, direct_cloud_models, local_ollama, preset
 ):
-    """Register installed stubs and preserve the existing guarded direct fallback."""
+    """Register direct cloud identities; local daemon stubs are never rewrites."""
     if combined_models:
         config["provider"]["ollama"] = {
             "models": combined_models,
@@ -237,29 +258,19 @@ def _register_ollama_cloud_routes(
     elif local_ollama and preset not in ["plus", "pro"]:
         config["provider"]["ollama"] = local_ollama
 
-    litellm_canary = not direct_cloud_route_allowed("opencode")
     direct_key = os.environ.get("OLLAMA_API_KEY", "").strip()
-    if direct_cloud_models and direct_key and not litellm_canary:
+    if direct_cloud_models and direct_key:
         config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
-        logger.warning(
-            "Some curated Ollama Cloud models have no unique installed local stub; retaining direct ollama-cloud route"
-        )
         return
 
     config["disabled_providers"].append("ollama-cloud")
     if not direct_cloud_models:
         return
     unavailable_ids = ", ".join(sorted(direct_cloud_models))
-    if litellm_canary:
-        logger.warning(
-            "Ollama Cloud models unavailable through the LiteLLM canary (no unique installed local stub; direct bypass disabled): %s",
-            unavailable_ids,
-        )
-    else:
-        logger.warning(
-            "Ollama Cloud models unavailable: no unique local stub and OLLAMA_API_KEY is unset: %s",
-            unavailable_ids,
-        )
+    logger.warning(
+        "Ollama Cloud models unavailable because OLLAMA_API_KEY is unset: %s",
+        unavailable_ids,
+    )
 
 
 @with_generation_lock("configure-opencode")
@@ -332,15 +343,8 @@ def main():
         except Exception:
             pass
 
-    # Check if local Ollama daemon can proxy cloud models
-    _, can_proxy_cloud = check_ollama_daemon()
-    installed_cloud_models = None
-    if can_proxy_cloud and args.mode == "global" and args.preset != "plus":
-        try:
-            installed_cloud_models = list_cloud_ollama_models()
-        except Exception as exc:
-            logger.warning("Could not list installed Ollama Cloud stubs: %s", exc)
-            installed_cloud_models = []
+    # Installed :cloud stubs stay daemon consumers; canonical cloud IDs are
+    # never rewritten to stub IDs by this client generator.
 
     # Generate MCP Config (unless --skip-mcp was passed)
     mcp_config = {}
@@ -575,22 +579,15 @@ def main():
                     for mid in anthropic_models
                 }
             }
-        # Project mode uses the direct ollama-cloud provider rather than the
-        # merged local+cloud `ollama` block, so configs remain portable across
-        # machines whether or not the local daemon proxies cloud.
+        # Project cloud identities use the direct cloud provider; local daemon
+        # stubs are never substituted for canonical IDs.
         if "ollama-cloud" in needed_providers and ollama_cloud_models:
-            if not direct_cloud_route_allowed("opencode"):
-                config["disabled_providers"].append("ollama-cloud")
-                logger.warning(
-                    "Direct ollama-cloud provider omitted under OpenCode LiteLLM canary; project cloud refs are unavailable unless locally proxied"
-                )
-            else:
-                config["provider"]["ollama-cloud"] = {
-                    "models": {
-                        mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
-                        for mid in ollama_cloud_models
-                    }
+            config["provider"]["ollama-cloud"] = {
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
+                    for mid in ollama_cloud_models
                 }
+            }
         if "ollama" in needed_providers and local_ollama:
             config["provider"]["ollama"] = local_ollama
         for provider, block in local_engine_providers.items():
@@ -824,13 +821,9 @@ def main():
                     for mid in openai_models
                 }
                 config["provider"]["openai"] = {"models": enriched_openai}
-            if can_proxy_cloud and ollama_cloud_models and args.preset != "plus":
-                # Unified: merge local + cloud Ollama under single provider
-                # Add only exact cloud stubs reported by the daemon. Unmatched
-                # curated models retain their direct ollama-cloud route below.
+            if ollama_cloud_models and args.preset != "plus":
                 combined_models, direct_cloud_models = _build_ollama_cloud_model_maps(
                     ollama_cloud_models,
-                    installed_cloud_models,
                     models_dev_data,
                     local_ollama,
                     args.preset,
@@ -842,21 +835,6 @@ def main():
                     local_ollama,
                     args.preset,
                 )
-            elif ollama_cloud_models and args.preset != "plus":
-                # Not cloud-capable: use direct ollama-cloud provider
-                if not direct_cloud_route_allowed("opencode"):
-                    config["disabled_providers"].append("ollama-cloud")
-                    logger.warning(
-                        "Direct ollama-cloud provider omitted under OpenCode LiteLLM canary; cloud refs are unavailable"
-                    )
-                else:
-                    enriched_cloud = {
-                        mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
-                        for mid in ollama_cloud_models
-                    }
-                    config["provider"]["ollama-cloud"] = {"models": enriched_cloud}
-                if local_ollama and args.preset not in ["plus", "pro"]:
-                    config["provider"]["ollama"] = local_ollama
             elif local_ollama and args.preset not in ["plus", "pro"]:
                 # No cloud models at all; local-only provider
                 config["provider"]["ollama"] = local_ollama
@@ -869,12 +847,7 @@ def main():
             if args.preset == "pro":
                 config["provider"].pop("openai", None)
                 config["provider"].pop("anthropic", None)
-                if can_proxy_cloud:
-                    config["disabled_providers"].extend(["openai", "anthropic"])
-                else:
-                    config["disabled_providers"].extend(
-                        ["openai", "anthropic", "ollama"]
-                    )
+                config["disabled_providers"].extend(["openai", "anthropic", "ollama"])
             elif args.preset == "plus":
                 config["provider"].pop("anthropic", None)
                 config["disabled_providers"].extend(

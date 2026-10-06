@@ -180,7 +180,7 @@ def test_pi_litellm_gate_repoints_openai_and_local_providers():
             os.environ,
             {
                 "DOTFILES_RUN_LITELLM_SETUP": "1",
-                "DOTFILES_PI_USE_LITELLM": "1",
+                "DOTFILES_USE_LITELLM_PROXY": "1",
                 "HOME": home,
             },
             clear=False,
@@ -210,10 +210,12 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
         },
     )
     routes = configure_pi.litellm_cloud_aliases()
-    assert routes["google"]["gemini-3.8-flash"] == "google/models/gemini-3.8-flash"
+    assert (
+        routes["google"]["gemini-3.8-flash"] == "litellm/google/models/gemini-3.8-flash"
+    )
     assert (
         routes["openrouter"]["inclusionai/ling-3.0-flash-sante:free"]
-        == "openrouter/inclusionai/ling-3.0-flash-sante:free"
+        == "litellm/openrouter/inclusionai/ling-3.0-flash-sante:free"
     )
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: {"data": "bad"})
     assert configure_pi.litellm_cloud_aliases() == {"google": {}, "openrouter": {}}
@@ -226,7 +228,7 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1" if canary else "0")
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1" if canary else "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if canary else "0")
     monkeypatch.setenv("GEMINI_API_KEY", "direct-google-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "direct-openrouter-key")
     key_file = Path(home) / ".local/share/litellm/clients/pi.key"
@@ -237,7 +239,6 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
         key_file.chmod(0o600)
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: catalogue)
     monkeypatch.setattr(configure_pi, "list_local_ollama_models", lambda: [])
-    monkeypatch.setattr(configure_pi, "check_ollama_daemon", lambda: (False, False))
     monkeypatch.setattr(
         configure_pi, "_ensure_packages", lambda *_args, **_kwargs: None
     )

@@ -128,6 +128,20 @@ MIGRATIONS = [
     ),
 ]
 
+# Four retired per-client canaries OR into the single explicit proxy mode.
+# This four-field record is applied only by migration, never runtime resolution.
+LITELLM_PROXY_OR_MIGRATION = (
+    (
+        "DOTFILES_OPENWEBUI_USE_LITELLM",
+        "DOTFILES_OPENCODE_USE_LITELLM",
+        "DOTFILES_PI_USE_LITELLM",
+        "DOTFILES_JUNIE_USE_LITELLM",
+    ),
+    "DOTFILES_USE_LITELLM_PROXY",
+    "truthy-or",
+    "legacy client canaries",
+)
+
 # Tier value renames. These are value migrations rather than environment-key
 # migrations, so the existing key and quoting are preserved.
 # Project `.opencode/.env` files are intentionally outside this script's
@@ -233,6 +247,16 @@ def migrate_env(lines, dry_run=False):
     """Migrate env lines according to MIGRATIONS. Returns (new_lines, changes)."""
     active_keys = get_active_keys(lines)
     changes = []
+    legacy_keys, proxy_key, _policy, legacy_label = LITELLM_PROXY_OR_MIGRATION
+    explicit_proxy_value = get_active_value(lines, proxy_key)
+    legacy_enabled = any(
+        key in active_keys
+        and normalize_env_value(
+            split_inline_comment(get_active_value(lines, key) or "")[0]
+        ).lower()
+        in {"1", "true", "yes", "on"}
+        for key in legacy_keys
+    )
     migrated_keys = {}  # old_key → new_key
 
     # Build rename map from MIGRATIONS (only for entries where old_key exists)
@@ -265,6 +289,13 @@ def migrate_env(lines, dry_run=False):
 
         indent, comment_prefix, key, value = parsed
         is_commented = comment_prefix.strip().startswith("#")
+
+        if key in legacy_keys and not is_commented:
+            new_lines.append(
+                comment_migrated_line(indent, key, value, f"migrated to {proxy_key}")
+            )
+            changes.append(f"Deprecated: {key} → {proxy_key}")
+            continue
 
         if (
             key in TIER_VALUE_KEYS
@@ -423,6 +454,15 @@ def migrate_env(lines, dry_run=False):
     if caddy_access_line_index is None:
         new_lines.append(format_caddy_access_line("", "localhost"))
         changes.append("Added: CADDY_ACCESS='localhost' (v1 default migration)")
+
+    if explicit_proxy_value is None and legacy_enabled:
+        new_lines.append(f"{proxy_key}='1'  # migrated from {legacy_label}\n")
+        changes.append(f"OR-migrated legacy client canaries → {proxy_key}='1'")
+    elif explicit_proxy_value is not None:
+        # The new setting wins even when it explicitly disables the proxy.
+        for key in legacy_keys:
+            if key in active_keys:
+                changes.append(f"Explicit {proxy_key} overrides legacy {key}")
 
     # Handle inheritance: for new gates that are absent, inherit from predecessor
     for old_key, new_key, inherit_from in MIGRATIONS:

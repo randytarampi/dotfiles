@@ -18,7 +18,7 @@ source "${LIB_DIR}/env.sh"
 # junie-channel: {{ env "DOTFILES_JUNIE_CHANNEL" | default "release" }}
 # junie-version:{{ env "DOTFILES_JUNIE_VERSION" }}
 # junie-local-model: {{ env "DOTFILES_JUNIE_LOCAL_MODEL" | default "0" }}
-# junie-litellm: {{ env "DOTFILES_JUNIE_USE_LITELLM" | default "0" }}
+# junie-litellm: {{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
 # scripts/lib/constants.py: {{ include "scripts/lib/constants.py" | sha256sum }}
 # scripts/lib/model_stamp.py: {{ include "scripts/lib/model_stamp.py" | sha256sum }}
 # scripts/lib/model_catalogues.py: {{ include "scripts/lib/model_catalogues.py" | sha256sum }}

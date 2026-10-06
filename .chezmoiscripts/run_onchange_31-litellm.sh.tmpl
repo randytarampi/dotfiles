@@ -13,7 +13,7 @@ source "$LIB_DIR/litellm_service.sh"
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_JUNIE_USE_LITELLM" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
+# env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}
 # secret fingerprint: {{ env "LITELLM_MASTER_KEY" | sha256sum | trunc 12 }}
 # database fingerprint: {{ env "LITELLM_DATABASE_URL" | default (env "DATABASE_URL") | sha256sum | trunc 12 }}
 

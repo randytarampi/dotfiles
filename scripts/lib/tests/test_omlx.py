@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import discover_models
 import local_engines
 import omlx
@@ -425,69 +427,66 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
         assert configure_opencode.build_local_provider("omlx", models) is None
 
 
-def test_configure_opencode_litellm_gate_is_key_guarded_and_repoints_local(tmp_path):
+def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_path):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     key_file = tmp_path / ".local/share/litellm/clients/opencode.key"
     key_file.parent.mkdir(parents=True)
     key_file.write_text("dummy-key", encoding="utf-8")
-    original = {
+    direct = {
+        "model": "openai/gpt-x",
         "provider": {
-            "openai": {"options": {"baseURL": "https://api.openai.com/v1"}},
-            "ollama": {"options": {"baseURL": "http://localhost:11434/v1"}},
-            "omlx": {"options": {"baseURL": "http://localhost:8000/v1"}},
-        }
-    }
-    with patch.dict(
-        os.environ,
-        {
-            "DOTFILES_RUN_LITELLM_SETUP": "1",
-            "DOTFILES_OPENCODE_USE_LITELLM": "1",
-            "DOTFILES_OPENWEBUI_USE_LITELLM": "0",
-            "OPENAI_API_KEY": "",
-            "LITELLM_PORT": "4001",
-            "HOME": str(tmp_path),
+            "openai": {"models": {"gpt-x": {"name": "GPT X"}}},
         },
-        clear=False,
-    ):
-        configure_opencode.apply_litellm_client_gate(original)
-    assert original["provider"]["openai"]["options"] == {
-        "baseURL": "https://api.openai.com/v1"
     }
-    for name in ("ollama", "omlx"):
-        assert original["provider"][name]["options"] == {
-            "baseURL": "http://127.0.0.1:4001/v1",
-            "apiKey": "{file:" + str(key_file) + "}",
-        }
+    expected_direct = json.loads(json.dumps(direct))
+    with patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False):
+        configure_opencode.apply_litellm_client_gate(direct)
+    assert direct == expected_direct
 
-    original["provider"]["openai"]["options"]["baseURL"] = "https://api.openai.com/v1"
+    with (
+        patch.dict(
+            os.environ,
+            {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "0"},
+            clear=False,
+        ),
+        pytest.raises(RuntimeError, match="DOTFILES_RUN_LITELLM_SETUP"),
+    ):
+        configure_opencode.apply_litellm_client_gate(json.loads(json.dumps(direct)))
+
     with patch.dict(
         os.environ,
         {
+            "DOTFILES_USE_LITELLM_PROXY": "1",
             "DOTFILES_RUN_LITELLM_SETUP": "1",
-            "DOTFILES_OPENCODE_USE_LITELLM": "1",
-            "OPENAI_API_KEY": "present",
             "LITELLM_PORT": "4001",
             "HOME": str(tmp_path),
         },
         clear=False,
     ):
-        configure_opencode.apply_litellm_client_gate(original)
-    assert (
-        original["provider"]["openai"]["options"]["apiKey"]
-        == "{file:" + str(key_file) + "}"
+        proxied = json.loads(json.dumps(expected_direct))
+        configure_opencode.apply_litellm_client_gate(proxied)
+    assert proxied["model"] == "litellm/openai/gpt-x"
+    assert set(proxied["provider"]) == {"litellm"}
+    assert proxied["provider"]["litellm"]["options"]["apiKey"] == (
+        "{file:" + str(key_file) + "}"
     )
 
     key_file.unlink()
-    original["provider"]["ollama"]["options"] = {"baseURL": "http://localhost:11434/v1"}
-    original["provider"]["omlx"]["options"] = {"baseURL": "http://localhost:8000/v1"}
-    with patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=False):
-        configure_opencode.apply_litellm_client_gate(original)
-    assert original["provider"]["ollama"]["options"]["baseURL"] == (
-        "http://localhost:11434/v1"
-    )
-    assert original["provider"]["omlx"]["options"]["baseURL"] == (
-        "http://localhost:8000/v1"
-    )
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "HOME": str(tmp_path),
+            },
+            clear=False,
+        ),
+        pytest.raises(RuntimeError, match="key file"),
+    ):
+        configure_opencode.apply_litellm_client_gate(
+            json.loads(json.dumps(expected_direct))
+        )
 
 
 def test_configure_opencode_local_provider_emits_modalities():

@@ -528,7 +528,6 @@ def test_unmanaged_and_envelope_preserved_and_only_changed_collection_written():
 
 def test_proxy_ownership_add_update_and_second_run_is_idempotent(monkeypatch):
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
-    monkeypatch.setattr(constants, "should_use_ollama_cloud_proxy", lambda: True)
     monkeypatch.setattr(constants, "check_ollama_daemon", lambda: (True, True))
     desired = openwebui.compute_desired_state()
 
@@ -646,7 +645,6 @@ def test_ollama_probe_runs_at_most_once_per_compute(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
     calls = []
-    monkeypatch.setattr(constants, "should_use_ollama_cloud_proxy", lambda: True)
     monkeypatch.setattr(
         constants,
         "check_ollama_daemon",

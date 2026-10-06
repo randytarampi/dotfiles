@@ -28,7 +28,7 @@ MERIDIAN_PORT_ENV = "MERIDIAN_PORT"
 MERIDIAN_DEFAULT_HOST = "127.0.0.1"
 MERIDIAN_DEFAULT_PORT = "3456"
 OLLAMA_HOST_ENV = "OLLAMA_HOST"
-OLLAMA_CLOUD_PROXY_ENV = "DOTFILES_USE_OLLAMA_CLOUD_PROXY"
+LITELLM_PROXY_ENV = "DOTFILES_USE_LITELLM_PROXY"
 OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
 OMLX_HOST_ENV = "OMLX_HOST"
 OMLX_PORT_ENV = "OMLX_PORT"
@@ -164,30 +164,22 @@ def check_omlx_daemon():
         return (False, str(err))
 
 
-def should_use_ollama_cloud_proxy():
-    """Check if Ollama cloud proxy routing is enabled.
-
-    Returns True unless DOTFILES_USE_OLLAMA_CLOUD_PROXY is explicitly set
-    to false/0.
-    """
+def get_litellm_proxy_mode(environ=None):
+    """Resolve the explicit two-mode LiteLLM transport gate (default direct)."""
     import os
 
-    value = os.environ.get(OLLAMA_CLOUD_PROXY_ENV, "").strip().lower()
-    return value not in {"0", "false"}
+    environ = os.environ if environ is None else environ
+    value = environ.get(LITELLM_PROXY_ENV, "0").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off", ""):
+        return False
+    raise ValueError(f"{LITELLM_PROXY_ENV} must be 0 or 1")
 
 
-def check_ollama_daemon():
-    """Check whether local Ollama is running and cloud-signed-in.
-
-    Returns:
-      (is_running, can_proxy_cloud)
-    """
-    if not should_use_ollama_cloud_proxy():
-        _log.info("%s disabled; skipping Ollama daemon check", OLLAMA_CLOUD_PROXY_ENV)
-        return (False, False)
-
+def check_ollama_daemon_health():
+    """Probe local daemon health without deriving any cloud-routing policy."""
     try:
-        import urllib.error
         import urllib.parse
         import urllib.request
 
@@ -202,20 +194,27 @@ def check_ollama_daemon():
         _log.info("Checking Ollama daemon at %s", daemon_base)
 
         tags_request = urllib.request.Request(tags_url, method="GET")
-        try:
-            with urllib.request.urlopen(tags_request, timeout=3):
-                pass
-        except urllib.error.HTTPError as err:
-            _log.info("Ollama daemon responded to /api/tags with HTTP %s", err.code)
-
-        _log.info("Ollama daemon is running; checking cloud proxy sign-in")
-
-        can_proxy_cloud = _check_ollama_cloud_signin(daemon_base)
-        _log.info("Ollama cloud proxy available: %s", can_proxy_cloud)
-        return (True, can_proxy_cloud)
+        with urllib.request.urlopen(tags_request, timeout=3):
+            pass
+        return True
     except Exception as err:
-        _log.warning("Failed to check Ollama daemon: %s", err)
+        _log.info("Ollama daemon health probe failed: %s", err)
+        return False
+
+
+def check_ollama_daemon():
+    """Return daemon health and signed-in cloud capability as separate facts."""
+    import urllib.parse
+
+    if not check_ollama_daemon_health():
         return (False, False)
+    local_base = get_ollama_local_base_url()
+    parsed = urllib.parse.urlsplit(local_base)
+    daemon_path = parsed.path[:-3] if parsed.path.endswith("/v1") else parsed.path
+    daemon_base = urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, daemon_path, "", "")
+    )
+    return (True, _check_ollama_cloud_signin(daemon_base))
 
 
 def _check_ollama_cloud_signin(daemon_base):
@@ -272,12 +271,5 @@ def _check_ollama_cloud_signin(daemon_base):
 
 
 def get_ollama_base_url():
-    """Return the preferred Ollama base URL for unified routing.
-
-    Uses the local daemon when it can proxy cloud models; otherwise falls
-    back to the direct Ollama Cloud base URL.
-    """
-    is_running, can_proxy_cloud = check_ollama_daemon()
-    if is_running and can_proxy_cloud:
-        return get_ollama_local_base_url()
+    """Return canonical direct cloud URL; daemon health never rewrites routing."""
     return get_provider_base_url("ollama-cloud")

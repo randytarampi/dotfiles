@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_SETUP" | sha256sum }}
-# LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_OPENCODE_USE_LITELLM" | default "0" }}
+# LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -26,7 +26,7 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/lib/local_engines.py: {{ include "scripts/lib/local_engines.py" | sha256sum }}
 # scripts/lib/omlx.py: {{ include "scripts/lib/omlx.py" | sha256sum }}
 # scripts/lib/discover_models.py: {{ include "scripts/lib/discover_models.py" | sha256sum }}
-# scripts/lib/ollama_cloud_wire_ids.py: {{ include "scripts/lib/ollama_cloud_wire_ids.py" | sha256sum }}
+# scripts/lib/litellm_aliases.py: {{ include "scripts/lib/litellm_aliases.py" | sha256sum }}
 # scripts/lib/ai_dirs.py: {{ include "scripts/lib/ai_dirs.py" | sha256sum }}
 # scripts/lib/ai_mcps.py: {{ include "scripts/lib/ai_mcps.py" | sha256sum }}
 # scripts/lib/ai_models.py: {{ include "scripts/lib/ai_models.py" | sha256sum }}
