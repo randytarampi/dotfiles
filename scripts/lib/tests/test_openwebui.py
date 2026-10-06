@@ -266,6 +266,84 @@ def test_litellm_non_default_port_used_for_ownership_and_desired_state(
     assert "/v1" not in ollama["url"]
 
 
+def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-test-key")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "webui-key")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    user = {
+        "url": "http://user.example/v1",
+        "key": "user-key",
+        "config": {"name": "user"},
+    }
+    state = {"openai": [user], "ollama": []}
+
+    def desired_for_mode(proxy):
+        monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if proxy else "0")
+        computed = openwebui.compute_desired_state()
+        wanted = [
+            item
+            for collection in ("openai", "anthropic", "ollama")
+            for item in computed[collection]
+            if item["config"]["prefix_id"] in {"openai", "ollama"}
+        ]
+        return {
+            "openai": [item for item in wanted if item["collection"] == "openai"],
+            "anthropic": [],
+            "ollama": [item for item in wanted if item["collection"] == "ollama"],
+        }
+
+    def reconcile_mode(proxy):
+        desired = desired_for_mode(proxy)
+        result = openwebui.reconcile(state["openai"], state["ollama"], desired)
+        assert result.status == "clean", result.collisions
+        for item in result.plan.entries:
+            collection = item["collection"]
+            if item["action"] == "delete":
+                state[collection].remove(item["entry"])
+            elif item["action"] == "add":
+                state[collection].append(item["entry"])
+            elif item["action"] == "update":
+                state[collection].remove(item["before"])
+                state[collection].append(item["entry"])
+        assert (
+            sum(openwebui._identity(entry) == "openai" for entry in state["openai"])
+            == 1
+        )
+        assert (
+            sum(
+                openwebui._identity(entry) == "ollama"
+                for entries in state.values()
+                for entry in entries
+            )
+            == 1
+        )
+        assert user in state["openai"]
+        return json.loads(json.dumps(state, sort_keys=True))
+
+    direct_first = reconcile_mode(False)
+    proxy_first = reconcile_mode(True)
+    assert (
+        next(
+            entry
+            for entry in proxy_first["openai"]
+            if openwebui._identity(entry) == "openai"
+        )["url"]
+        == "http://127.0.0.1:4000"
+    )
+    assert (
+        next(
+            entry
+            for entry in proxy_first["openai"]
+            if openwebui._identity(entry) == "ollama"
+        )["url"]
+        == "http://127.0.0.1:4000"
+    )
+    assert reconcile_mode(False) == direct_first
+    assert reconcile_mode(True) == proxy_first
+    assert reconcile_mode(True) == proxy_first
+
+
 def test_removal_uses_catalogue_without_managed_marker():
     desired = {"openai": [], "ollama": []}
     result = openwebui.reconcile(

@@ -25,7 +25,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
-from constants import get_litellm_proxy_mode
+from constants import get_litellm_oauth_gate, get_litellm_proxy_mode
 from litellm_aliases import resolve_canonical_identity
 from model_catalogues import _configured_litellm_port
 import litellm_config
@@ -225,7 +225,17 @@ def litellm_oauth_readiness(environ=None):
     """Return weak OAuth cache candidates; cache presence is not auth proof."""
     environ = os.environ if environ is None else environ
     rows = []
+    oauth_enabled = get_litellm_oauth_gate(environ)
     for provider in ("github_copilot", "chatgpt"):
+        if not oauth_enabled:
+            rows.append(
+                (
+                    provider,
+                    "WITHHELD",
+                    "DOTFILES_LITELLM_OAUTH_PROVIDERS=0; enable only where proxy device-flow pauses are acceptable",
+                )
+            )
+            continue
         expiry = litellm_config.oauth_cache_expiry(provider, environ)
         if expiry is None:
             rows.append(
@@ -293,7 +303,14 @@ def validate_litellm_service_env(
     # Per-app virtual keys provisioned by configure-litellm.py are allowed
     # to be absent (fresh installs before the first provisioning run) but
     # never allow unexpected extras.
-    expected_env = core_env | set(APP_KEYS.values()) | refs
+    oauth_cache_env = {
+        "CHATGPT_TOKEN_DIR",
+        "CHATGPT_AUTH_FILE",
+        "GITHUB_COPILOT_TOKEN_DIR",
+        "GITHUB_COPILOT_ACCESS_TOKEN_FILE",
+        "GITHUB_COPILOT_API_KEY_FILE",
+    }
+    expected_env = core_env | set(APP_KEYS.values()) | refs | oauth_cache_env
     unexpected_env = set(litellm_env_values) - expected_env
     missing_required = (core_env | refs) - set(litellm_env_values)
     if unexpected_env:

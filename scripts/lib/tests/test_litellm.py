@@ -89,6 +89,7 @@ def test_oauth_cache_controls_generation_without_api_key(
         credentials.update(access_token="access", refresh_token="refresh")
     (cache_dir / filename).write_text(json.dumps(credentials))
     env = {"HOME": str(tmp_path)}
+    env["DOTFILES_LITELLM_OAUTH_PROVIDERS"] = "1"
     env[
         (
             "GITHUB_COPILOT_TOKEN_DIR"
@@ -101,8 +102,68 @@ def test_oauth_cache_controls_generation_without_api_key(
     }
     assert model in aliases
     assert "api_key" not in aliases[model]["litellm_params"]
-    absent = litellm_config.compute_model_list({"HOME": str(tmp_path / "absent")})
+    absent = litellm_config.compute_model_list(
+        {
+            "HOME": str(tmp_path / "absent"),
+            "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+        }
+    )
     assert not any(item["model_name"].startswith(provider + "/") for item in absent)
+    assert any(
+        note.startswith(f"{provider}: OAuth token cache absent/expired")
+        for note in litellm_config.last_generation_notes
+    )
+
+
+@pytest.mark.parametrize(
+    "provider,filename,valid_cache",
+    [
+        (
+            "github_copilot",
+            "api-key.json",
+            {"token": "copilot", "expires_at": 4102444800},
+        ),
+        (
+            "chatgpt",
+            "auth.json",
+            {
+                "access_token": "access",
+                "refresh_token": "refresh",
+                "expires_at": 4102444800,
+            },
+        ),
+    ],
+)
+def test_oauth_generation_requires_explicit_gate_and_valid_cache(
+    tmp_path, provider, filename, valid_cache
+):
+    cache_dir = tmp_path / provider
+    cache_dir.mkdir()
+    cache_path = cache_dir / filename
+    cache_path.write_text(json.dumps(valid_cache))
+    cache_dir_env = (
+        "GITHUB_COPILOT_TOKEN_DIR"
+        if provider == "github_copilot"
+        else "CHATGPT_TOKEN_DIR"
+    )
+    base_env = {"HOME": str(tmp_path), cache_dir_env: str(cache_dir)}
+    off_entries = litellm_config.compute_model_list(base_env)
+    assert not any(
+        entry["model_name"].startswith(provider + "/") for entry in off_entries
+    )
+    assert any(
+        f"OAuth provider {provider} withheld: DOTFILES_LITELLM_OAUTH_PROVIDERS=0"
+        in note
+        for note in litellm_config.last_generation_notes
+    )
+    on_env = {**base_env, "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1"}
+    on_entries = litellm_config.compute_model_list(on_env)
+    assert any(entry["model_name"].startswith(provider + "/") for entry in on_entries)
+    cache_path.write_text(json.dumps({**valid_cache, "expires_at": 1}))
+    expired_entries = litellm_config.compute_model_list(on_env)
+    assert not any(
+        entry["model_name"].startswith(provider + "/") for entry in expired_entries
+    )
     assert any(
         note.startswith(f"{provider}: OAuth token cache absent/expired")
         for note in litellm_config.last_generation_notes
@@ -1197,6 +1258,51 @@ def test_litellm_env_sync_removes_missing_or_empty_provider_keys(tmp_path):
 
     assert "COHERE_API_KEY=" not in sync("")
     assert "COHERE_API_KEY=" not in sync("COHERE_API_KEY=''\n")
+
+
+def test_litellm_env_sync_oauth_cache_overrides_remove_and_restore(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    env_file = tmp_path / ".env"
+    overrides = {
+        "CHATGPT_TOKEN_DIR": "/custom/chatgpt",
+        "CHATGPT_AUTH_FILE": "custom-auth.json",
+        "GITHUB_COPILOT_TOKEN_DIR": "/custom/copilot",
+        "GITHUB_COPILOT_ACCESS_TOKEN_FILE": "custom-access.json",
+        "GITHUB_COPILOT_API_KEY_FILE": "custom-api.json",
+    }
+    env_file.write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key'\n"
+        + "".join(f"{key}='{value}'\n" for key, value in overrides.items()),
+        encoding="utf-8",
+    )
+    script = (
+        f"""\
+source {shlex.quote(str(helper))}
+litellm_service_env_sync {shlex.quote(str(env_path))} || exit 1
+"""
+        + "\n".join(
+            f"grep -Fqx {shlex.quote(f'{key}={value}')} {shlex.quote(str(env_path))} || exit 1"
+            for key, value in overrides.items()
+        )
+        + f"""
+: > {shlex.quote(str(env_file))}
+litellm_service_env_sync {shlex.quote(str(env_path))} || exit 1
+"""
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    service_values = dict(
+        line.split("=", 1) for line in env_path.read_text(encoding="utf-8").splitlines()
+    )
+    assert not set(overrides).intersection(service_values)
 
 
 def test_litellm_env_sync_removes_provider_from_same_shell_scope(tmp_path):

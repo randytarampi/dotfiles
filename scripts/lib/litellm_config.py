@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import constants
 from constants import (
     get_meridian_base_url,
     get_ollama_local_base_url,
@@ -531,6 +532,11 @@ def compute_model_list(environ=None):
         "chatgpt": ("gpt-5.2",),
     }
     for provider, model_ids in oauth_models.items():
+        if not constants.get_litellm_oauth_gate(environ):
+            last_generation_notes.append(
+                f"OAuth provider {provider} withheld: DOTFILES_LITELLM_OAUTH_PROVIDERS=0 — set =1 only on machines where proxy device-flow pauses are acceptable"
+            )
+            continue
         if oauth_cache_expiry(provider, environ) is None:
             last_generation_notes.append(
                 f"{provider}: OAuth token cache absent/expired — run litellm-oauth.py --provider {provider}"
