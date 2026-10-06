@@ -93,7 +93,7 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
     route = caddy.build_route_block("/tmp/portal")
     assert "/omlx/*" in route
     assert "@omlx_blocked" in route
-    assert "127.0.0.1:8000" in route
+    assert "127.0.0.1:11427" in route
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
     assert "/omlx/*" not in caddy.build_route_block("/tmp/portal")
 
