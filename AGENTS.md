@@ -299,6 +299,7 @@ Press style (casual conversation stays casual). Full guidance lives in
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 | [docs/CHAT_FRONTEND.md](docs/CHAT_FRONTEND.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
 | [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Ordered modernization work items, portability risks, tool recommendations and local-model analysis |
+| [docs/UNMANAGED-CLIENTS.md](docs/UNMANAGED-CLIENTS.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---
 
