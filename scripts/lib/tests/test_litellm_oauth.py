@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "litellm-oauth.py"
@@ -26,6 +27,37 @@ def test_missing_managed_venv_returns_clean_usage_error(monkeypatch, tmp_path, c
     captured = capsys.readouterr()
     assert "virtualenv Python is unavailable" in captured.err
     assert str(tmp_path) not in captured.err
+
+
+def test_chatgpt_bootstrap_verifies_registry_models_and_atomically_writes_ids(
+    tmp_path, capsys
+):
+    import stat
+    from types import SimpleNamespace
+
+    target = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    calls = []
+
+    def stub(command, check=False):
+        code = command[-1]
+        calls.append(code)
+        return SimpleNamespace(returncode=0 if "chatgpt/gpt-good" in code else 1)
+
+    verified, all_ok = OAUTH.verify_chatgpt_openai_models(
+        python=tmp_path / "venv/bin/python",
+        refs={"openai/gpt-good", "openai/gpt-bad", "anthropic/not-openai"},
+        verified_path=target,
+        run=stub,
+    )
+    assert verified == ["gpt-good"] and not all_ok
+    assert len(calls) == 2
+    assert all("max_tokens=1" in call for call in calls)
+    assert json.loads(target.read_text()) == ["gpt-good"]
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
+    report = capsys.readouterr().out
+    assert "openai/gpt-good: VERIFIED" in report
+    assert "openai/gpt-bad: FAILED" in report
 
 
 def test_non_tty_refuses_before_subprocess(monkeypatch):

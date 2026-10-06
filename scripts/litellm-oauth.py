@@ -5,6 +5,8 @@ import argparse
 import os
 import subprocess
 import sys
+import json
+import tempfile
 from pathlib import Path
 import stat
 
@@ -32,6 +34,66 @@ def cache_path(provider):
 
 PROVIDERS = ("github_copilot", "chatgpt")
 MODELS = {"github_copilot": "github_copilot/gpt-4o", "chatgpt": "chatgpt/gpt-5.2"}
+
+
+def verify_chatgpt_openai_models(python=None, refs=None, verified_path=None, run=None):
+    """Verify each registry OpenAI ID interactively and atomically persist successes."""
+    if refs is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+        import litellm_config
+
+        refs = litellm_config._registry_model_refs()
+    model_ids = sorted(
+        {
+            ref.split("/", 1)[1]
+            for ref in refs
+            if isinstance(ref, str) and ref.startswith("openai/")
+        }
+    )
+    python = Path(python or litellm_python())
+    target = Path(
+        verified_path
+        or Path.home() / ".local/share/litellm/chatgpt_verified_models.json"
+    )
+    runner = run or subprocess.run
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target.parent.chmod(0o700)
+    verified = []
+    results = []
+    for model_id in model_ids:
+        code = (
+            "import litellm; "
+            f"response = litellm.completion(model={'chatgpt/' + model_id!r}, "
+            "messages=[{'role':'user','content':'Reply with one character.'}], max_tokens=1); "
+            "assert response"
+        )
+        try:
+            result = runner([str(python), "-c", code], check=False)
+            passed = result.returncode == 0
+            reason = (
+                "inference succeeded"
+                if passed
+                else f"request failed (exit {result.returncode})"
+            )
+        except OSError:
+            passed = False
+            reason = "request could not be started"
+        print(f"openai/{model_id}: {'VERIFIED' if passed else 'FAILED'} — {reason}")
+        results.append(passed)
+        if passed:
+            verified.append(model_id)
+    fd, temp_path = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            json.dump(verified, output)
+            output.write("\n")
+        os.replace(temp_path, target)
+        os.chmod(target, 0o600)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+    return verified, all(results)
 
 
 def main(argv=None):
@@ -95,6 +157,9 @@ def main(argv=None):
         if result.returncode == 0
         else "Verification request failed."
     )
+    if provider == "chatgpt":
+        _, models_verified = verify_chatgpt_openai_models(python)
+        return 0 if result.returncode == 0 and models_verified else 1
     return 0 if result.returncode == 0 else 1
 
 
