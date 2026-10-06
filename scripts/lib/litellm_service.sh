@@ -59,7 +59,7 @@ litellm_ensure_prisma_client() {
 
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
-  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL=""
+  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL="" LITELLM_LOCAL_MODEL_COST_MAP=""
   local LITELLM_OPENCODE_KEY="" LITELLM_PI_KEY="" LITELLM_OPENWEBUI_KEY="" LITELLM_JUNIE_KEY=""
   local GITHUB_COPILOT_TOKEN_DIR="" GITHUB_COPILOT_ACCESS_TOKEN_FILE="" GITHUB_COPILOT_API_KEY_FILE="" CHATGPT_TOKEN_DIR="" CHATGPT_AUTH_FILE=""
   local config_path
@@ -97,7 +97,7 @@ litellm_service_env_sync() {
     *) continue ;;
     esac
   done
-  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL=""
+  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL="" env_LITELLM_LOCAL_MODEL_COST_MAP=""
   local env_GITHUB_COPILOT_TOKEN_DIR="" env_GITHUB_COPILOT_ACCESS_TOKEN_FILE="" env_GITHUB_COPILOT_API_KEY_FILE="" env_CHATGPT_TOKEN_DIR="" env_CHATGPT_AUTH_FILE=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
@@ -106,6 +106,7 @@ litellm_service_env_sync() {
   env_LITELLM_MASTER_KEY="$LITELLM_MASTER_KEY"
   env_LITELLM_PORT="$LITELLM_PORT"
   env_DISABLE_ADMIN_UI="$DISABLE_ADMIN_UI"
+  env_LITELLM_LOCAL_MODEL_COST_MAP="$LITELLM_LOCAL_MODEL_COST_MAP"
   env_DATABASE_URL="$DATABASE_URL"
   env_LITELLM_DATABASE_URL="$LITELLM_DATABASE_URL"
   env_GITHUB_COPILOT_TOKEN_DIR="$GITHUB_COPILOT_TOKEN_DIR"
@@ -163,6 +164,16 @@ litellm_service_env_sync() {
   else
     DISABLE_ADMIN_UI="True"
   fi
+  # The scrubbed launchd environment cannot reliably reach the public model
+  # cost map (single worker stalls on the remote fetch, dragging DB-backed
+  # routes into watchdog timeouts). Serve the bundled map instead unless the
+  # user overrides. The captured env_ value survives service.env re-sourcing
+  # (the same name is persisted, so an uncaptured read would be clobbered).
+  if [[ -n "$env_LITELLM_LOCAL_MODEL_COST_MAP" ]]; then
+    LITELLM_LOCAL_MODEL_COST_MAP="$env_LITELLM_LOCAL_MODEL_COST_MAP"
+  else
+    LITELLM_LOCAL_MODEL_COST_MAP="True"
+  fi
   if [[ -z "$LITELLM_MASTER_KEY" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1
     local payload
@@ -181,6 +192,7 @@ litellm_service_env_sync() {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
     printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
+    printf 'LITELLM_LOCAL_MODEL_COST_MAP=%q\n' "$LITELLM_LOCAL_MODEL_COST_MAP"
     [[ -n "$GITHUB_COPILOT_TOKEN_DIR" ]] && printf 'GITHUB_COPILOT_TOKEN_DIR=%q\n' "$GITHUB_COPILOT_TOKEN_DIR"
     [[ -n "$GITHUB_COPILOT_ACCESS_TOKEN_FILE" ]] && printf 'GITHUB_COPILOT_ACCESS_TOKEN_FILE=%q\n' "$GITHUB_COPILOT_ACCESS_TOKEN_FILE"
     [[ -n "$GITHUB_COPILOT_API_KEY_FILE" ]] && printf 'GITHUB_COPILOT_API_KEY_FILE=%q\n' "$GITHUB_COPILOT_API_KEY_FILE"
