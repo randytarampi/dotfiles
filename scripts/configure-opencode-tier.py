@@ -6,6 +6,7 @@ Handles local Ollama model role classification and placeholder resolution.
 
 import sys
 import json
+import importlib.util
 import argparse
 import shutil
 import os
@@ -31,6 +32,7 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
     add_common_args,
     add_model_override_args,
 )
+from constants import get_litellm_proxy_mode  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 
 
@@ -306,6 +308,33 @@ def orchestrate_tier_switch(
         logger.warning(
             "No local Ollama models found — _local: placeholders will not be resolved"
         )
+
+    if get_litellm_proxy_mode():
+        if dry_run:
+            logger.info("Would apply LiteLLM transport mapping to materialized tier")
+        else:
+            opencode_config_path = os.path.join(config_dir, "opencode.json")
+            try:
+                with open(opencode_config_path, encoding="utf-8") as f:
+                    consumer_config = json.load(f)
+                helper_path = os.path.join(SCRIPT_DIR, "configure-opencode.py")
+                spec = importlib.util.spec_from_file_location(
+                    "configure_opencode_transport", helper_path
+                )
+                helper = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(helper)
+                with open(config_path, encoding="utf-8") as f:
+                    final_config = json.load(f)
+                final_config = helper.apply_litellm_slim_gate(
+                    final_config, consumer_config
+                )
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(final_config, f, indent=2)
+                    f.write("\n")
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to apply LiteLLM mapping to standalone tier output: {exc}"
+                ) from exc
 
 
 def main():
