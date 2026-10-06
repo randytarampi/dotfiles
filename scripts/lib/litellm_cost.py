@@ -46,7 +46,7 @@ def _request(base_url, path, master_key, params=None):
     request = urllib.request.Request(
         url, headers={"Authorization": "Bearer " + master_key}
     )
-    with open_same_origin(request, timeout=5) as response:
+    with open_same_origin(request, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -54,7 +54,7 @@ def _rows(payload):
     if isinstance(payload, list):
         return payload
     if isinstance(payload, dict):
-        for name in ("data", "results", "spend_logs"):
+        for name in ("data", "results", "spend_logs", "keys"):
             if isinstance(payload.get(name), list):
                 return payload[name]
     return []
