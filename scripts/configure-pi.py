@@ -848,6 +848,11 @@ def main():
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
         if pi_litellm_canary and provider in ("google", "openrouter"):
             continue
+        # Registry entries without an "api"/"allowlist" pair (litellm-only
+        # catalogue providers like cerebras/cohere/huggingface) have no pi
+        # client wiring — skip them instead of KeyError-ing.
+        if "api" not in endpoint or "allowlist" not in endpoint:
+            continue
         key_env = endpoint["apiKeyEnv"]
         if not os.environ.get(key_env, "").strip():
             skipped_providers.append(f"{provider} ({key_env})")

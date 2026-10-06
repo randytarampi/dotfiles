@@ -1,6 +1,7 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
+import pytest
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "verify-config.py"
 SPEC = spec_from_file_location("verify_config", SCRIPT_PATH)
@@ -304,6 +305,47 @@ def test_litellm_service_env_accepts_provisioned_per_app_keys():
     )
     problems = VERIFY_CONFIG.validate_litellm_service_env(env, _LITELLM_POLICY_CONFIG)
     assert problems == []
+
+
+@pytest.mark.parametrize(
+    "provider,key_env,model",
+    [
+        ("cohere_chat", "COHERE_API_KEY", "cohere_chat/command-r"),
+        ("cerebras", "CEREBRAS_API_KEY", "cerebras/llama-3.3-70b"),
+        ("huggingface", "HF_TOKEN", "huggingface/org/model"),
+    ],
+)
+def test_litellm_policy_accepts_api_key_provider_references(provider, key_env, model):
+    config = (
+        "model_list:\n"
+        f"  - model_name: {provider}/test\n    litellm_params:\n"
+        f"      model: {model}\n      api_key: os.environ/{key_env}\n"
+        + _LITELLM_POLICY_CONFIG
+    )
+    env = _litellm_env(**{key_env: "provider-key"})
+    assert VERIFY_CONFIG.validate_litellm_service_env(env, config) == []
+
+
+def test_litellm_policy_accepts_model_entry_without_api_key():
+    config = (
+        "model_list:\n  - model_name: cohere_chat/test\n    litellm_params:\n"
+        "      model: cohere_chat/command-r\n" + _LITELLM_POLICY_CONFIG
+    )
+    assert VERIFY_CONFIG.validate_litellm_service_env(_litellm_env(), config) == []
+
+
+def test_litellm_coverage_warnings_read_persisted_notes_and_skip_malformed(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "last_generation_notes.json"
+    monkeypatch.setattr(VERIFY_CONFIG, "LITELLM_NOTES_PATH", path)
+    assert VERIFY_CONFIG.litellm_coverage_warnings() == []
+    path.write_text('["opencode/model: UNKNOWN"]')
+    assert VERIFY_CONFIG.litellm_coverage_warnings() == [
+        "LiteLLM coverage: opencode/model: UNKNOWN"
+    ]
+    path.write_text("not json")
+    assert VERIFY_CONFIG.litellm_coverage_warnings() == []
 
 
 def test_litellm_service_env_validation_stays_on_service_database_name():

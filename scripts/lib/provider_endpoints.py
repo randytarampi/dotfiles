@@ -22,6 +22,15 @@ PROVIDER_ENDPOINTS = {
         "apiKeyEnv": "OPENCODE_API_KEY",
         "allowlist": "configs/opencode/opencode-models.json",
     },
+    "cerebras": {
+        "baseUrl": "https://api.cerebras.ai/v1",
+        "apiKeyEnv": "CEREBRAS_API_KEY",
+    },
+    "cohere": {"baseUrl": "https://api.cohere.ai", "apiKeyEnv": "COHERE_API_KEY"},
+    "huggingface": {
+        "baseUrl": "https://router.huggingface.co",
+        "apiKeyEnv": "HF_TOKEN",
+    },
 }
 
 

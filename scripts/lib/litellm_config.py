@@ -1,5 +1,7 @@
 """Pure LiteLLM proxy configuration generation from dotfiles registries."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -16,7 +18,7 @@ from constants import (
 )
 from discover_models import list_cloud_ollama_models
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
-from provider_endpoints import PROVIDER_ENDPOINTS
+from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
 from model_catalogues import open_same_origin
 
@@ -25,7 +27,17 @@ logger = logging.getLogger(__name__)
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
 # 403) keep their single curated default alias instead.
-LIVE_CATALOGUE_PROVIDERS = ("google", "openrouter", "ollama-cloud")
+LIVE_CATALOGUE_PROVIDERS = (
+    "google",
+    "openrouter",
+    "ollama-cloud",
+    "cerebras",
+    "cohere",
+    "huggingface",
+    "openai",
+)
+last_generation_notes = []
+COHERE_CATALOGUE_MAX_PAGES = 20
 
 # Per-client virtual keys provisioned in the LiteLLM proxy (alias → env var
 # name persisted in service.env). Shared source for configure-litellm.py
@@ -58,13 +70,18 @@ def _model_name(item):
     return item.get("name") if isinstance(item, dict) else str(item)
 
 
-def _entry(alias, model, *, api_base=None, key_env=None):
+def _entry(alias, model, *, api_base=None, key_env=None, alias_kind=None):
     params = {"model": model}
     if api_base:
         params["api_base"] = api_base
     if key_env:
         params["api_key"] = f"os.environ/{key_env}"
-    return {"model_name": alias, "litellm_params": params}
+    return {
+        "model_name": alias,
+        "litellm_params": params,
+        "_alias_kind": alias_kind or ("bare" if "/" not in alias else "qualified"),
+        "_upstream_ref": (api_base or "", model),
+    }
 
 
 def _live_catalogue(provider, key, base_url, timeout=10):
@@ -75,8 +92,75 @@ def _live_catalogue(provider, key, base_url, timeout=10):
     if parsed.scheme != "https" or not parsed.netloc:
         # bandit B310: audit the constructed URL before urlopen sees it.
         raise LiveCatalogueError(f"refusing non-https catalogue url for {provider}")
+    catalogue_path = parsed.path.rstrip("/")
+    if provider in ("cohere", "huggingface") and not catalogue_path:
+        catalogue_path = "/v1"
+    if provider == "cohere":
+        model_ids = set()
+        page_token = None
+        seen_tokens = set()
+        for page_number in range(COHERE_CATALOGUE_MAX_PAGES):
+            query: dict[str, str | int] = {"page_size": 1000}
+            if page_token:
+                query["page_token"] = page_token
+            url = urllib.parse.urlunsplit(
+                (
+                    parsed.scheme,
+                    parsed.netloc,
+                    catalogue_path + "/models",
+                    urllib.parse.urlencode(query),
+                    "",
+                )
+            )
+            request = urllib.request.Request(
+                url, headers={"Authorization": f"Bearer {key}"}
+            )
+            try:
+                with open_same_origin(request, timeout=timeout) as response:
+                    payload = json.load(response)
+            except (
+                urllib.error.URLError,
+                ValueError,
+                TypeError,
+                AttributeError,
+            ) as error:
+                raise LiveCatalogueError(
+                    f"live model catalogue enumeration failed for {provider}: {error}"
+                ) from error
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("models"), list
+            ):
+                raise LiveCatalogueError(
+                    "malformed Cohere catalogue: expected models list"
+                )
+            for item in payload["models"]:
+                if (
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("name"), str)
+                    or not isinstance(item.get("endpoints", []), list)
+                ):
+                    raise LiveCatalogueError("malformed Cohere catalogue model entry")
+                if "chat" in item.get("endpoints", []) and not item.get(
+                    "is_deprecated", False
+                ):
+                    model_ids.add(item["name"])
+            next_token = payload.get("next_page_token")
+            if next_token is not None and not isinstance(next_token, str):
+                raise LiveCatalogueError(
+                    "malformed Cohere catalogue: next_page_token must be a string"
+                )
+            if not next_token:
+                return sorted(model_ids)
+            if next_token in seen_tokens:
+                raise LiveCatalogueError("Cohere catalogue repeated next_page_token")
+            seen_tokens.add(next_token)
+            if page_number + 1 >= COHERE_CATALOGUE_MAX_PAGES:
+                raise LiveCatalogueError(
+                    f"Cohere catalogue exceeded {COHERE_CATALOGUE_MAX_PAGES} pages"
+                )
+            page_token = next_token
     url = urllib.parse.urlunsplit(
-        (parsed.scheme, parsed.netloc, parsed.path.rstrip("/") + "/models", "", "")
+        (parsed.scheme, parsed.netloc, catalogue_path + "/models", "", "")
     )
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
     try:
@@ -111,9 +195,127 @@ def _safe_models(provider):
         return []
 
 
+def _registry_model_refs():
+    """Collect canonical references from managed model registries and tier docs."""
+    root = Path(__file__).resolve().parents[2]
+    refs = set()
+    for path in (
+        root / "configs/junie/model-groups.json",
+        root / "configs/opencode/oh-my-opencode-slim.json",
+    ):
+        try:
+            refs.update(
+                _collect_model_refs(json.loads(path.read_text(encoding="utf-8")))
+            )
+        except (OSError, json.JSONDecodeError):
+            continue
+    try:
+        refs.update(
+            _markdown_model_refs((root / "docs/TIERS.md").read_text(encoding="utf-8"))
+        )
+    except OSError:
+        pass
+    return refs
+
+
+def _collect_model_refs(source):
+    """Collect model-field references while respecting each field's provider."""
+    refs = set()
+    prefixes = (
+        "ollama-cloud/",
+        "opencode/",
+        "openrouter/",
+        "google/models/",
+        "openai/",
+    )
+
+    def collect_fallback(value):
+        if isinstance(value, str):
+            if value.startswith(prefixes):
+                refs.add(value)
+        elif isinstance(value, (dict, list)):
+            iterable = value.values() if isinstance(value, dict) else value
+            for child in iterable:
+                collect_fallback(child)
+
+    def collect(value):
+        if isinstance(value, dict):
+            provider = value.get("provider")
+            for field, provider_key in (
+                ("model", None),
+                ("primaryModel", "provider"),
+                ("fasterModel", "fasterProvider"),
+            ):
+                model = value.get(field)
+                model_provider = (
+                    (value.get(provider_key) or provider) if provider_key else provider
+                )
+                if not isinstance(model, str) or model.startswith(
+                    ("http://", "https://", "_local:")
+                ):
+                    continue
+                if model_provider in (
+                    "openrouter",
+                    "google",
+                    "openai",
+                    "ollama-cloud",
+                    "opencode",
+                ):
+                    expected_prefix = {
+                        "openrouter": "openrouter/",
+                        "google": "google/models/",
+                        "openai": "openai/",
+                        "ollama-cloud": "ollama-cloud/",
+                        "opencode": "opencode/",
+                    }[model_provider]
+                    if model.startswith(expected_prefix):
+                        refs.add(model)
+                    elif model_provider == "google":
+                        refs.add(f"google/models/{model.removeprefix('models/')}")
+                    else:
+                        refs.add(f"{model_provider}/{model}")
+                elif model.startswith(prefixes):
+                    refs.add(model)
+            for key, child in value.items():
+                if key == "fallback":
+                    collect_fallback(child)
+                elif key not in ("model", "primaryModel", "fasterModel"):
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(source)
+    return refs
+
+
+def _markdown_model_refs(document):
+    """Return qualified model references from tier-table model cells."""
+    import re
+
+    refs = set()
+    in_tier = False
+    for line in document.splitlines():
+        if line.startswith("### "):
+            in_tier = " Tier" in line
+        if not in_tier or "|" not in line:
+            continue
+        for cell in line.split("|"):
+            refs.update(
+                match.group(1)
+                for match in re.finditer(
+                    r"`((?:ollama-cloud|opencode|openrouter|google/models|openai)/[A-Za-z0-9._:/-]+)`",
+                    cell,
+                )
+            )
+    return refs
+
+
 def compute_model_list(environ=None):
     """Return LiteLLM model entries without reading secrets or doing writes."""
     environ = environ or os.environ
+    global last_generation_notes
+    last_generation_notes = []
     entries = []
     for provider in active_engines():
         models = sorted(_safe_models(provider))
@@ -126,7 +328,9 @@ def compute_model_list(environ=None):
             ollama_models = sorted(dict.fromkeys(models + cloud_models))
             for model in ollama_models:
                 params = _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
-                bare = _entry(model, f"ollama/{model}", api_base=base)
+                bare = _entry(
+                    model, f"ollama/{model}", api_base=base, alias_kind="bare"
+                )
                 entries.extend([params, bare])
             continue
         endpoint = local_endpoint_for(provider, "openai")
@@ -148,18 +352,25 @@ def compute_model_list(environ=None):
                         f"openai/{model}",
                         api_base=base_url,
                         key_env=key_env,
+                        alias_kind="bare",
                     ),
                 ]
             )
 
     if is_meridian_configured() and environ.get("MERIDIAN_API_KEY", "").strip():
-        entries.append(
+        allowlist = (
+            Path(__file__).resolve().parents[2]
+            / "configs/opencode/anthropic-models.json"
+        )
+        model_ids = sorted(json.loads(allowlist.read_text(encoding="utf-8"))["models"])
+        entries.extend(
             _entry(
-                "meridian/claude-sonnet-5-5",
-                "anthropic/claude-sonnet-5-5",
+                f"meridian/{model_id}",
+                f"anthropic/{model_id}",
                 api_base=get_meridian_base_url(),
                 key_env="MERIDIAN_API_KEY",
             )
+            for model_id in model_ids
         )
 
     clouds = {
@@ -193,37 +404,113 @@ def compute_model_list(environ=None):
             "openai/gpt-oss:120b",
             "https://ollama.com/v1",
         ),
+        "cerebras": (
+            "CEREBRAS_API_KEY",
+            "cerebras/llama-3.3-70b",
+            PROVIDER_ENDPOINTS["cerebras"]["baseUrl"],
+        ),
+        "cohere": ("COHERE_API_KEY", "", PROVIDER_ENDPOINTS["cohere"]["baseUrl"]),
+        "huggingface": ("HF_TOKEN", "", PROVIDER_ENDPOINTS["huggingface"]["baseUrl"]),
     }
     for provider, (key_env, model, base_url) in clouds.items():
-        if environ.get(key_env, "").strip():
-            if provider in LIVE_CATALOGUE_PROVIDERS:
-                live_base = PROVIDER_ENDPOINTS.get(provider, {}).get(
-                    "baseUrl", base_url
-                )
-                live_ids = _live_catalogue(provider, environ[key_env], live_base)
-                if live_ids is None:
-                    raise LiveCatalogueError(
-                        f"live model catalogue enumeration failed for {provider}"
-                    )
-                if live_ids:
-                    entries.extend(
-                        _entry(
-                            f"{provider}/{model_id}",
-                            f"openai/{model_id}",
-                            api_base=live_base,
-                            key_env=key_env,
-                        )
-                        for model_id in live_ids
-                    )
-                    continue
+        refs = _registry_model_refs()
+        requested = {
+            ref.split("/", 1)[1] for ref in refs if ref.startswith(provider + "/")
+        }
+        if provider == "google":
+            requested = {model_id.removeprefix("models/") for model_id in requested}
+        key = environ.get(key_env, "").strip()
+        if provider == "openai" and not key:
+            last_generation_notes.extend(
+                f"openai/{model_id}: UNKNOWN OPENAI_API_KEY is unset"
+                for model_id in sorted(requested)
+            )
+            continue
+        if not key:
+            continue
+        if provider == "opencode":
+            confirmed = set(provider_models("opencode"))
+        elif provider in LIVE_CATALOGUE_PROVIDERS:
+            live_base = PROVIDER_ENDPOINTS.get(provider, {}).get("baseUrl", base_url)
+            try:
+                confirmed = set(_live_catalogue(provider, key, live_base))
+            except LiveCatalogueError as error:
+                last_generation_notes.append(f"{provider}: UNKNOWN ({error})")
+                continue
+        else:
+            confirmed = set()
+        for model_id in sorted(requested - confirmed):
+            last_generation_notes.append(
+                f"{provider}/{model_id}: UNKNOWN registry reference is not in catalogue/allowlist"
+            )
+        confirmed_models = confirmed & requested if provider == "openai" else confirmed
+        if not confirmed_models:
+            last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
+            continue
+        for model_id in sorted(confirmed_models):
+            if provider == "cohere":
+                alias = wire_model = f"cohere_chat/{model_id}"
+            elif provider == "huggingface":
+                alias = wire_model = f"huggingface/{model_id}"
+            elif provider == "cerebras":
+                alias = wire_model = f"cerebras/{model_id}"
+            elif provider == "google":
+                alias = f"google/models/{model_id.removeprefix('models/')}"
+                wire_model = f"gemini/{model_id.removeprefix('models/')}"
+            else:
+                alias = f"{provider}/{model_id}"
+                wire_model = f"openai/{model_id}"
             entries.append(
-                _entry(f"{provider}/default", model, api_base=base_url, key_env=key_env)
+                _entry(
+                    alias,
+                    wire_model,
+                    api_base=(
+                        None
+                        if provider in ("cohere", "huggingface", "cerebras", "google")
+                        else PROVIDER_ENDPOINTS.get(provider, {}).get(
+                            "baseUrl", base_url
+                        )
+                    ),
+                    key_env=key_env,
+                )
             )
     try:
         routing_port = int(environ.get("LITELLM_PORT", "4000"))
     except (TypeError, ValueError):
         routing_port = 4000
+    qualified = {
+        item["model_name"] for item in entries if item["_alias_kind"] == "qualified"
+    }
+    bare_upstreams = {}
+    for item in entries:
+        if item["_alias_kind"] == "bare":
+            bare_upstreams.setdefault(item["model_name"], set()).add(
+                item["_upstream_ref"]
+            )
+    unambiguous_bare = {
+        alias
+        for alias, upstreams in bare_upstreams.items()
+        if len(upstreams) == 1 and alias not in qualified
+    }
+    seen_qualified = set()
+    seen_bare = set()
+    filtered = []
+    for item in entries:
+        alias = item["model_name"]
+        if item["_alias_kind"] == "qualified":
+            if alias in seen_qualified:
+                continue
+            seen_qualified.add(alias)
+        else:
+            if alias not in unambiguous_bare or alias in seen_bare:
+                continue
+            seen_bare.add(alias)
+        filtered.append(item)
+    entries = sorted(filtered, key=lambda item: item["model_name"])
     validate_routing_entries(entries, port=routing_port)
+    for item in entries:
+        item.pop("_alias_kind", None)
+        item.pop("_upstream_ref", None)
     return entries
 
 
