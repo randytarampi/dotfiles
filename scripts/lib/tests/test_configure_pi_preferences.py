@@ -324,6 +324,47 @@ def test_pi_main_partial_catalogue_and_gate_off_are_fail_closed_or_direct(
     assert "google" in direct_auth and "openrouter" in direct_auth
 
 
+def test_pi_anthropic_selection_resolves_to_catalogued_meridian_alias(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": "anthropic/claude-sonnet-5-5"},
+    )
+    out = _run_pi_main(
+        tmp_path,
+        {"data": [{"id": "meridian/claude-sonnet-5-5"}]},
+        monkeypatch,
+    )
+    providers = json.loads((out / "models.json").read_text())["providers"]
+    settings = json.loads((out / "settings.json").read_text())
+    assert settings["defaultProvider"] == "litellm"
+    assert settings["defaultModel"] == "meridian/claude-sonnet-5-5"
+    assert "meridian/claude-sonnet-5-5" in {
+        entry["id"] for entry in providers["litellm"]["models"]
+    }
+
+
+def test_pi_missing_default_model_raises_without_phantom_inventory(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": None},
+    )
+    with (
+        patch("sys.stderr"),
+        unittest.TestCase().assertRaisesRegex(
+            RuntimeError, "default model has no advertised"
+        ),
+    ):
+        _run_pi_main(tmp_path, {"data": []}, monkeypatch)
+    output = tmp_path / "pi-agent" / "models.json"
+    assert not output.exists()
+
+
 def test_pi_main_rejects_missing_or_insecure_client_key_before_output(
     tmp_path, monkeypatch
 ):

@@ -39,7 +39,6 @@ from local_engines import (
     resolve_engine,
 )
 
-JUNIE_LITELLM_ENV = "DOTFILES_JUNIE_USE_LITELLM"
 LITELLM_ROUTED_PROVIDERS = {
     "ollama",
     "omlx",

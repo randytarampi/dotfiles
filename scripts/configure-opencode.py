@@ -232,6 +232,41 @@ def apply_litellm_client_gate(config: dict) -> None:
             config[key] = rewrite(config[key])
 
 
+def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
+    """Route every Slim selection using the gateway inventory built for OpenCode."""
+    if not get_litellm_proxy_mode():
+        return slim
+    gateway = config.get("provider", {}).get("litellm", {}).get("models", {})
+    available = {
+        model.get("id") for model in gateway.values() if isinstance(model, dict)
+    }
+    key_path = (
+        Path("~/.local/share/litellm/clients/opencode.key").expanduser().resolve()
+    )
+    base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    direct_exceptions = {"meridian", "copilot", "github-copilot"}
+
+    def rewrite(value):
+        if isinstance(value, dict):
+            return {key: rewrite(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [rewrite(child) for child in value]
+        if isinstance(value, str) and "/" in value and not value.startswith("litellm/"):
+            owner = value.split("/", 1)[0]
+            if owner in direct_exceptions:
+                return value
+            if value not in available:
+                raise RuntimeError(
+                    f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
+                )
+            return resolve_alias(
+                value, True, client_key=key_path, gateway_url=base_url
+            )["model"]
+        return value
+
+    return rewrite(slim)
+
+
 def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
     """Keep local models local and cloud identities on the canonical cloud route."""
     combined_models = {}
@@ -929,16 +964,27 @@ def main():
         logger.critical(f"presets.json not found at {presets_json_path}")
         sys.exit(1)
 
+    try:
+        with open(presets_json_path, "r", encoding="utf-8") as f:
+            slim_data = json.load(f)
+        slim_data = apply_litellm_slim_gate(slim_data, config)
+    except Exception as e:
+        logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
+        sys.exit(1)
+
     if args.dry_run:
         logger.info(
-            f"[dry-run] Would copy oh-my-opencode-slim.json to {config_dir_path}"
+            f"[dry-run] Would write routed oh-my-opencode-slim.json to {config_dir_path}"
         )
     else:
         try:
-            shutil.copy(
-                presets_json_path,
+            with open(
                 os.path.join(config_dir_path, "oh-my-opencode-slim.json"),
-            )
+                "w",
+                encoding="utf-8",
+            ) as f:
+                json.dump(slim_data, f, indent=2)
+                f.write("\n")
             logger.info("oh-my-opencode-slim.json written (base config)")
         except Exception as e:
             logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")

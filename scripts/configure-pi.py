@@ -293,34 +293,37 @@ def litellm_cloud_aliases(port="4000"):
             available.add(item["id"])
     except Exception:
         logger.warning(
-            "Pi LiteLLM cloud catalogue unavailable; Google/OpenRouter availability is UNKNOWN"
+            "Pi LiteLLM catalogue unavailable; model availability is UNKNOWN"
         )
-        return {"google": {}, "openrouter": {}}
-    gateway_url = f"http://127.0.0.1:{port}/v1"
-    return {
-        provider: {
-            model_id: resolve_alias(
-                (
-                    f"{provider}/{model_id}"
-                    if provider != "google"
-                    else f"google/models/{model_id}"
-                ),
-                True,
-                client_key=f"os.environ/LITELLM_PI_KEY",
-                gateway_url=gateway_url,
-            )["model"]
-            for model_id in provider_models(provider)
-            if (
-                alias := (
-                    f"google/models/{model_id}"
-                    if provider == "google"
-                    else f"openrouter/{model_id}"
-                )
-            )
-            in available
+        # Explicit empty presence per provider (UNKNOWN discipline): the
+        # providers exist, nothing is confirmed — never a silent absence.
+        return {
+            provider: {}
+            for provider in PROVIDER_ENDPOINTS
+            if provider in ("google", "openrouter")
         }
-        for provider in ("google", "openrouter")
-    }
+    gateway_url = f"http://127.0.0.1:{port}/v1"
+    routes = {provider: {} for provider in PROVIDER_ENDPOINTS}
+    available.update(
+        {
+            f"litellm/{identity}"
+            for identity in available
+            if not identity.startswith("litellm/")
+        }
+    )
+    for catalogue_id in available:
+        wire = (
+            catalogue_id
+            if catalogue_id.startswith("litellm/")
+            else f"litellm/{catalogue_id}"
+        )
+        identity = catalogue_id.removeprefix("litellm/")
+        if identity.startswith("google/models/"):
+            routes["google"][identity.removeprefix("google/models/")] = wire
+        elif identity.startswith("openrouter/"):
+            routes["openrouter"][identity.removeprefix("openrouter/")] = wire
+    routes["_available"] = available
+    return routes
 
 
 def local_chat_model_ids(models, provider):
@@ -719,13 +722,6 @@ def main():
                 f"Pi LiteLLM client key permissions are unsafe: {proxy_key_path}"
             )
         cloud_routes = litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
-        for model_ref in role_models.values():
-            if (
-                isinstance(model_ref, str)
-                and "/" in model_ref
-                and not model_ref.startswith("_local:")
-            ):
-                gateway_models.add(model_ref)
         resolved = {}
         for role, model_ref in role_models.items():
             if (
@@ -736,7 +732,22 @@ def main():
                 resolved[role] = model_ref
                 continue
             provider, model_id = model_ref.split("/", 1)
-            if provider in ("google", "openrouter"):
+            if provider == "anthropic":
+                lookup_id = model_id
+                transport = resolve_alias(
+                    f"meridian/{model_id}",
+                    True,
+                    client_key=proxy_key_path.resolve(),
+                    gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+                )["model"]
+                canonical_ref = f"meridian/{model_id}"
+                if transport not in cloud_routes.get("_available", set()):
+                    logger.warning(
+                        "Pi LiteLLM alias is not advertised for %s", canonical_ref
+                    )
+                    resolved[role] = None
+                    continue
+            elif provider in cloud_routes:
                 lookup_id = (
                     model_id.removeprefix("models/")
                     if provider == "google"
@@ -760,6 +771,12 @@ def main():
                     client_key=proxy_key_path.resolve(),
                     gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
                 )["model"]
+                if transport not in cloud_routes.get("_available", set()):
+                    logger.warning(
+                        "Pi LiteLLM alias is not advertised for %s", model_ref
+                    )
+                    resolved[role] = None
+                    continue
             gateway_models.add(canonical_ref)
             resolved[role] = transport
         role_models = resolved
@@ -767,7 +784,17 @@ def main():
 
     orchestrator_model = role_models["orchestrator"]
     if orchestrator_model is None:
-        orchestrator_model = next(iter(category_models.values()), None)
+        orchestrator_model = next(
+            iter(category_models.values()),
+            next(
+                (
+                    model
+                    for role, model in role_models.items()
+                    if role != "orchestrator" and isinstance(model, str) and model
+                ),
+                None,
+            ),
+        )
     if orchestrator_model is None:
         logger.warning(
             "No default model could be derived from the preset or local models"
@@ -777,6 +804,8 @@ def main():
         default = orchestrator_model
     if pi_litellm_proxy and isinstance(default, str) and "/" in default:
         canonical_default = default.removeprefix("litellm/")
+        if canonical_default == "ollama/no-model-available":
+            raise RuntimeError("Pi default model has no advertised LiteLLM alias")
         if canonical_default.startswith("google/"):
             key = canonical_default.split("/", 2)[-1].removeprefix("models/")
             default = cloud_routes.get("google", {}).get(key)
@@ -791,7 +820,7 @@ def main():
                 client_key=proxy_key_path.resolve(),
                 gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
             )["model"]
-        if default is None:
+        if default is None or default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
     provider, _, default_model = default.partition("/")
     settings = {
