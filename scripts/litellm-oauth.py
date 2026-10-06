@@ -6,6 +6,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import stat
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from env import load_env
 
 PYTHON = "/Users/randytarampi/.local/share/litellm/venv/bin/python"
 
@@ -29,6 +33,8 @@ MODELS = {"github_copilot": "github_copilot/gpt-4o", "chatgpt": "chatgpt/gpt-5.2
 
 
 def main(argv=None):
+    os.umask(0o077)
+    load_env()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", required=True, choices=PROVIDERS)
     args = parser.parse_args(argv)
@@ -38,8 +44,11 @@ def main(argv=None):
         )
         return 2
     provider = args.provider
+    cache = cache_path(provider)
+    cache.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    cache.parent.chmod(0o700)
     print(
-        f"Provider: {provider}\nCache: {cache_path(provider)}\n"
+        f"Provider: {provider}\nCache: {cache}\n"
         "WARNING: a device-code URL and authorization code may be shown; complete login only if you initiated it.",
         flush=True,
     )
@@ -53,6 +62,18 @@ def main(argv=None):
     if result.returncode:
         print(f"OAuth login failed (exit {result.returncode}).", file=sys.stderr)
         return 1
+    hardened = False
+    for path in (cache.parent, cache):
+        try:
+            mode = stat.S_IMODE(path.stat().st_mode)
+            expected = 0o700 if path.is_dir() else 0o600
+            if mode & 0o077 or (path.is_dir() and mode != expected):
+                path.chmod(expected)
+                hardened = True
+        except OSError:
+            pass
+    if hardened:
+        print("Hardened OAuth cache permissions (directory 0700, file 0600).")
     model = MODELS[provider]
     verification = (
         "import litellm; "

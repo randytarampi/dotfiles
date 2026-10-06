@@ -61,6 +61,7 @@ litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
   local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL=""
   local LITELLM_OPENCODE_KEY="" LITELLM_PI_KEY="" LITELLM_OPENWEBUI_KEY="" LITELLM_JUNIE_KEY=""
+  local GITHUB_COPILOT_TOKEN_DIR="" GITHUB_COPILOT_API_KEY_FILE="" CHATGPT_TOKEN_DIR="" CHATGPT_AUTH_FILE=""
   local config_path
   config_path="$(dirname "$service_env")/config.yaml"
   # Provider credentials are exactly what the generated config references via
@@ -97,6 +98,7 @@ litellm_service_env_sync() {
     esac
   done
   local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL=""
+  local env_GITHUB_COPILOT_TOKEN_DIR="" env_GITHUB_COPILOT_API_KEY_FILE="" env_CHATGPT_TOKEN_DIR="" env_CHATGPT_AUTH_FILE=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.env"
@@ -106,6 +108,10 @@ litellm_service_env_sync() {
   env_DISABLE_ADMIN_UI="$DISABLE_ADMIN_UI"
   env_DATABASE_URL="$DATABASE_URL"
   env_LITELLM_DATABASE_URL="$LITELLM_DATABASE_URL"
+  env_GITHUB_COPILOT_TOKEN_DIR="$GITHUB_COPILOT_TOKEN_DIR"
+  env_GITHUB_COPILOT_API_KEY_FILE="$GITHUB_COPILOT_API_KEY_FILE"
+  env_CHATGPT_TOKEN_DIR="$CHATGPT_TOKEN_DIR"
+  env_CHATGPT_AUTH_FILE="$CHATGPT_AUTH_FILE"
   # Capture provider credentials from ~/.env, then clear them so values
   # sourced from service.env below can never win; the captured HOME values
   # are restored afterwards.
@@ -132,6 +138,10 @@ litellm_service_env_sync() {
   if [[ -n "$env_DISABLE_ADMIN_UI" ]]; then DISABLE_ADMIN_UI="$env_DISABLE_ADMIN_UI"; fi
   if [[ -n "$env_DATABASE_URL" ]]; then DATABASE_URL="$env_DATABASE_URL"; fi
   if [[ -n "$env_LITELLM_DATABASE_URL" ]]; then DATABASE_URL="$env_LITELLM_DATABASE_URL"; fi
+  [[ -n "$env_GITHUB_COPILOT_TOKEN_DIR" ]] && GITHUB_COPILOT_TOKEN_DIR="$env_GITHUB_COPILOT_TOKEN_DIR"
+  [[ -n "$env_GITHUB_COPILOT_API_KEY_FILE" ]] && GITHUB_COPILOT_API_KEY_FILE="$env_GITHUB_COPILOT_API_KEY_FILE"
+  [[ -n "$env_CHATGPT_TOKEN_DIR" ]] && CHATGPT_TOKEN_DIR="$env_CHATGPT_TOKEN_DIR"
+  [[ -n "$env_CHATGPT_AUTH_FILE" ]] && CHATGPT_AUTH_FILE="$env_CHATGPT_AUTH_FILE"
   for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
     case "$key" in
     [A-Z][A-Z0-9_]*) ;;
@@ -168,6 +178,10 @@ litellm_service_env_sync() {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
     printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
+    [[ -n "$GITHUB_COPILOT_TOKEN_DIR" ]] && printf 'GITHUB_COPILOT_TOKEN_DIR=%q\n' "$GITHUB_COPILOT_TOKEN_DIR"
+    [[ -n "$GITHUB_COPILOT_API_KEY_FILE" ]] && printf 'GITHUB_COPILOT_API_KEY_FILE=%q\n' "$GITHUB_COPILOT_API_KEY_FILE"
+    [[ -n "$CHATGPT_TOKEN_DIR" ]] && printf 'CHATGPT_TOKEN_DIR=%q\n' "$CHATGPT_TOKEN_DIR"
+    [[ -n "$CHATGPT_AUTH_FILE" ]] && printf 'CHATGPT_AUTH_FILE=%q\n' "$CHATGPT_AUTH_FILE"
     if [[ -n "$DATABASE_URL" ]]; then printf 'DATABASE_URL=%q\n' "$DATABASE_URL"; fi
     for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
       case "$key" in

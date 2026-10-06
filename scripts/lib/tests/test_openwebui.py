@@ -189,6 +189,83 @@ def test_key_rotation_enable_flip_and_dual_protocol_updates():
     assert [item["action"] for item in result.plan.entries] == ["update"]
 
 
+def test_ollama_managed_connection_mode_round_trip_is_idempotent(monkeypatch):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    direct = openwebui.compute_desired_state()["ollama"][0]
+    user = {
+        "url": "http://user-ollama:11434",
+        "key": "user",
+        "config": {"name": "user"},
+    }
+    state = {"openai": [user], "ollama": [direct]}
+
+    def transition(proxy):
+        monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if proxy else "0")
+        monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+        if proxy:
+            monkeypatch.setattr(
+                openwebui, "_litellm_client_key", lambda _: "client-key"
+            )
+        gateway = openwebui._connection(
+            "ollama", "http://127.0.0.1:4000", "client-key", "openai", "openai"
+        )
+        desired = (
+            {"openai": [gateway], "anthropic": [], "ollama": []}
+            if proxy
+            else {"openai": [], "anthropic": [], "ollama": [direct]}
+        )
+        result = openwebui.reconcile(state["openai"], state["ollama"], desired)
+        assert result.status == "clean", (result.plan.entries, result.collisions)
+        for collection in state:
+            for item in result.plan.entries:
+                if item["collection"] != collection:
+                    continue
+                if item["action"] == "delete":
+                    state[collection].remove(item["entry"])
+                elif item["action"] == "add":
+                    state[collection].append(item["entry"])
+                elif item["action"] == "update":
+                    state[collection].remove(item["before"])
+                    state[collection].append(item["entry"])
+        return desired
+
+    transition(False)
+    first_proxy = transition(True)
+    proxy_snapshot = json.loads(json.dumps(state, sort_keys=True))
+    assert len(state["ollama"]) == 0
+    assert sum(openwebui._identity(item) == "ollama" for item in state["openai"]) == 1
+    assert (
+        next(
+            item
+            for item in state["openai"]
+            if item["config"].get("managed_by") != "dotfiles"
+        )
+        == user
+    )
+    transition(False)
+    assert len(state["ollama"]) == 1
+    second_proxy = transition(True)
+    assert json.loads(json.dumps(state, sort_keys=True)) == proxy_snapshot
+    assert first_proxy["openai"] == second_proxy["openai"]
+
+
+def test_litellm_non_default_port_used_for_ownership_and_desired_state(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_PORT", "4567")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    identity = openwebui.ownership_catalogue()["ollama"]
+    desired = openwebui.compute_desired_state()
+    ollama = next(
+        item for item in desired["ollama"] if item["config"]["prefix_id"] == "ollama"
+    )
+    assert identity["url"] == "http://127.0.0.1:4567"
+    assert ollama["url"] == "http://127.0.0.1:4567"
+    assert "/v1" not in ollama["url"]
+
+
 def test_removal_uses_catalogue_without_managed_marker():
     desired = {"openai": [], "ollama": []}
     result = openwebui.reconcile(
