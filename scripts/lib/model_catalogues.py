@@ -157,8 +157,9 @@ def get_catalogue(url: str, api_key: str = "", *, strict: bool = False):
     _validate_catalogue_url(url, strict=strict)
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     request = urllib.request.Request(url, headers=headers, method="GET")
-    # URL scheme, host, and local port are validated against fixed allowlists.
-    with open_same_origin(request, timeout=3) as response:
+    # LiteLLM's warm, DB-backed /v1/models catalogue takes 26–30 seconds in live
+    # probes; allow a bounded deadline above that while retaining UNKNOWN on timeout.
+    with open_same_origin(request, timeout=45) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

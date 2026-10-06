@@ -74,7 +74,7 @@ def _database_url_configured():
     )
 
 
-def _request_json(url, method, master_key, payload=None, timeout=5):
+def _request_json(url, method, master_key, payload=None, timeout=30):
     parsed_url = urllib.parse.urlsplit(url)
     if parsed_url.scheme != "http" or parsed_url.hostname != "127.0.0.1":
         raise ValueError(
@@ -168,6 +168,11 @@ def _write_junie_key(service_env_path: Path, dry_run=False) -> None:
     _write_client_key(service_env_path, "junie", "LITELLM_JUNIE_KEY", dry_run)
 
 
+def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the Open WebUI app key without sourcing service.env."""
+    _write_client_key(service_env_path, "openwebui", "LITELLM_OPENWEBUI_KEY", dry_run)
+
+
 def provision_app_keys(master_key, service_env_path=None, api_base=None):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
     if not master_key:
@@ -194,10 +199,30 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
         }
         found = {}
         for alias, env_name in APP_KEYS.items():
+            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+            stranded_record = next(
+                (
+                    item
+                    for item in records
+                    if isinstance(item, dict) and item.get("key_alias") == alias
+                ),
+                None,
+            )
             if alias in aliases:
                 # The key-list endpoint intentionally does not reveal existing
                 # key material; preserve any locally stored key on disk.
-                continue
+                materialized = client_key_path.is_file() or bool(
+                    _service_env_value(env_name, service_env_path)
+                )
+                if materialized or client_key_path.is_symlink():
+                    continue
+                if stranded_record:
+                    key = _recover_stranded_app_key(
+                        api_base, master_key, alias, stranded_record
+                    )
+                    if key:
+                        found[env_name] = key
+                    continue
             try:
                 generated = _request_json(
                     f"{api_base}/key/generate",
@@ -211,7 +236,36 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
                 # already-provisioned and keep the loop idempotent.
                 status = getattr(error, "code", None)
                 if status == 400:
-                    logger.info("LiteLLM key alias %s already exists; skipping", alias)
+                    listing = _request_json(
+                        f"{api_base}/key/list?return_full_object=true",
+                        "GET",
+                        master_key,
+                    )
+                    retry_records = (
+                        listing.get("keys", []) if isinstance(listing, dict) else []
+                    )
+                    record = next(
+                        (
+                            item
+                            for item in retry_records
+                            if isinstance(item, dict) and item.get("key_alias") == alias
+                        ),
+                        None,
+                    )
+                    materialized = client_key_path.is_file() or bool(
+                        _service_env_value(env_name, service_env_path)
+                    )
+                    if record and not materialized and not client_key_path.is_symlink():
+                        key = _recover_stranded_app_key(
+                            api_base, master_key, alias, record
+                        )
+                        if key:
+                            found[env_name] = key
+                        continue
+                    logger.info(
+                        "LiteLLM key alias %s already exists; preserving local key state",
+                        alias,
+                    )
                     continue
                 raise
             key = generated.get("key") if isinstance(generated, dict) else None
@@ -226,8 +280,30 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
         _write_opencode_key(service_env_path)
         _write_pi_key(service_env_path)
         _write_junie_key(service_env_path)
+        _write_openwebui_key(service_env_path)
     except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
+
+
+def _recover_stranded_app_key(api_base, master_key, alias, record):
+    """Delete and regenerate only an alias whose local key material is absent."""
+    token_hash = record.get("token") or record.get("token_id")
+    if not isinstance(token_hash, str) or not token_hash:
+        logger.warning(
+            "Cannot recover stranded LiteLLM alias %s: token hash unavailable", alias
+        )
+        return None
+    _request_json(f"{api_base}/key/delete", "POST", master_key, {"keys": [token_hash]})
+    generated = _request_json(
+        f"{api_base}/key/generate",
+        "POST",
+        master_key,
+        {"key_alias": alias, "duration": None},
+    )
+    key = generated.get("key") if isinstance(generated, dict) else None
+    if key:
+        logger.info("recovered stranded alias %s: deleted + regenerated", alias)
+    return key
 
 
 def main():

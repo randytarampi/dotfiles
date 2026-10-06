@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 import litellm_config
+import model_catalogues
 
 LIVE_CATALOGUE = litellm_config._live_catalogue
 
@@ -630,6 +631,98 @@ def test_openai_registry_reference_requires_key_and_confirmed_catalogue(monkeypa
     )
 
 
+def test_openai_subscription_transport_emits_verified_intersection_and_wire_model(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-a", "openai/gpt-b"}
+    )
+    cache = tmp_path / ".config/litellm/chatgpt/auth.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        json.dumps(
+            {"access_token": "a", "refresh_token": "r", "expires_at": 4102444800}
+        )
+    )
+    verified = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    verified.parent.mkdir(parents=True)
+    verified.write_text('["gpt-a"]')
+    verified.chmod(0o600)
+    entries = litellm_config.compute_model_list(
+        {
+            "HOME": str(tmp_path),
+            "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+        }
+    )
+    openai_entries = {
+        entry["model_name"]: entry
+        for entry in entries
+        if entry["model_name"].startswith("openai/")
+    }
+    assert openai_entries["openai/gpt-a"]["litellm_params"]["model"] == "chatgpt/gpt-a"
+    assert "openai/gpt-b" not in openai_entries
+    assert any(
+        "openai/gpt-b: subscription-transport candidate NOT verified" in note
+        for note in litellm_config.last_generation_notes
+    )
+
+
+@pytest.mark.parametrize("contents", [None, "not-json", '{"gpt-a": true}', '["gpt-a"]'])
+def test_openai_subscription_verified_file_missing_or_malformed_is_empty(
+    tmp_path, monkeypatch, contents
+):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-a"}
+    )
+    cache = tmp_path / ".config/litellm/chatgpt/auth.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        json.dumps(
+            {"access_token": "a", "refresh_token": "r", "expires_at": 4102444800}
+        )
+    )
+    verified = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    if contents is not None:
+        verified.parent.mkdir(parents=True, exist_ok=True)
+        verified.write_text(contents)
+        verified.chmod(0o600 if contents != '["gpt-a"]' else 0o644)
+    entries = litellm_config.compute_model_list(
+        {"HOME": str(tmp_path), "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1"}
+    )
+    assert not any(entry["model_name"] == "openai/gpt-a" for entry in entries)
+    assert any(
+        "openai/gpt-a: subscription-transport candidate NOT verified" in note
+        for note in litellm_config.last_generation_notes
+    )
+
+
+def test_openai_api_key_transport_takes_precedence_over_oauth(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-a"}
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *_args: ["gpt-a"])
+    cache = tmp_path / ".config/litellm/chatgpt/auth.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        json.dumps(
+            {"access_token": "a", "refresh_token": "r", "expires_at": 4102444800}
+        )
+    )
+    verified = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    verified.parent.mkdir(parents=True)
+    verified.write_text('["gpt-a"]')
+    verified.chmod(0o600)
+    entries = litellm_config.compute_model_list(
+        {
+            "HOME": str(tmp_path),
+            "OPENAI_API_KEY": "direct-key",
+            "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+        }
+    )
+    entry = next(item for item in entries if item["model_name"] == "openai/gpt-a")
+    assert entry["litellm_params"]["model"] == "openai/gpt-a"
+
+
 def test_bare_alias_ambiguity_is_removed_in_either_provider_order(monkeypatch):
     monkeypatch.setattr(litellm_config, "iter_engine_models", lambda provider: ["same"])
     monkeypatch.setattr(litellm_config, "list_cloud_ollama_models", lambda: [])
@@ -1057,6 +1150,99 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     assert not any(
         name in path.read_text(encoding="utf-8") for name in CONFIGURE.APP_KEYS.values()
     )
+
+
+def test_app_key_provisioning_recovers_stranded_alias_and_materializes_key(
+    tmp_path, monkeypatch
+):
+    requests = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=30):
+        requests.append((url, method, payload, timeout))
+        if "/health/" in url:
+            return {"status": "healthy"}
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": "openwebui", "token": "hash-openwebui"}]}
+        if url.endswith("/key/delete"):
+            assert payload == {"keys": ["hash-openwebui"]}
+            return {"deleted_keys": 1}
+        if url.endswith("/key/generate"):
+            return {"key": "sk-regenerated-openwebui"}
+        return {"keys": []}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_MASTER_KEY='master'\n")
+    CONFIGURE.provision_app_keys("master", service_env, "http://127.0.0.1:4000")
+    recovery_calls = [
+        url.removeprefix("http://127.0.0.1:4000")
+        for url, method, payload, _timeout in requests
+        if method == "POST"
+        and (
+            payload.get("keys") == ["hash-openwebui"]
+            or payload.get("key_alias") == "openwebui"
+        )
+    ]
+    assert recovery_calls == ["/key/delete", "/key/generate"]
+    client_key = tmp_path / "clients/openwebui.key"
+    assert client_key.read_text() == "sk-regenerated-openwebui"
+    assert client_key.stat().st_mode & 0o777 == 0o600
+    assert all(timeout == 30 for *_, timeout in requests)
+
+
+def test_app_key_provisioning_never_deletes_alias_with_local_key(tmp_path, monkeypatch):
+    requests = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=30):
+        requests.append((url, method, payload))
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": "openwebui", "token": "hash-openwebui"}]}
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_MASTER_KEY='master'\n")
+    client_dir = tmp_path / "clients"
+    client_dir.mkdir()
+    (client_dir / "openwebui.key").write_text("working-key")
+    CONFIGURE.provision_app_keys("master", service_env, "http://127.0.0.1:4000")
+    assert not any(url.endswith("/key/delete") for url, _, _ in requests)
+
+
+def test_model_catalogue_fetch_uses_45_second_deadline_and_timeout_is_unknown(
+    monkeypatch,
+):
+    seen = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"data": []}'
+
+    def open_stub(request, *, timeout):
+        seen["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(model_catalogues, "open_same_origin", open_stub)
+    model_catalogues.get_catalogue("http://127.0.0.1:4000/v1/models")
+    assert seen["timeout"] == 45
+
+    monkeypatch.setattr(
+        model_catalogues,
+        "get_catalogue",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError()),
+    )
+    stats = {"checked": 0, "skipped": 0}
+    assert (
+        model_catalogues.get_models("http://127.0.0.1:4000/v1/models", stats=stats)
+        is None
+    )
+    assert stats == {"checked": 0, "skipped": 1}
 
 
 def test_app_key_provisioning_defers_on_unexpected_generate_errors(
@@ -1717,3 +1903,41 @@ def test_litellm_template_prepares_prisma_before_service_start():
     prepare = template.index('litellm_ensure_prisma_client "$VENV"')
     assert prepare < template.index("systemctl --user enable --now litellm.service")
     assert prepare < template.index("litellm_service_start")
+
+
+def test_litellm_env_sync_local_model_cost_map_rule(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    env_path = tmp_path / "litellm" / "service.env"
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "DATABASE_URL='postgresql://u:pw@127.0.0.1:5432/litellm'\n"
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
+        encoding="utf-8",
+    )
+    script = (
+        f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True)
+    lines = dict(
+        line.split("=", 1)
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    )
+    # Repo-managed default: never fetch the remote cost map in the scrubbed
+    # launchd environment (single worker stalls on the remote fetch).
+    assert lines["LITELLM_LOCAL_MODEL_COST_MAP"] == "True"
+
+    # User override passes through.
+    env_file.write_text(
+        env_file.read_text(encoding="utf-8") + "LITELLM_LOCAL_MODEL_COST_MAP='False'\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True)
+    lines = dict(
+        line.split("=", 1)
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    )
+    assert lines["LITELLM_LOCAL_MODEL_COST_MAP"] == "False"
