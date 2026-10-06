@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import logging
 import os
 import time
@@ -110,8 +111,24 @@ def oauth_cache_expiry(provider, environ=None):
         payload = json.loads(
             oauth_cache_path(provider, environ).read_text(encoding="utf-8")
         )
-        expires = payload.get("expires_at") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            return None
+        token_fields = (
+            ("token",)
+            if provider == "github_copilot"
+            else ("access_token", "refresh_token")
+        )
+        if any(
+            not isinstance(payload.get(field), str) or not payload[field].strip()
+            for field in token_fields
+        ):
+            return None
+        expires = payload.get("expires_at")
+        if isinstance(expires, bool) or not isinstance(expires, (int, float)):
+            return None
         expires = float(expires)
+        if not math.isfinite(expires):
+            return None
         if expires <= time.time() + (60 if provider == "chatgpt" else 0):
             return None
         return expires
