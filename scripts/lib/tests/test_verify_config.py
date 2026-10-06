@@ -152,6 +152,23 @@ def test_direct_mode_gateway_residue_uses_configured_non_default_port(
     config.write_text(
         '{"provider":{"openai":{"options":{"baseURL":"http://127.0.0.1:4567/v1"}}}}'
     )
+
+
+def test_direct_mode_residue_port_is_independent_of_litellm_run_gate(
+    tmp_path, monkeypatch
+):
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        '{"provider":{"openai":{"options":{"baseURL":"http://127.0.0.1:4567/v1"}}}}'
+    )
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+    monkeypatch.setenv("LITELLM_PORT", "4567")
+    errors = VERIFY_CONFIG.litellm_client_gate_errors(
+        {"DOTFILES_USE_LITELLM_PROXY": "0", "DOTFILES_RUN_LITELLM_SETUP": "0"},
+        home=tmp_path,
+    )
+    assert any("gateway endpoint on port 4567" in error for error in errors)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("LITELLM_PORT", "4567")
     assert any(

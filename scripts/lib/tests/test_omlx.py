@@ -1349,20 +1349,52 @@ def test_identity_marks_fine_tune_variants_distinct():
 
 
 def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
-    tmp_path,
+    tmp_path, monkeypatch
 ):
-    """The standalone tier-switch path applies the same transport boundary."""
+    """Invoke tier materialization itself and inspect its persisted output."""
     tier = _load_script("configure_opencode_tier", "configure-opencode-tier.py")
     cfgdir = tmp_path / ".config/opencode"
     cfgdir.mkdir(parents=True)
-    inventory_ids = [
-        "openai/gpt-faster",
-        "ollama-cloud/glm-5.3-flash",
-        "google/models/gemini-3.8-flash",
-        "opencode/big-pickle",
-        "github-copilot/gpt-4o",
-        "meridian/claude-sonnet-5-5",
-    ]
+    source = (
+        Path(__file__).resolve().parents[3]
+        / "configs/opencode/oh-my-opencode-slim.json"
+    )
+    deployed_slim = json.loads(source.read_text())
+    deployed_slim["skills"] = ["frontend/design"]
+    (cfgdir / "oh-my-opencode-slim.json").write_text(json.dumps(deployed_slim))
+    # Build wire inventory from the actual model references used by the checked-in registry.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    import litellm_config as gateway_generator
+
+    inventory_ids = set(gateway_generator._registry_model_refs())
+    inventory_ids.update(
+        f"meridian/{ref.split('/', 1)[1]}"
+        for ref in list(inventory_ids)
+        if ref.startswith("anthropic/")
+    )
+    anthropic_allowlist = json.loads(
+        (source.parent / "anthropic-models.json").read_text()
+    )["models"]
+    inventory_ids.update(f"meridian/{model}" for model in anthropic_allowlist)
+    inventory_ids = {ref for ref in inventory_ids if not ref.startswith("anthropic/")}
+    for provider in (
+        "openai",
+        "ollama-cloud",
+        "google",
+        "openrouter",
+        "opencode",
+        "github-copilot",
+    ):
+        models = json.loads((source.parent / f"{provider}-models.json").read_text())[
+            "models"
+        ]
+        for model in models:
+            identity = (
+                f"google/models/{model}"
+                if provider == "google"
+                else f"{provider}/{model}"
+            )
+            inventory_ids.add(identity)
     consumer = cfgdir / "opencode.json"
     consumer.write_text(
         json.dumps(
@@ -1375,12 +1407,6 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
             }
         )
     )
-    slim = {
-        "roles": {"orchestrator": {"model": "openai/gpt-faster"}},
-        "council": {
-            "presets": {"active": {"alpha": {"model": "anthropic/claude-sonnet-5-5"}}}
-        },
-    }
     with patch.dict(
         os.environ,
         {
@@ -1393,15 +1419,52 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
         },
         clear=False,
     ):
-        helper = _load_script("configure_opencode", "configure-opencode.py")
-        mapped = helper.apply_litellm_slim_gate(slim, json.loads(consumer.read_text()))
-    assert mapped["roles"]["orchestrator"]["model"] == "litellm/openai/gpt-faster"
-    assert (
-        mapped["council"]["presets"]["active"]["alpha"]["model"]
-        == "litellm/meridian/claude-sonnet-5-5"
-    )
-    with (patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False),):
-        unmapped = helper.apply_litellm_slim_gate(
-            slim, json.loads(consumer.read_text())
+        monkeypatch.setattr(tier, "list_local_ollama_models", lambda: [])
+        tier.orchestrate_tier_switch("pro", True, [], dry_run=False)
+    output = json.loads((cfgdir / "oh-my-opencode-slim.json").read_text())
+
+    selections = []
+
+    def collect(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in {"model", "primaryModel"} and isinstance(value, str):
+                    selections.append(value)
+                elif key == "fallback" and isinstance(value, dict):
+                    selections.extend(
+                        model
+                        for chain in value.values()
+                        if isinstance(chain, list)
+                        for model in chain
+                        if isinstance(model, str)
+                    )
+                else:
+                    collect(value)
+        elif isinstance(node, list):
+            for child in node:
+                collect(child)
+
+    collect(output)
+    routed = [model for model in selections if model.startswith("litellm/")]
+    unwrapped = [
+        model
+        for model in selections
+        if model.startswith(
+            tuple(
+                f"{p}/"
+                for p in (
+                    "openai",
+                    "ollama-cloud",
+                    "google",
+                    "openrouter",
+                    "opencode",
+                    "omlx",
+                    "ollama",
+                    "github-copilot",
+                )
+            )
         )
-    assert unmapped == slim
+    ]
+    assert len(routed) == 84
+    assert unwrapped == []
+    assert output["skills"] == ["frontend/design"]

@@ -132,13 +132,12 @@ def test_non_configured_loopback_port_is_rejected(monkeypatch):
         CATALOGUES._validate_catalogue_url("http://127.0.0.1:8101/v1/models")
 
 
-def test_litellm_default_loopback_port_requires_setup_gate(monkeypatch):
+def test_litellm_default_loopback_port_is_static_when_setup_is_off(monkeypatch):
     monkeypatch.delenv("LITELLM_PORT", raising=False)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
-    with pytest.raises(ValueError):
-        CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
+    CATALOGUES._validate_catalogue_url("http://127.0.0.1:4000/v1/models")
 
 
 def test_litellm_custom_port_requires_valid_gate_and_loopback(monkeypatch):

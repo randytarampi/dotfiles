@@ -79,9 +79,7 @@ def _configured_loopback_ports() -> frozenset[int]:
 
 
 def _configured_litellm_port() -> int | None:
-    """Return LiteLLM's local port only while its managed service is enabled."""
-    if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
-        return None
+    """Return the statically configured LiteLLM port, independent of service state."""
     value = os.environ.get("LITELLM_PORT", "4000").strip()
     if not value.isdigit():
         return None
