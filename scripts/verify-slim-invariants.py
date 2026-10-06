@@ -38,7 +38,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 from constants import get_litellm_proxy_mode
-from litellm_aliases import resolve_canonical_identity
+from litellm_aliases import canonical_allowlist_key, resolve_canonical_identity
 
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 MODEL_ALLOWLIST_PATHS = {
@@ -129,8 +129,6 @@ def _model_allowlist_violations(data, proxy_mode=None):
     allowlists = _model_allowlists()
     violations = []
     for path, model in _iter_model_values(data):
-        if model.startswith("_local:") or model.startswith("ollama/"):
-            continue
         if model.startswith("litellm/"):
             if not proxy_mode:
                 violations.append(f"{path} = {model!r} uses LiteLLM in direct mode")
@@ -140,15 +138,18 @@ def _model_allowlist_violations(data, proxy_mode=None):
                 violations.append(f"{path} = {model!r} has malformed LiteLLM reference")
                 continue
             model = canonical
+        if model.startswith("_local:") or model.startswith("ollama/"):
+            continue
         if "/" not in model:
             violations.append(
                 f"{path} = {model!r} has no provider prefix or local placeholder"
             )
             continue
         provider, model_id = model.split("/", 1)
+        allowlist_key = canonical_allowlist_key(model_id)
         if provider not in allowlists:
             violations.append(f"{path} = {model!r} uses unknown provider '{provider}'")
-        elif model_id not in allowlists[provider]:
+        elif allowlist_key not in allowlists[provider]:
             violations.append(
                 f"{path} = {model!r} is not in {provider} model allowlist"
             )
