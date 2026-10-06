@@ -109,6 +109,50 @@ Python parsers use `allow_abbrev=False` to match Bash: abbreviated long
 options are not accepted. Help comparison checks the exit code and required
 option names, not byte-for-byte formatting.
 
+## Dependency Version Policy
+
+Pinned dependencies use an evidence-based refresh policy — never blind range
+relaxation. Empirical sandbox probes (2026-10-05) established:
+
+### OpenCode plugins (`configs/opencode/opencode-plugins.json`)
+
+Exact pins (`name@X.Y.Z`) are **retained**. Probes against opencode 1.18.34:
+
+- Range specs (`name@^3.0.1`) are accepted but install into a cache directory
+  that preserves the literal range (`oh-my-opencode-slim@^3.0.1/`), so the
+  concrete resolved version differs from the directory name.
+- Warm-cache re-runs did not float to newer versions within the probe window
+  (float behaviour unobservable — no newer release existed to detect).
+- Unversioned specs cache as `name@latest`.
+
+Because a literal-range cache directory contradicts
+`check-plugin-consistency.py` (which expects concrete-version directories)
+and floating behaviour could not be verified as non-breaking, ranges and
+bare names do not meet the "latest non-breaking" bar. Refresh is a
+**deliberate bounded bump**: update the manifest pin, run
+`make check-plugin-consistency` and the tests, then deploy.
+
+### Pi packages (`scripts/configure-pi.py`)
+
+Unversioned `npm:<name>` specs are **retained**. Probes (pi 1.0.3):
+
+- `_ensure_packages` is idempotent by package NAME only (version-blind
+  string comparison), so re-running configure-pi never refreshes anything.
+- Refresh is manual: `pi update --extension <source>` for one package or
+  `pi update --extensions` for all, run deliberately by a human, then verify
+  the tool still functions (`check-plugin-consistency` does not cover pi).
+
+### GitHub Actions and pip
+
+Dependabot covers both (`github-actions` weekly floating-major, `pip`
+weekly); GitHub Actions major bumps are additionally guarded by
+`scripts/lib/tests/test_action_major_refs.py`. These ecosystems already
+match the bounded-refresh policy.
+
+Rationale: "unversioned" and "range" are not verified non-breaking —
+they are "latest, possibly breaking". A pin is the only spec form whose
+update semantics are fully controlled.
+
 ## Convention Enforcement
 
 `make verify` runs `check-cli-contract` (manifest-driven CLI surface
