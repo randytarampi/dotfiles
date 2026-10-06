@@ -543,7 +543,14 @@ def compute_model_list(environ=None):
             )
             continue
         entries.extend(
-            _entry(f"{provider}/{model_id}", f"{provider}/{model_id}")
+            (
+                _entry(
+                    f"github-copilot/{model_id}",
+                    f"github_copilot/{model_id}",
+                )
+                if provider == "github_copilot"
+                else _entry(f"{provider}/{model_id}", f"{provider}/{model_id}")
+            )
             for model_id in model_ids
         )
     try:

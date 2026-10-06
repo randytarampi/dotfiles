@@ -259,10 +259,13 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
         owner, model = value.split("/", 1)
         if owner in direct_exceptions:
             return value
+        # Anthropic selections route through the Meridian gateway aliases
+        # (same canonical model IDs, meridian/ owner namespace).
+        owner_for_lookup = "meridian" if owner == "anthropic" else owner
         matches = [
             item
             for item in available
-            if item.split("/", 1)[0] == owner
+            if item.split("/", 1)[0] == owner_for_lookup
             and canonical_allowlist_key(item.split("/", 1)[1])
             == canonical_allowlist_key(model)
         ]

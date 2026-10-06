@@ -1346,3 +1346,62 @@ def test_identity_marks_fine_tune_variants_distinct():
     assert _model_identity("gemma4:12b-mxfp8") == _model_identity(
         "gemma-4-12B-it-MLX-8bit"
     )
+
+
+def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
+    tmp_path,
+):
+    """The standalone tier-switch path applies the same transport boundary."""
+    tier = _load_script("configure_opencode_tier", "configure-opencode-tier.py")
+    cfgdir = tmp_path / ".config/opencode"
+    cfgdir.mkdir(parents=True)
+    inventory_ids = [
+        "openai/gpt-faster",
+        "ollama-cloud/glm-5.3-flash",
+        "google/models/gemini-3.8-flash",
+        "opencode/big-pickle",
+        "github-copilot/gpt-4o",
+        "meridian/claude-sonnet-5-5",
+    ]
+    consumer = cfgdir / "opencode.json"
+    consumer.write_text(
+        json.dumps(
+            {
+                "provider": {
+                    "litellm": {
+                        "models": {f"litellm/{i}": {"id": i} for i in inventory_ids}
+                    }
+                }
+            }
+        )
+    )
+    slim = {
+        "roles": {"orchestrator": {"model": "openai/gpt-faster"}},
+        "council": {
+            "presets": {"active": {"alpha": {"model": "anthropic/claude-sonnet-5-5"}}}
+        },
+    }
+    with patch.dict(
+        os.environ,
+        {
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+            "LITELLM_PORT": "4000",
+            "HOME": str(tmp_path),
+            "OPENCODE_DIR": str(cfgdir),
+        },
+        clear=False,
+    ):
+        helper = _load_script("configure_opencode", "configure-opencode.py")
+        mapped = helper.apply_litellm_slim_gate(slim, json.loads(consumer.read_text()))
+    assert mapped["roles"]["orchestrator"]["model"] == "litellm/openai/gpt-faster"
+    assert (
+        mapped["council"]["presets"]["active"]["alpha"]["model"]
+        == "litellm/meridian/claude-sonnet-5-5"
+    )
+    with (patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False),):
+        unmapped = helper.apply_litellm_slim_gate(
+            slim, json.loads(consumer.read_text())
+        )
+    assert unmapped == slim

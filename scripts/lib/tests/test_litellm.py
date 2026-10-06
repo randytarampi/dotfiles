@@ -75,7 +75,7 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
 @pytest.mark.parametrize(
     "provider,filename,model",
     [
-        ("github_copilot", "api-key.json", "github_copilot/gpt-4o"),
+        ("github_copilot", "api-key.json", "github-copilot/gpt-4o"),
         ("chatgpt", "auth.json", "chatgpt/gpt-5.2"),
     ],
 )
@@ -102,6 +102,8 @@ def test_oauth_cache_controls_generation_without_api_key(
     }
     assert model in aliases
     assert "api_key" not in aliases[model]["litellm_params"]
+    if provider == "github_copilot":
+        assert aliases[model]["litellm_params"]["model"] == "github_copilot/gpt-4o"
     absent = litellm_config.compute_model_list(
         {
             "HOME": str(tmp_path / "absent"),
@@ -158,11 +160,12 @@ def test_oauth_generation_requires_explicit_gate_and_valid_cache(
     )
     on_env = {**base_env, "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1"}
     on_entries = litellm_config.compute_model_list(on_env)
-    assert any(entry["model_name"].startswith(provider + "/") for entry in on_entries)
+    model_prefix = "github-copilot/" if provider == "github_copilot" else provider + "/"
+    assert any(entry["model_name"].startswith(model_prefix) for entry in on_entries)
     cache_path.write_text(json.dumps({**valid_cache, "expires_at": 1}))
     expired_entries = litellm_config.compute_model_list(on_env)
     assert not any(
-        entry["model_name"].startswith(provider + "/") for entry in expired_entries
+        entry["model_name"].startswith(model_prefix) for entry in expired_entries
     )
     assert any(
         note.startswith(f"{provider}: OAuth token cache absent/expired")
