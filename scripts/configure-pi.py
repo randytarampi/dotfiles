@@ -297,13 +297,9 @@ def litellm_cloud_aliases(port="4000"):
         )
         # Explicit empty presence per provider (UNKNOWN discipline): the
         # providers exist, nothing is confirmed — never a silent absence.
-        return {
-            provider: {}
-            for provider in PROVIDER_ENDPOINTS
-            if provider in ("google", "openrouter")
-        }
+        return {provider: {} for provider in ("google", "openrouter", "opencode")}
     gateway_url = f"http://127.0.0.1:{port}/v1"
-    routes = {provider: {} for provider in PROVIDER_ENDPOINTS}
+    routes = {provider: {} for provider in ("google", "openrouter", "opencode")}
     available.update(
         {
             f"litellm/{identity}"
@@ -322,6 +318,8 @@ def litellm_cloud_aliases(port="4000"):
             routes["google"][identity.removeprefix("google/models/")] = wire
         elif identity.startswith("openrouter/"):
             routes["openrouter"][identity.removeprefix("openrouter/")] = wire
+        elif identity.startswith("opencode/"):
+            routes["opencode"][identity.removeprefix("opencode/")] = wire
     routes["_available"] = available
     return routes
 
@@ -813,13 +811,15 @@ def main():
             key = canonical_default.split("/", 1)[1]
             default = cloud_routes.get("openrouter", {}).get(key)
         else:
-            gateway_models.add(canonical_default)
             default = resolve_alias(
                 canonical_default,
                 True,
                 client_key=proxy_key_path.resolve(),
                 gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
             )["model"]
+            if default not in cloud_routes.get("_available", set()):
+                raise RuntimeError("Pi default model has no advertised LiteLLM alias")
+            gateway_models.add(canonical_default)
         if default is None or default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
     provider, _, default_model = default.partition("/")

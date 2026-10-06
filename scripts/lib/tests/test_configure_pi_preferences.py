@@ -218,7 +218,11 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
         == "litellm/openrouter/inclusionai/ling-3.0-flash-sante:free"
     )
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: {"data": "bad"})
-    assert configure_pi.litellm_cloud_aliases() == {"google": {}, "openrouter": {}}
+    assert configure_pi.litellm_cloud_aliases() == {
+        "google": {},
+        "openrouter": {},
+        "opencode": {},
+    }
 
 
 def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
