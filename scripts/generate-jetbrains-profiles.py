@@ -21,7 +21,10 @@ if LIB_DIR not in sys.path:
 
 import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
 import tier_registry
-from model_catalogues import open_same_origin  # noqa: E402 -- scripts/lib bootstrap.
+from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
+    MODEL_CATALOGUE_TIMEOUT,
+    open_same_origin,
+)
 from ai_models import resolve_model
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
@@ -149,7 +152,7 @@ def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
             headers={"Authorization": f"Bearer {api_key}"},
             method="GET",
         )
-        with open_same_origin(request, timeout=3) as response:
+        with open_same_origin(request, timeout=MODEL_CATALOGUE_TIMEOUT) as response:
             payload = json.loads(response.read().decode("utf-8"))
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, list):

@@ -35,6 +35,7 @@ TRUSTED_HTTPS_HOSTS = BASE_URL_HOSTS | {
     "opencode.ai",
     "open.openaipublic.com",
 }
+MODEL_CATALOGUE_TIMEOUT = 45
 
 
 def _origin(url):
@@ -159,7 +160,7 @@ def get_catalogue(url: str, api_key: str = "", *, strict: bool = False):
     request = urllib.request.Request(url, headers=headers, method="GET")
     # LiteLLM's warm, DB-backed /v1/models catalogue takes 26–30 seconds in live
     # probes; allow a bounded deadline above that while retaining UNKNOWN on timeout.
-    with open_same_origin(request, timeout=45) as response:
+    with open_same_origin(request, timeout=MODEL_CATALOGUE_TIMEOUT) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

@@ -20,6 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from cli_helpers import add_common_args  # noqa: E402
+from model_catalogues import MODEL_CATALOGUE_TIMEOUT  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 LABEL = "com.litellm.proxy"
@@ -105,7 +106,9 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
+def _request(
+    url: str, key: str = "", timeout: float = 3
+) -> tuple[int, object | None, str]:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme not in {"http", "https"}:
         return 0, None, "unsafe-scheme"
@@ -114,7 +117,7 @@ def _request(url: str, key: str = "") -> tuple[int, object | None, str]:
         request.add_header("Authorization", f"Bearer {key}")
     try:
         opener = urllib.request.build_opener(_NoRedirectHandler())
-        with opener.open(request, timeout=3) as response:
+        with opener.open(request, timeout=timeout) as response:
             payload = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(payload), ""
@@ -156,7 +159,7 @@ def diagnose(master_key: str | None = None) -> tuple[int, str]:
             f"LITELLM: MISSING-OR-INVALID-MASTER-KEY; artifact={artifact}; loaded={loaded}",
         )
     readiness = _request(f"{base}/health/readiness", key)
-    models = _request(f"{base}/v1/models", key)
+    models = _request(f"{base}/v1/models", key, timeout=MODEL_CATALOGUE_TIMEOUT)
     if any(
         status == 200 and parsed is None for status, parsed, _ in (readiness, models)
     ):
