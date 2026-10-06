@@ -16,8 +16,7 @@ FAKE_OPENCODE_KEY = "fake-" + "opencode-key"
 
 def client_home(tmp_path, monkeypatch, client="pi"):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("DOTFILES_OPENCODE_USE_LITELLM", "0")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     keys = tmp_path / ".local/share/litellm/clients"
     keys.mkdir(parents=True)
     key = keys / f"{client}.key"
@@ -25,7 +24,6 @@ def client_home(tmp_path, monkeypatch, client="pi"):
     key.chmod(0o600)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("LITELLM_PORT", "4000")
-    monkeypatch.setenv(f"DOTFILES_{client.upper()}_USE_LITELLM", "1")
     monkeypatch.setattr(drift, "_configured_litellm_port", lambda: 4000)
     return key
 
@@ -245,8 +243,7 @@ def test_pi_role_override_missing(tmp_path, monkeypatch):
 def test_opencode_provider_key_alias_and_disabled_provider(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_OPENCODE_USE_LITELLM", "1")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     key_dir = tmp_path / ".local/share/litellm/clients"
     key_dir.mkdir(parents=True)
     key = key_dir / "opencode.key"
@@ -279,6 +276,7 @@ def test_opencode_provider_key_alias_and_disabled_provider(tmp_path, monkeypatch
     assert {item["outcome"] for item in report["results"]} == {
         "MATCH",
         "SKIPPED_INACTIVE",
+        "UNKNOWN",  # pi is audited too under the unified gate; its config is missing
     }
     assert FAKE_OPENCODE_KEY not in json.dumps(report)
 
@@ -348,6 +346,29 @@ def test_qualified_pi_override_uses_its_provider_not_global_default(
     tmp_path, monkeypatch
 ):
     client_home(tmp_path, monkeypatch)
+    # Unified gate audits both clients; give opencode a complete config so
+    # report["complete"] reflects the pi subject of this test.
+    opencode_key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    opencode_key.write_text(FAKE_OPENCODE_KEY, encoding="utf-8")
+    opencode_key.chmod(0o600)
+    opencode_config = tmp_path / ".config/opencode/opencode.json"
+    opencode_config.parent.mkdir(parents=True, exist_ok=True)
+    opencode_config.write_text(
+        json.dumps(
+            {
+                "provider": {
+                    "ollama": {
+                        "options": {
+                            "baseURL": "http://127.0.0.1:4000/v1",
+                            "apiKey": f"{{file:{opencode_key}}}",
+                        },
+                        "models": {"Ornith-1.5-35B-A3B-MLX-4bit": {}},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     write_pi(
         tmp_path,
         {
@@ -430,8 +451,7 @@ def test_opencode_disabled_providers_and_enabled_missing_provider(
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_OPENCODE_USE_LITELLM", "1")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setattr(drift, "_configured_litellm_port", lambda: 4000)
     key_dir = tmp_path / ".local/share/litellm/clients"
     key_dir.mkdir(parents=True)
@@ -475,7 +495,6 @@ def test_opencode_disabled_providers_and_enabled_missing_provider(
 @pytest.mark.parametrize("client", ["opencode", "pi"])
 def test_missing_enabled_config_is_incomplete(tmp_path, monkeypatch, client):
     client_home(tmp_path, monkeypatch, client)
-    monkeypatch.setenv(f"DOTFILES_{client.upper()}_USE_LITELLM", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(drift, "_configured_litellm_port", lambda: 4000)
     report, _ = drift.audit_client_providers()

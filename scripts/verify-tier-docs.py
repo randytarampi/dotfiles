@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Set
 
 ROOT = Path(__file__).resolve().parent.parent
+import sys
+
+sys.path.insert(0, str(ROOT / "scripts" / "lib"))
+from litellm_aliases import resolve_canonical_identity
+
 SLIM_PATH = ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 DOCS_PATH = ROOT / "docs" / "TIERS.md"
 
@@ -19,6 +24,8 @@ BACKTICKED_MODEL = re.compile(r"`([^`]+)`")
 
 def _model_id(model: str) -> str:
     """Compare provider-qualified and unqualified documentation IDs equally."""
+    if model.startswith("litellm/"):
+        model = resolve_canonical_identity(model, True) or model
     return model.split("/", 1)[-1]
 
 

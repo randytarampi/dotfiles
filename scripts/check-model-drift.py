@@ -31,6 +31,8 @@ from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is inte
     load_allowlists,
     _configured_litellm_port,
 )
+from constants import get_litellm_proxy_mode  # noqa: E402
+from litellm_aliases import resolve_canonical_identity  # noqa: E402
 from model_references import (  # noqa: E402  # sys.path bootstrap above is intentional.
     Catalogue,
     EndpointIdentity,
@@ -95,10 +97,20 @@ def resolve_profile_api_key(value: object) -> tuple[str | None, str]:
     return (value, "inline-profile-key") if value else ("", "anonymous")
 
 
-def check_slim(data: dict) -> list[str]:
+def check_slim(data: dict, proxy_mode=None) -> list[str]:
     violations = []
+    if proxy_mode is None:
+        proxy_mode = get_litellm_proxy_mode()
     allowlists = load_allowlists(ALLOWLISTS)
     for model in set(iter_models(data)):
+        if model.startswith("litellm/"):
+            if not proxy_mode:
+                violations.append(f"{model} uses LiteLLM in direct mode")
+                continue
+            model = resolve_canonical_identity(model, True)
+            if model is None:
+                violations.append("malformed LiteLLM model reference")
+                continue
         if model.startswith("_local:") or any(
             model.startswith(f"{provider}/") for provider in active_engines()
         ):
@@ -537,7 +549,7 @@ def _client_is_active(client, port):
     return bool(
         port
         and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-        and os.environ.get(f"DOTFILES_{client.upper()}_USE_LITELLM", "0") == "1"
+        and get_litellm_proxy_mode()
     )
 
 

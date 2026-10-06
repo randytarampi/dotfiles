@@ -46,3 +46,14 @@ def test_checker_reports_bogus_registry_model(tmp_path, capsys):
     assert MODULE.check(slim, docs) == 2
     output = capsys.readouterr().err
     assert "Missing from docs/TIERS.md tier tables: bogus" in output
+
+
+def test_litellm_wrapped_tier_identity_matches_direct_documentation():
+    registry = {
+        "presets": {"test": {"orchestrator": {"model": "litellm/openai/alpha"}}}
+    }
+    document = (
+        "### Test Tier (`test`)\n| Role | Model | Variant |\n|---|---|---|\n"
+        "| orchestrator | `openai/alpha` | high |\n"
+    )
+    assert MODULE.drift_messages(registry, document) == []
