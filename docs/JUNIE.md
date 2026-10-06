@@ -4,9 +4,11 @@
 
 The shared tier registry in `scripts/lib/tier_registry.py` is the single source of truth for tier → role → model mapping. OpenCode, Junie, and Pi consume the presets in `configs/opencode/oh-my-opencode-slim.json` through this registry. `configs/junie/model-groups.json` supplies Junie-specific profile metadata, provider endpoints (including Google, OpenRouter, and OpenCode Zen), and temperature overrides.
 
-Set `DOTFILES_JUNIE_USE_LITELLM=1` together with
-`DOTFILES_RUN_LITELLM_SETUP=1` to select the parallel `litellm-*` groups for
-externally authenticated providers. The LiteLLM provider uses the app-specific
+Set `DOTFILES_USE_LITELLM_PROXY=1` to route Junie through the LiteLLM gateway.
+This gateway-only switch requires `DOTFILES_RUN_LITELLM_SETUP=1`, Junie's client
+key file and exact gateway aliases; missing prerequisites are errors, with no
+direct-provider fallback. See [LiteLLM Proxy](LITELLM.md) for setup and
+client-key requirements. The LiteLLM provider uses the app-specific
 `LITELLM_JUNIE_KEY`. The tracked `configs/junie/model-groups.json` keeps only
 the `apiKeyEnv` selector; no key is stored in tracked configuration. After
 LiteLLM provisions the key in its generated `service.env`, configuration
@@ -17,7 +19,7 @@ literal in the generated private profile JSON under `~/.junie/models/` (the
 shared `~/.ai/models/` directory). This is an intentional credential-bearing
 runtime artifact: keep the profile directory private, do not copy/share those
 profiles, and rotate via LiteLLM provisioning plus `make deploy`. With the
-canary enabled, tier and generated local-pool profiles for supported providers
+gateway enabled, tier and generated local-pool profiles for supported providers
 are routed only through exact aliases present in Junie's authenticated LiteLLM
 catalogue. Missing aliases or an unavailable catalogue omit the owned generated
 profile (and remove a stale manifest-owned profile); missing faster aliases omit

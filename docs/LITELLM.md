@@ -38,6 +38,15 @@ LiteLLM requires Postgres for key, spend-tracking, and UI state. Set
 matching the unchanged `database_url: os.environ/DATABASE_URL` config reference.
 Legacy `DATABASE_URL` remains accepted during migration, behind the new name.
 
+### OAuth providers (opt-in)
+
+`DOTFILES_LITELLM_OAUTH_PROVIDERS` defaults to `0`. Setting it to `1` is an
+accepted operator risk: when cached tokens lapse mid-session, the proxy may
+enter the interactive device flow. Cache checks and near-expiry warnings do
+not prevent runtime login; withholding this gate by default is the control.
+Bootstrap with `scripts/litellm-oauth.py --provider <github_copilot|chatgpt>`
+in a supervised terminal.
+
 ## Client virtual keys
 
 Each client receives its own virtual key, stored in `service.env` and materialized
