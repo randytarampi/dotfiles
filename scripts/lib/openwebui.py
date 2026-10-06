@@ -154,7 +154,9 @@ def ownership_catalogue():
             raise RuntimeError(
                 "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
             )
-        endpoint = "http://127.0.0.1:4000"
+        from model_catalogues import _configured_litellm_port
+
+        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}"
         for identity in catalogue.values():
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
@@ -238,7 +240,9 @@ def compute_desired_state():
             raise RuntimeError(
                 "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
             )
-        endpoint = "http://127.0.0.1:4000"
+        from model_catalogues import _configured_litellm_port
+
+        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}"
         key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
         for collection in ("openai", "anthropic", "ollama"):
             for connection in desired.get(collection, []):
@@ -577,6 +581,43 @@ def reconcile(
         identity_owner = catalogue_by_identity.get(current_identity)
         expected_identity = owner and current_identity == _catalogue_identity(owner)
         if _managed(existing):
+            # Ollama's native entry is a managed identity in direct mode and
+            # moves to OpenAI when the gateway is enabled (and back again).
+            # Its marker plus stable prefix makes this cross-collection move
+            # safe; no user-owned connection is adopted.
+            if prefix == "ollama" and wanted is not None and not expected_identity:
+                native_identity = _ownership_identity(
+                    LOCAL_ENGINES["ollama"]["base_url"](), "ollama", "ollama"
+                )
+                from model_catalogues import _configured_litellm_port
+
+                gateway_identity = _ownership_identity(
+                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}",
+                    "openai",
+                    "openai",
+                )
+                is_native_managed = (
+                    collection == "ollama"
+                    and config.get("connection_type") == "ollama"
+                    and current_identity[0] == native_identity[0]
+                )
+                if is_native_managed or current_identity == gateway_identity:
+                    seen.add(prefix)
+                    plan.entries.append(
+                        {
+                            "action": "delete",
+                            "collection": collection,
+                            "entry": copy.deepcopy(existing),
+                        }
+                    )
+                    plan.entries.append(
+                        {
+                            "action": "add",
+                            "collection": wanted["collection"],
+                            "entry": copy.deepcopy(wanted),
+                        }
+                    )
+                    continue
             # owner == prefix and the entry's identity matches its catalogue
             # owner: authoritative match. The reverse map is unreliable when
             # multiple owners share one URL (LiteLLM canary collapses every

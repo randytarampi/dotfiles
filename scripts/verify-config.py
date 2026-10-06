@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import plistlib
 import shlex
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
 from constants import get_litellm_proxy_mode
 from litellm_aliases import resolve_canonical_identity
+from model_catalogues import _configured_litellm_port
 import litellm_config
 from litellm_config import APP_KEYS
 
@@ -240,8 +242,17 @@ def litellm_oauth_readiness(environ=None):
                 .astimezone()
                 .strftime("%Y-%m-%d %H:%M:%S %Z")
             )
+            warning = (
+                " — re-run bootstrap within 24 hours"
+                if expiry < time.time() + 86400
+                else ""
+            )
             rows.append(
-                (provider, "MATCH-candidate", f"token cache present, expires {date}")
+                (
+                    provider,
+                    "MATCH-candidate",
+                    f"token cache present, expires {date}{warning}",
+                )
             )
     return rows
 
@@ -403,7 +414,12 @@ def _direct_mode_routing_errors(home):
         if any(value.startswith("litellm/") for value in values):
             errors.append(f"Direct mode has LiteLLM transport references in {path}")
         if any(
-            value.startswith(("http://127.0.0.1:4000", "http://localhost:4000"))
+            value.startswith(
+                (
+                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}",
+                    f"http://localhost:{_configured_litellm_port() or 4000}",
+                )
+            )
             for value in values
         ):
             errors.append(f"Direct mode has a gateway endpoint in {path}")
