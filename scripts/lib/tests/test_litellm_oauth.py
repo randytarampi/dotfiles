@@ -17,6 +17,17 @@ def test_help_exits_zero():
     assert result.returncode == 0
 
 
+def test_missing_managed_venv_returns_clean_usage_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(OAUTH, "load_env", lambda: None)
+    monkeypatch.setattr(OAUTH.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(OAUTH.sys.stdin, "isatty", lambda: True)
+    assert OAUTH.main(["--provider", "chatgpt"]) == 2
+    captured = capsys.readouterr()
+    assert "virtualenv Python is unavailable" in captured.err
+    assert str(tmp_path) not in captured.err
+
+
 def test_non_tty_refuses_before_subprocess(monkeypatch):
     monkeypatch.setattr(OAUTH.sys.stdout, "isatty", lambda: False)
     monkeypatch.setattr(OAUTH.sys.stdin, "isatty", lambda: False)
@@ -40,6 +51,10 @@ def test_bootstrap_hardens_cache_under_permissive_umask(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GITHUB_COPILOT_TOKEN_DIR", str(cache_dir))
     monkeypatch.setattr(OAUTH, "load_env", lambda: None)
+    python = home / "venv/bin/python"
+    python.parent.mkdir(parents=True)
+    python.touch()
+    monkeypatch.setattr(OAUTH, "litellm_python", lambda: python)
     monkeypatch.setattr(OAUTH.sys.stdout, "isatty", lambda: True)
     monkeypatch.setattr(OAUTH.sys.stdin, "isatty", lambda: True)
     calls = []

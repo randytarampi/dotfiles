@@ -11,7 +11,9 @@ import stat
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from env import load_env
 
-PYTHON = "/Users/randytarampi/.local/share/litellm/venv/bin/python"
+
+def litellm_python():
+    return Path("~/.local/share/litellm/venv/bin/python").expanduser()
 
 
 def cache_path(provider):
@@ -38,6 +40,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", required=True, choices=PROVIDERS)
     args = parser.parse_args(argv)
+    python = litellm_python()
+    if not python.is_file():
+        print(
+            "LiteLLM virtualenv Python is unavailable; run LiteLLM setup first.",
+            file=sys.stderr,
+        )
+        return 2
     if not sys.stdout.isatty() or not sys.stdin.isatty():
         print(
             "Refusing OAuth bootstrap without an interactive terminal.", file=sys.stderr
@@ -58,7 +67,7 @@ def main(argv=None):
         "auth = Authenticator(); "
         "getattr(auth, 'get_api_key', auth.get_access_token)()"
     )
-    result = subprocess.run([PYTHON, "-c", code], check=False)
+    result = subprocess.run([str(python), "-c", code], check=False)
     if result.returncode:
         print(f"OAuth login failed (exit {result.returncode}).", file=sys.stderr)
         return 1
@@ -80,7 +89,7 @@ def main(argv=None):
         f"response = litellm.completion(model={model!r}, messages=[{{'role':'user','content':'Reply with one character.'}}], max_tokens=1); "
         "print('Verification request succeeded:', bool(response))"
     )
-    result = subprocess.run([PYTHON, "-c", verification], check=False)
+    result = subprocess.run([str(python), "-c", verification], check=False)
     print(
         "Verification request succeeded."
         if result.returncode == 0

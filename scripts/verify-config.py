@@ -439,7 +439,9 @@ def _direct_mode_routing_errors(home):
             )
             for value in values
         ):
-            errors.append(f"Direct mode has a gateway endpoint in {path}")
+            errors.append(
+                f"Direct mode has a gateway endpoint on port {_configured_litellm_port() or 4000} in {path}"
+            )
     return errors
 
 
