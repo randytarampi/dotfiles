@@ -110,7 +110,11 @@ def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monke
     )
     assert (
         VERIFY_CONFIG.litellm_client_gate_errors(
-            {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "1"},
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "OPENAI_API_KEY": "direct-key",
+            },
             home=tmp_path,
         )
         == []
@@ -123,6 +127,67 @@ def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monke
             home=tmp_path,
         )
     )
+
+
+def test_litellm_openai_subscription_preflight_direct_subscription_or_unavailable(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        VERIFY_CONFIG.litellm_config,
+        "_registry_model_refs",
+        lambda: {"openai/gpt-verified"},
+    )
+    clients = tmp_path / ".local/share/litellm/clients"
+    clients.mkdir(parents=True)
+    for client in VERIFY_CONFIG.APP_KEYS:
+        (clients / f"{client}.key").write_text("virtual-key")
+    config = tmp_path / ".local/share/litellm/config.yaml"
+    config.write_text('  - model_name: "openai/gpt-verified"\n')
+
+    direct_env = {
+        "HOME": str(tmp_path),
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "OPENAI_API_KEY": "direct-key",
+    }
+    assert VERIFY_CONFIG.litellm_client_gate_errors(direct_env, home=tmp_path) == []
+
+    cache = tmp_path / ".config/litellm/chatgpt/auth.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        json.dumps(
+            {"access_token": "a", "refresh_token": "r", "expires_at": 4102444800}
+        )
+    )
+    verified = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
+    verified.write_text('["gpt-verified"]')
+    verified.chmod(0o600)
+    subscription_env = {
+        "HOME": str(tmp_path),
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+    }
+    assert (
+        VERIFY_CONFIG.litellm_client_gate_errors(subscription_env, home=tmp_path) == []
+    )
+    assert any(
+        row[:2] == ("openai", "SUBSCRIPTION-chatgpt")
+        for row in VERIFY_CONFIG.litellm_oauth_readiness(subscription_env)
+    )
+
+    config.write_text('  - model_name: "another/alias"\n')
+    errors = VERIFY_CONFIG.litellm_client_gate_errors(
+        {
+            "HOME": str(tmp_path),
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+        },
+        home=tmp_path,
+    )
+    assert errors == [
+        "LiteLLM proxy mode cannot resolve canonical alias: openai/gpt-verified; set OPENAI_API_KEY or run litellm-oauth.py --provider chatgpt"
+    ]
 
 
 def test_litellm_direct_mode_rejects_gateway_rewrite_residue(tmp_path):
@@ -364,6 +429,7 @@ def _litellm_env(**overrides):
         "LITELLM_MASTER_KEY": "sk-" + "x" * 20,
         "LITELLM_PORT": "4000",
         "DISABLE_ADMIN_UI": "False",
+        "LITELLM_LOCAL_MODEL_COST_MAP": "True",
         "DATABASE_URL": "postgresql://localhost/litellm",
     }
     values.update(overrides)
@@ -500,7 +566,7 @@ def test_litellm_oauth_readiness_reports_gate_withheld():
     rows = VERIFY_CONFIG.litellm_oauth_readiness(
         {"DOTFILES_LITELLM_OAUTH_PROVIDERS": "0"}
     )
-    assert len(rows) == 2
+    assert len(rows) == 3
     assert all(row[1] == "WITHHELD" for row in rows)
     assert all("DOTFILES_LITELLM_OAUTH_PROVIDERS=0" in row[2] for row in rows)
 

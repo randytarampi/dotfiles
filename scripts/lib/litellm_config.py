@@ -6,6 +6,7 @@ import json
 import math
 import logging
 import os
+import stat
 import time
 import tempfile
 import urllib.error
@@ -135,6 +136,24 @@ def oauth_cache_expiry(provider, environ=None):
         return expires
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
+
+
+def chatgpt_verified_openai_models(environ=None):
+    """Read the mode-600 IDs verified through a supervised ChatGPT session."""
+    environ = os.environ if environ is None else environ
+    home = Path(environ.get("HOME", str(Path.home()))).expanduser()
+    path = home / ".local/share/litellm/chatgpt_verified_models.json"
+    try:
+        if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) != 0o600:
+            return set()
+        values = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return set()
+    if not isinstance(values, list) or any(
+        not isinstance(value, str) or not value or "/" in value for value in values
+    ):
+        return set()
+    return set(values)
 
 
 def _live_catalogue(provider, key, base_url, timeout=10):
@@ -474,6 +493,22 @@ def compute_model_list(environ=None):
             requested = {model_id.removeprefix("models/") for model_id in requested}
         key = environ.get(key_env, "").strip()
         if provider == "openai" and not key:
+            if (
+                constants.get_litellm_oauth_gate(environ)
+                and oauth_cache_expiry("chatgpt", environ) is not None
+            ):
+                verified = chatgpt_verified_openai_models(environ)
+                for model_id in sorted(requested & verified):
+                    entries.append(_entry(f"openai/{model_id}", f"chatgpt/{model_id}"))
+                for model_id in sorted(requested - verified):
+                    last_generation_notes.append(
+                        f"openai/{model_id}: subscription-transport candidate NOT verified — run litellm-oauth.py --provider chatgpt which verifies ids"
+                    )
+                if requested and not requested & verified:
+                    last_generation_notes.append(
+                        "openai: UNKNOWN no verified ChatGPT subscription models"
+                    )
+                continue
             last_generation_notes.extend(
                 f"openai/{model_id}: UNKNOWN OPENAI_API_KEY is unset"
                 for model_id in sorted(requested)

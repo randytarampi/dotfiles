@@ -264,6 +264,34 @@ def litellm_oauth_readiness(environ=None):
                     f"token cache present, expires {date}{warning}",
                 )
             )
+    if environ.get("OPENAI_API_KEY", "").strip():
+        rows.append(("openai", "DIRECT-openai", "OPENAI_API_KEY configured"))
+    elif oauth_enabled and litellm_config.oauth_cache_expiry("chatgpt", environ):
+        verified = litellm_config.chatgpt_verified_openai_models(environ)
+        if verified:
+            rows.append(
+                (
+                    "openai",
+                    "SUBSCRIPTION-chatgpt",
+                    f"{len(verified)} verified model ID(s)",
+                )
+            )
+        else:
+            rows.append(
+                ("openai", "UNKNOWN", "no verified ChatGPT subscription model IDs")
+            )
+    elif not oauth_enabled:
+        rows.append(
+            (
+                "openai",
+                "WITHHELD",
+                "DOTFILES_LITELLM_OAUTH_PROVIDERS=0; set OPENAI_API_KEY or bootstrap ChatGPT models",
+            )
+        )
+    else:
+        rows.append(
+            ("openai", "UNKNOWN", "OPENAI_API_KEY unset; ChatGPT cache unavailable")
+        )
     return rows
 
 
@@ -299,7 +327,12 @@ def validate_litellm_service_env(
     if not validate_litellm_routing_text(config_text, routing_port):
         problems.append("LiteLLM config: Mozart/self-routing loop detected")
     refs = set(re.findall(r"os\.environ/([A-Z][A-Z0-9_]*)", config_text))
-    core_env = {"LITELLM_MASTER_KEY", "LITELLM_PORT", "DISABLE_ADMIN_UI"}
+    core_env = {
+        "LITELLM_MASTER_KEY",
+        "LITELLM_PORT",
+        "DISABLE_ADMIN_UI",
+        "LITELLM_LOCAL_MODEL_COST_MAP",
+    }
     # Per-app virtual keys provisioned by configure-litellm.py are allowed
     # to be absent (fresh installs before the first provisioning run) but
     # never allow unexpected extras.
@@ -390,6 +423,23 @@ def litellm_client_gate_errors(environ=None, home=None):
     for canonical in litellm_config._registry_model_refs():
         transport = f"litellm/{canonical}"
         resolved = resolve_canonical_identity(transport, True)
+        if canonical.startswith("openai/"):
+            model_id = canonical.split("/", 1)[1]
+            direct_covered = (
+                bool(environ.get("OPENAI_API_KEY", "").strip()) and canonical in aliases
+            )
+            subscription_covered = (
+                get_litellm_oauth_gate(environ)
+                and litellm_config.oauth_cache_expiry("chatgpt", environ) is not None
+                and model_id in litellm_config.chatgpt_verified_openai_models(environ)
+                and canonical in aliases
+            )
+            if direct_covered or subscription_covered:
+                continue
+            errors.append(
+                f"LiteLLM proxy mode cannot resolve canonical alias: {canonical}; set OPENAI_API_KEY or run litellm-oauth.py --provider chatgpt"
+            )
+            continue
         if resolved != canonical or canonical not in aliases:
             errors.append(
                 f"LiteLLM proxy mode cannot resolve canonical alias: {canonical}"
