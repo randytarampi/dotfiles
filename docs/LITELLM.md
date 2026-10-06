@@ -20,6 +20,12 @@ gateway-only: `DOTFILES_RUN_LITELLM_SETUP=1`, each client key file, and every
 exact gateway alias are required. Missing prerequisites are configuration
 errors, never a direct-routing fallback.
 
+Intentional direct exceptions are `meridian` (the local proxy surface, with
+its own keys and responses API; it is not a LiteLLM upstream) and `copilot`
+(direct GitHub OAuth in Junie only). Routing either through LiteLLM would add
+a hop without attribution benefit. The doctor excludes these exceptions from
+gateway-only violation checks.
+
 Client adapters map canonical identities at their boundary through
 `scripts/lib/litellm_aliases.py`; tier registries remain transport-neutral.
 The old Open WebUI, OpenCode, Pi and Junie canaries migrate by OR: any active

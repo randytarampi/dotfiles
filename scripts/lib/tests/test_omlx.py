@@ -489,6 +489,60 @@ def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_
         )
 
 
+def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_is_canonical(
+    tmp_path,
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    providers = (
+        "openai",
+        "ollama-cloud",
+        "google",
+        "openrouter",
+        "opencode",
+        "omlx",
+        "ollama",
+    )
+    refs = [f"{provider}/fixture-model" for provider in providers]
+    inventory = {ref: {"id": ref} for ref in refs}
+    config = {"provider": {"litellm": {"models": inventory}}}
+    slim = {"roles": refs, "council": {"members": refs}, "fallback": refs}
+    with patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False):
+        assert configure_opencode.apply_litellm_slim_gate(slim, config) == slim
+
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    with patch.dict(
+        os.environ,
+        {
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "HOME": str(tmp_path),
+        },
+        clear=False,
+    ):
+        key.parent.mkdir(parents=True, exist_ok=True)
+        key.write_text("test-key")
+        routed = configure_opencode.apply_litellm_slim_gate(slim, config)
+    routed_refs = routed["roles"] + routed["council"]["members"] + routed["fallback"]
+    assert routed_refs == [f"litellm/{ref}" for ref in refs] * 3
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "HOME": str(tmp_path),
+            },
+            clear=False,
+        ),
+        pytest.raises(
+            RuntimeError, match="no LiteLLM gateway alias: cerebras/unmapped"
+        ),
+    ):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": ["cerebras/unmapped"]}, config
+        )
+
+
 def test_configure_opencode_local_provider_emits_modalities():
     """Vision-capable engine models must declare image input so OpenCode's
     client-side attachment gating accepts screenshots (registry-generic)."""
