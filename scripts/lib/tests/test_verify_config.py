@@ -1,6 +1,7 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
+import json
 import pytest
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "verify-config.py"
@@ -139,6 +140,25 @@ def test_litellm_direct_mode_rejects_gateway_rewrite_residue(tmp_path):
         "LiteLLM transport references" in error
         for error in VERIFY_CONFIG.litellm_client_gate_errors(
             {"DOTFILES_USE_LITELLM_PROXY": "0"}, home=tmp_path
+        )
+    )
+
+
+def test_direct_mode_gateway_residue_uses_configured_non_default_port(
+    tmp_path, monkeypatch
+):
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        '{"provider":{"openai":{"options":{"baseURL":"http://127.0.0.1:4567/v1"}}}}'
+    )
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_PORT", "4567")
+    assert any(
+        "gateway endpoint" in error
+        for error in VERIFY_CONFIG.litellm_client_gate_errors(
+            {"DOTFILES_USE_LITELLM_PROXY": "0", "DOTFILES_RUN_LITELLM_SETUP": "1"},
+            home=tmp_path,
         )
     )
 
@@ -401,7 +421,17 @@ def test_litellm_oauth_readiness_candidate_and_unknown(
     tmp_path, monkeypatch, provider, filename, envkey
 ):
     cache = tmp_path / filename
-    cache.write_text('{"expires_at": 4102444800}')
+    cache.write_text(
+        json.dumps(
+            {"expires_at": 4102444800, "token": "copilot"}
+            if provider == "github_copilot"
+            else {
+                "expires_at": 4102444800,
+                "access_token": "access",
+                "refresh_token": "refresh",
+            }
+        )
+    )
     rows = VERIFY_CONFIG.litellm_oauth_readiness(
         {envkey: str(tmp_path), "HOME": str(tmp_path)}
     )

@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from litellm_aliases import resolve_alias
+from litellm_aliases import (
+    canonical_allowlist_key,
+    resolve_alias,
+    resolve_canonical_identity,
+)
 from constants import get_litellm_proxy_mode
 
 
@@ -79,3 +83,51 @@ def test_canonical_identity_is_mode_invariant():
     )
     assert direct["model"] == identity
     assert gateway["model"].removeprefix("litellm/") == identity
+
+
+@pytest.mark.parametrize(
+    "reference,mode,expected",
+    [
+        # F6: valid transport-wrapped identities normalize to canonical.
+        ("litellm/ollama/some-model", True, "ollama/some-model"),
+        (
+            "litellm/google/models/gemini-3.8-flash",
+            True,
+            "google/models/gemini-3.8-flash",
+        ),
+        ("litellm/openai/gpt-x", True, "openai/gpt-x"),
+        # Malformed shapes are rejected, never mis-resolved.
+        ("litellm/ollama/", True, None),
+        ("litellm//model", True, None),
+        ("litellm/litellm/openai/gpt-x", True, None),
+        # Transport refs are meaningless outside proxy mode.
+        ("litellm/openai/gpt-x", False, None),
+        # Canonical identities pass through direct mode unchanged.
+        ("openai/gpt-x", False, "openai/gpt-x"),
+    ],
+)
+def test_resolve_canonical_identity_shapes(reference, mode, expected):
+    assert resolve_canonical_identity(reference, mode) == expected
+
+
+def test_resolve_alias_rejects_empty_segments():
+    with pytest.raises(ValueError, match="empty segments"):
+        resolve_alias(
+            "openai/",
+            True,
+            client_key="{file:/k}",
+            gateway_url="http://127.0.0.1:4000/v1",
+        )
+
+
+@pytest.mark.parametrize(
+    "model_id,expected",
+    [
+        ("models/gemini-3.8-flash", "gemini-3.8-flash"),
+        ("gemini-3.8-flash", "gemini-3.8-flash"),
+        (None, None),
+        (123, 123),
+    ],
+)
+def test_canonical_allowlist_key_strips_models_segment(model_id, expected):
+    assert canonical_allowlist_key(model_id) == expected

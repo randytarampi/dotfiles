@@ -32,7 +32,10 @@ from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is inte
     _configured_litellm_port,
 )
 from constants import get_litellm_proxy_mode  # noqa: E402
-from litellm_aliases import resolve_canonical_identity  # noqa: E402
+from litellm_aliases import (
+    canonical_allowlist_key,
+    resolve_canonical_identity,
+)  # noqa: E402
 from model_references import (  # noqa: E402  # sys.path bootstrap above is intentional.
     Catalogue,
     EndpointIdentity,
@@ -118,9 +121,10 @@ def check_slim(data: dict, proxy_mode=None) -> list[str]:
         if "/" not in model:
             continue
         provider, model_id = model.split("/", 1)
+        allowlist_key = canonical_allowlist_key(model_id)
         if provider not in allowlists:
             violations.append(f"{model} uses an unavailable {provider} model allowlist")
-        elif model_id not in allowlists[provider]:
+        elif allowlist_key not in allowlists[provider]:
             violations.append(f"{model} is not in the {provider} model allowlist")
     return violations
 

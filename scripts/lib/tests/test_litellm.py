@@ -84,9 +84,10 @@ def test_oauth_cache_controls_generation_without_api_key(
 ):
     cache_dir = tmp_path / provider
     cache_dir.mkdir()
-    (cache_dir / filename).write_text(
-        json.dumps({"expires_at": 4102444800, "token": "stub"})
-    )
+    credentials = {"expires_at": 4102444800, "token": "stub"}
+    if provider == "chatgpt":
+        credentials.update(access_token="access", refresh_token="refresh")
+    (cache_dir / filename).write_text(json.dumps(credentials))
     env = {"HOME": str(tmp_path)}
     env[
         (
