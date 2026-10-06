@@ -110,7 +110,7 @@ def _connection(prefix, url, key, connection_type, collection):
     }
 
 
-def ownership_catalogue():
+def ownership_catalogue(proxy_mode=None):
     """Return stable prefix → expected endpoint/type ownership identities."""
     catalogue = {}
     for provider in LOCAL_ENGINES:
@@ -149,8 +149,15 @@ def ownership_catalogue():
             "connection_type": connection_type,
             "collection": "openai",
         }
-    if constants.get_litellm_proxy_mode():
-        if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+    enforce_proxy_prerequisites = proxy_mode is None
+    proxy_mode = (
+        constants.get_litellm_proxy_mode() if proxy_mode is None else proxy_mode
+    )
+    if proxy_mode:
+        if (
+            enforce_proxy_prerequisites
+            and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1"
+        ):
             raise RuntimeError(
                 "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
             )
@@ -539,6 +546,7 @@ def reconcile(
     current_openai, current_ollama, desired, *, namespace=MANAGED_PREFIX_NAMESPACE
 ):
     catalogue = ownership_catalogue()
+    previous_catalogue = ownership_catalogue(not constants.get_litellm_proxy_mode())
     desired_entries = (
         desired.get("openai", [])
         + desired.get("anthropic", [])
@@ -581,43 +589,38 @@ def reconcile(
         identity_owner = catalogue_by_identity.get(current_identity)
         expected_identity = owner and current_identity == _catalogue_identity(owner)
         if _managed(existing):
-            # Ollama's native entry is a managed identity in direct mode and
-            # moves to OpenAI when the gateway is enabled (and back again).
-            # Its marker plus stable prefix makes this cross-collection move
-            # safe; no user-owned connection is adopted.
-            if prefix == "ollama" and wanted is not None and not expected_identity:
-                native_identity = _ownership_identity(
-                    LOCAL_ENGINES["ollama"]["base_url"](), "ollama", "ollama"
-                )
-                from model_catalogues import _configured_litellm_port
-
-                gateway_identity = _ownership_identity(
-                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}",
-                    "openai",
-                    "openai",
-                )
-                is_native_managed = (
-                    collection == "ollama"
-                    and config.get("connection_type") == "ollama"
-                    and current_identity[0] == native_identity[0]
-                )
-                if is_native_managed or current_identity == gateway_identity:
-                    seen.add(prefix)
+            previous_owner = previous_catalogue.get(prefix)
+            previously_managed = (
+                previous_owner
+                and current_identity == _catalogue_identity(previous_owner)
+            )
+            if previously_managed and wanted is not None:
+                seen.add(prefix)
+                if collection != wanted["collection"]:
+                    plan.entries.extend(
+                        (
+                            {
+                                "action": "delete",
+                                "collection": collection,
+                                "entry": copy.deepcopy(existing),
+                            },
+                            {
+                                "action": "add",
+                                "collection": wanted["collection"],
+                                "entry": copy.deepcopy(wanted),
+                            },
+                        )
+                    )
+                else:
                     plan.entries.append(
                         {
-                            "action": "delete",
+                            "action": "update",
                             "collection": collection,
-                            "entry": copy.deepcopy(existing),
-                        }
-                    )
-                    plan.entries.append(
-                        {
-                            "action": "add",
-                            "collection": wanted["collection"],
                             "entry": copy.deepcopy(wanted),
+                            "before": copy.deepcopy(existing),
                         }
                     )
-                    continue
+                continue
             # owner == prefix and the entry's identity matches its catalogue
             # owner: authoritative match. The reverse map is unreliable when
             # multiple owners share one URL (LiteLLM canary collapses every

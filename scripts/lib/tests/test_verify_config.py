@@ -369,6 +369,32 @@ def test_litellm_service_env_accepts_provisioned_per_app_keys():
     assert problems == []
 
 
+def test_litellm_service_env_accepts_oauth_cache_overrides_and_defaults():
+    overrides = {
+        "CHATGPT_TOKEN_DIR": "/custom/chatgpt",
+        "CHATGPT_AUTH_FILE": "auth.json",
+        "GITHUB_COPILOT_TOKEN_DIR": "/custom/copilot",
+        "GITHUB_COPILOT_ACCESS_TOKEN_FILE": "access-token.json",
+        "GITHUB_COPILOT_API_KEY_FILE": "api-key.json",
+    }
+    assert (
+        VERIFY_CONFIG.validate_litellm_service_env(
+            _litellm_env(**overrides), _LITELLM_POLICY_CONFIG
+        )
+        == []
+    )
+    assert (
+        VERIFY_CONFIG.validate_litellm_service_env(
+            _litellm_env(), _LITELLM_POLICY_CONFIG
+        )
+        == []
+    )
+    rejected = VERIFY_CONFIG.validate_litellm_service_env(
+        _litellm_env(UNKNOWN_CACHE_OVERRIDE="x"), _LITELLM_POLICY_CONFIG
+    )
+    assert any("UNKNOWN_CACHE_OVERRIDE" in problem for problem in rejected)
+
+
 @pytest.mark.parametrize(
     "provider,key_env,model",
     [
@@ -433,7 +459,11 @@ def test_litellm_oauth_readiness_candidate_and_unknown(
         )
     )
     rows = VERIFY_CONFIG.litellm_oauth_readiness(
-        {envkey: str(tmp_path), "HOME": str(tmp_path)}
+        {
+            envkey: str(tmp_path),
+            "HOME": str(tmp_path),
+            "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1",
+        }
     )
     candidate = next(row for row in rows if row[0] == provider)
     assert candidate[1] == "MATCH-candidate"
@@ -441,12 +471,21 @@ def test_litellm_oauth_readiness_candidate_and_unknown(
     unknown = next(
         row
         for row in VERIFY_CONFIG.litellm_oauth_readiness(
-            {"HOME": str(tmp_path / "missing")}
+            {"HOME": str(tmp_path / "missing"), "DOTFILES_LITELLM_OAUTH_PROVIDERS": "1"}
         )
         if row[0] == provider
     )
     assert unknown[1] == "UNKNOWN"
     assert "litellm-oauth.py" in unknown[2]
+
+
+def test_litellm_oauth_readiness_reports_gate_withheld():
+    rows = VERIFY_CONFIG.litellm_oauth_readiness(
+        {"DOTFILES_LITELLM_OAUTH_PROVIDERS": "0"}
+    )
+    assert len(rows) == 2
+    assert all(row[1] == "WITHHELD" for row in rows)
+    assert all("DOTFILES_LITELLM_OAUTH_PROVIDERS=0" in row[2] for row in rows)
 
 
 def test_litellm_service_env_validation_stays_on_service_database_name():

@@ -29,6 +29,7 @@ MERIDIAN_DEFAULT_HOST = "127.0.0.1"
 MERIDIAN_DEFAULT_PORT = "3456"
 OLLAMA_HOST_ENV = "OLLAMA_HOST"
 LITELLM_PROXY_ENV = "DOTFILES_USE_LITELLM_PROXY"
+LITELLM_OAUTH_PROVIDERS_ENV = "DOTFILES_LITELLM_OAUTH_PROVIDERS"
 OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
 OMLX_HOST_ENV = "OMLX_HOST"
 OMLX_PORT_ENV = "OMLX_PORT"
@@ -175,6 +176,19 @@ def get_litellm_proxy_mode(environ=None):
     if value in ("0", "false", "no", "off", ""):
         return False
     raise ValueError(f"{LITELLM_PROXY_ENV} must be 0 or 1")
+
+
+def get_litellm_oauth_gate(environ=None):
+    """Return whether OAuth-backed gateway providers are explicitly opted in."""
+    import os
+
+    environ = os.environ if environ is None else environ
+    value = environ.get(LITELLM_OAUTH_PROVIDERS_ENV, "0").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off", ""):
+        return False
+    raise ValueError(f"{LITELLM_OAUTH_PROVIDERS_ENV} must be 0 or 1")
 
 
 def check_ollama_daemon_health():
