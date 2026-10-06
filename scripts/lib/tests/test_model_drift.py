@@ -19,6 +19,20 @@ def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
     assert load_allowlists({"openai": path}) == {"openai": {"real-id"}}
 
 
+def test_slim_litellm_prefix_normalizes_before_allowlist_check(monkeypatch):
+    monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": {"model"}})
+    monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
+    data = {"model": "litellm/openai/model"}
+    assert DRIFT.check_slim(data, proxy_mode=True) == []
+    assert "direct mode" in DRIFT.check_slim(data, proxy_mode=False)[0]
+
+
+def test_slim_litellm_unknown_normalized_identity_is_error(monkeypatch):
+    monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": set()})
+    monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
+    assert DRIFT.check_slim({"model": "litellm/openai/missing"}, proxy_mode=True)
+
+
 def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
     assert DRIFT.check_local_engine_models() == []

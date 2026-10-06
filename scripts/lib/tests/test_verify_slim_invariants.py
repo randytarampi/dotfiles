@@ -89,3 +89,17 @@ def test_preset_violations_still_flags_council_member_mismatch():
     tiers["test"]["council"]["presets"]["test"]["alpha"]["model"] = "other"
     violations = INVARIANTS._preset_violations(presets, council_presets, tiers)
     assert any("alpha.model" in violation for violation in violations)
+
+
+def test_litellm_model_reference_requires_proxy_mode(monkeypatch):
+    monkeypatch.setattr(INVARIANTS, "_model_allowlists", lambda: {"openai": {"alpha"}})
+    data = {"presets": {"x": {"orchestrator": {"model": "litellm/openai/alpha"}}}}
+    assert INVARIANTS._model_allowlist_violations(data, proxy_mode=True) == []
+    errors = INVARIANTS._model_allowlist_violations(data, proxy_mode=False)
+    assert errors and "direct mode" in errors[0]
+
+
+def test_litellm_model_reference_rejects_unknown_canonical_model(monkeypatch):
+    monkeypatch.setattr(INVARIANTS, "_model_allowlists", lambda: {"openai": set()})
+    data = {"presets": {"x": {"orchestrator": {"model": "litellm/openai/unknown"}}}}
+    assert INVARIANTS._model_allowlist_violations(data, proxy_mode=True)
