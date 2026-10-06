@@ -99,7 +99,7 @@ def get_omlx_base_url():
         return override.rstrip("/")
 
     host = os.environ.get(OMLX_HOST_ENV, "127.0.0.1")
-    port = os.environ.get(OMLX_PORT_ENV, "8000")
+    port = os.environ.get(OMLX_PORT_ENV, "11427")
     return f"http://{host}:{port}"
 
 
