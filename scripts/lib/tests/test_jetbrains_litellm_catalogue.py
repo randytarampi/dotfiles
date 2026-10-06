@@ -38,7 +38,28 @@ def test_catalogue_uses_private_key_and_exact_known_ids(monkeypatch):
     ) == {"google/models/gemini-3.8-flash"}
     assert captured["request"].full_url == "http://127.0.0.1:4000/v1/models"
     assert captured["request"].get_header("Authorization") == "Bearer dummy-private-key"
-    assert captured["timeout"] == 3
+    assert captured["timeout"] == PROFILES.MODEL_CATALOGUE_TIMEOUT == 45
+
+
+def test_delayed_catalogue_succeeds_with_shared_consumer_deadline(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"data":[{"id":"openai/gpt-delayed"}]}'
+
+    def delayed_response(_request, timeout):
+        assert timeout >= 30  # Simulates the observed 30-second service response.
+        return Response()
+
+    monkeypatch.setattr(PROFILES, "open_same_origin", delayed_response)
+    assert PROFILES.litellm_catalogue_models(
+        "http://127.0.0.1:4000/v1", "stubbed-key"
+    ) == {"openai/gpt-delayed"}
 
 
 @pytest.mark.parametrize(

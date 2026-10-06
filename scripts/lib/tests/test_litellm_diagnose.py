@@ -46,8 +46,8 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
     monkeypatch.setattr(MODULE, "_loaded", lambda: True)
     calls = []
 
-    def request(url, key=""):
-        calls.append((url, key))
+    def request(url, key="", timeout=3):
+        calls.append((url, key, timeout))
         return (200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")
 
     monkeypatch.setattr(MODULE, "_request", request)
@@ -55,20 +55,45 @@ def test_healthy_and_redacted(monkeypatch, tmp_path):
     assert code == 0
     assert "HEALTHY" in summary
     assert "dtf-not-a-real-key" not in summary
-    assert [url.rsplit("/", 1)[-1] for url, _ in calls] == [
+    assert [url.rsplit("/", 1)[-1] for url, _, _ in calls] == [
         "liveliness",
         "readiness",
         "models",
     ]
-    assert calls[0][1] == ""
-    assert all(key == "dtf-not-a-real-key" for _, key in calls[1:])
+    assert calls[0][1:] == ("", 3)
+    assert all(key == "dtf-not-a-real-key" for _, key, _ in calls[1:])
+    assert calls[1][2] == 3
+    assert calls[2][2] == MODULE.MODEL_CATALOGUE_TIMEOUT == 45
+
+
+def test_delayed_catalogue_is_available_but_health_probe_stays_fast(
+    monkeypatch, tmp_path
+):
+    setup_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(MODULE, "_loaded", lambda: True)
+    observed = []
+
+    def delayed_response(url, key="", timeout=3):
+        observed.append((url, timeout))
+        if url.endswith("/v1/models"):
+            assert timeout >= 30  # simulated delayed response, without sleeping
+            return 200, {"data": [{"id": "served-model"}]}, ""
+        return 200, {}, ""
+
+    monkeypatch.setattr(MODULE, "_request", delayed_response)
+    code, summary = MODULE.diagnose()
+    assert code == 0 and "HEALTHY" in summary
+    assert observed[0][1] == 3
+    assert observed[1][1] == 3
+    assert observed[2][1] == 45
 
 
 def test_non_json_200_is_unhealthy(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
 
-    def request(url, key=""):
+    def request(url, key="", timeout=3):
         if url.endswith("/health/readiness"):
             return 200, None, "invalid-json"
         return (200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")
@@ -118,7 +143,7 @@ def test_redirect_response_is_not_followed_and_is_unhealthy(monkeypatch, tmp_pat
     )
 
     monkeypatch.setattr(
-        MODULE, "_request", lambda url, key="": (302, None, "http-error")
+        MODULE, "_request", lambda url, key="", timeout=3: (302, None, "http-error")
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "PROXY-UNAVAILABLE" in summary
@@ -132,7 +157,7 @@ def test_master_key_flag_precedes_environment_and_service_env(monkeypatch, tmp_p
     monkeypatch.setattr(
         MODULE,
         "_request",
-        lambda url, key="": calls.append((url, key))
+        lambda url, key="", timeout=3: calls.append((url, key))
         or ((200, {"data": []}, "") if url.endswith("/v1/models") else (200, {}, "")),
     )
 
@@ -149,7 +174,11 @@ def test_auth_failure_is_classified(monkeypatch, tmp_path):
         monkeypatch.setattr(
             MODULE,
             "_request",
-            lambda url, key="", status=status: ((status if key else 200), {}, ""),
+            lambda url, key="", timeout=3, status=status: (
+                (status if key else 200),
+                {},
+                "",
+            ),
         )
         code, summary = MODULE.diagnose()
         assert code == 1
@@ -160,7 +189,7 @@ def test_models_400_is_classified_with_healthy_readiness(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
 
-    def request(url, key=""):
+    def request(url, key="", timeout=3):
         if url.endswith("/v1/models"):
             return 400, None, "http-error"
         return 200, {}, ""
@@ -178,7 +207,7 @@ def test_no_key_does_not_send_models_request(monkeypatch, tmp_path):
     monkeypatch.setattr(
         MODULE,
         "_request",
-        lambda url, key="": calls.append((url, key)) or (200, {}, ""),
+        lambda url, key="", timeout=3: calls.append((url, key)) or (200, {}, ""),
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "MISSING-OR-INVALID-MASTER-KEY" in summary
@@ -189,7 +218,7 @@ def test_db_less_auth_backend_rejection(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
 
-    def request(url, key=""):
+    def request(url, key="", timeout=3):
         if url.endswith("/v1/models"):
             # Production shape: _request() discards HTTPError bodies, so a DB-less
             # LiteLLM's no_db_connection rejection arrives as (400, None, "http-error"),
@@ -207,7 +236,7 @@ def test_error_dict_body_is_provider_failure(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
 
-    def request(url, key=""):
+    def request(url, key="", timeout=3):
         if url.endswith("/v1/models"):
             # Parsed dict-error bodies (e.g. provider upstream failure relayed in
             # a 2xx-adjacent payload) still classify as PROVIDER-FAILURE.
@@ -227,7 +256,7 @@ def test_remote_base_url_is_refused_without_key_attachment(monkeypatch, tmp_path
     monkeypatch.setattr(
         MODULE,
         "_request",
-        lambda url, key="": calls.append((url, key)) or (200, {}, ""),
+        lambda url, key="", timeout=3: calls.append((url, key)) or (200, {}, ""),
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "PROXY-UNAVAILABLE" in summary
@@ -237,11 +266,15 @@ def test_remote_base_url_is_refused_without_key_attachment(monkeypatch, tmp_path
 def test_proxy_unavailable_and_provider_failure(monkeypatch, tmp_path):
     setup_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setattr(MODULE, "_request", lambda url, key="": (0, None, "URLError"))
+    monkeypatch.setattr(
+        MODULE, "_request", lambda url, key="", timeout=3: (0, None, "URLError")
+    )
     code, summary = MODULE.diagnose()
     assert code == 1 and "PROXY-UNAVAILABLE" in summary
     monkeypatch.setattr(
-        MODULE, "_request", lambda url, key="": (500, {"error": "provider"}, "")
+        MODULE,
+        "_request",
+        lambda url, key="", timeout=3: (500, {"error": "provider"}, ""),
     )
     code, summary = MODULE.diagnose()
     assert code == 1 and "PROXY-UNAVAILABLE" in summary
