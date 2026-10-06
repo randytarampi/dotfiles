@@ -87,18 +87,28 @@ def test_exact_native_and_cloud_endpoints(monkeypatch):
     ]["url"] == "https://ollama.com/v1"
 
 
-def test_litellm_client_key_prefers_service_key_then_master_fallback(
+def test_litellm_proxy_requires_openwebui_key_file_and_never_uses_master(
     monkeypatch, tmp_path
 ):
-    service_env = tmp_path / "service.env"
-    service_env.write_text(
-        "LITELLM_MASTER_KEY='master-key'\nLITELLM_OPENWEBUI_KEY='app-key'\n",
-        encoding="utf-8",
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "master-secret")
+    monkeypatch.setattr(
+        openwebui.os.path,
+        "expanduser",
+        lambda _: str(tmp_path / "clients/openwebui.key"),
     )
-    monkeypatch.setattr(openwebui.os.path, "expanduser", lambda _: str(service_env))
-    assert openwebui._litellm_client_key("LITELLM_OPENWEBUI_KEY") == "app-key"
-    service_env.write_text("LITELLM_MASTER_KEY='master-key'\n", encoding="utf-8")
-    assert openwebui._litellm_client_key("LITELLM_OPENWEBUI_KEY") == "master-key"
+    with pytest.raises(RuntimeError, match="key file is unavailable"):
+        openwebui.compute_desired_state()
+    assert "LITELLM_MASTER_KEY" not in openwebui._litellm_client_key.__code__.co_names
+
+
+def test_litellm_client_key_reads_only_client_file(monkeypatch, tmp_path):
+    key_file = tmp_path / "openwebui.key"
+    key_file.write_text("client-secret", encoding="utf-8")
+    monkeypatch.setattr(openwebui.os.path, "expanduser", lambda _: str(key_file))
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "master-secret")
+    assert openwebui._litellm_client_key("LITELLM_OPENWEBUI_KEY") == "client-secret"
 
 
 def test_dual_protocol_and_stable_ownership(monkeypatch):

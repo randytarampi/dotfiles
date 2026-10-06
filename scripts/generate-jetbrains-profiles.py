@@ -27,6 +27,7 @@ from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from constants import (
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
+    get_litellm_proxy_mode,
     get_ollama_local_base_url,
 )
 from discover_models import list_local_ollama_models
@@ -586,10 +587,7 @@ def main():
     if args.local_fallback_preset:
         logger.info(f"Using local fallback preset: {args.local_fallback_preset}")
 
-    litellm_gate = (
-        os.environ.get(JUNIE_LITELLM_ENV, "0") == "1"
-        and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-    )
+    litellm_gate = get_litellm_proxy_mode()
     junie_key = read_junie_key() if litellm_gate else ""
     if litellm_gate and not junie_key:
         logger.warning(
