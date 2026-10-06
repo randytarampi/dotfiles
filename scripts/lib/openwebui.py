@@ -28,33 +28,15 @@ MANAGED_MARKER_VALUE = "dotfiles"
 DISABLED_ENGINES_ENV = "DOTFILES_OPENWEBUI_DISABLED_ENGINES"
 
 
-def _litellm_master_key():
-    value = os.environ.get("LITELLM_MASTER_KEY", "").strip()
-    if value:
-        return value
-    path = os.path.expanduser("~/.local/share/litellm/service.env")
-    try:
-        for line in open(path, encoding="utf-8"):
-            if line.startswith("LITELLM_MASTER_KEY="):
-                return line.split("=", 1)[1].strip().strip("'\"")
-    except OSError:
-        pass
-    return ""
-
-
 def _litellm_client_key(env_name):
-    value = os.environ.get(env_name, "").strip()
-    if value:
-        return value
-    path = os.path.expanduser("~/.local/share/litellm/service.env")
+    path = os.path.expanduser("~/.local/share/litellm/clients/openwebui.key")
     try:
-        for line in open(path, encoding="utf-8"):
-            if line.startswith(f"{env_name}="):
-                value = line.split("=", 1)[1].strip().strip("'\"")
-                return value or _litellm_master_key()
+        value = open(path, encoding="utf-8").read().strip()
     except OSError:
-        pass
-    return _litellm_master_key()
+        value = ""
+    if not value:
+        raise RuntimeError(f"Open WebUI LiteLLM key file is unavailable: {path}")
+    return value
 
 
 def mask_secret(value):
@@ -167,19 +149,17 @@ def ownership_catalogue():
             "connection_type": connection_type,
             "collection": "openai",
         }
-    if (
-        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-        and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
-    ):
-        endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
-        # Ollama-native collection stays on direct routing: LiteLLM serves
-        # OpenAI-compatible traffic only, so its catalogue identity is not
-        # rewritten.
+    if constants.get_litellm_proxy_mode():
+        if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+            raise RuntimeError(
+                "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+            )
+        endpoint = "http://127.0.0.1:4000"
         for identity in catalogue.values():
-            if identity["collection"] == "ollama":
-                continue
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
+            identity["connection_type"] = "openai"
+            identity["collection"] = "openai"
     return catalogue
 
 
@@ -253,18 +233,19 @@ def compute_desired_state():
                     "openai",
                 )
             )
-    if (
-        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-        and os.environ.get("DOTFILES_OPENWEBUI_USE_LITELLM", "0") == "1"
-    ):
-        endpoint = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    if constants.get_litellm_proxy_mode():
+        if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+            raise RuntimeError(
+                "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+            )
+        endpoint = "http://127.0.0.1:4000"
         key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
-        # LiteLLM serves OpenAI-compatible traffic only; the Ollama-native
-        # collection cannot speak to it, so leave it on direct 11434 routing.
-        for collection in ("openai", "anthropic"):
+        for collection in ("openai", "anthropic", "ollama"):
             for connection in desired.get(collection, []):
                 connection["url"] = endpoint
                 connection["key"] = key
+                connection["config"]["connection_type"] = "openai"
+                connection["collection"] = "openai"
     return desired
 
 

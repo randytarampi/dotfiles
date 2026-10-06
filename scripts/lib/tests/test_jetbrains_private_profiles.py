@@ -70,7 +70,7 @@ def harness(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("LITELLM_JUNIE_KEY", "stale-env-dummy")
     monkeypatch.setattr(PROFILES, "load_env", lambda: True)
     monkeypatch.setattr(
@@ -170,7 +170,7 @@ def test_litellm_faster_model_stays_on_proxy_and_direct_group_stays_direct(
     assert proxy["apiKey"] == "dummy-junie-key-one"
     assert (target / "litellm-google-flash.json").stat().st_mode & 0o777 == 0o600
 
-    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     PROFILES.main()
     direct = json.loads((target / "google-flash.json").read_text())
     assert direct["fasterModel"]["id"] == "gemini-3.5-flash-lite"
@@ -330,7 +330,7 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
         == "openai/custom/alias"
     )
 
-    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     PROFILES.main()
     direct_cloud = json.loads((target / "pro.json").read_text())
     assert direct_cloud["id"] == "llama:cloud"
@@ -477,7 +477,7 @@ def test_gate_off_cleans_stale_litellm_but_preserves_unrelated_profile(
     target.chmod(0o700)
     (target / "litellm-openai-main.json").write_text("stale", encoding="utf-8")
     (target / "unrelated.json").write_text('{"user": true}', encoding="utf-8")
-    monkeypatch.setenv("DOTFILES_JUNIE_USE_LITELLM", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
 
     PROFILES.main()
 
