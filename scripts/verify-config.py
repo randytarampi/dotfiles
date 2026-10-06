@@ -219,6 +219,33 @@ def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
 LITELLM_NOTES_PATH = HOME / ".local/share/litellm/last_generation_notes.json"
 
 
+def litellm_oauth_readiness(environ=None):
+    """Return weak OAuth cache candidates; cache presence is not auth proof."""
+    environ = os.environ if environ is None else environ
+    rows = []
+    for provider in ("github_copilot", "chatgpt"):
+        expiry = litellm_config.oauth_cache_expiry(provider, environ)
+        if expiry is None:
+            rows.append(
+                (
+                    provider,
+                    "UNKNOWN",
+                    f"cache absent/expired — run litellm-oauth.py --provider {provider}",
+                )
+            )
+        else:
+            date = (
+                __import__("datetime")
+                .datetime.fromtimestamp(expiry)
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M:%S %Z")
+            )
+            rows.append(
+                (provider, "MATCH-candidate", f"token cache present, expires {date}")
+            )
+    return rows
+
+
 def litellm_coverage_warnings(path=None):
     """Read persisted generation notes; never discover models during doctor."""
     try:
@@ -1431,6 +1458,8 @@ def main():
         print("  \u2298 cptr (main/sub-gate disabled, LaunchAgent absent)")
 
     litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
+    for provider, status, detail in litellm_oauth_readiness():
+        print(f"  {status}: LiteLLM {provider} OAuth — {detail}")
     litellm_root = HOME / ".local/share/litellm"
     for error in litellm_client_gate_errors(home=HOME):
         print(f"  \u2717 {error}")

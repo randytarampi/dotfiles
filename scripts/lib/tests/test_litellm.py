@@ -72,6 +72,42 @@ def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
     }
 
 
+@pytest.mark.parametrize(
+    "provider,filename,model",
+    [
+        ("github_copilot", "api-key.json", "github_copilot/gpt-4o"),
+        ("chatgpt", "auth.json", "chatgpt/gpt-5.2"),
+    ],
+)
+def test_oauth_cache_controls_generation_without_api_key(
+    tmp_path, monkeypatch, provider, filename, model
+):
+    cache_dir = tmp_path / provider
+    cache_dir.mkdir()
+    (cache_dir / filename).write_text(
+        json.dumps({"expires_at": 4102444800, "token": "stub"})
+    )
+    env = {"HOME": str(tmp_path)}
+    env[
+        (
+            "GITHUB_COPILOT_TOKEN_DIR"
+            if provider == "github_copilot"
+            else "CHATGPT_TOKEN_DIR"
+        )
+    ] = str(cache_dir)
+    aliases = {
+        item["model_name"]: item for item in litellm_config.compute_model_list(env)
+    }
+    assert model in aliases
+    assert "api_key" not in aliases[model]["litellm_params"]
+    absent = litellm_config.compute_model_list({"HOME": str(tmp_path / "absent")})
+    assert not any(item["model_name"].startswith(provider + "/") for item in absent)
+    assert any(
+        note.startswith(f"{provider}: OAuth token cache absent/expired")
+        for note in litellm_config.last_generation_notes
+    )
+
+
 @pytest.mark.parametrize("catalogue", [["m1", "m2"], []])
 def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
