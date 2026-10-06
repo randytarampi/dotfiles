@@ -974,6 +974,15 @@
       "accepted_flags": ["--help", "--dry-run"],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/litellm-oauth.py",
+      "capabilities": ["public", "inspect"],
+      "enforcement": "strict",
+      "notes": "Interactive mutator of ~/.config/litellm OAuth token caches; no repository writes, dry-run, or backup semantics.",
+      "accepted_flags": ["--help", "--provider"],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }

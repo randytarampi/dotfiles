@@ -390,6 +390,35 @@ def test_litellm_coverage_warnings_read_persisted_notes_and_skip_malformed(
     assert VERIFY_CONFIG.litellm_coverage_warnings() == []
 
 
+@pytest.mark.parametrize(
+    "provider,filename,envkey",
+    [
+        ("github_copilot", "api-key.json", "GITHUB_COPILOT_TOKEN_DIR"),
+        ("chatgpt", "auth.json", "CHATGPT_TOKEN_DIR"),
+    ],
+)
+def test_litellm_oauth_readiness_candidate_and_unknown(
+    tmp_path, monkeypatch, provider, filename, envkey
+):
+    cache = tmp_path / filename
+    cache.write_text('{"expires_at": 4102444800}')
+    rows = VERIFY_CONFIG.litellm_oauth_readiness(
+        {envkey: str(tmp_path), "HOME": str(tmp_path)}
+    )
+    candidate = next(row for row in rows if row[0] == provider)
+    assert candidate[1] == "MATCH-candidate"
+    assert "expires" in candidate[2]
+    unknown = next(
+        row
+        for row in VERIFY_CONFIG.litellm_oauth_readiness(
+            {"HOME": str(tmp_path / "missing")}
+        )
+        if row[0] == provider
+    )
+    assert unknown[1] == "UNKNOWN"
+    assert "litellm-oauth.py" in unknown[2]
+
+
 def test_litellm_service_env_validation_stays_on_service_database_name():
     env = _litellm_env(LITELLM_DATABASE_URL="postgresql://localhost/litellm")
     env.pop("DATABASE_URL")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import tempfile
 import urllib.error
 import urllib.parse
@@ -82,6 +83,40 @@ def _entry(alias, model, *, api_base=None, key_env=None, alias_kind=None):
         "_alias_kind": alias_kind or ("bare" if "/" not in alias else "qualified"),
         "_upstream_ref": (api_base or "", model),
     }
+
+
+def oauth_cache_path(provider, environ=None):
+    """Resolve the installed LiteLLM OAuth cache file, including its overrides."""
+    environ = os.environ if environ is None else environ
+    home = Path(environ.get("HOME", str(Path.home()))).expanduser()
+    if provider == "github_copilot":
+        directory = Path(
+            environ.get(
+                "GITHUB_COPILOT_TOKEN_DIR", str(home / ".config/litellm/github_copilot")
+            )
+        ).expanduser()
+        return directory / environ.get("GITHUB_COPILOT_API_KEY_FILE", "api-key.json")
+    if provider == "chatgpt":
+        directory = Path(
+            environ.get("CHATGPT_TOKEN_DIR", str(home / ".config/litellm/chatgpt"))
+        ).expanduser()
+        return directory / environ.get("CHATGPT_AUTH_FILE", "auth.json")
+    raise ValueError(f"unsupported OAuth provider: {provider}")
+
+
+def oauth_cache_expiry(provider, environ=None):
+    """Return expiry timestamp for a parseable, unexpired OAuth cache."""
+    try:
+        payload = json.loads(
+            oauth_cache_path(provider, environ).read_text(encoding="utf-8")
+        )
+        expires = payload.get("expires_at") if isinstance(payload, dict) else None
+        expires = float(expires)
+        if expires <= time.time() + (60 if provider == "chatgpt" else 0):
+            return None
+        return expires
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
 
 
 def _live_catalogue(provider, key, base_url, timeout=10):
@@ -474,6 +509,20 @@ def compute_model_list(environ=None):
                     key_env=key_env,
                 )
             )
+    oauth_models = {
+        "github_copilot": ("gpt-4o",),
+        "chatgpt": ("gpt-5.2",),
+    }
+    for provider, model_ids in oauth_models.items():
+        if oauth_cache_expiry(provider, environ) is None:
+            last_generation_notes.append(
+                f"{provider}: OAuth token cache absent/expired — run litellm-oauth.py --provider {provider}"
+            )
+            continue
+        entries.extend(
+            _entry(f"{provider}/{model_id}", f"{provider}/{model_id}")
+            for model_id in model_ids
+        )
     try:
         routing_port = int(environ.get("LITELLM_PORT", "4000"))
     except (TypeError, ValueError):
