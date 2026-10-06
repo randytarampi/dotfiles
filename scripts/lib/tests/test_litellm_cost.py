@@ -273,3 +273,14 @@ def test_text_mode_success_groups_and_total(monkeypatch, caplog):
     assert error.value.code == 0
     assert "unknown: spend 1.000000" in caplog.text
     assert "Total rows: 1" in caplog.text
+
+
+def test_rows_accepts_key_list_envelope():
+    # Live /key/list returns {"keys": [...]} (verified against the proxy);
+    # the alias fetch must read that envelope, not just data/results.
+    assert litellm_cost._rows(
+        {"keys": [{"key_alias": "junie", "token": "hash-j"}]}
+    ) == [{"key_alias": "junie", "token": "hash-j"}]
+    # Spend logs keep their documented envelope.
+    assert litellm_cost._rows({"data": [1, 2]}) == [1, 2]
+    assert litellm_cost._rows("logs") == []
