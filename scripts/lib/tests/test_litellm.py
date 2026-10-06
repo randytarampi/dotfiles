@@ -23,6 +23,11 @@ PI_SPEC = spec_from_file_location(
 )
 PI = module_from_spec(PI_SPEC)
 PI_SPEC.loader.exec_module(PI)
+MIGRATE_SPEC = spec_from_file_location(
+    "migrate_env_gates", Path(__file__).resolve().parents[2] / "migrate-env-gates.py"
+)
+MIGRATE = module_from_spec(MIGRATE_SPEC)
+MIGRATE_SPEC.loader.exec_module(MIGRATE)
 
 
 @pytest.fixture(autouse=True)
@@ -546,6 +551,27 @@ def test_bare_alias_ambiguity_is_removed_in_either_provider_order(monkeypatch):
     assert generated[0] == generated[1]
 
 
+def test_legacy_litellm_canaries_or_migrate_idempotently_and_explicit_wins():
+    old_names = MIGRATE.LITELLM_PROXY_OR_MIGRATION[0]
+    lines = [f"{name}='0'\n" for name in old_names]
+    lines[1] = f"{old_names[1]}='true'\n"
+    migrated, changes = MIGRATE.migrate_env(lines)
+    assert "DOTFILES_USE_LITELLM_PROXY='1'" in "".join(migrated)
+    assert all(
+        any(line.startswith(f"# {name}=") for line in migrated) for name in old_names
+    )
+    migrated_again, second_changes = MIGRATE.migrate_env(migrated)
+    assert migrated_again == migrated
+    assert second_changes == []
+
+    explicit, _ = MIGRATE.migrate_env([*lines, "DOTFILES_USE_LITELLM_PROXY='0'\n"])
+    assert "DOTFILES_USE_LITELLM_PROXY='0'\n" in explicit
+    assert "DOTFILES_USE_LITELLM_PROXY='1'" not in "".join(explicit)
+
+    comments, _ = MIGRATE.migrate_env([f"# {name}='1'\n" for name in old_names])
+    assert not any(line.startswith("DOTFILES_USE_LITELLM_PROXY=") for line in comments)
+
+
 def test_cohere_service_key_syncs_from_config_reference(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
@@ -843,7 +869,7 @@ def test_pi_provider_override_requires_private_file_and_uses_command_key(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("HOME", str(tmp_path))
     providers = {
         name: {"baseUrl": f"https://{name}.example/v1", "apiKey": "direct"}
@@ -868,7 +894,7 @@ def test_pi_provider_override_requires_private_file_and_uses_command_key(
 
 def test_pi_provider_override_rejects_symlinked_key_file(tmp_path, monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_PI_USE_LITELLM", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("HOME", str(tmp_path))
     directory = tmp_path / ".local/share/litellm/clients"
     directory.mkdir(parents=True)

@@ -24,6 +24,8 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).with_name("lib")))
 from litellm_routing import routing_config_text_is_safe
+from constants import get_litellm_proxy_mode
+from litellm_aliases import resolve_canonical_identity
 import litellm_config
 from litellm_config import APP_KEYS
 
@@ -295,20 +297,90 @@ def validate_litellm_service_env(
     return problems
 
 
-def litellm_client_gate_errors(environ=None):
-    """Return client gates that are enabled without the main gate."""
-    environ = environ or os.environ
-    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1":
-        return []
-    return [
-        gate
-        for gate in (
-            "DOTFILES_OPENWEBUI_USE_LITELLM",
-            "DOTFILES_OPENCODE_USE_LITELLM",
-            "DOTFILES_PI_USE_LITELLM",
-        )
-        if environ.get(gate, "0") == "1"
-    ]
+def litellm_client_gate_errors(environ=None, home=None):
+    """Validate gateway-only mode prerequisites and canonical alias coverage."""
+    environ = os.environ if environ is None else environ
+    try:
+        proxy_mode = get_litellm_proxy_mode(environ)
+    except ValueError as error:
+        return [str(error)]
+    root = Path(home or environ.get("HOME", HOME)).expanduser()
+    if not proxy_mode:
+        return _direct_mode_routing_errors(root)
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return ["DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"]
+    errors = []
+    for client in APP_KEYS:
+        key_path = root / ".local/share/litellm/clients" / f"{client}.key"
+        if key_path.is_symlink() or not key_path.is_file():
+            errors.append(f"LiteLLM proxy mode requires client key file: {key_path}")
+    config_path = root / ".local/share/litellm/config.yaml"
+    if not config_path.is_file():
+        errors.append(f"LiteLLM proxy mode requires gateway config: {config_path}")
+        return errors
+    aliases = set()
+    for line in config_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            stripped = stripped[2:].lstrip()
+        if not stripped.startswith("model_name:"):
+            continue
+        value = stripped.split(":", 1)[1].strip()
+        try:
+            alias = json.loads(value) if value.startswith('"') else value.strip("'")
+        except json.JSONDecodeError:
+            continue
+        if isinstance(alias, str):
+            aliases.add(alias)
+    for canonical in litellm_config._registry_model_refs():
+        transport = f"litellm/{canonical}"
+        resolved = resolve_canonical_identity(transport, True)
+        if resolved != canonical or canonical not in aliases:
+            errors.append(
+                f"LiteLLM proxy mode cannot resolve canonical alias: {canonical}"
+            )
+    return errors
+
+
+def _direct_mode_routing_errors(home):
+    """Reject generated OpenCode/Pi configs that retain gateway rewrites."""
+    errors = []
+    candidates = (
+        home / ".config/opencode/opencode.json",
+        home / ".pi/agent/models.json",
+        home / "pi-agent/models.json",
+    )
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        providers = data.get("provider", data.get("providers", {}))
+        if isinstance(providers, dict) and "litellm" in providers:
+            errors.append(f"Direct mode has a LiteLLM provider in {path}")
+        values = []
+
+        def collect(value):
+            if isinstance(value, dict):
+                for child in value.values():
+                    collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+            elif isinstance(value, str):
+                values.append(value)
+
+        collect(data)
+        if any(value.startswith("litellm/") for value in values):
+            errors.append(f"Direct mode has LiteLLM transport references in {path}")
+        if any(
+            value.startswith(("http://127.0.0.1:4000", "http://localhost:4000"))
+            for value in values
+        ):
+            errors.append(f"Direct mode has a gateway endpoint in {path}")
+    return errors
 
 
 def litellm_ui_contradiction_errors(environ=None):
@@ -1360,17 +1432,9 @@ def main():
 
     litellm_gate = os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
     litellm_root = HOME / ".local/share/litellm"
-    for client_gate, label in (
-        ("DOTFILES_OPENWEBUI_USE_LITELLM", "Open WebUI"),
-        ("DOTFILES_OPENCODE_USE_LITELLM", "OpenCode"),
-        ("DOTFILES_PI_USE_LITELLM", "Pi"),
-    ):
-        if client_gate in litellm_client_gate_errors() and not litellm_gate:
-            print(
-                f"  \u2717 {label} LiteLLM client gate requires "
-                "DOTFILES_RUN_LITELLM_SETUP=1; direct routing remains active"
-            )
-            exit_code = 1
+    for error in litellm_client_gate_errors(home=HOME):
+        print(f"  \u2717 {error}")
+        exit_code = 1
     for error in litellm_ui_contradiction_errors():
         print(f"  \u2717 {error}")
         exit_code = 1

@@ -86,18 +86,60 @@ def test_caddyfile_validation_skips_without_binary(tmp_path, monkeypatch):
     assert VERIFY_CONFIG.validate_caddyfile(caddyfile) == (None, "")
 
 
-def test_litellm_client_gate_requires_main_gate():
-    assert VERIFY_CONFIG.litellm_client_gate_errors(
-        {
-            "DOTFILES_RUN_LITELLM_SETUP": "0",
-            "DOTFILES_PI_USE_LITELLM": "1",
-        }
-    ) == ["DOTFILES_PI_USE_LITELLM"]
+def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monkeypatch):
     assert not VERIFY_CONFIG.litellm_client_gate_errors(
-        {
-            "DOTFILES_RUN_LITELLM_SETUP": "1",
-            "DOTFILES_PI_USE_LITELLM": "1",
-        }
+        {"DOTFILES_USE_LITELLM_PROXY": "0"}
+    )
+    errors = VERIFY_CONFIG.litellm_client_gate_errors(
+        {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "0"},
+        home=tmp_path,
+    )
+    assert errors == [
+        "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+    ]
+
+    key_dir = tmp_path / ".local/share/litellm/clients"
+    key_dir.mkdir(parents=True)
+    for client in VERIFY_CONFIG.APP_KEYS:
+        (key_dir / f"{client}.key").write_text("key")
+    config_path = tmp_path / ".local/share/litellm/config.yaml"
+    config_path.write_text('  - model_name: "openai/gpt-x"\n')
+    monkeypatch.setattr(
+        VERIFY_CONFIG.litellm_config, "_registry_model_refs", lambda: {"openai/gpt-x"}
+    )
+    assert (
+        VERIFY_CONFIG.litellm_client_gate_errors(
+            {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "1"},
+            home=tmp_path,
+        )
+        == []
+    )
+    config_path.write_text('  - model_name: "openrouter/missing"\n')
+    assert any(
+        "cannot resolve canonical alias" in error
+        for error in VERIFY_CONFIG.litellm_client_gate_errors(
+            {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "1"},
+            home=tmp_path,
+        )
+    )
+
+
+def test_litellm_direct_mode_rejects_gateway_rewrite_residue(tmp_path):
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"model":"openai/gpt-x"}')
+    assert (
+        VERIFY_CONFIG.litellm_client_gate_errors(
+            {"DOTFILES_USE_LITELLM_PROXY": "0"}, home=tmp_path
+        )
+        == []
+    )
+    config.write_text('{"model":"litellm/openai/gpt-x"}')
+    assert any(
+        "LiteLLM transport references" in error
+        for error in VERIFY_CONFIG.litellm_client_gate_errors(
+            {"DOTFILES_USE_LITELLM_PROXY": "0"}, home=tmp_path
+        )
     )
 
 

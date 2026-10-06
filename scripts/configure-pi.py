@@ -17,7 +17,7 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 )
 from constants import (  # noqa: E402 -- local import follows bootstrap.
     BASE_URLS,
-    check_ollama_daemon,
+    get_litellm_proxy_mode,
     get_meridian_base_url,
     get_ollama_local_base_url,
 )
@@ -44,14 +44,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     local_endpoint_for,
     resolve_engine,
 )
-from ollama_cloud_wire_ids import (  # noqa: E402 -- local import follows bootstrap.
-    direct_cloud_route_allowed,
-    fail_closed_cloud_refs,
-    installed_cloud_stubs,
-    litellm_canary_enabled,
-    rewrite_cloud_refs,
-    unresolved_cloud_model_ids,
-)
+from litellm_aliases import resolve_alias  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 from model_catalogues import (  # noqa: E402 -- local import follows bootstrap.
     get_catalogue,
@@ -227,11 +220,12 @@ def build_local_provider(provider, model_ids):
 
 
 def apply_litellm_provider_overrides(providers, port="4000"):
-    if not (
-        os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-        and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
-    ):
+    if not get_litellm_proxy_mode():
         return
+    if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        raise RuntimeError(
+            "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+        )
     key_file = Path("~/.local/share/litellm/clients/pi.key").expanduser()
     if (
         any(
@@ -302,9 +296,19 @@ def litellm_cloud_aliases(port="4000"):
             "Pi LiteLLM cloud catalogue unavailable; Google/OpenRouter availability is UNKNOWN"
         )
         return {"google": {}, "openrouter": {}}
+    gateway_url = f"http://127.0.0.1:{port}/v1"
     return {
         provider: {
-            model_id: alias
+            model_id: resolve_alias(
+                (
+                    f"{provider}/{model_id}"
+                    if provider != "google"
+                    else f"google/models/{model_id}"
+                ),
+                True,
+                client_key=f"os.environ/LITELLM_PI_KEY",
+                gateway_url=gateway_url,
+            )["model"]
             for model_id in provider_models(provider)
             if (
                 alias := (
@@ -588,19 +592,6 @@ def main():
         category_models,
         args.role_models,
     )
-    cloud_routes = (
-        litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
-        if litellm_canary_enabled("pi")
-        else None
-    )
-    if cloud_routes is not None:
-        for role, model_ref in list(role_models.items()):
-            if not isinstance(model_ref, str):
-                continue
-            source, separator, model_id = model_ref.partition("/")
-            if source in cloud_routes and separator:
-                alias = cloud_routes[source].get(model_id)
-                role_models[role] = f"litellm/{alias}" if alias else None
     if any(
         isinstance(model, str) and model.startswith("github-copilot/")
         for model in role_models.values()
@@ -695,22 +686,83 @@ def main():
     cloud_path = ROOT / "configs/opencode/ollama-cloud-models.json"
     with cloud_path.open(encoding="utf-8") as f:
         cloud = json.load(f).get("models", {})
-    _, proxy = check_ollama_daemon()
-    installed_cloud_models = list_cloud_ollama_models() if proxy else None
-    pi_litellm_canary = litellm_canary_enabled("pi")
-    if proxy or pi_litellm_canary:
-        role_models = rewrite_cloud_refs(role_models, installed_cloud_models)
-        unresolved = unresolved_cloud_model_ids(role_models, installed_cloud_models)
-        for model_id in sorted(unresolved):
-            logger.warning(
-                "No unique installed Ollama Cloud stub for %s",
-                model_id,
+    pi_litellm_proxy = get_litellm_proxy_mode()
+    proxy_key_path = Path("~/.local/share/litellm/clients/pi.key").expanduser()
+    gateway_models = set()
+    cloud_routes = {}
+    if pi_litellm_proxy:
+        if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+            raise RuntimeError(
+                "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
             )
-        if pi_litellm_canary and unresolved:
-            role_models = fail_closed_cloud_refs(role_models, unresolved)
-            logger.warning(
-                "Unavailable Ollama Cloud role refs fail closed under the Pi LiteLLM canary"
+        if (
+            any(
+                path.is_symlink()
+                for path in (
+                    proxy_key_path.parent.parent,
+                    proxy_key_path.parent,
+                    proxy_key_path,
+                )
             )
+            or not proxy_key_path.is_file()
+        ):
+            raise RuntimeError(f"Pi LiteLLM key file is unavailable: {proxy_key_path}")
+        key_metadata = proxy_key_path.stat()
+        client_metadata = proxy_key_path.parent.stat()
+        if (
+            key_metadata.st_uid != os.getuid()
+            or stat.S_IMODE(key_metadata.st_mode) != 0o600
+            or client_metadata.st_uid != os.getuid()
+            or stat.S_IMODE(client_metadata.st_mode) & 0o077
+        ):
+            raise RuntimeError(
+                f"Pi LiteLLM client key permissions are unsafe: {proxy_key_path}"
+            )
+        cloud_routes = litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
+        for model_ref in role_models.values():
+            if (
+                isinstance(model_ref, str)
+                and "/" in model_ref
+                and not model_ref.startswith("_local:")
+            ):
+                gateway_models.add(model_ref)
+        resolved = {}
+        for role, model_ref in role_models.items():
+            if (
+                not isinstance(model_ref, str)
+                or "/" not in model_ref
+                or model_ref.startswith("_local:")
+            ):
+                resolved[role] = model_ref
+                continue
+            provider, model_id = model_ref.split("/", 1)
+            if provider in ("google", "openrouter"):
+                lookup_id = (
+                    model_id.removeprefix("models/")
+                    if provider == "google"
+                    else model_id
+                )
+                transport = cloud_routes.get(provider, {}).get(lookup_id)
+                if transport is None:
+                    logger.warning(
+                        "Pi LiteLLM alias is not advertised for %s", model_ref
+                    )
+                    resolved[role] = None
+                    continue
+                canonical_ref = (
+                    f"google/models/{lookup_id}" if provider == "google" else model_ref
+                )
+            else:
+                canonical_ref = model_ref
+                transport = resolve_alias(
+                    canonical_ref,
+                    True,
+                    client_key=proxy_key_path.resolve(),
+                    gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+                )["model"]
+            gateway_models.add(canonical_ref)
+            resolved[role] = transport
+        role_models = resolved
     compaction_tokens = _compaction_tokens(local_refs)
 
     orchestrator_model = role_models["orchestrator"]
@@ -723,6 +775,24 @@ def main():
         default = "ollama/no-model-available"
     else:
         default = orchestrator_model
+    if pi_litellm_proxy and isinstance(default, str) and "/" in default:
+        canonical_default = default.removeprefix("litellm/")
+        if canonical_default.startswith("google/"):
+            key = canonical_default.split("/", 2)[-1].removeprefix("models/")
+            default = cloud_routes.get("google", {}).get(key)
+        elif canonical_default.startswith("openrouter/"):
+            key = canonical_default.split("/", 1)[1]
+            default = cloud_routes.get("openrouter", {}).get(key)
+        else:
+            gateway_models.add(canonical_default)
+            default = resolve_alias(
+                canonical_default,
+                True,
+                client_key=proxy_key_path.resolve(),
+                gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+            )["model"]
+        if default is None:
+            raise RuntimeError("Pi default model has no advertised LiteLLM alias")
     provider, _, default_model = default.partition("/")
     settings = {
         "defaultProvider": provider,
@@ -797,25 +867,13 @@ def main():
         provider_config = build_local_provider(provider, model_ids)
         if provider_config:
             providers[provider] = provider_config
-    if proxy:
-        providers["ollama"]["models"] += [
-            model_entry(stub)
-            for stub in installed_cloud_stubs(cloud, installed_cloud_models)
-        ]
-    direct_cloud_ids = unresolved_cloud_model_ids(role_models, installed_cloud_models)
-    if direct_cloud_route_allowed("pi") and (not proxy or direct_cloud_ids):
-        direct_ids = sorted(direct_cloud_ids) if proxy else list(cloud)
+    if cloud and not pi_litellm_proxy:
         providers["ollama-cloud"] = {
             "baseUrl": BASE_URLS["ollama-cloud"],
             "api": "openai-completions",
             "apiKey": "$OLLAMA_API_KEY",
-            "models": [model_entry(model_id) for model_id in direct_ids],
+            "models": [model_entry(model_id) for model_id in cloud],
         }
-    elif pi_litellm_canary and direct_cloud_ids:
-        logger.warning(
-            "Direct Ollama Cloud provider omitted under Pi LiteLLM canary; unresolved model IDs: %s",
-            ", ".join(sorted(direct_cloud_ids)),
-        )
     providers["meridian"] = {
         "baseUrl": get_meridian_base_url(),
         "api": "openai-responses",
@@ -823,30 +881,16 @@ def main():
         "models": [],
     }
     providers["openai"] = {
-        "baseUrl": (
-            f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
-            if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-            and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
-            else BASE_URLS["openai"]
-        ),
+        "baseUrl": BASE_URLS["openai"],
         "api": "openai-completions",
-        "apiKey": (
-            "$LITELLM_PI_KEY"
-            if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") == "1"
-            and os.environ.get("DOTFILES_PI_USE_LITELLM", "0") == "1"
-            else "$OPENAI_API_KEY"
-        ),
+        "apiKey": "$OPENAI_API_KEY",
         "models": [],
     }
-    if pi_litellm_canary:
-        apply_litellm_provider_overrides(
-            providers, os.environ.get("LITELLM_PORT", "4000")
-        )
     skipped_providers = []
     skipped_provider_names = []
     emitted_providers = []
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
-        if pi_litellm_canary and provider in ("google", "openrouter"):
+        if pi_litellm_proxy and provider in ("google", "openrouter"):
             continue
         # Registry entries without an "api"/"allowlist" pair (litellm-only
         # catalogue providers like cerebras/cohere/huggingface) have no pi
@@ -875,22 +919,30 @@ def main():
             "Providers skipped because API keys are unavailable: %s",
             ", ".join(skipped_providers),
         )
-    if pi_litellm_canary:
-        routes = cloud_routes or {"google": {}, "openrouter": {}}
+    if pi_litellm_proxy:
+        providers.clear()
+        if not gateway_models:
+            raise RuntimeError(
+                "Pi LiteLLM mode has no resolvable canonical model aliases"
+            )
         entries = []
-        for provider_name in ("google", "openrouter"):
-            for alias in routes[provider_name].values():
-                entry = model_entry(alias, provider="litellm")
-                if provider_name == "google":
-                    entry["compat"] = {"supportsStore": False}
-                entries.append(entry)
-        if entries:
-            providers["litellm"] = {
-                "baseUrl": f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
-                "api": "openai-completions",
-                "apiKey": f"!cat {shlex.quote(str(Path('~/.local/share/litellm/clients/pi.key').expanduser()))}",
-                "models": entries,
-            }
+        for identity in sorted(gateway_models):
+            entry = model_entry(identity, provider="litellm")
+            if identity.startswith("google/models/"):
+                entry["compat"] = {"supportsStore": False}
+            entries.append(entry)
+        key_indirection = resolve_alias(
+            next(iter(sorted(gateway_models)), "ollama/no-model-available"),
+            True,
+            client_key=f"!cat {shlex.quote(str(proxy_key_path.resolve()))}",
+            gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+        )
+        providers["litellm"] = {
+            "baseUrl": f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
+            "api": "openai-completions",
+            "apiKey": key_indirection["api_key"],
+            "models": entries,
+        }
     skipped_role_overrides = {}
     builtin_roles = {builtin: role for role, builtin in ROLE_TO_BUILTIN.items()}
     for builtin, override in list(settings["subagents"]["agentOverrides"].items()):
@@ -930,8 +982,10 @@ def main():
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},
     }
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
-        if not (pi_litellm_canary and provider in ("google", "openrouter")):
+        if not (pi_litellm_proxy and provider in ("google", "openrouter")):
             auth[provider] = {"type": "api_key", "key": f"${endpoint['apiKeyEnv']}"}
+    if pi_litellm_proxy:
+        auth = {"litellm": {"type": "api_key", "key": "$LITELLM_PI_KEY"}}
     # Derive enabledModels from actual provider model IDs instead of hardcoding
     # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [
@@ -943,6 +997,9 @@ def main():
     # - API models (family-variant) → glob on the family prefix (e.g. "claude-*")
     prefixes: set[str] = set()
     for mid in all_model_ids:
+        if pi_litellm_proxy:
+            prefixes.add(f"litellm/{mid}")
+            continue
         if mid.startswith(("google/models/", "openrouter/")):
             prefixes.add(f"litellm/{mid}")
             continue

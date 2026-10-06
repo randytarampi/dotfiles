@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# scripts/lib/litellm_aliases.py: {{ include "scripts/lib/litellm_aliases.py" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_PI_SETUP" | sha256sum }}
-# LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_PI_USE_LITELLM" | default "0" }}
+# LiteLLM gate fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/env.sh"
@@ -11,7 +12,6 @@ source "$LIB_DIR/tier_args.sh"
 # scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
-# scripts/lib/ollama_cloud_wire_ids.py: {{ include "scripts/lib/ollama_cloud_wire_ids.py" | sha256sum }}
 load_env || true
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_PI_SETUP='${DOTFILES_RUN_PI_SETUP:-0}' — skipping Pi configuration"

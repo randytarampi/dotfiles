@@ -20,15 +20,11 @@ import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path boo
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
 )
-from constants import (  # noqa: E402 -- local import follows bootstrap.
-    check_ollama_daemon,
-)
 from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     engine_gate_active,
     resolve_engine,
 )
 from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
-    resolve_roles_from_list,
     list_local_ollama_models,
 )
 from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
@@ -36,46 +32,12 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
     add_model_override_args,
 )
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
-from ollama_cloud_wire_ids import (  # noqa: E402 -- sibling libs require sys.path bootstrap.
-    proxied_cloud_ref,
-    fail_closed_cloud_refs,
-    fail_closed_all_cloud_refs,
-    litellm_canary_enabled,
-    rewrite_cloud_refs,
-    unresolved_cloud_model_ids,
-)
-
-
-def proxied_ollama_cloud_model(model_name: str, installed_models=None) -> str:
-    """Rewrite a cloud ref only when its exact daemon stub is installed."""
-    return proxied_cloud_ref(model_name, installed_models)
 
 
 def _csv_env(name):
     return [
         value.strip() for value in os.environ.get(name, "").split(",") if value.strip()
     ]
-
-
-def rewrite_ollama_cloud_models_for_proxy(value, installed_models=None):
-    """Recursively rewrite installed model refs, retaining direct fallbacks."""
-    unresolved = unresolved_cloud_model_ids(value, installed_models)
-    for model_id in sorted(unresolved):
-        logger.warning(
-            "No unique installed Ollama Cloud stub for %s",
-            model_id,
-        )
-    rewritten = rewrite_cloud_refs(value, installed_models)
-    if litellm_canary_enabled("opencode"):
-        if unresolved:
-            logger.warning(
-                "Unavailable Ollama Cloud refs fail closed under the OpenCode LiteLLM canary"
-            )
-            return fail_closed_cloud_refs(rewritten, unresolved)
-        # The daemon is unavailable or the list failed; there is no safe local
-        # route to substitute, and direct cloud routing is forbidden.
-        return fail_closed_all_cloud_refs(rewritten)
-    return rewritten
 
 
 def filter_omlx_models_for_gate(models):
@@ -171,32 +133,8 @@ def orchestrate_tier_switch(
                 min_reasoning_embedding,
             )
 
-    cloud_role_models = {}
-    cloud_models_list = None
-    opencode_litellm_canary = litellm_canary_enabled("opencode")
-    _, can_proxy_cloud = check_ollama_daemon()
-    if can_proxy_cloud:
-        try:
-            from discover_models import list_cloud_ollama_models
-
-            cloud_models_list = list_cloud_ollama_models()
-            if cloud_models_list:
-                cloud_role_models = resolve_roles_from_list(
-                    cloud_models_list,
-                    min_reasoning_embedding=min_reasoning_embedding,
-                )
-                logger.info(
-                    f"Cloud models available via local proxy: {len(cloud_models_list)} models"
-                )
-        except Exception as e:
-            logger.warning(f"Failed to discover cloud models via local proxy: {e}")
-    if can_proxy_cloud and not cloud_models_list:
-        logger.warning(
-            "No installed Ollama Cloud stubs discovered; preserving direct ollama-cloud model refs"
-        )
-
     tier_registry.apply_placeholder_overrides(local_role_models, category_models)
-    fallback_role_models = local_role_models or cloud_role_models
+    fallback_role_models = local_role_models
     resolved_role_models = tier_registry.materialize_role_models(
         registry, tier, fallback_role_models, role_models
     )
@@ -206,10 +144,6 @@ def orchestrate_tier_switch(
         logger.info(
             f"Classified local models: {json.dumps(local_role_models, indent=2)}"
         )
-        if cloud_role_models:
-            logger.info(
-                f"Classified cloud models: {json.dumps(cloud_role_models, indent=2)}"
-            )
         # Log local role assignments (from the resolution preset's role mapping)
         if local_role_models:
             local_role_models_logged = tier_registry.materialize_role_models(
@@ -306,10 +240,6 @@ def orchestrate_tier_switch(
                     del source_preset[role]
                 else:
                     source_preset[role]["model"] = model
-        if can_proxy_cloud or opencode_litellm_canary:
-            source_preset = rewrite_ollama_cloud_models_for_proxy(
-                source_preset, cloud_models_list
-            )
         if "presets" not in target_config:
             target_config["presets"] = {}
         target_config["presets"][tier] = json.loads(json.dumps(source_preset))
@@ -324,10 +254,6 @@ def orchestrate_tier_switch(
         target_config["council"] = {}
     target_config["council"]["default_preset"] = source_council.get("default_preset")
     source_presets = json.loads(json.dumps(source_council.get("presets", {}) or {}))
-    if can_proxy_cloud or opencode_litellm_canary:
-        source_presets = rewrite_ollama_cloud_models_for_proxy(
-            source_presets, cloud_models_list
-        )
 
     for other_tier_name, other_tier_config in tiers_dict.items():
         other_council = other_tier_config.get("council", {})
@@ -336,10 +262,6 @@ def orchestrate_tier_switch(
             other_preset = other_presets[other_tier_name]
             if "council" in other_preset and other_tier_name in source_presets:
                 council_preset = other_preset["council"]
-                if can_proxy_cloud or opencode_litellm_canary:
-                    council_preset = rewrite_ollama_cloud_models_for_proxy(
-                        council_preset, cloud_models_list
-                    )
                 source_presets[other_tier_name]["council"] = council_preset
 
     target_config["council"]["presets"] = source_presets
