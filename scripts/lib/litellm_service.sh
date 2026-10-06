@@ -164,11 +164,12 @@ litellm_service_env_sync() {
   else
     DISABLE_ADMIN_UI="True"
   fi
-  # The scrubbed launchd environment cannot reliably reach the public model
-  # cost map (single worker stalls on the remote fetch, dragging DB-backed
-  # routes into watchdog timeouts). Serve the bundled map instead unless the
-  # user overrides. The captured env_ value survives service.env re-sourcing
-  # (the same name is persisted, so an uncaptured read would be clobbered).
+  # The scrubbed launchd environment may not reach the public model cost map;
+  # the bundled map avoids that remote-fetch stall class. It does not address
+  # the separately measured /v1/models latency, which is associated with the
+  # pinned Prisma sync-fallback path. Serve the bundled map unless overridden.
+  # The captured env_ value survives service.env re-sourcing (the same name is
+  # persisted, so an uncaptured read would be clobbered).
   if [[ -n "$env_LITELLM_LOCAL_MODEL_COST_MAP" ]]; then
     LITELLM_LOCAL_MODEL_COST_MAP="$env_LITELLM_LOCAL_MODEL_COST_MAP"
   else
