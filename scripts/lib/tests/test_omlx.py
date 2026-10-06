@@ -505,7 +505,12 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
     refs = [f"{provider}/fixture-model" for provider in providers]
     inventory = {ref: {"id": ref} for ref in refs}
     config = {"provider": {"litellm": {"models": inventory}}}
-    slim = {"roles": refs, "council": {"members": refs}, "fallback": refs}
+    slim = {
+        "roles": {"orchestrator": {"model": refs[0]}},
+        "council": {"presets": {"active": {"alpha": {"model": refs[1]}}}},
+        "_tiers": {"active": {"fallback": {"orchestrator": refs[2:]}}},
+        "skills": ["frontend/design"],
+    }
     with patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False):
         assert configure_opencode.apply_litellm_slim_gate(slim, config) == slim
 
@@ -522,8 +527,13 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         key.parent.mkdir(parents=True, exist_ok=True)
         key.write_text("test-key")
         routed = configure_opencode.apply_litellm_slim_gate(slim, config)
-    routed_refs = routed["roles"] + routed["council"]["members"] + routed["fallback"]
-    assert routed_refs == [f"litellm/{ref}" for ref in refs] * 3
+    routed_refs = [
+        routed["roles"]["orchestrator"]["model"],
+        routed["council"]["presets"]["active"]["alpha"]["model"],
+        *routed["_tiers"]["active"]["fallback"]["orchestrator"],
+    ]
+    assert routed_refs == [f"litellm/{ref}" for ref in refs]
+    assert routed["skills"] == ["frontend/design"]
     with (
         patch.dict(
             os.environ,
@@ -539,7 +549,7 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         ),
     ):
         configure_opencode.apply_litellm_slim_gate(
-            {"roles": ["cerebras/unmapped"]}, config
+            {"roles": {"unknown": {"model": "cerebras/unmapped"}}}, config
         )
 
 

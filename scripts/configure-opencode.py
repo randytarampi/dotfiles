@@ -27,7 +27,10 @@ from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
 )
-from litellm_aliases import resolve_alias  # noqa: E402
+from litellm_aliases import (  # noqa: E402
+    canonical_allowlist_key,
+    resolve_alias,
+)
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
@@ -244,27 +247,65 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
         Path("~/.local/share/litellm/clients/opencode.key").expanduser().resolve()
     )
     base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
-    direct_exceptions = {"meridian", "copilot", "github-copilot"}
+    direct_exceptions = {"meridian"}
 
-    def rewrite(value):
-        if isinstance(value, dict):
-            return {key: rewrite(child) for key, child in value.items()}
-        if isinstance(value, list):
-            return [rewrite(child) for child in value]
-        if isinstance(value, str) and "/" in value and not value.startswith("litellm/"):
-            owner = value.split("/", 1)[0]
-            if owner in direct_exceptions:
-                return value
-            if value not in available:
+    def rewrite_model(value):
+        if (
+            not isinstance(value, str)
+            or "/" not in value
+            or value.startswith("litellm/")
+        ):
+            return value
+        owner, model = value.split("/", 1)
+        if owner in direct_exceptions:
+            return value
+        matches = [
+            item
+            for item in available
+            if item.split("/", 1)[0] == owner
+            and canonical_allowlist_key(item.split("/", 1)[1])
+            == canonical_allowlist_key(model)
+        ]
+        if len(matches) != 1:
+            if (
+                owner == "github-copilot"
+                and os.environ.get("DOTFILES_LITELLM_OAUTH_PROVIDERS") != "1"
+            ):
                 raise RuntimeError(
-                    f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
+                    "OpenCode GitHub Copilot selection withheld: enable DOTFILES_LITELLM_OAUTH_PROVIDERS=1"
                 )
-            return resolve_alias(
-                value, True, client_key=key_path, gateway_url=base_url
-            )["model"]
-        return value
+            raise RuntimeError(
+                f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
+            )
+        return resolve_alias(
+            matches[0], True, client_key=key_path, gateway_url=base_url
+        )["model"]
 
-    return rewrite(slim)
+    model_fields = {"model", "primaryModel"}
+
+    def visit(node):
+        if isinstance(node, dict):
+            result = {}
+            for key, child in node.items():
+                if key in model_fields:
+                    result[key] = rewrite_model(child)
+                elif key == "fallback" and isinstance(child, dict):
+                    result[key] = {
+                        role: (
+                            [rewrite_model(model) for model in chain]
+                            if isinstance(chain, list)
+                            else chain
+                        )
+                        for role, chain in child.items()
+                    }
+                else:
+                    result[key] = visit(child)
+            return result
+        if isinstance(node, list):
+            return [visit(child) for child in node]
+        return node
+
+    return visit(slim)
 
 
 def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
@@ -1083,6 +1124,14 @@ def main():
                 os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
             ] + tier_args_list
             subprocess.run(tier_args, check=True)
+            slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
+            if get_litellm_proxy_mode() and not args.dry_run:
+                with open(slim_output_path, "r", encoding="utf-8") as f:
+                    final_slim = json.load(f)
+                final_slim = apply_litellm_slim_gate(final_slim, config)
+                with open(slim_output_path, "w", encoding="utf-8") as f:
+                    json.dump(final_slim, f, indent=2)
+                    f.write("\n")
             logger.info(f"Active tier set to {args.preset}")
     except Exception as e:
         logger.error(f"Failed to set active tier: {e}")
