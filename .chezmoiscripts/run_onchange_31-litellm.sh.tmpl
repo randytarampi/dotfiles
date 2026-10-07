@@ -6,6 +6,7 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
+# scripts/configure-litellm-venv.py: {{ include "scripts/configure-litellm-venv.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
 # scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
@@ -72,6 +73,7 @@ mkdir -p "$DATA" "$LOGS"
 chmod 700 "$DATA" "$LOGS"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile LiteLLM service.env"
 "$CONFIGURE_SCRIPT" || die "Failed to generate LiteLLM config"
+"{{ .chezmoi.sourceDir }}/scripts/configure-litellm-venv.py" || die "Failed to patch LiteLLM listing enrichment"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to align LiteLLM provider environment"
 
 PLIST="$(litellm_service_plist)"
