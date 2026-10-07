@@ -82,3 +82,19 @@ def test_patch_compiler_launch_error_restores_source(tmp_path, monkeypatch):
     monkeypatch.setattr(PATCHER.subprocess, "run", fail)
     assert PATCHER.configure(target, no_backup=True) == 1
     assert target.read_text() == original
+
+
+def test_patch_rollback_preserves_crlf_bytes_and_mode(tmp_path, monkeypatch):
+    target = tmp_path / "utils.py"
+    original = (
+        b"def _safe_get_model_info(model: str, get_model_info: Callable[[str], ModelInfo]) -> ModelInfo | None:\r\n"
+        b"    return None\r\n"
+    )
+    target.write_bytes(original)
+    target.chmod(0o640)
+    monkeypatch.setattr(
+        PATCHER.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1)
+    )
+    assert PATCHER.configure(target, no_backup=True) == 1
+    assert target.read_bytes() == original
+    assert target.stat().st_mode & 0o777 == 0o640
