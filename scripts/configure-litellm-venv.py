@@ -6,7 +6,7 @@ import glob
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - used for a fixed interpreter and repository-owned source path.
 import sys
 from pathlib import Path
 
@@ -109,7 +109,7 @@ def configure(path, *, dry_run=False, no_backup=False):
         python = venv / "bin" / "python"
         if not python.is_file():
             python = Path(sys.executable)
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - interpreter and file path are resolved from the managed venv.
             [str(python), "-m", "py_compile", str(path)], check=False
         )
         if result.returncode:

@@ -3,7 +3,7 @@
 
 import argparse
 import os
-import subprocess
+import subprocess  # nosec B404 - used only for the managed LiteLLM interpreter.
 import sys
 import json
 import tempfile
@@ -226,7 +226,9 @@ def main(argv=None):
         "auth = Authenticator(); "
         "getattr(auth, 'get_api_key', auth.get_access_token)()"
     )
-    result = subprocess.run([str(python), "-c", code], check=False)
+    result = subprocess.run(  # nosec B603 - managed interpreter and internally generated code.
+        [str(python), "-c", code], check=False
+    )
     if result.returncode:
         print(f"OAuth login failed (exit {result.returncode}).", file=sys.stderr)
         return 1
@@ -248,7 +250,7 @@ def main(argv=None):
         f"response = litellm.completion(model={model!r}, messages=[{{'role':'user','content':'Reply with one character.'}}], max_tokens=16); "
         "print('Verification request succeeded:', bool(response))"
     )
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 - managed interpreter and internally generated verification.
         [str(python), "-c", verification], check=False, capture_output=True, text=True
     )
     main_probe_unknown = False
