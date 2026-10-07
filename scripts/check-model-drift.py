@@ -32,7 +32,7 @@ from model_catalogues import (  # noqa: E402  # sys.path bootstrap above is inte
     _configured_litellm_port,
 )
 from constants import get_litellm_proxy_mode  # noqa: E402
-from litellm_aliases import (
+from litellm_aliases import (  # noqa: E402 -- local imports follow scripts/lib bootstrap.
     canonical_allowlist_key,
     resolve_canonical_identity,
 )  # noqa: E402

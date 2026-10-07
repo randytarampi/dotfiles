@@ -20,22 +20,27 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
-import tier_registry
+import tier_registry  # noqa: E402 -- scripts/lib is added to sys.path above.
 from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     MODEL_CATALOGUE_TIMEOUT,
     open_same_origin,
 )
-from ai_models import resolve_model
-from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
-from constants import (
+from ai_models import resolve_model  # noqa: E402 -- scripts/lib bootstrap.
+from cli_helpers import (
+    add_model_override_args,
+    add_min_reasoning_embedding_arg,
+)  # noqa: E402
+from constants import (  # noqa: E402 -- scripts/lib bootstrap.
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
 )
-from discover_models import list_local_ollama_models
-from env import load_env
-from local_engines import (
+from discover_models import (
+    list_local_ollama_models,
+)  # noqa: E402 -- scripts/lib bootstrap.
+from env import load_env  # noqa: E402 -- scripts/lib bootstrap.
+from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     active_engine_pools,
     engine_gate_active,
     local_endpoint_for,

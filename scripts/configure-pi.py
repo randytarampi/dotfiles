@@ -298,7 +298,6 @@ def litellm_cloud_aliases(port="4000"):
         # Explicit empty presence per provider (UNKNOWN discipline): the
         # providers exist, nothing is confirmed — never a silent absence.
         return {provider: {} for provider in ("google", "openrouter", "opencode")}
-    gateway_url = f"http://127.0.0.1:{port}/v1"
     routes = {provider: {} for provider in ("google", "openrouter", "opencode")}
     available.update(
         {

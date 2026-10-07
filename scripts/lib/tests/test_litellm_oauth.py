@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 SCRIPT = Path(__file__).resolve().parents[2] / "litellm-oauth.py"
 SPEC = importlib.util.spec_from_file_location("litellm_oauth", SCRIPT)
@@ -33,12 +34,9 @@ def test_chatgpt_bootstrap_verifies_registry_models_and_atomically_writes_ids(
     tmp_path, capsys
 ):
     import stat
-    from types import SimpleNamespace
 
     target = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
     calls = []
-
-    from types import SimpleNamespace
 
     def stub(command, check=False, **kwargs):
         code = command[-1]
@@ -81,8 +79,6 @@ def test_classify_probe_failure():
 
 
 def test_artifact_retries_then_succeeds(tmp_path):
-    from types import SimpleNamespace
-
     calls = []
     sleeps = []
 
@@ -105,8 +101,6 @@ def test_artifact_retries_then_succeeds(tmp_path):
 
 
 def test_persistent_artifact_is_deferred(tmp_path):
-    from types import SimpleNamespace
-
     target = tmp_path / "verified.json"
 
     def stub(command, **kwargs):
@@ -127,8 +121,6 @@ def test_persistent_artifact_is_deferred(tmp_path):
 
 
 def test_unknown_preserves_verified_file(tmp_path):
-    from types import SimpleNamespace
-
     target = tmp_path / "verified.json"
     target.write_text('["stale"]')
 
@@ -144,8 +136,6 @@ def test_unknown_preserves_verified_file(tmp_path):
 
 
 def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp_path):
-    from types import SimpleNamespace
-
     python = tmp_path / "venv/bin/python"
     python.parent.mkdir(parents=True)
     python.touch()
@@ -195,7 +185,6 @@ def test_non_tty_refuses_before_subprocess(monkeypatch):
 def test_bootstrap_hardens_cache_under_permissive_umask(monkeypatch, tmp_path):
     import os
     import stat
-    from types import SimpleNamespace
 
     home = tmp_path / "isolated-home"
     home.mkdir()

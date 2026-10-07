@@ -2,7 +2,6 @@
 
 import datetime as dt
 import json
-import os
 import re
 import shlex
 import urllib.error
@@ -178,5 +177,8 @@ def parse_window(value):
             dt.timedelta(hours=amount) if unit == "h" else dt.timedelta(minutes=amount)
         )
     )
-    fmt = lambda value: value.isoformat(timespec="seconds")
+
+    def fmt(value):
+        return value.isoformat(timespec="seconds")
+
     return fmt(start), fmt(end)

@@ -70,16 +70,17 @@ litellm_service_env_sync() {
   local -a provider_keys=()
   if [[ -f "$config_path" ]]; then
     local ref
-    for ref in $(
-      grep -o 'os\.environ/[A-Z][A-Z0-9_]*' "$config_path" 2>/dev/null |
-        sed 's|os\.environ/||' | sort -u
-    ); do
+    while IFS= read -r ref; do
+      [[ -n "$ref" ]] || continue
       case "$ref" in
       LITELLM_MASTER_KEY | LITELLM_PORT | DISABLE_ADMIN_UI | DATABASE_URL) continue ;;
       LITELLM_OPENCODE_KEY | LITELLM_PI_KEY | LITELLM_OPENWEBUI_KEY | LITELLM_JUNIE_KEY) continue ;;
       *) provider_keys+=("$ref") ;;
       esac
-    done
+    done < <(
+      grep -o 'os\.environ/[A-Z][A-Z0-9_]*' "$config_path" 2>/dev/null |
+        sed 's|os\.environ/||' | sort -u
+    )
   fi
   if [[ ! -f "$config_path" ]]; then
     provider_keys=(
