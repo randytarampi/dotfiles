@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 SCRIPT = Path(__file__).resolve().parents[2] / "configure-litellm-venv.py"
 SPEC = importlib.util.spec_from_file_location("litellm_venv_patch", SCRIPT)
@@ -43,3 +44,41 @@ def test_patch_dry_run_does_not_write(tmp_path):
     assert PATCHER.configure(target, dry_run=True) == 0
     assert "dotfiles listing-enrichment" not in target.read_text()
     assert not target.with_name("utils.py.orig-dotfiles").exists()
+
+
+def test_patch_compile_failure_restores_invocation_source_with_no_backup(
+    tmp_path, monkeypatch
+):
+    target = tmp_path / "utils.py"
+    original = "def _safe_get_model_info(model: str, get_model_info: Callable[[str], ModelInfo]) -> ModelInfo | None:\n    return None\n"
+    target.write_text(original)
+    monkeypatch.setattr(
+        PATCHER.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1)
+    )
+    assert PATCHER.configure(target, no_backup=True) == 1
+    assert target.read_text() == original
+
+
+def test_patch_compile_failure_ignores_stale_backup(tmp_path, monkeypatch):
+    target = tmp_path / "utils.py"
+    original = "def _safe_get_model_info(model: str, get_model_info: Callable[[str], ModelInfo]) -> ModelInfo | None:\n    return None\n"
+    target.write_text(original)
+    target.with_name("utils.py.orig-dotfiles").write_text("stale source")
+    monkeypatch.setattr(
+        PATCHER.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1)
+    )
+    assert PATCHER.configure(target) == 1
+    assert target.read_text() == original
+
+
+def test_patch_compiler_launch_error_restores_source(tmp_path, monkeypatch):
+    target = tmp_path / "utils.py"
+    original = "def _safe_get_model_info(model: str, get_model_info: Callable[[str], ModelInfo]) -> ModelInfo | None:\n    return None\n"
+    target.write_text(original)
+
+    def fail(*args, **kwargs):
+        raise OSError("launch failed")
+
+    monkeypatch.setattr(PATCHER.subprocess, "run", fail)
+    assert PATCHER.configure(target, no_backup=True) == 1
+    assert target.read_text() == original

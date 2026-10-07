@@ -59,7 +59,7 @@ def test_litellm_venv_patch_status_reports_applied_and_drift(tmp_path):
     utils = root / "utils.py"
     env = {"DOTFILES_RUN_LITELLM_SETUP": "1", "HOME": str(tmp_path)}
     utils.write_text("# dotfiles listing-enrichment bypass: begin HF fast path\n")
-    assert "applied" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
+    assert "run make deploy" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
     utils.write_text("plain upstream source\n")
     assert "run make deploy" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
     assert not VERIFY_CONFIG.validate_litellm_routing_text(
@@ -600,6 +600,11 @@ def test_litellm_service_env_rejects_unexpected_extras():
         _litellm_env(UNRELATED_VAR="x"), _LITELLM_POLICY_CONFIG
     )
     assert any("UNRELATED_VAR" in problem for problem in problems)
+
+
+def test_litellm_service_env_accepts_default_lru_size():
+    env = _litellm_env(DEFAULT_MAX_LRU_CACHE_SIZE="4096")
+    assert VERIFY_CONFIG.validate_litellm_service_env(env, _LITELLM_POLICY_CONFIG) == []
 
 
 def test_litellm_service_env_requires_core_and_config_refs():

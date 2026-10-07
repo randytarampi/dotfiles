@@ -1082,12 +1082,21 @@ def main() -> int:
         help="Exit nonzero when catalogue evidence is incomplete",
     )
     args = parser.parse_args()
-    logger.info("Checking slim presets...")
+    if args.json:
+        print("Checking slim presets...", file=sys.stderr)
+    else:
+        logger.info("Checking slim presets...")
     results = {"violations": _model_assignment_violations(), "warnings": []}
-    logger.info("Auditing junie profiles...")
+    if args.json:
+        print("Auditing junie profiles...", file=sys.stderr)
+    else:
+        logger.info("Auditing junie profiles...")
     junie_audit, junie_violations = audit_junie_profiles()
     results["violations"].extend(junie_violations)
-    logger.info("Auditing client providers...")
+    if args.json:
+        print("Auditing client providers...", file=sys.stderr)
+    else:
+        logger.info("Auditing client providers...")
     client_audit, client_violations = audit_client_providers()
     results["violations"].extend(client_violations)
     _record_stale_model_warning(results)

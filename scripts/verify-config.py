@@ -332,6 +332,7 @@ def validate_litellm_service_env(
         "LITELLM_PORT",
         "DISABLE_ADMIN_UI",
         "LITELLM_LOCAL_MODEL_COST_MAP",
+        "DEFAULT_MAX_LRU_CACHE_SIZE",
     }
     # Per-app virtual keys provisioned by configure-litellm.py are allowed
     # to be absent (fresh installs before the first provisioning run) but
@@ -345,7 +346,9 @@ def validate_litellm_service_env(
     }
     expected_env = core_env | set(APP_KEYS.values()) | refs | oauth_cache_env
     unexpected_env = set(litellm_env_values) - expected_env
-    missing_required = (core_env | refs) - set(litellm_env_values)
+    missing_required = ((core_env - {"DEFAULT_MAX_LRU_CACHE_SIZE"}) | refs) - set(
+        litellm_env_values
+    )
     if unexpected_env:
         problems.append(
             "LiteLLM service env: unexpected entries: "
@@ -530,13 +533,21 @@ def litellm_venv_patch_status(home=None, environ=None):
     if not matches:
         return []
     source = matches[0].read_text(encoding="utf-8")
-    if "# dotfiles listing-enrichment bypass: begin HF fast path" in source:
+    function = re.search(r"^def _safe_get_model_info\s*\(.*\):\s*$", source, re.M)
+    guard = 'if isinstance(model, str) and model.startswith("huggingface/"):'
+    begin = "# dotfiles listing-enrichment bypass: begin HF fast path"
+    end = "# dotfiles listing-enrichment bypass: end HF fast path"
+    if (
+        function
+        and begin in source
+        and end in source
+        and source.find(begin) > function.end()
+        and source.find(guard, function.end()) < source.find(end)
+    ):
         return [
             "✓ LiteLLM venv listing bypass: applied (HF enrichment skipped for /v1/models)"
         ]
-    if not matches[0].with_name("utils.py.orig-dotfiles").exists():
-        return ["⚠ drift-report: run make deploy to apply the listing bypass"]
-    return []
+    return ["⚠ drift-report: run make deploy to apply the listing bypass"]
 
 
 # Gate → list of (description, file path) checks
