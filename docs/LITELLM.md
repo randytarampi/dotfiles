@@ -68,3 +68,6 @@ under `~/.local/share/litellm/clients/`:
 
 These switches describe separate layers; a contradictory configuration is a
 doctor error.
+# Listing performance
+
+At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass for `/v1/models` listing enrichment; the original `utils.py` is retained as `utils.py.orig-dotfiles`. Generated `service.env` also sets `DEFAULT_MAX_LRU_CACHE_SIZE=4096` to reduce model-info cache eviction.

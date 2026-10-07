@@ -175,6 +175,7 @@ litellm_service_env_sync() {
   else
     LITELLM_LOCAL_MODEL_COST_MAP="True"
   fi
+  DEFAULT_MAX_LRU_CACHE_SIZE=4096
   if [[ -z "$LITELLM_MASTER_KEY" ]]; then
     command -v openssl >/dev/null 2>&1 || return 1
     local payload
@@ -194,6 +195,7 @@ litellm_service_env_sync() {
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
     printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
     printf 'LITELLM_LOCAL_MODEL_COST_MAP=%q\n' "$LITELLM_LOCAL_MODEL_COST_MAP"
+    printf 'DEFAULT_MAX_LRU_CACHE_SIZE=%q\n' "$DEFAULT_MAX_LRU_CACHE_SIZE"
     [[ -n "$GITHUB_COPILOT_TOKEN_DIR" ]] && printf 'GITHUB_COPILOT_TOKEN_DIR=%q\n' "$GITHUB_COPILOT_TOKEN_DIR"
     [[ -n "$GITHUB_COPILOT_ACCESS_TOKEN_FILE" ]] && printf 'GITHUB_COPILOT_ACCESS_TOKEN_FILE=%q\n' "$GITHUB_COPILOT_ACCESS_TOKEN_FILE"
     [[ -n "$GITHUB_COPILOT_API_KEY_FILE" ]] && printf 'GITHUB_COPILOT_API_KEY_FILE=%q\n' "$GITHUB_COPILOT_API_KEY_FILE"
