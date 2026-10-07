@@ -299,7 +299,7 @@ def test_live_catalogue_key_providers_generate_only_with_keys(
 
 def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
     root = Path(__file__).resolve().parents[3]
-    refs = litellm_config._registry_model_refs()
+    litellm_config._registry_model_refs()
     opencode_allowlist = json.loads(
         (root / "configs/opencode/opencode-models.json").read_text()
     )["models"]

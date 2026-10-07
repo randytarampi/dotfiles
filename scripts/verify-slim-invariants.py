@@ -37,8 +37,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
-from constants import get_litellm_proxy_mode
-from litellm_aliases import canonical_allowlist_key, resolve_canonical_identity
+from constants import get_litellm_proxy_mode  # noqa: E402 -- scripts/lib bootstrap.
+from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
+    canonical_allowlist_key,
+    resolve_canonical_identity,
+)  # noqa: E402
 
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 MODEL_ALLOWLIST_PATHS = {

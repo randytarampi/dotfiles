@@ -26,17 +26,17 @@ from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     open_same_origin,
 )
 from ai_models import resolve_model  # noqa: E402 -- scripts/lib bootstrap.
-from cli_helpers import (
+from cli_helpers import (  # noqa: E402 -- scripts/lib bootstrap.
     add_model_override_args,
     add_min_reasoning_embedding_arg,
-)  # noqa: E402
+)  # noqa: E402 -- scripts/lib bootstrap.
 from constants import (  # noqa: E402 -- scripts/lib bootstrap.
     MERIDIAN_DEFAULT_HOST,
     MERIDIAN_DEFAULT_PORT,
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
 )
-from discover_models import (
+from discover_models import (  # noqa: E402 -- scripts/lib bootstrap.
     list_local_ollama_models,
 )  # noqa: E402 -- scripts/lib bootstrap.
 from env import load_env  # noqa: E402 -- scripts/lib bootstrap.

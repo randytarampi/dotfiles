@@ -175,10 +175,8 @@ def main():
     referenced = find_referenced_vars()
     all_referenced = find_referenced_env_names()
     documented = find_documented_vars()
-    documented_env_vars = find_documented_env_vars()
     missing = referenced - documented - set(DEPRECATED_VARS) - REMOVED_VARS
     deprecated = find_deprecated_vars(referenced)
-    example_lines = ENV_EXAMPLE.read_text().splitlines()
 
     print("DOTFILES_* env var documentation coverage report")
     print("=" * 60)

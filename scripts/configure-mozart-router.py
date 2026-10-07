@@ -15,9 +15,9 @@ LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
-import logger
-from env import load_env
-from cli_helpers import add_common_args
+import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
+from env import load_env  # noqa: E402
+from cli_helpers import add_common_args  # noqa: E402
 
 
 def inject_local_engine_gateways(gateways):
