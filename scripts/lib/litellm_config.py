@@ -435,11 +435,17 @@ def compute_model_list(environ=None):
             / "configs/opencode/anthropic-models.json"
         )
         model_ids = sorted(json.loads(allowlist.read_text(encoding="utf-8"))["models"])
+        # Meridian's user-facing surface includes /v1, but the Anthropic wire
+        # adapter appends /v1/messages itself (same shape as the direct
+        # api.anthropic.com entry), so the wire base must be root-only.
+        meridian_wire_base = get_meridian_base_url().rstrip("/")
+        if meridian_wire_base.endswith("/v1"):
+            meridian_wire_base = meridian_wire_base[: -len("/v1")]
         entries.extend(
             _entry(
                 f"meridian/{model_id}",
                 f"anthropic/{model_id}",
-                api_base=get_meridian_base_url(),
+                api_base=meridian_wire_base,
                 key_env="MERIDIAN_API_KEY",
             )
             for model_id in model_ids
