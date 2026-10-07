@@ -185,7 +185,11 @@ def _live_catalogue(provider, key, base_url, timeout=10):
                 )
             )
             request = urllib.request.Request(
-                url, headers={"Authorization": f"Bearer {key}"}
+                url,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "User-Agent": "dotfiles-catalogue/1.0",
+                },
             )
             try:
                 with open_same_origin(request, timeout=timeout) as response:
@@ -234,7 +238,13 @@ def _live_catalogue(provider, key, base_url, timeout=10):
     url = urllib.parse.urlunsplit(
         (parsed.scheme, parsed.netloc, catalogue_path + "/models", "", "")
     )
-    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "User-Agent": "dotfiles-catalogue/1.0",
+        },
+    )
     try:
         with open_same_origin(request, timeout=timeout) as response:
             payload = json.load(response)

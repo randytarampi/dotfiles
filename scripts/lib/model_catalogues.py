@@ -30,6 +30,7 @@ BASE_URL_HOSTS = frozenset(
 )
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 TRUSTED_HTTPS_HOSTS = BASE_URL_HOSTS | {
+    "api.cerebras.ai",
     "api.githubcopilot.com",
     "generativelanguage.googleapis.com",
     "opencode.ai",
@@ -157,6 +158,9 @@ def get_catalogue(url: str, api_key: str = "", *, strict: bool = False):
     """Fetch a raw OpenAI-compatible catalogue, or None when unavailable."""
     _validate_catalogue_url(url, strict=strict)
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    # Some upstreams (Cerebras WAF) reject urllib's default Python-urllib
+    # User-Agent while serving identical requests from named clients.
+    headers.setdefault("User-Agent", "dotfiles-catalogue/1.0")
     request = urllib.request.Request(url, headers=headers, method="GET")
     # LiteLLM's warm, DB-backed /v1/models catalogue takes 26–30 seconds in live
     # probes; allow a bounded deadline above that while retaining UNKNOWN on timeout.
