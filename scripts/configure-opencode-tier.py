@@ -70,6 +70,13 @@ def orchestrate_tier_switch(
     min_reasoning_embedding: int = 0,
     dry_run: bool = False,
 ):
+    use_litellm_proxy = get_litellm_proxy_mode()
+    if use_litellm_proxy and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        logger.critical(
+            "DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"
+        )
+        sys.exit(1)
+
     opencode_dir = os.environ.get("OPENCODE_DIR")
     if opencode_dir:
         config_dir = os.path.abspath(os.path.expanduser(opencode_dir))
@@ -271,17 +278,6 @@ def orchestrate_tier_switch(
     if "_tiers" in target_config:
         del target_config["_tiers"]
 
-    try:
-        if dry_run:
-            logger.info(f"Would write tier configuration to {config_path}")
-        else:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(target_config, f, indent=2)
-                f.write("\n")
-    except Exception as e:
-        logger.critical(f"Failed to write configuration to {config_path}: {e}")
-        sys.exit(1)
-
     if fallback_role_models:
         logger.info("Resolving _local: model placeholders...")
 
@@ -298,18 +294,12 @@ def orchestrate_tier_switch(
         target_config["council"]["presets"] = resolve_value(
             target_config["council"]["presets"]
         )
-        if dry_run:
-            logger.info(f"Would write resolved placeholders to {config_path}")
-        else:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(target_config, f, indent=2)
-                f.write("\n")
     else:
         logger.warning(
             "No local Ollama models found — _local: placeholders will not be resolved"
         )
 
-    if get_litellm_proxy_mode():
+    if use_litellm_proxy:
         if dry_run:
             logger.info("Would apply LiteLLM transport mapping to materialized tier")
         else:
@@ -321,20 +311,28 @@ def orchestrate_tier_switch(
                 spec = importlib.util.spec_from_file_location(
                     "configure_opencode_transport", helper_path
                 )
+                if spec is None or spec.loader is None:
+                    raise RuntimeError("Unable to load OpenCode transport helper")
                 helper = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(helper)
-                with open(config_path, encoding="utf-8") as f:
-                    final_config = json.load(f)
-                final_config = helper.apply_litellm_slim_gate(
-                    final_config, consumer_config
+                target_config = helper.apply_litellm_slim_gate(
+                    target_config, consumer_config
                 )
-                with open(config_path, "w", encoding="utf-8") as f:
-                    json.dump(final_config, f, indent=2)
-                    f.write("\n")
             except Exception as exc:
                 raise RuntimeError(
                     f"Failed to apply LiteLLM mapping to standalone tier output: {exc}"
                 ) from exc
+
+    try:
+        if dry_run:
+            logger.info(f"Would write tier configuration to {config_path}")
+        else:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(target_config, f, indent=2)
+                f.write("\n")
+    except Exception as e:
+        logger.critical(f"Failed to write configuration to {config_path}: {e}")
+        sys.exit(1)
 
 
 def main():

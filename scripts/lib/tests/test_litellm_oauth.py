@@ -51,6 +51,7 @@ def test_chatgpt_bootstrap_verifies_registry_models_and_atomically_writes_ids(
         python=tmp_path / "venv/bin/python",
         refs={"openai/gpt-good", "openai/gpt-bad", "anthropic/not-openai"},
         verified_path=target,
+        deferred_path=tmp_path / "chatgpt_deferred_models.json",
         run=stub,
     )
     assert verified == ["gpt-good"] and all_ok
@@ -130,6 +131,7 @@ def test_unknown_preserves_verified_file(tmp_path):
     verified, ok = OAUTH.verify_chatgpt_openai_models(
         refs={"openai/gpt-unknown"},
         verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
         run=stub,
     )
     assert not ok and verified == [] and target.read_text() == '["stale"]'
@@ -144,6 +146,7 @@ def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp
     monkeypatch.setattr(OAUTH.sys.stdout, "isatty", lambda: True)
     monkeypatch.setattr(OAUTH.sys.stdin, "isatty", lambda: True)
     monkeypatch.setenv("HOME", str(tmp_path))
+    deferred_path = tmp_path / ".local/share/litellm/chatgpt_deferred_models.json"
     calls = []
 
     def stub(command, **kwargs):
@@ -165,6 +168,15 @@ def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp
 
     monkeypatch.setattr(OAUTH.subprocess, "run", stub)
     assert OAUTH.main(["--provider", "chatgpt"]) == 0
+    assert deferred_path.exists()
+    assert json.loads(deferred_path.read_text()) == {"entitlement": [], "artifact": []}
+    assert (
+        not Path("~/.local/share/litellm/chatgpt_deferred_models.json")
+        .expanduser()
+        .exists()
+        or Path("~/.local/share/litellm/chatgpt_deferred_models.json").expanduser()
+        == deferred_path
+    )
     assert any(
         "openai/" in call or "chatgpt/" in call and "gpt-5.2" not in call
         for call in calls
