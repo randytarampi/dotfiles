@@ -10,6 +10,11 @@ assert SPEC is not None
 assert SPEC.loader is not None
 VERIFY_CONFIG = module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY_CONFIG)
+PATCHER_PATH = Path(__file__).resolve().parents[2] / "configure-litellm-venv.py"
+PATCHER_SPEC = spec_from_file_location("litellm_venv_patch_for_doctor", PATCHER_PATH)
+assert PATCHER_SPEC is not None and PATCHER_SPEC.loader is not None
+PATCHER = module_from_spec(PATCHER_SPEC)
+PATCHER_SPEC.loader.exec_module(PATCHER)
 
 
 def _mock_git_and_chezmoi(monkeypatch, current, worktree_output, source):
@@ -58,6 +63,42 @@ def test_litellm_venv_patch_status_reports_applied_and_drift(tmp_path):
     root.mkdir(parents=True)
     utils = root / "utils.py"
     env = {"DOTFILES_RUN_LITELLM_SETUP": "1", "HOME": str(tmp_path)}
+    upstream = (
+        PATCHER.EXPECTED_DEF
+        + "\n    try:\n        return get_model_info(model)\n    except Exception:\n        return None\n"
+    )
+    patched = PATCHER.patched_source(upstream)
+    utils.write_text(patched)
+    status = VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
+    assert "applied" in status
+    assert patched.index(PATCHER.EXPECTED_DEF) < patched.index(PATCHER.BEGIN)
+    assert patched.index(PATCHER.BEGIN) < patched.index(PATCHER.GUARD)
+    assert patched.index(PATCHER.GUARD) < patched.index(PATCHER.END)
+    for invalid in (
+        PATCHER.EXPECTED_DEF + "\n    " + PATCHER.BEGIN + "\n    " + PATCHER.END + "\n",
+        PATCHER.EXPECTED_DEF
+        + "\n"
+        + PATCHER.GUARD
+        + "\n    "
+        + PATCHER.BEGIN
+        + "\n    "
+        + PATCHER.END
+        + "\n",
+        PATCHER.EXPECTED_DEF
+        + "\n    "
+        + PATCHER.END
+        + "\n    "
+        + PATCHER.GUARD
+        + "\n    "
+        + PATCHER.BEGIN
+        + "\n",
+    ):
+        utils.write_text(invalid)
+        assert (
+            "run make deploy" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
+        )
+        with pytest.raises(ValueError, match="incomplete patch"):
+            PATCHER.patched_source(invalid)
     utils.write_text("# dotfiles listing-enrichment bypass: begin HF fast path\n")
     assert "run make deploy" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
     utils.write_text("plain upstream source\n")

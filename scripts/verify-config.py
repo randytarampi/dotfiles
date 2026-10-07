@@ -533,16 +533,17 @@ def litellm_venv_patch_status(home=None, environ=None):
     if not matches:
         return []
     source = matches[0].read_text(encoding="utf-8")
-    function = re.search(r"^def _safe_get_model_info\s*\(.*\):\s*$", source, re.M)
+    function = re.search(r"^def _safe_get_model_info\s*\(.*:\s*$", source, re.M)
     guard = 'if isinstance(model, str) and model.startswith("huggingface/"):'
     begin = "# dotfiles listing-enrichment bypass: begin HF fast path"
     end = "# dotfiles listing-enrichment bypass: end HF fast path"
+    function_end = function.end() if function else -1
+    begin_pos = source.find(begin)
+    guard_pos = source.find(guard)
+    end_pos = source.find(end)
     if (
-        function
-        and begin in source
-        and end in source
-        and source.find(begin) > function.end()
-        and source.find(guard, function.end()) < source.find(end)
+        all(position >= 0 for position in (function_end, begin_pos, guard_pos, end_pos))
+        and function_end < begin_pos < guard_pos < end_pos
     ):
         return [
             "✓ LiteLLM venv listing bypass: applied (HF enrichment skipped for /v1/models)"

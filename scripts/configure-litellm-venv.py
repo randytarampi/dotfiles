@@ -34,27 +34,23 @@ def target_file():
 def patched_source(source):
     if BEGIN in source or END in source:
         definition = source.find(EXPECTED_DEF)
-        match = (
-            re.match(re.escape(EXPECTED_DEF), source[definition:])
-            if definition >= 0
-            else None
+        function_end = definition + len(EXPECTED_DEF) if definition >= 0 else -1
+        begin = source.find(BEGIN)
+        guard = source.find(
+            'if isinstance(model, str) and model.startswith("huggingface/"):'
         )
-        if match and BEGIN in source and END in source:
-            end = source.find(END, source.find(BEGIN))
-            region = source[definition + match.end() : end]
-            guard = (
-                'if isinstance(model, str) and model.startswith("huggingface/"):'
-                in region
-            )
-            if guard and source.find(BEGIN) < source.find(END):
-                return source
+        end = source.find(END)
+        if all(position >= 0 for position in (function_end, begin, guard, end)) and (
+            function_end < begin < guard < end
+        ):
+            return source
         raise ValueError(
             "incomplete patch; delete sentinels or reinstall litellm and re-run"
         )
     lines = source.splitlines(keepends=True)
     for index, line in enumerate(lines):
         if re.match(r"^def _safe_get_model_info\s*\(", line):
-            if line.rstrip("\n") != EXPECTED_DEF:
+            if line.rstrip("\r\n") != EXPECTED_DEF:
                 raise ValueError(
                     f"unexpected _safe_get_model_info definition: {line.strip()}"
                 )
@@ -88,8 +84,8 @@ def patched_source(source):
 
 
 def configure(path, *, dry_run=False, no_backup=False):
-    source = path.read_text(encoding="utf-8")
-    original_bytes = source.encode("utf-8")
+    original_bytes = path.read_bytes()
+    source = original_bytes.decode("utf-8")
     original_mode = path.stat().st_mode
     updated = patched_source(source)
     if updated == source:
