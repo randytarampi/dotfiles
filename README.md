@@ -229,6 +229,11 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | Global Prisma skills category | 0 |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | Ollama daemon env config | 0 |
 | `DOTFILES_RUN_OMLX_SETUP` | oMLX service, settings, and provider wiring (macOS Apple Silicon only) | 0 |
+| `DOTFILES_USE_LITELLM_PROXY` | Unified LiteLLM routing, replacing four per-client canaries; `1` is gateway-only, `0` keeps canonical direct routing ([details](docs/LITELLM.md)) | 0 |
+| `DOTFILES_LITELLM_OAUTH_PROVIDERS` | Opt in to LiteLLM OAuth-backed provider routes ([details](docs/LITELLM.md#oauth-providers-opt-in)) | 0 |
+| `DOTFILES_LITELLM_UI_EXPOSED` | Caddy LiteLLM UI-only hostname sites; requires `CADDY_ACCESS=lan|public` ([details](docs/LITELLM.md#ui-exposure)) | 0 |
+| `LITELLM_DISABLE_ADMIN_UI` | Service override; set `False` to serve the Admin UI ([details](docs/LITELLM.md#ui-exposure)) | True (disabled) |
+| `LITELLM_DATABASE_URL` | User-facing Postgres URL translated to service-side `DATABASE_URL` ([details](docs/LITELLM.md)) | unset |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
 | `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |
 | `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
@@ -236,6 +241,10 @@ Set in `~/.env` (0 = skip, 1 = run):
 
 See [docs/OMLX.md](docs/OMLX.md) for oMLX installation, settings, provider
 integration, model management, and platform-gating details.
+
+LiteLLM's Caddy UI exposure and serving are separate: `DOTFILES_LITELLM_UI_EXPOSED=1`
+exposes the UI host, while `LITELLM_DISABLE_ADMIN_UI=False` is also required to serve it.
+See [docs/LITELLM.md](docs/LITELLM.md) for the full environment contract.
 
 ## Structure
 
