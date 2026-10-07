@@ -1,6 +1,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import json
+import sys
 from unittest.mock import patch
 
 from model_catalogues import load_allowlists
@@ -17,6 +19,25 @@ def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
     path = tmp_path / "openai.json"
     path.write_text('{"models": {"real-id": {"name": "Pretty name"}}}')
     assert load_allowlists({"openai": path}) == {"openai": {"real-id"}}
+
+
+def test_json_main_keeps_progress_out_of_stdout(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT_PATH), "--json"])
+    monkeypatch.setattr(DRIFT, "load_env", lambda: None)
+    monkeypatch.setattr(DRIFT, "_model_assignment_violations", lambda: [])
+    monkeypatch.setattr(
+        DRIFT, "audit_junie_profiles", lambda: ({"results": [], "complete": True}, [])
+    )
+    monkeypatch.setattr(
+        DRIFT, "audit_client_providers", lambda: ({"results": [], "complete": True}, [])
+    )
+    monkeypatch.setattr(DRIFT, "_record_stale_model_warning", lambda results: None)
+    monkeypatch.setattr(DRIFT, "_model_drift_exit_status", lambda *args: 0)
+    assert DRIFT.main() == 0
+    captured = capsys.readouterr()
+    json.loads(captured.out)
+    assert "Checking slim presets" not in captured.out
+    assert "Checking slim presets" in captured.err
 
 
 def test_catalogue_cache_fetches_same_url_and_key_once(monkeypatch):

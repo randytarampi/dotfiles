@@ -33,9 +33,24 @@ def target_file():
 
 def patched_source(source):
     if BEGIN in source or END in source:
-        if BEGIN in source and END in source and GUARD in source:
-            return source
-        raise ValueError("incomplete or invalid dotfiles patch markers")
+        definition = source.find(EXPECTED_DEF)
+        match = (
+            re.match(re.escape(EXPECTED_DEF), source[definition:])
+            if definition >= 0
+            else None
+        )
+        if match and BEGIN in source and END in source:
+            end = source.find(END, source.find(BEGIN))
+            region = source[definition + match.end() : end]
+            guard = (
+                'if isinstance(model, str) and model.startswith("huggingface/"):'
+                in region
+            )
+            if guard and source.find(BEGIN) < source.find(END):
+                return source
+        raise ValueError(
+            "incomplete patch; delete sentinels or reinstall litellm and re-run"
+        )
     lines = source.splitlines(keepends=True)
     for index, line in enumerate(lines):
         if re.match(r"^def _safe_get_model_info\s*\(", line):
@@ -66,7 +81,7 @@ def patched_source(source):
                     if insert == len(lines):
                         raise ValueError("unterminated function docstring")
                 insert += 1
-            block = f"{BEGIN}\n{GUARD}\n{END}\n"
+            block = f"    {BEGIN}\n{GUARD}\n    {END}\n"
             lines.insert(insert, block)
             return "".join(lines)
     raise ValueError("_safe_get_model_info definition not found")
@@ -74,6 +89,8 @@ def patched_source(source):
 
 def configure(path, *, dry_run=False, no_backup=False):
     source = path.read_text(encoding="utf-8")
+    original_bytes = source.encode("utf-8")
+    original_mode = path.stat().st_mode
     updated = patched_source(source)
     if updated == source:
         logger.info("LiteLLM venv listing bypass already applied: %s", path)
@@ -87,22 +104,35 @@ def configure(path, *, dry_run=False, no_backup=False):
     backup = path.with_name(path.name + ".orig-dotfiles")
     if not no_backup and not backup.exists():
         shutil.copy2(path, backup)
-    path.write_text(updated, encoding="utf-8")
-    python = path.parents[4] / ".." / ".." / ".." / "bin" / "python"
-    # Resolve the interpreter from the venv root independently of site-packages depth.
-    venv = path.parents[4]
-    while venv != venv.parent and venv.name != "venv":
-        venv = venv.parent
-    python = venv / "bin" / "python"
-    if not python.is_file():
-        python = Path(sys.executable)
-    result = subprocess.run([str(python), "-m", "py_compile", str(path)], check=False)
-    if result.returncode:
-        if backup.exists():
-            shutil.copy2(backup, path)
-        logger.warning(
-            "LiteLLM venv patch compile check failed; restored original file"
+    try:
+        path.write_text(updated, encoding="utf-8")
+        # Resolve the interpreter from the venv root independently of site-packages depth.
+        venv = path.parents[4]
+        while venv != venv.parent and venv.name != "venv":
+            venv = venv.parent
+        python = venv / "bin" / "python"
+        if not python.is_file():
+            python = Path(sys.executable)
+        result = subprocess.run(
+            [str(python), "-m", "py_compile", str(path)], check=False
         )
+        if result.returncode:
+            raise RuntimeError("LiteLLM venv patch compile check failed")
+    except Exception:
+        restored = False
+        try:
+            temp = path.with_name(path.name + ".rollback")
+            temp.write_bytes(original_bytes)
+            os.chmod(temp, original_mode)
+            os.replace(temp, path)
+            restored = True
+        finally:
+            if not restored:
+                logger.warning(
+                    "LiteLLM venv patch failed; could not restore original file"
+                )
+        if restored:
+            logger.warning("LiteLLM venv patch failed; restored original file")
         return 1
     logger.info("Applied LiteLLM venv listing bypass: %s", path)
     return 0
