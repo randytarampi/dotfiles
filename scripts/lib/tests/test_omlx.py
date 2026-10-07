@@ -553,6 +553,109 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         )
 
 
+def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
+    tmp_path, monkeypatch
+):
+    """Aggregation must mirror the gateway's meridian-serving condition: while
+    Meridian has credentials, anthropic allowlist models key as meridian/<id>.
+    Regression for the live-deploy failure 'no LiteLLM gateway alias:
+    anthropic/claude-sonnet-5-5'."""
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("MERIDIAN_API_KEY", "meridian")
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    config = {
+        "model": "anthropic/claude-sonnet-5-5",
+        "provider": {
+            "anthropic": {
+                "models": {"claude-sonnet-5-5": {"name": "Sonnet 5.5"}},
+            },
+        },
+    }
+    configure_opencode.apply_litellm_client_gate(config)
+    inventory = config["provider"]["litellm"]["models"]
+    assert "meridian/claude-sonnet-5-5" in inventory
+    assert not any(item.startswith("anthropic/") for item in inventory)
+    assert config["model"] == "litellm/meridian/claude-sonnet-5-5"
+    slim = {
+        "presets": {"x": {"designer": {"model": "anthropic/claude-sonnet-5-5"}}},
+    }
+    routed = configure_opencode.apply_litellm_slim_gate(slim, config)
+    assert (
+        routed["presets"]["x"]["designer"]["model"]
+        == "litellm/meridian/claude-sonnet-5-5"
+    )
+
+
+def test_opencode_slim_anthropic_falls_back_to_direct_anthropic_alias(
+    tmp_path, monkeypatch
+):
+    """Without Meridian credentials the inventory keeps anthropic/<id> keys and
+    anthropic selections resolve against them instead of unroutable
+    meridian/<id> lookups."""
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("MERIDIAN_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    config = {
+        "provider": {
+            "anthropic": {
+                "models": {"claude-sonnet-5-5": {"name": "Sonnet 5.5"}},
+            },
+        },
+    }
+    configure_opencode.apply_litellm_client_gate(config)
+    inventory = config["provider"]["litellm"]["models"]
+    assert "anthropic/claude-sonnet-5-5" in inventory
+    slim = {
+        "presets": {"x": {"designer": {"model": "anthropic/claude-sonnet-5-5"}}},
+    }
+    routed = configure_opencode.apply_litellm_slim_gate(slim, config)
+    assert (
+        routed["presets"]["x"]["designer"]["model"]
+        == "litellm/anthropic/claude-sonnet-5-5"
+    )
+
+
+def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypatch):
+    """Provider blocks absent from the active tier must still be selectable:
+    repo allowlists seed their identities (never invented aliases)."""
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("MERIDIAN_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    config = {
+        "provider": {
+            "openai": {"models": {"gpt-x": {"name": "X"}}},
+        },
+    }
+    configure_opencode.apply_litellm_client_gate(config)
+    inventory = config["provider"]["litellm"]["models"]
+    assert "opencode/big-pickle" in inventory
+    assert "google/models/gemini-3.8-flash" in inventory
+    assert "github-copilot/gemini-3.5-flash" in inventory
+    slim = {
+        "presets": {"free": {"fast": {"model": "opencode/big-pickle"}}},
+    }
+    routed = configure_opencode.apply_litellm_slim_gate(slim, config)
+    assert routed["presets"]["free"]["fast"]["model"] == "litellm/opencode/big-pickle"
+
+
 def test_configure_opencode_local_provider_emits_modalities():
     """Vision-capable engine models must declare image input so OpenCode's
     client-side attachment gating accepts screenshots (registry-generic)."""

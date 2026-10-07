@@ -26,6 +26,7 @@ import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path boo
 from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
+    is_meridian_configured,
 )
 from litellm_aliases import (  # noqa: E402
     canonical_allowlist_key,
@@ -166,6 +167,18 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
 
 def apply_litellm_client_gate(config: dict) -> None:
     """Map canonical model references to gateway-only or direct transports."""
+    # The gateway keys Anthropic allowlist models under the meridian owner
+    # exactly when it serves them (litellm_config mirrors this condition), so
+    # the client inventory must use the same namespace.
+    meridian_serves = is_meridian_configured() and bool(
+        os.environ.get("MERIDIAN_API_KEY", "").strip()
+    )
+
+    def inventory_owner(provider_name):
+        if provider_name == "anthropic" and meridian_serves:
+            return "meridian"
+        return provider_name
+
     if not get_litellm_proxy_mode():
         return
     if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
@@ -181,16 +194,55 @@ def apply_litellm_client_gate(config: dict) -> None:
     models = {}
     for provider_name, provider in providers.items():
         for model_id, model in (provider.get("models", {}) or {}).items():
+            owner = inventory_owner(provider_name)
             identity = (
                 f"google/models/{model_id.removeprefix('models/')}"
                 if provider_name == "google"
-                else f"{provider_name}/{model_id}"
+                else f"{owner}/{model_id}"
             )
             models[identity] = {
                 **model,
                 "id": identity,
                 "name": model.get("name", identity),
             }
+    # Registry-wide inventory coverage: the deployed Slim file also selects
+    # dormant-preset models whose provider blocks this tier does not build
+    # (Google, Open Router, OpenCode Zen, GitHub Copilot). The gateway serves
+    # those owners from repo allowlists/live catalogues, so seed the same
+    # allowlist-derived identities — never invent aliases beyond them.
+    configs_root = Path(__file__).resolve().parents[1] / "configs/opencode"
+    for allowlist_provider in (
+        "google",
+        "openrouter",
+        "opencode",
+        "github-copilot",
+        "openai",
+        "ollama-cloud",
+        "anthropic",
+    ):
+        allowlist_path = configs_root / f"{allowlist_provider}-models.json"
+        if not allowlist_path.is_file():
+            continue
+        try:
+            allowlist = json.loads(allowlist_path.read_text(encoding="utf-8"))["models"]
+        except (OSError, json.JSONDecodeError):
+            continue
+        for model_id, model in allowlist.items():
+            if allowlist_provider == "google":
+                identity = f"google/models/{model_id}"
+            else:
+                identity = f"{inventory_owner(allowlist_provider)}/{model_id}"
+            models.setdefault(
+                identity,
+                {
+                    "id": identity,
+                    "name": (
+                        model.get("name", identity)
+                        if isinstance(model, dict)
+                        else identity
+                    ),
+                },
+            )
     resolution = resolve_alias(
         "openai/gpt-6-luna",
         True,
@@ -220,13 +272,19 @@ def apply_litellm_client_gate(config: dict) -> None:
             and not value.startswith(("http://", "https://"))
         ):
             owner, model_id = value.split("/", 1)
+            routed_owner = inventory_owner(owner)
             if owner in source_provider_names:
-                if value not in models:
+                identity = (
+                    f"google/models/{model_id.removeprefix('models/')}"
+                    if owner == "google"
+                    else f"{routed_owner}/{model_id.removeprefix('models/')}"
+                )
+                if identity not in models:
                     raise RuntimeError(
                         f"OpenCode gateway alias is not configured for canonical model {value}"
                     )
                 return resolve_alias(
-                    value, True, client_key=key_path.resolve(), gateway_url=base_url
+                    identity, True, client_key=key_path.resolve(), gateway_url=base_url
                 )["model"]
         return value
 
@@ -260,15 +318,24 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
         if owner in direct_exceptions:
             return value
         # Anthropic selections route through the Meridian gateway aliases
-        # (same canonical model IDs, meridian/ owner namespace).
+        # (same canonical model IDs, meridian/ owner namespace). When
+        # Meridian does not serve but the gateway has a direct Anthropic
+        # alias, fall back to it — same canonical identity, real coverage.
         owner_for_lookup = "meridian" if owner == "anthropic" else owner
+        canonical_model = canonical_allowlist_key(model)
         matches = [
             item
             for item in available
             if item.split("/", 1)[0] == owner_for_lookup
-            and canonical_allowlist_key(item.split("/", 1)[1])
-            == canonical_allowlist_key(model)
+            and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
         ]
+        if not matches and owner == "anthropic":
+            matches = [
+                item
+                for item in available
+                if item.split("/", 1)[0] == "anthropic"
+                and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
+            ]
         if len(matches) != 1:
             if (
                 owner == "github-copilot"

@@ -88,8 +88,10 @@ def test_caddyfile_validation_skips_without_binary(tmp_path, monkeypatch):
 
 
 def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monkeypatch):
+    # Direct mode reads deployed configs under the given home; isolate from
+    # the real machine so the assert is a contract check, not a state check.
     assert not VERIFY_CONFIG.litellm_client_gate_errors(
-        {"DOTFILES_USE_LITELLM_PROXY": "0"}
+        {"DOTFILES_USE_LITELLM_PROXY": "0"}, home=tmp_path
     )
     errors = VERIFY_CONFIG.litellm_client_gate_errors(
         {"DOTFILES_USE_LITELLM_PROXY": "1", "DOTFILES_RUN_LITELLM_SETUP": "0"},
