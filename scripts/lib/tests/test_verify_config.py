@@ -48,6 +48,20 @@ model_list:
     assert not VERIFY_CONFIG.validate_litellm_routing_text(
         'model_list:\n  - litellm_params:\n      api_base: "http://LOCALHOST:4000/v1"\n'
     )
+
+
+def test_litellm_venv_patch_status_reports_applied_and_drift(tmp_path):
+    root = (
+        tmp_path
+        / ".local/share/litellm/venv/lib/python3.11/site-packages/litellm/proxy"
+    )
+    root.mkdir(parents=True)
+    utils = root / "utils.py"
+    env = {"DOTFILES_RUN_LITELLM_SETUP": "1", "HOME": str(tmp_path)}
+    utils.write_text("# dotfiles listing-enrichment bypass: begin HF fast path\n")
+    assert "applied" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
+    utils.write_text("plain upstream source\n")
+    assert "run make deploy" in VERIFY_CONFIG.litellm_venv_patch_status(environ=env)[0]
     assert not VERIFY_CONFIG.validate_litellm_routing_text(
         'model_list:\n  - litellm_params:\n      gateway: "localhost:4000"\n'
     )

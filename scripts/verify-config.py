@@ -519,6 +519,26 @@ def litellm_ui_contradiction_errors(environ=None):
     return []
 
 
+def litellm_venv_patch_status(home=None, environ=None):
+    environ = os.environ if environ is None else environ
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return []
+    root = Path(home or environ.get("HOME", HOME)).expanduser() / ".local/share/litellm"
+    matches = list(
+        (root / "venv/lib").glob("python3*/site-packages/litellm/proxy/utils.py")
+    )
+    if not matches:
+        return []
+    source = matches[0].read_text(encoding="utf-8")
+    if "# dotfiles listing-enrichment bypass: begin HF fast path" in source:
+        return [
+            "✓ LiteLLM venv listing bypass: applied (HF enrichment skipped for /v1/models)"
+        ]
+    if not matches[0].with_name("utils.py.orig-dotfiles").exists():
+        return ["⚠ drift-report: run make deploy to apply the listing bypass"]
+    return []
+
+
 # Gate → list of (description, file path) checks
 CHECKS = [
     (
@@ -1552,6 +1572,8 @@ def main():
     for error in litellm_ui_contradiction_errors():
         print(f"  \u2717 {error}")
         exit_code = 1
+    for status in litellm_venv_patch_status(home=HOME):
+        print(f"  {status}")
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
     litellm_unit = HOME / ".config/systemd/user/litellm.service"

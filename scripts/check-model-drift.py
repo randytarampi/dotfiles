@@ -72,6 +72,18 @@ def get_models(url: str, api_key: str = ""):
     return fetch_models(url, api_key, stats=DRIFT_STATS)
 
 
+_CATALOGUE_CACHE = None
+
+
+def _cached_catalogue(url, api_key=""):
+    if _CATALOGUE_CACHE is None:
+        return get_catalogue(url, api_key)
+    key = (url, api_key)
+    if key not in _CATALOGUE_CACHE:
+        _CATALOGUE_CACHE[key] = get_catalogue(url, api_key)
+    return _CATALOGUE_CACHE[key]
+
+
 def iter_models(value):
     if isinstance(value, dict):
         for key, child in value.items():
@@ -420,7 +432,7 @@ def _fetch_junie_catalogues(references, keys, base_urls):
         url = endpoint_models_url(base_urls[endpoint])
         DRIFT_STATS["checked"] += 1
         try:
-            payload = get_catalogue(url, api_key)
+            payload = _cached_catalogue(url, api_key)
             if not isinstance(payload, dict) or not isinstance(
                 payload.get("data"), list
             ):
@@ -843,7 +855,7 @@ def _compare_client_provider(
 def _fetch_client_catalogue(key):
     try:
         DRIFT_STATS["checked"] += 1
-        payload = get_catalogue(_client_models_url(), key)
+        payload = _cached_catalogue(_client_models_url(), key)
         ids = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(ids, list) or any(
             not isinstance(item, dict)
@@ -1055,6 +1067,8 @@ def _compare_pi_selection(settings_path, selection, inventories, provider_names)
 
 
 def main() -> int:
+    global _CATALOGUE_CACHE
+    _CATALOGUE_CACHE = {}
     load_env()
     parser = argparse.ArgumentParser(
         description="Check model assignments for catalog drift."
@@ -1068,9 +1082,12 @@ def main() -> int:
         help="Exit nonzero when catalogue evidence is incomplete",
     )
     args = parser.parse_args()
+    logger.info("Checking slim presets...")
     results = {"violations": _model_assignment_violations(), "warnings": []}
+    logger.info("Auditing junie profiles...")
     junie_audit, junie_violations = audit_junie_profiles()
     results["violations"].extend(junie_violations)
+    logger.info("Auditing client providers...")
     client_audit, client_violations = audit_client_providers()
     results["violations"].extend(client_violations)
     _record_stale_model_warning(results)

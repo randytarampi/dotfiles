@@ -19,6 +19,22 @@ def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
     assert load_allowlists({"openai": path}) == {"openai": {"real-id"}}
 
 
+def test_catalogue_cache_fetches_same_url_and_key_once(monkeypatch):
+    setattr(DRIFT, "_CATALOGUE_CACHE", {})
+    calls = []
+    payload = {"data": []}
+    monkeypatch.setattr(
+        DRIFT, "get_catalogue", lambda url, key: calls.append((url, key)) or payload
+    )
+    assert (
+        DRIFT._cached_catalogue("https://example.test/v1/models", "secret") is payload
+    )
+    assert (
+        DRIFT._cached_catalogue("https://example.test/v1/models", "secret") is payload
+    )
+    assert calls == [("https://example.test/v1/models", "secret")]
+
+
 def test_slim_litellm_prefix_normalizes_before_allowlist_check(monkeypatch):
     monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": {"model"}})
     monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
