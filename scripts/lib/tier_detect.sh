@@ -51,7 +51,7 @@ detect_tier() {
     _has_ollama=true
   fi
   if [[ "${DOTFILES_RUN_OMLX_SETUP:-0}" == "1" ]] && command -v curl >/dev/null 2>&1; then
-    _omlx_base="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
+    _omlx_base="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-11427}}"
     _omlx_auth=()
     [[ -n "${OMLX_API_KEY:-}" ]] && _omlx_auth=(-H "Authorization: Bearer ${OMLX_API_KEY}")
     if curl -fsS --max-time 2 "${_omlx_base%/}/health" "${_omlx_auth[@]+${_omlx_auth[@]}}" >/dev/null 2>&1; then

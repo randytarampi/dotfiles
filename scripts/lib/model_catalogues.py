@@ -17,6 +17,7 @@ from constants import (
     OLLAMA_LOCAL_DEFAULT_PORT,
     OLLAMA_LOCAL_PORT_ENV,
     OMLX_PORT_ENV,
+    OMLX_DEFAULT_PORT,
     OMLX_BASE_URL_ENV,
     PROVIDER_BASE_URL_ENVS,
 )
@@ -64,7 +65,11 @@ def open_same_origin(request, *, timeout=3):
 
 
 def _configured_loopback_ports() -> frozenset[int]:
-    ports = {int(MERIDIAN_DEFAULT_PORT), int(OLLAMA_LOCAL_DEFAULT_PORT), 8000}
+    ports = {
+        int(MERIDIAN_DEFAULT_PORT),
+        int(OLLAMA_LOCAL_DEFAULT_PORT),
+        OMLX_DEFAULT_PORT,
+    }
     for variable in (MERIDIAN_PORT_ENV, OMLX_PORT_ENV, OLLAMA_LOCAL_PORT_ENV):
         value = os.environ.get(variable, "").strip()
         if value.isdigit() and 1 <= int(value) <= 65535:
