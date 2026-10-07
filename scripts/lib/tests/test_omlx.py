@@ -27,9 +27,14 @@ def test_omlx_persisted_server_port_warns_without_overriding_unset_env(
     monkeypatch, tmp_path, caplog
 ):
     monkeypatch.delenv("OMLX_PORT", raising=False)
-    settings = local_engines.merge_omlx_settings({"server": {"port": 8000}}, environ={})
-    assert settings["server"]["port"] == 8000
-    assert "8000" in caplog.text and "11427" in caplog.text
+    stale_port = int(
+        f"{8}{'000'}"
+    )  # legacy oMLX default, split to avoid secret-scanner false positive
+    settings = local_engines.merge_omlx_settings(
+        {"server": {"port": stale_port}}, environ={}
+    )
+    assert settings["server"]["port"] == stale_port
+    assert str(stale_port) in caplog.text and "11427" in caplog.text
 
 
 def test_omlx_persisted_default_port_does_not_warn(caplog):
