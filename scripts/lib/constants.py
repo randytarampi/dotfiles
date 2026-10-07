@@ -33,6 +33,7 @@ LITELLM_OAUTH_PROVIDERS_ENV = "DOTFILES_LITELLM_OAUTH_PROVIDERS"
 OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
 OMLX_HOST_ENV = "OMLX_HOST"
 OMLX_PORT_ENV = "OMLX_PORT"
+OMLX_DEFAULT_PORT = 11427
 
 # ── Provider base URLs ──────────────────────────────────────────────────
 # Single source of truth for all configure scripts.
@@ -100,7 +101,7 @@ def get_omlx_base_url():
         return override.rstrip("/")
 
     host = os.environ.get(OMLX_HOST_ENV, "127.0.0.1")
-    port = os.environ.get(OMLX_PORT_ENV, "11427")
+    port = os.environ.get(OMLX_PORT_ENV, str(OMLX_DEFAULT_PORT))
     return f"http://{host}:{port}"
 
 

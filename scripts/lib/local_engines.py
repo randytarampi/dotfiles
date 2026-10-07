@@ -4,7 +4,12 @@ import os
 import re
 
 import logger
-from constants import check_omlx_daemon, get_omlx_base_url, get_ollama_local_base_url
+from constants import (
+    OMLX_DEFAULT_PORT,
+    check_omlx_daemon,
+    get_omlx_base_url,
+    get_ollama_local_base_url,
+)
 
 LOCAL_ENGINES = {
     "ollama": {
@@ -47,7 +52,7 @@ LOCAL_ENGINES = {
         "npm": "@ai-sdk/openai-compatible",
         "resolve_model": False,
         "context_fallback": 32768,
-        "default_port": "11427",
+        "default_port": str(OMLX_DEFAULT_PORT),
         "chat_model_types": {"llm", "vlm"},
         "gate_required": True,
         "drift_check": True,
@@ -448,7 +453,18 @@ def merge_omlx_settings(existing, environ=None):
 
     server = _section("server")
     _override(server, "host", "OMLX_HOST", str, "127.0.0.1")
-    _override(server, "port", "OMLX_PORT", _int, "11427")
+    configured_port = _env("OMLX_PORT")
+    if configured_port:
+        server["port"] = _int(configured_port)
+    elif "port" not in server:
+        server["port"] = OMLX_DEFAULT_PORT
+    elif int(server["port"]) != OMLX_DEFAULT_PORT:
+        logger.warning(
+            "Persisted oMLX server.port %s differs from default %s; set OMLX_PORT=%s in ~/.env or migrate the server config",
+            server["port"],
+            OMLX_DEFAULT_PORT,
+            OMLX_DEFAULT_PORT,
+        )
     _override(server, "log_level", "OMLX_LOG_LEVEL", str, "info")
     audio_upload_env = _env("OMLX_MAX_AUDIO_UPLOAD_SIZE")
     audio_upload_value = audio_upload_env or server.get("max_audio_upload_size")
