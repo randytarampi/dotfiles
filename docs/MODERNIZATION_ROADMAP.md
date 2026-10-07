@@ -98,8 +98,8 @@ schedule-only workflow, so it can **never be a required pull-request check**.
 Promotion means removing `continue-on-error` so scheduled failures are truthful,
 with failure notification/issue ownership. Decision date: on or after
 2026-09-29, gated on roughly seven consecutive green scheduled runs on the
-current logic (only one scheduled + one manual success at `5e48340` exists so
-far). [.github/workflows/nightly-integration.yml]
+current logic (two scheduled green runs observed by 2026-10-07; still short of
+the threshold). [.github/workflows/nightly-integration.yml]
 
 ### 3. Add oMLX audio-upload validation and normalization
 
@@ -139,6 +139,14 @@ so one flaky test cannot break `main`; 30+ is gated on representative tests
 [pyproject.toml; Makefile test target] Raise the floor in small
 quarterly increments only when new coverage is representative, rather than
 targeting 100%.
+
+**Status:** `[updated 2026-10-07]` Local branch-aware pytest now measures
+**52.70–54%** (e.g. `make test` runs during the LiteLLM gateway pass), with the
+floor deliberately still 27
+([pyproject.toml](../pyproject.toml) `fail_under = 27`). The measured value grew
+by the gateway-session test lanes; the ratchet has not moved — the next
+increment is gated on the same representative-test criteria as before, not on
+the raw number.
 
 **Acceptance criteria:** each ratchet records the measured production baseline,
 the new threshold and the tests that justify it; subprocess and shell behaviour
@@ -297,6 +305,53 @@ after ruleset activation was a docs-only follow-through of the reflect round,
 using the admin bypass once; subsequent work returns to PR-first. Live merge
 settings are rebase-only; squash is disabled.
 
+### 9. LiteLLM gateway unification — completed in this pass (2026-10-05…07)
+
+**Priority:** High · **Effort:** XL · **Dependencies:** resolved (all five
+phases gate-approved; Oracle reviews at each boundary).
+
+All home-managed AI traffic routes through the local LiteLLM proxy
+(`127.0.0.1:4000`) when opted in, with per-client virtual keys for spend
+attribution. **Status:** `[completed-in-this-pass]` across five gated phases.
+Reference: [docs/LITELLM.md](LITELLM.md), [docs/UNMANAGED-CLIENTS.md](UNMANAGED-CLIENTS.md),
+[.env.example](../dot_dotfiles/shell/.env.example).
+
+- Routing contract: single `DOTFILES_USE_LITELLM_PROXY` gate (default `0`) with
+  gateway-only semantics when `1` — generator-side hard errors instead of
+  silent direct fallbacks, `RUN=0`+`USE=1` is a configuration error. The four
+  per-client canaries (`DOTFILES_{OPENWEBUI,OPENCODE,PI,JUNIE}_USE_LITELLM`)
+  and `DOTFILES_USE_OLLAMA_CLOUD_PROXY` were retired via
+  [scripts/migrate-env-gates.py](../scripts/migrate-env-gates.py) OR-migration;
+  `0` is canonical direct routing (`ollama-cloud/<id>` → `https://ollama.com/v1`).
+- Transport mapping at the client boundary ([scripts/lib/litellm_aliases.py](../scripts/lib/litellm_aliases.py));
+  canonical identities invariant across modes; tier registry untouched.
+- Provider expansion: Meridian (Claude; root Anthropic base, not `/v1`),
+  Cohere, Hugging Face, Cerebras, OpenRouter, OpenCode Zen, Ollama Cloud direct,
+  oMLX on the corrected `11427` port; GitHub Copilot + ChatGPT via supervised
+  OAuth bootstrap ([scripts/litellm-oauth.py](../scripts/litellm-oauth.py)) that
+  probes each upstream ID and persists verified/deferred model files.
+- Service contract: `LITELLM_DATABASE_URL` user-facing rename
+  (service-side `DATABASE_URL` unchanged), provider-key reconciliation, spend
+  CLI [scripts/litellm-costs.py](../scripts/litellm-costs.py),
+  `LITELLM_DISABLE_ADMIN_UI` / `DOTFILES_LITELLM_UI_EXPOSED` kept distinct.
+- Listing performance: `/v1/models` cold latency reduced from ~29 s to ~0.14 s
+  (138 serial synchronous Hugging Face metadata GETs per listing; fix is an
+  idempotent sentinel-guarded venv bypass applied at deploy by
+  [scripts/configure-litellm-venv.py](../scripts/configure-litellm-venv.py),
+  plus `DEFAULT_MAX_LRU_CACHE_SIZE=4096` in the service environment). Doctor
+  reports patch status; the `.orig-dotfiles` backup is the first saved original.
+  Upgrade discipline: reinstall LiteLLM → re-run deploy → the patcher re-applies
+  or fails closed; upstream fix tracked via perf issue #33721 reference.
+- Known honest deferrals (documented, not bugs): `openai/gpt-5.3-codex` is
+  refused by the OpenAI Codex backend for ChatGPT accounts (needs a real
+  `OPENAI_API_KEY`); Cerebras and Hugging Face inference are
+  quota/credit-exhausted (entitlement class); the Copilot cached token carries a
+  near-expiry `MATCH-candidate` doctor row.
+
+**Residual (open):** none beyond the documented entitlement deferrals; the
+pinned `1.102.1` patch assumes the installed function signature, guarded by the
+deploy-time shape check.
+
 ## 4. Local-model analysis
 
 ### Decision summary
@@ -329,9 +384,15 @@ requires a controlled benchmark.
    [.github/workflows/nightly-integration.yml]
 3. **Coverage:** the 27% production floor is a ratchet starting point; the
     current measured value is 36%, not a promise of 100%. [pyproject.toml]
+    Dated correction (2026-10-07): local `make test` now measures 52.70–54%;
+    see item 4. [pyproject.toml → `fail_under = 27`]
 4. **Machine state:** the oMLX upload-limit correction was machine-side; future
-   configure scripts must validate it without assuming that this repository owns
-   every upstream setting. [docs/VOICE.md]
+    configure scripts must validate it without assuming that this repository owns
+    every upstream setting. [docs/VOICE.md]
+5. **LiteLLM venv patch:** the listing bypass is keyed to the pinned
+    `1.102.1` install; a LiteLLM upgrade removes it and the deploy-time shape
+    check fails closed until the patcher is re-anchored to the new upstream
+    source. [item 9; scripts/configure-litellm-venv.py]
 
 ## 6. Traceability and update rules
 
