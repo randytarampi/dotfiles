@@ -594,6 +594,15 @@ def reconcile(
                 previous_owner
                 and current_identity == _catalogue_identity(previous_owner)
             )
+            if previously_managed and wanted is None:
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+                continue
             if previously_managed and wanted is not None:
                 seen.add(prefix)
                 if collection != wanted["collection"]:

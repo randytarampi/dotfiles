@@ -276,6 +276,26 @@ def test_direct_mode_gateway_residue_uses_configured_non_default_port(
     )
 
 
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("http://127.0.0.1:4000", True),
+        ("http://127.0.0.1:4000/v1", True),
+        ("http://127.0.0.1:40001/v1", False),
+        ("https://localhost:4000?x=1", True),
+    ],
+)
+def test_direct_mode_gateway_port_requires_origin_boundary(
+    tmp_path, monkeypatch, url, expected
+):
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps({"baseURL": url}))
+    monkeypatch.setenv("LITELLM_PORT", "4000")
+    errors = VERIFY_CONFIG._direct_mode_routing_errors(tmp_path)
+    assert any("gateway endpoint" in error for error in errors) is expected
+
+
 def test_direct_mode_residue_port_is_independent_of_litellm_run_gate(
     tmp_path, monkeypatch
 ):

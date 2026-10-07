@@ -397,6 +397,16 @@ def test_unmarked_adoptable_entry_is_preserved_when_provider_is_removed():
     assert result.plan.entries[0]["action"] == "keep"
 
 
+def test_previously_managed_entry_is_deleted_when_provider_is_removed():
+    url = openwebui.ownership_catalogue()["omlx"]["url"]
+    result = openwebui.reconcile(
+        [_entry("omlx", url)],
+        [],
+        {"openai": [], "anthropic": [], "ollama": []},
+    )
+    assert [item["action"] for item in result.plan.entries] == ["delete"]
+
+
 def test_unmarked_new_style_prefix_with_mismatched_identity_is_preserved():
     result = openwebui.reconcile(
         [_entry("omlx", "https://wrong.example/v1", managed=False)],

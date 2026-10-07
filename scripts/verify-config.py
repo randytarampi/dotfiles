@@ -483,17 +483,21 @@ def _direct_mode_routing_errors(home):
         collect(data)
         if any(value.startswith("litellm/") for value in values):
             errors.append(f"Direct mode has LiteLLM transport references in {path}")
+        gateway_port = _configured_litellm_port() or 4000
+        gateway_origins = (
+            f"http://127.0.0.1:{gateway_port}",
+            f"http://localhost:{gateway_port}",
+            f"https://127.0.0.1:{gateway_port}",
+            f"https://localhost:{gateway_port}",
+        )
         if any(
-            value.startswith(
-                (
-                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}",
-                    f"http://localhost:{_configured_litellm_port() or 4000}",
-                )
-            )
+            value == origin
+            or value.startswith((f"{origin}/", f"{origin}?", f"{origin}:"))
             for value in values
+            for origin in gateway_origins
         ):
             errors.append(
-                f"Direct mode has a gateway endpoint on port {_configured_litellm_port() or 4000} in {path}"
+                f"Direct mode has a gateway endpoint on port {gateway_port} in {path}"
             )
     return errors
 
