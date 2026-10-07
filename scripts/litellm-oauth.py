@@ -9,6 +9,7 @@ import json
 import tempfile
 from pathlib import Path
 import stat
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from env import load_env
@@ -36,7 +37,43 @@ PROVIDERS = ("github_copilot", "chatgpt")
 MODELS = {"github_copilot": "github_copilot/gpt-4o", "chatgpt": "chatgpt/gpt-5.2"}
 
 
-def verify_chatgpt_openai_models(python=None, refs=None, verified_path=None, run=None):
+def classify_probe_failure(returncode, output):
+    """Classify known subscription denials and retryable transport artifacts.
+
+    Keep transient markers narrow: recognized API errors, network failures,
+    rate limits, and Cloudflare challenge evidence only.
+    """
+    text = str(output or "").lower()
+    if "is not supported when using codex with a chatgpt account" in text:
+        return "entitlement"
+    if "unknown items in responses api response" in text:
+        return "artifact"
+    if "permissiondeniederror" in text and any(
+        marker in text
+        for marker in ("__cf_chl", "cf-chl", "cloudflare", "challenge-platform")
+    ):
+        return "artifact"
+    if any(
+        marker in text
+        for marker in ("ratelimiterror", "429", "timeout", "connectionerror")
+    ):
+        return "artifact"
+    if any(marker in text for marker in ("litellm", "openai")) and any(
+        marker in text
+        for marker in ("<html", "<!doctype html", "challenge-platform", "cf-chl")
+    ):
+        return "artifact"
+    return "unknown"
+
+
+def verify_chatgpt_openai_models(
+    python=None,
+    refs=None,
+    verified_path=None,
+    deferred_path=None,
+    run=None,
+    sleep=time.sleep,
+):
     """Verify each registry OpenAI ID interactively and atomically persist successes."""
     if refs is None:
         sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
@@ -55,45 +92,105 @@ def verify_chatgpt_openai_models(python=None, refs=None, verified_path=None, run
         verified_path
         or Path.home() / ".local/share/litellm/chatgpt_verified_models.json"
     )
+    deferred_target = Path(
+        deferred_path
+        or Path.home() / ".local/share/litellm/chatgpt_deferred_models.json"
+    )
     runner = run or subprocess.run
-    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    target.parent.chmod(0o700)
+    for path in (target, deferred_target):
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.parent.chmod(0o700)
     verified = []
-    results = []
+    deferred = {"entitlement": [], "artifact": []}
+    unknown = []
     for model_id in model_ids:
         code = (
             "import litellm; "
             f"response = litellm.completion(model={'chatgpt/' + model_id!r}, "
-            "messages=[{'role':'user','content':'Reply with one character.'}], max_tokens=1); "
+            "messages=[{'role':'user','content':'Reply with one character.'}], max_tokens=16); "
             "assert response"
         )
-        try:
-            result = runner([str(python), "-c", code], check=False)
-            passed = result.returncode == 0
-            reason = (
-                "inference succeeded"
-                if passed
-                else f"request failed (exit {result.returncode})"
-            )
-        except OSError:
-            passed = False
-            reason = "request could not be started"
-        print(f"openai/{model_id}: {'VERIFIED' if passed else 'FAILED'} — {reason}")
-        results.append(passed)
-        if passed:
-            verified.append(model_id)
-    fd, temp_path = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+        failure_class = None
+        for attempt in range(3):
+            try:
+                result = runner(
+                    [str(python), "-c", code],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    verified.append(model_id)
+                    print(f"openai/{model_id}: VERIFIED — inference succeeded")
+                    break
+                output = "\n".join((result.stdout or "", result.stderr or ""))
+                failure_class = classify_probe_failure(result.returncode, output)
+            except OSError as error:
+                failure_class = "unknown"
+                output = str(error)
+            if failure_class == "artifact" and attempt < 2:
+                sleep(10)
+                continue
+            if failure_class in deferred:
+                deferred[failure_class].append(model_id)
+                print(f"openai/{model_id}: DEFERRED ({failure_class})")
+            else:
+                unknown.append(model_id)
+                print(f"openai/{model_id}: FAILED — unknown probe failure")
+            break
+        else:
+            # A successful final attempt has already recorded the model.
+            pass
+    if unknown:
+        print(
+            "Unknown probe failures; preserving the existing verified-model file: "
+            + ", ".join(unknown)
+        )
+        return verified, False
+
     try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as output:
-            json.dump(verified, output)
-            output.write("\n")
-        os.replace(temp_path, target)
-        os.chmod(target, 0o600)
-    finally:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-    return verified, all(results)
+        existing = set(json.loads(target.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        existing = set()
+    dropped = sorted(existing - set(verified))
+    if dropped:
+        print(
+            "WARNING: verified model coverage shrank; dropped ids: "
+            + ", ".join(dropped)
+        )
+
+    def atomic_json(path, payload):
+        fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump(payload, output)
+                output.write("\n")
+            os.replace(temp_path, path)
+            os.chmod(path, 0o600)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    atomic_json(target, verified)
+    atomic_json(
+        deferred_target, {key: sorted(value) for key, value in deferred.items()}
+    )
+    summary = [
+        "ChatGPT subscription probe summary:",
+        "  Verified (routed): " + (", ".join(verified) or "none"),
+        "  Deferred entitlement: "
+        + (", ".join(sorted(deferred["entitlement"])) or "none"),
+        "  Deferred artifact: " + (", ".join(sorted(deferred["artifact"])) or "none"),
+        "  Rerun `make deploy` to regenerate and clear verified refs from preflight coverage.",
+    ]
+    if not verified:
+        summary.insert(
+            0,
+            "WARNING: no models verified via subscription transport; all refs remain deferred (honest red in preflight).",
+        )
+    print("\n".join(summary))
+    return verified, True
 
 
 def main(argv=None):
@@ -148,10 +245,26 @@ def main(argv=None):
     model = MODELS[provider]
     verification = (
         "import litellm; "
-        f"response = litellm.completion(model={model!r}, messages=[{{'role':'user','content':'Reply with one character.'}}], max_tokens=1); "
+        f"response = litellm.completion(model={model!r}, messages=[{{'role':'user','content':'Reply with one character.'}}], max_tokens=16); "
         "print('Verification request succeeded:', bool(response))"
     )
-    result = subprocess.run([str(python), "-c", verification], check=False)
+    result = subprocess.run(
+        [str(python), "-c", verification], check=False, capture_output=True, text=True
+    )
+    main_probe_unknown = False
+    if provider == "chatgpt" and result.returncode != 0:
+        try:
+            probe_output = "\n".join((result.stdout or "", result.stderr or ""))
+            probe_class = classify_probe_failure(result.returncode, probe_output)
+        except AttributeError:
+            probe_class = "unknown"
+        if probe_class == "entitlement":
+            print(
+                f"WARNING: main probe model {model} is unavailable via ChatGPT subscription; continuing with per-model verification."
+            )
+            result.returncode = 0
+        else:
+            main_probe_unknown = True
     print(
         "Verification request succeeded."
         if result.returncode == 0
@@ -159,7 +272,7 @@ def main(argv=None):
     )
     if provider == "chatgpt":
         _, models_verified = verify_chatgpt_openai_models(python)
-        return 0 if result.returncode == 0 and models_verified else 1
+        return 0 if models_verified and not main_probe_unknown else 1
     return 0 if result.returncode == 0 else 1
 
 

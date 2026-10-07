@@ -38,10 +38,16 @@ def test_chatgpt_bootstrap_verifies_registry_models_and_atomically_writes_ids(
     target = tmp_path / ".local/share/litellm/chatgpt_verified_models.json"
     calls = []
 
-    def stub(command, check=False):
+    from types import SimpleNamespace
+
+    def stub(command, check=False, **kwargs):
         code = command[-1]
         calls.append(code)
-        return SimpleNamespace(returncode=0 if "chatgpt/gpt-good" in code else 1)
+        return SimpleNamespace(
+            returncode=0 if "chatgpt/gpt-good" in code else 1,
+            stdout="",
+            stderr="The gpt-bad model is not supported when using Codex with a ChatGPT account",
+        )
 
     verified, all_ok = OAUTH.verify_chatgpt_openai_models(
         python=tmp_path / "venv/bin/python",
@@ -49,15 +55,130 @@ def test_chatgpt_bootstrap_verifies_registry_models_and_atomically_writes_ids(
         verified_path=target,
         run=stub,
     )
-    assert verified == ["gpt-good"] and not all_ok
+    assert verified == ["gpt-good"] and all_ok
     assert len(calls) == 2
-    assert all("max_tokens=1" in call for call in calls)
+    assert all("max_tokens=16" in call for call in calls)
     assert json.loads(target.read_text()) == ["gpt-good"]
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
     assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
     report = capsys.readouterr().out
     assert "openai/gpt-good: VERIFIED" in report
-    assert "openai/gpt-bad: FAILED" in report
+    assert "openai/gpt-bad: DEFERRED (entitlement)" in report
+
+
+def test_classify_probe_failure():
+    cases = [
+        ("is not supported when using codex with a chatgpt account", "entitlement"),
+        ("Unknown items in responses API response: []", "artifact"),
+        ("PermissionDeniedError __cf_chl challenge", "artifact"),
+        ("RateLimitError", "artifact"),
+        ("ConnectionError", "artifact"),
+        ("unrecognised failure", "unknown"),
+        (None, "unknown"),
+    ]
+    for output, expected in cases:
+        assert OAUTH.classify_probe_failure(1, output) == expected
+
+
+def test_artifact_retries_then_succeeds(tmp_path):
+    from types import SimpleNamespace
+
+    calls = []
+    sleeps = []
+
+    def stub(command, **kwargs):
+        calls.append(command[-1])
+        return SimpleNamespace(
+            returncode=1 if len(calls) == 1 else 0,
+            stdout="",
+            stderr="Unknown items in responses API response: []",
+        )
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-retry"},
+        verified_path=tmp_path / "verified.json",
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=sleeps.append,
+    )
+    assert ok and verified == ["gpt-retry"] and sleeps == [10]
+
+
+def test_persistent_artifact_is_deferred(tmp_path):
+    from types import SimpleNamespace
+
+    target = tmp_path / "verified.json"
+
+    def stub(command, **kwargs):
+        return SimpleNamespace(returncode=1, stdout="", stderr="Timeout")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-timeout"},
+        verified_path=target,
+        deferred_path=tmp_path / "deferred.json",
+        run=stub,
+        sleep=lambda _: None,
+    )
+    assert ok and verified == [] and json.loads(target.read_text()) == []
+    assert json.loads((tmp_path / "deferred.json").read_text()) == {
+        "entitlement": [],
+        "artifact": ["gpt-timeout"],
+    }
+
+
+def test_unknown_preserves_verified_file(tmp_path):
+    from types import SimpleNamespace
+
+    target = tmp_path / "verified.json"
+    target.write_text('["stale"]')
+
+    def stub(command, **kwargs):
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
+
+    verified, ok = OAUTH.verify_chatgpt_openai_models(
+        refs={"openai/gpt-unknown"},
+        verified_path=target,
+        run=stub,
+    )
+    assert not ok and verified == [] and target.read_text() == '["stale"]'
+
+
+def test_main_probe_entitlement_continues_to_model_verification(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    python = tmp_path / "venv/bin/python"
+    python.parent.mkdir(parents=True)
+    python.touch()
+    monkeypatch.setattr(OAUTH, "litellm_python", lambda: python)
+    monkeypatch.setattr(OAUTH, "load_env", lambda: None)
+    monkeypatch.setattr(OAUTH.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(OAUTH.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    calls = []
+
+    def stub(command, **kwargs):
+        calls.append(command[-1])
+        if "Authenticator" in command[-1]:
+            cache = OAUTH.cache_path("chatgpt")
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text("{}")
+            return SimpleNamespace(returncode=0)
+        if "chatgpt/gpt-5.2" in command[-1]:
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="model is not supported when using Codex with a ChatGPT account",
+            )
+        if "litellm.completion" in command[-1]:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(OAUTH.subprocess, "run", stub)
+    assert OAUTH.main(["--provider", "chatgpt"]) == 0
+    assert any(
+        "openai/" in call or "chatgpt/" in call and "gpt-5.2" not in call
+        for call in calls
+    )
 
 
 def test_non_tty_refuses_before_subprocess(monkeypatch):
