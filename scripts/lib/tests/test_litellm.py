@@ -230,6 +230,14 @@ def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
         f"meridian/{model}" for model in allowlist if f"meridian/{model}" not in aliases
     )
     assert not missing, f"Uncovered canonical identities: {missing}"
+    # The Anthropic wire adapter appends /v1/messages itself, so the wire
+    # base must be root-only (regression for POST /v1/v1/messages 404s).
+    meridian = next(
+        entry
+        for entry in entries
+        if entry["model_name"] == "meridian/claude-sonnet-5-5"
+    )
+    assert not meridian["litellm_params"]["api_base"].endswith("/v1")
 
 
 def test_qualified_model_alias_survives_bare_alias_collision(monkeypatch):
