@@ -85,7 +85,7 @@ else
 fi
 
 if [[ "$OMLX_STARTED" == true ]]; then
-  OMLX_BASE_URL="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-11427}}"
+  OMLX_BASE_URL="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
   OMLX_AUTH_ARGS=()
   [[ -n "${OMLX_API_KEY:-}" ]] && OMLX_AUTH_ARGS=(-H "Authorization: Bearer ${OMLX_API_KEY}")
   ready=false

@@ -180,7 +180,7 @@ else
 fi
 
 verify_omlx_models() {
-  local base_url="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-11427}}"
+  local base_url="${OMLX_BASE_URL:-http://${OMLX_HOST:-127.0.0.1}:${OMLX_PORT:-8000}}"
   local auth_args=()
   if [[ -n "${OMLX_API_KEY:-}" ]]; then
     auth_args=(-H "Authorization: Bearer ${OMLX_API_KEY}")

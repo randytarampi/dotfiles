@@ -327,7 +327,8 @@ Reference: [docs/LITELLM.md](LITELLM.md), [docs/UNMANAGED-CLIENTS.md](UNMANAGED-
   canonical identities invariant across modes; tier registry untouched.
 - Provider expansion: Meridian (Claude; root Anthropic base, not `/v1`),
   Cohere, Hugging Face, Cerebras, OpenRouter, OpenCode Zen, Ollama Cloud direct,
-  oMLX on the corrected `11427` port; GitHub Copilot + ChatGPT via supervised
+  oMLX (repo default aligned to the upstream `8000` port; per-machine
+  override via `OMLX_PORT`); GitHub Copilot + ChatGPT via supervised
   OAuth bootstrap ([scripts/litellm-oauth.py](../scripts/litellm-oauth.py)) that
   probes each upstream ID and persists verified/deferred model files.
 - Service contract: `LITELLM_DATABASE_URL` user-facing rename

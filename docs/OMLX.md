@@ -64,7 +64,7 @@ make services-restart
 |----------|---------|---------|
 | `DOTFILES_RUN_OMLX_SETUP` | `0` | Enable oMLX installation wiring, service, and consumers. |
 | `OMLX_HOST` | `127.0.0.1` | Bind host for the server. |
-| `OMLX_PORT` | `11427` | Bind port for the server. |
+| `OMLX_PORT` | `8000` | Bind port for the server (upstream default). |
 | `OMLX_BASE_URL` | — | Endpoint override; origin only, without `/v1`. |
 | `OMLX_MODEL_DIR` | `$HOME/.omlx/models` | MLX model directory. |
 | `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. |
@@ -237,4 +237,4 @@ The repository does not pull models or manage model directories.
 - `omlx launch <tool>` integrations; repository configure scripts supersede them.
 - The embeddings API: it is documented and exposed, but has no repository consumer today.
 
-Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align via `OMLX_PORT=11427`.
+Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align via `OMLX_PORT=<your port>`.
