@@ -138,9 +138,6 @@ def verify_chatgpt_openai_models(
                 unknown.append(model_id)
                 print(f"openai/{model_id}: FAILED — unknown probe failure")
             break
-        else:
-            # A successful final attempt has already recorded the model.
-            pass
     if unknown:
         print(
             "Unknown probe failures; preserving the existing verified-model file: "
