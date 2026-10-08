@@ -179,6 +179,8 @@ def test_oauth_generation_requires_explicit_gate_and_valid_cache(
 def test_live_catalogue_entries_and_fallback(monkeypatch, catalogue):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
+    # These tests validate full-catalogue emission shapes; opt out of the default free scope.
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "full")
 
     entries = litellm_config.compute_model_list()
     aliases = {entry["model_name"]: entry for entry in entries}
@@ -202,6 +204,9 @@ def test_live_catalogue_failure_is_recorded_and_other_providers_continue(monkeyp
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-" + "or-" + "stub")
     monkeypatch.setenv("GOOGLE_API_KEY", "google-stub")
     monkeypatch.setenv("GEMINI_API_KEY", "google-stub")
+    # The stub catalogue id is not a curated registry reference; full scope
+    # keeps the emission-shape assertions focused on failure handling.
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "full")
 
     def catalogue(provider, *args):
         if provider == "openrouter":
@@ -288,7 +293,13 @@ def test_live_catalogue_key_providers_generate_only_with_keys(
     monkeypatch, provider, key, api_base, wire_prefix, model_id
 ):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [model_id])
-    entries = litellm_config.compute_model_list({key: "test-key"})
+    entries = litellm_config.compute_model_list(
+        {
+            # Full scope: the stub id is not a curated registry selection.
+            "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+            key: "test-key",
+        }
+    )
     alias = f"{wire_prefix}{model_id}"
     entry = next(item for item in entries if item["model_name"] == alias)
     assert entry["litellm_params"]["model"] == alias
@@ -506,10 +517,69 @@ def test_empty_provider_sources_never_emit_default_aliases(monkeypatch, provider
 
 def test_cerebras_catalogue_entry_has_no_api_base(monkeypatch):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["model-x"])
-    entries = litellm_config.compute_model_list({"CEREBRAS_API_KEY": "test-key"})
+    entries = litellm_config.compute_model_list(
+        {
+            # Full scope: the stub id is not a curated registry selection.
+            "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+            "CEREBRAS_API_KEY": "test-key",
+        }
+    )
     entry = next(item for item in entries if item["model_name"] == "cerebras/model-x")
     assert entry["litellm_params"]["model"] == "cerebras/model-x"
     assert "api_base" not in entry["litellm_params"]
+
+
+def test_free_scope_openrouter_keeps_curated_and_free_suffixes(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["free-model:free", "paid-model"],
+    )
+    free_ref = "inclusionai/ling-3.0-flash-sante:free"
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
+    aliases = {item["model_name"] for item in entries}
+    assert "openrouter/free-model:free" in aliases
+    if any(
+        ref.endswith("ling-3.0-flash-sante:free")
+        for ref in litellm_config._registry_model_refs()
+    ):
+        assert "openrouter/inclusionai/ling-3.0-flash-sante:free" in aliases
+    assert "openrouter/paid-model" not in aliases
+
+
+def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["paid-model"])
+    entries = litellm_config.compute_model_list({"HF_TOKEN": "test-" + "key"})
+    assert not any(item["model_name"].startswith("huggingface/") for item in entries)
+    assert any(
+        "huggingface: UNKNOWN (no confirmed models)" in note
+        for note in litellm_config.last_generation_notes
+    )
+
+
+def test_full_scope_keeps_whole_catalogue(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["m-one", "m-two"]
+    )
+    entries = litellm_config.compute_model_list(
+        {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "HF_TOKEN": "test-" + "key"}
+    )
+    aliases = {item["model_name"] for item in entries}
+    assert "huggingface/m-one" in aliases
+    assert "huggingface/m-two" in aliases
+
+
+def test_bogus_scope_is_a_hard_error_before_fetching(monkeypatch):
+    calls = []
+
+    def sentinel(*args):
+        calls.append(args)
+        return []
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", sentinel)
+    with pytest.raises(RuntimeError, match="DOTFILES_LITELLM_CATALOGUE_SCOPE"):
+        litellm_config.compute_model_list({"DOTFILES_LITELLM_CATALOGUE_SCOPE": "bogus"})
+    assert calls == []
 
 
 @pytest.mark.parametrize(
@@ -527,7 +597,13 @@ def test_new_catalogue_failure_is_local_and_visible(monkeypatch, provider, key):
         ),
     )
     entries = litellm_config.compute_model_list(
-        {key: "test-key", "GEMINI_API_KEY": "google-key"}
+        {
+            # Full scope: the surviving stub id is not a curated registry
+            # selection; the failing provider's silence stays asserted below.
+            "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+            key: "test-key",
+            "GEMINI_API_KEY": "google-key",
+        }
     )
     assert not any(item["model_name"].startswith("cohere_chat/") for item in entries)
     assert not any(item["model_name"].startswith("huggingface/") for item in entries)
@@ -919,6 +995,9 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
     catalogue = ["router-alpha", "router-zeta"]
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: catalogue)
     environ = {
+        # Full scope: stub catalogue ids are not curated registry selections,
+        # and the ordering-stability assertion needs the full alias set.
+        "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
         "LITELLM_PORT": "4400",
         "OMLX_API_KEY": "test-omlx-key",
         "OPENROUTER_API_KEY": "test-openrouter-key",
@@ -1721,7 +1800,16 @@ def test_cloud_provider_routes_use_recorded_upstreams(
         alias = f"{provider}/{model_id}"
     entry = next(
         item
-        for item in litellm_config.compute_model_list()
+        for item in litellm_config.compute_model_list(
+            {
+                # The provider key must ride the env-dict: compute_model_list
+                # reads only the dict it is given, not os.environ. Full scope
+                # keeps the stub id emitted even though it is not a curated
+                # registry selection.
+                "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+                env_name: "test-key",
+            }
+        )
         if item["model_name"] == alias
     )
     params = entry["litellm_params"]
