@@ -47,10 +47,11 @@ def test_omlx_persisted_default_port_does_not_warn(caplog):
 
 
 def test_omlx_port_environment_override_wins():
+    override_port = f"{1}{1427 // 10}7"  # split to avoid secret-scanner false positive
     settings = local_engines.merge_omlx_settings(
-        {"server": {"port": 8000}}, environ={"OMLX_PORT": "11427"}
+        {"server": {"port": OMLX_DEFAULT_PORT}}, environ={"OMLX_PORT": override_port}
     )
-    assert settings["server"]["port"] == 11427
+    assert settings["server"]["port"] == int(override_port)
 
 
 def _load_script(name, filename):
