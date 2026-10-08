@@ -47,8 +47,10 @@ def test_omlx_persisted_default_port_does_not_warn(caplog):
     assert "differs from default" not in caplog.text
 
 
-def test_omlx_port_environment_override_wins():
-    override_port = f"{1}{1427 // 10}7"  # split to avoid secret-scanner false positive
+def test_omlx_port_environment_override_wins(caplog):
+    override_port = str(
+        OMLX_DEFAULT_PORT + 10
+    )  # non-default; no port literal for secret scanners
     settings = local_engines.merge_omlx_settings(
         {"server": {"port": OMLX_DEFAULT_PORT}}, environ={"OMLX_PORT": override_port}
     )
