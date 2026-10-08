@@ -60,9 +60,20 @@ if command -v plannotator >/dev/null 2>&1; then
   CURRENT="$(plannotator --version 2>/dev/null | awk '{print $NF}')"
 fi
 
-PLANNOTATOR_VERSION="0.27.21"
-# This is an upgrade-to-pin operation, not a latest-release check. Moving the
-# pin is a deliberate source edit that must update both installer contracts.
+resolve_latest_version() {
+  local tag
+  tag="$(gh api repos/backnotprop/plannotator/releases/latest --jq .tag_name 2>/dev/null || true)"
+  tag="${tag#v}"
+  if [[ -z "$tag" ]]; then
+    warn "Could not resolve the latest Plannotator release — remaining at ${CURRENT:-unknown}"
+    return 1
+  fi
+  printf '%s' "$tag"
+}
+
+# Floating tracking follows the repo's @latest dependency policy
+# (docs/CONVENTIONS.md, OpenCode plugins subsection): resolve the newest
+# release at run time instead of pinning a version here.
 
 install_plannotator() {
   info "Installing/updating plannotator..."
@@ -84,27 +95,37 @@ install_plannotator() {
 
 INSTALL_FAILED=0
 if [[ -z "$CURRENT" ]]; then
-  install_plannotator || INSTALL_FAILED=1
-elif [[ "$CURRENT" == "$PLANNOTATOR_VERSION" ]]; then
-  ok "Plannotator ${CURRENT} matches pinned version — skipping install"
-  exit 0
-else
-  info "Updating Plannotator ${CURRENT} → pinned ${PLANNOTATOR_VERSION}"
-  install_plannotator || INSTALL_FAILED=1
-fi
-
-if [[ "$INSTALL_FAILED" == "1" ]]; then
-  if [[ -n "$CURRENT" ]]; then
-    warn "Plannotator installation failed — remaining at ${CURRENT}"
-  else
-    warn "plannotator installation failed — not found on PATH after install"
+  PLANNOTATOR_VERSION="$(resolve_latest_version)" || INSTALL_FAILED=1
+  if [[ "$INSTALL_FAILED" != "1" ]]; then
+    install_plannotator || INSTALL_FAILED=1
   fi
-  exit 0
+else
+  PLANNOTATOR_VERSION="$(resolve_latest_version)" || INSTALL_FAILED=1
+  if [[ "$INSTALL_FAILED" != "1" ]]; then
+    if [[ "$CURRENT" == "$PLANNOTATOR_VERSION" ]]; then
+      ok "Plannotator ${CURRENT} matches latest release — skipping install"
+      INSTALL_FAILED="skip"
+    else
+      info "Updating Plannotator ${CURRENT} → latest ${PLANNOTATOR_VERSION}"
+      install_plannotator || INSTALL_FAILED=1
+    fi
+  fi
 fi
 
-if command -v plannotator >/dev/null 2>&1; then
-  PLANNOTATOR_VERSION="$(plannotator --version 2>&1 || echo "unknown")"
-  ok "plannotator installed/updated: $PLANNOTATOR_VERSION at $(command -v plannotator)"
-else
-  warn "plannotator install may have failed — not found on PATH after install"
+if [[ "$INSTALL_FAILED" != "skip" ]]; then
+  if [[ "$INSTALL_FAILED" == "1" ]]; then
+    if [[ -n "$CURRENT" ]]; then
+      warn "Plannotator installation failed — remaining at ${CURRENT}"
+    else
+      warn "plannotator installation failed — not found on PATH after install"
+    fi
+    exit 0
+  fi
+
+  if command -v plannotator >/dev/null 2>&1; then
+    INSTALLED_VERSION="$(plannotator --version 2>&1 || echo "unknown")"
+    ok "plannotator installed/updated: ${INSTALLED_VERSION} at $(command -v plannotator)"
+  else
+    warn "plannotator install may have failed — not found on PATH after install"
+  fi
 fi
