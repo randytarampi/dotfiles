@@ -1013,7 +1013,13 @@ def main():
         if not (pi_litellm_proxy and provider in ("google", "openrouter")):
             auth[provider] = {"type": "api_key", "key": f"${endpoint['apiKeyEnv']}"}
     if pi_litellm_proxy:
-        auth = {"litellm": {"type": "api_key", "key": "$LITELLM_PI_KEY"}}
+        # Pi prefers the static auth entry in auth.json over a provider's
+        # apiKey from models.json; when LITELLM_PI_KEY is not exported to the
+        # Pi process the litellm entry would stay unresolved while Pi still
+        # sends the stale stored credential. models.json already supplies the
+        # gateway key for the litellm provider, so emit no conflicting auth
+        # entry at all.
+        auth = {}
     # Derive enabledModels from actual provider model IDs instead of hardcoding
     # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [

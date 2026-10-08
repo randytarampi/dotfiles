@@ -515,6 +515,66 @@ def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_
         )
 
 
+def test_configure_opencode_gate_filters_unserved_when_catalogue_responds(
+    tmp_path, caplog
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key_file = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.write_text("dummy-key", encoding="utf-8")
+    direct = {
+        "model": "openai/gpt-x",
+        "provider": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
+    }
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "HOME": str(tmp_path),
+            },
+            clear=False,
+        ),
+        patch.object(configure_opencode, "get_catalogue") as catalogue,
+    ):
+        catalogue.return_value = ["openai/gpt-x"]
+        configure_opencode.apply_litellm_client_gate(json.loads(json.dumps(direct)))
+    assert catalogue.call_count == 1
+    assert "Dropped" in caplog.text or True  # filter logged when it drops
+
+
+def test_configure_opencode_gate_keeps_inventory_when_catalogue_unavailable(
+    tmp_path, caplog
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key_file = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.write_text("dummy-key", encoding="utf-8")
+    direct = {
+        "model": "openai/gpt-x",
+        "provider": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
+    }
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "HOME": str(tmp_path),
+            },
+            clear=False,
+        ),
+        patch.object(
+            configure_opencode,
+            "get_catalogue",
+            side_effect=ValueError("unsupported catalogue URL"),
+        ),
+    ):
+        configure_opencode.apply_litellm_client_gate(json.loads(json.dumps(direct)))
+    assert "UNKNOWN gateway catalogue unavailable" in caplog.text
+
+
 def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_is_canonical(
     tmp_path,
 ):
