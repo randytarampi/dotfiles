@@ -113,7 +113,12 @@ def main():
             start,
             end,
         )
-        rows = data["logs"]
+        rows = data["logs"] if isinstance(data.get("logs"), list) else None
+        if rows is None:
+            logger.error(
+                "UNKNOWN malformed spend response (missing logs array); no rows rendered"
+            )
+            return 1
         if args.client:
             rows = [
                 row for row in rows if aliases.get(row.get("api_key")) == args.client

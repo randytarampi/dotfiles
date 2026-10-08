@@ -461,16 +461,14 @@ def compute_model_list(environ=None):
             for model_id in model_ids
         )
 
+    # refs are loop-invariant (two JSON reads + a TIERS.md regex pass per
+    # call) — compute once instead of per provider iteration.
+    refs = _registry_model_refs()
     clouds = {
         "openai": (
             "OPENAI_API_KEY",
             "openai/gpt-6-luna",
             "https://api.openai.com/v1",
-        ),
-        "anthropic": (
-            "ANTHROPIC_API_KEY",
-            "anthropic/claude-sonnet-5-5",
-            "https://api.anthropic.com",
         ),
         "google": (
             "GEMINI_API_KEY",
@@ -501,7 +499,6 @@ def compute_model_list(environ=None):
         "huggingface": ("HF_TOKEN", "", PROVIDER_ENDPOINTS["huggingface"]["baseUrl"]),
     }
     for provider, (key_env, model, base_url) in clouds.items():
-        refs = _registry_model_refs()
         requested = {
             ref.split("/", 1)[1] for ref in refs if ref.startswith(provider + "/")
         }
@@ -578,6 +575,21 @@ def compute_model_list(environ=None):
                     key_env=key_env,
                 )
             )
+    # Anthropic coverage comes solely from the meridian block above; the
+    # clouds loop has no anthropic entry because no ref collector emits
+    # anthropic/-prefixed ids (slim anthropic selections translate to
+    # meridian/<id>). Keep the signal honest: silent when meridian covers
+    # it, distinctive when an Anthropic key exists without meridian.
+    anthropic_key = environ.get("ANTHROPIC_API_KEY", "").strip()
+    meridian_key = environ.get("MERIDIAN_API_KEY", "").strip()
+    meridian_covered = is_meridian_configured() and bool(meridian_key)
+    if anthropic_key and meridian_covered:
+        last_generation_notes.append("anthropic: covered by meridian aliases")
+    elif anthropic_key and not meridian_covered:
+        last_generation_notes.append(
+            "anthropic: UNKNOWN configured but no meridian gateway — anthropic selections have no gateway alias (set MERIDIAN_API_KEY)"
+        )
+
     oauth_models = {
         "github_copilot": ("gpt-4o",),
         "chatgpt": ("gpt-5.2",),
