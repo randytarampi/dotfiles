@@ -517,6 +517,13 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 
 ### Detection
 
+The LiteLLM generator defaults to a **free catalogue scope**
+(`DOTFILES_LITELLM_CATALOGUE_SCOPE=free`): only curated selections plus
+OpenRouter `:free` ids are enumerated, so a config drifts smaller and no longer
+advertises models no credential here can call. Set the scope to `full` to
+enumerate whole live catalogues (≈758 entries) instead of the free-scope set
+(≈180–220).
+
 1. `make check-model-drift` — validates slim.json references against checked-in allowlists, probes live local Ollama and deployed Junie profile endpoints, and warns when the sync stamp is >14 days old (run as part of `make verify`; excluded from `ci-verify` because it needs live endpoints).
 2. `opencode models <provider> --refresh` — the only authoritative view of a provider's *current* catalog (models.dev pages and OpenCode's local cache lag; both have shown stale IDs).
 3. `make deploy` prints a staleness notice when the model-sync stamp is missing or old (written by `generate-jetbrains-profiles.py` on real runs).

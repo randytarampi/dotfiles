@@ -481,6 +481,14 @@ def compute_model_list(environ=None):
     global last_generation_notes
     last_generation_notes = []
     entries = []
+    # Catalogue scope gate: free (default) emits only curated selections plus
+    # OpenRouter's genuinely-free tier; full restores the whole enumerated
+    # catalogue. Unknown values are a hard configuration error.
+    scope = str(environ.get("DOTFILES_LITELLM_CATALOGUE_SCOPE", "free")).strip().lower()
+    if scope not in {"free", "full"}:
+        raise RuntimeError(
+            f"unsupported DOTFILES_LITELLM_CATALOGUE_SCOPE {scope!r}: expected 'free' or 'full'"
+        )
     for provider in active_engines():
         models = sorted(_safe_models(provider))
         if provider == "ollama":
@@ -625,12 +633,27 @@ def compute_model_list(environ=None):
         # Canonicalize confirmed ids to the bare gateway-alias spelling so the
         # comparison matches how requested ids are collected (strips models/
         # and :free transport spellings).
+        # Keep the raw catalogue ids: the free scope needs the upstream
+        # ':free' spelling, which canonicalization intentionally removes.
+        raw_confirmed = set(confirmed)
         confirmed = {canonical_allowlist_key(item) for item in confirmed}
         for model_id in sorted(requested - confirmed):
             last_generation_notes.append(
                 f"{provider}/{model_id}: UNKNOWN registry reference is not in catalogue/allowlist"
             )
-        confirmed_models = confirmed & requested if provider == "openai" else confirmed
+        if scope == "free":
+            # Free scope: emit only curated selections (allowlist/TIERS
+            # references). OpenRouter additionally keeps upstream ids whose
+            # raw catalogue spelling is genuinely free (':free' suffix).
+            curated = confirmed & requested
+            if provider == "openrouter":
+                confirmed_models = curated | {
+                    item for item in raw_confirmed if item.endswith(":free")
+                }
+            else:
+                confirmed_models = curated
+        else:
+            confirmed_models = confirmed
         if not confirmed_models:
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue

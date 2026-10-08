@@ -75,6 +75,14 @@ A contradictory configuration is a doctor error.
 
 At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass for `/v1/models` listing enrichment; the original `utils.py` is retained as `utils.py.orig-dotfiles`. Generated `service.env` also sets `DEFAULT_MAX_LRU_CACHE_SIZE=4096` to reduce model-info cache eviction.
 
+## Catalogue scope
+
+By default the generator enumerates live catalogues in a **free scope**:
+only curated selections (allowlists, tier refs) plus OpenRouter ids that are
+genuinely free (`:free`) are emitted. Set `DOTFILES_LITELLM_CATALOGUE_SCOPE=full`
+in `~/.env` to enumerate whole live catalogues again. Any other value is a
+**hard configuration error** at generation time.
+
 ## Database model-table pruning
 
 `python3 scripts/litellm-db-prune.py` compares the served `model_name` set from
