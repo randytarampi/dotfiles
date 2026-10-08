@@ -236,4 +236,5 @@ The repository does not pull models or manage model directories.
 - Custom Metal kernels, which require full Xcode tooling.
 - `omlx launch <tool>` integrations; repository configure scripts supersede them.
 - The embeddings API: it is documented and exposed, but has no repository consumer today.
+
 Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align via `OMLX_PORT=11427`.

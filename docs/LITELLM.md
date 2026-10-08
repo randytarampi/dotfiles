@@ -70,6 +70,7 @@ These switches describe separate layers: `DOTFILES_LITELLM_UI_EXPOSED=1` exposes
 the Admin UI through Caddy (with `CADDY_ACCESS=lan|public`), while the service
 defaults to `LITELLM_DISABLE_ADMIN_UI=True`; set it to `False` to serve the UI.
 A contradictory configuration is a doctor error.
-# Listing performance
+
+## Listing performance
 
 At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass for `/v1/models` listing enrichment; the original `utils.py` is retained as `utils.py.orig-dotfiles`. Generated `service.env` also sets `DEFAULT_MAX_LRU_CACHE_SIZE=4096` to reduce model-info cache eviction.
