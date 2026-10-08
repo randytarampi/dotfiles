@@ -18,7 +18,10 @@ def load_checker():
 def test_manifest_matches_config_and_install_template():
     checker = load_checker()
     full_manifest = checker.load_manifest()["plugins"]
-    assert "opencode-mem@2.26.0" in full_manifest
+    assert "opencode-mem@latest" in full_manifest
+    assert all(  # trufflehog:ignore - spec literals, not credentials.
+        spec.rsplit("@", 1)[1] == "latest" for spec in full_manifest
+    )
     manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
     assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
@@ -29,10 +32,10 @@ def test_gated_plugins_are_excluded_until_explicitly_enabled(monkeypatch):
     checker = load_checker()
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "0")
     inactive = checker.active_plugin_specs()
-    assert "opencode-mem@2.26.0" not in inactive
+    assert "opencode-mem@latest" not in inactive
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
     active = checker.active_plugin_specs()
-    assert "opencode-mem@2.26.0" in active
+    assert "opencode-mem@latest" in active
 
 
 @pytest.mark.parametrize("field", ["install", "config"])
@@ -91,7 +94,7 @@ def test_install_exclusion_condition_mutation_fails(tmp_path):
     mutated = tmp_path / source.name
     text = source.read_text(encoding="utf-8").replace(
         '[[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")',
-        '[[ "$plugin" == "$OH_MY_PLUGIN" || "$plugin" == "opencode-mem@2.26.0" ]] || PLUGINS+=("$plugin")',
+        '[[ "$plugin" == "$OH_MY_PLUGIN" || "$plugin" == "opencode-mem@latest" ]] || PLUGINS+=("$plugin")',  # trufflehog:ignore
     )
     mutated.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match="exclusion condition changed"):
@@ -162,3 +165,32 @@ def test_plan_agent_is_disabled_but_not_plannotator_planning_agent():
 def test_generated_global_config_disables_native_auto_compaction():
     source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
     assert '"compaction": {"auto": False}' in source
+
+
+# trufflehog:ignore - package specs and semver strings, not credentials.
+def test_pinned_spec_accepts_floating_latest_alias():
+    spec = importlib.util.spec_from_file_location(
+        "opencode_plugins_loader", ROOT / "scripts/lib/opencode_plugins.py"
+    )
+    loader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loader)
+    assert loader.is_pinned_spec("oh-my-opencode-slim@latest")
+    assert loader.is_pinned_spec("@plannotator/opencode@latest")
+    assert loader.is_pinned_spec("example-plugin@1.2.3")
+    assert not loader.is_pinned_spec("example-plugin")
+    assert not loader.is_pinned_spec("example-plugin@not-a-version")
+    assert not loader.is_pinned_spec("example-plugin@^1.0.0")
+
+
+def test_latest_alias_dir_check_skips_package_json_fallback(tmp_path):
+    checker = load_checker()
+    cache = tmp_path / "opencode" / "npm" / "oh-my-opencode-slim@latest"
+    cache.mkdir(parents=True)
+    assert checker.is_plugin_installed(
+        "oh-my-opencode-slim@latest", tmp_path / "opencode"
+    )
+    # Directory missing: the fallback compares literal versions and can never
+    # match "latest", so it must report not-installed rather than scan.
+    assert not checker.is_plugin_installed(
+        "oh-my-opencode-slim@latest", tmp_path / "absent"
+    )
