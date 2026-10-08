@@ -32,6 +32,7 @@ from litellm_aliases import (  # noqa: E402
     canonical_allowlist_key,
     resolve_alias,
 )
+from model_catalogues import get_catalogue  # noqa: E402 -- scripts/lib bootstrap.
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
@@ -243,6 +244,30 @@ def apply_litellm_client_gate(config: dict) -> None:
                     ),
                 },
             )
+    # Catalogue honesty: only advertise models the gateway actually serves.
+    # The allowlist seeds cover dormant presets; anything the live gateway
+    # does not list would otherwise fail at request time, so filter it here
+    # (UNKNOWN discipline when the catalogue itself is unavailable).
+    try:
+        client_key = key_path.read_text(encoding="utf-8").strip()
+        catalogue_ids = set(get_catalogue(f"{base_url}/models", client_key) or [])
+        unserved = sorted(set(models) - catalogue_ids)
+        if unserved:
+            logger.warning(
+                "Dropped %d selection(s) the gateway does not serve: %s",
+                len(unserved),
+                ", ".join(unserved),
+            )
+        models = {
+            identity: entry
+            for identity, entry in models.items()
+            if identity in catalogue_ids
+        }
+    except (ValueError, OSError, TimeoutError) as error:
+        logger.warning(
+            "UNKNOWN gateway catalogue unavailable (%s) — inventory unfiltered",
+            error,
+        )
     resolution = resolve_alias(
         "openai/gpt-6-luna",
         True,
