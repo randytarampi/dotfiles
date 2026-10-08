@@ -181,6 +181,11 @@ def is_plugin_installed(spec, cache_dir=None):
     for root in (cache / "npm", cache / "packages"):
         if (root / expected_dir).exists():
             return True
+    if version == "latest":
+        # The floating alias installs into an "<name>@latest" directory (the
+        # dir check above); package.json files always record a concrete
+        # version, so the equality fallback below can never match "latest".
+        return False
     if not cache.exists():
         return False
     for package_json in cache.rglob("package.json"):

@@ -49,6 +49,11 @@ def is_pinned_spec(spec: str) -> bool:
     if "@" not in spec:
         return False
     version = spec.rsplit("@", 1)[1]
+    if version == "latest":
+        # Floating tracking alias: OpenCode installs an "<name>@latest" cache
+        # entry and resolves the newest release at install time (probed on
+        # opencode 1.18.34). Allowed deliberately; see CONVENTIONS.md.
+        return True
     return bool(
         re.fullmatch(
             r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",
