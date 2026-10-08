@@ -222,7 +222,6 @@ def test_live_catalogue_failure_is_recorded_and_other_providers_continue(monkeyp
 
 
 def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
-    import json
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[3]
@@ -535,7 +534,6 @@ def test_free_scope_openrouter_keeps_curated_and_free_suffixes(monkeypatch):
         "_live_catalogue",
         lambda *args: ["free-model:free", "paid-model"],
     )
-    free_ref = "inclusionai/ling-3.0-flash-sante:free"
     entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
     aliases = {item["model_name"] for item in entries}
     assert "openrouter/free-model:free" in aliases
