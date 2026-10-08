@@ -24,6 +24,7 @@ from discover_models import list_cloud_ollama_models
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
+from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
 from model_catalogues import open_same_origin
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ LIVE_CATALOGUE_PROVIDERS = (
 )
 last_generation_notes = []
 COHERE_CATALOGUE_MAX_PAGES = 20
+GOOGLE_CATALOGUE_MAX_PAGES = 10
 
 # Per-client virtual keys provisioned in the LiteLLM proxy (alias → env var
 # name persisted in service.env). Shared source for configure-litellm.py
@@ -156,6 +158,22 @@ def chatgpt_verified_openai_models(environ=None):
     return set(values)
 
 
+def _google_catalogue_rows(payload):
+    """Extract (entries, id_field, next_token_field) from a Google catalogue page.
+
+    Google serves two shapes: the OpenAI-compatible endpoint returns
+    ``{"data": [{"id": ...}], "nextPageToken": ...}`` while the native API
+    returns ``{"models": [{"name": "models/<id>"}], "next_page_token": ...}``.
+    """
+    if not isinstance(payload, dict):
+        return None, None, None
+    if isinstance(payload.get("data"), list):
+        return payload["data"], "id", "nextPageToken"
+    if isinstance(payload.get("models"), list):
+        return payload["models"], "name", "next_page_token"
+    return None, None, None
+
+
 def _live_catalogue(provider, key, base_url, timeout=10):
     """Fetch a provider's live /models IDs, failing closed when unreachable."""
     # bandit B310: provider catalogues are https-only; validate before the
@@ -233,6 +251,70 @@ def _live_catalogue(provider, key, base_url, timeout=10):
             if page_number + 1 >= COHERE_CATALOGUE_MAX_PAGES:
                 raise LiveCatalogueError(
                     f"Cohere catalogue exceeded {COHERE_CATALOGUE_MAX_PAGES} pages"
+                )
+            page_token = next_token
+    if provider == "google":
+        model_ids = set()
+        page_token = None
+        seen_tokens = set()
+        for page_number in range(GOOGLE_CATALOGUE_MAX_PAGES):
+            # The OpenAI-compatible endpoint rejects pageSize ("Unknown
+            # name"); fetch page 1 plain and forward only a real token.
+            query: dict[str, str | int] = {}
+            if page_token:
+                query["pageToken"] = page_token
+            url = urllib.parse.urlunsplit(
+                (
+                    parsed.scheme,
+                    parsed.netloc,
+                    catalogue_path + "/models",
+                    urllib.parse.urlencode(query),
+                    "",
+                )
+            )
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "User-Agent": "dotfiles-catalogue/1.0",
+                },
+            )
+            try:
+                with open_same_origin(request, timeout=timeout) as response:
+                    payload = json.load(response)
+            except (
+                urllib.error.URLError,
+                ValueError,
+                TypeError,
+                AttributeError,
+            ) as error:
+                raise LiveCatalogueError(
+                    f"live model catalogue enumeration failed for {provider}: {error}"
+                ) from error
+            entries, id_field, next_field = _google_catalogue_rows(payload)
+            if entries is None:
+                raise LiveCatalogueError(
+                    "malformed Google catalogue: expected data or models list"
+                )
+            for item in entries:
+                if not isinstance(item, dict) or not isinstance(
+                    item.get(id_field), str
+                ):
+                    raise LiveCatalogueError("malformed Google catalogue model entry")
+                model_ids.add(item[id_field])
+            next_token = payload.get(next_field)
+            if next_token is not None and not isinstance(next_token, str):
+                raise LiveCatalogueError(
+                    "malformed Google catalogue: nextPageToken must be a string"
+                )
+            if not next_token:
+                return sorted(model_ids)
+            if next_token in seen_tokens:
+                raise LiveCatalogueError("Google catalogue repeated nextPageToken")
+            seen_tokens.add(next_token)
+            if page_number + 1 >= GOOGLE_CATALOGUE_MAX_PAGES:
+                raise LiveCatalogueError(
+                    f"Google catalogue exceeded {GOOGLE_CATALOGUE_MAX_PAGES} pages"
                 )
             page_token = next_token
     url = urllib.parse.urlunsplit(
@@ -540,6 +622,10 @@ def compute_model_list(environ=None):
                 continue
         else:
             confirmed = set()
+        # Canonicalize confirmed ids to the bare gateway-alias spelling so the
+        # comparison matches how requested ids are collected (strips models/
+        # and :free transport spellings).
+        confirmed = {canonical_allowlist_key(item) for item in confirmed}
         for model_id in sorted(requested - confirmed):
             last_generation_notes.append(
                 f"{provider}/{model_id}: UNKNOWN registry reference is not in catalogue/allowlist"
