@@ -45,6 +45,34 @@ last_generation_notes = []
 COHERE_CATALOGUE_MAX_PAGES = 20
 GOOGLE_CATALOGUE_MAX_PAGES = 10
 
+# Upstream per-id pricing captured during catalogue fetches (id →
+# (prompt, completion) USD/token strings). The emission loop turns OpenRouter
+# pricing strings into model_info cost rates; other providers stay unpriced.
+_LIVE_CATALOGUE_PRICES: dict[str, dict[str, tuple[str, str]]] = {}
+
+
+def openrouter_pricing_for(model_id):
+    """Return model_info cost rates for a raw (canonicalized) OpenRouter id.
+
+    Sidecar keys hold the raw upstream spelling, which keeps the ':free'
+    suffix that canonicalization strips; try the spelled and suffix-dropped
+    forms. Rates return only when both prompt and completion parse."""
+    rates = _LIVE_CATALOGUE_PRICES.get("openrouter", {})
+    for candidate in (model_id, model_id + ":free"):
+        pricing = rates.get(candidate)
+        if pricing:
+            break
+    else:
+        return None
+    try:
+        return {
+            "input_cost_per_token": float(pricing[0]),
+            "output_cost_per_token": float(pricing[1]),
+        }
+    except (TypeError, ValueError):
+        return None
+
+
 # Per-client virtual keys provisioned in the LiteLLM proxy (alias → env var
 # name persisted in service.env). Shared source for configure-litellm.py
 # (provisioning) and verify-config.py (doctor allowlist).
@@ -76,12 +104,16 @@ def _model_name(item):
     return item.get("name") if isinstance(item, dict) else str(item)
 
 
-def _entry(alias, model, *, api_base=None, key_env=None, alias_kind=None):
+def _entry(
+    alias, model, *, api_base=None, key_env=None, alias_kind=None, model_info=None
+):
     params = {"model": model}
     if api_base:
         params["api_base"] = api_base
     if key_env:
         params["api_key"] = f"os.environ/{key_env}"
+    if model_info:
+        params["model_info"] = model_info
     return {
         "model_name": alias,
         "litellm_params": params,
@@ -343,6 +375,19 @@ def _live_catalogue(provider, key, base_url, timeout=10):
         raise LiveCatalogueError(
             f"live model catalogue for {provider} had invalid data"
         )
+    for item in data:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        pricing = item.get("pricing")
+        if (
+            isinstance(pricing, dict)
+            and isinstance(pricing.get("prompt"), str)
+            and isinstance(pricing.get("completion"), str)
+        ):
+            _LIVE_CATALOGUE_PRICES.setdefault(provider, {})[str(item["id"])] = (
+                pricing["prompt"],
+                pricing["completion"],
+            )
     return sorted(
         str(item["id"]) for item in data if isinstance(item, dict) and item.get("id")
     )
@@ -480,6 +525,8 @@ def compute_model_list(environ=None):
     environ = environ or os.environ
     global last_generation_notes
     last_generation_notes = []
+    # Per-invocation sidecar: rates captured during this fetch cycle only.
+    _LIVE_CATALOGUE_PRICES.clear()
     entries = []
     # Catalogue scope gate: free (default) emits only curated selections plus
     # OpenRouter's genuinely-free tier; full restores the whole enumerated
@@ -658,6 +705,9 @@ def compute_model_list(environ=None):
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
         for model_id in sorted(confirmed_models):
+            model_info = None
+            if provider == "openrouter":
+                model_info = openrouter_pricing_for(model_id)
             if provider == "cohere":
                 alias = wire_model = f"cohere_chat/{model_id}"
             elif provider == "huggingface":
@@ -682,6 +732,7 @@ def compute_model_list(environ=None):
                         )
                     ),
                     key_env=key_env,
+                    model_info=model_info,
                 )
             )
     # Anthropic coverage comes solely from the meridian block above; the
