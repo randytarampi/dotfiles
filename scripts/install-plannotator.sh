@@ -20,7 +20,12 @@ fi
 # shellcheck disable=SC1091
 source "$LIB_DIR/env.sh"
 
-PLANNOTATOR_VERSION="0.27.21"
+# Floating tracking follows the repo's @latest dependency policy
+# (docs/CONVENTIONS.md, OpenCode plugins subsection): resolve the newest
+# release at run time. When resolution fails (offline etc.), fall back to the
+# installed marker version so a healthy install is never churned.
+PLANNOTATOR_VERSION="$(gh api repos/backnotprop/plannotator/releases/latest --jq .tag_name 2>/dev/null || true)"
+PLANNOTATOR_VERSION="${PLANNOTATOR_VERSION#v}"
 PLANNOTATOR_TAG="v${PLANNOTATOR_VERSION}"
 
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -76,13 +81,25 @@ INSTALLED_VERSION=""
 if [[ -f "$VERSION_MARKER" ]]; then
   INSTALLED_VERSION="$(<"$VERSION_MARKER")"
 fi
-if [[ -x "$BIN_PATH" && "$INSTALLED_VERSION" == "$PINNED_VERSION" ]]; then
-  ok "Plannotator paste ${PINNED_VERSION} already installed at ${BIN_PATH}"
+if [[ -z "$PINNED_VERSION" && -n "$INSTALLED_VERSION" ]]; then
+  # Release resolution failed (offline etc.): target the version that is
+  # already installed so a healthy install is neither churned nor wiped.
+  warn "Could not resolve the latest Plannotator release — keeping installed ${INSTALLED_VERSION}"
+  PLANNED_VERSION="$INSTALLED_VERSION"
+  PLANNED_TAG="v${PLANNED_VERSION}"
+  SKIP_INSTALL=1
+else
+  PLANNED_VERSION="$PINNED_VERSION"
+  PLANNED_TAG="$PLANNOTATOR_TAG"
+  SKIP_INSTALL=0
+fi
+if [[ "$SKIP_INSTALL" == "1" || (-x "$BIN_PATH" && "$INSTALLED_VERSION" == "$PLANNED_VERSION") ]]; then
+  ok "Plannotator paste ${PLANNED_VERSION} already installed at ${BIN_PATH}"
 else
   if [[ -x "$BIN_PATH" ]]; then
-    info "Replacing Plannotator paste ${INSTALLED_VERSION:-unknown} with ${PINNED_VERSION}"
+    info "Replacing Plannotator paste ${INSTALLED_VERSION:-unknown} with ${PLANNED_VERSION}"
   elif [[ -n "$PRESENT_BIN" && "$PRESENT_BIN" != "$BIN_PATH" ]]; then
-    info "Found plannotator-paste outside the canonical path (${PRESENT_BIN}); installing ${PINNED_VERSION} to ${BIN_PATH}"
+    info "Found plannotator-paste outside the canonical path (${PRESENT_BIN}); installing ${PLANNED_VERSION} to ${BIN_PATH}"
   fi
   case "$(uname -s)/$(uname -m)" in
   Darwin/arm64) ARCH="darwin-arm64" ;;
@@ -98,7 +115,7 @@ else
   trap 'rm -rf "$TMP_DIR"' EXIT
 
   info "Installing Plannotator paste binary for ${ARCH}..."
-  DOWNLOAD_URL="https://github.com/backnotprop/plannotator/releases/download/${PLANNOTATOR_TAG}/plannotator-paste-${ARCH}"
+  DOWNLOAD_URL="https://github.com/backnotprop/plannotator/releases/download/${PLANNED_TAG}/plannotator-paste-${ARCH}"
   if [[ "$WIN_ARCH" == 1 ]]; then
     DOWNLOAD_URL="${DOWNLOAD_URL}.exe"
   fi
@@ -114,7 +131,7 @@ else
   if [[ "$ARCH" != win32-* ]]; then
     chmod 755 "$BIN_PATH"
   fi
-  printf '%s\n' "$PINNED_VERSION" >"${BIN_PATH}.version"
+  printf '%s\n' "$PLANNED_VERSION" >"${BIN_PATH}.version"
   ok "Plannotator paste installed to ${BIN_PATH}"
 fi
 
@@ -126,13 +143,13 @@ if command -v bun >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
 
   build_ok=1
   if [[ -d "$BUILD_DIR/.git" ]]; then
-    if ! git -C "$BUILD_DIR" fetch --tags --force origin "$PLANNOTATOR_TAG" || ! git -C "$BUILD_DIR" checkout --force "$PLANNOTATOR_TAG"; then
+    if ! git -C "$BUILD_DIR" fetch --tags --force origin "$PLANNED_TAG" || ! git -C "$BUILD_DIR" checkout --force "$PLANNED_TAG"; then
       warn "Portal build failed — Caddy will 404 on / until rebuilt"
       build_ok=0
     fi
   else
     rm -rf "$BUILD_DIR"
-    if ! git clone --depth 1 --branch "$PLANNOTATOR_TAG" https://github.com/backnotprop/plannotator.git "$BUILD_DIR"; then
+    if ! git clone --depth 1 --branch "$PLANNED_TAG" https://github.com/backnotprop/plannotator.git "$BUILD_DIR"; then
       warn "Portal build failed — Caddy will 404 on / until rebuilt"
       build_ok=0
     fi
