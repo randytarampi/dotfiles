@@ -114,10 +114,17 @@
     },
     {
       "path": "scripts/litellm-diagnose.py",
-      "capabilities": ["public", "inspect"],
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
       "enforcement": "strict",
       "failure_policy": "report",
-      "accepted_flags": ["--help", "--dry-run", "--master-key"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--master-key"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -207,17 +214,29 @@
     },
     {
       "path": "scripts/configure-aws.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-docker.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -723,15 +742,24 @@
     },
     {
       "path": "scripts/ci-codegraph.sh",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/run-local-review.sh",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -745,7 +773,11 @@
     },
     {
       "path": "scripts/onboard-agentic-review.py",
-      "capabilities": ["public", "mutates", "backups"],
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -760,9 +792,15 @@
     },
     {
       "path": "scripts/anchor-review-ref.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -895,15 +933,24 @@
     },
     {
       "path": "scripts/check-model-drift.py",
-      "capabilities": ["public"],
+      "capabilities": [
+        "public"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--json", "--require-complete"],
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--require-complete"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/verify-worktree-ready.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -930,7 +977,10 @@
     },
     {
       "path": "scripts/cleanup-project.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -945,15 +995,26 @@
     },
     {
       "path": "scripts/configure-omlx-wired-limit.py",
-      "capabilities": ["public", "mutates", "backups"],
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-openwebui.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -969,26 +1030,62 @@
     },
     {
       "path": "scripts/configure-litellm.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-litellm-venv.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--no-backup"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/litellm-oauth.py",
-      "capabilities": ["public", "inspect"],
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
       "enforcement": "strict",
       "notes": "Interactive mutator of ~/.config/litellm OAuth token caches; no repository writes, dry-run, or backup semantics.",
-      "accepted_flags": ["--help", "--provider"],
+      "accepted_flags": [
+        "--help",
+        "--provider"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/litellm-db-prune.py",
+      "capabilities": [
+        "public",
+        "mutator"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--endpoint",
+        "--config"
+      ],
       "positional_operand": null,
       "child_scripts": []
     }

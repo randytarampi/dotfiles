@@ -74,3 +74,13 @@ A contradictory configuration is a doctor error.
 ## Listing performance
 
 At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass for `/v1/models` listing enrichment; the original `utils.py` is retained as `utils.py.orig-dotfiles`. Generated `service.env` also sets `DEFAULT_MAX_LRU_CACHE_SIZE=4096` to reduce model-info cache eviction.
+
+## Database model-table pruning
+
+`python3 scripts/litellm-db-prune.py` compares the served `model_name` set from
+the generated `config.yaml` against the Admin API's model-table rows
+(`GET /model/info`) and deletes DB-side rows the config no longer serves via
+`POST /model/delete`. It never touches key, team, or spend tables. Accepts
+`--dry-run` (lists planned deletions and performs no network deletes) and
+`--no-backup`; targets the local loopback gateway only. Useful for clearing
+stale Admin UI `Models` tab rows left behind by earlier configuration states.
