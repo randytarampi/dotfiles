@@ -91,12 +91,12 @@
     },
     "openrouter-glm": {
       "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-sante:free"
+      "primaryModel": "inclusionai/ling-3.0-flash-sante"
     },
     "openrouter-nemotron": {
       "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-sante:free",
-      "fasterModel": "inclusionai/ling-3.0-flash-sante:free",
+      "primaryModel": "inclusionai/ling-3.0-flash-sante",
+      "fasterModel": "inclusionai/ling-3.0-flash-sante",
       "fasterProvider": "openrouter"
     },
     "meridian-opus-5-5": {
@@ -118,12 +118,12 @@
     },
     "litellm-openrouter-glm": {
       "provider": "litellm",
-      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante"
     },
     "litellm-openrouter-nemotron": {
       "provider": "litellm",
-      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante:free",
-      "fasterModel": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante",
+      "fasterModel": "openrouter/inclusionai/ling-3.0-flash-sante"
     },
     "litellm-openai-gpt-6-luna": {
       "provider": "litellm",

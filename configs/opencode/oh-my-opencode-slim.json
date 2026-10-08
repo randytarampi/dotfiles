@@ -892,7 +892,7 @@
         ]
       },
       "explorer": {
-        "model": "openrouter/inclusionai/ling-3.0-flash-sante:free",
+        "model": "openrouter/inclusionai/ling-3.0-flash-sante",
         "temperature": 0.2
       },
       "designer": {
@@ -1090,7 +1090,7 @@
           "model": "google/gemini-3.8-flash"
         },
         "gamma": {
-          "model": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+          "model": "openrouter/inclusionai/ling-3.0-flash-sante"
         }
       }
     }
@@ -1638,7 +1638,7 @@
               "model": "google/gemini-3.8-flash"
             },
             "gamma": {
-              "model": "openrouter/inclusionai/ling-3.0-flash-sante:free"
+              "model": "openrouter/inclusionai/ling-3.0-flash-sante"
             },
             "council": {
               "model": "opencode/big-pickle",
