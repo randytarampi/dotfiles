@@ -103,7 +103,13 @@ def _model_allowlists():
         with open(path, encoding="utf-8") as f:
             config = json.load(f)
         models = config.get("models", {})
-        allowlists[provider] = set(models) if isinstance(models, dict) else set()
+        # Canonicalize keys so bare selections match upstream-spelled entries
+        # (e.g. OpenRouter ':free' vs the gateway's bare aliases).
+        allowlists[provider] = (
+            {canonical_allowlist_key(key) for key in models}
+            if isinstance(models, dict)
+            else set()
+        )
     return allowlists
 
 

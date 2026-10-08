@@ -9,6 +9,10 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from litellm_aliases import (
+    canonical_allowlist_key,
+)  # noqa: E402 -- lib sibling import at bootstrap.
+
 from constants import (
     BASE_URLS,
     MERIDIAN_DEFAULT_PORT,
@@ -215,8 +219,14 @@ def load_allowlists(paths: dict[str, Path]) -> dict[str, set[str]]:
             continue
         try:
             models = json.loads(path.read_text(encoding="utf-8")).get("models", {})
-            # Display names are not requestable provider model IDs.
-            result[provider] = set(models) if isinstance(models, dict) else set()
+            # Display names are not requestable provider model IDs; allowlist
+            # keys canonicalize to the bare gateway-alias spelling (drops
+            # `models/` and `:free` variants) so lookups are spelling-proof.
+            result[provider] = (
+                {canonical_allowlist_key(key) for key in models}
+                if isinstance(models, dict)
+                else set()
+            )
         except (OSError, json.JSONDecodeError) as exc:
             logger.warning("Could not read %s — skipping (%s)", path, exc)
     return result

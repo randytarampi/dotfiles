@@ -125,6 +125,10 @@ def test_resolve_alias_rejects_empty_segments():
     [
         ("models/gemini-3.8-flash", "gemini-3.8-flash"),
         ("gemini-3.8-flash", "gemini-3.8-flash"),
+        ("inclusionai/ling-3.0-flash-sante:free", "inclusionai/ling-3.0-flash-sante"),
+        ("inclusionai/ling-3.0-flash-sante", "inclusionai/ling-3.0-flash-sante"),
+        ("inclusionai/ling-3.0-flash-fin-free", "inclusionai/ling-3.0-flash-fin-free"),
+        ("nemotron-3.5-lightning-freetier", "nemotron-3.5-lightning-freetier"),
         (None, None),
         (123, 123),
     ],
