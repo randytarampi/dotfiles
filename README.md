@@ -231,7 +231,7 @@ Set in `~/.env` (0 = skip, 1 = run):
 | `DOTFILES_RUN_OMLX_SETUP` | oMLX service, settings, and provider wiring (macOS Apple Silicon only) | 0 |
 | `DOTFILES_USE_LITELLM_PROXY` | Unified LiteLLM routing, replacing four per-client canaries; `1` is gateway-only, `0` keeps canonical direct routing ([details](docs/LITELLM.md)) | 0 |
 | `DOTFILES_LITELLM_OAUTH_PROVIDERS` | Opt in to LiteLLM OAuth-backed provider routes ([details](docs/LITELLM.md#oauth-providers-opt-in)) | 0 |
-| `DOTFILES_LITELLM_UI_EXPOSED` | Caddy LiteLLM UI-only hostname sites; requires `CADDY_ACCESS=lan|public` ([details](docs/LITELLM.md#ui-exposure)) | 0 |
+| `DOTFILES_LITELLM_UI_EXPOSED` | Caddy LiteLLM UI-only hostname sites; requires `CADDY_ACCESS=lan\|public` ([details](docs/LITELLM.md#ui-exposure)) | 0 |
 | `LITELLM_DISABLE_ADMIN_UI` | Service override; set `False` to serve the Admin UI ([details](docs/LITELLM.md#ui-exposure)) | True (disabled) |
 | `LITELLM_DATABASE_URL` | User-facing Postgres URL translated to service-side `DATABASE_URL` ([details](docs/LITELLM.md)) | unset |
 | `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
