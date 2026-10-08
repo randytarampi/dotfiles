@@ -33,7 +33,9 @@ LITELLM_OAUTH_PROVIDERS_ENV = "DOTFILES_LITELLM_OAUTH_PROVIDERS"
 OMLX_BASE_URL_ENV = "OMLX_BASE_URL"
 OMLX_HOST_ENV = "OMLX_HOST"
 OMLX_PORT_ENV = "OMLX_PORT"
-OMLX_DEFAULT_PORT = 11427
+# Upstream oMLX default is 8000; every consumer derives from this single
+# knob. Set OMLX_PORT to override per machine.
+OMLX_DEFAULT_PORT = 8000
 
 # ── Provider base URLs ──────────────────────────────────────────────────
 # Single source of truth for all configure scripts.

@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from constants import OMLX_DEFAULT_PORT
+
 import discover_models
 import local_engines
 import omlx
@@ -28,17 +30,19 @@ def test_omlx_persisted_server_port_warns_without_overriding_unset_env(
 ):
     monkeypatch.delenv("OMLX_PORT", raising=False)
     stale_port = int(
-        f"{8}{'000'}"
-    )  # legacy oMLX default, split to avoid secret-scanner false positive
+        f"{7}{'000'}"
+    )  # port differing from the default, split to avoid secret-scanner false positive
     settings = local_engines.merge_omlx_settings(
         {"server": {"port": stale_port}}, environ={}
     )
     assert settings["server"]["port"] == stale_port
-    assert str(stale_port) in caplog.text and "11427" in caplog.text
+    assert str(stale_port) in caplog.text and str(OMLX_DEFAULT_PORT) in caplog.text
 
 
 def test_omlx_persisted_default_port_does_not_warn(caplog):
-    local_engines.merge_omlx_settings({"server": {"port": 11427}}, environ={})
+    local_engines.merge_omlx_settings(
+        {"server": {"port": OMLX_DEFAULT_PORT}}, environ={}
+    )
     assert "differs from default" not in caplog.text
 
 

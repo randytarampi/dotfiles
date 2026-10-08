@@ -11,6 +11,7 @@ import pytest
 
 import litellm_config
 import model_catalogues
+from constants import OMLX_DEFAULT_PORT
 
 LIVE_CATALOGUE = litellm_config._live_catalogue
 
@@ -252,7 +253,9 @@ def test_qualified_model_alias_survives_bare_alias_collision(monkeypatch):
         litellm_config,
         "local_endpoint_for",
         lambda provider, proto: (
-            ("http://127.0.0.1:11427/v1", None) if provider == "omlx" else None
+            (f"http://127.0.0.1:{OMLX_DEFAULT_PORT}/v1", None)
+            if provider == "omlx"
+            else None
         ),
     )
     entries = litellm_config.compute_model_list({})
@@ -737,7 +740,7 @@ def test_bare_alias_ambiguity_is_removed_in_either_provider_order(monkeypatch):
     monkeypatch.setattr(
         litellm_config,
         "local_endpoint_for",
-        lambda *_: ("http://127.0.0.1:11427/v1", None),
+        lambda *_: (f"http://127.0.0.1:{OMLX_DEFAULT_PORT}/v1", None),
     )
     monkeypatch.setattr(
         litellm_config, "get_ollama_local_base_url", lambda: "http://127.0.0.1:11434/v1"

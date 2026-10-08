@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from constants import OMLX_DEFAULT_PORT
+
 import local_engines
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -93,7 +95,7 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
     route = caddy.build_route_block("/tmp/portal")
     assert "/omlx/*" in route
     assert "@omlx_blocked" in route
-    assert "127.0.0.1:11427" in route
+    assert f"127.0.0.1:{OMLX_DEFAULT_PORT}" in route
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
     assert "/omlx/*" not in caddy.build_route_block("/tmp/portal")
 
