@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from constants import OMLX_DEFAULT_PORT
+from litellm_aliases import canonical_allowlist_key
 
 import discover_models
 import local_engines
@@ -1600,6 +1601,10 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
                 else f"{provider}/{model}"
             )
             inventory_ids.add(identity)
+    # Allowlists key upstream spellings (e.g. OpenRouter ':free' variants) and
+    # the gateway serves bare aliases; canonicalize so selections always find
+    # their advertised alias.
+    inventory_ids = {canonical_allowlist_key(ref) for ref in inventory_ids}
     consumer = cfgdir / "opencode.json"
     consumer.write_text(
         json.dumps(

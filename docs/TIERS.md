@@ -113,7 +113,7 @@ a contributor-tier model.
 | orchestrator | `big-pickle` | high, temp 0.4 |
 | oracle | `big-pickle` | max, temp 0.4 |
 | librarian | `gemini-3.5-flash-lite` | temp 0.2 |
-| explorer | `openrouter/inclusionai/ling-3.0-flash-sante:free` | temp 0.2 |
+| explorer | `openrouter/inclusionai/ling-3.0-flash-sante` | temp 0.2 |
 | designer | `gemini-3.8-flash` | medium, temp 0.3 |
 | fixer | `nemotron-3.5-lightning-free` | high, temp 0.2 |
 | observer | `gemini-3.8-flash` | low, temp 0.2 |
@@ -555,7 +555,7 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-6.1-sol` (high variant; councillors α sol, β astra, γ luna)
 - **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free)
-- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-sante:free)
+- **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ inclusionai/ling-3.0-flash-sante)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
 
