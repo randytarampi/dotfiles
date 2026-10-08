@@ -1952,3 +1952,119 @@ def test_litellm_env_sync_local_model_cost_map_rule(tmp_path):
         if "=" in line
     )
     assert lines["LITELLM_LOCAL_MODEL_COST_MAP"] == "False"
+
+
+def test_google_catalogue_paginates_and_collects_union(monkeypatch):
+    pages = [
+        {
+            "data": [{"id": "gemini-3.5-flash"}, {"id": "a-first-id"}],
+            "nextPageToken": "tok-2",
+        },
+        {"data": [{"id": "zebra-last"}]},
+    ]
+    urls = []
+
+    def response(request, timeout):
+        urls.append(request.full_url)
+        return io.BytesIO(json.dumps(pages.pop(0)).encode())
+
+    monkeypatch.setattr(litellm_config, "open_same_origin", response)
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    result = litellm_config._live_catalogue(
+        "google", "test-key", "https://generativelanguage.googleapis.com"
+    )
+    assert result == ["a-first-id", "gemini-3.5-flash", "zebra-last"]
+    # The OpenAI-compatible endpoint rejects pageSize; page 1 is fetched bare.
+    assert "pageSize=" not in urls[0]
+    assert "pageToken=tok-2" in urls[1]
+
+
+def test_google_catalogue_uses_bearer_auth_header(monkeypatch):
+    headers_seen = []
+
+    def response(request, timeout):
+        headers_seen.append(request.headers)
+        return io.BytesIO(json.dumps({"data": [{"id": "x"}]}).encode())
+
+    monkeypatch.setattr(litellm_config, "open_same_origin", response)
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    litellm_config._live_catalogue(
+        "google", "test-key", "https://generativelanguage.googleapis.com"
+    )
+    assert headers_seen[0].get("Authorization") == "Bearer test-key"
+
+
+def test_malformed_google_catalogue_yields_note_and_no_entries(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(b'{"wrong": []}'),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    entries = litellm_config.compute_model_list()
+    assert not any(item["model_name"].startswith("google/models/") for item in entries)
+    assert any(
+        "google: UNKNOWN" in note for note in litellm_config.last_generation_notes
+    )
+
+
+@pytest.mark.parametrize(
+    "payloads,cap",
+    [
+        ([{"data": [], "nextPageToken": "repeat"}] * 2, 10),
+        ([{"data": [], "nextPageToken": f"tok-{i}"} for i in range(2)], 2),
+    ],
+)
+def test_google_catalogue_rejects_repeated_token_and_page_cap(
+    monkeypatch, payloads, cap
+):
+    pages = list(payloads)
+    monkeypatch.setattr(litellm_config, "GOOGLE_CATALOGUE_MAX_PAGES", cap)
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(json.dumps(pages.pop(0)).encode()),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    with pytest.raises(litellm_config.LiveCatalogueError):
+        litellm_config._live_catalogue(
+            "google", "key", "https://generativelanguage.googleapis.com"
+        )
+
+
+def test_google_catalogue_rejects_non_string_nextpagetoken(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(b'{"data": [], "nextPageToken": 7}'),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    with pytest.raises(litellm_config.LiveCatalogueError, match="must be a string"):
+        litellm_config._live_catalogue(
+            "google", "key", "https://generativelanguage.googleapis.com"
+        )
+
+
+def test_google_coverage_canonicalizes_native_catalogue_ids(monkeypatch):
+    requested = sorted(
+        ref.split("/", 1)[1]
+        for ref in litellm_config._registry_model_refs()
+        if ref.startswith("google/")
+    )
+    assert requested
+    model_id = requested[0]
+    # Native Google catalogue shape returns ids with the "models/" prefix;
+    # coverage comparison must canonicalize before subtracting.
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda provider, *args: (
+            [f"models/{model_id}"] if provider == "google" else []
+        ),
+    )
+    litellm_config.compute_model_list()
+    assert not any(
+        f"google/{model_id}: UNKNOWN" in note
+        for note in litellm_config.last_generation_notes
+    )
