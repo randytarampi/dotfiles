@@ -229,6 +229,10 @@ def apply_litellm_client_gate(config: dict) -> None:
         except (OSError, json.JSONDecodeError):
             continue
         for model_id, model in allowlist.items():
+            # Checked-in allowlists key upstream spellings (e.g. OpenRouter
+            # ':free' variants) while the gateway serves bare aliases;
+            # canonicalize before composing the identity.
+            model_id = canonical_allowlist_key(model_id)
             if allowlist_provider == "google":
                 identity = f"google/models/{model_id}"
             else:
