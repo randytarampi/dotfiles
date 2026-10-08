@@ -70,11 +70,17 @@ def resolve_canonical_identity(client_reference, proxy_mode):
 
 
 def canonical_allowlist_key(model_id):
-    """Strip provider-internal path segments for allowlist lookup.
+    """Strip provider-internal suffixes and path segments for allowlist lookup.
 
     Google aliases use ``google/models/<id>`` while the checked-in google
     allowlist keys bare IDs, so ``models/<id>`` collapses to ``<id>``.
+    OpenRouter upstream ids carry a ``:free`` variant suffix while the gateway
+    emits bare OpenAI-compatible aliases, so ``<id>:free`` collapses to
+    ``<id>`` — one canonical key per upstream model regardless of transport
+    spelling.
     """
+    if isinstance(model_id, str) and model_id.endswith(":free"):
+        return model_id[: -len(":free")]
     if isinstance(model_id, str) and model_id.startswith("models/"):
         return model_id[len("models/") :]
     return model_id
