@@ -2156,3 +2156,96 @@ def test_google_coverage_canonicalizes_native_catalogue_ids(monkeypatch):
         f"google/{model_id}: UNKNOWN" in note
         for note in litellm_config.last_generation_notes
     )
+
+
+def test_openrouter_pricing_sidecar_captured_from_catalogue(monkeypatch):
+    payload = {
+        "data": [
+            {"id": "free-one:free", "pricing": {"prompt": "0", "completion": "0"}},
+            {
+                "id": "paid-one",
+                "pricing": {"prompt": "0.000001", "completion": "0.0000027"},
+            },
+            {"id": "no-pricing"},
+        ]
+    }
+    calls = []
+
+    def response(request, timeout):
+        calls.append(request.full_url)
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setattr(litellm_config, "open_same_origin", response)
+    # Re-bind the real fetcher: the autouse hermetic fixture stubs it first.
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    result = litellm_config._live_catalogue(
+        "openrouter", "key", "https://openrouter.ai/api/v1"
+    )
+    assert result == ["free-one:free", "no-pricing", "paid-one"]
+    assert litellm_config._LIVE_CATALOGUE_PRICES["openrouter"] == {
+        "free-one:free": ("0", "0"),
+        "paid-one": ("0.000001", "0.0000027"),
+    }
+
+
+def test_openrouter_rows_price_bare_and_free_aliases(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openrouter/model-a:free"}
+    )
+    payload = {
+        "data": [{"id": "model-a:free", "pricing": {"prompt": "0", "completion": "0"}}]
+    }
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(json.dumps(payload).encode()),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
+    aliases = {item["model_name"]: item for item in entries}
+    # Free scope advertises the upstream ':free' spelling; rates come from
+    # the sidecar keyed on that same raw id.
+    assert aliases["openrouter/model-a:free"]["litellm_params"]["model_info"] == {
+        "input_cost_per_token": 0.0,
+        "output_cost_per_token": 0.0,
+    }
+
+
+def test_openrouter_malformed_pricing_leaves_rows_unpriced(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openrouter/busted"}
+    )
+    payload = {
+        "data": [
+            {"id": "busted", "pricing": {"prompt": "not-a-number", "completion": "0"}}
+        ]
+    }
+    monkeypatch.setattr(
+        litellm_config,
+        "open_same_origin",
+        lambda *args, **kwargs: io.BytesIO(json.dumps(payload).encode()),
+    )
+    monkeypatch.setattr(litellm_config, "_live_catalogue", LIVE_CATALOGUE)
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
+    assert entries and all(
+        "model_info" not in item["litellm_params"] for item in entries
+    )
+
+
+def test_non_openrouter_rows_never_carry_pricing(monkeypatch):
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["gpt-5.5"] if args[0] == "openai" else [],
+    )
+    litellm_config._LIVE_CATALOGUE_PRICES["openai"] = {"gpt-5.5": ("0", "0")}
+    try:
+        entries = litellm_config.compute_model_list(
+            {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "OPENAI_API_KEY": "test-key"}
+        )
+    finally:
+        litellm_config._LIVE_CATALOGUE_PRICES.clear()
+    assert entries and all(
+        "model_info" not in item["litellm_params"] for item in entries
+    )
