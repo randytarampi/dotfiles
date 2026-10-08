@@ -116,21 +116,27 @@ relaxation. Empirical sandbox probes (2026-10-05) established:
 
 ### OpenCode plugins (`configs/opencode/opencode-plugins.json`)
 
-Exact pins (`name@X.Y.Z`) are **retained**. Probes against opencode 1.18.34:
+All managed plugins track the **floating `@latest` alias** (user preference,
+2026-10-08; deliberately reverses the exact-pins policy chosen on 2026-10-05).
+Probes against opencode 1.18.34 established the semantics:
 
-- Range specs (`name@^3.0.1`) are accepted but install into a cache directory
-  that preserves the literal range (`oh-my-opencode-slim@^3.0.1/`), so the
-  concrete resolved version differs from the directory name.
-- Warm-cache re-runs did not float to newer versions within the probe window
-  (float behaviour unobservable — no newer release existed to detect).
-- Unversioned specs cache as `name@latest`.
+- `name@latest` installs into a stable cache directory (`name@latest/`) and
+  resolves the newest release at install time; the concrete resolved version
+  is readable only inside `node_modules/<pkg>/package.json`.
+- Warm-cache re-runs do not float on their own — the resolved version stays
+  until the cache is refreshed. A manifest change (hash-triggered
+  `run_onchange_07`) drives the reinstall.
+- `check-plugin-consistency.py` accepts `@latest` specs: `is_pinned_spec`
+  permits the alias, directory detection matches the `@latest` cache entry,
+  and the concrete-version `package.json` fallback is skipped for alias
+  specs (it could never match a literal "latest").
 
-Because a literal-range cache directory contradicts
-`check-plugin-consistency.py` (which expects concrete-version directories)
-and floating behaviour could not be verified as non-breaking, ranges and
-bare names do not meet the "latest non-breaking" bar. Refresh is a
-**deliberate bounded bump**: update the manifest pin, run
-`make check-plugin-consistency` and the tests, then deploy.
+Operator accepts that `@latest` means "newest, possibly breaking" — zero-major
+packages in particular may receive breaking changes without notice. Refresh
+semantics: reinstall on manifest-hash change re-resolves the newest release;
+a deliberate refresh without a manifest edit means clearing the
+corresponding plugin cache directory (or the whole cache) and re-running the
+install script, then `make check-plugin-consistency` plus the focused tests.
 
 ### Pi packages (`scripts/configure-pi.py`)
 
@@ -149,9 +155,13 @@ weekly); GitHub Actions major bumps are additionally guarded by
 `scripts/lib/tests/test_action_major_refs.py`. These ecosystems already
 match the bounded-refresh policy.
 
-Rationale: "unversioned" and "range" are not verified non-breaking —
-they are "latest, possibly breaking". A pin is the only spec form whose
-update semantics are fully controlled.
+Rationale: the ecosystems differ deliberately. OpenCode plugin specs are
+user-preference floating (`@latest`, accepted breaking risk); Pi packages
+are unversioned names reconciled only by a deliberate human `pi update`.
+Neither is "verified non-breaking" — they are "latest, possibly breaking",
+an accepted trade for current releases without manual bump churn. Where
+update semantics must stay fully controlled (GitHub Actions majors,
+guard-testable dependencies), pins or guarded floats remain the rule.
 
 ## Convention Enforcement
 
