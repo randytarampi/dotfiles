@@ -32,7 +32,7 @@ from litellm_aliases import (  # noqa: E402
     canonical_allowlist_key,
     resolve_alias,
 )
-from model_catalogues import get_catalogue  # noqa: E402 -- scripts/lib bootstrap.
+from model_catalogues import get_models  # noqa: E402 -- scripts/lib bootstrap.
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
     build_tier_args,
@@ -250,7 +250,11 @@ def apply_litellm_client_gate(config: dict) -> None:
     # (UNKNOWN discipline when the catalogue itself is unavailable).
     try:
         client_key = key_path.read_text(encoding="utf-8").strip()
-        catalogue_ids = set(get_catalogue(f"{base_url}/models", client_key) or [])
+        catalogue_ids = get_models(f"{base_url}/models", client_key)
+        if catalogue_ids is None:
+            # get_models returns None for any fetch/auth failure; never
+            # convert that to an empty allowlist (UNKNOWN discipline).
+            raise ValueError("gateway catalogue unavailable")
         unserved = sorted(set(models) - catalogue_ids)
         if unserved:
             logger.warning(

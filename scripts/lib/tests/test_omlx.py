@@ -541,12 +541,11 @@ def test_configure_opencode_gate_filters_unserved_when_catalogue_responds(
             },
             clear=False,
         ),
-        patch.object(configure_opencode, "get_catalogue") as catalogue,
+        patch.object(configure_opencode, "get_models") as catalogue,
     ):
-        catalogue.return_value = ["openai/gpt-x"]
+        catalogue.return_value = {"openai/gpt-x"}
         configure_opencode.apply_litellm_client_gate(json.loads(json.dumps(direct)))
     assert catalogue.call_count == 1
-    assert "Dropped" in caplog.text or True  # filter logged when it drops
 
 
 def test_configure_opencode_gate_keeps_inventory_when_catalogue_unavailable(
@@ -572,7 +571,7 @@ def test_configure_opencode_gate_keeps_inventory_when_catalogue_unavailable(
         ),
         patch.object(
             configure_opencode,
-            "get_catalogue",
+            "get_models",
             side_effect=ValueError("unsupported catalogue URL"),
         ),
     ):
@@ -735,6 +734,18 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
             "openai": {"models": {"gpt-x": {"name": "X"}}},
         },
     }
+    # Seed test: the live catalogue serves every seeded identity, so the
+    # honesty filter keeps the inventory (stub returns the id-set directly).
+    monkeypatch.setattr(
+        configure_opencode,
+        "get_models",
+        lambda *args, **kwargs: {
+            "opencode/big-pickle",
+            "google/models/gemini-3.8-flash",
+            "github-copilot/gemini-3.5-flash",
+            "openai/gpt-x",
+        },
+    )
     configure_opencode.apply_litellm_client_gate(config)
     inventory = config["provider"]["litellm"]["models"]
     assert "opencode/big-pickle" in inventory
