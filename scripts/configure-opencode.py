@@ -229,11 +229,13 @@ def apply_litellm_client_gate(config: dict) -> None:
         except (OSError, json.JSONDecodeError):
             continue
         for model_id, model in allowlist.items():
-            # Checked-in allowlists key upstream spellings (e.g. OpenRouter
-            # ':free' variants) while the gateway serves bare aliases;
-            # canonicalize before composing the identity.
-            model_id = canonical_allowlist_key(model_id)
+            # Google allowlist keys are bare while the gateway aliases strip
+            # the native 'models/' prefix; OpenRouter allowlist keys use the
+            # upstream spellings the gateway now serves verbatim (one alias
+            # per model, ':free' variants included), so compose from the raw
+            # key. Other providers have no transport-suffix spellings.
             if allowlist_provider == "google":
+                model_id = canonical_allowlist_key(model_id)
                 identity = f"google/models/{model_id}"
             else:
                 identity = f"{inventory_owner(allowlist_provider)}/{model_id}"
