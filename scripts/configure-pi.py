@@ -719,6 +719,11 @@ def main():
                 f"Pi LiteLLM client key permissions are unsafe: {proxy_key_path}"
             )
         cloud_routes = litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
+        # Every advertised gateway identity belongs in Pi's model list —
+        # users pick from /model, not just preset role selections.
+        for advertised in cloud_routes.get("_available", set()):
+            if advertised.startswith("litellm/"):
+                gateway_models.add(advertised.removeprefix("litellm/"))
         resolved = {}
         for role, model_ref in role_models.items():
             if (
