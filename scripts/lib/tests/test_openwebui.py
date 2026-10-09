@@ -261,9 +261,8 @@ def test_litellm_non_default_port_used_for_ownership_and_desired_state(
     ollama = next(
         item for item in desired["ollama"] if item["config"]["prefix_id"] == "ollama"
     )
-    assert identity["url"] == "http://127.0.0.1:4567"
-    assert ollama["url"] == "http://127.0.0.1:4567"
-    assert "/v1" not in ollama["url"]
+    assert identity["url"] == "http://127.0.0.1:4567/v1"
+    assert ollama["url"] == "http://127.0.0.1:4567/v1"
 
 
 def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
@@ -329,7 +328,7 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
             for entry in proxy_first["openai"]
             if openwebui._identity(entry) == "openai"
         )["url"]
-        == "http://127.0.0.1:4000"
+        == "http://127.0.0.1:4000/v1"
     )
     assert (
         next(
@@ -337,7 +336,7 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
             for entry in proxy_first["openai"]
             if openwebui._identity(entry) == "ollama"
         )["url"]
-        == "http://127.0.0.1:4000"
+        == "http://127.0.0.1:4000/v1"
     )
     assert reconcile_mode(False) == direct_first
     assert reconcile_mode(True) == proxy_first

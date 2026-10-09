@@ -163,7 +163,7 @@ def ownership_catalogue(proxy_mode=None):
             )
         from model_catalogues import _configured_litellm_port
 
-        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}"
+        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
         for identity in catalogue.values():
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
@@ -249,7 +249,7 @@ def compute_desired_state():
             )
         from model_catalogues import _configured_litellm_port
 
-        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}"
+        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
         key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
         for collection in ("openai", "anthropic", "ollama"):
             for connection in desired.get(collection, []):
