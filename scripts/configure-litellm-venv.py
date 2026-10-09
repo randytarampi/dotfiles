@@ -3,6 +3,7 @@
 
 import argparse
 import glob
+import json
 import os
 import re
 import shutil
@@ -83,6 +84,110 @@ def patched_source(source):
     raise ValueError("_safe_get_model_info definition not found")
 
 
+def cost_map_file():
+    """Locate the installed bundled model cost map (same venv as the patcher)."""
+    root = Path(os.environ.get("LITELLM_ROOT", "~/.local/share/litellm")).expanduser()
+    candidates = sorted(
+        glob.glob(
+            str(
+                root / "venv/lib/python3*/site-packages/litellm/"
+                "model_prices_and_context_window_backup.json"
+            )
+        )
+    )
+    return Path(candidates[-1]) if candidates else None
+
+
+def snapshot_rates():
+    """Authoritative checked-in rates (configs/litellm/model-rates.json)."""
+    snapshot_path = SCRIPT_DIR.parent / "configs" / "litellm" / "model-rates.json"
+    try:
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise ValueError(f"unreadable model-rates snapshot: {snapshot_path}")
+    models = snapshot.get("models") if isinstance(snapshot, dict) else None
+    if not isinstance(models, dict) or not models:
+        raise ValueError("model-rates snapshot has no models")
+    return {str(key): value for key, value in models.items() if isinstance(value, dict)}
+
+
+def cost_map_rate_drift(installed, snapshot):
+    """Entries whose installed value differs from the snapshot (or are absent)."""
+    drift = [
+        model_id
+        for model_id, entry in sorted(snapshot.items())
+        if installed.get(model_id) != entry
+    ]
+    return drift
+
+
+def merge_cost_rates(path, *, dry_run=False, no_backup=False):
+    """Merge the checked-in claude rates into the installed LiteLLM cost map.
+
+    The bundled backup file shipped with pinned LiteLLM 1.102.1 lacks the
+    claude-5.x entries, and the service intentionally reads ONLY this file
+    (launchd runs single-worker in an internet-scrubbed environment, so the
+    remote map fetch is unavailable). Request-time cost tracking resolves ids
+    from this map, hence spend rows for Claude wires record $0 today. This is
+    the JSON analogue of the listing patch: snapshot-verified, idempotent,
+    first-write backed up, byte-rollback on write failure.
+    """
+    snapshot = snapshot_rates()
+    original_bytes = path.read_bytes()
+    original_mode = path.stat().st_mode
+    try:
+        installed = json.loads(original_bytes.decode("utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"installed cost map is not valid JSON: {error}")
+    if not isinstance(installed, dict):
+        raise ValueError("installed cost map has unexpected JSON shape")
+    drift = cost_map_rate_drift(installed, snapshot)
+    if not drift:
+        logger.info("LiteLLM cost-map rates already current: %s", path)
+        return 0
+    if dry_run:
+        logger.info(
+            "Would merge %d rate entry/ies into %s: %s",
+            len(drift),
+            path,
+            ", ".join(drift),
+        )
+        return 0
+    merged = dict(installed)
+    for model_id, entry in snapshot.items():
+        merged[model_id] = entry
+    payload = json.dumps(merged, indent=4, sort_keys=True) + "\n"
+    backup = path.with_name(path.name + ".orig-dotfiles")
+    if not no_backup and not backup.exists():
+        shutil.copy2(path, backup)
+    try:
+        json.loads(payload)  # never write an unparseable map
+        temp = path.with_name(path.name + ".rollback")
+        temp.write_text(payload, encoding="utf-8")
+        os.chmod(temp, original_mode)
+        os.replace(temp, path)
+    except Exception:
+        restored = False
+        try:
+            temp = path.with_name(path.name + ".rollback")
+            temp.write_bytes(original_bytes)
+            os.chmod(temp, original_mode)
+            os.replace(temp, path)
+            restored = True
+        finally:
+            if not restored:
+                logger.warning(
+                    "LiteLLM cost-map merge failed; could not restore original file"
+                )
+        if restored:
+            logger.warning("LiteLLM cost-map merge failed; restored original file")
+        return 1
+    logger.info(
+        "Merged %d rate entry/ies into the LiteLLM cost map: %s", len(drift), path
+    )
+    return 0
+
+
 def configure(path, *, dry_run=False, no_backup=False):
     original_bytes = path.read_bytes()
     source = original_bytes.decode("utf-8")
@@ -142,10 +247,26 @@ def main():
     if not path or not path.is_file():
         logger.info("LiteLLM proxy/utils.py not found under configured venv; skipping")
         return 0
+    patch_result = 0
     try:
-        return configure(path, dry_run=args.dry_run, no_backup=args.no_backup)
+        patch_result = configure(path, dry_run=args.dry_run, no_backup=args.no_backup)
     except (OSError, ValueError) as error:
         logger.warning("Could not safely patch LiteLLM venv: %s", error)
+        return 1
+    if patch_result:
+        return patch_result
+    rate_map = cost_map_file()
+    if not rate_map or not rate_map.is_file():
+        logger.info(
+            "LiteLLM bundled cost map not found under configured venv; skipping rates merge"
+        )
+        return 0
+    try:
+        return merge_cost_rates(
+            rate_map, dry_run=args.dry_run, no_backup=args.no_backup
+        )
+    except (OSError, ValueError) as error:
+        logger.warning("Could not safely merge LiteLLM cost rates: %s", error)
         return 1
 
 
