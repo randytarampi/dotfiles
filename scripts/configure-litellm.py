@@ -56,6 +56,49 @@ def _persist_generation_notes(notes, path=None):
         raise
 
 
+def _sync_runtime_rates_snapshot(dry_run=False, runtime_path=None) -> str:
+    """Refresh the runtime rates document from models.dev-derived rates.
+
+    The committed repo snapshot stays the offline fallback; the runtime file
+    (~/.local/share/litellm/model-rates.json) is what the venv patcher merges
+    into the installed cost map, refreshed here at every generation. Diff-only
+    write keeps repeated deploys byte-stable.
+    """
+    runtime = Path(
+        runtime_path or "~/.local/share/litellm/model-rates.json"
+    ).expanduser()
+    generated = litellm_config.build_rates_snapshot()
+    payload = json.dumps(generated, indent=2, sort_keys=True) + "\n"
+    try:
+        current = runtime.read_text(encoding="utf-8") if runtime.is_file() else ""
+    except OSError:
+        current = ""
+    if current == payload:
+        return "unchanged"
+    if dry_run:
+        logger.info("LiteLLM runtime rates would be updated: %s", runtime)
+        return "updated"
+    try:
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(
+            dir=str(runtime.parent), prefix=".model-rates."
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+            os.replace(temp_path, runtime)
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
+        return "updated"
+    except OSError as error:
+        logger.warning("LiteLLM runtime rates write failed: %s", error)
+        return "failed"
+
+
 def _service_env_value(name, path):
     try:
         for line in Path(path).read_text(encoding="utf-8").splitlines():
@@ -346,11 +389,13 @@ def main():
             logger.warning("LiteLLM coverage: %s", note)
         if args.dry_run:
             master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
+            rates_state = _sync_runtime_rates_snapshot(dry_run=True)
             logger.info(
-                "LiteLLM dry-run: models=%d master_key_set=%s config=%s",
+                "LiteLLM dry-run: models=%d master_key_set=%s config=%s rates=%s",
                 len(entries),
                 master_key_set,
                 config_path,
+                rates_state,
             )
             return 0
         changed = write_config(config_path, entries=entries)
@@ -360,6 +405,9 @@ def main():
             "updated" if changed else "unchanged",
             len(entries),
         )
+        rates_state = _sync_runtime_rates_snapshot(args.dry_run)
+        if rates_state == "updated":
+            logger.info("LiteLLM rates snapshot refreshed (models.dev)")
         service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
         master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
         if not master_key:

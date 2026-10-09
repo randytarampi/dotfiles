@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+RUNTIME_RATES_PATH = "~/.local/share/litellm/model-rates.json"
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 import logger  # noqa: E402
@@ -99,16 +100,30 @@ def cost_map_file():
 
 
 def snapshot_rates():
-    """Authoritative checked-in rates (configs/litellm/model-rates.json)."""
-    snapshot_path = SCRIPT_DIR.parent / "configs" / "litellm" / "model-rates.json"
-    try:
-        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        raise ValueError(f"unreadable model-rates snapshot: {snapshot_path}")
-    models = snapshot.get("models") if isinstance(snapshot, dict) else None
-    if not isinstance(models, dict) or not models:
-        raise ValueError("model-rates snapshot has no models")
-    return {str(key): value for key, value in models.items() if isinstance(value, dict)}
+    """Authoritative rate source: runtime snapshot first, committed fallback.
+
+    Generation refreshes the runtime document (~/.local/share/litellm/
+    model-rates.json) from models.dev at every configure-litellm run; the
+    committed repo snapshot covers offline deploys (fresh checkouts before
+    the first generation) and CI runners.
+    """
+    repo_path = SCRIPT_DIR.parent / "configs" / "litellm" / "model-rates.json"
+    candidates = [Path(RUNTIME_RATES_PATH).expanduser(), repo_path]
+    last_error = None
+    for snapshot_path in candidates:
+        try:
+            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            last_error = error
+            continue
+        models = snapshot.get("models") if isinstance(snapshot, dict) else None
+        if isinstance(models, dict) and models:
+            return {
+                str(key): value
+                for key, value in models.items()
+                if isinstance(value, dict)
+            }
+    raise ValueError(f"unreadable model-rates snapshot: {repo_path} ({last_error})")
 
 
 def cost_map_rate_drift(installed, snapshot):

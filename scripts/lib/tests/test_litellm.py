@@ -54,6 +54,11 @@ def hermetic_environment(monkeypatch):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
+    # Models.dev rates stay hermetic: no network, no index leakage between
+    # tests — every rate lookup falls back to the installed cost map seams.
+    monkeypatch.setattr(litellm_config, "_MODELS_DEV_FETCH", lambda **kwargs: {})
+    litellm_config._MODELS_DEV_RATES_LOADED = False
+    litellm_config._MODELS_DEV_RATES = {}
     # Keep the bundled-cost-map loader hermetic: machines with a real LiteLLM
     # venv must not leak live rates into catalogue-emission assertions.
     monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", True)
@@ -2330,6 +2335,139 @@ def test_builtin_rates_never_prices_subscription_chatgpt_wires(monkeypatch):
         },
     )
     assert litellm_config.builtin_rates("chatgpt/gpt-6-luna") is None
+
+
+def _seed_models_dev_fetch(monkeypatch, catalogue):
+    litellm_config._MODELS_DEV_RATES_LOADED = False
+    litellm_config._MODELS_DEV_RATES = {}
+    monkeypatch.setattr(litellm_config, "_MODELS_DEV_FETCH", lambda **kwargs: catalogue)
+
+
+def test_models_dev_rates_index_builds_and_converts_units(monkeypatch):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {
+            "ollama-cloud": {
+                "models": {
+                    "glm-5.3-flash": {
+                        "cost": {"input": 0.15, "output": 0.5, "cache_read": 0.03},
+                        "limit": {"context": 1000000, "output": 131072},
+                    }
+                }
+            }
+        },
+    )
+    index = litellm_config._models_dev_rates()
+    assert "ollama-cloud" in index
+    assert "glm-5.3-flash" in index["ollama-cloud"]
+    info = litellm_config.model_rates("ollama", "glm-5.3-flash:cloud", "ollama/x")
+    # models.dev prices $/1M tokens; LiteLLM wants $/token.
+    assert info == {
+        "input_cost_per_token": 1.5e-07,
+        "output_cost_per_token": 5e-07,
+        "cache_read_input_token_cost": 3e-08,
+        "max_input_tokens": 1000000,
+        "max_output_tokens": 131072,
+    }
+
+
+def test_models_dev_rates_support_ollama_hyphen_cloud_stubs(monkeypatch):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {
+            "ollama-cloud": {
+                "models": {
+                    "nemotron-3-nano:30b": {
+                        "cost": {"input": 0.2, "output": 0.6},
+                    }
+                }
+            }
+        },
+    )
+    info = litellm_config.model_rates("ollama", "nemotron-3-nano:30b-cloud", "ollama/x")
+    assert info["input_cost_per_token"] == pytest.approx(2e-07)
+    assert info["output_cost_per_token"] == pytest.approx(6e-07)
+
+
+def test_models_dev_rates_chatgpt_subscription_estimate(monkeypatch):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {"openai": {"models": {"gpt-6-luna": {"cost": {"input": 0.1, "output": 0.5}}}}},
+    )
+    info = litellm_config.model_rates("openai", "gpt-6-luna", "chatgpt/gpt-6-luna")
+    assert info["input_cost_per_token"] == pytest.approx(1e-07)
+    assert info["output_cost_per_token"] == pytest.approx(5e-07)
+
+
+def test_models_dev_rates_fall_back_to_installed_map(monkeypatch):
+    _seed_models_dev_fetch(monkeypatch, {})
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    info = litellm_config.model_rates(
+        "meridian", "claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"
+    )
+    assert info == dict(CLAUDE_FIXTURE_ENTRY)
+
+
+def test_models_dev_rates_precedence_over_installed_map(monkeypatch):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {
+            "anthropic": {
+                "models": {"claude-sonnet-5-5": {"cost": {"input": 2, "output": 10}}}
+            }
+        },
+    )
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    info = litellm_config.model_rates(
+        "meridian", "claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"
+    )
+    assert info["input_cost_per_token"] == 2e-06
+    assert info["output_cost_per_token"] == 1e-05
+
+
+def test_models_dev_rates_degraded_fetch_keeps_generation_running(monkeypatch):
+    def explode(**kwargs):
+        raise OSError("offline")
+
+    litellm_config._MODELS_DEV_RATES_LOADED = False
+    litellm_config._MODELS_DEV_RATES = {}
+    monkeypatch.setattr(litellm_config, "_MODELS_DEV_FETCH", explode)
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    info = litellm_config.model_rates(
+        "meridian", "claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"
+    )
+    assert info == dict(CLAUDE_FIXTURE_ENTRY)
+
+
+def test_build_rates_snapshot_uses_bare_keys_and_provenance(monkeypatch):
+    _seed_models_dev_fetch(
+        monkeypatch,
+        {
+            "openai": {
+                "models": {
+                    "gpt-6-luna": {
+                        "cost": {"input": 0.1, "output": 0.5},
+                        "limit": {"context": 1050000, "output": 128000},
+                    }
+                }
+            }
+        },
+    )
+    snapshot = litellm_config.build_rates_snapshot({})
+    assert "gpt-6-luna" in snapshot["models"]
+    # The chatgpt twin prices the namespaced bundled entry that shadows the
+    # bare key at request-time resolution (subscription-lane estimate).
+    assert snapshot["models"]["chatgpt/gpt-6-luna"][
+        "input_cost_per_token"
+    ] == pytest.approx(1e-07)
+    assert snapshot["_provenance"]["source"] == "models.dev api.json"
+    assert "fetched" in snapshot["_provenance"]
 
 
 def test_builtin_rates_unknown_wire_stays_unpriced(monkeypatch):

@@ -27,6 +27,11 @@ from litellm_routing import routing_entries_are_safe
 from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
 from model_catalogues import open_same_origin
 
+import models_dev  # noqa: E402 -- lib sibling import.
+
+# Fetch seam for the models.dev rate index; tests stub this module attribute.
+_MODELS_DEV_FETCH = models_dev.fetch_models_dev
+
 logger = logging.getLogger(__name__)
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
@@ -141,6 +146,143 @@ def builtin_rates(wire_model):
         if isinstance(value, (int, float, str)) and value is not None:
             info[info_key] = value
     return info
+
+
+MODELS_DEV_WIRE_PROVIDERS = {
+    "meridian": "anthropic",
+    "anthropic": "anthropic",
+    "google": "google",
+    "openai": "openai",
+    "chatgpt": "openai",
+    "ollama-cloud": "ollama-cloud",
+    "ollama": "ollama-cloud",
+    "opencode": "opencode",
+    "github-copilot": "github-copilot",
+}
+
+_MODELS_DEV_RATES: dict = {}
+_MODELS_DEV_RATES_LOADED = False
+
+
+def _models_dev_rates(environ=None):
+    """Lazily build per-provider rates from models.dev ($/token units).
+
+    models.dev lists costs per million tokens; LiteLLM wants per-token, so
+    values divide by 1e6. Uses the shared 24h-cached fetch and degrades to
+    an empty index on failure so generation never breaks on metadata.
+    """
+    global _MODELS_DEV_RATES, _MODELS_DEV_RATES_LOADED
+    if _MODELS_DEV_RATES_LOADED:
+        return _MODELS_DEV_RATES
+    _MODELS_DEV_RATES_LOADED = True
+    try:
+        catalogue = _MODELS_DEV_FETCH()
+    except Exception:
+        catalogue = {}
+    if not isinstance(catalogue, dict):
+        catalogue = {}
+    rates: dict[str, dict] = {}
+    for provider in models_dev.SUPPORTED_PROVIDERS:
+        entries = (catalogue.get(provider) or {}).get("models")
+        if not isinstance(entries, dict):
+            continue
+        provider_rates = {}
+        for model_id, entry in entries.items():
+            if isinstance(model_id, str) and model_id:
+                provider_rates[model_id] = entry if isinstance(entry, dict) else {}
+        rates[provider] = provider_rates
+    _MODELS_DEV_RATES = rates
+    return _MODELS_DEV_RATES
+
+
+def _models_dev_rate_entry(entry):
+    """Convert one models.dev model entry into LiteLLM model_info rates."""
+    cost = entry.get("cost") if isinstance(entry, dict) else None
+    if not isinstance(cost, dict):
+        return None
+    input_rate = cost.get("input")
+    output_rate = cost.get("output")
+    if not isinstance(input_rate, (int, float)) or not isinstance(
+        output_rate, (int, float)
+    ):
+        return None
+    info: dict[str, object] = {
+        "input_cost_per_token": float(input_rate) / 1e6,
+        "output_cost_per_token": float(output_rate) / 1e6,
+    }
+    for source_key, info_key in (
+        ("cache_read", "cache_read_input_token_cost"),
+        ("cache_write", "cache_creation_input_token_cost"),
+    ):
+        value = cost.get(source_key)
+        if isinstance(value, (int, float)):
+            info[info_key] = float(value) / 1e6
+    limit = entry.get("limit") if isinstance(entry, dict) else None
+    if isinstance(limit, dict):
+        if isinstance(limit.get("context"), (int, float)) and limit["context"] > 0:
+            info["max_input_tokens"] = int(limit["context"])
+        if isinstance(limit.get("output"), (int, float)) and limit["output"] > 0:
+            info["max_output_tokens"] = int(limit["output"])
+    return info
+
+
+def model_rates(provider, model_id, wire_model):
+    """Rates for one emitted row: models.dev first, installed map as fallback.
+
+    ChatGPT-transport rows (subscription lanes) deliberately use the OpenAI
+    API rates as an estimate — the plan bundle has no per-token price, and
+    the user wants usage pages to show a comparable number for every lane.
+    """
+    dev_provider = MODELS_DEV_WIRE_PROVIDERS.get(provider)
+    if dev_provider:
+        candidates = [model_id]
+        if provider == "ollama":
+            # Daemon cloud stubs spell their suffix two ways upstream;
+            # match whichever form models.dev carries, never blind-strip.
+            for suffix in (":cloud", "-cloud"):
+                if model_id.endswith(suffix):
+                    candidates.append(model_id[: -len(suffix)])
+        for dev_id in candidates:
+            info = _models_dev_rate_entry(
+                _models_dev_rates().get(dev_provider, {}).get(dev_id)
+            )
+            if info:
+                return info
+    return builtin_rates(wire_model)
+
+
+def build_rates_snapshot(environ=None):
+    """Generate the models.dev-derived rates document for cost-map merging.
+
+    Keys are bare model ids (the shape request-time cost resolution looks up
+    regardless of the wire namespace, verified for claude/gemini/gpt wires).
+    OpenAI ids also emit `chatgpt/<id>` twins: the installed bundled map has
+    namespaced chatgpt entries with deliberately-empty (subscription) rates,
+    and those shadow the bare key at request-time resolution — pricing the
+    twin makes the subscription-lane estimate actually record.
+    """
+    rates = {}
+    for provider, entries in _models_dev_rates(environ).items():
+        for model_id, entry in entries.items():
+            info = _models_dev_rate_entry(entry)
+            if info:
+                rates[model_id] = info
+                if provider == "openai":
+                    rates[f"chatgpt/{model_id}"] = info
+    # Provenance stamps the cache's data vintage (deterministic inside the
+    # 24h cache window); empty when the fetch degraded.
+    fetched = ""
+    try:
+        fetched = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(os.path.getmtime(models_dev.CACHE_FILE)),
+        )
+    except OSError:
+        pass
+    return {
+        "_provenance": {"source": "models.dev api.json", "fetched": fetched},
+        "models": rates,
+    }
 
 
 def openrouter_pricing_for(model_id):
@@ -638,9 +780,25 @@ def compute_model_list(environ=None):
             # pools and preserve one pair of aliases per installed model.
             ollama_models = sorted(dict.fromkeys(models + cloud_models))
             for model in ollama_models:
-                params = _entry(f"ollama/{model}", f"ollama/{model}", api_base=base)
+                # Daemon cloud stubs bill against the Ollama plan — price
+                # them; bare local names (user hardware) stay unpriced.
+                cloud_info = (
+                    model_rates("ollama", model, f"ollama/{model}")
+                    if model.endswith(":cloud") or model.endswith("-cloud")
+                    else None
+                )
+                params = _entry(
+                    f"ollama/{model}",
+                    f"ollama/{model}",
+                    api_base=base,
+                    model_info=cloud_info,
+                )
                 bare = _entry(
-                    model, f"ollama/{model}", api_base=base, alias_kind="bare"
+                    model,
+                    f"ollama/{model}",
+                    api_base=base,
+                    alias_kind="bare",
+                    model_info=cloud_info,
                 )
                 entries.extend([params, bare])
             continue
@@ -686,10 +844,11 @@ def compute_model_list(environ=None):
                 f"anthropic/{model_id}",
                 api_base=meridian_wire_base,
                 key_env="MERIDIAN_API_KEY",
-                # Claude wires are priced here explicitly: the bundled cost
-                # map only aliases bare claude ids, so the namespaced lookup
-                # LiteLLM runs at request time misses and logs $0 spend.
-                model_info=builtin_rates(f"anthropic/{model_id}"),
+                # Claude wires are priced here explicitly: models.dev rates
+                # first, then the installed cost map — the bundled map only
+                # aliases bare claude ids, so the namespaced lookup LiteLLM
+                # runs at request time misses and logs $0 spend.
+                model_info=model_rates("meridian", model_id, f"anthropic/{model_id}"),
             )
             for model_id in model_ids
         )
@@ -745,7 +904,17 @@ def compute_model_list(environ=None):
             ):
                 verified = chatgpt_verified_openai_models(environ)
                 for model_id in sorted(requested & verified):
-                    entries.append(_entry(f"openai/{model_id}", f"chatgpt/{model_id}"))
+                    entries.append(
+                        _entry(
+                            f"openai/{model_id}",
+                            f"chatgpt/{model_id}",
+                            # Subscription lanes price at the provider's API
+                            # rates as an estimate so usage is comparable.
+                            model_info=model_rates(
+                                "openai", model_id, f"chatgpt/{model_id}"
+                            ),
+                        )
+                    )
                 for model_id in sorted(requested - verified):
                     last_generation_notes.append(
                         f"openai/{model_id}: subscription-transport candidate NOT verified — run litellm-oauth.py --provider chatgpt which verifies ids"
@@ -833,10 +1002,11 @@ def compute_model_list(environ=None):
             if provider == "openrouter":
                 model_info = openrouter_pricing_for(model_id)
             if model_info is None:
-                # Live-sidecar pricing wins; otherwise price from the
-                # installed LiteLLM cost map. Free and subscription rows stay
-                # honest ($0 by live rates; unpriced by design respectively).
-                model_info = builtin_rates(wire_model)
+                # Live-sidecar pricing wins; otherwise models.dev rates and
+                # finally the installed LiteLLM cost map. Free and
+                # subscription rows stay honest ($0 by live rates;
+                # unpriced by design respectively).
+                model_info = model_rates(provider, model_id, wire_model)
             entries.append(
                 _entry(
                     alias,

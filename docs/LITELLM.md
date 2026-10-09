@@ -89,15 +89,27 @@ Request-time spend tracking resolves per-token rates from the map the proxy
 actually runs. The launchd service intentionally reads the bundled local map
 (`LITELLM_LOCAL_MODEL_COST_MAP=True`: single worker, internet-scrubbed, so the
 remote map fetch is unavailable), and the bundled file shipped with pinned
-LiteLLM lacks claude-5.x entries — which silently recorded $0.00 spend for
-Claude traffic. `configs/litellm/model-rates.json` carries a snapshot of the
-authoritative upstream rates (provenance in the file); `make deploy` merges it
-into the installed map via `scripts/configure-litellm-venv.py` (idempotent,
-first-write backed up, drift reported by the doctor's cost-rates row). Meridian
-entries also carry `model_info` rates from the same snapshot so the Models tab
-shows pricing directly. Free rows ($0 by live upstream rates), subscription
-transports (`chatgpt/*` — plan billing, no per-token rates published), local
-daemon rows, and providers with no published rates stay unpriced by design.
+LiteLLM lacks several current entries — which silently recorded $0.00 spend
+for affected models.
+
+Rates are generated from [models.dev](https://models.dev) at every
+`make deploy`/`configure-litellm.py` run: the shared 24h-cached
+`scripts/lib/models_dev.py` fetch supplies per-provider prices (models.dev
+units are $/1M tokens, converted to $/token), and the generator merges them at
+three precedence levels per row — OpenRouter's live-catalogue sidecar first
+(request-time rates straight from upstream pricing), then the models.dev
+index, then the installed bundled map. The merged document written to
+`~/.local/share/litellm/model-rates.json` (diff-only, provenance = the cache's
+data vintage) is what `scripts/configure-litellm-venv.py` merges into the
+installed map (idempotent, first-write backed up, drift reported by the
+doctor's cost-rates row); the committed `configs/litellm/model-rates.json` is
+the offline/CI fallback when the runtime snapshot has not been refreshed yet.
+Subscription transports (`chatgpt/*` — plan billing with no published
+per-token rates) are priced at the provider's API rates as a comparable
+estimate; genuinely free rows ($0 by live upstream rates), local hardware
+rows, and providers with no published rates stay unpriced by design.
+Context-tier pricing (`context_over_200k`) is intentionally not merged —
+base rates only until a request-class-aware consumer exists.
 
 ## Database model-table pruning
 
