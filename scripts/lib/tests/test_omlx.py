@@ -1603,10 +1603,13 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
                 else f"{provider}/{model}"
             )
             inventory_ids.add(identity)
-    # Allowlists key upstream spellings (e.g. OpenRouter ':free' variants) and
-    # the gateway serves bare aliases; canonicalize so selections always find
-    # their advertised alias.
-    inventory_ids = {canonical_allowlist_key(ref) for ref in inventory_ids}
+    # The gateway serves OpenRouter aliases in raw upstream spellings
+    # (':free' variants included) and strips only Google's native 'models/'
+    # prefix — mirror that, don't blanket-canonicalize.
+    inventory_ids = {
+        canonical_allowlist_key(ref) if ref.startswith("google/") else ref
+        for ref in inventory_ids
+    }
     consumer = cfgdir / "opencode.json"
     consumer.write_text(
         json.dumps(
