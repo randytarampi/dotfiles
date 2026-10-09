@@ -684,7 +684,13 @@ def compute_model_list(environ=None):
         # ':free' spelling, which canonicalization intentionally removes.
         raw_confirmed = set(confirmed)
         confirmed = {canonical_allowlist_key(item) for item in confirmed}
-        for model_id in sorted(requested - confirmed):
+        # Compare in the bare gateway-alias space on BOTH sides: requested
+        # carries upstream spellings like ':free' or 'models/' that the
+        # canonicalized confirmed set never contains.
+        canonical_requested = {
+            canonical_allowlist_key(model_id) for model_id in requested
+        }
+        for model_id in sorted(canonical_requested - confirmed):
             last_generation_notes.append(
                 f"{provider}/{model_id}: UNKNOWN registry reference is not in catalogue/allowlist"
             )
