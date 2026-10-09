@@ -116,6 +116,23 @@ def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
             os.unlink(temp_path)
 
 
+def _key_file_materialized(client_key_path: Path, env_name, service_env_path) -> bool:
+    """A client key is materialized only with non-empty usable key material.
+
+    An empty key file alone would strand the client: the recovery path below
+    has no value to repair it with, so treat emptiness as unmaterialized.
+    """
+    if client_key_path.is_symlink():
+        return False
+    if client_key_path.is_file():
+        try:
+            if client_key_path.read_text(encoding="utf-8").strip():
+                return True
+        except OSError:
+            pass
+    return bool(_service_env_value(env_name, service_env_path))
+
+
 def _write_client_key(service_env_path: Path, client, env_name, dry_run=False) -> None:
     """Materialize a per-client app key without sourcing service.env."""
     key = _service_env_value(env_name, service_env_path)
@@ -211,8 +228,8 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
             if alias in aliases:
                 # The key-list endpoint intentionally does not reveal existing
                 # key material; preserve any locally stored key on disk.
-                materialized = client_key_path.is_file() or bool(
-                    _service_env_value(env_name, service_env_path)
+                materialized = _key_file_materialized(
+                    client_key_path, env_name, service_env_path
                 )
                 if materialized or client_key_path.is_symlink():
                     continue
@@ -252,8 +269,8 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
                         ),
                         None,
                     )
-                    materialized = client_key_path.is_file() or bool(
-                        _service_env_value(env_name, service_env_path)
+                    materialized = _key_file_materialized(
+                        client_key_path, env_name, service_env_path
                     )
                     if record and not materialized and not client_key_path.is_symlink():
                         key = _recover_stranded_app_key(
