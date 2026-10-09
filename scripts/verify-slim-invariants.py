@@ -214,7 +214,9 @@ def _check_junie_model_reference(name, group, field, allowlists, violations):
 
 
 def _require_allowlisted_model(provider, model, path, allowlists, violations):
-    if model not in allowlists.get(provider, set()):
+    # Canonicalize the reference the same way allowlist keys are stored, so
+    # upstream spellings like ':free' match the bare gateway-alias keys.
+    if canonical_allowlist_key(model) not in allowlists.get(provider, set()):
         violations.append(f"{path} = {model!r} is not in {provider} model allowlist")
 
 

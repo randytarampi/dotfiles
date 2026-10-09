@@ -95,8 +95,8 @@
     },
     "openrouter-nemotron": {
       "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-sante",
-      "fasterModel": "inclusionai/ling-3.0-flash-sante",
+      "primaryModel": "nvidia/nemotron-3.5-lightning:free",
+      "fasterModel": "nvidia/nemotron-3.5-lightning:free",
       "fasterProvider": "openrouter"
     },
     "meridian-opus-5-5": {
@@ -122,8 +122,8 @@
     },
     "litellm-openrouter-nemotron": {
       "provider": "litellm",
-      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante",
-      "fasterModel": "openrouter/inclusionai/ling-3.0-flash-sante"
+      "primaryModel": "openrouter/nvidia/nemotron-3.5-lightning:free",
+      "fasterModel": "openrouter/nvidia/nemotron-3.5-lightning:free"
     },
     "litellm-openai-gpt-6-luna": {
       "provider": "litellm",
