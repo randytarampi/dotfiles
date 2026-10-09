@@ -50,6 +50,77 @@ GOOGLE_CATALOGUE_MAX_PAGES = 10
 # pricing strings into model_info cost rates; other providers stay unpriced.
 _LIVE_CATALOGUE_PRICES: dict[str, dict[str, tuple[str, str]]] = {}
 
+# Lazy snapshot of the installed LiteLLM bundled cost map. Reading the same
+# file the upstream service uses keeps custom rates authoritative rather than
+# invented; a missing map leaves rows honestly unpriced.
+BUILTIN_COST_MAP: dict = {}
+_BUILTIN_COST_MAP_LOADED = False
+
+
+def _builtin_cost_map(environ=None):
+    """Load the installed LiteLLM model cost map once per process."""
+    global BUILTIN_COST_MAP, _BUILTIN_COST_MAP_LOADED
+    if _BUILTIN_COST_MAP_LOADED:
+        return BUILTIN_COST_MAP
+    _BUILTIN_COST_MAP_LOADED = True
+    root = os.environ.get(
+        "LITELLM_ROOT", str(Path("~/.local/share/litellm").expanduser())
+    )
+    matches = sorted(
+        Path(root).glob(
+            "venv/lib/python3*/site-packages/litellm/"
+            "model_prices_and_context_window_backup.json"
+        )
+    )
+    if not matches:
+        return BUILTIN_COST_MAP
+    try:
+        data = json.loads(matches[0].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return BUILTIN_COST_MAP
+    if isinstance(data, dict):
+        BUILTIN_COST_MAP = data
+    return BUILTIN_COST_MAP
+
+
+def builtin_rates(wire_model):
+    """Return model_info rates for a wire model from the installed cost map.
+
+    Looks up the namespaced key first (e.g. 'gemini/gemini-3.8-flash'), then
+    the provider-stripped bare key (e.g. 'claude-sonnet-5-5', which the
+    bundled maps only alias bare). Subscription rows (wire 'chatgpt/…', token
+    bundles billed via a plan, not per token) are never priced at API rates.
+    """
+    if not isinstance(wire_model, str) or "/" not in wire_model:
+        return None
+    if wire_model.startswith("chatgpt/"):
+        return None
+    provider, model_id = wire_model.split("/", 1)
+    cost_map = _builtin_cost_map()
+    entry = cost_map.get(wire_model) or cost_map.get(model_id)
+    if not isinstance(entry, dict):
+        return None
+    input_rate = entry.get("input_cost_per_token")
+    output_rate = entry.get("output_cost_per_token")
+    if not isinstance(input_rate, (int, float)) or not isinstance(
+        output_rate, (int, float)
+    ):
+        return None
+    info: dict[str, object] = {
+        "input_cost_per_token": float(input_rate),
+        "output_cost_per_token": float(output_rate),
+    }
+    for source_key, info_key in (
+        ("cache_read_input_token_cost", "cache_read_input_token_cost"),
+        ("max_input_tokens", "max_input_tokens"),
+        ("max_output_tokens", "max_output_tokens"),
+        ("mode", "mode"),
+    ):
+        value = entry.get(source_key)
+        if isinstance(value, (int, float, str)) and value is not None:
+            info[info_key] = value
+    return info
+
 
 def openrouter_pricing_for(model_id):
     """Return model_info cost rates for a raw (canonicalized) OpenRouter id.
@@ -594,6 +665,10 @@ def compute_model_list(environ=None):
                 f"anthropic/{model_id}",
                 api_base=meridian_wire_base,
                 key_env="MERIDIAN_API_KEY",
+                # Claude wires are priced here explicitly: the bundled cost
+                # map only aliases bare claude ids, so the namespaced lookup
+                # LiteLLM runs at request time misses and logs $0 spend.
+                model_info=builtin_rates(f"anthropic/{model_id}"),
             )
             for model_id in model_ids
         )
@@ -721,9 +796,6 @@ def compute_model_list(environ=None):
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
         for model_id in sorted(confirmed_models):
-            model_info = None
-            if provider == "openrouter":
-                model_info = openrouter_pricing_for(model_id)
             if provider == "cohere":
                 alias = wire_model = f"cohere_chat/{model_id}"
             elif provider == "huggingface":
@@ -736,6 +808,14 @@ def compute_model_list(environ=None):
             else:
                 alias = f"{provider}/{model_id}"
                 wire_model = f"openai/{model_id}"
+            model_info = None
+            if provider == "openrouter":
+                model_info = openrouter_pricing_for(model_id)
+            if model_info is None:
+                # Live-sidecar pricing wins; otherwise price from the
+                # installed LiteLLM cost map. Free and subscription rows stay
+                # honest ($0 by live rates; unpriced by design respectively).
+                model_info = builtin_rates(wire_model)
             entries.append(
                 _entry(
                     alias,

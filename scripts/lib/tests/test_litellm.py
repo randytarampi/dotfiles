@@ -54,6 +54,10 @@ def hermetic_environment(monkeypatch):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
+    # Keep the bundled-cost-map loader hermetic: machines with a real LiteLLM
+    # venv must not leak live rates into catalogue-emission assertions.
+    monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", True)
+    monkeypatch.setattr(litellm_config, "BUILTIN_COST_MAP", {})
 
 
 def test_cloud_keys_and_meridian_are_conditional(monkeypatch):
@@ -2253,3 +2257,82 @@ def test_non_openrouter_rows_never_carry_pricing(monkeypatch):
     assert entries and all(
         "model_info" not in item["litellm_params"] for item in entries
     )
+
+
+def _seed_builtin_cost_map(monkeypatch, fixture):
+    monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", True)
+    monkeypatch.setattr(litellm_config, "BUILTIN_COST_MAP", fixture)
+
+
+CLAUDE_FIXTURE_ENTRY = {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1e-05,
+    "cache_read_input_token_cost": 1e-07,
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000,
+    "mode": "chat",
+}
+
+
+def test_builtin_rates_price_claude_wires_from_bare_map_keys(monkeypatch):
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    info = litellm_config.builtin_rates("anthropic/claude-sonnet-5-5")
+    assert info == {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 1e-05,
+        "cache_read_input_token_cost": 1e-07,
+        "max_input_tokens": 1000000,
+        "max_output_tokens": 128000,
+        "mode": "chat",
+    }
+
+
+def test_builtin_rates_prices_gemini_via_namespaced_key(monkeypatch):
+    _seed_builtin_cost_map(
+        monkeypatch,
+        {
+            "gemini/gemini-3.8-flash": {
+                "input_cost_per_token": 7.5e-07,
+                "output_cost_per_token": 3.75e-06,
+            }
+        },
+    )
+    info = litellm_config.builtin_rates("gemini/gemini-3.8-flash")
+    assert info is not None
+    assert info["input_cost_per_token"] == 7.5e-07
+    assert "mode" not in info  # absent fields are omitted, not invented
+
+
+def test_builtin_rates_never_prices_subscription_chatgpt_wires(monkeypatch):
+    _seed_builtin_cost_map(
+        monkeypatch,
+        {
+            "gpt-6-luna": dict(CLAUDE_FIXTURE_ENTRY),
+            "chatgpt/gpt-6-luna": {"input_cost_per_token": None},
+        },
+    )
+    assert litellm_config.builtin_rates("chatgpt/gpt-6-luna") is None
+
+
+def test_builtin_rates_unknown_wire_stays_unpriced(monkeypatch):
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    assert litellm_config.builtin_rates("opencode/big-pickle") is None
+    assert litellm_config.builtin_rates("ollama/gemma4:31b-cloud") is None
+
+
+def test_meridian_entries_carry_cached_claude_rates(monkeypatch):
+    _seed_builtin_cost_map(
+        monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}
+    )
+    monkeypatch.setattr(litellm_config, "is_meridian_configured", lambda: True)
+    entries = litellm_config.compute_model_list({"MERIDIAN_API_KEY": "meridian"})
+    target = next(
+        item for item in entries if item["model_name"] == "meridian/claude-sonnet-5-5"
+    )
+    info = target["litellm_params"]["model_info"]
+    assert info["input_cost_per_token"] == 2e-06
+    assert info["output_cost_per_token"] == 1e-05
