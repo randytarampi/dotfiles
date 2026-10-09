@@ -3,6 +3,8 @@ from pathlib import Path
 import sys
 from unittest.mock import patch
 
+import pytest
+
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "litellm-db-prune.py"
 SPEC = importlib.util.spec_from_file_location("litellm_db_prune", SCRIPT_PATH)
 assert SPEC is not None
@@ -14,16 +16,32 @@ SPEC.loader.exec_module(DB_PRUNE)
 
 def _config(tmp_path, names):
     config = tmp_path / "config.yaml"
-    lines = "\n".join(f'  - model_name: "{name}"' for name in names) + "\n"
-    config.write_text(lines)
+    entries = "\n".join(
+        f'  - model_name: "{name}"\n    litellm_params:\n      model: "openai/{name}"'
+        for name in names
+    )
+    config.write_text(f"model_list:\n{entries}\n")
     return config
 
 
 def test_served_model_names_parses_config(tmp_path):
     config = _config(tmp_path, ["openai/gpt-5.5", "google/models/gemini-3.8-flash"])
-    assert DB_PRUNE.served_model_names(config) == {
-        "openai/gpt-5.5",
-        "google/models/gemini-3.8-flash",
+    names = DB_PRUNE.served_model_names(config)
+    assert names == {"openai/gpt-5.5", "google/models/gemini-3.8-flash"}
+    assert not any("openai/" not in n and "google/" not in n for n in names)
+
+
+def test_served_names_regex_fallback_and_nested_exclusion():
+    text = (
+        "model_list:\n"
+        '  - model_name: "quoted/model"\n'
+        "  - model_name: plain/model # inline comment\n"
+        "    litellm_params:\n"
+        "      model_name: nested/should-not-count\n"
+    )
+    assert DB_PRUNE._served_names_regex(text) == {
+        "quoted/model",
+        "plain/model",
     }
 
 
@@ -89,8 +107,7 @@ def test_main_rejects_non_loopback_endpoint(tmp_path, capsys):
             "argv",
             ["litellm-db-prune.py", "--endpoint", "http://example.com:4000"],
         ):
-            try:
+            with pytest.raises(SystemExit) as exc:
                 DB_PRUNE.main()
-            except SystemExit as exc:
-                assert exc.code == 2
+        assert exc.value.code == 2
         assert "refusing non-loopback endpoint" in capsys.readouterr().err
