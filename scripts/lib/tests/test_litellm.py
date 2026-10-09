@@ -2274,6 +2274,22 @@ CLAUDE_FIXTURE_ENTRY = {
 }
 
 
+def test_builtin_rate_snapshot_loads_checked_in_claude_rates(monkeypatch):
+    from pathlib import Path
+
+    # The snapshot is a checked-in repo artifact: reading the real file keeps
+    # this test deterministic in CI (no venv, no network).
+    snapshot = json.loads(
+        (
+            Path(__file__).resolve().parents[3] / "configs/litellm/model-rates.json"
+        ).read_text()
+    )
+    assert snapshot["models"]["claude-sonnet-5-5"]["input_cost_per_token"] == 2e-06
+    _seed_builtin_cost_map(monkeypatch, snapshot["models"])
+    info = litellm_config.builtin_rates("anthropic/claude-sonnet-5-5")
+    assert info is not None and info["input_cost_per_token"] == 2e-06
+
+
 def test_builtin_rates_price_claude_wires_from_bare_map_keys(monkeypatch):
     _seed_builtin_cost_map(
         monkeypatch, {"claude-sonnet-5-5": dict(CLAUDE_FIXTURE_ENTRY)}

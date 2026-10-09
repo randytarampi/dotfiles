@@ -555,6 +555,48 @@ def litellm_venv_patch_status(home=None, environ=None):
     return ["⚠ drift-report: run make deploy to apply the listing bypass"]
 
 
+def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
+    """Report whether the installed cost map carries the checked-in rate snapshot."""
+    environ = os.environ if environ is None else environ
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return []
+    root = Path(home or environ.get("HOME", HOME)).expanduser() / ".local/share/litellm"
+    matches = list(
+        (root / "venv/lib").glob(
+            "python3*/site-packages/litellm/"
+            "model_prices_and_context_window_backup.json"
+        )
+    )
+    if not matches:
+        return []
+    snapshot_path = snapshot_path or (
+        Path(__file__).resolve().parents[1] / "configs/litellm/model-rates.json"
+    )
+    try:
+        models = json.loads(snapshot_path.read_text(encoding="utf-8")).get("models", {})
+    except (OSError, json.JSONDecodeError):
+        return [
+            "⚠ LiteLLM cost rates: unreadable snapshot configs/litellm/model-rates.json"
+        ]
+    try:
+        installed = json.loads(matches[0].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["⚠ LiteLLM cost rates: installed cost map is unreadable"]
+    if not isinstance(installed, dict):
+        return ["⚠ LiteLLM cost rates: installed cost map has unexpected shape"]
+    drift = sorted(
+        model_id
+        for model_id, entry in models.items()
+        if isinstance(entry, dict) and installed.get(model_id) != entry
+    )
+    if not drift:
+        return ["✓ LiteLLM cost rates: installed map matches the checked-in snapshot"]
+    return [
+        "⚠ LiteLLM cost rates: %d model(s) priced differently; run make deploy to merge configs/litellm/model-rates.json (%s)"
+        % (len(drift), ", ".join(drift[:4]) + (", …" if len(drift) > 4 else ""))
+    ]
+
+
 # Gate → list of (description, file path) checks
 CHECKS = [
     (
@@ -1589,6 +1631,8 @@ def main():
         print(f"  \u2717 {error}")
         exit_code = 1
     for status in litellm_venv_patch_status(home=HOME):
+        print(f"  {status}")
+    for status in litellm_cost_rates_status(home=HOME):
         print(f"  {status}")
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"

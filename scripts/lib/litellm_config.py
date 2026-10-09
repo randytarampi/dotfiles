@@ -58,11 +58,31 @@ _BUILTIN_COST_MAP_LOADED = False
 
 
 def _builtin_cost_map(environ=None):
-    """Load the installed LiteLLM model cost map once per process."""
+    """Load cost rates once per process.
+
+    The checked-in snapshot (configs/litellm/model-rates.json) wins: it covers
+    wire families the installed package's bundled backup file lacks (claude-*
+    entries are absent there). The installed file is the fallback so the rest
+    of the map (gemini, gpt, …) prices without snapshotting everything. A
+    missing map leaves rows honestly unpriced.
+    """
     global BUILTIN_COST_MAP, _BUILTIN_COST_MAP_LOADED
     if _BUILTIN_COST_MAP_LOADED:
         return BUILTIN_COST_MAP
     _BUILTIN_COST_MAP_LOADED = True
+    snapshot_path = (
+        Path(__file__).resolve().parents[2] / "configs/litellm/model-rates.json"
+    )
+    try:
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("models"), dict):
+            BUILTIN_COST_MAP = {
+                str(key): value
+                for key, value in snapshot["models"].items()
+                if isinstance(value, dict)
+            }
+    except (OSError, json.JSONDecodeError):
+        pass
     root = os.environ.get(
         "LITELLM_ROOT", str(Path("~/.local/share/litellm").expanduser())
     )
@@ -72,14 +92,15 @@ def _builtin_cost_map(environ=None):
             "model_prices_and_context_window_backup.json"
         )
     )
-    if not matches:
-        return BUILTIN_COST_MAP
-    try:
-        data = json.loads(matches[0].read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return BUILTIN_COST_MAP
-    if isinstance(data, dict):
-        BUILTIN_COST_MAP = data
+    if matches:
+        try:
+            data = json.loads(matches[0].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    BUILTIN_COST_MAP.setdefault(str(key), value)
     return BUILTIN_COST_MAP
 
 

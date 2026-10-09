@@ -12,6 +12,7 @@ source "$LIB_DIR/litellm_service.sh"
 # scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
 # scripts/lib/litellm_config.py: {{ include "scripts/lib/litellm_config.py" | sha256sum }}
+# configs/litellm/model-rates.json: {{ include "configs/litellm/model-rates.json" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}:{{ env "DOTFILES_LITELLM_OAUTH_PROVIDERS" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.102.1" }}:{{ env "LITELLM_PORT" | default "4000" }}

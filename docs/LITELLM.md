@@ -83,6 +83,22 @@ genuinely free (`:free`) are emitted. Set `DOTFILES_LITELLM_CATALOGUE_SCOPE=full
 in `~/.env` to enumerate whole live catalogues again. Any other value is a
 **hard configuration error** at generation time.
 
+## Cost rates
+
+Request-time spend tracking resolves per-token rates from the map the proxy
+actually runs. The launchd service intentionally reads the bundled local map
+(`LITELLM_LOCAL_MODEL_COST_MAP=True`: single worker, internet-scrubbed, so the
+remote map fetch is unavailable), and the bundled file shipped with pinned
+LiteLLM lacks claude-5.x entries — which silently recorded $0.00 spend for
+Claude traffic. `configs/litellm/model-rates.json` carries a snapshot of the
+authoritative upstream rates (provenance in the file); `make deploy` merges it
+into the installed map via `scripts/configure-litellm-venv.py` (idempotent,
+first-write backed up, drift reported by the doctor's cost-rates row). Meridian
+entries also carry `model_info` rates from the same snapshot so the Models tab
+shows pricing directly. Free rows ($0 by live upstream rates), subscription
+transports (`chatgpt/*` — plan billing, no per-token rates published), local
+daemon rows, and providers with no published rates stay unpriced by design.
+
 ## Database model-table pruning
 
 `python3 scripts/litellm-db-prune.py` compares the served `model_name` set from

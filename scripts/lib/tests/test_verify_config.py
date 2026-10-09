@@ -696,3 +696,65 @@ def test_litellm_service_env_rejects_inline_api_keys_and_missing_policy():
     assert any("inline api_key" in problem for problem in problems)
     problems = VERIFY_CONFIG.validate_litellm_service_env({}, "")
     assert any("telemetry/master-key policy" in problem for problem in problems)
+
+
+def test_litellm_cost_rates_status_reports_drift_and_current(tmp_path, monkeypatch):
+    root = tmp_path / ".local/share/litellm/venv/lib/python3.11/site-packages/litellm"
+    root.mkdir(parents=True)
+    cost_map = root / "model_prices_and_context_window_backup.json"
+    env = {"DOTFILES_RUN_LITELLM_SETUP": "1", "HOME": str(tmp_path)}
+    rates = {
+        "models": {
+            "claude-sonnet-5-5": {"input_cost_per_token": 2e-06, "mode": "chat"}
+        },
+        "_provenance": "fixture",
+    }
+    # Point the repo snapshot at a temp dir so the test reads a fixture, not
+    # the live checked-in file.
+    snapshot = tmp_path / "model-rates.json"
+    snapshot.write_text(json.dumps(rates))
+    monkeypatch.setattr(
+        VERIFY_CONFIG.Path, "parents", VERIFY_CONFIG.Path(__file__).parents
+    )
+    # Simpler: the status function derives the snapshot from its own file
+    # location; patch by rewriting its source path via a module-level seam.
+    monkeypatch.setattr(
+        VERIFY_CONFIG,
+        "litellm_cost_rates_status",
+        VERIFY_CONFIG.litellm_cost_rates_status,
+    )
+
+
+def test_litellm_cost_rates_status_reports_drift_and_current(tmp_path):
+    root = (
+        tmp_path / "home/.local/share/litellm/venv/lib/python3.11/site-packages/litellm"
+    )
+    root.mkdir(parents=True)
+    cost_map = root / "model_prices_and_context_window_backup.json"
+    cost_map.write_text('{"gpt-5.5": {"input_cost_per_token": 0.0000015}}\n')
+    env = {"DOTFILES_RUN_LITELLM_SETUP": "1", "HOME": str(tmp_path / "home")}
+    rates = {
+        "models": {"claude-sonnet-5-5": {"input_cost_per_token": 2e-06, "mode": "chat"}}
+    }
+    snapshot = tmp_path / "model-rates.json"
+    snapshot.write_text(json.dumps(rates))
+    drifted = VERIFY_CONFIG.litellm_cost_rates_status(
+        environ=env, snapshot_path=snapshot
+    )
+    assert any(
+        "priced differently" in line and "make deploy" in line for line in drifted
+    )
+    cost_map.write_text(
+        json.dumps({**json.loads(cost_map.read_text()), **rates["models"]}) + "\n"
+    )
+    current = VERIFY_CONFIG.litellm_cost_rates_status(
+        environ=env, snapshot_path=snapshot
+    )
+    assert any("matches the checked-in snapshot" in line for line in current)
+    assert (
+        VERIFY_CONFIG.litellm_cost_rates_status(
+            environ={"DOTFILES_RUN_LITELLM_SETUP": "0"},
+            snapshot_path=snapshot,
+        )
+        == []
+    )

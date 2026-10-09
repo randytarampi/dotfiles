@@ -1,0 +1,86 @@
+{
+  "_provenance": "Snapshot of LiteLLM's upstream model cost map, fetched 2026-10-09 via litellm.model_cost in the managed LiteLLM venv. Covers wire families missing from the installed package's bundled backup file (claude-* entries). Refresh when model families churn; free, subscription (chatgpt/*) and local rows stay unpriced by design.",
+  "models": {
+    "claude-fable-5-1": {
+      "input_cost_per_token": 1e-05,
+      "output_cost_per_token": 5e-05,
+      "cache_read_input_token_cost": 2.5e-07,
+      "cache_creation_input_token_cost": 1.25e-05,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-haiku-4-5": {
+      "input_cost_per_token": 1e-06,
+      "output_cost_per_token": 5e-06,
+      "cache_read_input_token_cost": 1e-07,
+      "cache_creation_input_token_cost": 1.25e-06,
+      "max_input_tokens": 200000,
+      "max_output_tokens": 64000,
+      "mode": "chat"
+    },
+    "claude-opus-4-6": {
+      "input_cost_per_token": 5e-06,
+      "output_cost_per_token": 2.5e-05,
+      "cache_read_input_token_cost": 5e-07,
+      "cache_creation_input_token_cost": 6.25e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-opus-4-8": {
+      "input_cost_per_token": 5e-06,
+      "output_cost_per_token": 2.5e-05,
+      "cache_read_input_token_cost": 5e-07,
+      "cache_creation_input_token_cost": 6.25e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-opus-5": {
+      "input_cost_per_token": 5e-06,
+      "output_cost_per_token": 2.5e-05,
+      "cache_read_input_token_cost": 5e-07,
+      "cache_creation_input_token_cost": 6.25e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-opus-5-5": {
+      "input_cost_per_token": 4e-06,
+      "output_cost_per_token": 2e-05,
+      "cache_read_input_token_cost": 2e-07,
+      "cache_creation_input_token_cost": 5e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-sonnet-4-6": {
+      "input_cost_per_token": 3e-06,
+      "output_cost_per_token": 1.5e-05,
+      "cache_read_input_token_cost": 3e-07,
+      "cache_creation_input_token_cost": 3.75e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-sonnet-5": {
+      "input_cost_per_token": 2e-06,
+      "output_cost_per_token": 1e-05,
+      "cache_read_input_token_cost": 2e-07,
+      "cache_creation_input_token_cost": 2.5e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    },
+    "claude-sonnet-5-5": {
+      "input_cost_per_token": 2e-06,
+      "output_cost_per_token": 1e-05,
+      "cache_read_input_token_cost": 1e-07,
+      "cache_creation_input_token_cost": 2.5e-06,
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "mode": "chat"
+    }
+  }
+}

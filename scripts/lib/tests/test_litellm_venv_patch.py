@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -98,3 +99,103 @@ def test_patch_rollback_preserves_crlf_bytes_and_mode(tmp_path, monkeypatch):
     assert PATCHER.configure(target, no_backup=True) == 1
     assert target.read_bytes() == original
     assert target.stat().st_mode & 0o777 == 0o640
+
+
+CLAUDE_SNAPSHOT = {
+    "claude-sonnet-5-5": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 1e-05,
+        "mode": "chat",
+    }
+}
+
+
+def _cost_map_fixture(tmp_path, entries):
+    target = tmp_path / "model_prices_and_context_window_backup.json"
+    target.write_text(
+        '{"gpt-5.5": {"input_cost_per_token": 0.0000015}}\n'.replace(
+            '{"gpt-5.5": {"input_cost_per_token": 0.0000015}}',
+            str(entries).replace("'", '"'),
+        )
+    )
+    return target
+
+
+def test_cost_map_merge_applies_snapshot_idempotently(tmp_path, monkeypatch):
+    target = _cost_map_fixture(
+        tmp_path, {"gpt-5.5": {"input_cost_per_token": 0.0000015}}
+    )
+    monkeypatch.setattr(PATCHER, "snapshot_rates", lambda: dict(CLAUDE_SNAPSHOT))
+    monkeypatch.setattr(PATCHER, "cost_map_file", lambda: target)
+    assert PATCHER.merge_cost_rates(target) == 0
+    merged = json.loads(target.read_text())
+    assert merged["claude-sonnet-5-5"] == CLAUDE_SNAPSHOT["claude-sonnet-5-5"]
+    assert merged["gpt-5.5"] == {"input_cost_per_token": 0.0000015}
+    backup = target.with_name(
+        "model_prices_and_context_window_backup.json.orig-dotfiles"
+    )
+    assert backup.exists()
+    first_bytes = target.read_bytes()
+    assert PATCHER.merge_cost_rates(target) == 0
+    assert target.read_bytes() == first_bytes
+    assert not target.with_name(
+        "model_prices_and_context_window_backup.json.rollback"
+    ).exists()
+
+
+def test_cost_map_merge_dry_run_writes_nothing(tmp_path, monkeypatch, caplog):
+    target = _cost_map_fixture(tmp_path, {})
+    monkeypatch.setattr(PATCHER, "snapshot_rates", lambda: dict(CLAUDE_SNAPSHOT))
+    assert PATCHER.merge_cost_rates(target, dry_run=True) == 0
+    assert json.loads(target.read_text()) == {}
+    assert "claude-sonnet-5-5" in caplog.text
+
+
+def test_cost_map_merge_restores_original_on_write_failure(tmp_path, monkeypatch):
+    target = _cost_map_fixture(tmp_path, {})
+    original_bytes = target.read_bytes()
+    monkeypatch.setattr(PATCHER, "snapshot_rates", lambda: dict(CLAUDE_SNAPSHOT))
+    real_replace = PATCHER.os.replace
+    calls = {"n": 0}
+
+    def fail_first_replace(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("boom")
+        return real_replace(*args, **kwargs)
+
+    monkeypatch.setattr(PATCHER.os, "replace", fail_first_replace)
+    assert PATCHER.merge_cost_rates(target, no_backup=True) == 1
+    assert target.read_bytes() == original_bytes
+    assert not target.with_name(
+        "model_prices_and_context_window_backup.json.rollback"
+    ).exists()
+
+
+def test_cost_map_merge_detects_upstream_drift(tmp_path, monkeypatch):
+    target = _cost_map_fixture(
+        tmp_path,
+        {
+            "gpt-5.5": {"input_cost_per_token": 0.0000015},
+            "claude-sonnet-5-5": {"input_cost_per_token": 9e-9},
+        },
+    )
+    monkeypatch.setattr(PATCHER, "snapshot_rates", lambda: dict(CLAUDE_SNAPSHOT))
+    assert PATCHER.cost_map_rate_drift(
+        json.loads(target.read_text()), CLAUDE_SNAPSHOT
+    ) == ["claude-sonnet-5-5"]
+    assert PATCHER.merge_cost_rates(target) == 0
+    assert (
+        json.loads(target.read_text())["claude-sonnet-5-5"]
+        == CLAUDE_SNAPSHOT["claude-sonnet-5-5"]
+    )
+
+
+def test_snapshot_rates_rejects_unreadable(tmp_path, monkeypatch):
+    monkeypatch.setattr(PATCHER, "SCRIPT_DIR", tmp_path)
+    try:
+        PATCHER.snapshot_rates()
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("missing snapshot accepted")
