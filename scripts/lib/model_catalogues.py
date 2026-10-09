@@ -42,6 +42,21 @@ TRUSTED_HTTPS_HOSTS = BASE_URL_HOSTS | {
     "open.openaipublic.com",
 }
 MODEL_CATALOGUE_TIMEOUT = 45
+# External catalogue endpoints (Google, OpenRouter, Cohere, ...) are probed
+# serially during generation; an unreachable host must not stall each fetch
+# for the loopback-sized deadline.
+EXTERNAL_CATALOGUE_TIMEOUT = 10
+
+
+def _catalogue_timeout(url):
+    """Bound loopback gateways generously; external hosts keep a fast deadline."""
+    parsed = urlsplit(url)
+    if parsed.scheme.lower() == "http" and parsed.hostname in {
+        "127.0.0.1",
+        "localhost",
+    }:
+        return MODEL_CATALOGUE_TIMEOUT
+    return EXTERNAL_CATALOGUE_TIMEOUT
 
 
 def _origin(url):
@@ -172,8 +187,9 @@ def get_catalogue(url: str, api_key: str = "", *, strict: bool = False):
     headers.setdefault("User-Agent", "dotfiles-catalogue/1.0")
     request = urllib.request.Request(url, headers=headers, method="GET")
     # LiteLLM's warm, DB-backed /v1/models catalogue takes 26–30 seconds in live
-    # probes; allow a bounded deadline above that while retaining UNKNOWN on timeout.
-    with open_same_origin(request, timeout=MODEL_CATALOGUE_TIMEOUT) as response:
+    # probes; allow a bounded deadline above that for loopback gateways while
+    # external providers keep a fast deadline and retain UNKNOWN on timeout.
+    with open_same_origin(request, timeout=_catalogue_timeout(url)) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
