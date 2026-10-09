@@ -1061,13 +1061,14 @@
       "path": "scripts/litellm-oauth.py",
       "capabilities": [
         "public",
-        "inspect"
+        "mutates"
       ],
       "enforcement": "strict",
-      "notes": "Interactive mutator of ~/.config/litellm OAuth token caches; no repository writes, dry-run, or backup semantics.",
+      "notes": "Interactive mutator of ~/.config/litellm OAuth token caches and verified/deferred model reports; --dry-run previews without side effects.",
       "accepted_flags": [
         "--help",
-        "--provider"
+        "--provider",
+        "--dry-run"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1076,18 +1077,18 @@
       "path": "scripts/litellm-db-prune.py",
       "capabilities": [
         "public",
-        "mutator"
+        "mutates"
       ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
         "--dry-run",
-        "--no-backup",
         "--endpoint",
         "--config"
       ],
       "positional_operand": null,
-      "child_scripts": []
+      "child_scripts": [],
+      "notes": "Remote maintenance CLI for the live gateway DB model tables; no local file writes, so backup semantics are unsupported."
     }
   ]
 }

@@ -195,7 +195,39 @@ def main(argv=None):
     load_env()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", required=True, choices=PROVIDERS)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the bootstrap steps without authenticating or writing",
+    )
     args = parser.parse_args(argv)
+    if args.dry_run:
+        provider = args.provider
+        model = MODELS[provider]
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+        import litellm_config
+
+        refs = litellm_config._registry_model_refs()
+        model_ids = sorted(
+            {
+                ref.split("/", 1)[1]
+                for ref in refs
+                if isinstance(ref, str) and ref.startswith("openai/")
+            }
+        )
+        print(
+            "Dry-run: no authentication, probes or writes were performed.\n"
+            f"Provider: {provider}\n"
+            f"Cache: {cache_path(provider)}\n"
+            f"Main probe model: {model}\n"
+            f"Models to verify via chatgpt transport ({len(model_ids)}): "
+            + (", ".join(model_ids) or "none")
+            + "\nVerified report: "
+            + str(Path.home() / ".local/share/litellm/chatgpt_verified_models.json")
+            + "\nDeferred report: "
+            + str(Path.home() / ".local/share/litellm/chatgpt_deferred_models.json")
+        )
+        return 0
     python = litellm_python()
     if not python.is_file():
         print(
@@ -260,6 +292,14 @@ def main(argv=None):
         if probe_class == "entitlement":
             print(
                 f"WARNING: main probe model {model} is unavailable via ChatGPT subscription; continuing with per-model verification."
+            )
+            result.returncode = 0
+        elif probe_class == "artifact":
+            # Transient main-probe artifacts (rate limits, Cloudflare
+            # challenges, empty responses) are retried per-model below;
+            # reserving exit 1 for the unknown class only.
+            print(
+                f"WARNING: main probe hit a transient artifact; per-model verification will retry."
             )
             result.returncode = 0
         else:
