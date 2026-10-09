@@ -193,6 +193,11 @@ def test_cost_map_merge_detects_upstream_drift(tmp_path, monkeypatch):
 
 def test_snapshot_rates_rejects_unreadable(tmp_path, monkeypatch):
     monkeypatch.setattr(PATCHER, "SCRIPT_DIR", tmp_path)
+    # Isolate BOTH candidates: with runtime-first precedence a readable
+    # machine's runtime snapshot would otherwise satisfy a repo-missing probe.
+    monkeypatch.setattr(
+        PATCHER, "RUNTIME_RATES_PATH", str(tmp_path / "missing-rates.json")
+    )
     try:
         PATCHER.snapshot_rates()
     except ValueError:

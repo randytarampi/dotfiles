@@ -569,14 +569,26 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
     )
     if not matches:
         return []
-    snapshot_path = snapshot_path or (
+    repo_snapshot = (
         Path(__file__).resolve().parents[1] / "configs/litellm/model-rates.json"
     )
-    try:
-        models = json.loads(snapshot_path.read_text(encoding="utf-8")).get("models", {})
-    except (OSError, json.JSONDecodeError):
+    runtime_snapshot = root / "model-rates.json"
+    candidates = [snapshot_path] if snapshot_path else [runtime_snapshot, repo_snapshot]
+    source_path = None
+    models: dict = {}
+    for candidate in candidates:
+        try:
+            loaded = json.loads(candidate.read_text(encoding="utf-8")).get("models", {})
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+        if isinstance(loaded, dict) and loaded:
+            source_path = candidate
+            models = loaded
+            break
+    if source_path is None:
         return [
-            "⚠ LiteLLM cost rates: unreadable snapshot configs/litellm/model-rates.json"
+            "⚠ LiteLLM cost rates: no readable rates snapshot (%s or %s)"
+            % (runtime_snapshot, repo_snapshot)
         ]
     try:
         installed = json.loads(matches[0].read_text(encoding="utf-8"))
@@ -590,10 +602,14 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
         if isinstance(entry, dict) and installed.get(model_id) != entry
     )
     if not drift:
-        return ["✓ LiteLLM cost rates: installed map matches the checked-in snapshot"]
+        return ["✓ LiteLLM cost rates: installed map matches %s" % source_path.name]
     return [
-        "⚠ LiteLLM cost rates: %d model(s) priced differently; run make deploy to merge configs/litellm/model-rates.json (%s)"
-        % (len(drift), ", ".join(drift[:4]) + (", …" if len(drift) > 4 else ""))
+        "⚠ LiteLLM cost rates: %d model(s) priced differently; run make deploy to merge %s (%s)"
+        % (
+            len(drift),
+            source_path.name,
+            ", ".join(drift[:4]) + (", …" if len(drift) > 4 else ""),
+        )
     ]
 
 
