@@ -964,8 +964,15 @@ def main():
             if identity.startswith("google/models/"):
                 entry["compat"] = {"supportsStore": False}
             entries.append(entry)
+        # The key indirection only needs some valid canonical identity; the
+        # seeded set may include bare local engine names which resolve_alias
+        # rejects, so pick the first entry with a provider/model shape.
+        key_identity = next(
+            (identity for identity in sorted(gateway_models) if "/" in identity),
+            "ollama/no-model-available",
+        )
         key_indirection = resolve_alias(
-            next(iter(sorted(gateway_models)), "ollama/no-model-available"),
+            key_identity,
             True,
             client_key=f"!cat {shlex.quote(str(proxy_key_path.resolve()))}",
             gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
