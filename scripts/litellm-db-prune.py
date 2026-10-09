@@ -34,22 +34,51 @@ def _parser():
 
 def served_model_names(config_path):
     """Return the set of model_name values the generated config actually serves."""
-    names = set()
-    pattern = re.compile(r'^\s*-?\s*model_name:\s*"?(?P<name>[^"\n]+?)"?\s*$')
     try:
         with open(config_path, encoding="utf-8") as stream:
-            for line in stream:
-                match = pattern.match(line)
-                if match:
-                    names.add(match.group("name"))
+            text = stream.read()
     except OSError as error:
         raise RuntimeError(f"cannot read LiteLLM config {config_path}: {error}")
+    names = _served_names_from_text(text)
     if not names:
         raise RuntimeError(
             f"no model_name entries parsed from {config_path}; refusing to operate "
             "against an empty served set"
         )
     return names
+
+
+def _served_names_regex(text):
+    """Dash-form model_name lines only — the no-PyYAML fallback parse."""
+    names = set()
+    pattern = re.compile(r'^\s*-\s*model_name:\s*"?([^"\n]+?)"?\s*(?:#.*)?$')
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            names.add(match.group(1).strip().strip('"'))
+    return names - {""}
+
+
+def _served_names_from_text(text):
+    """Collect top-level model_list[*].model_name, preferring a real YAML parse."""
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        # The macOS system Python used by the doctor also lacks PyYAML; the
+        # regex fallback keeps the CLI runnable there (same policy as
+        # litellm_routing.py). Only list items carry top-level model names —
+        # nested litellm_params.model_name keys have no dash and are excluded.
+        return _served_names_regex(text)
+    parsed = yaml.safe_load(text)
+    if parsed is None:
+        return set()
+    if not isinstance(parsed, dict) or "model_list" not in parsed:
+        return set()
+    return {
+        str(entry["model_name"])
+        for entry in parsed["model_list"]
+        if isinstance(entry, dict) and entry.get("model_name")
+    }
 
 
 def model_info_rows(base_url, master_key):
@@ -73,7 +102,7 @@ def plan_deletions(rows, served):
 def delete_row(base_url, master_key, row_id):
     """Delete one stale model row via the admin API; returns (ok, safe_message)."""
     body = json.dumps({"id": row_id}).encode("utf-8")
-    url = f"{base_url}{DEFAULT_DELETE_PATH}"
+    url = f"{base_url.rstrip('/')}{DEFAULT_DELETE_PATH}"
     request = urllib.request.Request(
         url,
         data=body,
@@ -85,7 +114,13 @@ def delete_row(base_url, master_key, row_id):
         method="POST",
     )
     try:
-        open_same_origin(request, timeout=15)
+        with open_same_origin(request, timeout=15) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                code = getattr(response, "getcode", lambda: None)()
+                status = code
+            if status is None or not 200 <= status < 300:
+                return False, f"DELETE returned HTTP status {status}"
     except Exception as error:  # noqa: BLE001 - single safe log line
         return False, litellm_cost.safe_error_message(error, master_key)
     return True, ""
@@ -108,12 +143,6 @@ def main():
         )
     config_path = args.config or DEFAULT_CONFIG_PATH
 
-    if args.dry_run:
-        print(f"Would read served models from: {config_path}")
-        print(f"Would request {base_url}/model/info")
-        print(f"Would delete stale rows via {base_url}{DEFAULT_DELETE_PATH}")
-        return 0
-
     try:
         master_key = litellm_cost.resolve_master_key(os.environ)
         litellm_cost.validate_master_key(master_key)
@@ -132,6 +161,28 @@ def main():
         return 1
 
     stale = plan_deletions(rows, served)
+
+    if args.dry_run:
+        if not stale:
+            print(
+                f"Dry-run: would delete 0 stale row(s) of {len(rows)} candidates "
+                f"(served {len(served)})"
+            )
+            return 0
+        lines = [
+            f"Would delete stale row {index + 1}/{len(stale)}: "
+            f"{row.get('model_name') if isinstance(row, dict) else None}"
+            f" (id {row.get('id') if isinstance(row, dict) else None})"
+            for index, row in enumerate(stale)
+        ]
+        lines.append(
+            f"Dry-run: would delete {len(stale)} stale row(s) of {len(stale)} "
+            f"candidates (served {len(served)}, rows {len(rows)}) via "
+            f"{base_url}{DEFAULT_DELETE_PATH}"
+        )
+        print("\n".join(lines))
+        return 0
+
     if not stale:
         print(
             f"Prune complete: 0 stale of {len(rows)} rows; config serves {len(served)}"
@@ -141,7 +192,10 @@ def main():
     deleted = 0
     failures = []
     for row in stale:
-        row_id = row.get("id") if isinstance(row, dict) else None
+        if not isinstance(row, dict):
+            logger.warning("skipping malformed model-info row without a name")
+            continue
+        row_id = row.get("id")
         name = row.get("model_name")
         if not row_id:
             # Config-derived rows carry no DB id; /model/delete only manages
