@@ -5,7 +5,7 @@
     "scripts/run-local-review.sh": "f9e0d4cfc36ceabfc06766d3faf835f8b674cc4124596260de3381b749174cb0",
     "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
     "scripts/verify-ci-assets.py": "cb7d903fe640802b97a820409f0718eb422172f07aff9d82ecabc8fd7164bb22",
-    "configs/opencode/ci/opencode.json": "ba2ed2d5c5524cfdf5315bc12aadbb4d24e2eef56300e7696075c9ca5cf8ac8c",
+    "configs/opencode/ci/opencode.json": "3e893404f65cceeb723108b2ae34551ef1967160b0ac1788d8b7087ddfb85b88",
     "scripts/onboard-agentic-review.py": "79bbdce9f093368cf4d56dc420611e697b2ba7bffddec08c85bef00380770b01"
   }
 }
