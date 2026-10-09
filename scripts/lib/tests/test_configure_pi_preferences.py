@@ -298,6 +298,25 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     assert "fixture-secret" not in json.dumps([providers, settings, auth])
 
 
+def test_pi_main_lists_every_advertised_gateway_identity(tmp_path, monkeypatch):
+    unselected = "openrouter/poolside/laguna-s-2.1:free"
+    catalogue = {
+        "data": [
+            {"id": "google/models/gemini-3.8-flash"},
+            {"id": "openrouter/inclusionai/ling-3.0-flash-sante"},
+            {"id": unselected},
+        ]
+    }
+    out = _run_pi_main(tmp_path, catalogue, monkeypatch)
+    entries = {
+        entry["id"]: entry
+        for entry in json.loads((out / "models.json").read_text())["providers"][
+            "litellm"
+        ]["models"]
+    }
+    assert unselected in entries
+
+
 def test_pi_main_partial_catalogue_and_gate_off_are_fail_closed_or_direct(
     tmp_path, monkeypatch
 ):
