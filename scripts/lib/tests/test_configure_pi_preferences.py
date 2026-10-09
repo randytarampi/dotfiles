@@ -205,7 +205,7 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
         lambda url, key: {
             "data": [
                 {"id": "google/models/gemini-3.8-flash"},
-                {"id": "openrouter/inclusionai/ling-3.0-flash-sante"},
+                {"id": "openrouter/nvidia/nemotron-3.5-lightning:free"},
             ]
         },
     )
@@ -214,8 +214,8 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
         routes["google"]["gemini-3.8-flash"] == "litellm/google/models/gemini-3.8-flash"
     )
     assert (
-        routes["openrouter"]["inclusionai/ling-3.0-flash-sante"]
-        == "litellm/openrouter/inclusionai/ling-3.0-flash-sante"
+        routes["openrouter"]["nvidia/nemotron-3.5-lightning:free"]
+        == "litellm/openrouter/nvidia/nemotron-3.5-lightning:free"
     )
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: {"data": "bad"})
     assert configure_pi.litellm_cloud_aliases() == {
@@ -258,7 +258,7 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
         "data": [
             {"id": "google/models/gemini-3.8-flash"},
             {"id": "google/models/gemini-3.5-flash-lite"},
-            {"id": "openrouter/inclusionai/ling-3.0-flash-sante"},
+            {"id": "openrouter/nvidia/nemotron-3.5-lightning:free"},
         ]
     }
     out = _run_pi_main(tmp_path, catalogue, monkeypatch)
@@ -273,7 +273,7 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     assert entries["google/models/gemini-3.8-flash"]["compat"] == {
         "supportsStore": False
     }
-    assert "compat" not in entries["openrouter/inclusionai/ling-3.0-flash-sante"]
+    assert "compat" not in entries["openrouter/nvidia/nemotron-3.5-lightning:free"]
     assert "google" not in providers and "openrouter" not in providers
     assert "google" not in auth and "openrouter" not in auth
     overrides = settings["subagents"]["agentOverrides"]
@@ -283,7 +283,7 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     )
     assert (
         overrides["scout"]["model"]
-        == "litellm/openrouter/inclusionai/ling-3.0-flash-sante"
+        == "litellm/openrouter/nvidia/nemotron-3.5-lightning:free"
     )
     assert settings["defaultProvider"] + "/" + settings["defaultModel"] in {
         f"{provider}/{entry['id']}"
@@ -292,7 +292,7 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     }
     assert "litellm/google/models/gemini-3.8-flash" in settings["enabledModels"]
     assert (
-        "litellm/openrouter/inclusionai/ling-3.0-flash-sante"
+        "litellm/openrouter/nvidia/nemotron-3.5-lightning:free"
         in settings["enabledModels"]
     )
     assert "fixture-secret" not in json.dumps([providers, settings, auth])
@@ -303,7 +303,7 @@ def test_pi_main_lists_every_advertised_gateway_identity(tmp_path, monkeypatch):
     catalogue = {
         "data": [
             {"id": "google/models/gemini-3.8-flash"},
-            {"id": "openrouter/inclusionai/ling-3.0-flash-sante"},
+            {"id": "openrouter/nvidia/nemotron-3.5-lightning:free"},
             {"id": unselected},
         ]
     }

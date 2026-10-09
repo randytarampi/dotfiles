@@ -63,6 +63,7 @@ LITELLM_MODEL_PREFIXES = (
     ("google/models/", "google"),
     ("openrouter/", "openrouter"),
     ("openai/", "openai"),
+    ("ollama-cloud/", "ollama-cloud"),
 )
 
 
