@@ -696,13 +696,23 @@ def compute_model_list(environ=None):
             )
         if scope == "free":
             # Free scope: emit only curated selections (allowlist/TIERS
-            # references). OpenRouter additionally keeps upstream ids whose
-            # raw catalogue spelling is genuinely free (':free' suffix).
-            curated = confirmed & requested
-            if provider == "openrouter":
-                confirmed_models = curated | {
-                    item for item in raw_confirmed if item.endswith(":free")
+            # references). OpenRouter and the cloud-capable local daemon
+            # additionally keep upstream ids whose raw catalogue spelling
+            # identifies them (':free' suffix / ':cloud' stubs).
+            curated = confirmed & canonical_requested
+            if provider in ("openrouter", "ollama-cloud"):
+                # Curated keys are bare canonical ids; map them back to the
+                # matching raw upstream spelling so only ONE alias per model
+                # is emitted (no bare paid-route twin for OpenRouter).
+                raw_upstream_by_key = {
+                    canonical_allowlist_key(item): item for item in raw_confirmed
                 }
+                curated = {raw_upstream_by_key.get(item, item) for item in curated}
+                if provider == "openrouter":
+                    curated |= {
+                        item for item in raw_confirmed if item.endswith(":free")
+                    }
+                confirmed_models = curated
             else:
                 confirmed_models = curated
         else:

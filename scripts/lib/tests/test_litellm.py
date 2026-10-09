@@ -405,7 +405,7 @@ def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
             )
     assert "https://example.com/openai/ignored" not in expected
     assert "_local:placeholder" not in expected
-    assert any(ref.startswith("openrouter/inclusionai/") for ref in expected)
+    assert any(ref.startswith("openrouter/nvidia/") for ref in expected)
     verified = {
         ref
         for ref in expected
@@ -534,14 +534,20 @@ def test_free_scope_openrouter_keeps_curated_and_free_suffixes(monkeypatch):
         "_live_catalogue",
         lambda *args: ["free-model:free", "paid-model"],
     )
+    # The real registry no longer carries a curated ling ref (upstream churn);
+    # stub a fixed curated reference so the curated-branch assertion runs.
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {"openrouter/curated-model"},
+    )
     entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
     aliases = {item["model_name"] for item in entries}
     assert "openrouter/free-model:free" in aliases
-    if any(
-        ref.endswith("ling-3.0-flash-sante:free")
-        for ref in litellm_config._registry_model_refs()
-    ):
-        assert "openrouter/inclusionai/ling-3.0-flash-sante:free" in aliases
+    # The curated bare key maps to its raw ':free' spelling — the bare paid
+    # twin must never be emitted.
+    assert "openrouter/curated-model" not in aliases
+    assert "openrouter/curated-model:free" not in aliases
     assert "openrouter/paid-model" not in aliases
 
 
