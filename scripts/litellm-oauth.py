@@ -299,7 +299,7 @@ def main(argv=None):
             # challenges, empty responses) are retried per-model below;
             # reserving exit 1 for the unknown class only.
             print(
-                f"WARNING: main probe hit a transient artifact; per-model verification will retry."
+                "WARNING: main probe hit a transient artifact; per-model verification will retry."
             )
             result.returncode = 0
         else:

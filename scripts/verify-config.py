@@ -1922,18 +1922,18 @@ def main():
         if opencode_config is not None:
             mcps = opencode_config.get("mcp", {})
             if "codegraph" in mcps:
-                print(f"  \u2713 CodeGraph MCP: registered in opencode.json")
+                print("  \u2713 CodeGraph MCP: registered in opencode.json")
             else:
-                print(f"  \u2717 CodeGraph MCP: not found in opencode.json")
+                print("  \u2717 CodeGraph MCP: not found in opencode.json")
                 exit_code = 1
         elif opencode_json.exists():
-            print(f"  \u2717 CodeGraph MCP: could not parse opencode.json")
+            print("  \u2717 CodeGraph MCP: could not parse opencode.json")
             exit_code = 1
         else:
-            print(f"  \u2717 CodeGraph MCP: opencode.json not found")
+            print("  \u2717 CodeGraph MCP: opencode.json not found")
             exit_code = 1
     else:
-        print(f"  \u2298 CodeGraph MCP (gate DOTFILES_RUN_CODEGRAPH_SETUP=0, skipped)")
+        print("  \u2298 CodeGraph MCP (gate DOTFILES_RUN_CODEGRAPH_SETUP=0, skipped)")
 
     # OpenCode orphan config check (only enforced when OpenCode setup is enabled)
     exit_code = max(exit_code, check_opencode_orphan_files())
