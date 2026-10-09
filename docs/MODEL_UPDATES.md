@@ -130,6 +130,12 @@ without following this document's normal review flow.
  - oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.
  - Tier-selection alignment (commits `d59ec3e`, `0d8510a`, `858cd39`): oMLX models now classify on the same basis as Ollama models — discovery derives real `size_gb`, MLX-style names parse parameter counts (first size token wins; `4bit`/`8bit` quant suffixes never match), and MoE status infers from `A<n>B` markers when server metadata omits it, so dense-beats-MoE reasoning ordering works identically (`omlx/Qwen3.8-27B-MLX-4bit` tops reasoning; `gemma-4-12B` classifies lightweight/vision instead of Qwen misreading as lightweight). The merged pool prefers the oMLX entry for engine-equivalent models — same `(family, params)` identity, e.g. `omlx/gemma-4-12B-it-MLX-8bit` over `ollama/gemma4:12b-mxfp8` — while distinct models are kept. `DOTFILES_ROLE_MODELS` now bridges into `configure-pi.py` (mirroring `configure-opencode-tier.py`), and applied role overrides log after materialization for auditability.
 
+## 2026-10-09: OpenRouter Ling free-route retirement
+
+- OpenRouter made `inclusionai/ling-3.0-flash-sante` paid (prompt $0.042/1M, completion $0.1232/1M) and removed the `:free` variant from the catalogue; no GLM-family free id remains upstream.
+- The free-tier selections (slim explorer, council gamma, CI OpenCode catalogue, Junie groups) retargeted to the verified free id `nvidia/nemotron-3.5-lightning:free`; the Junie GLM group now rides Ollama Cloud (`glm-5.3`/`glm-5.3-flash`) instead of a paid OpenRouter route.
+- Removed the retired `:free` key from the OpenRouter allowlist; free-scope generation maps curated keys to raw upstream spellings so only one alias per model is emitted.
+
 ## 2026-09-28: OpenRouter Ling model retirement
 
 - OpenRouter retired `inclusionai/ling-3.0-flash-fin:free`; the verified replacement is `inclusionai/ling-3.0-flash-sante:free`.

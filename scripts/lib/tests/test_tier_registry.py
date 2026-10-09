@@ -251,7 +251,7 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(groups["openai-gpt-6-luna"]["primaryModel"], "gpt-6-luna")
         self.assertNotIn("openai-gpt-6-sol", groups)
         self.assertNotIn("litellm-openai-gpt-6-sol", groups)
-        self.assertEqual(groups["meridian-opus-5-5"]["primaryModel"], "claude-opus-5-5")
+        self.assertEqual(groups["meridian-opus"]["primaryModel"], "claude-opus-5-5")
 
     def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
         data = registry()

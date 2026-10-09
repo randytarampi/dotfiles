@@ -243,7 +243,7 @@ their rubric from.
 - orchestrator `opencode/big-pickle`
 - oracle `opencode/big-pickle`
 - librarian `google/gemini-3.5-flash-lite`
-- explorer `openrouter/inclusionai/ling-3.0-flash-sante:free`
+- explorer `openrouter/nvidia/nemotron-3.5-lightning:free`
 - designer `google/gemini-3.8-flash`
 - fixer `opencode/nemotron-3.5-lightning-free`
 

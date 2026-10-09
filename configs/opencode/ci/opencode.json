@@ -69,8 +69,8 @@
         "baseURL": "https://openrouter.ai/api/v1"
       },
       "models": {
-        "inclusionai/ling-3.0-flash-sante:free": {
-          "name": "Ling 3.0 Flash Sante (free)"
+        "nvidia/nemotron-3.5-lightning:free": {
+          "name": "Nemotron 3.5 Lightning (free)"
         }
       }
     }

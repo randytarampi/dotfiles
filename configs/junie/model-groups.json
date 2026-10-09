@@ -69,7 +69,7 @@
   "groups": {
     "meridian-opus": {
       "provider": "meridian",
-      "primaryModel": "claude-opus-5"
+      "primaryModel": "claude-opus-5-5"
     },
     "meridian-sonnet": {
       "provider": "meridian",
@@ -89,20 +89,6 @@
       "fasterModel": "gemini-3.5-flash-lite",
       "fasterProvider": "google"
     },
-    "openrouter-glm": {
-      "provider": "openrouter",
-      "primaryModel": "inclusionai/ling-3.0-flash-sante"
-    },
-    "openrouter-nemotron": {
-      "provider": "openrouter",
-      "primaryModel": "nvidia/nemotron-3.5-lightning:free",
-      "fasterModel": "nvidia/nemotron-3.5-lightning:free",
-      "fasterProvider": "openrouter"
-    },
-    "meridian-opus-5-5": {
-      "provider": "meridian",
-      "primaryModel": "claude-opus-5-5"
-    },
     "openai-gpt-6-luna": {
       "provider": "openai",
       "primaryModel": "gpt-6-luna"
@@ -116,15 +102,6 @@
       "primaryModel": "google/models/gemini-3.8-flash",
       "fasterModel": "google/models/gemini-3.5-flash-lite"
     },
-    "litellm-openrouter-glm": {
-      "provider": "litellm",
-      "primaryModel": "openrouter/inclusionai/ling-3.0-flash-sante"
-    },
-    "litellm-openrouter-nemotron": {
-      "provider": "litellm",
-      "primaryModel": "openrouter/nvidia/nemotron-3.5-lightning:free",
-      "fasterModel": "openrouter/nvidia/nemotron-3.5-lightning:free"
-    },
     "litellm-openai-gpt-6-luna": {
       "provider": "litellm",
       "primaryModel": "openai/gpt-6-luna"
@@ -132,6 +109,28 @@
     "litellm-openai-gpt-6.1-sol": {
       "provider": "litellm",
       "primaryModel": "openai/gpt-6.1-sol"
+    },
+    "ollama-cloud-glm": {
+      "provider": "ollama-cloud",
+      "primaryModel": "glm-5.3",
+      "fasterModel": "glm-5.3-flash",
+      "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-nemotron": {
+      "provider": "ollama-cloud",
+      "primaryModel": "nemotron-3-ultra",
+      "fasterModel": "nemotron-3-super",
+      "fasterProvider": "ollama-cloud"
+    },
+    "litellm-ollama-cloud-glm": {
+      "provider": "litellm",
+      "primaryModel": "ollama-cloud/glm-5.3",
+      "fasterModel": "ollama-cloud/glm-5.3-flash"
+    },
+    "litellm-ollama-cloud-nemotron": {
+      "provider": "litellm",
+      "primaryModel": "ollama-cloud/nemotron-3-ultra",
+      "fasterModel": "ollama-cloud/nemotron-3-super"
     }
   }
 }
