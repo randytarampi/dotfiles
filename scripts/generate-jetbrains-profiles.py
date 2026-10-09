@@ -435,10 +435,34 @@ def atomic_private_write(path: Path, content: str) -> None:
             os.unlink(temp_path)
 
 
+def manifest_path() -> Path:
+    """Return the profile-index location OUTSIDE ~/.junie/models.
+
+    Junie loads every .json file in the models directory as a profile
+    object; the index (a JSON array) must live elsewhere.
+    """
+    return Path.home() / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+
+
 def read_profile_manifest(target_dir: Path) -> set[str]:
-    manifest = target_dir / PROFILE_MANIFEST
-    if manifest.is_symlink():
+    manifest = manifest_path()
+    legacy = target_dir / PROFILE_MANIFEST
+    if manifest.is_symlink() or legacy.is_symlink():
         raise OSError("unsafe Junie profile manifest symlink")
+    # One-time migration: an index left inside the models dir is both a
+    # broken pseudo-profile for Junie and the previous seeding source.
+    try:
+        legacy_meta = legacy.stat()
+    except FileNotFoundError:
+        legacy = None
+    else:
+        owner = getattr(os, "getuid", lambda: None)()
+        if not (
+            stat.S_IMODE(legacy_meta.st_mode) == 0o600
+            and (owner is None or legacy_meta.st_uid == owner)
+            and stat.S_ISREG(legacy_meta.st_mode)
+        ):
+            raise OSError("unsafe legacy Junie profile manifest owner or permissions")
     try:
         metadata = manifest.stat()
         owner = getattr(os, "getuid", lambda: None)()
@@ -450,7 +474,12 @@ def read_profile_manifest(target_dir: Path) -> set[str]:
             raise OSError("unsafe Junie profile manifest owner or permissions")
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return set()
+        if legacy is None:
+            return set()
+        try:
+            data = json.loads(legacy.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return set()
     if not isinstance(data, list) or any(
         not isinstance(name, str)
         or name.endswith(".json")
@@ -458,6 +487,9 @@ def read_profile_manifest(target_dir: Path) -> set[str]:
         for name in data
     ):
         raise ValueError("invalid Junie generated-profile manifest")
+    if legacy is not None:
+        legacy.unlink()
+        logger.info("Relocated legacy profile manifest out of the models directory")
     return set(data)
 
 
@@ -486,8 +518,10 @@ def cleanup_profiles(
 
 
 def atomic_write_manifest(target_dir: Path, names: set[str]) -> None:
+    target = manifest_path()
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     atomic_private_write(
-        target_dir / PROFILE_MANIFEST,
+        target,
         json.dumps(sorted(names), indent=2) + "\n",
     )
 

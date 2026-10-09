@@ -525,3 +525,18 @@ def test_wrapper_propagates_profile_generation_failure_without_success_message(
     with pytest.raises(SystemExit, match="1"):
         CONFIGURE.main()
     assert "JetBrains AI configured!" not in caplog.text
+
+
+def test_manifest_relocates_from_models_dir(harness):
+    home, target, _, _ = harness
+    target.mkdir(parents=True, exist_ok=True)
+    legacy = target / PROFILES.PROFILE_MANIFEST
+    legacy.write_text(json.dumps(["older-profile"]), encoding="utf-8")
+    legacy.chmod(0o600)
+    new_path = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    migrated = PROFILES.read_profile_manifest(target)
+    assert migrated == {"older-profile"}
+    assert not legacy.exists()
+    PROFILES.atomic_write_manifest(target, {"fresh-profile"})
+    assert json.loads(new_path.read_text(encoding="utf-8")) == ["fresh-profile"]
+    assert not (target / PROFILES.PROFILE_MANIFEST).exists()
