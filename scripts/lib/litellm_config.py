@@ -269,6 +269,15 @@ def build_rates_snapshot(environ=None):
                 rates[model_id] = info
                 if provider == "openai":
                     rates[f"chatgpt/{model_id}"] = info
+                elif provider == "ollama-cloud":
+                    # Daemon cloud-stub requests carry ':cloud'/-cloud
+                    # suffix spellings (with and without the ollama/
+                    # namespace); the bundled map never prices either form,
+                    # so emit priced twins for every stub spelling a client
+                    # may request.
+                    for suffix in (":cloud", "-cloud"):
+                        rates[f"{model_id}{suffix}"] = info
+                        rates[f"ollama/{model_id}{suffix}"] = info
     # Provenance stamps the cache's data vintage (deterministic inside the
     # 24h cache window); empty when the fetch degraded.
     fetched = ""
@@ -781,26 +790,30 @@ def compute_model_list(environ=None):
             ollama_models = sorted(dict.fromkeys(models + cloud_models))
             for model in ollama_models:
                 # Daemon cloud stubs bill against the Ollama plan — price
-                # them; bare local names (user hardware) stay unpriced.
+                # them; bare local names (user hardware) stay unpriced. Stubs
+                # emit ONLY the ollama/-namespaced alias: the naked
+                # '<id>:cloud' twin is a duplicate of the same daemon route.
+                is_stub = model.endswith(":cloud") or model.endswith("-cloud")
                 cloud_info = (
-                    model_rates("ollama", model, f"ollama/{model}")
-                    if model.endswith(":cloud") or model.endswith("-cloud")
-                    else None
+                    model_rates("ollama", model, f"ollama/{model}") if is_stub else None
                 )
-                params = _entry(
-                    f"ollama/{model}",
-                    f"ollama/{model}",
-                    api_base=base,
-                    model_info=cloud_info,
+                entries.append(
+                    _entry(
+                        f"ollama/{model}",
+                        f"ollama/{model}",
+                        api_base=base,
+                        model_info=cloud_info,
+                    )
                 )
-                bare = _entry(
-                    model,
-                    f"ollama/{model}",
-                    api_base=base,
-                    alias_kind="bare",
-                    model_info=cloud_info,
-                )
-                entries.extend([params, bare])
+                if not is_stub:
+                    entries.append(
+                        _entry(
+                            model,
+                            f"ollama/{model}",
+                            api_base=base,
+                            alias_kind="bare",
+                        )
+                    )
             continue
         endpoint = local_endpoint_for(provider, "openai")
         if endpoint is None:
