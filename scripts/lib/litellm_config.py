@@ -981,10 +981,16 @@ def compute_model_list(environ=None):
             if provider in ("openrouter", "ollama-cloud"):
                 # Curated keys are bare canonical ids; map them back to the
                 # matching raw upstream spelling so only ONE alias per model
-                # is emitted (no bare paid-route twin for OpenRouter).
-                raw_upstream_by_key = {
-                    canonical_allowlist_key(item): item for item in raw_confirmed
-                }
+                # is emitted. Upstream may carry bare and suffixed spellings
+                # of the same model under one canonical key — prefer the
+                # longer (transport-suffixed) spelling deterministically so
+                # ':free' models never also emit a bare paid-route twin.
+                raw_upstream_by_key = {}
+                for item in sorted(raw_confirmed):
+                    key = canonical_allowlist_key(item)
+                    held = raw_upstream_by_key.get(key)
+                    if held is None or len(item) > len(held):
+                        raw_upstream_by_key[key] = item
                 curated = {raw_upstream_by_key.get(item, item) for item in curated}
                 if provider == "openrouter":
                     curated |= {
