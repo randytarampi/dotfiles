@@ -151,6 +151,16 @@ def test_dry_run_plans_without_writes(tmp_path, monkeypatch, caplog):
             "completion_tokens": 2,
             "cache_hit": "True",
         },
+        {
+            # A local hardware model with no rate: stays unpriced and is
+            # reported as left uncorrected (never silently dropped).
+            "request_id": "row-local",
+            "model": "omlx/Ornith-1.5-35B-A3B-MLX-4bit",
+            "spend": 0.0,
+            "prompt_tokens": 7,
+            "completion_tokens": 3,
+            "cache_hit": "",
+        },
     ]
     rates_path = tmp_path / "rates.json"
     rates_path.write_text(
@@ -178,4 +188,8 @@ def test_dry_run_plans_without_writes(tmp_path, monkeypatch, caplog):
     assert fetch_calls == [BACKFILL._FETCH_CODE]
     assert all(code != BACKFILL._APPLY_CODE for code, _ in apply_calls)
     assert any("cache-served" in message for message in caplog.messages)
-    assert any("capped" not in message for message in caplog.messages)
+    # The cap warning must be absent from every captured message, and the
+    # summary must report the exact unpriced count for these rows (the
+    # omlx local model has no rate → 1 unpriced).
+    assert all("capped" not in message for message in caplog.messages)
+    assert any("1 unpriced row(s) stay" in message for message in caplog.messages)

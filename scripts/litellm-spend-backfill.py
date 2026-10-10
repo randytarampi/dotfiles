@@ -330,7 +330,10 @@ def main():
             continue
         if str(row.get("cache_hit") or "").lower() == "true":
             continue
-        if expected_spend(row, rates) is None:
+        # Retain genuinely uncorrectable rows: expected_spend is None means
+        # the model has no rate (or the row carries unusable tokens) — those
+        # are exactly the ones left outside the plan.
+        if expected_spend(row, rates) is not None:
             continue
         # Serialized token columns can arrive as strings; coerce defensively
         # so the row-count gate never concatenates strings or raises.
