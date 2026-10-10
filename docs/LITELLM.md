@@ -111,6 +111,22 @@ rows, and providers with no published rates stay unpriced by design.
 Context-tier pricing (`context_over_200k`) is intentionally not merged —
 base rates only until a request-class-aware consumer exists.
 
+## Spend backfill
+
+Spend rows recorded before pricing was wired carry the original resolved cost
+($0.00 for lanes whose bundled-map entries were missing).
+`python3 scripts/litellm-spend-backfill.py` reprices those historical rows
+from the merged model-rate snapshot (runtime
+`~/.local/share/litellm/model-rates.json` first, committed
+`configs/litellm/model-rates.json` as fallback): every priced spelling
+resolves to its bare models.dev key and the row's stored prompt/completion
+tokens recompute `spend`. Cache-served rows are left untouched (cache pricing
+cannot be reconstructed from the stored columns) and reported; genuinely
+unpriced models (local hardware, keys without rates) are reported and stay.
+`--dry-run` lists planned corrections without writing; updates run through
+the managed venv's prisma client against the gateway database. Run it after a
+`make deploy` has merged fresh rates.
+
 ## Database model-table pruning
 
 `python3 scripts/litellm-db-prune.py` compares the served `model_name` set from

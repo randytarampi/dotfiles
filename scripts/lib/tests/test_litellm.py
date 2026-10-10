@@ -560,6 +560,25 @@ def test_free_scope_openrouter_keeps_curated_and_free_suffixes(monkeypatch):
     assert "openrouter/paid-model" not in aliases
 
 
+def test_free_scope_prefers_free_spelling_for_curated_openrouter(monkeypatch):
+    # Upstream can carry bare and ':free' spellings of the same model under
+    # one canonical key; the mapping must deterministically prefer the
+    # ':free' spelling so the bare paid-route twin never emits.
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["dupe-model", "dupe-model:free"],
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {"openrouter/dupe-model"},
+    )
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
+    aliases = {item["model_name"] for item in entries}
+    assert aliases == {"openrouter/dupe-model:free"}
+
+
 def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["paid-model"])
     entries = litellm_config.compute_model_list({"HF_TOKEN": "test-" + "key"})
@@ -959,23 +978,17 @@ def test_ollama_cloud_stubs_are_routed_through_local_daemon_without_duplicates(
     aliases = [entry["model_name"] for entry in entries]
     by_alias = {entry["model_name"]: entry for entry in entries}
 
+    # Cloud stubs keep exactly the ollama/-namespaced alias: the naked
+    # '<stub>' spelling was a duplicate of the same daemon route.
     assert aliases.count("ollama/glm-5.3:cloud") == 1
-    assert aliases.count("glm-5.3:cloud") == 1
-    assert {
-        "ollama/qwen3-cloud",
-        "qwen3-cloud",
-        "ollama/deepseek-cloud",
-        "deepseek-cloud",
-    } <= set(aliases)
+    assert "glm-5.3:cloud" not in aliases
+    assert {"ollama/qwen3-cloud", "ollama/deepseek-cloud"} <= set(aliases)
+    assert "qwen3-cloud" not in aliases and "deepseek-cloud" not in aliases
     assert {"ollama/local-model", "local-model"} <= set(aliases)
     assert by_alias["ollama/glm-5.3:cloud"]["litellm_params"] == {
         "model": "ollama/glm-5.3:cloud",
         "api_base": "http://127.0.0.1:11434",
     }
-    assert (
-        by_alias["glm-5.3:cloud"]["litellm_params"]
-        == by_alias["ollama/glm-5.3:cloud"]["litellm_params"]
-    )
 
 
 def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monkeypatch):
@@ -1045,7 +1058,6 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
         "local-zeta",
         "ollama/shared",
         "ollama/shared-cloud",
-        "shared-cloud",
         "openrouter/router-alpha",
         "openrouter/router-zeta",
     }
@@ -2456,7 +2468,10 @@ def test_build_rates_snapshot_uses_bare_keys_and_provenance(monkeypatch):
                         "limit": {"context": 1050000, "output": 128000},
                     }
                 }
-            }
+            },
+            "ollama-cloud": {
+                "models": {"glm-5.3-flash": {"cost": {"input": 0.15, "output": 0.5}}}
+            },
         },
     )
     snapshot = litellm_config.build_rates_snapshot({})
@@ -2466,6 +2481,18 @@ def test_build_rates_snapshot_uses_bare_keys_and_provenance(monkeypatch):
     assert snapshot["models"]["chatgpt/gpt-6-luna"][
         "input_cost_per_token"
     ] == pytest.approx(1e-07)
+    # Daemon cloud-stub request spellings get priced twins too — the bundled
+    # map never prices ':cloud'/-cloud forms and that's why their spend was $0.
+    stub = snapshot["models"]["glm-5.3-flash"]
+    for twin in (
+        "glm-5.3-flash:cloud",
+        "glm-5.3-flash-cloud",
+        "ollama/glm-5.3-flash:cloud",
+    ):
+        assert (
+            snapshot["models"][twin]["input_cost_per_token"]
+            == stub["input_cost_per_token"]
+        )
     assert snapshot["_provenance"]["source"] == "models.dev api.json"
     assert "fetched" in snapshot["_provenance"]
 
