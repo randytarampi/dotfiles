@@ -1089,6 +1089,22 @@
       "positional_operand": null,
       "child_scripts": [],
       "notes": "Remote maintenance CLI for the live gateway DB model tables; no local file writes, so backup semantics are unsupported."
+    },
+    {
+      "path": "scripts/litellm-spend-backfill.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--rates"
+      ],
+      "positional_operand": null,
+      "child_scripts": [],
+      "notes": "Maintenance CLI that reprices historical spend rows from the merged model-rate snapshot via the prisma client; no local file writes, so backup semantics are unsupported."
     }
   ]
 }
