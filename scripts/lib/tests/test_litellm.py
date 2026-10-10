@@ -560,6 +560,25 @@ def test_free_scope_openrouter_keeps_curated_and_free_suffixes(monkeypatch):
     assert "openrouter/paid-model" not in aliases
 
 
+def test_free_scope_prefers_free_spelling_for_curated_openrouter(monkeypatch):
+    # Upstream can carry bare and ':free' spellings of the same model under
+    # one canonical key; the mapping must deterministically prefer the
+    # ':free' spelling so the bare paid-route twin never emits.
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["dupe-model", "dupe-model:free"],
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {"openrouter/dupe-model"},
+    )
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-" + "key"})
+    aliases = {item["model_name"] for item in entries}
+    assert aliases == {"openrouter/dupe-model:free"}
+
+
 def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["paid-model"])
     entries = litellm_config.compute_model_list({"HF_TOKEN": "test-" + "key"})
