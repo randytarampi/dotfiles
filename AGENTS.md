@@ -196,6 +196,7 @@ To ensure clean, prefix-continuous, and readable logs:
 Recurring validation quirks — check these before diagnosing failures:
 
 - **Tests:** `make test` (or `PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/ -q`). Poetry owns the test environment; the Makefile sets `PYTHONPATH` because direct module imports require it.
+- **Review-fix test edits:** verify a rewritten test **fails against the pre-fix behavior** (mutation check) before trusting it, and pin exact counts/values — vacuous truthy asserts (`any(... not in ...)`, recorder lists nothing appends to) are the recurring false-green class; one such miss shipped a behavior regression that only the next review round caught.
 - **Formatting:** black lives at `/opt/homebrew/bin/black` (bare `python3` has no `black` module). Run it on touched `.py` files **before** `git commit` — the pre-commit hook reformats and aborts the first commit otherwise.
 - **LSP noise:** import-resolution errors in `scripts/*.py` under the IDE are pre-existing runtime `PYTHONPATH` artifacts, not introduced breakage. Use `python3 -m py_compile <file>` for ground truth.
 - **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
