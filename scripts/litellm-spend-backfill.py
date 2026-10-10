@@ -11,9 +11,9 @@ if LIB_DIR not in sys.path:
 
 import glob as globlib
 
-import logger  # noqa: E402
-from cli_helpers import add_common_args  # noqa: E402
-from env import load_env  # noqa: E402
+import logger  # noqa: E402 -- scripts/lib bootstrap.
+from cli_helpers import add_common_args  # noqa: E402 -- scripts/lib bootstrap.
+from env import load_env  # noqa: E402 -- scripts/lib bootstrap.
 
 RUNTIME_RATES_PATH = os.path.expanduser("~/.local/share/litellm/model-rates.json")
 REPO_RATES_PATH = os.path.join(
@@ -224,9 +224,9 @@ def _run_prisma(code, stdin_payload=None):
     if not python:
         raise RuntimeError("LiteLLM venv interpreter not found; run make deploy first")
     env = {**os.environ, "DATABASE_URL": database_url}
-    import subprocess
+    import subprocess  # nosec B404 -- required to run the prisma helper under the managed venv.
 
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # nosec B603 -- invocation is fully controlled: venv interpreter + internal code strings.
         [python, "-c", code],
         stdin=subprocess.PIPE if stdin_payload is not None else None,
         stdout=subprocess.PIPE,
@@ -329,7 +329,7 @@ def safe_error_message(error):
     import re
 
     text = str(error)
-    text = re.sub(r"[a-zA-Z0-9_]+://\S+", "[REDACTED-URL]", text)
+    text = re.sub(r"\w+://\S+", "[REDACTED-URL]", text)
     return text
 
 

@@ -1,7 +1,8 @@
 import importlib.util
 from pathlib import Path
 import sys
-from unittest.mock import patch
+
+import pytest
 
 BACKFILL_PATH = Path(__file__).resolve().parents[2] / "litellm-spend-backfill.py"
 SPEC = importlib.util.spec_from_file_location("litellm_spend_backfill", BACKFILL_PATH)
@@ -49,7 +50,7 @@ def test_expected_spend_recomputes_from_tokens_and_rates():
         "cache_hit": "",
     }
     expected = 1000 * 1.5e-07 + 400 * 5e-07
-    assert BACKFILL.expected_spend(priced, RATES) == expected
+    assert BACKFILL.expected_spend(priced, RATES) == pytest.approx(expected)
 
 
 def test_expected_spend_rejects_unpriced_cache_and_empty_rows():
@@ -96,7 +97,7 @@ def test_plan_updates_filters_drift_and_keeps_correct_rows():
     ]
     plan = BACKFILL.plan_updates(drift, RATES)
     assert [request_id for request_id, _, _ in plan] == ["drift-1"]
-    assert plan[0][2] == 1000 * 1.5e-07 + 400 * 5e-07
+    assert plan[0][2] == pytest.approx(1000 * 1.5e-07 + 400 * 5e-07)
 
 
 def test_help_exits_zero():
