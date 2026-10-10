@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import glob as globlib
 import json
 import os
 import sys
@@ -8,8 +9,6 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
-
-import glob as globlib
 
 import logger  # noqa: E402 -- scripts/lib bootstrap.
 from cli_helpers import add_common_args  # noqa: E402 -- scripts/lib bootstrap.
@@ -47,19 +46,40 @@ def wire_to_bare(model):
 
     Spend rows record the requested wire spelling: gateway aliases
     ('openai/x', 'ollama-cloud/x', 'chatgpt/x', 'meridian/x' — claude ids
-    arrive bare for OpenWebUI), daemon cloud stubs ('x:cloud', 'x-cloud',
-    with or without the ollama/ namespace), and bare local ids. Every priced
-    lane resolves to the single bare models.dev-style key.
+    arrive bare for OpenWebUI, plus the 'gemini/', 'cohere_chat/',
+    'cerebras/', 'huggingface/' namespaces), daemon cloud stubs
+    ('x:cloud', 'x-cloud', with or without the ollama/ namespace), and
+    historical naked spellings.
+
+    Namespaced NON-stub ollama rows ('ollama/<local-id>') are local
+    hardware routes: they are returned verbatim so they can never match
+    the Cloud-catalogue keys and be repriced as paid spend.
     """
     if not isinstance(model, str):
         return None
     bare = model
     if bare.startswith(("meridian/", "anthropic/")):
         bare = bare.split("/", 1)[1]
-    for prefix in ("openai/", "chatgpt/", "ollama-cloud/", "ollama/"):
+    for prefix in (
+        "openai/",
+        "chatgpt/",
+        "ollama-cloud/",
+        "gemini/",
+        "cohere_chat/",
+        "cerebras/",
+        "huggingface/",
+    ):
         if bare.startswith(prefix):
             bare = bare[len(prefix) :]
             break
+    else:
+        if bare.startswith("ollama/"):
+            body = bare[len("ollama/") :]
+            for suffix in STUB_SUFFIXES:
+                if body.endswith(suffix) and body[: -len(suffix)]:
+                    # Daemon cloud stub via the local namespace: priced.
+                    return body[: -len(suffix)]
+            return model
     # The ollama-cloud allowlist keys dated ids verbatim ('deepseek-v4-pro:0813')
     # so only genuine daemon stub markers are stripped here.
     for suffix in STUB_SUFFIXES:
@@ -119,11 +139,15 @@ def plan_updates(rows, rates):
             continue
         request_id = row.get("request_id")
         current = row.get("spend")
-        if not isinstance(current, (int, float)):
+        # Serialized columns can arrive as strings (json default=str); a
+        # silently-skipped unparsable row would hide drift from the report.
+        try:
+            current = float(current)
+        except (TypeError, ValueError):
             continue
-        if abs(float(current) - expected) <= SPEND_TOLERANCE:
+        if abs(current - expected) <= SPEND_TOLERANCE:
             continue
-        plan.append((str(request_id), float(current), expected))
+        plan.append((str(request_id), current, expected))
     return plan
 
 
@@ -189,20 +213,34 @@ import json, os, sys
 from prisma import Prisma
 import asyncio
 
+CHUNK_SIZE = 500
 plan = json.load(sys.stdin)
 
 async def _main():
     client = Prisma()
     await client.connect()
     applied = 0
-    for request_id, spend in plan:
-        await client.query_raw(
-            'UPDATE "LiteLLM_SpendLogs" SET spend = $1 WHERE request_id = $2',
-            spend, request_id,
-        )
-        applied += 1
+    chunk_index = 0
+    for start in range(0, len(plan), CHUNK_SIZE):
+        batch = plan[start : start + CHUNK_SIZE]
+        chunk_index += 1
+        try:
+            # Chunked interactive transactions: a failure commits nothing in
+            # the failing chunk, and progress stays visible per chunk.
+            async with client.tx() as tx:
+                for request_id, spend in batch:
+                    await tx.query_raw(
+                        'UPDATE "LiteLLM_SpendLogs" SET spend = $1 WHERE request_id = $2',
+                        spend, request_id,
+                    )
+        except Exception:
+            # Partial-progress contract: the wrapper reports how far we got.
+            print(json.dumps({"applied": applied, "failed_at_chunk": chunk_index}))
+            raise
+        applied += len(batch)
+        print(json.dumps({"applied": applied, "chunk": chunk_index}))
     await client.disconnect()
-    print(json.dumps({"applied": applied}))
+    print(json.dumps({"applied": applied, "chunks": chunk_index}))
 
 asyncio.run(_main())
 """
@@ -238,9 +276,19 @@ def _run_prisma(code, stdin_payload=None):
     )
     if proc.returncode != 0:
         # The prisma client prints service URLs on connect failures; keep the
-        # payload out of diagnostics and surface only the failure class.
+        # payload out of diagnostics and surface only the failure class — plus
+        # the partially-applied count when the apply step already made progress.
         tail = (err.decode(errors="replace").strip().splitlines() or ["?"])[-1]
-        raise RuntimeError(f"spend backfill prisma step failed: {tail[:200]}")
+        detail = ""
+        try:
+            progress = json.loads(
+                [line for line in out.decode().splitlines() if line.strip()][-1]
+            )
+            if isinstance(progress, dict) and "applied" in progress:
+                detail = f"; rows applied before failure: {progress['applied']}"
+        except (json.JSONDecodeError, IndexError):
+            pass
+        raise RuntimeError(f"spend backfill prisma step failed{detail}: {tail[:200]}")
     # The prisma client can print an engine banner before the JSON payload;
     # parse the last non-empty line rather than the whole stream.
     payload = [line for line in out.decode().splitlines() if line.strip()]
@@ -271,14 +319,29 @@ def main():
         logger.error("UNKNOWN spend rows response was not a list")
         return 1
     plan = plan_updates(rows, rates)
-    unpriced = [
-        row
+    cache_hits = sum(
+        1
         for row in rows
-        if isinstance(row, dict)
-        and not str(row.get("cache_hit") or "").lower() == "true"
-        and expected_spend(row, rates) is None
-        and (row.get("prompt_tokens") or 0) + (row.get("completion_tokens") or 0) > 0
-    ]
+        if isinstance(row, dict) and str(row.get("cache_hit") or "").lower() == "true"
+    )
+    unpriced = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("cache_hit") or "").lower() == "true":
+            continue
+        if expected_spend(row, rates) is None:
+            continue
+        # Serialized token columns can arrive as strings; coerce defensively
+        # so the row-count gate never concatenates strings or raises.
+        try:
+            tokens = int(row.get("prompt_tokens") or 0) + int(
+                row.get("completion_tokens") or 0
+            )
+        except (TypeError, ValueError):
+            continue
+        if tokens > 0:
+            unpriced.append(row)
     capped = plan[:MAX_UPDATES]
     if args.dry_run:
         for item in capped[:20]:
@@ -291,16 +354,28 @@ def main():
         if len(capped) > 20:
             logger.info("…and %d more row(s)", len(capped) - 20)
         logger.info(
-            "Backfill dry-run: %d row(s) would update, %d unpriced row(s) stay, %d rows total",
+            "Backfill dry-run: %d row(s) would update, %d cache-served stay, "
+            "%d unpriced row(s) stay, %d rows total",
             len(capped),
+            cache_hits,
             len(unpriced),
             len(rows),
         )
+        # Cap contract (idempotent rerun continues the remainder): never hide
+        # that corrections were left unprocessed.
+        if len(plan) > MAX_UPDATES:
+            logger.warning(
+                "Backfill plan capped at %d: %d correction(s) need a follow-up run",
+                MAX_UPDATES,
+                len(plan) - MAX_UPDATES,
+            )
         return 0
     if not capped:
         logger.info(
-            "Backfill: nothing to correct (%d rows checked, %d unpriced stay)",
+            "Backfill: nothing to correct (%d rows checked, %d cache-served stay, "
+            "%d unpriced stay)",
             len(rows),
+            cache_hits,
             len(unpriced),
         )
         return 0
@@ -316,11 +391,19 @@ def main():
         return 1
     applied = result.get("applied", 0) if isinstance(result, dict) else "?"
     logger.info(
-        "Backfill complete: %s row(s) repriced, %d unpriced stay, %d rows total",
+        "Backfill complete: %s row(s) repriced, %d cache-served stay, "
+        "%d unpriced stay, %d rows total",
         applied,
+        cache_hits,
         len(unpriced),
         len(rows),
     )
+    if len(plan) > MAX_UPDATES:
+        logger.warning(
+            "Backfill plan capped at %d: %d correction(s) need a follow-up run",
+            MAX_UPDATES,
+            len(plan) - MAX_UPDATES,
+        )
     return 0
 
 
