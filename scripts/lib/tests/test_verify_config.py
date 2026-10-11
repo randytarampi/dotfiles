@@ -1033,9 +1033,12 @@ def test_litellm_cost_rates_missing_rate_guard_is_decisive(tmp_path, monkeypatch
     status = VERIFY_CONFIG.litellm_cost_rates_status(
         home=home, environ=env, snapshot_path=snapshot
     )
-    assertion = lambda result: any(
-        "UNKNOWN" in line and "missing or unpriced" in line for line in result
-    )
+
+    def assertion(result):
+        return any(
+            "UNKNOWN" in line and "missing or unpriced" in line for line in result
+        )
+
     assert assertion(status)
     # Mutation proof: the pre-fix implementation skipped the pricing probe and
     # returned only ordinary drift status, which fails this exact assertion.
@@ -1063,3 +1066,86 @@ def test_litellm_cost_rates_runtime_probe_skips_gate_and_reports_missing_venv(
         "UNKNOWN" in line and "interpreter is unavailable" in line for line in status
     )
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        "⚠ LiteLLM cost rates: no readable rates snapshot",
+        "⚠ LiteLLM cost rates: installed cost map is unreadable",
+        "⚠ LiteLLM cost rates: installed cost map has unexpected shape",
+        "⚠ LiteLLM pricing probe: UNKNOWN (managed venv interpreter is unavailable)",
+        "⚠ LiteLLM pricing probe: UNKNOWN (managed runtime probe failed or timed out)",
+        "⚠ LiteLLM pricing probe: UNKNOWN for chatgpt/gpt-x (invalid rate)",
+        "⚠ LiteLLM pricing probe: mismatch for chatgpt/gpt-x",
+    ],
+)
+def test_litellm_pricing_exit_decision_blocks_unverified_configured_chatgpt(
+    tmp_path, status
+):
+    home = tmp_path / "home"
+    config = home / ".local/share/litellm/config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('  model: "chatgpt/gpt-x"\n')
+
+    assert (
+        VERIFY_CONFIG.litellm_pricing_status_blocks(
+            [status], home=home, environ={"DOTFILES_RUN_LITELLM_SETUP": "1"}
+        )
+        is True
+    )
+
+
+def test_litellm_pricing_exit_decision_allows_unavailable_when_no_chatgpt_is_configured(
+    tmp_path,
+):
+    home = tmp_path / "home"
+    config = home / ".local/share/litellm/config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('  model: "openai/gpt-x"\n')
+
+    assert (
+        VERIFY_CONFIG.litellm_pricing_status_blocks(
+            ["⚠ LiteLLM cost rates: installed cost map is unreadable"],
+            home=home,
+            environ={"DOTFILES_RUN_LITELLM_SETUP": "1"},
+        )
+        is False
+    )
+    for status in (
+        "⚠ LiteLLM pricing probe: UNKNOWN (managed cost map is unavailable)",
+        "⚠ LiteLLM pricing probe: UNKNOWN (managed venv interpreter is unavailable)",
+        "⚠ LiteLLM pricing probe: UNKNOWN (managed runtime probe failed or timed out)",
+    ):
+        assert (
+            VERIFY_CONFIG.litellm_pricing_status_blocks(
+                [status], home=home, environ={"DOTFILES_RUN_LITELLM_SETUP": "1"}
+            )
+            is False
+        )
+    assert (
+        VERIFY_CONFIG.litellm_pricing_status_blocks(
+            [
+                "⚠ LiteLLM pricing probe: UNKNOWN (no exact priced chatgpt wire IDs to sample)"
+            ],
+            home=home,
+            environ={"DOTFILES_RUN_LITELLM_SETUP": "1"},
+        )
+        is False
+    )
+
+
+def test_litellm_pricing_exit_decision_is_nonblocking_when_gate_is_off(tmp_path):
+    home = tmp_path / "home"
+    config = home / ".local/share/litellm/config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('  model: "chatgpt/gpt-x"\n')
+
+    assert (
+        VERIFY_CONFIG.litellm_pricing_status_blocks(
+            ["⚠ LiteLLM cost rates: installed cost map is unreadable"],
+            home=home,
+            environ={"DOTFILES_RUN_LITELLM_SETUP": "0"},
+        )
+        is False
+    )

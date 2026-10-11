@@ -125,6 +125,13 @@ checking cost resolution and Responses bridge mode without provider requests.
 This is bounded runtime evidence, not a claim of full provider coverage or
 permanent freedom from upstream challenges.
 
+When the setup gate is enabled and the generated gateway config contains exact
+`chatgpt/*` wire IDs, unavailable rate snapshots/maps or uncertain runtime
+pricing evidence are blocking doctor results. If no ChatGPT wires are deployed,
+unavailable pricing evidence remains a nonblocking warning. This is a
+fail-closed verification policy for configured ChatGPT wires; it does not alter
+model routing or require provider inference.
+
 ## Spend backfill
 
 Spend rows recorded before pricing was wired carry the original resolved cost
