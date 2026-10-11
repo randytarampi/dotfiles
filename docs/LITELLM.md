@@ -20,6 +20,10 @@ gateway-only: `DOTFILES_RUN_LITELLM_SETUP=1`, each client key file, and every
 exact gateway alias are required. Missing prerequisites are configuration
 errors, never a direct-routing fallback.
 
+Gateway orchestration precedes client generation. In gateway-only mode,
+orchestration requires local gateway readiness and authenticated keys for each
+enabled client before allowing client configuration to proceed.
+
 Intentional direct exceptions are `meridian` (the local proxy surface, with
 its own keys and responses API; it is not a LiteLLM upstream) and `copilot`
 (direct GitHub OAuth in Junie only). Routing either through LiteLLM would add
@@ -111,6 +115,16 @@ rows, and providers with no published rates stay unpriced by design.
 Context-tier pricing (`context_over_200k`) is intentionally not merged —
 base rates only until a request-class-aware consumer exists.
 
+The merge overlays managed rates onto existing entries; it must not replace
+upstream capability or protocol metadata. ChatGPT subscription entries require
+`mode: responses` and `litellm_provider: chatgpt`: losing those fields makes
+LiteLLM send chat requests to a different upstream endpoint, which produced
+Cloudflare managed challenges in the observed regression. The doctor samples
+at most five exact generated ChatGPT wires with the managed interpreter,
+checking cost resolution and Responses bridge mode without provider requests.
+This is bounded runtime evidence, not a claim of full provider coverage or
+permanent freedom from upstream challenges.
+
 ## Spend backfill
 
 Spend rows recorded before pricing was wired carry the original resolved cost
@@ -133,6 +147,6 @@ the managed venv's prisma client against the gateway database. Run it after a
 the generated `config.yaml` against the Admin API's model-table rows
 (`GET /model/info`) and deletes DB-side rows the config no longer serves via
 `POST /model/delete`. It never touches key, team, or spend tables. Accepts
-`--dry-run` (lists planned deletions and performs no network deletes) and
-`--no-backup`; targets the local loopback gateway only. Useful for clearing
+`--dry-run` (lists planned deletions and performs no network deletes);
+targets the local loopback gateway only. Useful for clearing
 stale Admin UI `Models` tab rows left behind by earlier configuration states.

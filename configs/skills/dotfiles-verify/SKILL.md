@@ -37,6 +37,13 @@ For code or configuration changes, run the complete `make verify` once on the st
 
 `make verify` already runs the CLI-contract check. Run it separately only when its inputs changed and a focused diagnosis is needed; otherwise avoid duplicating it. For focused Python tests, use the repository's Poetry environment and `--no-cov` when measuring only a subset.
 
+For a rewritten regression test, when applicable, demonstrate that its decisive
+assertion fails against the pre-fix or deliberately mutated implementation and
+passes against the fixed implementation. This mutation check is evidence that
+the test detects the regression; it does not replace `make verify` or justify
+claims of full coverage from a targeted run. Keep exact expected counts and
+values so an assertion cannot pass vacuously.
+
 ## Notes
 
 - Do not unconditionally remove `__pycache__` or other ignored artifacts; they are not source changes or verification failures.

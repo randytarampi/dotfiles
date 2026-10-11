@@ -26,17 +26,19 @@ These apply to every repo, every session.
 ### Verifying before declaring success
 
 - **How we ship**
-  1. **Agree:** set the outcome, acceptance checks, delivery state and permissions. Classify new requests as blocking, next batch or future; honour explicit overrides and freeze scope at finalisation except for correctness and required CI.
+  1. **Agree:** set the outcome, acceptance checks, delivery state and permissions. Classify additive requests as blocking, next batch or future; checkpoint plan amendments without requiring the user to batch all steering. Honour explicit overrides and freeze scope at finalisation except for correctness and required CI.
   2. **Own:** one writer owns one branch and worktree. Record objective, role, path, base SHA, files, validation owner, checkpoint and stop conditions. Parallel lanes are allowed only with disjoint, recorded ownership.
-  3. **Prove:** run the repository's runtime preflight and test the thinnest observable acceptance slice before building harnesses. Seek first evidence within about five minutes when appropriate.
-  4. **Stop:** after two failed approaches on one subsystem, change approach; if still unresolved, stop and ask the human. Do not start a fourth fix commit without an explicit scope check.
+  3. **Prove:** establish the decisive reproduction or thinnest observable acceptance slice before advancing speculative theories or building harnesses. Seek first evidence within about five minutes when appropriate.
+  4. **Stop:** after at most two failed approaches on one subsystem, change approach or ask the human if still unresolved. Do not start a fourth fix commit without an explicit scope check.
   5. **Claim:** report only actual tool results and persisted state; never simulate calls, results or transcripts. Git/remote HEAD, index and CI prevail over conflicting reports; a status or live PID is not proof.
   6. **Verify:** the validation owner inspects each lane and re-runs its decisive check; for code or configuration changes, run one canonical integrated verify before completion, push or release. Dotfiles use `make verify`; other repos use their documented command. Verify the intended committed state, not unrelated dirty-worktree content; for agreed local uncommitted delivery, label and verify that exact tree. For documentation-only or trivially mechanical changes, run relevant documentation checks and state that full integrated verification was not run.
   7. **Finish:** deliver the agreed state and retire agent worktrees under recorded consent. Agent PRs stay draft; do not push, mark ready or merge without explicit authority.
 - **Terms:** a **lane** is an owned scope of work; the **validation owner** independently re-runs its decisive check; **checkpoint/stop scope** defines when to pause and what ends iteration; a **bounded stop budget** caps attempts before asking the human for direction.
+- Distinguish observed causes from hypotheses. A brief successful run is evidence for that run, not proof that a fix is permanent; use causal analysis appropriate to the evidence rather than requiring a fixed technique such as five whys.
 - Run focused red/green checks during implementation; they do not replace the final integrated verify when one applies. Required CI remains mandatory; normal coverage remains mandatory when integrated verification applies. Failures block delivery. Rerun only when relevant code, inputs or runtime invalidate evidence. For dotfiles mechanics and blocked-tool handling, use the `dotfiles-verify` skill and `docs/ORCHESTRATION.md` in the dotfiles repository.
 - For service or model-generator changes, use the real consumer and credential path, capture a baseline, run twice, and check health, generated state/keys and idempotence. Isolate `HOME` and `PATH`, stub real service/process commands in tests, and confirm live services survived verification.
-- Keep status factual (command, exit, HEAD and outcome); do not claim Markdown can repair host or adapter liveness.
+- Keep progress brief and factual (command, exit, HEAD, evidence and outcome); do not narrate internal reasoning, job-board state or compaction repeatedly, and do not claim Markdown can repair host or adapter liveness.
+- At phase close, use the existing reflect skill for a lightweight, evidence-based reflection and the smallest justified improvement; skip ceremony for trivial tasks.
 - Before takeover, confirm termination and inspect actual partial state. Never overlap writers or clean destructively.
 
 ### Tone and style
@@ -52,6 +54,7 @@ These apply to every repo, every session.
 ### Focused execution and status
 
 - Start with the decisive reproduction or check before advancing a speculative root cause. Report only material progress, a decision, or a blocker; do not narrate internal deliberation or ambient job-board state.
+- Apply debugging skills proportionately: prefer the smallest discriminating comparison over a mandatory hypothesis count. Stress loops belong in safe, isolated local tests; external calls and delegated retries must respect user-imposed caps, provider limits and the existing stop budget. Do not repeatedly dispatch through the same demonstrated transport failure.
 - When blocked, inspect persisted source and worktree state, try bounded recovery within the agreed scope, and stop for direction rather than expanding the task.
 
 ### Delegation discipline
