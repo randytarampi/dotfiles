@@ -364,8 +364,6 @@ if ! step_skipped litellm; then
           die "LiteLLM readiness failed; refusing gateway-only client configuration"
         fi
         warn "LiteLLM is still starting; configuration will retry on a later deploy"
-      elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-        python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
       fi
     elif [[ "$(uname)" == "Linux" ]] && command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
       systemctl --user restart litellm.service || die "LiteLLM service restart failed"
@@ -373,9 +371,9 @@ if ! step_skipped litellm; then
         if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
         sleep 2
       done
-      curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || die "LiteLLM readiness failed; refusing gateway-only client configuration"
-      if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-        python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
+      if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
+        if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM readiness failed; refusing gateway-only client configuration"; fi
+        warn "LiteLLM is still starting; configuration will retry on a later deploy"
       fi
     elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
       die "LiteLLM readiness check requires a supported service supervisor"
@@ -390,6 +388,10 @@ if ! step_skipped litellm; then
   fi
 else
   info "Skipping LiteLLM configuration (--skip litellm)"
+fi
+
+if [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" && "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" && "$COMMON_DRY_RUN" != "1" ]] && ! step_skipped litellm; then
+  python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
 fi
 
 # Refresh Junie only after gateway readiness and client-key provisioning.

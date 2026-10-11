@@ -76,8 +76,6 @@ def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch)
 
 
 def test_require_ready_flag_is_registered():
-    import json
-
     manifest = json.loads((ROOT / "scripts/lib/cli-contract.json").read_text())
     entry = next(
         item
@@ -125,6 +123,7 @@ def test_orchestration_order_and_failure_guards_are_present():
     assert template.index("health/readiness") < template.index(
         '"$CONFIGURE_SCRIPT" --require-ready'
     )
+    assert template.count('"$CONFIGURE_SCRIPT" --require-ready') == 1
     assert "step_skipped litellm" in wrapper_lifecycle
     assert 'if [[ "$COMMON_DRY_RUN" == "1" ]]' in wrapper_lifecycle
     assert "systemctl --user restart litellm.service" in wrapper_lifecycle

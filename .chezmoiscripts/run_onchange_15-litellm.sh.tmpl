@@ -111,8 +111,6 @@ EOF
     if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
       if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM readiness failed; refusing gateway-only clients"; fi
       warn "LiteLLM is still starting; configuration will retry on a later deploy"
-    elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-      "$CONFIGURE_SCRIPT" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only clients"
     fi
   else
     info "systemd user session unavailable; wrote litellm.service for later activation"
@@ -141,9 +139,6 @@ PLIST_EOF
   if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
     if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM readiness failed; refusing gateway-only clients"; fi
     warn "LiteLLM is still starting; configuration will retry on a later deploy"
-  fi
-  if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
-    "$CONFIGURE_SCRIPT" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only clients"
   fi
 fi
 
