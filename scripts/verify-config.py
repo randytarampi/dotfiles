@@ -659,7 +659,7 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
         ]
     missing_installed = {
         wire
-        for wire in snapshot_wires & configured_wires - set(installed)
+        for wire in (snapshot_wires & configured_wires) - set(installed)
         if isinstance(models[wire], dict)
         and models[wire].get("input_cost_per_token") is not None
         and models[wire].get("output_cost_per_token") is not None
@@ -702,13 +702,16 @@ for wire in json.loads(sys.argv[1]):
     bridge_info, _ = responses_api_bridge_check(
         model=bare, custom_llm_provider=provider
     )
-    rows.append({"wire": wire, "prompt": prompt, "completion": completion,
-                 "mode": info.get("mode"), "provider": info.get("litellm_provider"),
-                 "bridge_mode": bridge_info.get("mode")})
+    rows.append({
+        "wire": wire, "prompt": prompt, "completion": completion,
+        "mode": info.get("mode"), "provider": info.get("litellm_provider"),
+        "bridge_mode": bridge_info.get("mode"),
+    })
 print(json.dumps(rows, allow_nan=False))
 """
     try:
-        result = subprocess.run(
+        # Fixed probe code and managed interpreter; wire IDs are JSON argv data.
+        result = subprocess.run(  # nosec B603
             [str(venv_python), "-c", probe_code, json.dumps(sample)],
             capture_output=True,
             text=True,
@@ -825,6 +828,32 @@ print(json.dumps(rows, allow_nan=False))
         "✓ LiteLLM pricing probe: %d exact chatgpt wire model(s) verified with the managed runtime"
         % len(rows),
     ]
+
+
+def litellm_pricing_status_blocks(statuses, home=None, environ=None):
+    """Block configured ChatGPT pricing uncertainty, but not absent optional pricing."""
+    environ = os.environ if environ is None else environ
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return False
+    root = Path(home or environ.get("HOME", HOME)).expanduser()
+    try:
+        config_text = (root / ".local/share/litellm/config.yaml").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return False
+    configured_wires = re.findall(
+        r'(?m)^\s*model:\s*["\']?(chatgpt/[^"\'\s]+)', config_text
+    )
+    if configured_wires:
+        return any(
+            status.startswith("⚠ LiteLLM cost rates:")
+            or status.startswith("⚠ LiteLLM pricing probe:")
+            for status in statuses
+        )
+    # This runtime probe is specific to ChatGPT wires. Other gateway
+    # prerequisites are checked independently by the doctor.
+    return False
 
 
 # Gate → list of (description, file path) checks
@@ -1862,13 +1891,11 @@ def main():
         exit_code = 1
     for status in litellm_venv_patch_status(home=HOME):
         print(f"  {status}")
-    for status in litellm_cost_rates_status(home=HOME):
+    pricing_statuses = litellm_cost_rates_status(home=HOME)
+    for status in pricing_statuses:
         print(f"  {status}")
-        if (
-            status.startswith("⚠ LiteLLM pricing probe:")
-            and "no exact priced chatgpt wire IDs" not in status
-        ):
-            exit_code = 1
+    if litellm_pricing_status_blocks(pricing_statuses, home=HOME, environ=os.environ):
+        exit_code = 1
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
     litellm_unit = HOME / ".config/systemd/user/litellm.service"
