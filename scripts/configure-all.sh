@@ -331,7 +331,68 @@ else
   info "DOTFILES_RUN_DOCKER_CONFIG_SETUP='${DOTFILES_RUN_DOCKER_CONFIG_SETUP:-0}' — skipping Docker CLI configuration"
 fi
 
-# 1.5. Refresh Junie model profiles (models-only; dir scaffolding handled by run_onchange_06)
+# 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
+if ! step_skipped mcps && [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
+  info "Configuring MCP servers..."
+  run_step "MCP configuration" python3 "$SCRIPT_DIR/configure-mcps.py" --mode global ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+else
+  info "DOTFILES_RUN_MCP_SETUP not set — skipping MCP configuration"
+fi
+
+# 2.5. Start and provision LiteLLM before gateway-only clients are emitted.
+# Keep bounded readiness consistent with the service template's 30 x 2 s boot window.
+if ! step_skipped litellm; then
+  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+    info "Skipping LiteLLM configuration (dry-run mode)"
+  elif [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" ]]; then
+    litellm_require_database_url
+    litellm_service_env_sync "$HOME/.local/share/litellm/service.env" || die "LiteLLM service environment failed"
+    python3 "$SCRIPT_DIR/configure-litellm.py" || die "LiteLLM configuration failed"
+    litellm_service_env_sync "$HOME/.local/share/litellm/service.env" || die "LiteLLM provider environment failed"
+    if ! python3 "$SCRIPT_DIR/configure-litellm-venv.py"; then
+      if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM listing/rates patch failed; refusing gateway-only client configuration"; fi
+      warn "LiteLLM listing/rates patch failed"
+    fi
+    if [[ "$(uname)" == "Darwin" ]]; then
+      litellm_service_restart || die "LiteLLM service restart failed"
+      for _ in {1..30}; do
+        if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
+        sleep 2
+      done
+      if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
+        if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+          die "LiteLLM readiness failed; refusing gateway-only client configuration"
+        fi
+        warn "LiteLLM is still starting; configuration will retry on a later deploy"
+      elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+        python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
+      fi
+    elif [[ "$(uname)" == "Linux" ]] && command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+      systemctl --user restart litellm.service || die "LiteLLM service restart failed"
+      for _ in {1..30}; do
+        if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
+        sleep 2
+      done
+      curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || die "LiteLLM readiness failed; refusing gateway-only client configuration"
+      if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+        python3 "$SCRIPT_DIR/configure-litellm.py" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only client configuration"
+      fi
+    elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+      die "LiteLLM readiness check requires a supported service supervisor"
+    fi
+  else
+    if [[ "$(uname)" == "Darwin" ]]; then
+      litellm_service_stop
+      rm -f "$(litellm_service_plist)"
+      pkill -f "$HOME/.local/share/litellm/venv/bin/litellm" 2>/dev/null || true
+    fi
+    info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM"
+  fi
+else
+  info "Skipping LiteLLM configuration (--skip litellm)"
+fi
+
+# Refresh Junie only after gateway readiness and client-key provisioning.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Junie model refresh (dry-run mode)"
 elif ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
@@ -339,14 +400,6 @@ elif ! step_skipped junie && [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; 
   run_step "Junie model profiles refreshed" python3 "$SCRIPT_DIR/configure-jetbrains-ai.py" --skip dirs ${JETBRAINS_ARGS[@]+"${JETBRAINS_ARGS[@]}"}
 else
   info "DOTFILES_RUN_JUNIE_CLI_SETUP='${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}' — skipping junie models refresh"
-fi
-
-# 2. MCP config (must run before opencode — opencode calls configure-mcp-tool.py)
-if ! step_skipped mcps && [[ "${DOTFILES_RUN_MCP_SETUP:-0}" == "1" ]]; then
-  info "Configuring MCP servers..."
-  run_step "MCP configuration" python3 "$SCRIPT_DIR/configure-mcps.py" --mode global ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
-else
-  info "DOTFILES_RUN_MCP_SETUP not set — skipping MCP configuration"
 fi
 
 # Track OpenCode success separately to gate the service restart.
@@ -561,28 +614,6 @@ else
     rm -f "$(openwebui_service_plist)"
   fi
   info "DOTFILES_RUN_OPENWEBUI_SETUP='${DOTFILES_RUN_OPENWEBUI_SETUP:-0}' — skipping Open WebUI reconciliation"
-fi
-
-# 8d. LiteLLM is a separate loopback gateway for non-OpenWebUI clients.
-if ! step_skipped litellm; then
-  if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-    run_step "LiteLLM configuration dry-run" python3 "$SCRIPT_DIR/configure-litellm.py" --dry-run
-  elif [[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == "1" ]]; then
-    litellm_require_database_url
-    run_step "LiteLLM service environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"
-    run_step "LiteLLM configuration" python3 "$SCRIPT_DIR/configure-litellm.py"
-    run_step "LiteLLM provider environment" litellm_service_env_sync "$HOME/.local/share/litellm/service.env"
-    if [[ "$(uname)" == "Darwin" ]]; then run_step "LiteLLM service restart" litellm_service_restart; fi
-  else
-    if [[ "$(uname)" == "Darwin" ]]; then
-      litellm_service_stop
-      rm -f "$(litellm_service_plist)"
-      pkill -f "$HOME/.local/share/litellm/venv/bin/litellm" 2>/dev/null || true
-    fi
-    info "DOTFILES_RUN_LITELLM_SETUP='${DOTFILES_RUN_LITELLM_SETUP:-0}' — skipping LiteLLM"
-  fi
-else
-  info "Skipping LiteLLM configuration (--skip litellm)"
 fi
 
 # 9. Restart OpenCode Web to pick up config changes (opencode.json, acp-agents.json, etc.)
