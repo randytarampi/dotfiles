@@ -22,6 +22,7 @@ from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_ollama_local_base_url,
 )
 from discover_models import (  # noqa: E402 -- local import follows bootstrap.
+    is_ollama_cloud_model,
     list_cloud_ollama_models,
     list_local_ollama_models,
 )
@@ -118,7 +119,7 @@ def _model_context_window(model_id, local, provider="ollama"):
             return native or engine["context_fallback"]
         if native:
             return min(cap, native)
-    elif model_id.endswith(":cloud"):
+    elif is_ollama_cloud_model(model_id):
         native = _native_context(model_id)
         if native:
             return native

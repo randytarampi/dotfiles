@@ -135,3 +135,35 @@ def test_resolve_alias_rejects_empty_segments():
 )
 def test_canonical_allowlist_key_strips_models_segment(model_id, expected):
     assert canonical_allowlist_key(model_id) == expected
+
+
+def test_canonical_allowlist_key_collapses_upstream_free_rename():
+    assert canonical_allowlist_key("upstream/new-id:free") == "upstream/new-id"
+
+
+def test_raw_model_reference_keeps_endpoint_specific_wire_identity():
+    from model_references import (
+        Catalogue,
+        EndpointIdentity,
+        ModelReference,
+        Outcome,
+        compare_references,
+    )
+
+    direct_endpoint = EndpointIdentity("https://api.example/v1", "openai")
+    gateway_endpoint = EndpointIdentity("https://gateway.example/v1", "litellm")
+    wire = "upstream/new-id:free"
+    direct = ModelReference(direct_endpoint, wire, "test", "model")
+    gateway = ModelReference(gateway_endpoint, wire, "test", "model")
+    assert direct.wire_id == gateway.wire_id == wire
+    assert direct != gateway
+    result = compare_references(
+        [direct, gateway],
+        {direct_endpoint: Catalogue(True, frozenset({wire}))},
+    )
+    outcomes = {row.reference.endpoint: row.outcome for row in result.results}
+    assert outcomes == {
+        direct_endpoint: Outcome.MATCH,
+        gateway_endpoint: Outcome.UNKNOWN,
+    }
+    assert not result.complete

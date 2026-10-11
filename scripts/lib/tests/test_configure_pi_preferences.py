@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import local_engines
+import pytest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", "..", ".."))
@@ -21,6 +22,42 @@ PI_SPEC = importlib.util.spec_from_file_location(
 assert PI_SPEC is not None and PI_SPEC.loader is not None
 configure_pi = importlib.util.module_from_spec(PI_SPEC)
 PI_SPEC.loader.exec_module(configure_pi)
+
+
+@pytest.mark.parametrize("suffix", [":cloud", "-cloud"])
+def test_ollama_cloud_context_uses_native_window_and_original_model_id(suffix):
+    model_id = f"provider/model{suffix}"
+    configure_pi._model_details_cache.clear()
+    with (
+        patch.dict(os.environ, {"OLLAMA_CONTEXT_LENGTH": "32768"}),
+        patch.object(
+            configure_pi, "_native_context", return_value=65536
+        ) as native_context,
+    ):
+        assert configure_pi._model_context_window(model_id, local=False) == 65536
+    native_context.assert_called_once_with(model_id)
+
+
+def test_non_cloud_model_context_remains_capped():
+    with (
+        patch.dict(os.environ, {"OLLAMA_CONTEXT_LENGTH": "32768"}),
+        patch.object(configure_pi, "_native_context") as native_context,
+    ):
+        assert (
+            configure_pi._model_context_window("provider/model", local=False) == 32768
+        )
+    native_context.assert_not_called()
+
+
+def test_local_model_context_remains_capped_by_native_window():
+    with (
+        patch.dict(os.environ, {"OLLAMA_CONTEXT_LENGTH": "32768"}),
+        patch.object(
+            configure_pi, "_native_context", return_value=65536
+        ) as native_context,
+    ):
+        assert configure_pi._model_context_window("provider/model", local=True) == 32768
+    native_context.assert_called_once_with("provider/model", "ollama")
 
 
 def codified_settings():
