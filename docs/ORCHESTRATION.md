@@ -345,7 +345,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_CADDY_SETUP` | 0 | Scripts 21-25 (migration, ddns-route53, acme.sh, Caddy, Plannotator) |
 | `DOTFILES_RUN_OPENCODE_WEB_SETUP` | 0 | Script 26 (OpenCode web LaunchAgent) |
 | `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
-| `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (MCP config) |
+| `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (`run_onchange_15-configure-mcp.sh.tmpl`, MCP config) |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
 | `DOTFILES_RUN_AWS_CONFIG_SETUP` | 0 | `configure-all.sh` (non-secret AWS CLI config baseline) |
@@ -354,7 +354,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
 | `DOTFILES_RUN_OPENWEBUI_SETUP` | 0 | Script 30 (Open WebUI venv, LaunchAgent, service env, connection reconciliation) |
-| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 15 (separate LiteLLM loopback gateway) |
+| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 15 (`run_onchange_15-litellm.sh.tmpl`, separate LiteLLM loopback gateway) |
 | `DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP` | 0 | Script 32 (daily Open WebUI backup timer; requires Open WebUI gate) |
 | `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
 | `DOTFILES_RUN_UPDATE_SYSTEM_SETUP` | 0 | `update-system.sh` (manual cross-platform system/package updater) |
