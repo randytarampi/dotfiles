@@ -2,6 +2,8 @@
 """Generate the gated, loopback-only LiteLLM proxy configuration."""
 
 import argparse
+import glob
+import hashlib
 import os
 import json
 import shlex
@@ -233,7 +235,111 @@ def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
     _write_client_key(service_env_path, "openwebui", "LITELLM_OPENWEBUI_KEY", dry_run)
 
 
-def provision_app_keys(master_key, service_env_path=None, api_base=None):
+def _materialized_client_key_value(
+    client_key_path: Path, env_name, service_env_path
+) -> str:
+    """Canonical key value for one client: file material first, then service.env."""
+    try:
+        if client_key_path.is_file() and not client_key_path.is_symlink():
+            value = client_key_path.read_text(encoding="utf-8")
+            if value:
+                return value
+    except OSError:
+        pass
+    return _service_env_value(env_name, service_env_path)
+
+
+def _align_client_token_hash(alias, token_hash, service_env_path: Path) -> None:
+    """Align one app-key row's registered hash with the local key material.
+
+    Upstream exposes no API to set a token value, and the local material is
+    canonical once a key is materialized, so the alignment runs through the
+    same managed-venv prisma path the spend backfill uses.
+    """
+    import subprocess  # nosec B404 -- managed-venv runner with internal code strings
+
+    database_url = _service_env_value("DATABASE_URL", service_env_path)
+    if not database_url:
+        raise RuntimeError("DATABASE_URL missing from service.env")
+    candidates = sorted(
+        glob.glob(str(service_env_path.parent / "venv" / "bin" / "python3*"))
+    )
+    if not candidates:
+        raise RuntimeError("LiteLLM venv interpreter not found")
+    code = (
+        "import json, sys\n"
+        "from prisma import Prisma\n"
+        "import asyncio\n"
+        "async def _main():\n"
+        "    client = Prisma()\n"
+        "    await client.connect()\n"
+        "    rows = await client.query_raw(\n"
+        '        \'UPDATE "LiteLLM_VerificationToken" SET token = $1 '
+        "WHERE key_alias = $2 RETURNING key_alias',\n"
+        "        sys.argv[1], sys.argv[2],\n"
+        "    )\n"
+        "    await client.disconnect()\n"
+        "    print(json.dumps(rows, default=str))\n"
+        "asyncio.run(_main())\n"
+    )
+    proc = (
+        subprocess.run(  # nosec B603 -- controlled: internal code + managed interpreter
+            [candidates[-1], "-c", code, token_hash, alias],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "DATABASE_URL": database_url},
+        )
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr.strip().splitlines() or ["?"])[-1]
+        raise RuntimeError(f"app-key hash alignment failed: {tail[:200]}")
+
+
+def _verify_app_key_hash(
+    alias,
+    client_key_path: Path,
+    env_name,
+    service_env_path: Path,
+    record_token,
+    dry_run=False,
+) -> None:
+    """Repair app-key rows whose registered hash drifted from local material.
+
+    The deployed key material (service.env + the client key file) is the
+    canonical value once a key is materialized; a generation race can leave
+    the gateway row hashing a value that no longer exists on disk, which
+    makes every gateway request with that key 401 — observed live as Open
+    WebUI rendering no models at all.
+    """
+    if not isinstance(record_token, str) or not record_token:
+        return
+    value = _materialized_client_key_value(client_key_path, env_name, service_env_path)
+    if not value:
+        return
+    expected = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    if expected == record_token:
+        return
+    if dry_run:
+        logger.warning(
+            "LiteLLM app key %s drifted: registered hash %s… != local %s… (dry-run: not repaired)",
+            alias,
+            str(record_token)[:12],
+            expected[:12],
+        )
+        return
+    logger.warning(
+        "LiteLLM app key %s drifted: registered hash %s… != local %s… — repairing the row",
+        alias,
+        str(record_token)[:12],
+        expected[:12],
+    )
+    try:
+        _align_client_token_hash(alias, expected, service_env_path)
+    except (OSError, RuntimeError) as error:
+        logger.warning("Could not repair drifted LiteLLM app key %s: %s", alias, error)
+
+
+def provision_app_keys(master_key, service_env_path=None, api_base=None, dry_run=False):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
     if not master_key:
         logger.warning("LiteLLM master key unavailable; skipping app-key provisioning")
@@ -274,7 +380,17 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None):
                 materialized = _key_file_materialized(
                     client_key_path, env_name, service_env_path
                 )
-                if materialized or client_key_path.is_symlink():
+                if client_key_path.is_symlink():
+                    continue
+                if materialized:
+                    _verify_app_key_hash(
+                        alias,
+                        client_key_path,
+                        env_name,
+                        service_env_path,
+                        stranded_record.get("token") if stranded_record else None,
+                        dry_run=dry_run,
+                    )
                     continue
                 if stranded_record:
                     key = _recover_stranded_app_key(
@@ -412,7 +528,7 @@ def main():
         master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
         if not master_key:
             master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)
-        provision_app_keys(master_key, service_env_path)
+        provision_app_keys(master_key, service_env_path, dry_run=args.dry_run)
         return 0
     except LiveCatalogueError as error:
         logger.error(

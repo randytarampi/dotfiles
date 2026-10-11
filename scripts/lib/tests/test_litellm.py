@@ -1,3 +1,4 @@
+import hashlib
 import os
 import json
 import io
@@ -1236,6 +1237,128 @@ def test_existing_alias_recreates_file_from_service_env_without_generation(
     assert junie_key.read_text(encoding="utf-8") == "dummy-junie-existing"
     assert junie_key.parent.stat().st_mode & 0o777 == 0o700
     assert junie_key.stat().st_mode & 0o777 == 0o600
+
+
+def test_provision_repairs_drifted_client_key_hash(tmp_path, monkeypatch):
+    """A materialized key whose registered hash drifted from the local value
+    gets repaired in place — Open WebUI rendered no models while its row
+    hashed a value that no longer existed on disk."""
+    aligns = []
+    calls = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        calls.append((url, method, payload))
+        if "/key/list" in url:
+            return {
+                "keys": [
+                    {
+                        "key_alias": "openwebui",
+                        "token": hashlib.sha256(b"sk-stale").hexdigest(),
+                    }
+                ]
+            }
+        if url.endswith("/key/generate"):
+            return {"key": "sk-generated-openwebui"}
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    monkeypatch.setattr(
+        CONFIGURE,
+        "_align_client_token_hash",
+        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+    )
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+    clients = tmp_path / "clients"
+    clients.mkdir(mode=0o700)
+    key_file = clients / "openwebui.key"
+    key_file.write_text("sk-current", encoding="utf-8")
+    os.chmod(key_file, 0o600)
+
+    CONFIGURE.provision_app_keys("master", service, "http://127.0.0.1:4000")
+
+    assert aligns == [("openwebui", hashlib.sha256(b"sk-current").hexdigest())]
+    # The drifted alias owns canonical local material — never re-generated
+    # (only the unprovisioned siblings take the /key/generate path).
+    generated = [
+        payload["key_alias"]
+        for url, _, payload in calls
+        if "/key/generate" in url and isinstance(payload, dict)
+    ]
+    assert "openwebui" not in generated
+
+
+def test_provision_keeps_matching_client_key_hash(tmp_path, monkeypatch):
+    aligns = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        if "/key/list" in url:
+            return {
+                "keys": [
+                    {
+                        "key_alias": "openwebui",
+                        "token": hashlib.sha256(b"sk-current").hexdigest(),
+                    }
+                ]
+            }
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    monkeypatch.setattr(
+        CONFIGURE,
+        "_align_client_token_hash",
+        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+    )
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+    clients = tmp_path / "clients"
+    clients.mkdir(mode=0o700)
+    key_file = clients / "openwebui.key"
+    key_file.write_text("sk-current", encoding="utf-8")
+    os.chmod(key_file, 0o600)
+
+    CONFIGURE.provision_app_keys("master", service, "http://127.0.0.1:4000")
+
+    assert aligns == []
+
+
+def test_provision_dry_run_reports_drift_without_repair(tmp_path, monkeypatch, caplog):
+    aligns = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=5):
+        if "/key/list" in url:
+            return {
+                "keys": [
+                    {
+                        "key_alias": "openwebui",
+                        "token": hashlib.sha256(b"sk-stale").hexdigest(),
+                    }
+                ]
+            }
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    monkeypatch.setattr(
+        CONFIGURE,
+        "_align_client_token_hash",
+        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+    )
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+    clients = tmp_path / "clients"
+    clients.mkdir(mode=0o700)
+    key_file = clients / "openwebui.key"
+    key_file.write_text("sk-current", encoding="utf-8")
+    os.chmod(key_file, 0o600)
+
+    CONFIGURE.provision_app_keys(
+        "master", service, "http://127.0.0.1:4000", dry_run=True
+    )
+
+    assert aligns == []
+    assert any(
+        "drifted" in message and "dry-run" in message for message in caplog.messages
+    )
 
 
 def test_app_key_provisioning_treats_400_generate_as_alias_exists(
