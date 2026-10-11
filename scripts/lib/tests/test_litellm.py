@@ -1265,7 +1265,9 @@ def test_provision_repairs_drifted_client_key_hash(tmp_path, monkeypatch):
     monkeypatch.setattr(
         CONFIGURE,
         "_align_client_token_hash",
-        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+        lambda alias, token_hash, previous_hash, service_env_path: aligns.append(
+            (alias, token_hash, previous_hash)
+        ),
     )
     service = tmp_path / "service.env"
     service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
@@ -1277,7 +1279,14 @@ def test_provision_repairs_drifted_client_key_hash(tmp_path, monkeypatch):
 
     CONFIGURE.provision_app_keys("master", service, "http://127.0.0.1:4000")
 
-    assert aligns == [("openwebui", hashlib.sha256(b"sk-current").hexdigest())]
+    assert aligns == [
+        (
+            "openwebui",
+            hashlib.sha256(b"sk-current").hexdigest(),
+            # The UPDATE is constrained to the row that was read.
+            hashlib.sha256(b"sk-stale").hexdigest(),
+        )
+    ]
     # The drifted alias owns canonical local material — never re-generated
     # (only the unprovisioned siblings take the /key/generate path).
     generated = [
@@ -1307,7 +1316,9 @@ def test_provision_keeps_matching_client_key_hash(tmp_path, monkeypatch):
     monkeypatch.setattr(
         CONFIGURE,
         "_align_client_token_hash",
-        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+        lambda alias, token_hash, previous_hash, service_env_path: aligns.append(
+            (alias, token_hash, previous_hash)
+        ),
     )
     service = tmp_path / "service.env"
     service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
@@ -1341,7 +1352,9 @@ def test_provision_dry_run_reports_drift_without_repair(tmp_path, monkeypatch, c
     monkeypatch.setattr(
         CONFIGURE,
         "_align_client_token_hash",
-        lambda alias, token_hash, service_env_path: aligns.append((alias, token_hash)),
+        lambda alias, token_hash, previous_hash, service_env_path: aligns.append(
+            (alias, token_hash, previous_hash)
+        ),
     )
     service = tmp_path / "service.env"
     service.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
@@ -1359,6 +1372,96 @@ def test_provision_dry_run_reports_drift_without_repair(tmp_path, monkeypatch, c
     assert any(
         "drifted" in message and "dry-run" in message for message in caplog.messages
     )
+
+
+def test_materialized_client_key_value_strips_and_falls_back(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text(
+        "LITELLM_OPENWEBUI_KEY='sk-from-env'\n" "LITELLM_PI_KEY='sk-pi-env'\n",
+        encoding="utf-8",
+    )
+    clients = tmp_path / "clients"
+    clients.mkdir(mode=0o700)
+    padded = clients / "openwebui.key"
+    padded.write_text("  sk-current\n", encoding="utf-8")
+    os.chmod(padded, 0o600)
+    value = CONFIGURE._materialized_client_key_value(
+        padded, "LITELLM_OPENWEBUI_KEY", service
+    )
+    # The hash is computed over the credential the clients actually send.
+    assert value == "sk-current"
+    ws = clients / "pi.key"
+    ws.write_text("   \n", encoding="utf-8")
+    os.chmod(ws, 0o600)
+    # A whitespace-only file is unmaterialized from the FILE side, but the
+    # service.env fallback supplies usable material — both sides agree on
+    # the same stripped credential the clients send.
+    assert CONFIGURE._key_file_materialized(ws, "LITELLM_PI_KEY", service)
+    assert (
+        CONFIGURE._materialized_client_key_value(ws, "LITELLM_PI_KEY", service)
+        == "sk-pi-env"
+    )
+    # Without any env value there is nothing to repair with.
+    bare = tmp_path / "bare.env"
+    bare.write_text("LITELLM_OPENWEBUI_KEY=''\n", encoding="utf-8")
+    assert not CONFIGURE._key_file_materialized(ws, "LITELLM_PI_KEY", bare)
+    assert CONFIGURE._materialized_client_key_value(ws, "LITELLM_PI_KEY", bare) == ""
+
+
+def test_app_key_hash_alignment_requires_constrained_row(tmp_path, monkeypatch):
+    probe = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = "[]\n"
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        probe["argv"] = argv
+        probe["kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    service = tmp_path / "service.env"
+    service.write_text("DATABASE_URL='postgresql://gw/db'\n", encoding="utf-8")
+    # A fake managed-venv interpreter so the glob resolves before the stub.
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True, exist_ok=True)
+    (venv_bin / "python3").write_text("", encoding="utf-8")
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="unexpected alignment result"):
+        CONFIGURE._align_client_token_hash(
+            "openwebui",
+            "new-hash",
+            "old-hash",
+            service,
+        )
+    argv = probe["argv"]
+    assert argv[-3:] == ["new-hash", "openwebui", "old-hash"]
+    assert "AND token = $3" in argv[2]
+    assert probe["kwargs"].get("timeout") == 60
+
+    FakeProc.stdout = json.dumps([{"key_alias": "openwebui"}]) + "\n"
+    CONFIGURE._align_client_token_hash("openwebui", "new-hash", "old-hash", service)
+
+
+def test_app_key_hash_alignment_times_out(tmp_path, monkeypatch):
+    import pytest
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=60)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    service = tmp_path / "service.env"
+    service.write_text("DATABASE_URL='postgresql://gw/db'\n", encoding="utf-8")
+    # A fake managed-venv interpreter so the glob resolves before the stub.
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True, exist_ok=True)
+    (venv_bin / "python3").write_text("", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="timed out"):
+        CONFIGURE._align_client_token_hash("openwebui", "h", "old", service)
 
 
 def test_app_key_provisioning_treats_400_generate_as_alias_exists(
