@@ -363,11 +363,13 @@ def _verify_app_key_hash(
         logger.warning("Could not repair drifted LiteLLM app key %s: %s", alias, error)
 
 
-def provision_app_keys(master_key, service_env_path=None, api_base=None, dry_run=False):
+def provision_app_keys(
+    master_key, service_env_path=None, api_base=None, dry_run=False, strict=False
+):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
     if not master_key:
         logger.warning("LiteLLM master key unavailable; skipping app-key provisioning")
-        return
+        return not strict
     api_base = (
         api_base or f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}"
     ).rstrip("/")
@@ -375,7 +377,15 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None, dry_run
         service_env_path or "~/.local/share/litellm/service.env"
     ).expanduser()
     try:
-        _request_json(f"{api_base}/health/liveliness", "GET", master_key)
+        _request_json(
+            (
+                f"{api_base}/health/readiness"
+                if strict
+                else f"{api_base}/health/liveliness"
+            ),
+            "GET",
+            master_key,
+        )
         # Default /key/list responses carry opaque hash strings; only
         # return_full_object=true exposes key_alias for idempotency.
         listing = _request_json(
@@ -481,8 +491,37 @@ def provision_app_keys(master_key, service_env_path=None, api_base=None, dry_run
         _write_pi_key(service_env_path)
         _write_junie_key(service_env_path)
         _write_openwebui_key(service_env_path)
+        if strict:
+            for alias, env_name in APP_KEYS.items():
+                gate = {
+                    "opencode": "DOTFILES_RUN_OPENCODE_SETUP",
+                    "pi": "DOTFILES_RUN_PI_SETUP",
+                    "openwebui": "DOTFILES_RUN_OPENWEBUI_SETUP",
+                    "junie": "DOTFILES_RUN_JUNIE_CLI_SETUP",
+                }[alias]
+                if os.environ.get(gate, "0") != "1":
+                    continue
+                key_path = service_env_path.parent / "clients" / f"{alias}.key"
+                key = _materialized_client_key_value(
+                    key_path, env_name, service_env_path
+                )
+                if not key:
+                    logger.error("LiteLLM client key is not provisioned: %s", alias)
+                    return False
+                try:
+                    response = _request_json(f"{api_base}/v1/models", "GET", key)
+                except (OSError, ValueError, TypeError):
+                    logger.error("LiteLLM client key authentication failed: %s", alias)
+                    return False
+                if not isinstance(response, dict) or not isinstance(
+                    response.get("data"), list
+                ):
+                    logger.error("LiteLLM client key model access failed: %s", alias)
+                    return False
+        return True
     except (OSError, ValueError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
+        return not strict
 
 
 def _recover_stranded_app_key(api_base, master_key, alias, record):
@@ -511,6 +550,11 @@ def main():
         description="Configure the loopback LiteLLM gateway.", allow_abbrev=False
     )
     add_common_args(parser)
+    parser.add_argument(
+        "--require-ready",
+        action="store_true",
+        help="Require enabled client keys to authenticate against the ready local gateway",
+    )
     args = parser.parse_args()
     if not load_env():
         logger.warning("~/.env not found")
@@ -520,6 +564,14 @@ def main():
     if not _database_url_configured():
         logger.error("LITELLM_DATABASE_URL is required when LiteLLM is enabled")
         return 1
+    if args.require_ready and args.dry_run:
+        parser.error("--require-ready cannot be combined with --dry-run")
+    if args.require_ready:
+        service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
+        master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
+        if not master_key:
+            master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)
+        return 0 if provision_app_keys(master_key, service_env_path, strict=True) else 1
     config_path = os.path.expanduser("~/.local/share/litellm/config.yaml")
     try:
         # Compute the snapshot once: write_config reuses it instead of

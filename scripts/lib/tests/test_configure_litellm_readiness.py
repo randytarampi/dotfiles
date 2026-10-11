@@ -1,0 +1,163 @@
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = ROOT / "scripts/configure-litellm.py"
+SPEC = importlib.util.spec_from_file_location("configure_litellm_readiness", SCRIPT)
+assert SPEC and SPEC.loader
+CONFIGURE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CONFIGURE)
+
+
+def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monkeypatch):
+    service_env = tmp_path / "service.env"
+    service_env.write_text(
+        "LITELLM_OPENCODE_KEY='secret-key'\n"
+        "LITELLM_PI_KEY='pi-key'\nLITELLM_JUNIE_KEY='junie-key'\n"
+        "LITELLM_OPENWEBUI_KEY='webui-key'\n"
+    )
+    key_path = tmp_path / "clients/opencode.key"
+    key_path.parent.mkdir()
+    key_path.write_text("secret-key")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    calls = []
+
+    def request(url, method, key, payload=None, timeout=30):
+        calls.append((url, method))
+        if "/key/list" in url:
+            return {
+                "keys": [
+                    {"key_alias": alias}
+                    for alias in ("opencode", "pi", "junie", "openwebui")
+                ]
+            }
+        if url.endswith("/v1/models"):
+            assert key == "secret-key"
+            return {"data": []}
+        return {"healthy": True}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", request)
+    monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
+    assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True) is True
+    assert calls[:3] == [
+        ("http://127.0.0.1:4000/health/readiness", "GET"),
+        ("http://127.0.0.1:4000/key/list?return_full_object=true", "GET"),
+        ("http://127.0.0.1:4000/v1/models", "GET"),
+    ]
+
+
+def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch):
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_OPENCODE_KEY='secret-key'\n")
+    key_path = tmp_path / "clients/opencode.key"
+    key_path.parent.mkdir()
+    key_path.write_text("secret-key")
+    for gate in ("OPENCODE", "PI", "JUNIE_CLI", "OPENWEBUI"):
+        monkeypatch.setenv(
+            f"DOTFILES_RUN_{gate}_SETUP", "1" if gate == "OPENCODE" else "0"
+        )
+
+    def request(url, method, key, payload=None, timeout=30):
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": "opencode", "token": "hash"}]}
+        if url.endswith("/v1/models"):
+            raise OSError("unauthorized")
+        return {"healthy": True}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", request)
+    monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
+    assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True) is False
+
+
+def test_require_ready_flag_is_registered():
+    import json
+
+    manifest = json.loads((ROOT / "scripts/lib/cli-contract.json").read_text())
+    entry = next(
+        item
+        for item in manifest["scripts"]
+        if item["path"] == "scripts/configure-litellm.py"
+    )
+    assert "--require-ready" in entry["accepted_flags"]
+
+
+def test_require_ready_dry_run_is_rejected_before_any_work(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--require-ready", "--dry-run"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "LITELLM_DATABASE_URL": "postgresql://invalid/unused",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "cannot be combined" in result.stderr
+    assert not list(tmp_path.rglob("*"))
+
+
+def test_orchestration_order_and_failure_guards_are_present():
+    wrapper = (ROOT / "scripts/configure-all.sh").read_text()
+    template = (ROOT / ".chezmoiscripts/run_onchange_15-litellm.sh.tmpl").read_text()
+    assert wrapper.index("health/readiness") < wrapper.index(
+        '"$SCRIPT_DIR/configure-opencode.py"'
+    )
+    wrapper_lifecycle = wrapper[
+        wrapper.index("# 2.5. Start and provision LiteLLM") : wrapper.index(
+            "# Track OpenCode success"
+        )
+    ]
+    assert wrapper_lifecycle.index(
+        "configure-litellm-venv.py"
+    ) < wrapper_lifecycle.index("litellm_service_restart")
+    assert wrapper_lifecycle.index("--require-ready") < wrapper.index(
+        '"$SCRIPT_DIR/configure-opencode.py"'
+    )
+    assert template.index("health/readiness") < template.index(
+        '"$CONFIGURE_SCRIPT" --require-ready'
+    )
+    assert "step_skipped litellm" in wrapper_lifecycle
+    assert 'if [[ "$COMMON_DRY_RUN" == "1" ]]' in wrapper_lifecycle
+    assert "systemctl --user restart litellm.service" in wrapper_lifecycle
+    assert template.count("for _ in {1..30}") == 2
+
+
+def test_provisioning_second_pass_is_byte_stable(tmp_path, monkeypatch):
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_MASTER_KEY='master-key'\n")
+    for alias, variable in CONFIGURE.APP_KEYS.items():
+        service_env.write_text(service_env.read_text() + f"{variable}='{alias}-key'\n")
+    client_dir = tmp_path / "clients"
+    client_dir.mkdir()
+    for alias in CONFIGURE.APP_KEYS:
+        (client_dir / f"{alias}.key").write_text(f"{alias}-key")
+    for gate in ("OPENCODE", "PI", "JUNIE_CLI", "OPENWEBUI"):
+        monkeypatch.setenv(f"DOTFILES_RUN_{gate}_SETUP", "1")
+    monkeypatch.setattr(
+        CONFIGURE,
+        "_request_json",
+        lambda url, method, key, payload=None, timeout=30: (
+            {"keys": [{"key_alias": alias} for alias in CONFIGURE.APP_KEYS]}
+            if "/key/list" in url
+            else {"data": []}
+        ),
+    )
+    monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
+    before = {
+        path.name: path.read_bytes() for path in [service_env, *client_dir.iterdir()]
+    }
+    for _ in range(2):
+        assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True)
+    after = {
+        path.name: path.read_bytes() for path in [service_env, *client_dir.iterdir()]
+    }
+    assert after == before

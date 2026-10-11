@@ -1037,7 +1037,8 @@
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
-        "--dry-run"
+        "--dry-run",
+        "--require-ready"
       ],
       "positional_operand": null,
       "child_scripts": []

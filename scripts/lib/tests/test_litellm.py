@@ -2248,7 +2248,7 @@ def test_litellm_prisma_guard_fails_if_schema_is_missing(tmp_path):
 def test_litellm_template_prepares_prisma_before_service_start():
     template = (
         Path(__file__).resolve().parents[3]
-        / ".chezmoiscripts/run_onchange_31-litellm.sh.tmpl"
+        / ".chezmoiscripts/run_onchange_15-litellm.sh.tmpl"
     ).read_text(encoding="utf-8")
     prepare = template.index('litellm_ensure_prisma_client "$VENV"')
     assert prepare < template.index("systemctl --user enable --now litellm.service")

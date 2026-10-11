@@ -6,6 +6,7 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/env.sh"
 source "$LIB_DIR/litellm_service.sh"
 # scripts/configure-litellm.py: {{ include "scripts/configure-litellm.py" | sha256sum }}
+# scripts/configure-all.sh: {{ include "scripts/configure-all.sh" | sha256sum }}
 # scripts/configure-litellm-venv.py: {{ include "scripts/configure-litellm-venv.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
@@ -74,8 +75,11 @@ mkdir -p "$DATA" "$LOGS"
 chmod 700 "$DATA" "$LOGS"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to reconcile LiteLLM service.env"
 "$CONFIGURE_SCRIPT" || die "Failed to generate LiteLLM config"
-"{{ .chezmoi.sourceDir }}/scripts/configure-litellm-venv.py" || die "Failed to patch LiteLLM listing enrichment"
 litellm_service_env_sync "$SERVICE_ENV" || die "Failed to align LiteLLM provider environment"
+if ! "{{ .chezmoi.sourceDir }}/scripts/configure-litellm-venv.py"; then
+  if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM listing/rates patch failed; refusing gateway-only clients"; fi
+  warn "LiteLLM listing/rates patch failed"
+fi
 
 PLIST="$(litellm_service_plist)"
 mkdir -p "$(dirname "$PLIST")"
@@ -101,9 +105,15 @@ EOF
     systemctl --user daemon-reload || warn "systemd user daemon-reload failed"
     systemctl --user enable --now litellm.service || warn "systemd user LiteLLM start failed"
     for _ in {1..30}; do
-      if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then break; fi
+      if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
       sleep 2
     done
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
+      if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM readiness failed; refusing gateway-only clients"; fi
+      warn "LiteLLM is still starting; configuration will retry on a later deploy"
+    elif [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+      "$CONFIGURE_SCRIPT" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only clients"
+    fi
   else
     info "systemd user session unavailable; wrote litellm.service for later activation"
   fi
@@ -125,15 +135,23 @@ PLIST_EOF
   chmod 600 "$PLIST"
   if ! litellm_service_start; then die "${LITELLM_SERVICE_ERROR:-Failed to start LiteLLM}"; fi
   for _ in {1..30}; do
-    if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 || curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then break; fi
+    if curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then break; fi
     sleep 2
   done
-  if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1 && ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/liveliness" >/dev/null 2>&1; then
+  if ! curl -fsS --max-time 3 "http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness" >/dev/null 2>&1; then
+    if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then die "LiteLLM readiness failed; refusing gateway-only clients"; fi
     warn "LiteLLM is still starting; configuration will retry on a later deploy"
+  fi
+  if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+    "$CONFIGURE_SCRIPT" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only clients"
   fi
 fi
 
-"$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+  "$CONFIGURE_SCRIPT" --require-ready || die "LiteLLM key provisioning/readiness failed; refusing gateway-only clients"
+else
+  "$CONFIGURE_SCRIPT" || warn "LiteLLM post-start config reconciliation failed"
+fi
 if [[ "${DOTFILES_RUN_JUNIE_CLI_SETUP:-0}" == "1" ]]; then
   "$JUNIE_CONFIGURE" || die "Failed to regenerate Junie profiles after LiteLLM key provisioning"
 fi
