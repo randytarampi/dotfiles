@@ -238,10 +238,16 @@ def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
 def _materialized_client_key_value(
     client_key_path: Path, env_name, service_env_path
 ) -> str:
-    """Canonical key value for one client: file material first, then service.env."""
+    """Canonical key value for one client: file material first, then service.env.
+
+    Both sides are stripped to the credential the clients actually send, so
+    a whitespace-padded file hashes the same bare key it will authenticate
+    with; a whitespace-only file is unmaterialized (same semantics as
+    _key_file_materialized) and the service.env fallback applies.
+    """
     try:
         if client_key_path.is_file() and not client_key_path.is_symlink():
-            value = client_key_path.read_text(encoding="utf-8")
+            value = client_key_path.read_text(encoding="utf-8").strip()
             if value:
                 return value
     except OSError:
@@ -249,7 +255,9 @@ def _materialized_client_key_value(
     return _service_env_value(env_name, service_env_path)
 
 
-def _align_client_token_hash(alias, token_hash, service_env_path: Path) -> None:
+def _align_client_token_hash(
+    alias, token_hash, previous_hash, service_env_path: Path
+) -> None:
     """Align one app-key row's registered hash with the local key material.
 
     Upstream exposes no API to set a token value, and the local material is
@@ -275,24 +283,40 @@ def _align_client_token_hash(alias, token_hash, service_env_path: Path) -> None:
         "    await client.connect()\n"
         "    rows = await client.query_raw(\n"
         '        \'UPDATE "LiteLLM_VerificationToken" SET token = $1 '
-        "WHERE key_alias = $2 RETURNING key_alias',\n"
-        "        sys.argv[1], sys.argv[2],\n"
+        "WHERE key_alias = $2 AND token = $3 RETURNING key_alias, token',\n"
+        "        sys.argv[1], sys.argv[2],\n        sys.argv[3],\n"
         "    )\n"
         "    await client.disconnect()\n"
         "    print(json.dumps(rows, default=str))\n"
         "asyncio.run(_main())\n"
     )
-    proc = (
-        subprocess.run(  # nosec B603 -- controlled: internal code + managed interpreter
-            [candidates[-1], "-c", code, token_hash, alias],
+    try:
+        proc = subprocess.run(  # nosec B603 -- controlled: internal code + managed interpreter
+            [candidates[-1], "-c", code, token_hash, alias, previous_hash],
             capture_output=True,
             text=True,
+            check=False,
+            timeout=60,
             env={**os.environ, "DATABASE_URL": database_url},
         )
-    )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("app-key hash alignment timed out") from error
     if proc.returncode != 0:
         tail = (proc.stderr.strip().splitlines() or ["?"])[-1]
         raise RuntimeError(f"app-key hash alignment failed: {tail[:200]}")
+    # The constrained UPDATE must return exactly the row it aligned; zero or
+    # multiple returned rows mean the registry moved underneath us and the
+    # repair did NOT land — never report that as success.
+    try:
+        aligned = json.loads(
+            [line for line in proc.stdout.splitlines() if line.strip()][-1]
+        )
+    except (json.JSONDecodeError, IndexError) as error:
+        raise RuntimeError("app-key hash alignment returned no payload") from error
+    if not isinstance(aligned, list) or len(aligned) != 1:
+        raise RuntimeError(
+            f"unexpected alignment result: {len(aligned) if isinstance(aligned, list) else 'no rows'} row(s) matched"
+        )
 
 
 def _verify_app_key_hash(
@@ -334,7 +358,7 @@ def _verify_app_key_hash(
         expected[:12],
     )
     try:
-        _align_client_token_hash(alias, expected, service_env_path)
+        _align_client_token_hash(alias, expected, record_token, service_env_path)
     except (OSError, RuntimeError) as error:
         logger.warning("Could not repair drifted LiteLLM app key %s: %s", alias, error)
 
