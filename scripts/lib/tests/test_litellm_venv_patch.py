@@ -112,12 +112,7 @@ CLAUDE_SNAPSHOT = {
 
 def _cost_map_fixture(tmp_path, entries):
     target = tmp_path / "model_prices_and_context_window_backup.json"
-    target.write_text(
-        '{"gpt-5.5": {"input_cost_per_token": 0.0000015}}\n'.replace(
-            '{"gpt-5.5": {"input_cost_per_token": 0.0000015}}',
-            str(entries).replace("'", '"'),
-        )
-    )
+    target.write_text(json.dumps(entries) + "\n")
     return target
 
 
@@ -204,3 +199,27 @@ def test_snapshot_rates_rejects_unreadable(tmp_path, monkeypatch):
         pass
     else:
         raise AssertionError("missing snapshot accepted")
+
+
+def test_pricing_merge_preserves_protocol_metadata_and_is_idempotent(
+    tmp_path, monkeypatch
+):
+    model = "chatgpt/gpt-test"
+    metadata = {
+        "mode": "responses",
+        "litellm_provider": "chatgpt",
+        "supported_endpoints": ["/responses"],
+        "supports_function_calling": True,
+    }
+    target = _cost_map_fixture(tmp_path, {model: metadata})
+    rates = {"input_cost_per_token": 1e-7, "output_cost_per_token": 5e-7}
+    monkeypatch.setattr(PATCHER, "snapshot_rates", lambda: {model: rates})
+    assert PATCHER.merge_cost_rates(target) == 0
+    merged = json.loads(target.read_text())
+    assert merged[model] == {**metadata, **rates}
+    assert PATCHER.cost_map_rate_drift(merged, {model: rates}) == []
+    first = target.read_bytes()
+    assert PATCHER.merge_cost_rates(target) == 0
+    assert target.read_bytes() == first
+    merged[model]["output_cost_per_token"] = 0
+    assert PATCHER.cost_map_rate_drift(merged, {model: rates}) == [model]
