@@ -731,3 +731,335 @@ def test_litellm_cost_rates_status_reports_drift_and_current(tmp_path):
         )
         == []
     )
+
+
+def _pricing_probe_fixture(
+    tmp_path,
+    monkeypatch,
+    *,
+    runtime_rate=1e-7,
+    input_rate=1e-7,
+    output_rate=5e-7,
+    mode="responses",
+    provider="chatgpt",
+):
+    home = tmp_path / "home"
+    root = home / ".local/share/litellm"
+    package = root / "venv/lib/python3.11/site-packages/litellm"
+    package.mkdir(parents=True)
+    (root / "venv/bin").mkdir(parents=True)
+    (root / "venv/bin/python").write_text("stub interpreter")
+    wire = "chatgpt/gpt-6-luna"
+    (root / "config.yaml").write_text(
+        f'  - model_name: "{wire}"\n      model: "{wire}"\n'
+    )
+    (package / "model_prices_and_context_window_backup.json").write_text(
+        json.dumps(
+            {
+                wire: {
+                    "input_cost_per_token": runtime_rate,
+                    "output_cost_per_token": output_rate,
+                    "mode": mode,
+                    "litellm_provider": provider,
+                }
+            }
+        )
+    )
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "models": {
+                    wire: {
+                        "input_cost_per_token": input_rate,
+                        "output_cost_per_token": output_rate,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
+                }
+            }
+        )
+    )
+    env = {"HOME": str(home), "DOTFILES_RUN_LITELLM_SETUP": "1"}
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        assert kwargs["timeout"] == 15
+        assert kwargs["env"] == {
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "LITELLM_LOCAL_MODEL_COST_MAP": "True",
+        }
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "wire": wire,
+                        "prompt": input_rate,
+                        "completion": output_rate,
+                        "mode": mode,
+                        "provider": provider,
+                        "bridge_mode": mode,
+                    }
+                ]
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(VERIFY_CONFIG.subprocess, "run", run)
+    return home, env, snapshot, calls
+
+
+def test_litellm_cost_rates_runtime_probe_matches_exact_chatgpt_wire(
+    tmp_path, monkeypatch
+):
+    home, env, snapshot, calls = _pricing_probe_fixture(tmp_path, monkeypatch)
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("1 exact chatgpt wire model(s) verified" in line for line in status)
+    assert len(calls) == 1
+    args, _ = calls[0]
+    assert args[0] == str(home / ".local/share/litellm/venv/bin/python")
+    assert "chatgpt/gpt-6-luna" in args[-1]
+    assert "cost_per_token" in args[2]
+
+
+def test_litellm_cost_rates_runtime_probe_missing_rate_is_unknown(
+    tmp_path, monkeypatch
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch)
+    snapshot.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "chatgpt/gpt-6-luna": {
+                        "input_cost_per_token": 1e-7,
+                        "output_cost_per_token": None,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
+                }
+            }
+        )
+    )
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("UNKNOWN" in line for line in status)
+
+
+def test_litellm_cost_rates_runtime_probe_accepts_legitimate_zero_rate(
+    tmp_path, monkeypatch
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(
+        tmp_path, monkeypatch, runtime_rate=0.0, input_rate=0.0, output_rate=0.0
+    )
+    (
+        home
+        / ".local/share/litellm/venv/lib/python3.11/site-packages/litellm/model_prices_and_context_window_backup.json"
+    ).write_text(
+        json.dumps(
+            {
+                "chatgpt/gpt-6-luna": {
+                    "input_cost_per_token": 0.0,
+                    "output_cost_per_token": 0.0,
+                    "mode": "responses",
+                    "litellm_provider": "chatgpt",
+                }
+            }
+        )
+    )
+    snapshot.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "chatgpt/gpt-6-luna": {
+                        "input_cost_per_token": 0.0,
+                        "output_cost_per_token": 0.0,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(
+        VERIFY_CONFIG.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "wire": "chatgpt/gpt-6-luna",
+                        "prompt": 0.0,
+                        "completion": 0.0,
+                        "mode": "responses",
+                        "provider": "chatgpt",
+                        "bridge_mode": "responses",
+                    }
+                ]
+            ),
+            stderr="",
+        ),
+    )
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("verified" in line for line in status)
+
+
+def test_litellm_cost_rates_runtime_probe_rejects_chatgpt_mode_drift(
+    tmp_path, monkeypatch
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch, mode="chat")
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("mismatch" in line and "chatgpt/gpt-6-luna" in line for line in status)
+
+
+@pytest.mark.parametrize("failure", ["timeout", "nonzero", "malformed"])
+def test_litellm_cost_rates_runtime_probe_failure_is_unknown(
+    tmp_path, monkeypatch, failure
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch)
+
+    def fail(*_args, **_kwargs):
+        if failure == "timeout":
+            raise VERIFY_CONFIG.subprocess.TimeoutExpired("managed-python", 15)
+        return SimpleNamespace(
+            returncode=1 if failure == "nonzero" else 0,
+            stdout="not json" if failure == "malformed" else "",
+            stderr="secret or traceback must not be surfaced",
+        )
+
+    monkeypatch.setattr(VERIFY_CONFIG.subprocess, "run", fail)
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any(
+        "UNKNOWN" in line and "probe failed or timed out" in line for line in status
+    )
+    assert "secret" not in " ".join(status)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [None],
+        ["not an object"],
+        [{"wire": "chatgpt/gpt-6-luna", "prompt": True, "completion": 5e-7}],
+        [{"wire": "chatgpt/gpt-6-luna", "prompt": float("nan"), "completion": 5e-7}],
+        [{"wire": "chatgpt/gpt-6-luna", "prompt": -1.0, "completion": 5e-7}],
+        [
+            {"wire": "chatgpt/gpt-6-luna", "prompt": 1e-7, "completion": 5e-7},
+            {"wire": "chatgpt/gpt-6-luna", "prompt": 1e-7, "completion": 5e-7},
+        ],
+        [{"wire": "chatgpt/wrong", "prompt": 1e-7, "completion": 5e-7}],
+        [],
+    ],
+)
+def test_litellm_cost_rates_runtime_probe_rejects_malformed_rows_as_unknown(
+    tmp_path, monkeypatch, rows
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        VERIFY_CONFIG.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout=json.dumps(rows, allow_nan=True), stderr=""
+        ),
+    )
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("UNKNOWN" in line for line in status)
+
+
+@pytest.mark.parametrize("invalid", [True, "not-a-number", float("inf"), -1.0])
+def test_litellm_cost_rates_runtime_probe_invalid_expected_rates_are_unknown(
+    tmp_path, monkeypatch, invalid
+):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch)
+    snapshot.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "chatgpt/gpt-6-luna": {
+                        "input_cost_per_token": invalid,
+                        "output_cost_per_token": 5e-7,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
+                }
+            },
+            allow_nan=True,
+        )
+    )
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any("UNKNOWN" in line for line in status)
+
+
+def test_litellm_cost_rates_missing_rate_guard_is_decisive(tmp_path, monkeypatch):
+    home, env, snapshot, _ = _pricing_probe_fixture(tmp_path, monkeypatch)
+    wire = "chatgpt/gpt-6-luna"
+    installed_path = (
+        home
+        / ".local/share/litellm/venv/lib/python3.11/site-packages/litellm/model_prices_and_context_window_backup.json"
+    )
+    installed_path.write_text(
+        json.dumps({wire: {"mode": "responses", "litellm_provider": "chatgpt"}})
+    )
+    snapshot.write_text(
+        json.dumps(
+            {
+                "models": {
+                    wire: {
+                        "input_cost_per_token": 1e-7,
+                        "output_cost_per_token": 5e-7,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
+                }
+            }
+        )
+    )
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assertion = lambda result: any(
+        "UNKNOWN" in line and "missing or unpriced" in line for line in result
+    )
+    assert assertion(status)
+    # Mutation proof: the pre-fix implementation skipped the pricing probe and
+    # returned only ordinary drift status, which fails this exact assertion.
+    pre_fix_status = [line for line in status if "pricing probe:" not in line]
+    assert not assertion(pre_fix_status)
+
+
+def test_litellm_cost_rates_runtime_probe_skips_gate_and_reports_missing_venv(
+    tmp_path, monkeypatch
+):
+    home, env, snapshot, calls = _pricing_probe_fixture(tmp_path, monkeypatch)
+    assert (
+        VERIFY_CONFIG.litellm_cost_rates_status(
+            home=home,
+            environ={"DOTFILES_RUN_LITELLM_SETUP": "0"},
+            snapshot_path=snapshot,
+        )
+        == []
+    )
+    (home / ".local/share/litellm/venv/bin/python").unlink()
+    status = VERIFY_CONFIG.litellm_cost_rates_status(
+        home=home, environ=env, snapshot_path=snapshot
+    )
+    assert any(
+        "UNKNOWN" in line and "interpreter is unavailable" in line for line in status
+    )
+    assert calls == []

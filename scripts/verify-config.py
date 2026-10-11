@@ -13,6 +13,7 @@ import os
 import sys
 import importlib.util
 import json
+import math
 import platform
 import re
 import shutil
@@ -568,7 +569,7 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
         )
     )
     if not matches:
-        return []
+        return ["⚠ LiteLLM pricing probe: UNKNOWN (managed cost map is unavailable)"]
     repo_snapshot = (
         Path(__file__).resolve().parents[1] / "configs/litellm/model-rates.json"
     )
@@ -587,7 +588,7 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
             break
     if source_path is None:
         return [
-            "⚠ LiteLLM cost rates: no readable rates snapshot (%s or %s)"
+            "⚠ LiteLLM cost rates: no readable rates snapshot (%s or %s); pricing probe UNKNOWN"
             % (runtime_snapshot, repo_snapshot)
         ]
     try:
@@ -599,17 +600,230 @@ def litellm_cost_rates_status(home=None, environ=None, snapshot_path=None):
     drift = sorted(
         model_id
         for model_id, entry in models.items()
-        if isinstance(entry, dict) and installed.get(model_id) != entry
+        if isinstance(entry, dict)
+        and (
+            not isinstance(installed.get(model_id), dict)
+            or any(
+                installed[model_id].get(key) != value for key, value in entry.items()
+            )
+        )
     )
     if not drift:
-        return ["✓ LiteLLM cost rates: installed map matches %s" % source_path.name]
-    return [
-        "⚠ LiteLLM cost rates: %d model(s) priced differently; run make deploy to merge %s (%s)"
-        % (
-            len(drift),
-            source_path.name,
-            ", ".join(drift[:4]) + (", …" if len(drift) > 4 else ""),
+        drift_status = (
+            "✓ LiteLLM cost rates: installed map matches %s" % source_path.name
         )
+    else:
+        drift_status = (
+            "⚠ LiteLLM cost rates: %d model(s) priced differently; run make deploy to merge %s (%s)"
+            % (
+                len(drift),
+                source_path.name,
+                ", ".join(drift[:4]) + (", …" if len(drift) > 4 else ""),
+            )
+        )
+
+    venv_python = root / "venv/bin/python"
+    if not venv_python.is_file():
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (managed venv interpreter is unavailable)",
+        ]
+
+    # Limit the runtime probe to exact chatgpt wire IDs represented in both the
+    # generated gateway config and the authoritative snapshot; never infer a
+    # provider from a colliding bare model name.
+    config_path = root / "config.yaml"
+    try:
+        config_text = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (generated config is unavailable)",
+        ]
+    configured_wires = set(
+        re.findall(r'(?m)^\s*model:\s*["\']?(chatgpt/[^"\'\s]+)', config_text)
+    )
+    snapshot_wires = {
+        model_id
+        for model_id, entry in models.items()
+        if isinstance(model_id, str)
+        and model_id.startswith("chatgpt/")
+        and isinstance(entry, dict)
+    }
+    missing_snapshot = sorted(configured_wires - snapshot_wires)[:5]
+    if missing_snapshot:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (configured chatgpt wires missing from rates snapshot: %s)"
+            % ", ".join(missing_snapshot),
+        ]
+    missing_installed = {
+        wire
+        for wire in snapshot_wires & configured_wires - set(installed)
+        if isinstance(models[wire], dict)
+        and models[wire].get("input_cost_per_token") is not None
+        and models[wire].get("output_cost_per_token") is not None
+    }
+    if missing_installed:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (priced chatgpt wires missing from installed map: %s)"
+            % ", ".join(sorted(missing_installed)[:5]),
+        ]
+    wire_ids = sorted(configured_wires)
+    installed_models = set(installed)
+    sample = [
+        model_id
+        for model_id in wire_ids
+        if model_id in models and model_id in installed_models
+    ][:5]
+    if not sample:
+        if configured_wires:
+            return [
+                drift_status,
+                "⚠ LiteLLM pricing probe: UNKNOWN (configured chatgpt wires have no verified priced sample)",
+            ]
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (no exact priced chatgpt wire IDs to sample)",
+        ]
+
+    probe_code = r"""import json, sys
+import litellm
+from litellm.main import responses_api_bridge_check
+rows = []
+for wire in json.loads(sys.argv[1]):
+    provider, bare = wire.split("/", 1)
+    info = litellm.get_model_info(model=wire)
+    prompt, completion = litellm.cost_per_token(
+        model=wire, prompt_tokens=1, completion_tokens=1,
+        custom_llm_provider=provider,
+    )
+    bridge_info, _ = responses_api_bridge_check(
+        model=bare, custom_llm_provider=provider
+    )
+    rows.append({"wire": wire, "prompt": prompt, "completion": completion,
+                 "mode": info.get("mode"), "provider": info.get("litellm_provider"),
+                 "bridge_mode": bridge_info.get("mode")})
+print(json.dumps(rows, allow_nan=False))
+"""
+    try:
+        result = subprocess.run(
+            [str(venv_python), "-c", probe_code, json.dumps(sample)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+            env={
+                "HOME": str(root.parents[2]),
+                "PATH": "/usr/bin:/bin",
+                "LITELLM_LOCAL_MODEL_COST_MAP": "True",
+            },
+        )
+        rows = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        rows = None
+    if (
+        not isinstance(rows, list)
+        or len(rows) != len(sample)
+        or any(not isinstance(row, dict) for row in rows)
+    ):
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN (managed runtime probe failed or timed out)",
+        ]
+
+    failures = []
+    unknown = []
+    observed_wires = [row.get("wire") for row in rows]
+    if sorted(observed_wires) != sorted(sample):
+        unknown.append("probe returned missing, duplicate or unexpected wire IDs")
+    invalid_rows = False
+    for row in rows:
+        wire = row.get("wire")
+        if not isinstance(wire, str) or wire not in sample:
+            continue
+        expected = models.get(wire)
+        runtime = installed.get(wire)
+        if not isinstance(expected, dict) or not isinstance(runtime, dict):
+            unknown.append(wire)
+            continue
+        expected_values = [
+            expected.get("input_cost_per_token"),
+            expected.get("output_cost_per_token"),
+        ]
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+            for value in expected_values
+        ):
+            unknown.append(wire)
+            invalid_rows = True
+            continue
+        if any(
+            runtime.get(key) is None
+            for key in ("input_cost_per_token", "output_cost_per_token")
+        ):
+            unknown.append(wire)
+            continue
+        for key, actual in (
+            ("input_cost_per_token", row.get("prompt")),
+            ("output_cost_per_token", row.get("completion")),
+        ):
+            rate = expected.get(key)
+            if rate is None or actual is None:
+                unknown.append(wire)
+                break
+            if (
+                isinstance(rate, bool)
+                or not isinstance(rate, (int, float))
+                or not math.isfinite(rate)
+                or rate < 0
+                or isinstance(actual, bool)
+                or not isinstance(actual, (int, float))
+                or not math.isfinite(actual)
+                or actual < 0
+            ):
+                unknown.append(wire)
+                invalid_rows = True
+                break
+            if abs(actual - rate) > max(1e-12, abs(rate) * 1e-6):
+                failures.append(wire)
+                break
+        if wire.startswith("chatgpt/") and (
+            expected.get("mode") != "responses"
+            or expected.get("litellm_provider") != "chatgpt"
+            or runtime.get("mode") != "responses"
+            or runtime.get("litellm_provider") != "chatgpt"
+            or row.get("mode") != "responses"
+            or row.get("provider") != "chatgpt"
+            or row.get("bridge_mode") != "responses"
+        ):
+            failures.append(wire)
+    if invalid_rows:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN for %s (invalid, non-finite or negative rate value)"
+            % ", ".join(sorted(set(unknown))),
+        ]
+    if failures:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: mismatch for %s; run make deploy and inspect generated aliases/rates"
+            % ", ".join(sorted(set(failures))),
+        ]
+    if unknown:
+        return [
+            drift_status,
+            "⚠ LiteLLM pricing probe: UNKNOWN for %s (missing or unpriced rate metadata)"
+            % ", ".join(sorted(set(unknown))),
+        ]
+    return [
+        drift_status,
+        "✓ LiteLLM pricing probe: %d exact chatgpt wire model(s) verified with the managed runtime"
+        % len(rows),
     ]
 
 
@@ -1650,6 +1864,11 @@ def main():
         print(f"  {status}")
     for status in litellm_cost_rates_status(home=HOME):
         print(f"  {status}")
+        if (
+            status.startswith("⚠ LiteLLM pricing probe:")
+            and "no exact priced chatgpt wire IDs" not in status
+        ):
+            exit_code = 1
     litellm_root = HOME / ".local/share/litellm"
     litellm_plist = HOME / "Library/LaunchAgents/com.litellm.proxy.plist"
     litellm_unit = HOME / ".config/systemd/user/litellm.service"
