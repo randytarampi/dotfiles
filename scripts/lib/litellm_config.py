@@ -268,7 +268,14 @@ def build_rates_snapshot(environ=None):
             if info:
                 rates[model_id] = info
                 if provider == "openai":
-                    rates[f"chatgpt/{model_id}"] = info
+                    # Protocol metadata controls LiteLLM's chat-to-Responses
+                    # bridge; a rates-only twin incorrectly uses the upstream
+                    # chat endpoint instead of the subscription Responses API.
+                    rates[f"chatgpt/{model_id}"] = {
+                        **info,
+                        "mode": "responses",
+                        "litellm_provider": "chatgpt",
+                    }
                 elif provider == "ollama-cloud":
                     # Daemon cloud-stub requests carry ':cloud'/-cloud
                     # suffix spellings (with and without the ollama/

@@ -131,7 +131,8 @@ def cost_map_rate_drift(installed, snapshot):
     drift = [
         model_id
         for model_id, entry in sorted(snapshot.items())
-        if installed.get(model_id) != entry
+        if not isinstance(installed.get(model_id), dict)
+        or any(installed[model_id].get(key) != value for key, value in entry.items())
     ]
     return drift
 
@@ -170,7 +171,11 @@ def merge_cost_rates(path, *, dry_run=False, no_backup=False):
         return 0
     merged = dict(installed)
     for model_id, entry in snapshot.items():
-        merged[model_id] = entry
+        existing = installed.get(model_id)
+        merged[model_id] = {
+            **(existing if isinstance(existing, dict) else {}),
+            **entry,
+        }
     payload = json.dumps(merged, indent=4, sort_keys=True) + "\n"
     backup = path.with_name(path.name + ".orig-dotfiles")
     if not no_backup and not backup.exists():

@@ -2702,6 +2702,8 @@ def test_build_rates_snapshot_uses_bare_keys_and_provenance(monkeypatch):
     )
     snapshot = litellm_config.build_rates_snapshot({})
     assert "gpt-6-luna" in snapshot["models"]
+    assert snapshot["models"]["chatgpt/gpt-6-luna"]["mode"] == "responses"
+    assert snapshot["models"]["chatgpt/gpt-6-luna"]["litellm_provider"] == "chatgpt"
     # The chatgpt twin prices the namespaced bundled entry that shadows the
     # bare key at request-time resolution (subscription-lane estimate).
     assert snapshot["models"]["chatgpt/gpt-6-luna"][
