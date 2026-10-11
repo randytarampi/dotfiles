@@ -354,7 +354,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
 | `DOTFILES_RUN_OPENWEBUI_SETUP` | 0 | Script 30 (Open WebUI venv, LaunchAgent, service env, connection reconciliation) |
-| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 31 (separate LiteLLM loopback gateway) |
+| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 15 (separate LiteLLM loopback gateway) |
 | `DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP` | 0 | Script 32 (daily Open WebUI backup timer; requires Open WebUI gate) |
 | `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
 | `DOTFILES_RUN_UPDATE_SYSTEM_SETUP` | 0 | `update-system.sh` (manual cross-platform system/package updater) |

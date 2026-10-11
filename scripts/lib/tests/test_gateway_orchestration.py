@@ -1,6 +1,7 @@
 """Execute both gateway orchestration boundaries without host services."""
 
 from pathlib import Path
+import json
 import re
 import shutil
 import subprocess
@@ -70,7 +71,7 @@ case "$(basename "$0")" in
 uname) printf '%s\\n' "$TEST_PLATFORM";;
 sleep) :;;
 curl) [[ "${FAILURE:-}" != readiness ]] || exit 22; record ready;;
-systemctl) [[ "$*" != *restart* ]] || record restart;;
+systemctl) [[ "$*" != *restart* ]] || record restart; [[ "$*" != *enable* ]] || record start;;
 python3.11)
   mkdir -p "$3/bin"
   printf '#!/bin/bash\\nexit 0\\n' > "$3/bin/python"; chmod +x "$3/bin/python";;
@@ -87,7 +88,9 @@ python3)
   configure-litellm-venv.py) record patch;;
   configure-opencode.py|configure-pi.py|configure-jetbrains-ai.py|configure-openwebui.py)
     if [[ "$*" == *--dry-run* ]]; then record preview; exit 0; fi
-    [[ -s "$HOME/.local/share/litellm/clients/opencode.key" ]] || exit 9
+    if [[ "${DOTFILES_USE_LITELLM_PROXY:-0}" == "1" ]]; then
+      [[ -s "$HOME/.local/share/litellm/clients/opencode.key" ]] || exit 9
+    fi
     record "$name";;
   *) exit 8;;
   esac;;
@@ -150,6 +153,7 @@ def test_wrapper_fresh_gateway_precedes_all_clients_and_repeat_is_stable(
                 < events.index("ready")
                 < events.index("provision")
             )
+            assert events.count("provision") == 1
             for client in (
                 "configure-opencode.py",
                 "configure-pi.py",
@@ -161,6 +165,7 @@ def test_wrapper_fresh_gateway_precedes_all_clients_and_repeat_is_stable(
             service = Path(env["HOME"]) / ".local/share/litellm/service.env"
             before = (key.read_bytes(), service.read_bytes())
         else:
+            assert first
             assert events[len(first) :] == first
             assert (key.read_bytes(), service.read_bytes()) == before
 
@@ -177,6 +182,21 @@ def test_wrapper_failure_prevents_client_invocation(tmp_path, failure):
     )
     assert result.returncode != 0
     assert not any(item.startswith("configure-") for item in _events(trace))
+
+
+def test_wrapper_direct_mode_readiness_failure_continues_clients(tmp_path):
+    _, wrapper, env, trace = _sandbox(tmp_path, "Linux")
+    result = subprocess.run(
+        ["/bin/bash", str(wrapper), "--skip", SKIPS],
+        env={**env, "DOTFILES_USE_LITELLM_PROXY": "0", "FAILURE": "readiness"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    events = _events(trace)
+    assert "configure-opencode.py" in events
+    assert "provision" not in events
 
 
 def test_wrapper_dry_run_does_not_provision_or_restart(tmp_path):
@@ -209,11 +229,12 @@ def test_wrapper_explicit_skip_preserves_existing_gateway(tmp_path):
     assert key.read_text() == "existing-key"
 
 
-def test_rendered_gateway_template_provisions_before_junie(tmp_path):
+@pytest.mark.parametrize("system", ["Darwin", "Linux"])
+def test_rendered_gateway_template_provisions_before_junie(tmp_path, system):
     chezmoi = shutil.which("chezmoi")
     if not chezmoi:
         pytest.skip("chezmoi unavailable; integrated CLI preflight remains required")
-    source, _, env, trace = _sandbox(tmp_path, "Darwin")
+    source, _, env, trace = _sandbox(tmp_path, system)
     names = sorted(p.name for p in (ROOT / ".chezmoiscripts").glob("*.tmpl"))
     gateway_name = "run_onchange_15-litellm.sh.tmpl"
     assert "run_onchange_31-litellm.sh.tmpl" not in names
@@ -228,10 +249,20 @@ def test_rendered_gateway_template_provisions_before_junie(tmp_path):
         path = source / include
         if not path.exists():
             _write(path, "# fixture hash input\n")
+    override = json.dumps(
+        {"chezmoi": {"os": "linux" if system == "Linux" else "darwin"}}
+    )
     rendered = subprocess.run(
-        [chezmoi, "--source", str(source), "execute-template"],
+        [
+            chezmoi,
+            "--source",
+            str(source),
+            "--override-data",
+            override,
+            "execute-template",
+        ],
         input=text,
-        env=env,
+        env={**env, "TEST_PLATFORM": system},
         capture_output=True,
         text=True,
         timeout=15,
@@ -240,7 +271,7 @@ def test_rendered_gateway_template_provisions_before_junie(tmp_path):
     result = subprocess.run(
         ["/bin/bash"],
         input=rendered.stdout,
-        env=env,
+        env={**env, "TEST_PLATFORM": system},
         capture_output=True,
         text=True,
         timeout=15,
@@ -255,3 +286,5 @@ def test_rendered_gateway_template_provisions_before_junie(tmp_path):
         < events.index("provision")
         < events.index("configure-jetbrains-ai.py")
     )
+    assert events.count("provision") == 1
+    assert events.index("start") < events.index("ready") < events.index("provision")
