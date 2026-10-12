@@ -256,13 +256,18 @@ def test_litellm_non_default_port_used_for_ownership_and_desired_state(
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("LITELLM_PORT", "4567")
     monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
-    identity = openwebui.ownership_catalogue()["ollama"]
+    identity = openwebui.ownership_catalogue()["litellm"]
     desired = openwebui.compute_desired_state()
-    ollama = next(
-        item for item in desired["ollama"] if item["config"]["prefix_id"] == "ollama"
-    )
     assert identity["url"] == "http://127.0.0.1:4567/v1"
-    assert ollama["url"] == "http://127.0.0.1:4567/v1"
+    assert identity["connection_type"] == "openai"
+    assert identity["collection"] == "openai"
+    # Gateway-only mode: a single managed connection, no per-provider entries
+    # and no native Ollama entry (every model routes through the catalogue).
+    assert [item["url"] for item in desired["openai"]] == ["http://127.0.0.1:4567/v1"]
+    assert [openwebui._identity(item) for item in desired["openai"]] == ["litellm"]
+    assert desired["openai"][0]["key"] == "client-key"
+    assert desired["anthropic"] == []
+    assert desired["ollama"] == []
 
 
 def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
@@ -280,6 +285,14 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
     def desired_for_mode(proxy):
         monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if proxy else "0")
         computed = openwebui.compute_desired_state()
+        if proxy:
+            # Gateway-only mode: every model routes through ONE connection;
+            # native Ollama and per-provider entries leave the desired set.
+            return {
+                "openai": list(computed["openai"]),
+                "anthropic": [],
+                "ollama": [],
+            }
         wanted = [
             item
             for collection in ("openai", "anthropic", "ollama")
@@ -305,18 +318,36 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
             elif item["action"] == "update":
                 state[collection].remove(item["before"])
                 state[collection].append(item["entry"])
-        assert (
-            sum(openwebui._identity(entry) == "openai" for entry in state["openai"])
-            == 1
-        )
-        assert (
-            sum(
-                openwebui._identity(entry) == "ollama"
+        if proxy:
+            # One managed gateway connection next to the preserved user entry.
+            litellm_entries = [
+                entry
+                for entry in state["openai"]
+                if openwebui._identity(entry) == "litellm"
+            ]
+            assert len(litellm_entries) == 1 and len(state["openai"]) == 2
+            assert litellm_entries[0]["url"] == "http://127.0.0.1:4000/v1"
+            assert litellm_entries[0]["config"]["managed_by"] == "dotfiles"
+        else:
+            assert (
+                sum(
+                    openwebui._identity(entry) == "litellm" for entry in state["openai"]
+                )
+                == 0
+            )
+            assert (
+                sum(openwebui._identity(entry) == "openai" for entry in state["openai"])
+                == 1
+            )
+            native = next(
+                entry
                 for entries in state.values()
                 for entry in entries
+                if openwebui._identity(entry) == "ollama"
             )
-            == 1
-        )
+            assert native["url"] == openwebui._canonicalize_host(
+                openwebui._root(constants.get_ollama_local_base_url())
+            )
         assert user in state["openai"]
         return json.loads(json.dumps(state, sort_keys=True))
 
@@ -326,18 +357,11 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
         next(
             entry
             for entry in proxy_first["openai"]
-            if openwebui._identity(entry) == "openai"
+            if openwebui._identity(entry) == "litellm"
         )["url"]
         == "http://127.0.0.1:4000/v1"
     )
-    assert (
-        next(
-            entry
-            for entry in proxy_first["openai"]
-            if openwebui._identity(entry) == "ollama"
-        )["url"]
-        == "http://127.0.0.1:4000/v1"
-    )
+    # Round trips converge to the same state in both directions.
     assert reconcile_mode(False) == direct_first
     assert reconcile_mode(True) == proxy_first
     assert reconcile_mode(True) == proxy_first
