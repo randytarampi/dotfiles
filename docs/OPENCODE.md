@@ -101,6 +101,31 @@ defaults to off. The managed `opencode-mem.jsonc` configuration uses loopback we
 embeddings, and inherited OpenCode model routing. Remote embedding endpoints
 are deliberately absent and require an explicit egress decision.
 
+## Observer Vision Path and Image Payloads
+
+The OpenCode `@observer` lane routes through the LiteLLM proxy using the role
+model from `DOTFILES_ROLE_MODELS` (e.g.
+`observer=ollama/gemma4:12b-mxfp8`, bridged by
+`scripts/configure-opencode-tier.py`). Requirements and observed practice as
+of 2026-10-12:
+
+- **Pillow is required in the LiteLLM venv** for Ollama image conversion.
+  Without it, every image-bearing request to an `ollama/*` model fails with
+  HTTP 500 ("ollama image conversion failed please run pip install Pillow")
+  and the model never sees the image. The proxy venv pins `Pillow==12.3.0`
+  in `.chezmoiscripts/run_onchange_15-litellm.sh.tmpl`.
+- **Observe image payloads serially**: one image per `read` tool call and at
+  most two images per `@observer` dispatch. Three-image payloads to
+  `ollama/gemma4:12b-mxfp8` were observed to stall through the `ollama/`
+  LiteLLM path (>180 s, no response); batch larger visual jobs across
+  dispatches.
+- **The final message must be the report**:
+  `~/.config/opencode/oh-my-opencode-slim/observer_append.md` appends
+  guardrails to the bundled observer prompt (applies on the next OpenCode
+  run): complete plain-text report after the last read, never a pending or
+  serialized tool call, and partial success still emits observations plus an
+  explicit error note.
+
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
 > (1.18.32). Live validation confirmed all load on v1; upstream `v2`
 > builds do not exist yet for `opencode-planning-with-files`,
