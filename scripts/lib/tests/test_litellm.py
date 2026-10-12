@@ -321,6 +321,7 @@ def test_live_catalogue_key_providers_generate_only_with_keys(
 
 
 def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
+    """Verify catalogued registry identities get exact aliases and unknowns don't."""
     root = Path(__file__).resolve().parents[3]
     litellm_config._registry_model_refs()
     opencode_allowlist = json.loads(

@@ -31,19 +31,23 @@ class RegistryRef:
     __slots__ = ("location", "ref")
 
     def __init__(self, location: str, ref: str) -> None:
+        """Store a model reference and its dotted location in the registry."""
         self.location = location
         self.ref = ref
 
     def __eq__(self, other: object) -> bool:
+        """Compare registry references by both location and model reference."""
         return isinstance(other, RegistryRef) and (
             self.location,
             self.ref,
         ) == (other.location, other.ref)
 
     def __hash__(self) -> int:
+        """Hash the location and model reference used for equality."""
         return hash((self.location, self.ref))
 
     def __repr__(self) -> str:
+        """Return a constructor-style representation of the registry reference."""
         return f"RegistryRef({self.location!r}, {self.ref!r})"
 
 
@@ -57,10 +61,12 @@ def collect_registry_refs(slim: dict) -> list[RegistryRef]:
     refs: list[RegistryRef] = []
 
     def add_ref(location: str, value: str) -> None:
+        """Collect provider-qualified strings that lack the litellm/ prefix."""
         if isinstance(value, str) and "/" in value and not value.startswith("litellm/"):
             refs.append(RegistryRef(location, value))
 
     def visit(node, location: str) -> None:
+        """Walk nested registry nodes, collecting model fields and fallbacks."""
         if isinstance(node, dict):
             for key, child in node.items():
                 child_location = f"{location}.{key}" if location else str(key)

@@ -29,6 +29,7 @@ DEFAULT_INVENTORY = Path("~/.config/opencode/opencode.json").expanduser()
 
 
 def parse_args(argv=None):
+    """Parse registry, inventory, preset filter, and output options from argv."""
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument(
         "--slim",
@@ -52,6 +53,10 @@ def parse_args(argv=None):
 
 
 def main() -> int:
+    """Report unserved selections, returning 1 for registry errors or coverage gaps.
+
+    Return 0 when all selected references are served or inventory is unknown.
+    """
     args = parse_args()
     load_env()
     try:
@@ -108,6 +113,7 @@ def main() -> int:
 
 
 def loads_or_none(path: Path):
+    """Decode a JSON file, raising ValueError on read or JSON parsing failures."""
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

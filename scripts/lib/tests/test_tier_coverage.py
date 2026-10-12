@@ -6,6 +6,7 @@ import tier_coverage
 
 
 def slim_document():
+    """Build a registry with nested, fallback, direct, and gateway references."""
     return {
         "presets": {
             "pro-x": {
@@ -48,6 +49,7 @@ def slim_document():
 
 
 def inventory_ids():
+    """Return served gateway IDs, leaving the fixture's OpenRouter refs absent."""
     return [
         "meridian/claude-sonnet-5-5",
         "openai/gpt-6-luna",
@@ -58,6 +60,7 @@ def inventory_ids():
 
 
 def test_collect_walks_presets_council_tiers_and_fallbacks():
+    """Collect nested model refs while excluding gateway and non-model values."""
     refs = tier_coverage.collect_registry_refs(slim_document())
     locations = {entry.location: entry.ref for entry in refs}
     assert (
@@ -83,6 +86,7 @@ def test_collect_walks_presets_council_tiers_and_fallbacks():
 
 
 def test_unresolved_reports_only_unserved_refs():
+    """Report both unserved refs while honouring aliases and direct exceptions."""
     unserved = tier_coverage.unresolved_refs(slim_document(), inventory_ids())
     resolved = {(entry.location, entry.ref) for entry in unserved}
     # The openrouter NVIDIA id is unserved with this inventory.
@@ -103,6 +107,7 @@ def test_unresolved_reports_only_unserved_refs():
 
 
 def test_inventory_loader_known_and_unknown_shapes():
+    """Load gateway model IDs and treat invalid or direct-mode JSON as unknown."""
     import pathlib
     import tempfile
 
