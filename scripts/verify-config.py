@@ -31,6 +31,7 @@ from litellm_aliases import resolve_canonical_identity
 from model_catalogues import _configured_litellm_port
 import litellm_config
 from litellm_config import APP_KEYS
+import tier_coverage
 
 HOME = Path.home()
 OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
@@ -525,6 +526,50 @@ def litellm_ui_contradiction_errors(environ=None):
             "DOTFILES_LITELLM_UI_EXPOSED"
         ]
     return []
+
+
+def litellm_tier_coverage_errors(environ=None):
+    """Report Slim registry selections the deployed gateway inventory cannot serve.
+
+    Mirrors apply_litellm_slim_gate via scripts/lib/tier_coverage.py so the
+    doctor's row and a deploy-time gateway-only failure cannot disagree.
+    UNKNOWN inventory (no generated opencode.json provider.litellm block,
+    e.g. direct mode or not yet generated) is a non-blocking notice, never an
+    error — matching the repository's UNKNOWN discipline.
+    """
+    environ = environ or os.environ
+    try:
+        proxy_mode = get_litellm_proxy_mode(environ)
+    except ValueError as error:
+        return [str(error)], []
+    if not proxy_mode:
+        return [], []
+    if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
+        return [], ["LiteLLM tier coverage (DOTFILES_RUN_LITELLM_SETUP=0)"]
+    slim_path = Path(__file__).resolve().parent.parent / (
+        "configs/opencode/oh-my-opencode-slim.json"
+    )
+    try:
+        slim = json.loads(slim_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return [f"LiteLLM tier coverage: slim registry unreadable: {error}"], []
+    if not isinstance(slim, dict):
+        return ["LiteLLM tier coverage: slim registry is not an object"], []
+    inventory = tier_coverage.load_inventory_from_opencode_json(
+        Path.home() / ".config/opencode/opencode.json"
+    )
+    if inventory is None:
+        return [], ["LiteLLM tier coverage: gateway inventory unavailable (UNKNOWN)"]
+    unserved = tier_coverage.unresolved_refs(slim, inventory)
+    if not unserved:
+        return [], []
+    shown = sorted(unserved, key=lambda item: item.location)[:8]
+    suffix = " …" if len(unserved) > len(shown) else ""
+    detail = ", ".join(f"{entry.location}: {entry.ref}" for entry in shown)
+    return [
+        f"LiteLLM tier coverage: {len(unserved)} Slim registry selection(s) "
+        f"have no gateway alias: {detail}{suffix}"
+    ], []
 
 
 def litellm_venv_patch_status(home=None, environ=None):
@@ -1889,6 +1934,14 @@ def main():
     for error in litellm_ui_contradiction_errors():
         print(f"  \u2717 {error}")
         exit_code = 1
+    tier_errors, tier_notices = litellm_tier_coverage_errors()
+    for notice in tier_notices:
+        print(f"  \u2298 {notice} (skipped)")
+    for error in tier_errors:
+        print(f"  \u2717 {error}")
+        exit_code = 1
+    if not tier_errors and not tier_notices:
+        print("  \u2713 LiteLLM tier coverage: every Slim registry selection is served")
     for status in litellm_venv_patch_status(home=HOME):
         print(f"  {status}")
     pricing_statuses = litellm_cost_rates_status(home=HOME)
