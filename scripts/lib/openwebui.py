@@ -26,6 +26,8 @@ MANAGED_PREFIX_NAMESPACE = "dw-"
 MANAGED_MARKER_KEY = "managed_by"
 MANAGED_MARKER_VALUE = "dotfiles"
 DISABLED_ENGINES_ENV = "DOTFILES_OPENWEBUI_DISABLED_ENGINES"
+STOCK_OPENAI_URL = "https://api.openai.com/v1"
+STOCK_OPENAI_PREFIXES = ("", "openai")
 
 
 def _litellm_client_key(env_name):
@@ -164,6 +166,14 @@ def ownership_catalogue(proxy_mode=None):
         from model_catalogues import _configured_litellm_port
 
         endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+        # The single gateway connection is itself a catalogue-owned identity so
+        # the reconciler keeps/updates/prunes it like every other managed entry.
+        catalogue["litellm"] = {
+            "url": endpoint,
+            "urls": {endpoint},
+            "connection_type": "openai",
+            "collection": "openai",
+        }
         for identity in catalogue.values():
             identity["url"] = endpoint
             identity["urls"] = {endpoint}
@@ -249,14 +259,24 @@ def compute_desired_state():
             )
         from model_catalogues import _configured_litellm_port
 
+        # Gateway-only mode: ONE managed connection covers every proxy model.
+        # Per-provider connections would each re-export the entire LiteLLM
+        # catalogue under its own prefix (the 540-models listing problem), so
+        # the desired state collapses to a single owned "litellm" identity.
         endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
-        key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
-        for collection in ("openai", "anthropic", "ollama"):
-            for connection in desired.get(collection, []):
-                connection["url"] = endpoint
-                connection["key"] = key
-                connection["config"]["connection_type"] = "openai"
-                connection["collection"] = "openai"
+        desired = {
+            "openai": [
+                _connection(
+                    "litellm",
+                    endpoint,
+                    _litellm_client_key("LITELLM_OPENWEBUI_KEY"),
+                    "openai",
+                    "openai",
+                )
+            ],
+            "anthropic": [],
+            "ollama": [],
+        }
     return desired
 
 
@@ -532,6 +552,15 @@ def _managed(entry):
     return entry.get("config", {}).get(MANAGED_MARKER_KEY) == MANAGED_MARKER_VALUE
 
 
+def _is_stock_openai_default(entry):
+    """True for upstream's no-key https://api.openai.com/v1 default entry."""
+    if entry.get("key"):
+        return False
+    if _canonicalize_host(entry.get("url", "")) != _canonicalize_host(STOCK_OPENAI_URL):
+        return False
+    return _identity(entry) in STOCK_OPENAI_PREFIXES
+
+
 def _ownership_identity(url, connection_type, collection):
     return (_root(_canonicalize_host(url)), connection_type, collection)
 
@@ -547,6 +576,7 @@ def reconcile(
 ):
     catalogue = ownership_catalogue()
     previous_catalogue = ownership_catalogue(not constants.get_litellm_proxy_mode())
+    proxy_enabled = constants.get_litellm_proxy_mode()
     desired_entries = (
         desired.get("openai", [])
         + desired.get("anthropic", [])
@@ -749,6 +779,23 @@ def reconcile(
                 plan.entries.append(
                     {
                         "action": "keep",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
+                continue
+            if (
+                collection == "openai"
+                and proxy_enabled
+                and _is_stock_openai_default(existing)
+            ):
+                # Upstream ships a no-key api.openai.com default entry: plain
+                # enable-only config and no prefix_id, so on a managed gateway
+                # deployment it is a duplicate seed. Prune exactly that entry in
+                # proxy mode; key-bearing or customised entries stay untouched.
+                plan.entries.append(
+                    {
+                        "action": "delete",
                         "collection": collection,
                         "entry": copy.deepcopy(existing),
                     }
