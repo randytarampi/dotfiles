@@ -1253,6 +1253,7 @@ def check_opencode_orphan_files():
 
 
 def main():
+    """Print configuration health checks and exit with status 1 on errors."""
     exit_code = 0
 
     for gate, description, paths in CHECKS:

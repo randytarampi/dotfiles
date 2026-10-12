@@ -291,6 +291,7 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
 
 
 def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
+    """Verify catalogued cloud routes reach Pi settings through LiteLLM."""
     catalogue = {
         "data": [
             {"id": "google/models/gemini-3.8-flash"},
