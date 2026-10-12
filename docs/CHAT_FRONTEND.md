@@ -295,6 +295,19 @@ an Anthropic-facing connection. Local engine endpoints are canonicalized to
 to `https://ollama.com/v1`; setting `OLLAMA_API_KEY` no longer substitutes the
 local Ollama proxy URL.
 
+With `DOTFILES_USE_LITELLM_PROXY=1` (gateway-only mode) the desired state
+converges on exactly one managed OpenAI connection — the owned `litellm`
+prefix — and Open WebUI lists only the LiteLLM catalogue through it. The
+per-provider rewrites it replaces kept every provider connection pointed at
+the same proxy endpoint, each re-exporting the entire catalogue under its own
+Prefix ID (the 540-models listing: 77 model IDs × 7 connections). In proxy
+mode the reconciler also prunes upstream's no-key `https://api.openai.com/v1`
+default entry (prefix `openai` or none, empty stored key) as a duplicate seed
+next to the managed gateway connection; key-bearing or otherwise customised
+unmanaged entries are never touched. Direct mode keeps the per-provider
+topology described above, and both directions round-trip through the
+previous-mode catalogue.
+
 The model IDs in the picker consequently change with the prefix migration.
 Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`,
 `google.models/gemini-...`, `openrouter.vendor/model`, and
@@ -556,12 +569,15 @@ connection and MCP credentials.
   to cover OpenCode catalogs only.
 - **OpenCode tier presets are unchanged** — this system is a parallel consumer of
   the same engines, not a replacement for the slim.json tier registry.
-- Update pinned Open WebUI releases deliberately (bump the pinned version in
-  the LaunchAgent template; check release notes for security fixes first).
-  Release updates must account for data migration: back up the Open WebUI
-  data directory before upgrading, verify the pinned release's migration
-  notes, and keep the previous version available for rollback (SQLite data
-  is not always backward-compatible across versions).
+- Update pinned Open WebUI releases deliberately (change
+  `DOTFILES_OPENWEBUI_VERSION`; the default lives at
+  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.0 since this
+  change; check release notes for security fixes first). Since 0.12.0 the
+  deploy template stops the service and backs up `webui.db` (+ WAL/SHM)
+  automatically whenever the pinned version changes, before the upgrade runs.
+  SQLite data is not always backward-compatible across versions: the first
+  boot of a newer release migrates the database irreversibly, so rollback
+  means restoring a pre-upgrade backup from the data directory.
 
 ### Documentation duties when touching this area
 
@@ -570,8 +586,9 @@ connection and MCP credentials.
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
 - Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
-  once released, revisit whether the `DEFAULT_LOCALE` workaround remains
-  necessary.
+  0.12.0 postdates the fix's merge to `dev`, so after the 0.12.0 deploy the
+  `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if
+  titles such as `settings.admin.connections.title` render correctly.
 
 ## Explicit non-goals
 

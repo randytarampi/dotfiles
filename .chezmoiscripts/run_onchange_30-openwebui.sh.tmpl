@@ -32,7 +32,7 @@ source "${LIB_DIR}/openwebui_service.sh"
 # configs/opencode/openrouter-models.json: {{ include "configs/opencode/openrouter-models.json" | sha256sum }}
 # configs/opencode/opencode-models.json: {{ include "configs/opencode/opencode-models.json" | sha256sum }}
 # configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
 # terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
 # computer fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_COMPUTER_VERSION" | default "0.9.21" }}:{{ env "OPENWEBUI_COMPUTER_PORT" | default "8124" }}
@@ -84,7 +84,7 @@ VENV_DIR="$OPENWEBUI_HOME/venv"
 DATA_DIR="$OPENWEBUI_HOME/data"
 LOG_DIR="$OPENWEBUI_HOME/logs"
 SERVICE_ENV="$OPENWEBUI_HOME/service.env"
-VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.11.4}"
+VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.12.0}"
 
 PYTHON_BIN=""
 for candidate in python3.11 python3.12; do
@@ -99,6 +99,22 @@ if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   info "Creating Open WebUI Python environment..."
   mkdir -p "$OPENWEBUI_HOME"
   "$PYTHON_BIN" -m venv "$VENV_DIR" || die "Failed to create Open WebUI virtual environment"
+fi
+INSTALLED_VERSION="$("$VENV_DIR/bin/python" -c 'import importlib.metadata as m; print(m.version("open-webui"))' 2>/dev/null || true)"
+if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" != "$VERSION" && -f "$DATA_DIR/webui.db" ]]; then
+  # Version changes migrate webui.db irreversibly (see docs/CHAT_FRONTEND.md);
+  # stop the service, snapshot the database (+ WAL/SHM), then upgrade. The
+  # service is restarted by the wiring below, so a brief outage is expected.
+  info "Open WebUI version change ${INSTALLED_VERSION} → ${VERSION}: stopping service and backing up database..."
+  openwebui_service_stop 2>/dev/null || warn "Open WebUI service could not be stopped cleanly; backup continues from the running state"
+  BACKUP_PATH="$DATA_DIR/webui.db.bak-$(date +%Y%m%d-%H%M%S)-pre-upgrade-${INSTALLED_VERSION}"
+  cp -p "$DATA_DIR/webui.db" "$BACKUP_PATH" || die "Failed to back up webui.db before upgrading to ${VERSION}"
+  for companion in -wal -shm; do
+    if [[ -f "$DATA_DIR/webui.db${companion}" ]]; then
+      cp -p "$DATA_DIR/webui.db${companion}" "$BACKUP_PATH${companion}" 2>/dev/null || true
+    fi
+  done
+  ok "Pre-upgrade backup: $BACKUP_PATH"
 fi
 if ! "$VENV_DIR/bin/python" -m pip install -q "open-webui==${VERSION}"; then
   warn "Open WebUI install failed; retrying once"
