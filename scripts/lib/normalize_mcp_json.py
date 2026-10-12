@@ -43,6 +43,7 @@ ALLOWED_FIELDS = (
 
 def normalize(path: str = OPENCODE_CONFIG_PATH) -> bool:
     """Promote nested mcp.servers entries to flat mcp keys. True if rewritten."""
+    path = os.path.realpath(path)
     if not os.path.exists(path):
         return False
     try:

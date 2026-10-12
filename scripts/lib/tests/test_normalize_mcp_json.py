@@ -60,6 +60,44 @@ def test_normalization_is_atomic_and_idempotent(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == [path]
 
 
+@pytest.mark.parametrize("relative_target", [False, True])
+def test_normalization_preserves_symlink_and_updates_target(
+    tmp_path, monkeypatch, relative_target
+):
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    target = target_dir / "opencode.json"
+    original = '{"mcp": {"servers": {"codegraph": {"type": "local"}}}}'
+    target.write_text(original)
+    link_dir = tmp_path / "config"
+    link_dir.mkdir()
+    link = link_dir / "opencode.json"
+    link_target = Path("../target/opencode.json") if relative_target else target
+    link.symlink_to(link_target)
+    replace = normalize_mcp_json.os.replace
+    replacements = []
+
+    def checked_replace(source, destination):
+        assert Path(source).parent == target_dir
+        assert destination == str(target)
+        assert target.read_text() == original
+        replacements.append(destination)
+        replace(source, destination)
+
+    monkeypatch.setattr(normalize_mcp_json.os, "replace", checked_replace)
+    assert normalize_mcp_json.normalize(str(link)) is True
+    assert replacements == [str(target)]
+    assert link.is_symlink()
+    assert link.readlink() == link_target
+    assert json.loads(target.read_text()) == {
+        "mcp": {"codegraph": {"type": "local", "enabled": True}}
+    }
+    assert link.read_text() == target.read_text()
+    assert normalize_mcp_json.normalize(str(link)) is False
+    assert list(target_dir.iterdir()) == [target]
+    assert list(link_dir.iterdir()) == [link]
+
+
 @pytest.mark.parametrize(
     "stage,error", [("dump", OSError), ("dump", TypeError), ("replace", OSError)]
 )
