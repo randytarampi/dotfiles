@@ -124,6 +124,9 @@ def test_inventory_loader_known_and_unknown_shapes(tmp_path):
     assert tier_coverage.load_inventory_from_opencode_json(populated) == [
         "opencode/big-pickle"
     ]
+    empty_models = tmp_path / "empty-models.json"
+    empty_models.write_text(json.dumps({"provider": {"litellm": {"models": {}}}}))
+    assert tier_coverage.load_inventory_from_opencode_json(empty_models) == []
     # No litellm block (direct mode) is UNKNOWN, never empty-served.
     direct_mode = tmp_path / "direct-mode.json"
     direct_mode.write_text(json.dumps({"provider": {"anthropic": {}}}))

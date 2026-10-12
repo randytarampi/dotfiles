@@ -63,9 +63,12 @@ def main() -> int:
     args = parse_args()
     load_env()
     try:
-        slim = dict(loads_or_none(args.slim) or {})
+        slim = loads_or_none(args.slim)
     except ValueError as error:
         logger.warning("Slim registry unavailable: %s", error)
+        return 1
+    if not isinstance(slim, dict):
+        logger.warning("Slim registry is not a JSON object: %s", args.slim)
         return 1
     if not slim:
         logger.warning("Slim registry is empty or unreadable: %s", args.slim)
