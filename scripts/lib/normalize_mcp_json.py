@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 OPENCODE_CONFIG_PATH = os.path.expanduser("~/.config/opencode/opencode.json")
 
@@ -50,6 +51,9 @@ def normalize(path: str = OPENCODE_CONFIG_PATH) -> bool:
     except (OSError, ValueError):
         return False
 
+    if not isinstance(config, dict):
+        return False
+
     mcp = config.get("mcp")
     if not isinstance(mcp, dict) or not isinstance(mcp.get("servers"), dict):
         return False
@@ -64,9 +68,26 @@ def normalize(path: str = OPENCODE_CONFIG_PATH) -> bool:
         cleaned["enabled"] = False if disabled else cleaned.get("enabled", True)
         mcp[name] = cleaned
 
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2)
-        fh.write("\n")
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=os.path.dirname(os.path.abspath(path)),
+            delete=False,
+        ) as fh:
+            temporary_path = fh.name
+            json.dump(config, fh, indent=2)
+            fh.write("\n")
+        os.replace(temporary_path, path)
+    except (OSError, TypeError):
+        return False
+    finally:
+        if temporary_path is not None and os.path.exists(temporary_path):
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
     return True
 
 

@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 
 import logger  # noqa: E402  # sys.path is bootstrapped for shared repo libraries.
+from cli_helpers import add_common_args  # noqa: E402  # sys.path bootstrap.
 from env import load_env  # noqa: E402  # sys.path bootstrap.
 from tier_coverage import (  # noqa: E402
     load_inventory_from_opencode_json,
@@ -30,7 +31,9 @@ DEFAULT_INVENTORY = Path("~/.config/opencode/opencode.json").expanduser()
 
 def parse_args(argv=None):
     """Parse registry, inventory, preset filter, and output options from argv."""
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser = add_common_args(
+        argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    )
     parser.add_argument(
         "--slim",
         type=Path,

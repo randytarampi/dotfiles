@@ -953,6 +953,7 @@
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
+        "--dry-run",
         "--json",
         "--slim",
         "--inventory",

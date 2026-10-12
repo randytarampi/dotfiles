@@ -1,0 +1,82 @@
+"""Regression checks for safe MCP configuration normalization."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+import normalize_mcp_json
+
+
+@pytest.mark.parametrize(
+    "config", [None, [], "text", 1, True, {}, {"mcp": []}, {"mcp": {"servers": []}}]
+)
+def test_invalid_shapes_are_unchanged(tmp_path, config):
+    path = tmp_path / "opencode.json"
+    original = json.dumps(config)
+    path.write_text(original)
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert path.read_text() == original
+
+
+def test_normalization_is_atomic_and_idempotent(tmp_path, monkeypatch):
+    path = tmp_path / "opencode.json"
+    config = {
+        "mcp": {
+            "existing": {"type": "remote", "url": "https://example.com"},
+            "servers": {
+                "existing": {"type": "local", "command": ["ignored"]},
+                "codegraph": {
+                    "type": "local",
+                    "command": ["codegraph"],
+                    "disabled": True,
+                    "codemode": True,
+                },
+            },
+        }
+    }
+    original = json.dumps(config)
+    path.write_text(original)
+    replace = normalize_mcp_json.os.replace
+    replacements = []
+
+    def checked_replace(source, destination):
+        assert Path(source).parent == path.parent
+        assert path.read_text() == original
+        assert "servers" not in json.loads(Path(source).read_text())["mcp"]
+        replacements.append(destination)
+        replace(source, destination)
+
+    monkeypatch.setattr(normalize_mcp_json.os, "replace", checked_replace)
+    assert normalize_mcp_json.normalize(str(path)) is True
+    assert replacements == [str(path)]
+    assert json.loads(path.read_text()) == {
+        "mcp": {
+            "existing": config["mcp"]["existing"],
+            "codegraph": {"type": "local", "command": ["codegraph"], "enabled": False},
+        }
+    }
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize(
+    "stage,error", [("dump", OSError), ("dump", TypeError), ("replace", OSError)]
+)
+def test_write_failures_preserve_original_and_remove_temporary_file(
+    tmp_path, monkeypatch, stage, error
+):
+    path = tmp_path / "opencode.json"
+    original = '{"mcp": {"servers": {"codegraph": {"type": "local"}}}}'
+    path.write_text(original)
+
+    def fail(*args, **kwargs):
+        if stage == "dump":
+            args[1].write('{"partial":')
+        raise error("simulated write failure")
+
+    target = normalize_mcp_json.json if stage == "dump" else normalize_mcp_json.os
+    monkeypatch.setattr(target, stage, fail)
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert path.read_text() == original
+    assert list(tmp_path.iterdir()) == [path]

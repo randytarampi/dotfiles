@@ -40,5 +40,7 @@ Standard pre-deploy review for a newly pulled commit range.
 ## Secret hygiene
 
 Never print `~/.env` wholesale. Grep key names; redact values with sed before
-displaying anything; back the file up to the session temp dir before editing;
-edit line-scoped (sed) rather than reading secrets into context.
+displaying anything; back the file up to a user-private temporary directory
+(mode 0700, created with `mktemp -d`) before editing; edit line-scoped (sed)
+rather than reading secrets into context. After verifying the edit without
+displaying file contents, remove the backup and its temporary directory.
