@@ -46,6 +46,8 @@ values so an assertion cannot pass vacuously.
 
 ## Notes
 
+- The `~/.env` drift check counts a commented placeholder sharing an active key's name as a duplicate; when adding keys, replace the documented commented placeholder in its section instead of appending a second declaration at the file end.
+- Secret files (`~/.env`): grep key names only, redact values, back up to a session temp dir, and edit line-scoped (`sed`) so secrets never enter context.
 - Do not unconditionally remove `__pycache__` or other ignored artifacts; they are not source changes or verification failures.
 - If `make verify` fails, fix the issue before reporting success. Do not pipe it through output truncation and then report the pipeline's status as the verify status. Prefer direct invocation; if a wrapper must capture output, inspect `make verify`'s own exit code and retain the diagnostic output.
 - If Black or another required tool is missing, report BLOCKED and arrange the documented environment before continuing; never silently skip formatting.
