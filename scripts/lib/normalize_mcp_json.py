@@ -59,15 +59,20 @@ def normalize(path: str = OPENCODE_CONFIG_PATH) -> bool:
     if not isinstance(mcp, dict) or not isinstance(mcp.get("servers"), dict):
         return False
 
-    for name, entry in mcp.pop("servers").items():
-        if not isinstance(entry, dict) or name in mcp:
+    servers = mcp["servers"]
+    promoted = {}
+    for name, entry in servers.items():
+        if name in mcp:
             continue  # flat registry-authored entry wins
-        if entry.get("type") not in ("local", "remote"):
-            continue
+        if not isinstance(entry, dict) or entry.get("type") not in ("local", "remote"):
+            return False
         disabled = entry.get("disabled", False)
         cleaned = {k: v for k, v in entry.items() if k in ALLOWED_FIELDS}
         cleaned["enabled"] = False if disabled else cleaned.get("enabled", True)
-        mcp[name] = cleaned
+        promoted[name] = cleaned
+
+    mcp.pop("servers")
+    mcp.update(promoted)
 
     temporary_path = None
     try:

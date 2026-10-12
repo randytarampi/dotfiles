@@ -60,6 +60,31 @@ def test_normalization_is_atomic_and_idempotent(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == [path]
 
 
+@pytest.mark.parametrize("entry", ["unexpected", {"command": ["unknown"]}])
+def test_unsupported_non_colliding_server_preserves_wrapper(tmp_path, entry):
+    path = tmp_path / "opencode.json"
+    original = json.dumps({"mcp": {"servers": {"future-server": entry}}})
+    path.write_text(original)
+
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert path.read_text() == original
+
+
+def test_malformed_colliding_server_does_not_override_flat_entry(tmp_path):
+    path = tmp_path / "opencode.json"
+    flat_entry = {"type": "remote", "url": "https://example.com"}
+    config = {
+        "mcp": {
+            "existing": flat_entry,
+            "servers": {"existing": "unsupported nested entry"},
+        }
+    }
+    path.write_text(json.dumps(config))
+
+    assert normalize_mcp_json.normalize(str(path)) is True
+    assert json.loads(path.read_text()) == {"mcp": {"existing": flat_entry}}
+
+
 @pytest.mark.parametrize("relative_target", [False, True])
 def test_normalization_preserves_symlink_and_updates_target(
     tmp_path, monkeypatch, relative_target

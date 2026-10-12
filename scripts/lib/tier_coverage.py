@@ -151,4 +151,4 @@ def load_inventory_from_opencode_json(path: Path) -> list[str] | None:
             entry_id = entry.get("id")
             if isinstance(entry_id, str):
                 ids.append(entry_id)
-    return ids or None
+    return ids

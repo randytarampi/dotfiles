@@ -29,7 +29,7 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
-| **free** | OpenCode Zen + Google + OpenRouter | Free cross-provider workflow with cross-provider fallbacks |
+| **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
 | **local-pro** | Local Ollama + oMLX under the gate (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
@@ -98,9 +98,9 @@ Fallbacks point at OpenAI paid models (gpt-6.1-sol/luna) — free-tier failures 
 
 ### Free Cross-Provider Tier (`free`)
 
-The `free` preset combines OpenCode Zen, Google Gemini, and the verified
-OpenRouter `:free` catalog. Nemotron 3.5 Lightning Free serves exploration and
-council gamma, with provider-deduplicated cross-provider fallbacks. Refresh IDs through
+The `free` preset combines OpenCode Zen and Google Gemini. Nemotron 3.5
+Lightning Free serves exploration and council gamma, with provider-deduplicated
+cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
 
 Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image
@@ -392,7 +392,7 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 
 ## Fallback Chains
 
-Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains. The `omo-slim-openai`/`omo-slim-thirty-dollars` tiers fall back to OpenCode Zen, `omo-slim-opencode-zen-free` falls back to OpenAI paid models, and `free` crosses Zen, Google, and OpenRouter — cross-provider fallbacks by design, one entry per provider per role (invariant 7 in [scripts/verify-slim-invariants.py](../scripts/verify-slim-invariants.py)).
+Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains. The `omo-slim-openai`/`omo-slim-thirty-dollars` tiers fall back to OpenCode Zen, `omo-slim-opencode-zen-free` falls back to OpenAI paid models, and `free` uses cross-provider fallbacks across OpenCode Zen and Google, one entry per provider per role (invariant 7 in [scripts/verify-slim-invariants.py](../scripts/verify-slim-invariants.py)).
 
 Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models. All indexed models matching a role's category are appended (not just the single best model).
 
