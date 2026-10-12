@@ -537,7 +537,7 @@ def litellm_tier_coverage_errors(environ=None):
     e.g. direct mode or not yet generated) is a non-blocking notice, never an
     error — matching the repository's UNKNOWN discipline.
     """
-    environ = environ or os.environ
+    environ = os.environ if environ is None else environ
     try:
         proxy_mode = get_litellm_proxy_mode(environ)
     except ValueError as error:
@@ -556,7 +556,7 @@ def litellm_tier_coverage_errors(environ=None):
     if not isinstance(slim, dict):
         return ["LiteLLM tier coverage: slim registry is not an object"], []
     inventory = tier_coverage.load_inventory_from_opencode_json(
-        Path.home() / ".config/opencode/opencode.json"
+        Path(environ.get("HOME", HOME)).expanduser() / ".config/opencode/opencode.json"
     )
     if inventory is None:
         return [], ["LiteLLM tier coverage: gateway inventory unavailable (UNKNOWN)"]

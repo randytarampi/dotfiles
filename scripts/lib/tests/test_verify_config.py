@@ -1149,3 +1149,41 @@ def test_litellm_pricing_exit_decision_is_nonblocking_when_gate_is_off(tmp_path)
         )
         is False
     )
+
+
+def test_tier_coverage_preserves_empty_environment(monkeypatch):
+    """An explicit empty environment must not inherit process proxy settings."""
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "invalid")
+    assert VERIFY_CONFIG.litellm_tier_coverage_errors({}) == ([], [])
+    errors, notices = VERIFY_CONFIG.litellm_tier_coverage_errors()
+    assert len(errors) == 1
+    assert "DOTFILES_USE_LITELLM_PROXY" in errors[0]
+    assert notices == []
+
+
+def test_tier_coverage_uses_supplied_home(tmp_path, monkeypatch):
+    """Inventory lookup follows the supplied HOME, independently of the process."""
+    monkeypatch.setenv("HOME", str(tmp_path / "process-home"))
+    home = tmp_path / "supplied-home"
+    config = home / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "provider": {
+                    "litellm": {
+                        "models": {"opencode/big-pickle": {"id": "opencode/big-pickle"}}
+                    }
+                }
+            }
+        )
+    )
+    env = {
+        "HOME": str(home),
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+    }
+    errors, notices = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert len(errors) == 1
+    assert "have no gateway alias:" in errors[0]
+    assert notices == []

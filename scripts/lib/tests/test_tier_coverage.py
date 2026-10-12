@@ -106,27 +106,37 @@ def test_unresolved_reports_only_unserved_refs():
     assert len(unserved) == 2
 
 
-def test_inventory_loader_known_and_unknown_shapes():
+def test_inventory_loader_known_and_unknown_shapes(tmp_path):
     """Load gateway model IDs and treat invalid or direct-mode JSON as unknown."""
     import pathlib
-    import tempfile
 
     # Unreadable path is UNKNOWN.
     assert (
         tier_coverage.load_inventory_from_opencode_json(pathlib.Path("/dev/null"))
         is None
     )
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
-        json.dump(
-            {"provider": {"litellm": {"models": {"a": {"id": "opencode/big-pickle"}}}}},
-            fh,
+    populated = tmp_path / "populated.json"
+    populated.write_text(
+        json.dumps(
+            {"provider": {"litellm": {"models": {"a": {"id": "opencode/big-pickle"}}}}}
         )
-        populated = pathlib.Path(fh.name)
+    )
     assert tier_coverage.load_inventory_from_opencode_json(populated) == [
         "opencode/big-pickle"
     ]
     # No litellm block (direct mode) is UNKNOWN, never empty-served.
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
-        json.dump({"provider": {"anthropic": {}}}, fh)
-        direct_mode = pathlib.Path(fh.name)
+    direct_mode = tmp_path / "direct-mode.json"
+    direct_mode.write_text(json.dumps({"provider": {"anthropic": {}}}))
     assert tier_coverage.load_inventory_from_opencode_json(direct_mode) is None
+
+
+def test_unresolved_ignores_malformed_inventory_ids():
+    """Unqualified owner strings and non-strings cannot crash model matching."""
+    slim = {"presets": {"test": {"oracle": {"model": "anthropic/claude-sonnet-5-5"}}}}
+    malformed = ["anthropic", "meridian", None, 3, {}, []]
+    assert tier_coverage.unresolved_refs(slim, malformed) == [
+        tier_coverage.RegistryRef(
+            "presets.test.oracle.model", "anthropic/claude-sonnet-5-5"
+        )
+    ]
+    assert tier_coverage.unresolved_refs(slim, malformed + inventory_ids()) == []

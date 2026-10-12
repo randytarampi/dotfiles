@@ -99,8 +99,8 @@ Fallbacks point at OpenAI paid models (gpt-6.1-sol/luna) — free-tier failures 
 ### Free Cross-Provider Tier (`free`)
 
 The `free` preset combines OpenCode Zen, Google Gemini, and the verified
-OpenRouter `:free` catalog. North Mini Code serves exploration and council
-gamma, with provider-deduplicated cross-provider fallbacks. Refresh IDs through
+OpenRouter `:free` catalog. Nemotron 3.5 Lightning Free serves exploration and
+council gamma, with provider-deduplicated cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
 
 Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image

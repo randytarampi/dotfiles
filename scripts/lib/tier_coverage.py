@@ -15,8 +15,8 @@ repository's UNKNOWN discipline (e.g. litellm_cloud_aliases).
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from litellm_aliases import canonical_allowlist_key
 
@@ -115,7 +115,7 @@ def _matches_inventory(ref: str, inventory: set[str]) -> bool:
 
 def unresolved_refs(slim: dict, inventory: Iterable[str]) -> list[RegistryRef]:
     """Return registry selections the given gateway inventory cannot serve."""
-    available = {item for item in inventory if isinstance(item, str)}
+    available = {item for item in inventory if isinstance(item, str) and "/" in item}
     return [
         entry
         for entry in collect_registry_refs(slim)
