@@ -946,6 +946,22 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/detect-tier-coverage.py",
+      "capabilities": [
+        "public"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--slim",
+        "--inventory",
+        "--preset"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/verify-worktree-ready.py",
       "capabilities": [
         "public",
