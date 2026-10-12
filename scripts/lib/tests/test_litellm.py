@@ -415,7 +415,9 @@ def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
             )
     assert "https://example.com/openai/ignored" not in expected
     assert "_local:placeholder" not in expected
-    assert any(ref.startswith("openrouter/nvidia/") for ref in expected)
+    # The free preset's sole openrouter/nvidia reference was retargeted to
+    # opencode/nemotron-3.5-lightning-free for keyless machines; restore an
+    # openrouter canary here if a keyed free reference returns to the registry.
     verified = {
         ref
         for ref in expected
