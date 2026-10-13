@@ -20,7 +20,9 @@ from pathlib import Path
 
 from litellm_aliases import canonical_allowlist_key
 
-DIRECT_EXCEPTIONS = {"meridian"}
+# Keep aligned with apply_litellm_slim_gate's direct_exceptions and local_owners.
+# Local endpoints are deliberate alternatives, not LiteLLM catalogue entries.
+DIRECT_EXCEPTIONS = {"meridian", "ollama", "omlx", "llamacpp"}
 MODEL_FIELDS = {"model", "primaryModel"}
 FALLBACK_FIELD = "fallback"
 

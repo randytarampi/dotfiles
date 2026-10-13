@@ -1,6 +1,9 @@
 """Tests for the shared Slim tier-coverage resolution used by the doctor CLI row."""
 
 import json
+import ast
+import importlib.util
+from pathlib import Path
 
 import tier_coverage
 
@@ -104,6 +107,43 @@ def test_unresolved_reports_only_unserved_refs():
     assert not any(entry.ref.startswith("meridian/") for entry in unserved)
     assert not any("gemini-3.5-flash-lite" in entry.ref for entry in unserved)
     assert len(unserved) == 2
+
+
+def test_local_direct_exceptions_and_slim_gate_parity():
+    """Local direct refs bypass inventory, but cloud refs remain gateway-only."""
+    slim = {
+        "presets": {
+            "test": {
+                "a": {"model": "omlx/whatever-id"},
+                "b": {"model": "ollama/some-tag"},
+                "c": {"model": "openai/foo"},
+            }
+        }
+    }
+    unserved = tier_coverage.unresolved_refs(slim, [])
+    assert [(entry.ref) for entry in unserved] == ["openai/foo"]
+
+    script = Path(__file__).resolve().parents[2] / "configure-opencode.py"
+    spec = importlib.util.spec_from_file_location("configure_opencode_for_test", script)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    function = ast.parse(script.read_text(encoding="utf-8"))
+    gate = next(
+        node
+        for node in function.body
+        if isinstance(node, ast.FunctionDef) and node.name == "apply_litellm_slim_gate"
+    )
+    gate_sets = {}
+    for node in ast.walk(gate):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Set):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    gate_sets[target.id] = ast.literal_eval(node.value)
+    assert tier_coverage.DIRECT_EXCEPTIONS == (
+        gate_sets["direct_exceptions"] | gate_sets["local_owners"]
+    )
 
 
 def test_inventory_loader_known_and_unknown_shapes(tmp_path):
