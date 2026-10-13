@@ -151,30 +151,64 @@ class ProjectOverridesGlobalTests(unittest.TestCase):
                 )
 
 
-class TierProjectConfigPathTests(unittest.TestCase):
-    def test_prefers_opencode_dir_config_when_present(self):
+class TierEffectiveConfigTests(unittest.TestCase):
+    def test_merges_global_project_root_and_opencode_dir_configs(self):
         with (
             tempfile.TemporaryDirectory() as project,
             tempfile.TemporaryDirectory() as home,
         ):
             opencode_dir = Path(project) / ".opencode"
             opencode_dir.mkdir()
-            nested_config = opencode_dir / "opencode.json"
-            nested_config.write_text("{}\n", encoding="utf-8")
-            (Path(project) / "opencode.json").write_text("{}\n", encoding="utf-8")
+            (opencode_dir / "opencode.json").write_text(
+                json.dumps({"provider": {"litellm": {"options": {"timeout": 30}}}})
+            )
+            (Path(project) / "opencode.json").write_text(
+                json.dumps(
+                    {
+                        "model": "project-model",
+                        "provider": {"litellm": {"options": {"timeout": 20}}},
+                    }
+                )
+            )
             global_dir = Path(home) / ".config" / "opencode"
             global_dir.mkdir(parents=True)
-            (global_dir / "opencode.json").write_text("{}\n", encoding="utf-8")
+            (global_dir / "opencode.json").write_text(
+                json.dumps(
+                    {
+                        "model": "global-model",
+                        "provider": {
+                            "litellm": {
+                                "models": {"test": {"id": "openai/test"}},
+                                "options": {
+                                    "baseURL": "http://gateway/v1",
+                                    "timeout": 10,
+                                },
+                            }
+                        },
+                    }
+                )
+            )
 
             with mock.patch.dict(os.environ, {"HOME": home}):
                 self.assertEqual(
-                    configure_opencode_tier.resolve_opencode_config_path(
+                    configure_opencode_tier.load_effective_opencode_config(
                         str(opencode_dir)
                     ),
-                    str(nested_config),
+                    {
+                        "model": "project-model",
+                        "provider": {
+                            "litellm": {
+                                "models": {"test": {"id": "openai/test"}},
+                                "options": {
+                                    "baseURL": "http://gateway/v1",
+                                    "timeout": 30,
+                                },
+                            }
+                        },
+                    },
                 )
 
-    def test_resolves_project_root_config_when_opencode_dir_has_none(self):
+    def test_project_root_overrides_global_when_opencode_dir_has_no_config(self):
         with (
             tempfile.TemporaryDirectory() as project,
             tempfile.TemporaryDirectory() as home,
@@ -182,17 +216,20 @@ class TierProjectConfigPathTests(unittest.TestCase):
             opencode_dir = Path(project) / ".opencode"
             opencode_dir.mkdir()
             root_config = Path(project) / "opencode.json"
-            root_config.write_text("{}\n", encoding="utf-8")
+            root_config.write_text('{"model": "project-model"}\n', encoding="utf-8")
             global_dir = Path(home) / ".config" / "opencode"
             global_dir.mkdir(parents=True)
-            (global_dir / "opencode.json").write_text("{}\n", encoding="utf-8")
+            (global_dir / "opencode.json").write_text(
+                '{"model": "global-model", "provider": {"litellm": {}}}\n',
+                encoding="utf-8",
+            )
 
             with mock.patch.dict(os.environ, {"HOME": home}):
                 self.assertEqual(
-                    configure_opencode_tier.resolve_opencode_config_path(
+                    configure_opencode_tier.load_effective_opencode_config(
                         str(opencode_dir)
                     ),
-                    str(root_config),
+                    {"model": "project-model", "provider": {"litellm": {}}},
                 )
 
     def test_uses_global_config_when_project_has_no_consumer_config(self):
@@ -208,10 +245,10 @@ class TierProjectConfigPathTests(unittest.TestCase):
 
             with mock.patch.dict(os.environ, {"HOME": home}):
                 self.assertEqual(
-                    configure_opencode_tier.resolve_opencode_config_path(
+                    configure_opencode_tier.load_effective_opencode_config(
                         str(opencode_dir)
                     ),
-                    str(global_config),
+                    {},
                 )
 
     def test_unresolvable_global_tier_writes_conservatively(self):

@@ -138,6 +138,7 @@ def builtin_rates(wire_model):
     }
     for source_key, info_key in (
         ("cache_read_input_token_cost", "cache_read_input_token_cost"),
+        ("cache_creation_input_token_cost", "cache_creation_input_token_cost"),
         ("max_input_tokens", "max_input_tokens"),
         ("max_output_tokens", "max_output_tokens"),
         ("mode", "mode"),

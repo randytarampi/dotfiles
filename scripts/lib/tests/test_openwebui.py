@@ -583,6 +583,50 @@ def test_proxy_collapse_deletes_managed_stale_gateway_entries_with_mismatched_ty
     assert result.collisions == []
 
 
+@pytest.mark.parametrize("prefix", ["custom", "future-provider"])
+@pytest.mark.parametrize("kind", ["openai", "anthropic"])
+def test_unknown_managed_gateway_prefix_collides_without_api_writes(
+    monkeypatch, prefix, kind
+):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    unknown = _entry(prefix, desired["openai"][0]["url"], kind=kind)
+
+    class Client:
+        def __init__(self):
+            self.openai = {"connections": [unknown]}
+            self.ollama = {"connections": []}
+            self.writes = []
+
+        def get_openai_config(self):
+            return self.openai
+
+        def get_ollama_config(self):
+            return self.ollama
+
+        def update_openai_config(self, payload):
+            self.writes.append("openai")
+            self.openai = payload
+
+        def update_ollama_config(self, payload):
+            self.writes.append("ollama")
+            self.ollama = payload
+
+    client = Client()
+    result = openwebui.reconcile_via_api(client, desired)
+    assert result.status == "collision"
+    assert result.collisions == [unknown]
+    assert result.plan.entries[0] == {
+        "action": "skip",
+        "collection": "openai",
+        "entry": unknown,
+    }
+    assert client.writes == []
+    assert client.openai == {"connections": [unknown]}
+
+
 def test_proxy_collision_remains_fail_closed_off_gateway(monkeypatch):
     """The relaxation is scoped to entries physically at the gateway
     endpoint; stale managed entries elsewhere keep the collision abort."""

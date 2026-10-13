@@ -42,22 +42,38 @@ def _csv_env(name):
     ]
 
 
-def resolve_opencode_config_path(config_dir):
-    """Find the OpenCode consumer config, including project-root configs."""
-    config_path = os.path.join(config_dir, "opencode.json")
-    if os.path.isfile(config_path):
-        return config_path
-    project_root_config = os.path.join(os.path.dirname(config_dir), "opencode.json")
-    if os.path.isfile(project_root_config):
-        logger.info("Consumer config resolved from %s", project_root_config)
-        return project_root_config
-    global_config = os.path.join(
-        os.path.expanduser("~"), ".config", "opencode", "opencode.json"
+def load_effective_opencode_config(config_dir):
+    """Merge managed JSON configs: global, project root, then config directory."""
+    config_dir = os.path.realpath(os.path.expanduser(config_dir))
+    global_dir = os.path.realpath(
+        os.path.join(os.path.expanduser("~"), ".config", "opencode")
     )
-    if os.path.isfile(global_config):
-        logger.info("Consumer config resolved from %s", global_config)
-        return global_config
-    return config_path
+    config_paths = [os.path.join(global_dir, "opencode.json")]
+    if config_dir != global_dir:
+        config_paths.append(os.path.join(os.path.dirname(config_dir), "opencode.json"))
+        config_paths.append(os.path.join(config_dir, "opencode.json"))
+
+    def merge(target, overrides):
+        for key, value in overrides.items():
+            if isinstance(value, dict) and isinstance(target.get(key), dict):
+                merge(target[key], value)
+            else:
+                target[key] = value
+
+    consumer_config = {}
+    loaded = False
+    for path in config_paths:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"OpenCode config must be an object: {path}")
+        merge(consumer_config, data)
+        loaded = True
+    if not loaded:
+        raise FileNotFoundError(f"No OpenCode consumer config found for {config_dir}")
+    return consumer_config
 
 
 def filter_omlx_models_for_gate(models):
@@ -321,10 +337,8 @@ def orchestrate_tier_switch(
         if dry_run:
             logger.info("Would apply LiteLLM transport mapping to materialized tier")
         else:
-            opencode_config_path = resolve_opencode_config_path(config_dir)
             try:
-                with open(opencode_config_path, encoding="utf-8") as f:
-                    consumer_config = json.load(f)
+                consumer_config = load_effective_opencode_config(config_dir)
                 helper_path = os.path.join(SCRIPT_DIR, "configure-opencode.py")
                 spec = importlib.util.spec_from_file_location(
                     "configure_opencode_transport", helper_path

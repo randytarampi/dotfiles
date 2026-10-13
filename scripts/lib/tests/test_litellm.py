@@ -2520,7 +2520,16 @@ CLAUDE_FIXTURE_ENTRY = {
 }
 
 
-def test_builtin_rate_snapshot_loads_checked_in_claude_rates(monkeypatch):
+@pytest.mark.parametrize(
+    "model_id, input_rate, output_rate, cache_read, cache_write",
+    [
+        ("claude-sonnet-5-5", 2e-06, 1e-05, 1e-07, 2.5e-06),
+        ("claude-haiku-5-5", 1e-07, 5e-07, 1e-08, 1.25e-07),
+    ],
+)
+def test_builtin_rate_snapshot_loads_checked_in_claude_rates(
+    monkeypatch, tmp_path, model_id, input_rate, output_rate, cache_read, cache_write
+):
     from pathlib import Path
 
     # The snapshot is a checked-in repo artifact: reading the real file keeps
@@ -2530,10 +2539,22 @@ def test_builtin_rate_snapshot_loads_checked_in_claude_rates(monkeypatch):
             Path(__file__).resolve().parents[3] / "configs/litellm/model-rates.json"
         ).read_text()
     )
-    assert snapshot["models"]["claude-sonnet-5-5"]["input_cost_per_token"] == 2e-06
-    _seed_builtin_cost_map(monkeypatch, snapshot["models"])
-    info = litellm_config.builtin_rates("anthropic/claude-sonnet-5-5")
-    assert info is not None and info["input_cost_per_token"] == 2e-06
+    expected = {
+        "input_cost_per_token": input_rate,
+        "output_cost_per_token": output_rate,
+        "cache_read_input_token_cost": cache_read,
+        "cache_creation_input_token_cost": cache_write,
+        "max_input_tokens": 1000000,
+        "max_output_tokens": 128000,
+        "mode": "chat",
+    }
+    assert snapshot["models"][model_id] == expected
+    monkeypatch.setattr(litellm_config, "_BUILTIN_COST_MAP_LOADED", False)
+    monkeypatch.setenv("LITELLM_ROOT", str(tmp_path / "missing-litellm"))
+    assert (
+        litellm_config.model_rates("anthropic", model_id, f"anthropic/{model_id}")
+        == expected
+    )
 
 
 def test_builtin_rates_price_claude_wires_from_bare_map_keys(monkeypatch):
