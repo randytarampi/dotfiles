@@ -153,6 +153,7 @@ class ProjectOverridesGlobalTests(unittest.TestCase):
 
 class TierEffectiveConfigTests(unittest.TestCase):
     def test_merges_global_project_root_and_opencode_dir_configs(self):
+        """Later configs override nested values while preserving global models."""
         with (
             tempfile.TemporaryDirectory() as project,
             tempfile.TemporaryDirectory() as home,
@@ -209,6 +210,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                 )
 
     def test_project_root_overrides_global_when_opencode_dir_has_no_config(self):
+        """Use project-root overrides when the .opencode config is absent."""
         with (
             tempfile.TemporaryDirectory() as project,
             tempfile.TemporaryDirectory() as home,
@@ -233,6 +235,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                 )
 
     def test_uses_global_config_when_project_has_no_consumer_config(self):
+        """Fall back to the global consumer config for projects without one."""
         with (
             tempfile.TemporaryDirectory() as project,
             tempfile.TemporaryDirectory() as home,

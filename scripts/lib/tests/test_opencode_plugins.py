@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_checker():
+    """Import the plugin consistency checker from its script path."""
     spec = importlib.util.spec_from_file_location(
         "check_plugin_consistency", ROOT / "scripts/check-plugin-consistency.py"
     )
@@ -16,6 +17,7 @@ def load_checker():
 
 
 def load_pinned_spec_loader():
+    """Import the shared plugin manifest loader for package-spec validation."""
     spec = importlib.util.spec_from_file_location(
         "opencode_plugins_loader", ROOT / "scripts/lib/opencode_plugins.py"
     )
@@ -25,6 +27,7 @@ def load_pinned_spec_loader():
 
 
 def test_manifest_matches_config_and_install_template():
+    """Keep plugin specs and ordering consistent across manifest and consumers."""
     checker = load_checker()
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest

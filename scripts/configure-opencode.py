@@ -346,6 +346,11 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
     local_owners = {"ollama", "omlx", "llamacpp"}
 
     def rewrite_model(value):
+        """Resolve one gateway alias, preserving direct exceptions and local models.
+
+        Raise RuntimeError when a selection requires an alias but has no unique
+        match in the gateway inventory.
+        """
         if (
             not isinstance(value, str)
             or "/" not in value

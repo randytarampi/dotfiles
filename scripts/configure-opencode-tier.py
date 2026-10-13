@@ -54,6 +54,7 @@ def load_effective_opencode_config(config_dir):
         config_paths.append(os.path.join(config_dir, "opencode.json"))
 
     def merge(target, overrides):
+        """Recursively apply overrides to target, replacing non-dict values."""
         for key, value in overrides.items():
             if isinstance(value, dict) and isinstance(target.get(key), dict):
                 merge(target[key], value)
@@ -104,6 +105,11 @@ def orchestrate_tier_switch(
     min_reasoning_embedding: int = 0,
     dry_run: bool = False,
 ):
+    """Materialize a tier with model overrides, local fallbacks and proxy routing.
+
+    Write the Slim config under OPENCODE_DIR or the global config directory;
+    dry runs log planned writes without changing files.
+    """
     use_litellm_proxy = get_litellm_proxy_mode()
     if use_litellm_proxy and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
         logger.critical(
