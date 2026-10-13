@@ -572,6 +572,42 @@ def litellm_tier_coverage_errors(environ=None):
     ], []
 
 
+def omlx_turboquant_status(home=None, environ=None):
+    """Return the doctor status row without conflating unavailable with empty."""
+    from local_engines import iter_engine_models_strict
+
+    environ = os.environ if environ is None else environ
+    root = Path(home or environ.get("HOME", HOME)).expanduser()
+    discovered = iter_engine_models_strict("omlx")
+    if discovered is None:
+        return "oMLX TurboQuant KV: discovery unavailable (UNKNOWN)", None
+    ids = {
+        model["name"]
+        for model in discovered
+        if isinstance(model, dict) and isinstance(model.get("name"), str)
+    }
+    try:
+        data = json.loads(
+            (root / ".omlx/model_settings.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    profiles = data.get("models", {}) if isinstance(data, dict) else {}
+    applied = sum(
+        1
+        for model_id in ids
+        if isinstance(profiles, dict)
+        and isinstance(profiles.get(model_id), dict)
+        and profiles[model_id].get("turboquant_kv_enabled") is True
+        and profiles[model_id].get("turboquant_kv_bits") == 8
+        and profiles[model_id].get("turboquant_skip_last", True) is True
+    )
+    return (
+        f"oMLX TurboQuant KV: applied {applied} of {len(ids)} discovered models",
+        applied < len(ids),
+    )
+
+
 def litellm_venv_patch_status(home=None, environ=None):
     environ = os.environ if environ is None else environ
     if environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
@@ -1943,6 +1979,13 @@ def main():
         exit_code = 1
     if not tier_errors and not tier_notices:
         print("  \u2713 LiteLLM tier coverage: every Slim registry selection is served")
+    turboquant_status, turboquant_incomplete = omlx_turboquant_status(home=HOME)
+    if turboquant_incomplete is None:
+        print(f"  \u2298 {turboquant_status}")
+    elif turboquant_incomplete:
+        print(f"  \u26a0 {turboquant_status}; run oMLX discovery and sync settings")
+    else:
+        print(f"  \u2713 {turboquant_status}")
     for status in litellm_venv_patch_status(home=HOME):
         print(f"  {status}")
     pricing_statuses = litellm_cost_rates_status(home=HOME)

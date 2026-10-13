@@ -618,9 +618,22 @@ def sync_turboquant_kv(model_settings_path, environ=None):
         models = {}
         document["models"] = models
 
+    # Discovery failures are distinguishable from an empty catalogue so we do
+    # not seed settings from an unavailable daemon.
+    discovered = iter_engine_models_strict("omlx")
+    if discovered is None:
+        return 0
+    discovered_ids = {
+        model["name"]
+        for model in discovered
+        if isinstance(model, dict) and isinstance(model.get("name"), str)
+    }
+    for model_id in discovered_ids:
+        models.setdefault(model_id, {})
+
     bits = bit_map[kv_type]
     changed = 0
-    for model_id, profile in models.items():
+    for model_id, profile in list(models.items()):
         if not isinstance(profile, dict):
             continue
         wanted = (
