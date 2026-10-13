@@ -470,6 +470,7 @@ def _plain_default(url, collection):
     ],
 )
 def test_proxy_preserves_customised_no_key_openai_entry(monkeypatch, prefix, config):
+    """Preserve customised OpenAI entries when adding the proxy connection."""
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
@@ -588,6 +589,7 @@ def test_proxy_collapse_deletes_managed_stale_gateway_entries_with_mismatched_ty
 def test_unknown_managed_gateway_prefix_collides_without_api_writes(
     monkeypatch, prefix, kind
 ):
+    """Reject unknown managed gateway prefixes without writing either config."""
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
@@ -596,21 +598,26 @@ def test_unknown_managed_gateway_prefix_collides_without_api_writes(
 
     class Client:
         def __init__(self):
+            """Seed connection configs and an empty API-write log."""
             self.openai = {"connections": [unknown]}
             self.ollama = {"connections": []}
             self.writes = []
 
         def get_openai_config(self):
+            """Return the fake client's current OpenAI connection config."""
             return self.openai
 
         def get_ollama_config(self):
+            """Return the fake client's current Ollama connection config."""
             return self.ollama
 
         def update_openai_config(self, payload):
+            """Record an OpenAI write and replace the fake client's config."""
             self.writes.append("openai")
             self.openai = payload
 
         def update_ollama_config(self, payload):
+            """Record an Ollama write and replace the fake client's config."""
             self.writes.append("ollama")
             self.ollama = payload
 

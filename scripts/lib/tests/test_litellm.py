@@ -2530,6 +2530,7 @@ CLAUDE_FIXTURE_ENTRY = {
 def test_builtin_rate_snapshot_loads_checked_in_claude_rates(
     monkeypatch, tmp_path, model_id, input_rate, output_rate, cache_read, cache_write
 ):
+    """Load checked-in Claude token and cache rates without a LiteLLM install."""
     from pathlib import Path
 
     # The snapshot is a checked-in repo artifact: reading the real file keeps

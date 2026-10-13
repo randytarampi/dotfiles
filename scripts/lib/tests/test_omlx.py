@@ -765,6 +765,7 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
 def test_opencode_slim_keeps_local_engine_selections_direct(
     owner, tmp_path, monkeypatch
 ):
+    """Keep local-engine selections direct when the gateway has no alias."""
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     key = tmp_path / ".local/share/litellm/clients/opencode.key"
     key.parent.mkdir(parents=True)
