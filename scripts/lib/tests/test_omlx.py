@@ -85,6 +85,85 @@ def _load_script(name, filename):
     return module
 
 
+def _run_wired_limit(monkeypatch, tmp_path, *, environ, ram_mb):
+    script = _load_script("configure_omlx_wired_limit", "configure-omlx-wired-limit.py")
+    calls = []
+    monkeypatch.setattr(script.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(script.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(script, "load_env", lambda: True)
+    monkeypatch.setattr(script, "_physical_ram_mb", lambda: ram_mb)
+    monkeypatch.setattr(script, "_read_wired_limit", lambda: 1234)
+    monkeypatch.setattr(
+        script,
+        "apply_sysctl",
+        lambda limit, dry_run: calls.append(("apply", limit, dry_run)),
+    )
+    monkeypatch.setattr(
+        script,
+        "install_plist",
+        lambda *args, **kwargs: calls.append(("plist", args, kwargs)),
+    )
+    monkeypatch.setattr(script, "LAUNCHD_PLIST", str(tmp_path / "wired.plist"))
+    monkeypatch.setattr(sys, "argv", ["configure-omlx-wired-limit.py"])
+    monkeypatch.setattr(script, "os", type("OS", (), {"environ": environ})())
+    script.main()
+    return calls
+
+
+def test_wired_limit_default_reports_without_writing(monkeypatch, tmp_path, caplog):
+    calls = _run_wired_limit(
+        monkeypatch,
+        tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1"},
+        ram_mb=128 * 1024,
+    )
+    assert calls == []
+    assert "131072" in caplog.text
+    assert "1234" in caplog.text
+
+
+def test_wired_limit_explicit_opt_in_applies_computed_limit(monkeypatch, tmp_path):
+    calls = _run_wired_limit(
+        monkeypatch,
+        tmp_path,
+        environ={
+            "DOTFILES_RUN_OMLX_SETUP": "1",
+            "DOTFILES_APPLY_OMLX_WIRED_LIMIT": "1",
+        },
+        ram_mb=128 * 1024,
+    )
+    assert calls[0] == ("apply", 40960, False)
+
+
+def test_wired_limit_override_is_honoured(monkeypatch, tmp_path):
+    calls = _run_wired_limit(
+        monkeypatch,
+        tmp_path,
+        environ={
+            "DOTFILES_RUN_OMLX_SETUP": "1",
+            "DOTFILES_APPLY_OMLX_WIRED_LIMIT": "1",
+            "OMLX_WIRED_LIMIT_MB": "32768",
+        },
+        ram_mb=128 * 1024,
+    )
+    assert calls[0] == ("apply", 32768, False)
+
+
+def test_wired_limit_out_of_bounds_override_is_refused(monkeypatch, tmp_path):
+    with pytest.raises(SystemExit) as error:
+        _run_wired_limit(
+            monkeypatch,
+            tmp_path,
+            environ={
+                "DOTFILES_RUN_OMLX_SETUP": "1",
+                "DOTFILES_APPLY_OMLX_WIRED_LIMIT": "1",
+                "OMLX_WIRED_LIMIT_MB": "15000",
+            },
+            ram_mb=16 * 1024,
+        )
+    assert error.value.code == 1
+
+
 def test_map_omlx_capabilities_by_model_type():
     assert omlx.map_omlx_capabilities({"model_type": "llm"}) == {
         "completion",

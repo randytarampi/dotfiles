@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 HERMETIC_ENV_VARS = (
     "DOTFILES_RUN_OMLX_SETUP",
+    "DOTFILES_APPLY_OMLX_WIRED_LIMIT",
     "OMLX_WIRED_LIMIT_MB",
 )
 
@@ -55,8 +56,22 @@ def test_gate_off_skips(monkeypatch, wired, caplog):
     install_mock.assert_not_called()
 
 
+def test_gate_on_without_apply_optin_reports_only(monkeypatch, wired):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
+    with (
+        patch.object(wired, "apply_sysctl") as apply_mock,
+        patch.object(wired, "install_plist") as install_mock,
+        patch.object(sys, "argv", ["configure-omlx-wired-limit.py"]),
+    ):
+        wired.main()
+    apply_mock.assert_not_called()
+    install_mock.assert_not_called()
+
+
 def test_default_limit_applied_and_installed(monkeypatch, wired):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "1")
     monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
     with (
         patch.object(wired, "apply_sysctl") as apply_mock,
@@ -72,6 +87,7 @@ def test_default_limit_applied_and_installed(monkeypatch, wired):
 
 def test_custom_limit_respected(monkeypatch, wired):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "1")
     monkeypatch.setenv("OMLX_WIRED_LIMIT_MB", "43008")
     monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
     with (
@@ -85,16 +101,24 @@ def test_custom_limit_respected(monkeypatch, wired):
 
 def test_limit_above_90pct_ram_refused(monkeypatch, wired):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "1")
     monkeypatch.setenv("OMLX_WIRED_LIMIT_MB", "49152")
     monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
-    with pytest.raises(SystemExit):
+    with (
+        patch.object(sys, "argv", ["configure-omlx-wired-limit.py"]),
+        pytest.raises(SystemExit),
+    ):
         wired.main()
 
 
 def test_invalid_limit_rejected(monkeypatch, wired):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "1")
     monkeypatch.setenv("OMLX_WIRED_LIMIT_MB", "huge")
-    with pytest.raises(SystemExit):
+    with (
+        patch.object(sys, "argv", ["configure-omlx-wired-limit.py"]),
+        pytest.raises(SystemExit),
+    ):
         wired.main()
 
 
