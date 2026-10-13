@@ -631,25 +631,16 @@ Plannotator CLI is installed via the existing install script. The paste backend 
 
 The canonical pinned OpenCode plugin set is maintained in
 `configs/opencode/opencode-plugins.json`: `oh-my-opencode-slim@3.0.1`,
-`@plannotator/opencode@0.27.21`, `opencode-plugin-openspec@0.1.4`,
-`opencode-vibeguard@0.1.0`, `@ramtinj95/opencode-tokenscope@1.8.1`,
-`opencode-planning-with-files@1.0.1`, `@slkiser/opencode-quota@4.10.2`, and
+`@plannotator/opencode@0.27.21`, `opencode-vibeguard@0.1.0`,
+`@ramtinj95/opencode-tokenscope@1.8.1`, `@slkiser/opencode-quota@4.10.8`, and
 `opencode-mem@2.26.0`. DCP has a separate dual core/TUI ownership contract;
 voice is TUI-owned.
-
-### Planning-with-Files
-
-Persistent planning state (`task_plan.md`, `findings.md`, `progress.md`) that survives crashes and compaction.
-
-- OpenCode plugin: `opencode-planning-with-files@1.0.1` (config-registered)
-- Skill distribution: every configured tool via `configs/skills/skills.core.json` (canonical cache + symlinks to all 10 tool skill directories)
-- Upstream: https://github.com/OthmanAdi/planning-with-files
 
 ### OpenCode Quota
 
 Quota/usage/cost surfaces for OpenCode sessions.
 
-- OpenCode plugin: `@slkiser/opencode-quota@4.10.2` (config-registered)
+- OpenCode plugin: `@slkiser/opencode-quota@4.10.8` (config-registered; pinned deliberately — upstream 5.x fails the OpenCode 1.19.0 plugin loader, see [docs/OPENCODE.md](docs/OPENCODE.md))
 - Sidecar config: `~/.config/opencode/opencode-quota/quota-toast.jsonc` (`enabledProviders: "auto"`)
 - Upstream: https://github.com/slkiser/opencode-quota
 
@@ -659,16 +650,6 @@ Persistent project/user memory with vector search.
 
 - OpenCode plugin: `opencode-mem@2.26.0` (opt-in via `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`; managed `~/.config/opencode/opencode-mem.jsonc`)
 - Upstream: https://github.com/tickernelz/opencode-mem
-
-### OpenSpec
-
-Spec-driven development (SDD) for AI coding assistants.
-
-- Install: `npm install -g @fission-ai/openspec@latest`
-- Init: `cd your-project && openspec init`
-- Commands: `/opsx:propose`, `/opsx:apply`, `/opsx:archive`
-- Plugin: `opencode-plugin-openspec` adds the `openspec-plan` agent for read-only planning
-- Telemetry: `OPENSPEC_TELEMETRY=0` and `DO_NOT_TRACK=1`
 
 ### Junie CLI
 

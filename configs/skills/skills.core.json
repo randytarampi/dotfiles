@@ -1,7 +1,7 @@
 {
   "$schema": "https://skills.sh/schema.json",
   "version": 1,
-  "$comment": "skills CLI 1.7.0 has no package version or revision constraint for source entries; planning-with-files remains source-managed until skills-lock support is adopted.",
+  "$comment": "skills CLI 1.7.0 has no package version or revision constraint for source entries.",
   "profiles": {
     "core": {
       "description": "Core skills always active for all agents and all repos — iamhumans, find-skills, codegraph, plannotator, key mattpocock engineering skills, cross-cutting tools",
@@ -21,8 +21,7 @@
         { "source": "mattpocock/skills", "name": "resolving-merge-conflicts" },
         { "source": "aws/agent-toolkit-for-aws", "name": "aws-billing-and-cost-management" },
         { "source": "vercel-labs/agent-browser", "name": "agent-browser" },
-        { "source": "vercel/turborepo", "name": "turborepo" },
-        { "source": "OthmanAdi/planning-with-files", "name": "planning-with-files" }
+        { "source": "vercel/turborepo", "name": "turborepo" }
       ]
     }
   }

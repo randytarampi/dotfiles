@@ -73,11 +73,9 @@ driven by the pinned canonical manifest at
 | `oh-my-opencode-slim@3.0.1` | Orchestrator agent suite (deepwork, skills distribution) |
 | `@tarquinen/opencode-dcp@latest` | Core dynamic context pruning; TUI entry is owned separately |
 | `@plannotator/opencode@0.27.21` | Interactive plan/code review UI |
-| `opencode-plugin-openspec@0.1.4` | OpenSpec planning agent |
 | `opencode-vibeguard@0.1.0` | Secrets redaction before LLM requests |
 | `@ramtinj95/opencode-tokenscope@1.8.1` | Token usage/cost reporting |
-| `opencode-planning-with-files@1.0.1` | Persistent planning state (task_plan/findings/progress) |
-| `@slkiser/opencode-quota@4.10.2` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`) |
+| `@slkiser/opencode-quota@4.10.8` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`); pinned — see note below |
 | `opencode-mem@2.26.0` | Persistent project/user memory with vector search |
 | Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
 
@@ -86,13 +84,15 @@ ownership: the pinned manifest contract does not govern its legacy core entry,
 while `configure-opencode-dcp.py` owns its `/dcp` TUI entry in `tui.json`.
 Voice remains TUI-owned and is configured by `configure-opencode-voice.py`.
 
-`planning-with-files` is additionally distributed as a **skill to every
-configured tool** via `configs/skills/skills.core.json` +
-`scripts/configure-skills.py` (canonical cache `~/.local/share/dotfiles/skills`,
-symlinked to `~/.agents`, OpenCode, Claude, Codex, Cursor, Junie, Copilot,
-Pi, Cortex, and Antigravity skill directories).
-The installed `skills` CLI currently supports no source version constraint, so
-the manifest records that limitation rather than inventing an unsupported key.
+> **Note (2026-10-13):** `@slkiser/opencode-quota` is pinned to `4.10.8`
+> deliberately: the upstream 5.x releases switch the plugin contract and fail
+> to load on OpenCode CLI 1.19.0 ("must default export an object with
+> server()"), which silently dropped the quota sidebar. 4.10.8 probed clean on
+> 1.19.0 (headless run, no plugin load errors). Revisit the pin when upstream
+> restores compatibility. Removed from the fleet in this round:
+> `opencode-plugin-openspec` (underutilized) and
+> `opencode-planning-with-files` (experiment retired) — see
+> `configs/opencode/opencode-plugins.json` for the live canonical set.
 
 ### Memory opt-in
 
@@ -127,10 +127,9 @@ of 2026-10-12:
   explicit error note.
 
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
-> (1.18.32). Live validation confirmed all load on v1; upstream `v2`
-> builds do not exist yet for `opencode-planning-with-files`,
-> `@slkiser/opencode-quota`, and `opencode-mem` — on an OpenCode v2
-> binary they fail the plugin loader (no v2 `default {id, setup}`).
+> (1.18.32). `@slkiser/opencode-quota` is now pinned (see note above); upstream
+> `v2` builds still do not exist for `opencode-mem` — on an OpenCode v2 binary
+> it fails the plugin loader (no v2 `default {id, setup}`).
 > Revisit before migrating to OpenCode v2.
 
 ## Tokenscope

@@ -15,13 +15,24 @@ def load_checker():
     return module
 
 
+def load_pinned_spec_loader():
+    spec = importlib.util.spec_from_file_location(
+        "opencode_plugins_loader", ROOT / "scripts/lib/opencode_plugins.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_manifest_matches_config_and_install_template():
     checker = load_checker()
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest
-    assert all(  # trufflehog:ignore - spec literals, not credentials.
-        spec.rsplit("@", 1)[1] == "latest" for spec in full_manifest
-    )
+    loader = load_pinned_spec_loader()
+    # trufflehog:ignore - spec literal, not a credential. Quota is pinned:
+    # upstream 5.x fails the OpenCode 1.19.0 plugin loader contract.
+    assert "@slkiser/opencode-quota@4.10.8" in full_manifest
+    assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
     manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
     assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
