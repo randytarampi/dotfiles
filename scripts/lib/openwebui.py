@@ -687,12 +687,13 @@ def reconcile(
             # gateway endpoint with a connection_type the rewritten proxy
             # catalogue no longer records (every proxy-mode owner is
             # openai/openai). Their desired state is gone, so they are
-            # deletable even on identity mismatch; off-gateway entries keep
-            # the fail-closed collision path.
+            # deletable even on identity mismatch if their prefix is a known
+            # former owner; other entries keep the fail-closed collision path.
             gateway_url = catalogue.get("litellm", {}).get("url", "")
             if (
                 proxy_enabled
                 and wanted is None
+                and previous_owner is not None
                 and gateway_url
                 and _canonicalize_host(existing.get("url", ""))
                 == _canonicalize_host(gateway_url)

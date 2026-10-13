@@ -18,8 +18,9 @@ Standard pre-deploy review for a newly pulled commit range.
    real `~/.env` (names only). Prefix-style greps miss whole key families
    (e.g. `DOTFILES_USE_*` sits outside `DOTFILES_OPENWEBUI|LITELLM|...`),
    so enumerate ALL key names first with
-   `grep -oE '^[# ]*[A-Z][A-Z0-9_]*=' ~/.env` and match candidates against
-   that list before any scoped, redacted value lookup. Required-vs-optional
+   `grep -oE '^[#[:space:]]*(export[[:space:]]+)?[A-Z][A-Z0-9_]*=' ~/.env | sed -E 's/^[#[:space:]]*(export[[:space:]]+)?//; s/=$//'`
+   and match candidates against the resulting variable names before any
+   scoped, redacted value lookup. Required-vs-optional
    is defined by gates the user already runs.
 3. **Migration**: note what `make migrate` does for this range (renames, OR
    migrations, appended keys) and that project `.opencode/.env` files are

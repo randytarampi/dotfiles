@@ -1575,13 +1575,16 @@ def test_identity_marks_fine_tune_variants_distinct():
     )
 
 
+@pytest.mark.parametrize("project_config", [False, True])
 def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, project_config
 ):
     """Invoke tier materialization itself and inspect its persisted output."""
     tier = _load_script("configure_opencode_tier", "configure-opencode-tier.py")
-    cfgdir = tmp_path / ".config/opencode"
-    cfgdir.mkdir(parents=True)
+    global_dir = tmp_path / ".config/opencode"
+    global_dir.mkdir(parents=True)
+    cfgdir = tmp_path / "project/.opencode" if project_config else global_dir
+    cfgdir.mkdir(parents=True, exist_ok=True)
     source = (
         Path(__file__).resolve().parents[3]
         / "configs/opencode/oh-my-opencode-slim.json"
@@ -1629,7 +1632,7 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
         canonical_allowlist_key(ref) if ref.startswith("google/") else ref
         for ref in inventory_ids
     }
-    consumer = cfgdir / "opencode.json"
+    consumer = global_dir / "opencode.json"
     consumer.write_text(
         json.dumps(
             {
@@ -1641,6 +1644,13 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
             }
         )
     )
+    if project_config:
+        (cfgdir.parent / "opencode.json").write_text(
+            json.dumps({"model": "litellm/openai/gpt-6-luna"})
+        )
+        (cfgdir / "opencode.json").write_text(
+            json.dumps({"provider": {"litellm": {"options": {"timeout": 12345}}}})
+        )
     with patch.dict(
         os.environ,
         {
