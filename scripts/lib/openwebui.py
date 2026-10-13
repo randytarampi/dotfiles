@@ -560,7 +560,14 @@ def _is_stock_openai_default(entry):
         return False
     if _canonicalize_host(entry.get("url", "")) != _canonicalize_host(STOCK_OPENAI_URL):
         return False
-    return _identity(entry) in STOCK_OPENAI_PREFIXES
+    if _identity(entry) not in STOCK_OPENAI_PREFIXES:
+        return False
+    config = entry.get("config", {})
+    return config.get("enable") is True and config.keys() <= {
+        "connection_type",
+        "enable",
+        "prefix_id",
+    }
 
 
 def _ownership_identity(url, connection_type, collection):

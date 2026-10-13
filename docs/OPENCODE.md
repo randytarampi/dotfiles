@@ -111,7 +111,7 @@ of 2026-10-12:
 
 - **Pillow is required in the LiteLLM venv** for Ollama image conversion.
   Without it, every image-bearing request to an `ollama/*` model fails with
-  HTTP 500 ("ollama image conversion failed please run pip install Pillow")
+  HTTP 500 ("ollama image conversion failed please run pip install Pillow"),
   and the model never sees the image. The proxy venv pins `Pillow==12.3.0`
   in `.chezmoiscripts/run_onchange_15-litellm.sh.tmpl`.
 - **Observe image payloads serially**: one image per `read` tool call and at

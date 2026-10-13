@@ -454,6 +454,50 @@ def _plain_default(url, collection):
     }
 
 
+@pytest.mark.parametrize("prefix", ["", "openai"])
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"enable": True, "model_ids": ["custom-model"]},
+        {"enable": True, "headers": {}},
+        {"enable": False},
+        {"enable": 1},
+        {"enable": "true"},
+        {},
+    ],
+)
+def test_proxy_preserves_customised_no_key_openai_entry(monkeypatch, prefix, config):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    user_entry = _plain_default("https://api.openai.com/v1", "openai")
+    user_entry["config"] = {"prefix_id": prefix, **config}
+
+    result = openwebui.reconcile([user_entry], [], desired)
+
+    assert result.status == "clean"
+    assert [item["action"] for item in result.plan.entries] == ["keep", "add"]
+    assert result.plan.entries[0]["entry"] == user_entry
+    assert result.plan.entries[1]["entry"] == desired["openai"][0]
+
+
+@pytest.mark.parametrize("prefix", ["", "openai"])
+def test_proxy_prunes_only_stock_no_key_openai_entry(monkeypatch, prefix):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    seed = _plain_default("https://api.openai.com/v1", "openai")
+    seed["config"]["prefix_id"] = prefix
+
+    result = openwebui.reconcile([seed], [], desired)
+
+    assert result.status == "clean"
+    assert [item["action"] for item in result.plan.entries] == ["delete", "add"]
+    assert result.plan.entries[0]["entry"] == seed
+
+
 def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     catalogue = openwebui.ownership_catalogue()
