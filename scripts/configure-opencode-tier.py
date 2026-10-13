@@ -35,6 +35,8 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 from constants import get_litellm_proxy_mode  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 
+OPENCODE_CONFIG_FILENAME = "opencode.json"
+
 
 def _csv_env(name):
     return [
@@ -48,10 +50,12 @@ def load_effective_opencode_config(config_dir):
     global_dir = os.path.realpath(
         os.path.join(os.path.expanduser("~"), ".config", "opencode")
     )
-    config_paths = [os.path.join(global_dir, "opencode.json")]
+    config_paths = [os.path.join(global_dir, OPENCODE_CONFIG_FILENAME)]
     if config_dir != global_dir:
-        config_paths.append(os.path.join(os.path.dirname(config_dir), "opencode.json"))
-        config_paths.append(os.path.join(config_dir, "opencode.json"))
+        config_paths.append(
+            os.path.join(os.path.dirname(config_dir), OPENCODE_CONFIG_FILENAME)
+        )
+        config_paths.append(os.path.join(config_dir, OPENCODE_CONFIG_FILENAME))
 
     def merge(target, overrides):
         """Recursively apply overrides to target, replacing non-dict values."""
