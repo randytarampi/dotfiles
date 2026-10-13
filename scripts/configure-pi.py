@@ -77,10 +77,32 @@ ROLE_TO_BUILTIN = {
 _model_details_cache = {}
 
 
+DEFAULT_CLIENT_CONTEXT_CAP = 131072
+UNKNOWN_CONTEXT_FALLBACK = 32768
+
+
 def _ollama_context_cap():
-    """Return the OLLAMA_CONTEXT_LENGTH cap (int), or 128000 if unset/invalid."""
+    """Return the OLLAMA_CONTEXT_LENGTH cap (int), or the client default."""
     env_ctx = os.environ.get("OLLAMA_CONTEXT_LENGTH", "")
-    return int(env_ctx) if env_ctx.isdigit() else 128000
+    return int(env_ctx) if env_ctx.isdigit() else DEFAULT_CLIENT_CONTEXT_CAP
+
+
+def resolve_effective_context_window(native, backend, client_policy=None):
+    """Resolve the advertised client window for any local backend.
+
+    131072 is the qualified long-context target on big-memory hosts; 32768 is
+    the floor when native context is unknown. ``client_policy`` can override
+    the backend-aware default for an individual client without changing server
+    allocation: this cap only controls Pi's reported context window.
+    """
+    cap = (
+        client_policy
+        if client_policy is not None
+        else (
+            _ollama_context_cap() if backend == "ollama" else DEFAULT_CLIENT_CONTEXT_CAP
+        )
+    )
+    return min(native if native is not None else UNKNOWN_CONTEXT_FALLBACK, cap)
 
 
 def _native_context(model_id, provider="ollama"):
@@ -107,23 +129,20 @@ def _model_details(model_id, provider="ollama"):
 def _model_context_window(model_id, local, provider="ollama"):
     """Context window to advertise for a model.
 
-    Local Ollama models are capped at min(OLLAMA_CONTEXT_LENGTH, native) so pi
-    never requests a window the model can't hold. Ollama cloud models use their
-    native window when available; other cloud/API models use the cap.
+    Local models are capped by resolve_effective_context_window() at
+    min(native-if-known, client cap) so Pi never requests a window the model
+    can't hold, with a 32768 floor when native context is unknown. Ollama
+    cloud models use their native window when available; other cloud/API
+    models use the cap.
     """
-    cap = _ollama_context_cap()
     if local:
         native = _native_context(model_id, provider)
-        engine = resolve_engine(provider)
-        if engine and engine.get("context_fallback") is not None:
-            return native or engine["context_fallback"]
-        if native:
-            return min(cap, native)
+        return resolve_effective_context_window(native, provider)
     elif is_ollama_cloud_model(model_id):
         native = _native_context(model_id)
         if native:
             return native
-    return cap
+    return _ollama_context_cap()
 
 
 def _compaction_tokens(local_refs):
@@ -174,8 +193,10 @@ def model_entry(model_id, name=None, local=False, provider="ollama"):
         "name": name or model_id,
         "reasoning": True,
         "input": ["text"],
-        "contextWindow": _model_context_window(model_id, local, provider),
-        "maxTokens": 32000,
+        "contextWindow": (
+            resolved_window := _model_context_window(model_id, local, provider)
+        ),
+        "maxTokens": max(4096, min(32768, resolved_window - 8192)),
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
         **(
             {
