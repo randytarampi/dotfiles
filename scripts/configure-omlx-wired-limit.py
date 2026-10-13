@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 # pyright: reportMissingImports=false
-"""Configure the macOS Metal wired-limit for oMLX (Apple Silicon only).
+"""Report or configure the macOS Metal wired-limit for oMLX (Apple Silicon only).
 
 Apple's default Metal cap is ~75% of RAM (iogpu.wired_limit_mb unset = 0).
 Models whose runtime footprint (weights + KV cache + buffers) exceeds that
 cap fail to load with HTTP 507 ("does not fit under the metal_cap memory
-ceiling"). This script applies the kernel knob immediately via sudo sysctl
-and installs a root LaunchDaemon (com.dotfiles.omlx-wired-limit) that
-re-applies it at every boot for persistence.
+ceiling"). By default this script only reports RAM and the current sysctl.
+Set DOTFILES_APPLY_OMLX_WIRED_LIMIT=1 to apply the limit via sudo sysctl and
+install a root LaunchDaemon that re-applies it at every boot. Without that
+LaunchDaemon, the sysctl value is not persistent. Revert with
+`sudo sysctl iogpu.wired_limit_mb=<value>`; reboot restores Apple's default
+only when no LaunchDaemon is installed.
 
 Env inputs:
   DOTFILES_RUN_OMLX_SETUP  Gate (default 0; script is a no-op unless 1).
-  OMLX_WIRED_LIMIT_MB      Desired wired limit in MB (default 40960).
+  OMLX_WIRED_LIMIT_MB      Desired wired limit in MB (default 40960; max 90% RAM).
+  DOTFILES_APPLY_OMLX_WIRED_LIMIT=1 explicitly opts in to writes.
 """
 
 from __future__ import annotations
@@ -293,7 +297,12 @@ def apply_sysctl(limit_mb: int, *, dry_run: bool) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Apply and persist the macOS Metal wired limit for oMLX."
+        description=(
+            "Report only by default. Set DOTFILES_APPLY_OMLX_WIRED_LIMIT=1 to "
+            "apply via sysctl and install a boot LaunchDaemon. Revert with "
+            "sudo sysctl iogpu.wired_limit_mb=<value>; reboot restores Apple's "
+            "default only when the LaunchDaemon is absent."
+        )
     )
     add_common_args(parser, no_backup=True)
     args = parser.parse_args()
@@ -305,9 +314,19 @@ def main() -> None:
     if not load_env():
         logger.warning("~/.env not found")
 
+    ram_mb = _physical_ram_mb()
+    current = _read_wired_limit()
+    logger.info(f"Physical RAM: {ram_mb} MB; current {SYSCTL_KEY}: {current} MB")
     if os.environ.get("DOTFILES_RUN_OMLX_SETUP", "0") != "1":
         logger.info(
             f"DOTFILES_RUN_OMLX_SETUP='{os.environ.get('DOTFILES_RUN_OMLX_SETUP', '0')}' — skipping oMLX wired-limit configuration"
+        )
+        return
+
+    if os.environ.get("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "0") != "1":
+        logger.info(
+            "Report-only mode. Set DOTFILES_APPLY_OMLX_WIRED_LIMIT=1 to apply; "
+            "revert with 'sudo sysctl iogpu.wired_limit_mb=<value>' or reboot."
         )
         return
 
