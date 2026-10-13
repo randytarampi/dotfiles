@@ -103,17 +103,43 @@ fi
 INSTALLED_VERSION="$("$VENV_DIR/bin/python" -c 'import importlib.metadata as m; print(m.version("open-webui"))' 2>/dev/null || true)"
 if [[ -n "$INSTALLED_VERSION" && "$INSTALLED_VERSION" != "$VERSION" && -f "$DATA_DIR/webui.db" ]]; then
   # Version changes migrate webui.db irreversibly (see docs/CHAT_FRONTEND.md);
-  # stop the service, snapshot the database (+ WAL/SHM), then upgrade. The
+  # stop the service, snapshot the database (+ WAL/SHM), then upgrade. Use
+  # SQLite's online backup if the service remains active. The
   # service is restarted by the wiring below, so a brief outage is expected.
   info "Open WebUI version change ${INSTALLED_VERSION} → ${VERSION}: stopping service and backing up database..."
-  openwebui_service_stop 2>/dev/null || warn "Open WebUI service could not be stopped cleanly; backup continues from the running state"
+  if [[ "$OS_NAME" == "linux" ]]; then
+    systemctl --user stop open-webui.service 2>/dev/null || warn "Open WebUI service could not be stopped cleanly"
+  else
+    openwebui_service_stop 2>/dev/null || warn "Open WebUI service could not be stopped cleanly"
+  fi
   BACKUP_PATH="$DATA_DIR/webui.db.bak-$(date +%Y%m%d-%H%M%S)-pre-upgrade-${INSTALLED_VERSION}"
-  cp -p "$DATA_DIR/webui.db" "$BACKUP_PATH" || die "Failed to back up webui.db before upgrading to ${VERSION}"
-  for companion in -wal -shm; do
-    if [[ -f "$DATA_DIR/webui.db${companion}" ]]; then
-      cp -p "$DATA_DIR/webui.db${companion}" "$BACKUP_PATH${companion}" 2>/dev/null || true
+  (
+    umask 077
+    if { [[ "$OS_NAME" == "darwin" ]] && launchctl print "$(openwebui_service_domain)/com.openwebui.web" >/dev/null 2>&1; } ||
+      { [[ "$OS_NAME" == "linux" ]] && systemctl --user is-active --quiet open-webui.service; } ||
+      pgrep -f "$VENV_DIR/bin/open-webui serve" >/dev/null 2>&1; then
+      warn "Open WebUI service remains active; using SQLite online backup for webui.db"
+      "$VENV_DIR/bin/python" - "$DATA_DIR/webui.db" "$BACKUP_PATH" <<'PY' || die "Failed to back up webui.db before upgrading to ${VERSION}"
+from contextlib import closing
+import sqlite3
+import sys
+
+with closing(sqlite3.connect(sys.argv[1])) as source, closing(sqlite3.connect(sys.argv[2])) as backup:
+    source.backup(backup)
+PY
+    else
+      cp "$DATA_DIR/webui.db" "$BACKUP_PATH" || die "Failed to back up webui.db before upgrading to ${VERSION}"
+      for companion in -wal -shm; do
+        if [[ -f "$DATA_DIR/webui.db${companion}" ]]; then
+          if ! cp "$DATA_DIR/webui.db${companion}" "$BACKUP_PATH${companion}" 2>/dev/null ||
+            ! chmod 600 "$BACKUP_PATH${companion}"; then
+            warn "Failed to back up webui.db${companion}; backup may be incomplete"
+          fi
+        fi
+      done
     fi
-  done
+    chmod 600 "$BACKUP_PATH" || die "Failed to secure webui.db backup before upgrading to ${VERSION}"
+  )
   ok "Pre-upgrade backup: $BACKUP_PATH"
 fi
 if ! "$VENV_DIR/bin/python" -m pip install -q "open-webui==${VERSION}"; then

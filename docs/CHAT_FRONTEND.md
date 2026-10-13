@@ -300,7 +300,7 @@ converges on exactly one managed OpenAI connection — the owned `litellm`
 prefix — and Open WebUI lists only the LiteLLM catalogue through it. The
 per-provider rewrites it replaces kept every provider connection pointed at
 the same proxy endpoint, each re-exporting the entire catalogue under its own
-Prefix ID (the 540-models listing: 77 model IDs × 7 connections). In proxy
+Prefix ID (the 539-models listing: 77 model IDs × 7 connections). In proxy
 mode the reconciler also prunes upstream's no-key `https://api.openai.com/v1`
 default entry (prefix `openai` or none, empty stored key) as a duplicate seed
 next to the managed gateway connection; key-bearing or otherwise customised
