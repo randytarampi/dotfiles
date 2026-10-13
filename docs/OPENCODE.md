@@ -107,13 +107,25 @@ The OpenCode `@observer` lane routes through the LiteLLM proxy using the role
 model from `DOTFILES_ROLE_MODELS` (e.g.
 `observer=ollama/gemma4:12b-mxfp8`, bridged by
 `scripts/configure-opencode-tier.py`). Requirements and observed practice as
-of 2026-10-12:
+of 2026-10-13:
 
 - **Pillow is required in the LiteLLM venv** for Ollama image conversion.
   Without it, every image-bearing request to an `ollama/*` model fails with
   HTTP 500 ("ollama image conversion failed please run pip install Pillow"),
   and the model never sees the image. The proxy venv pins `Pillow==12.3.0`
   in `.chezmoiscripts/run_onchange_15-litellm.sh.tmpl`.
+- **Proxy vision path validated (2026-10-13)**: a direct
+  `/v1/chat/completions` probe through LiteLLM to
+  `ollama/gemma4:12b-mxfp8` with an `image_url` payload transcribed a
+  synthetic test image verbatim (text and shape colours correct). The
+  Pillow pin plus the Ollama bridge are therefore healthy end to end.
+- **Treat `@observer` image reports as unverified at OpenCode v1.19.0**:
+  dispatching a single-image probe returned a plausible, well-formatted
+  report whose content was hallucinated from the surrounding prompt — the
+  image never reached the model — and a headless primary read stalled.
+  Until this is fixed, corroboration rules apply: require verbatim strings
+  from the payload in the report, or fall back to reading the image
+  directly (orchestrator/`@observer`-independent probes).
 - **Observe image payloads serially**: one image per `read` tool call and at
   most two images per `@observer` dispatch. Three-image payloads to
   `ollama/gemma4:12b-mxfp8` were observed to stall through the `ollama/`
@@ -121,10 +133,13 @@ of 2026-10-12:
   dispatches.
 - **The final message must be the report**:
   `~/.config/opencode/oh-my-opencode-slim/observer_append.md` appends
-  guardrails to the bundled observer prompt (applies on the next OpenCode
-  run): complete plain-text report after the last read, never a pending or
-  serialized tool call, and partial success still emits observations plus an
-  explicit error note.
+  guardrails to the bundled observer prompt (verified in the installed
+  OMO-Slim plugin source; per-agent append files load for all bundled
+  agents on the next OpenCode run): complete plain-text report after the
+  last read, never a pending or serialized tool call, state nothing as
+  fact that was not seen in the payload, and partial success still emits
+  observations plus an explicit error note. The file ships untracked —
+  create it on new machines when the observer lane is in use.
 
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
 > (1.18.32). `@slkiser/opencode-quota` is now pinned (see note above); upstream
