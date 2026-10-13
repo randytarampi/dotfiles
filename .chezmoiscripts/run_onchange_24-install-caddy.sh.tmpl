@@ -8,7 +8,7 @@ set -euo pipefail
 # scripts/lib/caddy_domains.py: {{ include "scripts/lib/caddy_domains.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.11.4" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret presence fingerprint: {{ if env "WEBUI_SECRET_KEY" }}set{{ else }}unset{{ end }}:{{ if env "WEBUI_ADMIN_PASSWORD" }}set{{ else }}unset{{ end }}:{{ if env "OPENWEBUI_API_KEY" }}set{{ else }}unset{{ end }}
 
 {{- if eq .chezmoi.os "darwin" }}

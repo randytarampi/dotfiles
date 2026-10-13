@@ -14,10 +14,17 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def _run_backup(
-    tmp_path, *, active=False, process_active=False, platform="darwin", failed_copy=""
+    tmp_path,
+    *,
+    active=False,
+    process_active=False,
+    platform="darwin",
+    failed_copy="",
+    installed_version="0.11.4",
+    version="0.12.0",
 ):
     template = (ROOT / ".chezmoiscripts/run_onchange_30-openwebui.sh.tmpl").read_text()
-    start = template.index('if [[ -n "$INSTALLED_VERSION"')
+    start = template.index('if [[ -f "$DATA_DIR/webui.db" &&')
     end = template.index('if ! "$VENV_DIR/bin/python" -m pip install')
     home = tmp_path / "home"
     plist = home / "Library/LaunchAgents/com.openwebui.web.plist"
@@ -27,6 +34,7 @@ def _run_backup(
     (venv / "bin").mkdir(parents=True, exist_ok=True)
     (venv / "bin/python").symlink_to(sys.executable)
     trace = tmp_path / "service.log"
+    trace.write_text("")
     script = f"""
 set -euo pipefail
 source {shlex.quote(str(ROOT / 'scripts/lib/openwebui_service.sh'))}
@@ -59,8 +67,8 @@ printf 'upgrade-reached\\n'
             "HOME": str(home),
             "DATA_DIR": str(tmp_path / "data"),
             "VENV_DIR": str(venv),
-            "INSTALLED_VERSION": "0.11.4",
-            "VERSION": "0.12.0",
+            "INSTALLED_VERSION": installed_version,
+            "VERSION": version,
             "OS_NAME": platform,
             "ACTIVE": "1" if active else "0",
             "PROCESS_ACTIVE": "1" if process_active else "0",
@@ -98,11 +106,12 @@ def test_stopped_backup_secures_database_and_companions(tmp_path):
     backups = sorted(database.parent.glob("webui.db.bak-*"))
     assert len(backups) == 3
     for backup in backups:
-        suffix = (
-            "-wal"
-            if backup.name.endswith("-wal")
-            else "-shm" if backup.name.endswith("-shm") else ""
-        )
+        if backup.name.endswith("-wal"):
+            suffix = "-wal"
+        elif backup.name.endswith("-shm"):
+            suffix = "-shm"
+        else:
+            suffix = ""
         assert backup.read_bytes() == Path(str(database) + suffix).read_bytes()
         assert backup.stat().st_mode & 0o777 == 0o600
     assert events == [
@@ -175,3 +184,32 @@ def test_main_backup_failure_aborts_upgrade(tmp_path, active):
     assert result.returncode != 0
     assert "Failed to back up webui.db before upgrading to 0.12.0" in result.stderr
     assert "upgrade-reached" not in result.stdout
+
+
+def test_unknown_installed_version_still_backs_up(tmp_path):
+    database = _database(tmp_path)
+
+    result, events = _run_backup(tmp_path, installed_version="")
+
+    assert result.returncode == 0, result.stderr
+    backups = list(database.parent.glob("webui.db.bak-*-pre-upgrade-unknown"))
+    assert len(backups) == 1
+    assert backups[0].stat().st_mode & 0o777 == 0o600
+    assert "Pre-upgrade backup:" in result.stdout
+    assert "pre-upgrade-unknown" in result.stdout
+    assert events == [
+        f"bootout gui/{os.getuid()}/com.openwebui.web",
+        f"print gui/{os.getuid()}/com.openwebui.web",
+    ]
+    assert "upgrade-reached" in result.stdout
+
+
+def test_matching_installed_version_skips_backup(tmp_path):
+    database = _database(tmp_path)
+
+    result, events = _run_backup(tmp_path, installed_version="0.12.0", version="0.12.0")
+
+    assert result.returncode == 0, result.stderr
+    assert list(database.parent.glob("webui.db.bak-*")) == []
+    assert events == []
+    assert "upgrade-reached" in result.stdout
