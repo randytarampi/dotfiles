@@ -15,8 +15,12 @@ Standard pre-deploy review for a newly pulled commit range.
 2. **Env surface**: diff `dot_dotfiles/shell/.env.example` and
    `scripts/migrate-env-gates.py` — every new/renamed/deprecated key is an
    operator decision. Check which are active, commented, or absent in the
-   real `~/.env` (names only). Required-vs-optional is defined by gates the
-   user already runs.
+   real `~/.env` (names only). Prefix-style greps miss whole key families
+   (e.g. `DOTFILES_USE_*` sits outside `DOTFILES_OPENWEBUI|LITELLM|...`),
+   so enumerate ALL key names first with
+   `grep -oE '^[# ]*[A-Z][A-Z0-9_]*=' ~/.env` and match candidates against
+   that list before any scoped, redacted value lookup. Required-vs-optional
+   is defined by gates the user already runs.
 3. **Migration**: note what `make migrate` does for this range (renames, OR
    migrations, appended keys) and that project `.opencode/.env` files are
    deliberately excluded.
