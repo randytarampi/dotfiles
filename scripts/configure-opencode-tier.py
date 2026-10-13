@@ -49,7 +49,14 @@ def resolve_opencode_config_path(config_dir):
         return config_path
     project_root_config = os.path.join(os.path.dirname(config_dir), "opencode.json")
     if os.path.isfile(project_root_config):
+        logger.info("Consumer config resolved from %s", project_root_config)
         return project_root_config
+    global_config = os.path.join(
+        os.path.expanduser("~"), ".config", "opencode", "opencode.json"
+    )
+    if os.path.isfile(global_config):
+        logger.info("Consumer config resolved from %s", global_config)
+        return global_config
     return config_path
 
 

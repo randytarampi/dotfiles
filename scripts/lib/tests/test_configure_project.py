@@ -152,30 +152,67 @@ class ProjectOverridesGlobalTests(unittest.TestCase):
 
 
 class TierProjectConfigPathTests(unittest.TestCase):
-    def test_resolves_project_root_config_when_opencode_dir_has_none(self):
-        with tempfile.TemporaryDirectory() as project:
-            opencode_dir = Path(project) / ".opencode"
-            opencode_dir.mkdir()
-            root_config = Path(project) / "opencode.json"
-            root_config.write_text("{}\n", encoding="utf-8")
-
-            self.assertEqual(
-                configure_opencode_tier.resolve_opencode_config_path(str(opencode_dir)),
-                str(root_config),
-            )
-
     def test_prefers_opencode_dir_config_when_present(self):
-        with tempfile.TemporaryDirectory() as project:
+        with (
+            tempfile.TemporaryDirectory() as project,
+            tempfile.TemporaryDirectory() as home,
+        ):
             opencode_dir = Path(project) / ".opencode"
             opencode_dir.mkdir()
             nested_config = opencode_dir / "opencode.json"
             nested_config.write_text("{}\n", encoding="utf-8")
             (Path(project) / "opencode.json").write_text("{}\n", encoding="utf-8")
+            global_dir = Path(home) / ".config" / "opencode"
+            global_dir.mkdir(parents=True)
+            (global_dir / "opencode.json").write_text("{}\n", encoding="utf-8")
 
-            self.assertEqual(
-                configure_opencode_tier.resolve_opencode_config_path(str(opencode_dir)),
-                str(nested_config),
-            )
+            with mock.patch.dict(os.environ, {"HOME": home}):
+                self.assertEqual(
+                    configure_opencode_tier.resolve_opencode_config_path(
+                        str(opencode_dir)
+                    ),
+                    str(nested_config),
+                )
+
+    def test_resolves_project_root_config_when_opencode_dir_has_none(self):
+        with (
+            tempfile.TemporaryDirectory() as project,
+            tempfile.TemporaryDirectory() as home,
+        ):
+            opencode_dir = Path(project) / ".opencode"
+            opencode_dir.mkdir()
+            root_config = Path(project) / "opencode.json"
+            root_config.write_text("{}\n", encoding="utf-8")
+            global_dir = Path(home) / ".config" / "opencode"
+            global_dir.mkdir(parents=True)
+            (global_dir / "opencode.json").write_text("{}\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"HOME": home}):
+                self.assertEqual(
+                    configure_opencode_tier.resolve_opencode_config_path(
+                        str(opencode_dir)
+                    ),
+                    str(root_config),
+                )
+
+    def test_uses_global_config_when_project_has_no_consumer_config(self):
+        with (
+            tempfile.TemporaryDirectory() as project,
+            tempfile.TemporaryDirectory() as home,
+        ):
+            opencode_dir = Path(project) / ".opencode"
+            opencode_dir.mkdir()
+            global_config = Path(home) / ".config" / "opencode" / "opencode.json"
+            global_config.parent.mkdir(parents=True)
+            global_config.write_text("{}\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"HOME": home}):
+                self.assertEqual(
+                    configure_opencode_tier.resolve_opencode_config_path(
+                        str(opencode_dir)
+                    ),
+                    str(global_config),
+                )
 
     def test_unresolvable_global_tier_writes_conservatively(self):
         with tempfile.TemporaryDirectory() as home:
