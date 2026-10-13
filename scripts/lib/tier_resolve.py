@@ -341,6 +341,7 @@ def resolve_roles_from_list(
                 "codestral",
                 "laguna",
                 "ornith",
+                "mellum",
             ]
         ):
             category = "code-gen"
