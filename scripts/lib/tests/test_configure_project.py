@@ -16,6 +16,14 @@ assert PROJECT_SPEC is not None and PROJECT_SPEC.loader is not None
 configure_project = importlib.util.module_from_spec(PROJECT_SPEC)
 PROJECT_SPEC.loader.exec_module(configure_project)
 
+TIER_SPEC = importlib.util.spec_from_file_location(
+    "configure_opencode_tier",
+    os.path.join(TESTS_DIR, "..", "..", "configure-opencode-tier.py"),
+)
+assert TIER_SPEC is not None and TIER_SPEC.loader is not None
+configure_opencode_tier = importlib.util.module_from_spec(TIER_SPEC)
+TIER_SPEC.loader.exec_module(configure_opencode_tier)
+
 
 def make_args(
     preset=None,
@@ -141,6 +149,33 @@ class ProjectOverridesGlobalTests(unittest.TestCase):
                         make_args(preset="pro-plus")
                     )
                 )
+
+
+class TierProjectConfigPathTests(unittest.TestCase):
+    def test_resolves_project_root_config_when_opencode_dir_has_none(self):
+        with tempfile.TemporaryDirectory() as project:
+            opencode_dir = Path(project) / ".opencode"
+            opencode_dir.mkdir()
+            root_config = Path(project) / "opencode.json"
+            root_config.write_text("{}\n", encoding="utf-8")
+
+            self.assertEqual(
+                configure_opencode_tier.resolve_opencode_config_path(str(opencode_dir)),
+                str(root_config),
+            )
+
+    def test_prefers_opencode_dir_config_when_present(self):
+        with tempfile.TemporaryDirectory() as project:
+            opencode_dir = Path(project) / ".opencode"
+            opencode_dir.mkdir()
+            nested_config = opencode_dir / "opencode.json"
+            nested_config.write_text("{}\n", encoding="utf-8")
+            (Path(project) / "opencode.json").write_text("{}\n", encoding="utf-8")
+
+            self.assertEqual(
+                configure_opencode_tier.resolve_opencode_config_path(str(opencode_dir)),
+                str(nested_config),
+            )
 
     def test_unresolvable_global_tier_writes_conservatively(self):
         with tempfile.TemporaryDirectory() as home:
