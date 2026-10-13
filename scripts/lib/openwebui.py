@@ -563,11 +563,14 @@ def _is_stock_openai_default(entry):
     if _identity(entry) not in STOCK_OPENAI_PREFIXES:
         return False
     config = entry.get("config", {})
-    return config.get("enable") is True and config.keys() <= {
-        "connection_type",
-        "enable",
-        "prefix_id",
-    }
+    if config.get("enable") is not True:
+        return False
+    if config.keys() - {"connection_type", "enable", "prefix_id"}:
+        return False
+    # Upstream seed is OpenAI-protocol (or omits connection_type). A customised
+    # non-OpenAI value must survive proxy-mode pruning.
+    connection_type = config.get("connection_type")
+    return connection_type is None or connection_type == "openai"
 
 
 def _ownership_identity(url, connection_type, collection):

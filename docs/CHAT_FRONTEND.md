@@ -266,12 +266,12 @@ frontend.
     separately installed application with its own auth. "Localhost-only"
     (loopback) and "private network" (Tailscale/LAN) are distinct exposure
     modes and never conflated.
-6. **No LiteLLM gateway initially.** oMLX speaks OpenAI + Anthropic, but the
-  reconciler registers it OpenAI-only; Ollama is built in and both UIs connect
-  directly. LiteLLM becomes a documented
-   escalation if provider count, aliasing or fallback behaviour
-   grow — it is *not* part of the initial build (avoids over-layering; Mozart
-   already exists for the OpenCode side).
+6. **LiteLLM gateway is opt-in, not default.** Direct provider connections
+   remain the default path (oMLX is registered OpenAI-only; Ollama is native).
+   With `DOTFILES_USE_LITELLM_PROXY=1` and LiteLLM setup enabled, the reconciler
+   collapses to one managed gateway connection — see the reconciler contract
+   below. Leave the proxy off unless catalogue aliasing or multi-client gateway
+   behaviour is actually needed; Mozart already covers OpenCode-side routing.
 7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs
    an immutable versioned release — exact pip version or a digest-pinned
    image, updated deliberately. Moving tags (`main`, `main-slim`) are *not*
@@ -300,7 +300,7 @@ converges on exactly one managed OpenAI connection — the owned `litellm`
 prefix — and Open WebUI lists only the LiteLLM catalogue through it. The
 per-provider rewrites it replaces kept every provider connection pointed at
 the same proxy endpoint, each re-exporting the entire catalogue under its own
-Prefix ID (the 539-models listing: 77 model IDs × 7 connections). In proxy
+Prefix ID (the 539-model listing: 77 model IDs × 7 connections). In proxy
 mode the reconciler also prunes upstream's no-key `https://api.openai.com/v1`
 default entry (prefix `openai` or none, empty stored key) as a duplicate seed
 next to the managed gateway connection; key-bearing or otherwise customised
@@ -595,7 +595,8 @@ connection and MCP credentials.
 - No subscription-proxying of ChatGPT Plus/Claude Pro (ToS + fragility).
 - No Meridian-as-chat-backend unless both the technical and authorization
   conditions in the design principles pass.
-- No LiteLLM/OpenRouter gateway layer in the initial build.
+- No forced LiteLLM/OpenRouter gateway — direct mode stays the default; the
+  proxy is an explicit opt-in (design principle 6 and the reconciler contract).
 - No direct Open Terminal socket or Caddy route; its registered chat access is
   the explicit app-authenticated LAN decision. Computer remains separately
   installed and independently exposed, if adopted.
@@ -634,10 +635,11 @@ live-validated against `open-webui==0.11.4`:
    as a reconciler-managed `meridian` connection whenever
    `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
-2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.11.4}`
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.12.0}`
    in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
    3.14 unsupported upstream). LaunchAgent behaviour verified live
    (KeepAlive respawn works; see the bootout/bootstrap retry note below).
+   Early Phase 4 validation was against 0.11.4; the pinned default is 0.12.0.
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
    `chat.<CADDY_DOMAIN>`, LAN-only by default with the explicit
    `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
