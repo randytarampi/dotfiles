@@ -1333,7 +1333,8 @@ def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
     # q8_0 → 8-bit enabled; profiles without TurboQuant keys gain them;
     # unmanaged keys preserved
     env = {"OLLAMA_KV_CACHE_TYPE": "q8_0"}
-    changed = local_engines.sync_turboquant_kv(settings_file, env)
+    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+        changed = local_engines.sync_turboquant_kv(settings_file, env)
     assert changed == 2
     document = json.loads(settings_file.read_text())
     m1 = document["models"]["m1"]
@@ -1344,14 +1345,16 @@ def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
     assert document["models"]["m2"]["turboquant_kv_enabled"] is True
     assert document["models"]["m2"]["turboquant_kv_bits"] == 8
     # Idempotent: re-run with the same env → no changes
-    assert local_engines.sync_turboquant_kv(settings_file, env) == 0
+    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+        assert local_engines.sync_turboquant_kv(settings_file, env) == 0
     # q4_0 → 4-bit (both models flip)
-    assert (
-        local_engines.sync_turboquant_kv(
-            settings_file, {"OLLAMA_KV_CACHE_TYPE": "q4_0"}
+    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+        assert (
+            local_engines.sync_turboquant_kv(
+                settings_file, {"OLLAMA_KV_CACHE_TYPE": "q4_0"}
+            )
+            == 2
         )
-        == 2
-    )
     assert (
         json.loads(settings_file.read_text())["models"]["m1"]["turboquant_kv_bits"] == 4
     )
@@ -1371,6 +1374,86 @@ def test_sync_turboquant_kv_untouched_without_kv_type(tmp_path):
         == 0
     )
     assert json.loads(settings_file.read_text()) == original
+
+
+def test_sync_turboquant_kv_seeds_discovered_models_and_is_idempotent(
+    tmp_path, monkeypatch
+):
+    settings_file = tmp_path / "model_settings.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "models": {"existing": {"custom": "keep", "turboquant_kv_bits": 4}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models_strict",
+        lambda provider: [{"name": "existing"}, {"name": "new-model"}],
+    )
+    writes = []
+    original_replace = os.replace
+
+    def counted_replace(source, destination):
+        writes.append(destination)
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", counted_replace)
+    env = {"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+
+    assert local_engines.sync_turboquant_kv(settings_file, env) == 2
+    document = json.loads(settings_file.read_text(encoding="utf-8"))
+    expected_policy = {
+        "turboquant_kv_enabled": True,
+        "turboquant_kv_bits": 8,
+        "turboquant_skip_last": True,
+    }
+    assert document["models"]["existing"] == {
+        "custom": "keep",
+        **expected_policy,
+    }
+    assert document["models"]["new-model"] == expected_policy
+    assert local_engines.sync_turboquant_kv(settings_file, env) == 0
+    assert len(writes) == 1
+
+
+def test_omlx_turboquant_doctor_status(tmp_path, monkeypatch):
+    verify = _load_script("verify_config", "verify-config.py")
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models_strict",
+        lambda provider: [{"name": "ready"}, {"name": "pending"}],
+    )
+    settings = tmp_path / ".omlx/model_settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "ready": {
+                        "turboquant_kv_enabled": True,
+                        "turboquant_kv_bits": 8,
+                        "turboquant_skip_last": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    message, incomplete = verify.omlx_turboquant_status(home=tmp_path, environ={})
+    assert message == "oMLX TurboQuant KV: applied 1 of 2 discovered models"
+    assert incomplete is True
+
+    monkeypatch.setattr(
+        local_engines, "iter_engine_models_strict", lambda provider: None
+    )
+    assert verify.omlx_turboquant_status(home=tmp_path, environ={}) == (
+        "oMLX TurboQuant KV: discovery unavailable (UNKNOWN)",
+        None,
+    )
 
 
 def test_junie_pool_profile_specs_gate_off_unchanged(monkeypatch):
