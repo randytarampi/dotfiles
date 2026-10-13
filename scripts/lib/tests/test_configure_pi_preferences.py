@@ -60,6 +60,24 @@ def test_local_model_context_remains_capped_by_native_window():
     native_context.assert_called_once_with("provider/model", "ollama")
 
 
+@pytest.mark.parametrize(
+    ("native", "backend", "expected"),
+    [
+        (131072, "omlx", 131072),
+        (None, "omlx", 32768),
+        (200000, "ollama", 131072),
+    ],
+)
+def test_effective_context_window(native, backend, expected):
+    assert configure_pi.resolve_effective_context_window(native, backend) == expected
+
+
+@pytest.mark.parametrize(("window", "expected"), [(32768, 24576), (131072, 32768)])
+def test_model_entry_max_tokens_reserve(window, expected, monkeypatch):
+    monkeypatch.setattr(configure_pi, "_model_context_window", lambda *_args: window)
+    assert configure_pi.model_entry("model")["maxTokens"] == expected
+
+
 def codified_settings():
     """Fresh-install settings matching the codified defaults in configure-pi.py."""
     return {
