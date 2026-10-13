@@ -761,6 +761,25 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
     assert routed["presets"]["free"]["fast"]["model"] == "litellm/opencode/big-pickle"
 
 
+@pytest.mark.parametrize("owner", ["ollama", "omlx", "llamacpp"])
+def test_opencode_slim_keeps_local_engine_selections_direct(
+    owner, tmp_path, monkeypatch
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    slim = {"roles": {"observer": {"model": f"{owner}/fixture-model"}}}
+    consumer = {"provider": {"litellm": {"models": {}}}}
+
+    routed = configure_opencode.apply_litellm_slim_gate(slim, consumer)
+
+    assert routed["roles"]["observer"]["model"] == f"{owner}/fixture-model"
+
+
 def test_configure_opencode_local_provider_emits_modalities():
     """Vision-capable engine models must declare image input so OpenCode's
     client-side attachment gating accepts screenshots (registry-generic)."""

@@ -340,7 +340,10 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
         Path("~/.local/share/litellm/clients/opencode.key").expanduser().resolve()
     )
     base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    # Local Ollama and gated local-engine models are direct endpoints, not
+    # LiteLLM aliases; project and global inventories can omit their catalogues.
     direct_exceptions = {"meridian"}
+    local_owners = {"ollama", "omlx", "llamacpp"}
 
     def rewrite_model(value):
         if (
@@ -371,6 +374,8 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
                 if item.split("/", 1)[0] == "anthropic"
                 and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
             ]
+        if not matches and owner in local_owners:
+            return value
         if len(matches) != 1:
             if (
                 owner == "github-copilot"
