@@ -31,6 +31,7 @@ STOCK_OPENAI_PREFIXES = ("", "openai")
 
 
 def _litellm_client_key(env_name):
+    """Read the Open WebUI key file; raise RuntimeError if missing or empty."""
     path = os.path.expanduser("~/.local/share/litellm/clients/openwebui.key")
     try:
         value = open(path, encoding="utf-8").read().strip()
@@ -549,6 +550,7 @@ def _equal(current, wanted):
 
 
 def _managed(entry):
+    """Return whether the connection carries the dotfiles ownership marker."""
     return entry.get("config", {}).get(MANAGED_MARKER_KEY) == MANAGED_MARKER_VALUE
 
 
@@ -562,6 +564,7 @@ def _is_stock_openai_default(entry):
 
 
 def _ownership_identity(url, connection_type, collection):
+    """Return a canonical endpoint, protocol and collection ownership tuple."""
     return (_root(_canonicalize_host(url)), connection_type, collection)
 
 
@@ -574,6 +577,12 @@ def _catalogue_identity(owner):
 def reconcile(
     current_openai, current_ollama, desired, *, namespace=MANAGED_PREFIX_NAMESPACE
 ):
+    """Plan connection changes and report ownership collisions without writing.
+
+    Compare current and previous routing catalogues to migrate managed entries
+    between direct and proxy modes. Preserve unrelated user connections and
+    retain collection snapshots in the returned ReconcileResult.
+    """
     catalogue = ownership_catalogue()
     previous_catalogue = ownership_catalogue(not constants.get_litellm_proxy_mode())
     proxy_enabled = constants.get_litellm_proxy_mode()

@@ -252,6 +252,7 @@ def test_ollama_managed_connection_mode_round_trip_is_idempotent(monkeypatch):
 def test_litellm_non_default_port_used_for_ownership_and_desired_state(
     monkeypatch, tmp_path
 ):
+    """Proxy ownership and the sole desired connection use the configured port."""
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("LITELLM_PORT", "4567")
@@ -271,6 +272,7 @@ def test_litellm_non_default_port_used_for_ownership_and_desired_state(
 
 
 def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
+    """Direct/proxy round trips converge while preserving a user connection."""
     monkeypatch.setenv("OPENAI_API_KEY", "openai-test-key")
     monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "webui-key")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
@@ -283,6 +285,7 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
     state = {"openai": [user], "ollama": []}
 
     def desired_for_mode(proxy):
+        """Build gateway or OpenAI/Ollama desired entries for the selected mode."""
         monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if proxy else "0")
         computed = openwebui.compute_desired_state()
         if proxy:
@@ -306,6 +309,7 @@ def test_mixed_managed_connections_migrate_both_directions(monkeypatch):
         }
 
     def reconcile_mode(proxy):
+        """Apply a mode's plan, assert ownership and return a stable snapshot."""
         desired = desired_for_mode(proxy)
         result = openwebui.reconcile(state["openai"], state["ollama"], desired)
         assert result.status == "clean", result.collisions
