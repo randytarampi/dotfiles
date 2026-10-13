@@ -77,7 +77,7 @@
     },
     "meridian-haiku": {
       "provider": "meridian",
-      "primaryModel": "claude-haiku-4-5"
+      "primaryModel": "claude-haiku-5-5"
     },
     "meridian-fable": {
       "provider": "meridian",

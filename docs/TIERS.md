@@ -166,19 +166,19 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 | orchestrator | `claude-sonnet-5-5` | — |
 | oracle | `claude-fable-5-1` | xhigh |
 | librarian | `gpt-6-luna` | low |
-| explorer | `claude-haiku-4-5` | low |
+| explorer | `claude-haiku-5-5` | low |
 | designer | `claude-sonnet-5-5` | medium |
 | fixer | `gpt-6-luna` | high |
-| observer | `claude-haiku-4-5` | low |
+| observer | `claude-haiku-5-5` | low |
 | council | `claude-opus-5-5` | xhigh |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
 `openai/gpt-6.1-sol`, and γ `anthropic/claude-sonnet-5-5` (model-default
 variants). Fallbacks follow the configured cross-provider chains: `gpt-6.1-sol` then
-Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku then
+Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku 5.5 then
 `ollama-cloud/deepseek-v4.1-flash` for librarian; Luna then
-`ollama-cloud/deepseek-v4.1-flash` for explorer; Haiku then
+`ollama-cloud/deepseek-v4.1-flash` for explorer; Haiku 5.5 then
 `ollama-cloud/kimi-k2.7-code` for fixer; Luna then Flash for designer; and
 Luna then Flash for observer.
 
@@ -190,11 +190,11 @@ Anthropic-only preset with no OpenAI or Ollama Cloud providers:
 |------|-------|---------|
 | orchestrator | `claude-sonnet-5-5` | — |
 | oracle | `claude-fable-5-1` | xhigh |
-| librarian | `claude-haiku-4-5` | low |
-| explorer | `claude-haiku-4-5` | low |
+| librarian | `claude-haiku-5-5` | low |
+| explorer | `claude-haiku-5-5` | low |
 | designer | `claude-sonnet-5-5` | medium |
-| fixer | `claude-haiku-4-5` | high |
-| observer | `claude-haiku-4-5` | low |
+| fixer | `claude-haiku-5-5` | high |
+| observer | `claude-haiku-5-5` | low |
 
 Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `claude-sonnet-5-5`, gamma `claude-opus-5-5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Orchestrator now uses `claude-sonnet-5-5` (swapped from opus-5 for cost optimization). Empty fallback chains by default — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
@@ -207,10 +207,10 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | orchestrator | `openai/gpt-6.1-sol` | high |
 | oracle | `anthropic/claude-fable-5-1` | xhigh |
 | librarian | `openai/gpt-6-luna` | low |
-| explorer | `anthropic/claude-haiku-4-5` | low |
+| explorer | `anthropic/claude-haiku-5-5` | low |
 | designer | `anthropic/claude-sonnet-5-5` | medium |
-| fixer | `anthropic/claude-haiku-4-5` | high |
-| observer | `anthropic/claude-haiku-4-5` | low |
+| fixer | `anthropic/claude-haiku-5-5` | high |
+| observer | `anthropic/claude-haiku-5-5` | low |
 | council | `anthropic/claude-opus-5-5` | xhigh |
 
 Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
@@ -596,7 +596,8 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `claude-opus-4-6` | standard | — | Legacy model retained in registry only; no active Anthropic preset roles |
 | `claude-sonnet-5-5` | standard | — | Used for orchestrator (no variant), designer (medium), council beta (no variant), plus-anthropic council fallback; no synth role (opus-5-5) |
 | `claude-fable-5-1` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
-| `claude-haiku-4-5` | standard | `low/high` | Librarian/explorer/observer use low; fixer uses high |
+| `claude-haiku-4-5` | standard | `low/high` | Legacy model retained in the catalogue; no active preset roles |
+| `claude-haiku-5-5` | standard | `low/high` | 1M context, 128K max output; librarian/explorer/observer use low, fixer uses high |
 | `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Installed Cloud stub remains managed, but the bare direct LiteLLM alias is absent; no active tier role uses it. |
 | `gpt-5.6-terra` | retired | — | Absent from OpenAI's live catalog since 2026-10-01; still served by OpenCode Zen |

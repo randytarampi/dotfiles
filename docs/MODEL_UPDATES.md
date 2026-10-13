@@ -130,6 +130,12 @@ without following this document's normal review flow.
  - oMLX integration (commits `9108204` and `d37d124`): opt-in gate `DOTFILES_RUN_OMLX_SETUP`, merged local pool with Ollama collision precedence, OpenCode/Junie/Pi/ACP/Codex/voice/Caddy wiring, and live model drift checks.
  - Tier-selection alignment (commits `d59ec3e`, `0d8510a`, `858cd39`): oMLX models now classify on the same basis as Ollama models — discovery derives real `size_gb`, MLX-style names parse parameter counts (first size token wins; `4bit`/`8bit` quant suffixes never match), and MoE status infers from `A<n>B` markers when server metadata omits it, so dense-beats-MoE reasoning ordering works identically (`omlx/Qwen3.8-27B-MLX-4bit` tops reasoning; `gemma-4-12B` classifies lightweight/vision instead of Qwen misreading as lightweight). The merged pool prefers the oMLX entry for engine-equivalent models — same `(family, params)` identity, e.g. `omlx/gemma-4-12B-it-MLX-8bit` over `ollama/gemma4:12b-mxfp8` — while distinct models are kept. `DOTFILES_ROLE_MODELS` now bridges into `configure-pi.py` (mirroring `configure-opencode-tier.py`), and applied role overrides log after materialization for auditability.
 
+## 2026-10-13 — Haiku 5.5 adoption
+
+- Replaced active Anthropic Haiku 4.5 preset and Meridian profile references with `claude-haiku-5-5`; retained Haiku 4.5 in the provider and LiteLLM catalogues as a legacy model.
+- Added the new provider catalogue entry and LiteLLM flat rates: $0.10 input/$0.50 output per 1M tokens for prompts up to 100K. Anthropic's >100K prompt rates are $0.50/$2.50 per 1M; the rates schema has no prompt-size pricing tiers, so those higher rates are recorded here only.
+- Anthropic reports 1M context, 128K maximum output, vision and tools. Model and pricing evidence supplied for this update was verified 2026-10-13; runtime inference was not tested in this offline lane.
+
 ## 2026-10-09: OpenRouter Ling free-route retirement
 
 - OpenRouter made `inclusionai/ling-3.0-flash-sante` paid (prompt $0.042/1M, completion $0.1232/1M) and removed the `:free` variant from the catalogue; no GLM-family free id remains upstream.
