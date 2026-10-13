@@ -690,14 +690,13 @@ def reconcile(
             # deletable even on identity mismatch if their prefix is a known
             # former owner; other entries keep the fail-closed collision path.
             gateway_url = catalogue.get("litellm", {}).get("url", "")
-            if (
-                proxy_enabled
-                and wanted is None
-                and previous_owner is not None
-                and gateway_url
-                and _canonicalize_host(existing.get("url", ""))
-                == _canonicalize_host(gateway_url)
-            ):
+            stale_known_owner = (
+                proxy_enabled and wanted is None and previous_owner is not None
+            )
+            at_gateway = bool(gateway_url) and _canonicalize_host(
+                existing.get("url", "")
+            ) == _canonicalize_host(gateway_url)
+            if stale_known_owner and at_gateway:
                 plan.entries.append(
                     {
                         "action": "delete",
