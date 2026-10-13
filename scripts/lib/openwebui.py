@@ -563,7 +563,10 @@ def _is_stock_openai_default(entry):
     if _identity(entry) not in STOCK_OPENAI_PREFIXES:
         return False
     config = entry.get("config", {})
-    if config.get("enable") is not True:
+    # open-webui 0.12.0's config migration drops 'enable' from migrated
+    # entries; a missing flag is still the stock seed, while an explicit
+    # non-true value means the entry was customised and must survive.
+    if config.get("enable", True) is not True:
         return False
     if config.keys() - {"connection_type", "enable", "prefix_id"}:
         return False
@@ -678,6 +681,29 @@ def reconcile(
                             "before": copy.deepcopy(existing),
                         }
                     )
+                continue
+            # Degenerate proxy-collapse case: stale managed entries migrated
+            # from the previous per-provider proxy topology sit at the
+            # gateway endpoint with a connection_type the rewritten proxy
+            # catalogue no longer records (every proxy-mode owner is
+            # openai/openai). Their desired state is gone, so they are
+            # deletable even on identity mismatch; off-gateway entries keep
+            # the fail-closed collision path.
+            gateway_url = catalogue.get("litellm", {}).get("url", "")
+            if (
+                proxy_enabled
+                and wanted is None
+                and gateway_url
+                and _canonicalize_host(existing.get("url", ""))
+                == _canonicalize_host(gateway_url)
+            ):
+                plan.entries.append(
+                    {
+                        "action": "delete",
+                        "collection": collection,
+                        "entry": copy.deepcopy(existing),
+                    }
+                )
                 continue
             # owner == prefix and the entry's identity matches its catalogue
             # owner: authoritative match. The reverse map is unreliable when
