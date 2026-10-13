@@ -463,7 +463,10 @@ def _plain_default(url, collection):
         {"enable": False},
         {"enable": 1},
         {"enable": "true"},
-        {},
+        # NB: {} was historically kept as "customised", but open-webui
+        # 0.12.0's config migration produces exactly that shape for the
+        # stock seed, so it moved to the prune side
+        # (test_proxy_prunes_migrated_stock_seed_without_enable).
     ],
 )
 def test_proxy_preserves_customised_no_key_openai_entry(monkeypatch, prefix, config):
@@ -519,6 +522,82 @@ def test_proxy_preserves_no_key_openai_entry_with_non_openai_connection_type(
     assert [item["action"] for item in result.plan.entries] == ["keep", "add"]
     assert result.plan.entries[0]["entry"] == user_entry
     assert result.plan.entries[1]["entry"] == desired["openai"][0]
+
+
+@pytest.mark.parametrize("prefix", ["", "openai"])
+def test_proxy_prunes_migrated_stock_seed_without_enable(monkeypatch, prefix):
+    """open-webui 0.12.0's config migration drops 'enable' from the stock
+    seed (config becomes an empty object); in proxy mode it must still be
+    recognised as the prunable duplicate next to the gateway connection."""
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    seed = {
+        "url": "https://api.openai.com/v1",
+        "key": "",
+        "config": {"prefix_id": prefix},
+        "collection": "openai",
+    }
+
+    result = openwebui.reconcile([seed], [], desired)
+
+    assert result.status == "clean"
+    assert [item["action"] for item in result.plan.entries] == ["delete", "add"]
+    assert result.plan.entries[0]["entry"] == seed
+
+
+def test_proxy_collapse_deletes_managed_stale_gateway_entries_with_mismatched_type(
+    monkeypatch,
+):
+    """Migration from the old per-provider proxy topology: managed entries at
+    the gateway endpoint whose connection_type the rewritten catalogue no
+    longer records (every proxy-mode owner is openai/openai) must stay
+    deletable so the collapse applies instead of aborting on collision."""
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    gateway = desired["openai"][0]["url"]
+    user_entry = {
+        "url": "http://127.0.0.1:1234/v1",
+        "key": "user-key",
+        "config": {"enable": True, "prefix_id": ""},
+        "collection": "openai",
+    }
+    current = [
+        _entry("omlx", gateway),
+        _entry("meridian", gateway, kind="anthropic"),
+        user_entry,
+    ]
+
+    result = openwebui.reconcile(current, [], desired)
+
+    assert result.status == "clean", (result.plan.entries, result.collisions)
+    assert [item["action"] for item in result.plan.entries] == [
+        "delete",
+        "delete",
+        "keep",
+        "add",
+    ]
+    assert result.collisions == []
+
+
+def test_proxy_collision_remains_fail_closed_off_gateway(monkeypatch):
+    """The relaxation is scoped to entries physically at the gateway
+    endpoint; stale managed entries elsewhere keep the collision abort."""
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_litellm_client_key", lambda _: "client-key")
+    desired = openwebui.compute_desired_state()
+    stale = _entry("meridian", "http://elsewhere/v1", kind="anthropic")
+
+    result = openwebui.reconcile([stale], [], desired)
+
+    assert result.status == "collision"
+    assert not any(
+        item["action"] in {"update", "delete"} for item in result.plan.entries
+    )
 
 
 def test_unmanaged_duplicate_url_of_managed_entry_is_deleted(monkeypatch):
