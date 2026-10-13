@@ -22,17 +22,6 @@ fi
 info "Installing standalone AI CLI tools..."
 
 if command -v npm >/dev/null 2>&1; then
-  if npm list -g @fission-ai/openspec >/dev/null 2>&1; then
-    ok "openspec CLI already installed globally"
-  else
-    info "Installing @fission-ai/openspec globally..."
-    if npm install -g @fission-ai/openspec@latest 2>/dev/null; then
-      ok "openspec CLI installed globally"
-    else
-      warn "openspec CLI install failed"
-    fi
-  fi
-
   if npm list -g @colbymchenry/codegraph >/dev/null 2>&1; then
     ok "codegraph CLI already installed globally"
   else

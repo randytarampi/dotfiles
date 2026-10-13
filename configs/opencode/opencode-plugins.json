@@ -4,11 +4,9 @@
   "plugins": [
     "oh-my-opencode-slim@latest",
     "@plannotator/opencode@latest",
-    "opencode-plugin-openspec@latest",
     "opencode-vibeguard@latest",
     "@ramtinj95/opencode-tokenscope@latest",
-    "opencode-planning-with-files@latest",
-    "@slkiser/opencode-quota@latest",
+    "@slkiser/opencode-quota@4.10.8",
     "opencode-mem@latest"
   ],
   "gated": {
