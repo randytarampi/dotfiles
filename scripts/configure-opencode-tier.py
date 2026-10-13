@@ -42,6 +42,17 @@ def _csv_env(name):
     ]
 
 
+def resolve_opencode_config_path(config_dir):
+    """Find the OpenCode consumer config, including project-root configs."""
+    config_path = os.path.join(config_dir, "opencode.json")
+    if os.path.isfile(config_path):
+        return config_path
+    project_root_config = os.path.join(os.path.dirname(config_dir), "opencode.json")
+    if os.path.isfile(project_root_config):
+        return project_root_config
+    return config_path
+
+
 def filter_omlx_models_for_gate(models):
     """Exclude oMLX entries when its opt-in gate is disabled."""
     if all(
@@ -303,7 +314,7 @@ def orchestrate_tier_switch(
         if dry_run:
             logger.info("Would apply LiteLLM transport mapping to materialized tier")
         else:
-            opencode_config_path = os.path.join(config_dir, "opencode.json")
+            opencode_config_path = resolve_opencode_config_path(config_dir)
             try:
                 with open(opencode_config_path, encoding="utf-8") as f:
                     consumer_config = json.load(f)
