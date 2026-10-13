@@ -17,6 +17,24 @@ import opencode_config
 import tier_resolve
 
 
+def test_mellum_model_is_classified_as_code_gen():
+    model = {"name": "mellum-6b-mlx-4bit", "provider": "ollama"}
+    details = {
+        "param_count": 6,
+        "capabilities": [],
+        "architecture": None,
+        "embedding_length": None,
+        "context_length": None,
+        "quantization": None,
+        "is_moe": False,
+    }
+
+    with patch.object(tier_resolve, "get_model_details", return_value=details):
+        classified = tier_resolve.resolve_roles_from_list([model])
+
+    assert classified["code-gen"] == "ollama/mellum-6b-mlx-4bit"
+
+
 def test_get_preset_providers_extracts_provider_prefixes():
     assert opencode_config.get_preset_providers("pro-plus") == {
         "openai",
