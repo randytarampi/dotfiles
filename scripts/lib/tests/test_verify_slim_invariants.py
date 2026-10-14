@@ -71,6 +71,68 @@ def test_preset_violations_accepts_matching_synthesizer_and_members():
     assert INVARIANTS._preset_violations(presets, council_presets, tiers) == []
 
 
+def _profile_fixture():
+    roles = {
+        role: {"model": f"_local:{cap}"}
+        for role, cap in {
+            "orchestrator": "code-gen",
+            "oracle": "reasoning",
+            "librarian": "lightweight",
+            "explorer": "lightweight",
+            "designer": "code-gen",
+            "fixer": "code-gen",
+            "observer": "vision",
+        }.items()
+    }
+    presets, councils, tiers = {}, {}, {}
+    for tier, name in (
+        ("local-quiet", "quiet"),
+        ("local", "balanced"),
+        ("local-loud", "loud"),
+    ):
+        presets[tier] = {**roles, "council": {"model": "_local:reasoning"}}
+        councils[tier] = {
+            seat: {"model": "_local:reasoning"} for seat in ("alpha", "beta", "gamma")
+        }
+        tiers[tier] = {
+            "profile": {"name": name},
+            "fallback": {},
+            "council": {"presets": {tier: None}},
+        }
+    return presets, councils, tiers
+
+
+def test_profile_invariants_accept_compliant_family():
+    assert INVARIANTS._profile_violations(*_profile_fixture()) == []
+
+
+def test_profile_family_invariant_rejects_unknown_profile_name():
+    presets, councils, tiers = _profile_fixture()
+    tiers["local"]["profile"]["name"] = "travel"
+    assert any(
+        "expected 'balanced'" in issue
+        for issue in INVARIANTS._profile_violations(presets, councils, tiers)
+    )
+
+
+def test_profile_placeholder_invariant_rejects_nonlocal_role_reference():
+    presets, councils, tiers = _profile_fixture()
+    presets["local"]["oracle"]["model"] = "openai/gpt-x"
+    assert any(
+        "not a _local:" in issue
+        for issue in INVARIANTS._profile_violations(presets, councils, tiers)
+    )
+
+
+def test_lane_alias_invariant_rejects_flex_role_reference():
+    presets, councils, tiers = _profile_fixture()
+    presets["local"]["oracle"]["model"] = "openai/gpt-x-flex"
+    assert any(
+        "service-lane alias" in issue
+        for issue in INVARIANTS._profile_violations(presets, councils, tiers)
+    )
+
+
 def test_preset_violations_flags_nested_synthesizer_variant_drift():
     presets, council_presets, tiers = _fixtures(
         top_variant="max", nested_variant="high"

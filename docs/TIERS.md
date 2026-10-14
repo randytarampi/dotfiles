@@ -35,6 +35,22 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama + oMLX under the gate (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
+| **local-quiet** | Local profile — low-residency, single resident model posture | Quiet local work with specialists kept out of the resident set |
+| **local** | Local profile — balanced default | Balanced local model selection |
+| **local-loud** | Local profile — quality-first, specialists on demand | Maximum local quality; specialist models may be admitted as needed |
+
+These profile tiers share the same placeholder map: orchestrator/designer/fixer
+use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer
+use `_local:lightweight`, and observer uses `_local:vision`. Profile policy ranks
+and admits discovered models at resolution time; the placeholders remain the
+configuration contract.
+
+### Measured Local Profile Contracts
+
+| Hardware / path | Quiet | Balanced (`local`) | Loud |
+|-----------------|-------|--------------------|------|
+| M3/M5, Mellum6 path | UNKNOWN | 131072 context (measured) | UNKNOWN |
+| Other hardware / model paths | UNKNOWN | UNKNOWN | UNKNOWN |
 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.

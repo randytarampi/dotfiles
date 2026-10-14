@@ -32,6 +32,7 @@ Exit codes:
 
 import json
 import re
+import re
 import sys
 from pathlib import Path
 
@@ -352,25 +353,28 @@ def _preset_violations(presets, council_presets, tiers):
     tier_names = set(tiers)
     all_names = preset_names | council_names | tier_names
 
+    profile_councils = {
+        name for name in tier_names if (tiers.get(name) or {}).get("profile")
+    }
     for label, names in (
         ("presets", preset_names),
-        ("council.presets", council_names),
+        ("council.presets", council_names | profile_councils),
         ("_tiers", tier_names),
     ):
         for name in sorted(all_names - names):
             violations.append(f"{label} is missing preset name {name!r}")
 
     for tier in sorted(tier_names):
-        tier_council = tiers.get(tier, {}).get("council", {})
+        tier_council = (tiers.get(tier) or {}).get("council") or {}
         tier_presets = tier_council.get("presets", {})
-        if set(tier_presets) != {tier}:
+        if not isinstance(tier_presets, dict) or set(tier_presets) != {tier}:
             violations.append(
                 f"_tiers.{tier}.council.presets names {sorted(tier_presets)}; "
                 f"expected [{tier!r}]"
             )
 
-        top_preset = council_presets.get(tier, {})
-        nested_preset = tier_presets.get(tier, {})
+        top_preset = council_presets.get(tier) or {}
+        nested_preset = tier_presets.get(tier) or {}
         for member in ("alpha", "beta", "gamma"):
             top_model = _model(top_preset.get(member))
             nested_model = _model(nested_preset.get(member))
@@ -383,6 +387,8 @@ def _preset_violations(presets, council_presets, tiers):
 
         top_synth = _model(presets.get(tier, {}).get("council"))
         nested_synth = _model(nested_preset.get("council"))
+        if tier_presets.get(tier) is None:
+            continue
         if (top_synth is None) != (nested_synth is None) or (
             top_synth is not None and top_synth != nested_synth
         ):
@@ -405,6 +411,61 @@ def _preset_violations(presets, council_presets, tiers):
     return violations
 
 
+def _profile_violations(presets, council_presets, tiers):
+    """Validate profile-family metadata, local placeholders, and lane aliases."""
+    violations = []
+    family = {"local-quiet": "quiet", "local": "balanced", "local-loud": "loud"}
+    for tier, expected in family.items():
+        preset = presets.get(tier)
+        block = tiers.get(tier)
+        if not isinstance(preset, dict):
+            violations.append(f"profile family is missing presets.{tier}")
+        if not isinstance(block, dict):
+            violations.append(f"profile family is missing _tiers.{tier}")
+        elif (block.get("profile") or {}).get("name") != expected:
+            actual = (block.get("profile") or {}).get("name")
+            violations.append(
+                f"_tiers.{tier}.profile.name = {actual!r}; expected {expected!r}"
+            )
+        if isinstance(preset, dict) and not isinstance(preset.get("council"), dict):
+            violations.append(f"presets.{tier}.council shape is missing")
+        if isinstance(block, dict):
+            council = block.get("council")
+            if not isinstance(council, dict) or not isinstance(
+                council.get("presets"), dict
+            ):
+                violations.append(f"_tiers.{tier}.council.presets shape is missing")
+            if not isinstance(block.get("fallback"), dict):
+                violations.append(f"_tiers.{tier}.fallback shape is missing")
+
+    for tier, block in tiers.items():
+        if not isinstance(block, dict) or "profile" not in block:
+            continue
+        checks = [
+            (f"presets.{tier}", presets.get(tier)),
+            (f"council.presets.{tier}", council_presets.get(tier)),
+        ]
+        nested = ((block.get("council") or {}).get("presets") or {}).get(tier)
+        checks.append((f"_tiers.{tier}.council.presets.{tier}", nested))
+        for path, tree in checks:
+            if tree is None:
+                continue
+            for model_path, model in _iter_model_values(tree, path):
+                if not model.startswith("_local:"):
+                    violations.append(
+                        f"{model_path} = {model!r} is not a _local: placeholder"
+                    )
+
+    for label, root in (("presets", presets), ("council.presets", council_presets)):
+        for tier, tree in root.items():
+            for path, model in _iter_model_values(tree, f"{label}.{tier}"):
+                if re.search(r"-(?:flex|fast)$", model):
+                    violations.append(
+                        f"{path} = {model!r} uses a forbidden service-lane alias"
+                    )
+    return violations
+
+
 def main():
     if not SLIM_PATH.exists():
         print(f"✗ {SLIM_PATH} not found")
@@ -419,6 +480,7 @@ def main():
 
     violations = []
     violations.extend(_preset_violations(presets, council_presets, tiers))
+    violations.extend(_profile_violations(presets, council_presets, tiers))
     violations.extend(_model_allowlist_violations(data))
     violations.extend(_offline_model_parity_violations())
 
