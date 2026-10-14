@@ -64,7 +64,7 @@ info "Configuring opencode..."
 
 # Determine tier based on available API keys and CLI authentication
 detect_tier DOTFILES_OPENCODE_TIER
-info "Local tiers (local-pro, local-mini, local-nano, local-solo) are available via DOTFILES_OPENCODE_TIER"
+info "Manual-only local tier: local-solo (set via DOTFILES_OPENCODE_TIER)"
 
 # Forward local fallback configuration from environment variables
 build_tier_extra_args

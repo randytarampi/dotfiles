@@ -175,6 +175,36 @@ class TierRegistryTests(unittest.TestCase):
         self.assertIn("observer", roles)
         self.assertIn("orchestrator", roles)
 
+    def test_deprecated_tiers_resolve_to_local_and_warn_once(self):
+        data = registry()
+        tier_registry._WARNED_TIER_ALIASES.clear()
+        for alias in ("local-pro", "local-mini", "local-nano"):
+            with (
+                self.subTest(alias=alias),
+                patch.object(tier_registry.logger, "warning") as warning,
+            ):
+                self.assertEqual(
+                    tier_registry.get_preset(data, alias),
+                    tier_registry.get_preset(data, "local"),
+                )
+                tier_registry.get_preset(data, alias)
+                warning.assert_called_once_with(
+                    "tier '%s' is deprecated; resolving to '%s'", alias, "local"
+                )
+
+    def test_deprecated_tier_aliases_are_documented_and_absent_from_registry(self):
+        data = registry()
+        aliases = set(tier_registry.DEPRECATED_TIER_ALIASES)
+        readme = (Path(__file__).resolve().parents[3] / "README.md").read_text()
+        self.assertIn("Fourteen presets", readme)
+        self.assertEqual(aliases, {"local-pro", "local-mini", "local-nano"})
+        self.assertTrue(aliases.isdisjoint(data["presets"]))
+        self.assertTrue(aliases.isdisjoint(data["_tiers"]))
+
+    def test_unknown_tier_still_fails(self):
+        with self.assertRaises(KeyError):
+            tier_registry.get_preset(registry(), "not-a-tier")
+
     def test_openai_primary_generation_mapping(self):
         data = registry()
         for tier in ("plus", "omo-slim-openai", "omo-slim-thirty-dollars"):
@@ -313,7 +343,7 @@ class TierRegistryTests(unittest.TestCase):
     def test_role_override_does_not_change_category(self):
         roles = tier_registry.materialize_role_models(
             registry(),
-            "local-pro",
+            "local",
             {"code-gen": "ollama/code", "reasoning": "ollama/reason"},
             ["fixer=ollama/fixer"],
         )
@@ -323,9 +353,7 @@ class TierRegistryTests(unittest.TestCase):
     def test_placeholder_override_changes_all_roles(self):
         categories = {"code-gen": "ollama/code", "reasoning": "ollama/reason"}
         tier_registry.apply_placeholder_overrides(categories, ["code-gen=ollama/new"])
-        roles = tier_registry.materialize_role_models(
-            registry(), "local-pro", categories
-        )
+        roles = tier_registry.materialize_role_models(registry(), "local", categories)
         self.assertEqual(roles["orchestrator"], "ollama/new")
         self.assertEqual(roles["fixer"], "ollama/new")
 

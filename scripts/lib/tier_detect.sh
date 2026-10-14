@@ -59,8 +59,8 @@ detect_tier() {
     fi
   fi
 
-  # Tier auto-detection — covers all 11 tiers (6 cloud + 5 local)
-  # local-pro, local-mini, local-nano, local-solo are manual-only (set via override var)
+  # Tier auto-detection — six cloud presets + the local profile family
+  # local-solo is manual-only (set via override var)
   if [[ -n "$override_value" ]]; then
     TIER="$override_value"
     info "Tier override from ${override_var}: $TIER"

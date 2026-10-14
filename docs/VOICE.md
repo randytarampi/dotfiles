@@ -21,10 +21,7 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
-| **local-pro** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
 | **local** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
-| **local-mini** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
-| **local-nano** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
 | **local-solo** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
