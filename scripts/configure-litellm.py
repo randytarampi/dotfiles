@@ -7,6 +7,7 @@ import hashlib
 import os
 import json
 import shlex
+import subprocess
 import sys
 import tempfile
 import urllib.parse
@@ -33,32 +34,49 @@ GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 
 
 def validate_service_lane_runtime():
-    """Validate installed LiteLLM service-tier filtering and model metadata shape."""
-    try:
-        from importlib.metadata import version
-        import litellm
-        from litellm.utils import get_optional_params
+    """Validate service-tier filtering and metadata in the managed gateway venv."""
+    python = Path("~/.local/share/litellm/venv/bin/python").expanduser()
+    probe = """
+import json
+from importlib.metadata import version
+import litellm
+from litellm.utils import get_optional_params
 
-        installed_version = version("litellm")
-        params = get_optional_params(
-            model="openai/gpt-6.1-sol",
-            custom_llm_provider="openai",
-            drop_params=True,
-            service_tier="flex",
+params = get_optional_params(
+    model="openai/gpt-6.1-sol",
+    custom_llm_provider="openai",
+    drop_params=True,
+    service_tier="flex",
+)
+if params.get("service_tier") != "flex":
+    raise RuntimeError("service_tier was dropped with drop_params=True")
+info = litellm.get_model_info("gpt-6.1-sol")
+print(json.dumps({
+    "version": version("litellm"),
+    "metadata_path": "top-level model_info" if isinstance(info, dict) else "unknown",
+}))
+"""
+    try:
+        result = subprocess.run(  # nosec B603 - fixed probe in the managed gateway interpreter.
+            [str(python), "-I", "-c", probe],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
         )
-        if params.get("service_tier") != "flex":
-            raise RuntimeError("service_tier was dropped with drop_params=True")
-        info = litellm.get_model_info("gpt-6.1-sol")
-        metadata_path = "top-level model_info" if isinstance(info, dict) else "unknown"
+        evidence = json.loads(result.stdout)
         logger.info(
             "LiteLLM service-lane runtime validation VERIFIED: version=%s; "
             "service_tier survives drop_params; pricing lookup uses %s",
-            installed_version,
-            metadata_path,
+            evidence["version"],
+            evidence["metadata_path"],
         )
         return True
     except Exception as error:
-        logger.warning("LiteLLM service-lane runtime validation UNVERIFIED: %s", error)
+        logger.warning(
+            "LiteLLM service-lane runtime validation UNVERIFIED: %s",
+            getattr(error, "stderr", None) or error,
+        )
         return False
 
 
