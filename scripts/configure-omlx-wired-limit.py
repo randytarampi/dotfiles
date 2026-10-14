@@ -326,7 +326,8 @@ def main() -> None:
     if os.environ.get("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "0") != "1":
         logger.info(
             "Report-only mode. Set DOTFILES_APPLY_OMLX_WIRED_LIMIT=1 to apply; "
-            "revert with 'sudo sysctl iogpu.wired_limit_mb=<value>' or reboot."
+            "revert with 'sudo sysctl iogpu.wired_limit_mb=<value>'. Reboot is "
+            "not a rollback while the boot LaunchDaemon remains installed."
         )
         return
 
