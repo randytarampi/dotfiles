@@ -411,6 +411,14 @@ def main():
         help="Preferred interface: active OpenCode tier to set",
     )
     args = parser.parse_args()
+    # Accept the deprecated tier names everywhere (choices include them via
+    # get_available_tiers); resolve to canonical presets before use so
+    # forwarded children never receive an alias.
+    args.preset = tier_registry.resolve_deprecated_tier(args.preset)
+    if args.local_fallback_preset:
+        args.local_fallback_preset = tier_registry.resolve_deprecated_tier(
+            args.local_fallback_preset
+        )
     if args.role_models is None:
         args.role_models = _csv_env("DOTFILES_ROLE_MODELS")
         if not args.role_models and os.environ.get("DOTFILES_LOCAL_FALLBACK_ROLES"):

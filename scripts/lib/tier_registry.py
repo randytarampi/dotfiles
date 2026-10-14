@@ -52,14 +52,20 @@ def load_registry(slim_path: Optional[str] = None) -> Dict[str, Any]:
     return registry
 
 
-def get_preset(registry: Dict, tier: str) -> Dict[str, Any]:
-    resolved_tier = DEPRECATED_TIER_ALIASES.get(tier, tier)
-    if resolved_tier != tier and tier not in _WARNED_TIER_ALIASES:
-        logger.warning(
-            "tier '%s' is deprecated; resolving to '%s'", tier, resolved_tier
-        )
+def resolve_deprecated_tier(tier: str) -> str:
+    """Map a deprecated tier name to its canonical preset, warning once.
+
+    Unknown (non-alias) names pass through unchanged.
+    """
+    resolved = DEPRECATED_TIER_ALIASES.get(tier, tier)
+    if resolved != tier and tier not in _WARNED_TIER_ALIASES:
+        logger.warning("tier '%s' is deprecated; resolving to '%s'", tier, resolved)
         _WARNED_TIER_ALIASES.add(tier)
-    return registry["presets"][resolved_tier]
+    return resolved
+
+
+def get_preset(registry: Dict, tier: str) -> Dict[str, Any]:
+    return registry["presets"][resolve_deprecated_tier(tier)]
 
 
 def collect_placeholder_categories(value: Optional[str]) -> Optional[str]:
