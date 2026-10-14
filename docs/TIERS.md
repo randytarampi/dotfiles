@@ -35,9 +35,9 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama + oMLX under the gate (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
-| **local-quiet** | Local profile — low-residency, single resident model posture | Quiet local work with specialists kept out of the resident set |
+| **local-quiet** | Local profile — low-residency, single resident model posture | Quiet local work with specialists kept out of the resident set; policy ranks selections but does not enforce single-residency or shared-daemon concurrency |
 | **local** | Local profile — balanced default | Balanced local model selection |
-| **local-loud** | Local profile — quality-first, specialists on demand | Maximum local quality; specialist models may be admitted as needed |
+| **local-loud** | Local profile — quality-first, specialists on demand; sequential-until-measured | Maximum local quality; specialist models may be admitted as needed (concurrency headroom unmeasured) |
 
 These profile tiers share the same placeholder map: orchestrator/designer/fixer
 use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer
