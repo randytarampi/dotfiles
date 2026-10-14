@@ -751,9 +751,20 @@ def _apply_profile_policy(
             m for m in classified["lightweight"] if "gemma" in m.get("name", "").lower()
         ]
         qualified = [m for m in gemmas if _gemma_qualified(m)]
+
+        def _quiet_size_key(m):
+            # Mirror _size_sort_key so sizing falls back through the name
+            # tag (e.g. "gemma4-14b" where the detail lookup omits the
+            # count) instead of treating an unknown size as zero.
+            name_count = extract_param_count(m.get("name", ""))
+            if name_count > 0:
+                return name_count
+            show_count = m.get("param_count")
+            if show_count is not None and show_count > 0:
+                return float(show_count)
+            return m.get("size_gb", 0.0)
+
         if qualified:
             # Quiet prefers the small end: pick the smallest qualified Gemma
             # rather than only the first (largest) entry in the sorted list.
-            classified["reasoning"] = [
-                min(qualified, key=lambda m: int(m.get("param_count") or 0))
-            ]
+            classified["reasoning"] = [min(qualified, key=_quiet_size_key)]
