@@ -177,3 +177,41 @@ def test_quiet_substitutes_qualified_gemma_reasoning_candidate():
     resolved = resolve_reasoning_admission(["thinking", "tools"], 4096)
 
     assert resolved["reasoning"] == "ollama/gemma4:12b"
+
+
+def test_quiet_gemma_substitution_searches_all_qualified_candidates():
+    models = [
+        {"name": "mellum:6b", "provider": "ollama", "param_count": 6},
+        {"name": "gemma4:31b", "provider": "ollama", "param_count": 31},
+        {"name": "gemma4:12b", "provider": "ollama", "param_count": 12},
+    ]
+    details = {
+        "mellum:6b": {
+            "param_count": 6,
+            "capabilities": ["thinking", "completion", "tools"],
+            "embedding_length": 4096,
+            "is_moe": False,
+        },
+        "gemma4:31b": {
+            "param_count": 31,
+            "capabilities": ["completion", "vision", "tools"],
+            "embedding_length": 4096,
+            "is_moe": False,
+        },
+        "gemma4:12b": {
+            "param_count": 12,
+            "capabilities": ["thinking", "completion", "tools", "vision"],
+            "embedding_length": 4096,
+            "is_moe": False,
+        },
+    }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(
+            models, min_reasoning_embedding=4096, profile="quiet"
+        )
+
+    assert resolved["reasoning"] == "ollama/gemma4:12b"

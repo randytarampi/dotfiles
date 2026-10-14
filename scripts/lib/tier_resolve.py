@@ -715,24 +715,25 @@ def _apply_profile_policy(
         if profile == "quiet":
             classified[category] = classified[category][:1]
     if profile == "quiet" and classified["reasoning"]:
-        preferred = next(
-            (
-                m
-                for m in classified["lightweight"]
-                if "gemma" in m.get("name", "").lower()
-            ),
-            None,
-        )
-        if preferred is not None:
-            capabilities = preferred.get("capabilities", [])
-            preferred_is_qualified = (
-                not capabilities
-                or all(cap in capabilities for cap in ["thinking", "tools"])
-            ) and (
+
+        def _gemma_qualified(candidate):
+            caps = candidate.get("capabilities", [])
+            caps_ok = not caps or all(cap in caps for cap in ["thinking", "tools"])
+            embedding_ok = (
                 not min_reasoning_embedding
                 or min_reasoning_embedding <= 0
-                or preferred.get("embedding_length") is None
-                or preferred["embedding_length"] >= min_reasoning_embedding
+                or candidate.get("embedding_length") is None
+                or candidate["embedding_length"] >= min_reasoning_embedding
             )
-            if preferred_is_qualified:
-                classified["reasoning"] = [preferred]
+            return caps_ok and embedding_ok
+
+        gemmas = [
+            m for m in classified["lightweight"] if "gemma" in m.get("name", "").lower()
+        ]
+        qualified = [m for m in gemmas if _gemma_qualified(m)]
+        if qualified:
+            # Quiet prefers the small end: pick the smallest qualified Gemma
+            # rather than only the first (largest) entry in the sorted list.
+            classified["reasoning"] = [
+                min(qualified, key=lambda m: int(m.get("param_count") or 0))
+            ]
