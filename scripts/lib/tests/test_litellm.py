@@ -848,11 +848,14 @@ def test_openai_api_key_transport_takes_precedence_over_oauth(tmp_path, monkeypa
 
 
 def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypatch):
+    models = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
     monkeypatch.setattr(
-        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6.1-sol"}
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {f"openai/{model}" for model in models},
     )
     monkeypatch.setattr(
-        litellm_config, "_live_catalogue", lambda *_args: ["gpt-6.1-sol"]
+        litellm_config, "_live_catalogue", lambda *_args: sorted(models)
     )
     base = {
         "OPENAI_API_KEY": "test-key",
@@ -864,12 +867,11 @@ def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypat
         {**base, "DOTFILES_USE_OPENAI_SERVICE_LANES": "1"}
     )
     aliases = {item["model_name"]: item for item in on}
-    assert (
-        aliases["openai/gpt-6.1-sol-flex"]["litellm_params"]["service_tier"] == "flex"
-    )
-    assert (
-        aliases["openai/gpt-6.1-sol-fast"]["litellm_params"]["service_tier"] == "fast"
-    )
+    for model in models:
+        for tier in ("flex", "fast"):
+            alias = f"openai/{model}-{tier}"
+            assert aliases[alias]["litellm_params"]["service_tier"] == tier
+    assert sum(name.endswith(("-flex", "-fast")) for name in aliases) == 6
     oauth = litellm_config.compute_model_list(
         {"DOTFILES_USE_OPENAI_SERVICE_LANES": "1"}
     )
@@ -878,10 +880,10 @@ def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypat
 
 def test_openai_service_lane_unknown_not_expanded_and_collision_fails(monkeypatch):
     monkeypatch.setattr(
-        litellm_config, "_registry_model_refs", lambda: {"openai/unknown-model"}
+        litellm_config, "_registry_model_refs", lambda: {"openai/unlisted-model"}
     )
     monkeypatch.setattr(
-        litellm_config, "_live_catalogue", lambda *_args: ["unknown-model"]
+        litellm_config, "_live_catalogue", lambda *_args: ["unlisted-model"]
     )
     env = {
         "OPENAI_API_KEY": "test-key",
@@ -908,16 +910,28 @@ def test_service_lane_rates_and_gate_off_render(monkeypatch):
         Path(__file__).resolve().parents[3] / "configs/litellm/model-rates.json"
     )
     rates = json.loads(rates_path.read_text())["models"]
-    base = {
-        "input_cost_per_token": 2e-6,
-        "output_cost_per_token": 1e-5,
+    standard = {
+        "gpt-6-astra": (1e-5, 5e-5, 1e-6, 1.25e-5),
+        "gpt-6-luna": (1e-7, 5e-7, 1e-8, 1.25e-7),
     }
+    rate_keys = (
+        "input_cost_per_token",
+        "output_cost_per_token",
+        "cache_read_input_token_cost",
+        "cache_creation_input_token_cost",
+    )
+    sol = (2e-6, 1e-5, 1e-7, 2.5e-6)
     for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
-        lane = rates[f"gpt-6.1-sol-{suffix}"]
-        for rate in ("input_cost_per_token", "output_cost_per_token"):
-            assert lane[rate] == base[rate] * multiplier
-        assert "cache_read_input_token_cost" in lane
-        assert "cache_creation_input_token_cost" in lane
+        assert tuple(rates[f"gpt-6.1-sol-{suffix}"][key] for key in rate_keys) == tuple(
+            value * multiplier for value in sol
+        )
+    for model, values in standard.items():
+        assert tuple(rates[model][key] for key in rate_keys) == values
+        for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
+            lane = rates[f"{model}-{suffix}"]
+            assert tuple(lane[key] for key in rate_keys) == tuple(
+                value * multiplier for value in values
+            )
     monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
     unset = litellm_config.render_config({})
     head_fixture = litellm_config.render_config(
