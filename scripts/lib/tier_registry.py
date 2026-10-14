@@ -12,6 +12,12 @@ from typing import Any, Dict, List, Optional
 import logger
 
 PROFILE_NAMES = frozenset({"quiet", "balanced", "loud"})
+DEPRECATED_TIER_ALIASES = {
+    "local-pro": "local",
+    "local-mini": "local",
+    "local-nano": "local",
+}
+_WARNED_TIER_ALIASES = set()
 
 
 def get_profile_name(registry: Dict, tier: str) -> Optional[str]:
@@ -47,7 +53,13 @@ def load_registry(slim_path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_preset(registry: Dict, tier: str) -> Dict[str, Any]:
-    return registry["presets"][tier]
+    resolved_tier = DEPRECATED_TIER_ALIASES.get(tier, tier)
+    if resolved_tier != tier and tier not in _WARNED_TIER_ALIASES:
+        logger.warning(
+            "tier '%s' is deprecated; resolving to '%s'", tier, resolved_tier
+        )
+        _WARNED_TIER_ALIASES.add(tier)
+    return registry["presets"][resolved_tier]
 
 
 def collect_placeholder_categories(value: Optional[str]) -> Optional[str]:

@@ -16,7 +16,7 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ## Tier Definitions
 
-Seventeen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
+Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -30,10 +30,7 @@ Seventeen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source o
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
 | **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
-| **local-pro** | Local Ollama + oMLX under the gate (all 4 categories: reasoning, code-gen, lightweight, vision) | Power users with diverse local models |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
-| **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
-| **local-nano** | Local Ollama + oMLX under the gate (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
 | **local** | Local profile — balanced default | Balanced local model selection; preserves current selection policy |
@@ -74,7 +71,7 @@ with cached-input rate fields preserved. Spend reports identify the tier
 actually served. There is no automatic Flex-to-standard fallback. For lane
 configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models. Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
 
 Every preset defines an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer: the hook strips images from the main conversation
@@ -266,22 +263,6 @@ OpenAI-only preset with gpt-6.1-sol as orchestrator, oracle and council anchor:
 
 The orchestrator and oracle fall back to `openai/gpt-6-astra`; the remaining fallback chains are defined per role in `oh-my-opencode-slim.json`.
 
-### Local-Pro Tier (`local-pro`)
-
-Fully offline preset using all four `_local:<category>` placeholders:
-
-| Role | Placeholder | Variant | Resolves to |
-|------|-------------|---------|-------------|
-| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
-| oracle | `_local:reasoning` | max | Best local reasoning model |
-| librarian | `_local:lightweight` | low | Best local lightweight model |
-| explorer | `_local:lightweight` | low | Best local lightweight model |
-| designer | `_local:code-gen` | medium | Best local code-gen model |
-| fixer | `_local:code-gen` | high | Best local code-gen model |
-| observer | `_local:vision` | low | Best local vision-capable lightweight model |
-
-Council synthesizer: `_local:reasoning`, max. Individual councillors α `_local:reasoning`, β `_local:reasoning_2`, γ `_local:reasoning_3`: no variant override (model default). Best for power users with diverse local models spanning all four categories.
-
 Local-tier variants follow the repo-wide variant policy (TIERS.md:479-490), calibrated 2026-09-12; oracle/council retain max. Local Qwen3.8 reasoning remains enabled (mandatory for Qwen3.8 — JetBrains evidence, [blog.jetbrains.com/junie/2026/08/qwen-for-junie/](https://blog.jetbrains.com/junie/2026/08/qwen-for-junie/)).
 
 ### Local Tier (`local`)
@@ -300,38 +281,6 @@ Balanced offline preset using reasoning + code-gen + lightweight + vision:
 
 Council synthesizer: `_local:reasoning`, max. Individual councillors α `_local:reasoning`, β `_local:code-gen`, γ `_local:lightweight`: no variant override (model default). Best for balanced offline use with 3-party council diversity across model categories.
 
-### Local-Mini Tier (`local-mini`)
-
-Minimal-diversity preset using code-gen + lightweight + vision:
-
-| Role | Placeholder | Variant | Resolves to |
-|------|-------------|---------|-------------|
-| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
-| oracle | `_local:code-gen` | max | Best local code-gen model |
-| librarian | `_local:lightweight` | low | Best local lightweight model |
-| explorer | `_local:lightweight` | low | Best local lightweight model |
-| designer | `_local:code-gen` | medium | Best local code-gen model |
-| fixer | `_local:code-gen` | high | Best local code-gen model |
-| observer | `_local:vision` | low | Best local vision-capable lightweight model |
-
-Council synthesizer: `_local:code-gen`, max. Individual councillors α `_local:code-gen`, β `_local:lightweight`, γ `_local:vision`: no variant override (model default). Best for systems with only code-gen and lightweight models available.
-
-### Local-Nano Tier (`local-nano`)
-
-Single-model preset using one code-gen model for all roles (except vision):
-
-| Role | Placeholder | Variant | Resolves to |
-|------|-------------|---------|-------------|
-| orchestrator | `_local:code-gen` | medium | Best local code-gen model |
-| oracle | `_local:code-gen` | max | Best local code-gen model |
-| librarian | `_local:code-gen` | low | Best local code-gen model |
-| explorer | `_local:code-gen` | low | Best local code-gen model |
-| designer | `_local:code-gen` | medium | Best local code-gen model |
-| fixer | `_local:code-gen` | high | Best local code-gen model |
-| observer | `_local:vision` | low | Best local vision-capable lightweight model |
-
-Council synthesizer: `_local:code-gen`, max. Individual councillors α `_local:code-gen`, β `_local:lightweight`, γ `_local:vision`: no variant override (model default). Best for single-model systems — the council uses the code-gen model plus lightweight and vision.
-
 ### Local-Solo Tier (`local-solo`)
 
 Single-model preset using one omnicapable model for all roles:
@@ -346,10 +295,10 @@ Single-model preset using one omnicapable model for all roles:
 | fixer | `_local:solo` | high | Best local solo model |
 | observer | `_local:solo` | low | Best local solo model |
 
-Council synthesizer: `_local:solo`, max. Individual councillors α `_local:solo`, β `_local:solo`, γ `_local:solo`: no variant override (model default). If no solo model exists, falls back to code-gen + vision (local-nano behavior).
+Council synthesizer: `_local:solo`, max. Individual councillors α `_local:solo`, β `_local:solo`, γ `_local:solo`: no variant override (model default). If no solo model exists, falls back to code-gen + vision.
 
 > [!NOTE]
-> Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use local-mini or local-nano.
+> Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use `local`.
 
 ### MoE Code-Gen Reuse Across Tools
 
@@ -404,11 +353,11 @@ Additional classification rules (applied after name heuristics):
 
 **Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories. These warnings are generated from the shared tier registry via `scripts/lib/tier_registry.py`.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local-quiet, local, local-loud, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-quiet, local, local-loud, local-solo)
 
 Local Ollama and, when enabled, oMLX models form the multi-provider local pool; oMLX wins engine-equivalent bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
 
-Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: auto-detected from available API keys during OpenCode configuration. Detection order: both OpenAI + Anthropic keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-solo is manual-only (set via `DOTFILES_OPENCODE_TIER`). Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
 
 ### Model Classification Summary Table
 
@@ -442,14 +391,9 @@ Local Ollama models are appended to fallback chains by default. Use `--no-local-
 By default, non-local tiers use the `local` tier's placeholder definitions to determine which local model categories to append to fallback chains. Use `--local-fallback-preset` to specify a different tier whose placeholders drive fallback selection:
 
 ```bash
-# Use local-pro placeholders for richer fallback diversity
-scripts/configure-opencode-tier.py --local-fallback-preset local-pro --preset pro-plus
-
-# Use local-mini placeholders (fewer categories) for lighter fallbacks
-scripts/configure-opencode-tier.py --local-fallback-preset local-mini --preset pro
 ```
 
-For local tiers, `--local-fallback-preset` defaults to the current tier (so `local-pro` uses its own placeholders). For non-local tiers, it defaults to `local`.
+For local tiers, `--local-fallback-preset` defaults to the current tier. For non-local tiers, it defaults to `local`.
 
 ### Category Overrides (`--category-model`)
 

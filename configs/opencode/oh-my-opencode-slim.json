@@ -390,71 +390,6 @@
         "variant": "xhigh"
       }
     },
-    "local-pro": {
-      "orchestrator": {
-        "model": "_local:code-gen",
-        "variant": "medium",
-        "skills": [
-          "*"
-        ],
-        "mcps": [
-          "*",
-          "!context7"
-        ]
-      },
-      "oracle": {
-        "model": "_local:reasoning",
-        "variant": "max",
-        "skills": [
-          "simplify"
-        ],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "librarian": {
-        "model": "_local:lightweight",
-        "variant": "low",
-        "skills": [],
-        "mcps": [
-          "*"
-        ]
-      },
-      "explorer": {
-        "model": "_local:lightweight",
-        "variant": "low",
-        "skills": [
-          "codemap"
-        ],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "designer": {
-        "model": "_local:code-gen",
-        "variant": "medium",
-        "skills": [
-          "agent-browser"
-        ],
-        "mcps": []
-      },
-      "fixer": {
-        "model": "_local:code-gen",
-        "variant": "high",
-        "skills": [],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "observer": {
-        "model": "_local:vision",
-        "variant": "low"
-      },
-      "council": {
-        "model": "_local:reasoning",
-        "variant": "max"
-      }
-    },
     "local": {
       "orchestrator": {
         "model": "_local:code-gen",
@@ -524,38 +459,57 @@
       "orchestrator": {
         "model": "_local:code-gen",
         "variant": "medium",
-        "skills": ["*"],
-        "mcps": ["*", "!context7"]
+        "skills": [
+          "*"
+        ],
+        "mcps": [
+          "*",
+          "!context7"
+        ]
       },
       "oracle": {
         "model": "_local:reasoning",
         "variant": "max",
-        "skills": ["simplify"],
-        "mcps": ["codegraph"]
+        "skills": [
+          "simplify"
+        ],
+        "mcps": [
+          "codegraph"
+        ]
       },
       "librarian": {
         "model": "_local:lightweight",
         "variant": "low",
         "skills": [],
-        "mcps": ["*"]
+        "mcps": [
+          "*"
+        ]
       },
       "explorer": {
         "model": "_local:lightweight",
         "variant": "low",
-        "skills": ["codemap"],
-        "mcps": ["codegraph"]
+        "skills": [
+          "codemap"
+        ],
+        "mcps": [
+          "codegraph"
+        ]
       },
       "designer": {
         "model": "_local:code-gen",
         "variant": "medium",
-        "skills": ["agent-browser"],
+        "skills": [
+          "agent-browser"
+        ],
         "mcps": []
       },
       "fixer": {
         "model": "_local:code-gen",
         "variant": "high",
         "skills": [],
-        "mcps": ["codegraph"]
+        "mcps": [
+          "codegraph"
+        ]
       },
       "observer": {
         "model": "_local:vision",
@@ -570,52 +524,6 @@
       "orchestrator": {
         "model": "_local:code-gen",
         "variant": "medium",
-        "skills": ["*"],
-        "mcps": ["*", "!context7"]
-      },
-      "oracle": {
-        "model": "_local:reasoning",
-        "variant": "max",
-        "skills": ["simplify"],
-        "mcps": ["codegraph"]
-      },
-      "librarian": {
-        "model": "_local:lightweight",
-        "variant": "low",
-        "skills": [],
-        "mcps": ["*"]
-      },
-      "explorer": {
-        "model": "_local:lightweight",
-        "variant": "low",
-        "skills": ["codemap"],
-        "mcps": ["codegraph"]
-      },
-      "designer": {
-        "model": "_local:code-gen",
-        "variant": "medium",
-        "skills": ["agent-browser"],
-        "mcps": []
-      },
-      "fixer": {
-        "model": "_local:code-gen",
-        "variant": "high",
-        "skills": [],
-        "mcps": ["codegraph"]
-      },
-      "observer": {
-        "model": "_local:vision",
-        "variant": "low"
-      },
-      "council": {
-        "model": "_local:reasoning",
-        "variant": "max"
-      }
-    },
-    "local-mini": {
-      "orchestrator": {
-        "model": "_local:code-gen",
-        "variant": "medium",
         "skills": [
           "*"
         ],
@@ -625,7 +533,7 @@
         ]
       },
       "oracle": {
-        "model": "_local:code-gen",
+        "model": "_local:reasoning",
         "variant": "max",
         "skills": [
           "simplify"
@@ -673,72 +581,7 @@
         "variant": "low"
       },
       "council": {
-        "model": "_local:code-gen",
-        "variant": "max"
-      }
-    },
-    "local-nano": {
-      "orchestrator": {
-        "model": "_local:code-gen",
-        "variant": "medium",
-        "skills": [
-          "*"
-        ],
-        "mcps": [
-          "*",
-          "!context7"
-        ]
-      },
-      "oracle": {
-        "model": "_local:code-gen",
-        "variant": "max",
-        "skills": [
-          "simplify"
-        ],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "librarian": {
-        "model": "_local:code-gen",
-        "variant": "low",
-        "skills": [],
-        "mcps": [
-          "*"
-        ]
-      },
-      "explorer": {
-        "model": "_local:code-gen",
-        "variant": "low",
-        "skills": [
-          "codemap"
-        ],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "designer": {
-        "model": "_local:code-gen",
-        "variant": "medium",
-        "skills": [
-          "agent-browser"
-        ],
-        "mcps": []
-      },
-      "fixer": {
-        "model": "_local:code-gen",
-        "variant": "high",
-        "skills": [],
-        "mcps": [
-          "codegraph"
-        ]
-      },
-      "observer": {
-        "model": "_local:vision",
-        "variant": "low"
-      },
-      "council": {
-        "model": "_local:code-gen",
+        "model": "_local:reasoning",
         "variant": "max"
       }
     },
@@ -1086,17 +929,6 @@
           "model": "anthropic/claude-opus-5-5"
         }
       },
-      "local-pro": {
-        "alpha": {
-          "model": "_local:reasoning"
-        },
-        "beta": {
-          "model": "_local:reasoning_2"
-        },
-        "gamma": {
-          "model": "_local:reasoning_3"
-        }
-      },
       "local": {
         "alpha": {
           "model": "_local:reasoning"
@@ -1128,28 +960,6 @@
         },
         "gamma": {
           "model": "_local:lightweight"
-        }
-      },
-      "local-mini": {
-        "alpha": {
-          "model": "_local:code-gen"
-        },
-        "beta": {
-          "model": "_local:lightweight"
-        },
-        "gamma": {
-          "model": "_local:vision"
-        }
-      },
-      "local-nano": {
-        "alpha": {
-          "model": "_local:code-gen"
-        },
-        "beta": {
-          "model": "_local:lightweight"
-        },
-        "gamma": {
-          "model": "_local:vision"
         }
       },
       "local-solo": {
@@ -1487,29 +1297,6 @@
         ]
       }
     },
-    "local-pro": {
-      "council": {
-        "default_preset": "local-pro",
-        "presets": {
-          "local-pro": {
-            "alpha": {
-              "model": "_local:reasoning"
-            },
-            "beta": {
-              "model": "_local:reasoning_2"
-            },
-            "gamma": {
-              "model": "_local:reasoning_3"
-            },
-            "council": {
-              "model": "_local:reasoning",
-              "variant": "max"
-            }
-          }
-        }
-      },
-      "fallback": {}
-    },
     "local": {
       "council": {
         "default_preset": "local",
@@ -1532,7 +1319,9 @@
         }
       },
       "fallback": {},
-      "profile": {"name": "balanced"}
+      "profile": {
+        "name": "balanced"
+      }
     },
     "local-quiet": {
       "council": {
@@ -1556,7 +1345,9 @@
         }
       },
       "fallback": {},
-      "profile": {"name": "quiet"}
+      "profile": {
+        "name": "quiet"
+      }
     },
     "local-loud": {
       "council": {
@@ -1580,53 +1371,9 @@
         }
       },
       "fallback": {},
-      "profile": {"name": "loud"}
-    },
-    "local-mini": {
-      "council": {
-        "default_preset": "local-mini",
-        "presets": {
-          "local-mini": {
-            "alpha": {
-              "model": "_local:code-gen"
-            },
-            "beta": {
-              "model": "_local:lightweight"
-            },
-            "gamma": {
-              "model": "_local:vision"
-            },
-            "council": {
-              "model": "_local:code-gen",
-              "variant": "max"
-            }
-          }
-        }
-      },
-      "fallback": {}
-    },
-    "local-nano": {
-      "council": {
-        "default_preset": "local-nano",
-        "presets": {
-          "local-nano": {
-            "alpha": {
-              "model": "_local:code-gen"
-            },
-            "beta": {
-              "model": "_local:lightweight"
-            },
-            "gamma": {
-              "model": "_local:vision"
-            },
-            "council": {
-              "model": "_local:code-gen",
-              "variant": "max"
-            }
-          }
-        }
-      },
-      "fallback": {}
+      "profile": {
+        "name": "loud"
+      }
     },
     "local-solo": {
       "council": {

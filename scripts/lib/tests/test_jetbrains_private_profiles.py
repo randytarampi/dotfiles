@@ -209,7 +209,7 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     groups_path.write_text(json.dumps(config), encoding="utf-8")
     roles = {
         "pro": ("ollama-cloud/llama:cloud", "ollama-cloud/qwen:cloud"),
-        "local-pro": ("omlx/local/model", "omlx/local/faster"),
+        "local": ("omlx/local/model", "omlx/local/faster"),
         "plus": ("openai/gpt-missing", "openai/gpt-faster"),
         "free": ("opencode/free-present", "openai/gpt-faster-absent"),
         "meridian": ("anthropic/claude-sonnet", "openai/gpt-present"),
@@ -301,10 +301,10 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     assert cloud["id"] == "ollama-cloud/llama:cloud"
     assert cloud["fasterModel"]["id"] == "ollama-cloud/qwen:cloud"
     assert (target / "pro.json").stat().st_mode & 0o777 == 0o600
-    local = json.loads((target / "local-pro.json").read_text())
+    local = json.loads((target / "local.json").read_text())
     assert local["id"] == "omlx/local/model"
     assert local["fasterModel"]["id"] == "omlx/local/faster"
-    assert (target / "local-pro.json").stat().st_mode & 0o777 == 0o600
+    assert (target / "local.json").stat().st_mode & 0o777 == 0o600
     assert local["baseUrl"] == "http://127.0.0.1:4000/v1"
     assert "baseUrl" not in local["fasterModel"]
     assert "apiKey" not in local["fasterModel"]

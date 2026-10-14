@@ -536,7 +536,7 @@ Packages available on both platforms by category:
 
 Use `scripts/run-local-review.sh --help` for the local pre-push review runner; details are in [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md).
 
-Seventeen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
+Fourteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -550,10 +550,7 @@ Seventeen presets for AI agents, defined in `configs/opencode/oh-my-opencode-sli
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
 | **free** | OpenCode Zen + Google + OpenRouter (all free tiers) | Free cross-provider workflow with cross-provider fallbacks |
-| **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision), balanced profile | Balanced local selection for offline/air-gapped use |
-| **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
-| **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile ranking | Quiet local selection; policy does not guarantee hardware fit or latency |
 | **local-loud** | Local profile ranking | Quality-first candidate ranking; no guarantee of hardware fit, latency or concurrency |
@@ -566,9 +563,9 @@ Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (see [docs/TIE
 
 OpenAI service lanes are opt-in via `DOTFILES_USE_OPENAI_SERVICE_LANES=1`; see [docs/LITELLM.md](docs/LITELLM.md).
 
-Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
+Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-solo is manual-only (set via `DOTFILES_OPENCODE_TIER`). The deprecated `local-pro`, `local-mini` and `local-nano` names resolve to `local` through `tier_registry.py`.
 
-Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. All indexed models matching a role's category are included (not just the best model). Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules, `ollama show` parameter-based classification, and capability filtering. Override a primary role model: `--role-model observer=ollama/qwen3.5:9b-mlx`. Override fallback preset: `--local-fallback-preset local-pro`. Override a category model: `--category-model reasoning=code-gen`. Environment variables: `DOTFILES_LOCAL_FALLBACK_PRESET`, `DOTFILES_CATEGORY_MODELS` (comma-separated), `DOTFILES_ROLE_MODELS` (comma-separated).
+Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. All indexed models matching a role's category are included (not just the best model). Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules, `ollama show` parameter-based classification, and capability filtering. Override a primary role model: `--role-model observer=ollama/qwen3.5:9b-mlx`. Override fallback preset: `--local-fallback-preset local`. Override a category model: `--category-model reasoning=code-gen`. Environment variables: `DOTFILES_LOCAL_FALLBACK_PRESET`, `DOTFILES_CATEGORY_MODELS` (comma-separated), `DOTFILES_ROLE_MODELS` (comma-separated).
 
 ### DCP Context Compaction
 
@@ -588,10 +585,7 @@ OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
-| **local-pro** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-mini** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-nano** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
 | **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
 | **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
@@ -671,12 +665,9 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-5-5` | 1 |
 | `plus` | openai | `gpt-6.1-sol` | `gpt-6-luna` | 1 |
 | `plus-anthropic` | openai | `gpt-6.1-sol` | `claude-haiku-5-5` (meridian) | 1 |
-| `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
 | `local-quiet` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-loud` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
-| `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
-| `local-nano` | local | `_local:code-gen` | — | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
 | `meridian-opus` | meridian | `claude-opus-5` | — | 1 |
 | `meridian-sonnet` | meridian | `claude-sonnet-5-5` | — | 1 |

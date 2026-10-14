@@ -91,10 +91,10 @@ Beyond the tier-driven groups, the generator appends one selectable profile per 
 
 | Placeholder | Resolves to | Junie usage |
 |-------------|-------------|-------------|
-| `_local:reasoning` | Best local reasoning model | `local-pro` primaryModel |
-| `_local:code-gen` | Best local code-gen model | `local`/`local-mini`/`local-nano` primaryModel |
-| `_local:lightweight` | Best local lightweight model | `local-pro`/`local` fasterModel |
-| `_local:vision` | Best vision-capable lightweight model | `local-mini` fasterModel |
+| `_local:reasoning` | Best local reasoning model | `local` primaryModel |
+| `_local:code-gen` | Best local code-gen model | `local` primaryModel |
+| `_local:lightweight` | Best local lightweight model | `local` fasterModel |
+| `_local:vision` | Best vision-capable lightweight model | `local` fasterModel |
 | `_local:solo` | Best local solo model (all 4 caps) | `local-solo` primaryModel and fasterModel |
 
 If a placeholder cannot be resolved (no local models in that category), the profile generator skips the group with a warning.
