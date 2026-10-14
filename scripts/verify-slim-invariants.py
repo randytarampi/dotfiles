@@ -32,7 +32,6 @@ Exit codes:
 
 import json
 import re
-import re
 import sys
 from pathlib import Path
 
@@ -367,6 +366,21 @@ def _preset_violations(presets, council_presets, tiers):
     for tier in sorted(tier_names):
         tier_council = (tiers.get(tier) or {}).get("council") or {}
         tier_presets = tier_council.get("presets", {})
+        is_profile_tier = bool((tiers.get(tier) or {}).get("profile"))
+        if is_profile_tier and not isinstance(
+            tier_presets.get(tier) if isinstance(tier_presets, dict) else None, dict
+        ):
+            violations.append(
+                f"_tiers.{tier}.council.presets.{tier} must be a dict for profile tiers"
+            )
+        default_preset = tier_council.get("default_preset")
+        if default_preset is not None and (
+            not isinstance(tier_presets, dict) or default_preset not in tier_presets
+        ):
+            violations.append(
+                f"_tiers.{tier}.council.default_preset = {default_preset!r} "
+                f"is not a key of _tiers.{tier}.council.presets"
+            )
         if not isinstance(tier_presets, dict) or set(tier_presets) != {tier}:
             violations.append(
                 f"_tiers.{tier}.council.presets names {sorted(tier_presets)}; "
@@ -374,6 +388,10 @@ def _preset_violations(presets, council_presets, tiers):
             )
 
         top_preset = council_presets.get(tier) or {}
+        if is_profile_tier and not isinstance(council_presets.get(tier), dict):
+            violations.append(
+                f"council.presets.{tier} must be a dict for profile tiers"
+            )
         nested_preset = tier_presets.get(tier) or {}
         for member in ("alpha", "beta", "gamma"):
             top_model = _model(top_preset.get(member))
@@ -387,7 +405,7 @@ def _preset_violations(presets, council_presets, tiers):
 
         top_synth = _model(presets.get(tier, {}).get("council"))
         nested_synth = _model(nested_preset.get("council"))
-        if tier_presets.get(tier) is None:
+        if tier_presets.get(tier) is None and not is_profile_tier:
             continue
         if (top_synth is None) != (nested_synth is None) or (
             top_synth is not None and top_synth != nested_synth

@@ -1536,7 +1536,7 @@
     },
     "local-quiet": {
       "council": {
-        "default_preset": "local",
+        "default_preset": "local-quiet",
         "presets": {
           "local-quiet": {
             "alpha": {
@@ -1560,7 +1560,7 @@
     },
     "local-loud": {
       "council": {
-        "default_preset": "local",
+        "default_preset": "local-loud",
         "presets": {
           "local-loud": {
             "alpha": {

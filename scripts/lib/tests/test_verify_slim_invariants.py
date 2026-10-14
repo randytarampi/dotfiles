@@ -103,7 +103,43 @@ def _profile_fixture():
 
 
 def test_profile_invariants_accept_compliant_family():
-    assert INVARIANTS._profile_violations(*_profile_fixture()) == []
+    presets, councils, tiers = _profile_fixture()
+    for tier in tiers:
+        tiers[tier]["council"]["presets"][tier] = {
+            "alpha": {"model": "_local:reasoning"},
+            "beta": {"model": "_local:reasoning"},
+            "gamma": {"model": "_local:reasoning"},
+            "council": {"model": "_local:reasoning"},
+        }
+    assert INVARIANTS._profile_violations(presets, councils, tiers) == []
+
+
+def test_profile_councils_require_nested_and_top_level_dicts():
+    presets, councils, tiers = _profile_fixture()
+    nested = INVARIANTS._preset_violations(presets, councils, tiers)
+    assert any("must be a dict for profile tiers" in issue for issue in nested)
+
+    presets, councils, tiers = _profile_fixture()
+    for tier in tiers:
+        tiers[tier]["council"]["presets"][tier] = {
+            "alpha": {"model": "_local:reasoning"},
+            "beta": {"model": "_local:reasoning"},
+            "gamma": {"model": "_local:reasoning"},
+        }
+    councils.pop("local")
+    issues = INVARIANTS._preset_violations(presets, councils, tiers)
+    assert any("council.presets.local must be a dict" in issue for issue in issues)
+
+
+def test_council_default_preset_must_exist():
+    presets, councils, tiers = _fixtures()
+    tiers["test"]["council"]["default_preset"] = "missing"
+    issues = INVARIANTS._preset_violations(presets, councils, tiers)
+    assert any("default_preset" in issue for issue in issues)
+
+    presets, councils, tiers = _fixtures()
+    tiers["test"]["council"]["default_preset"] = "test"
+    assert INVARIANTS._preset_violations(presets, councils, tiers) == []
 
 
 def test_profile_family_invariant_rejects_unknown_profile_name():
