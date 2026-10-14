@@ -18,6 +18,19 @@ bridge or compatibility layer is used.
 | cline | Cline-configured providers | native/config varies by extension | `cline --acp` | yes, shared skill distribution | no | yes | no | N/A | env var (Cline OTel) | none | env-vars |
 | agy | Antigravity-configured providers | native `~/.gemini/config/mcp_config.json` | native `agy-acp` bridge | yes, `~/.gemini/antigravity-cli/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 
+## Tier families and service lanes
+
+- OpenCode supports the local profile family presets `local-quiet`, `local` and
+  `local-loud`, selected with `scripts/configure-opencode-tier.py --preset`.
+  Junie and Pi receive the selected family through their generators.
+- OpenAI Flex/Fast lane aliases are gated by
+  `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`). Clients receive aliases
+  only when the gate is enabled and the genuine direct OpenAI API-key route is
+  active. See [LiteLLM Proxy](LITELLM.md#openai-service-lanes-flexfast).
+- Pi's local effective context window is capped at the minimum of native
+  context, when known, and client cap; unknown native context has a 32768
+  fallback floor. The default client cap is 131072. See [Pi](PI.md#effective-context-window).
+
 ## Configuration notes
 
 - Providers use each tool's native environment/config format. The OpenCode tier

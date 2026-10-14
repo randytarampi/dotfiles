@@ -57,6 +57,15 @@ compatibility are confirmed.
 | `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama`: 0.6 |
 | `modelTemperatures` | — (Junie-specific) | Model-family temperature map; applied per-role at profile generation time |
 
+## Local profile family passthrough
+
+Tier switching forwards the selected profile family (`quiet`, `balanced` or
+`loud`) to `generate-jetbrains-profiles.py`, so Junie's generated local tier
+profiles follow the selected family. Cloud groups are unchanged. A literal
+Junie group must provide `provider`, `primaryModel` and the discovered runtime
+model ID in the shape required by the Junie schema; see the JetBrains model
+profile schema reference before adding one.
+
 ---
 
 ## Cross-Provider fasterModel

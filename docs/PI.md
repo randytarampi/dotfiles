@@ -137,10 +137,20 @@ via `scripts/lib/tier_registry.py`.
 
 `--skip mcps` is accepted for CLI parity (Pi does not configure MCPs; the flag
 is a no-op with an info log).
+
 - Enable `pi-web-access` for web-backed research and use the Plannotator Pi
   extension for plan review.
 - From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
   entry.
+
+### Effective context window
+
+For local models, Pi advertises the minimum of the native context window (when
+known) and the client cap. When native context is unknown, the fallback window
+is 32768. The default client cap is 131072 (also the Ollama client cap when
+`OLLAMA_CONTEXT_LENGTH` is unset or invalid). Model `maxTokens` is derived as
+`max(4096, min(32768, window - 8192))`; it is not a blanket fixed value.
+Tier switching also passes the selected local profile family through to Pi.
 
 ## Managed preference defaults
 

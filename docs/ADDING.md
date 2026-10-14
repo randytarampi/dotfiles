@@ -15,6 +15,23 @@
 
 Use the required `--preset <tier>` flag; positional tier arguments are not supported. Tier details belong in [docs/TIERS.md](TIERS.md).
 
+### Adding a profile to the local family
+
+1. Add the family preset and its `_tiers` entry in
+   `configs/opencode/oh-my-opencode-slim.json`. Keep both council surfaces in
+   member parity: nested `council.presets` and top-level `council.presets`.
+   Profile tiers require dict-valued councils, and each council's
+   `default_preset` must name an available preset for that tier.
+2. Add `profile.name` to `_tiers`, then update policy hooks in
+   `scripts/lib/tier_registry.py` and `scripts/lib/tier_resolve.py` as needed.
+   Check every consumer of the tier family.
+3. Run `scripts/verify-slim-invariants.py` and the profile tests
+   `test_tier_resolve_profiles.py` and `test_configure_opencode_tier.py`.
+
+There is no alias or deprecation mechanism for tier names. If a deprecation is
+approved, introduce one explicit alias map in `tier_registry.py` and have all
+consumers honour it; do not scatter renames among consumers.
+
 ---
 
 ## Adding an MCP Server
@@ -106,6 +123,14 @@ See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger pol
 7. Run `make verify` to confirm the new script fits the orchestration flow
 
 **Gate renames:** When renaming a gate, add a migration entry to `scripts/migrate-env-gates.py` `MIGRATIONS` list. See [docs/ORCHESTRATION.md](ORCHESTRATION.md) "Gate Migrations" section.
+
+### Adding a service-lane gate or environment variable
+
+Document new variables in `dot_dotfiles/shell/.env.example` and ensure
+`make check-env-coverage` passes. Register script capabilities and accepted
+flags in `scripts/lib/cli-contract.json`; irrelevant flags must remain rejected
+as usage errors. Follow [docs/CONVENTIONS.md](CONVENTIONS.md) for the CLI
+contract and run the relevant environment-coverage and CLI-contract checks.
 
 ## Adding a Skills Category
 
