@@ -267,3 +267,44 @@ def test_loud_ranking_preserves_source_moe_metadata():
         resolved = tier_resolve.resolve_roles_from_list(models, profile="loud")
 
     assert resolved["code-gen"] == "omlx/moe-coder:9b"
+
+
+def test_promoted_reasoning_entry_carries_source_moe_metadata():
+    models = [
+        {
+            "name": "moe-coder:90b",
+            "provider": "omlx",
+            "is_moe": True,
+            "param_count": 90,
+        },
+        {
+            "name": "dense-coder:30b",
+            "provider": "omlx",
+            "is_moe": False,
+            "param_count": 30,
+        },
+    ]
+    details = {
+        # Detail lookup succeeds on capabilities (so the MoE model is
+        # promoted to reasoning) but cannot establish MoE status.
+        "moe-coder:90b": {
+            "param_count": None,
+            "capabilities": ["thinking", "completion", "tools"],
+            "is_moe": False,
+        },
+        "dense-coder:30b": {
+            "param_count": None,
+            "capabilities": ["thinking", "completion", "tools"],
+            "is_moe": False,
+        },
+    }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(models, profile="balanced")
+
+    # The promoted MoE entry must not masquerade as dense in the density
+    # sort merely because the detail lookup missed its MoE status.
+    assert resolved["reasoning"] == "omlx/dense-coder:30b"

@@ -421,6 +421,7 @@ def resolve_roles_from_list(
                     if model.get("equivalent_ollama_names")
                     else {}
                 ),
+                **({"is_moe": model["is_moe"]} if model.get("is_moe") else {}),
             }
             classified["reasoning"].append(promoted)
             existing_reasoning_names.add(model["name"])
