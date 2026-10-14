@@ -78,7 +78,7 @@ make services-restart
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
 | `DOTFILES_APPLY_OMLX_WIRED_LIMIT` | `0` | Apply the wired limit and install a boot LaunchDaemon when `DOTFILES_RUN_OMLX_SETUP=1`. |
-| `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB; when unset, falls back to the script default of 40960 MB. `configure-omlx-wired-limit.py` is report-only by default; applying requires both `DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
+| `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB; when unset, falls back to the script default of 40960 MB. `configure-omlx-wired-limit.py` is a no-op by default; with `DOTFILES_RUN_OMLX_SETUP=1` and the apply gate unset it only reports; applying additionally requires `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
 
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
@@ -135,8 +135,10 @@ service plist does not inherit `~/.env`, so these values are persisted in
 
 ### Wired-limit lifecycle
 
-The utility reports current state without changing it unless both
-`DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1` are set.
+Behaviour is staged: with `DOTFILES_RUN_OMLX_SETUP` unset or `0` (the default)
+the utility exits before reading RAM or the wired limit; with the setup gate
+`1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT` unset or `0` it reports current state
+without changing anything; with both gates `1` it applies.
 `OMLX_WIRED_LIMIT_MB` overrides its computed target; values above 90% of
 physical RAM are refused. An applied value is installed in a boot LaunchDaemon.
 To revert, disable the apply gate, remove/unload the LaunchDaemon and restore
