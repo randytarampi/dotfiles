@@ -33,6 +33,14 @@
       "portEnv": "OLLAMA_LOCAL_PORT",
       "hostEnvAlt": "OLLAMA_HOST"
     },
+    "omlx": {
+      "baseUrl": "http://127.0.0.1:8000/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "OMLX_API_KEY",
+      "hostEnv": "OMLX_HOST",
+      "portEnv": "OMLX_PORT",
+      "baseUrlEnv": "OMLX_BASE_URL"
+    },
     "github-copilot": {
       "baseUrl": "https://api.githubcopilot.com/v1",
       "apiKeyEnv": "GITHUB_TOKEN",
