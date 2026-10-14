@@ -149,3 +149,28 @@ def test_jetbrains_dry_run_materializes_profile_tiers(tmp_path, monkeypatch, cap
     assert "Would configure: local-quiet" in caplog.text
     assert "Would configure: local →" in caplog.text
     assert "Would configure: local-loud" in caplog.text
+
+
+def test_get_available_tiers_includes_deprecated_aliases():
+    import opencode_config
+    from tier_registry import DEPRECATED_TIER_ALIASES
+
+    tiers = opencode_config.get_available_tiers()
+    for alias, canonical in DEPRECATED_TIER_ALIASES.items():
+        assert alias in tiers
+        assert canonical in tiers
+
+
+def test_tier_script_accepts_deprecated_alias_preset():
+    import subprocess
+    import sys
+
+    script = REPO_ROOT / "scripts" / "configure-opencode-tier.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--preset", "local-pro", "--dry-run"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]

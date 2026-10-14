@@ -10,6 +10,7 @@ import json
 import os
 import re
 from local_engines import LOCAL_ENGINES
+from tier_registry import DEPRECATED_TIER_ALIASES
 
 # Recognized provider prefixes that map to opencode.json provider blocks.
 # `ollama-cloud` is matched before `ollama` to avoid mis-parsing "ollama-cloud/...".
@@ -61,7 +62,9 @@ def get_available_tiers() -> list:
     tiers = list(data.get("_tiers", {}).keys())
     if not tiers:
         raise ValueError("No tiers found in oh-my-opencode-slim.json _tiers")
-    return tiers
+    # Deprecated names remain accepted (and warned) so installed ~/.env
+    # values keep working through the deprecation alias map.
+    return tiers + sorted(set(DEPRECATED_TIER_ALIASES) - set(tiers))
 
 
 def build_tier_args(
