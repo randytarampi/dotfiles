@@ -73,12 +73,14 @@ def test_openai_lane_alias_checked_against_proxy_inventory(monkeypatch):
     monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": set()})
     monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
     monkeypatch.setattr(DRIFT, "_configured_litellm_port", lambda: 4000)
-    monkeypatch.setattr(DRIFT, "get_models", lambda url: {"gpt-6.1-sol-flex"})
+    monkeypatch.setattr(
+        DRIFT, "get_models", lambda url, api_key="": {"gpt-6.1-sol-flex"}
+    )
     assert DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=True) == []
     violations = DRIFT.check_slim({"model": "openai/gpt-6.1-sol-fast"}, proxy_mode=True)
     assert violations == ["openai/gpt-6.1-sol-fast is not served by the LiteLLM proxy"]
     # Direct mode must check lane-shaped IDs against the native allowlist.
-    monkeypatch.setattr(DRIFT, "get_models", lambda url: None)
+    monkeypatch.setattr(DRIFT, "get_models", lambda url, api_key="": None)
     data = {"model": "openai/gpt-6.1-sol-flex"}
     assert DRIFT.check_slim(data, proxy_mode=False) == [
         "openai/gpt-6.1-sol-flex is not in the openai model allowlist"
@@ -87,6 +89,27 @@ def test_openai_lane_alias_checked_against_proxy_inventory(monkeypatch):
         DRIFT, "load_allowlists", lambda _: {"openai": {"gpt-6.1-sol-flex"}}
     )
     assert DRIFT.check_slim(data, proxy_mode=False) == []
+
+
+def test_openai_lane_alias_requires_available_proxy_inventory(monkeypatch):
+    monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": set()})
+    monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
+    monkeypatch.setattr(DRIFT, "_configured_litellm_port", lambda: 4000)
+    calls = []
+
+    def fake_get_models(url, api_key=""):
+        calls.append((url, api_key))
+        return None
+
+    monkeypatch.setattr(DRIFT, "get_models", fake_get_models)
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-test")
+    violations = DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=True)
+
+    assert calls == [("http://127.0.0.1:4000/v1/models", "sk-test")]
+    assert violations == [
+        "openai/gpt-6.1-sol-flex cannot be validated: "
+        "LiteLLM proxy inventory unavailable"
+    ]
 
 
 def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):
