@@ -35,6 +35,26 @@ def test_mellum_model_is_classified_as_code_gen():
     assert classified["code-gen"] == "ollama/mellum-6b-mlx-4bit"
 
 
+def test_resolve_roles_ignores_unknown_profile_with_warning():
+    model = {"name": "mellum-6b-mlx-4bit", "provider": "ollama"}
+    details = {"param_count": 6, "capabilities": ["thinking", "completion", "tools"]}
+    with (
+        patch.object(tier_resolve, "get_model_details", return_value=details),
+        patch.object(tier_resolve.logger, "warning") as warning,
+    ):
+        resolved = tier_resolve.resolve_roles_from_list([model], profile="future")
+    with patch.object(tier_resolve, "get_model_details", return_value=details):
+        baseline = tier_resolve.resolve_roles_from_list([model])
+    assert resolved == baseline
+    assert (
+        sum(
+            "Unknown local model profile" in str(call)
+            for call in warning.call_args_list
+        )
+        == 1
+    )
+
+
 def test_get_preset_providers_extracts_provider_prefixes():
     assert opencode_config.get_preset_providers("pro-plus") == {
         "openai",

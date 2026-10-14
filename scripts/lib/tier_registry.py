@@ -11,6 +11,16 @@ from typing import Any, Dict, List, Optional
 
 import logger
 
+PROFILE_NAMES = frozenset({"quiet", "balanced", "loud"})
+
+
+def get_profile_name(registry: Dict, tier: str) -> Optional[str]:
+    """Return a supported resolution profile for a tier, if configured."""
+    tier_config = registry.get("_tiers", {}).get(tier, {})
+    profile = tier_config.get("profile") if isinstance(tier_config, dict) else None
+    name = profile.get("name") if isinstance(profile, dict) else None
+    return name if name in PROFILE_NAMES else None
+
 
 def load_registry(slim_path: Optional[str] = None) -> Dict[str, Any]:
     """Load and validate the registry.
@@ -65,6 +75,7 @@ def classify_models_for_preset(
     registry: Dict,
     tier: str,
     min_reasoning_embedding: int = 0,
+    profile: Optional[str] = None,
 ) -> Dict[str, str]:
     from tier_resolve import resolve_roles_from_list
 
@@ -72,6 +83,7 @@ def classify_models_for_preset(
         models,
         min_reasoning_embedding=min_reasoning_embedding,
         moe_codegen_reuse=uses_local_placeholders(registry, tier),
+        profile=profile,
     )
 
 
@@ -136,4 +148,15 @@ def validate_registry(registry: Dict) -> List[str]:
             f"presets-only={sorted(preset_keys - tier_keys)}, "
             f"_tiers-only={sorted(tier_keys - preset_keys)}"
         )
+    for tier, tier_config in registry.get("_tiers", {}).items():
+        if not isinstance(tier_config, dict) or "profile" not in tier_config:
+            continue
+        profile = tier_config.get("profile")
+        name = profile.get("name") if isinstance(profile, dict) else None
+        if name not in PROFILE_NAMES:
+            warnings.append(f"tier {tier!r} has unknown profile name: {name!r}")
+        if tier not in registry.get(
+            "presets", {}
+        ) or not get_preset_placeholder_categories(registry, tier):
+            warnings.append(f"tier {tier!r} has a profile but no _local: placeholders")
     return warnings

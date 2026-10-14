@@ -237,7 +237,10 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
 
 
 def resolve_roles_from_list(
-    models: list, min_reasoning_embedding: int = 0, moe_codegen_reuse: bool = False
+    models: list,
+    min_reasoning_embedding: int = 0,
+    moe_codegen_reuse: bool = False,
+    profile=None,
 ) -> dict:
     """Classify local Ollama models into role categories and return {role: "ollama/model_name"}.
 
@@ -585,6 +588,8 @@ def resolve_roles_from_list(
                     solo_candidates.append(model)
     classified["solo"] = sorted(solo_candidates, key=_density_sort_key, reverse=True)
 
+    _apply_profile_policy(classified, models, profile)
+
     if not classified["solo"]:
         logger.warning(
             "No solo models found (need completion+thinking+tools+vision); "
@@ -653,3 +658,64 @@ def resolve_roles_from_list(
             )
 
     return resolved
+
+
+def _apply_profile_policy(classified, model_entries, profile):
+    """Apply profile-specific category ranking/admission without model discovery."""
+    if profile is None:
+        return
+    if profile not in {"quiet", "balanced", "loud"}:
+        logger.warning(
+            "Unknown local model profile %r; using default resolution", profile
+        )
+        return
+    if profile == "balanced":
+        return
+
+    def score(model, category):
+        name = model.get("name", "").lower()
+        source = next(
+            (
+                entry
+                for entry in model_entries
+                if isinstance(entry, dict) and entry.get("name") == model.get("name")
+            ),
+            {},
+        )
+        moe = model.get("is_moe", source.get("is_moe", False))
+        params = model.get(
+            "param_count", source.get("param_count")
+        ) or extract_param_count(name)
+        if category == "code-gen":
+            if profile == "quiet":
+                return ("mellum" in name, -int(params or 0))
+            return ("ornith" in name or bool(moe), int(params or 0))
+        if category == "reasoning":
+            if profile == "quiet":
+                return ("gemma" in name, "mellum" in name, -int(params or 0))
+            return (
+                "qwen" in name and not moe,
+                "ornith" in name or bool(moe),
+                int(params or 0),
+            )
+        if category == "vision":
+            return ("gemma" in name, int(params or 0))
+        return (int(params or 0),)
+
+    for category in ("code-gen", "reasoning", "vision"):
+        classified[category].sort(
+            key=lambda model: score(model, category), reverse=True
+        )
+        if profile == "quiet":
+            classified[category] = classified[category][:1]
+    if profile == "quiet" and classified["reasoning"]:
+        preferred = next(
+            (
+                m
+                for m in classified["lightweight"]
+                if "gemma" in m.get("name", "").lower()
+            ),
+            None,
+        )
+        if preferred is not None:
+            classified["reasoning"] = [preferred]
