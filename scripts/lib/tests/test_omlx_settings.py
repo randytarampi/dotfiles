@@ -82,3 +82,40 @@ def test_read_only_check_rejects_non_object_root_and_sections():
     assert "root must be a JSON object" in verify.validate_omlx_settings([])[0]
     errors = verify.validate_omlx_settings({"server": []})
     assert any("server must be a JSON object" in error for error in errors)
+
+
+def test_read_only_check_accepts_custom_guard_with_ceiling():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[3] / "scripts" / "verify-config.py"
+    spec = importlib.util.spec_from_file_location("verify_config_custom_guard", path)
+    assert spec is not None and spec.loader is not None
+    verify = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verify)
+    baseline = local_engines.merge_omlx_settings({}, {})
+    custom = dict(baseline)
+    custom["memory"] = {
+        **baseline["memory"],
+        "prefill_memory_guard": True,
+        "memory_guard_tier": "custom",
+        "memory_guard_custom_ceiling_gb": 48,
+    }
+    assert verify.validate_omlx_settings(custom) == []
+    tiers = ("safe", "balanced", "aggressive")
+    for tier in tiers:
+        tiered = dict(baseline)
+        tiered["memory"] = {
+            **custom["memory"],
+            "memory_guard_tier": tier,
+            "memory_guard_custom_ceiling_gb": None,
+        }
+        assert verify.validate_omlx_settings(tiered) == []
+    invalid = dict(baseline)
+    invalid["memory"] = {
+        **custom["memory"],
+        "memory_guard_custom_ceiling_gb": None,
+    }
+    assert any(
+        "memory_guard_tier" in error for error in verify.validate_omlx_settings(invalid)
+    )
