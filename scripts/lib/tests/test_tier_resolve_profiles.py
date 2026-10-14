@@ -308,3 +308,40 @@ def test_promoted_reasoning_entry_carries_source_moe_metadata():
     # The promoted MoE entry must not masquerade as dense in the density
     # sort merely because the detail lookup missed its MoE status.
     assert resolved["reasoning"] == "omlx/dense-coder:30b"
+
+
+def test_quiet_gemma_selection_sizes_by_name_when_details_omit_counts():
+    models = [
+        {"name": "mellum:6b", "provider": "ollama", "param_count": 6},
+        {"name": "gemma4-14b-noshow", "provider": "ollama", "param_count": None},
+        {"name": "gemma4:8b", "provider": "ollama", "param_count": 8},
+    ]
+    details = {
+        "mellum:6b": {
+            "param_count": 6,
+            "capabilities": ["thinking", "completion", "tools"],
+            "is_moe": False,
+        },
+        "gemma4-14b-noshow": {
+            "param_count": None,
+            "capabilities": ["thinking", "completion", "tools"],
+            "is_moe": False,
+        },
+        "gemma4:8b": {
+            "param_count": 8,
+            "capabilities": ["thinking", "completion", "tools"],
+            "is_moe": False,
+        },
+    }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(
+            models, min_reasoning_embedding=0, profile="quiet"
+        )
+
+    # Size must come from the name tag when the detail lookup omits the
+    # count — an unknown-size Gemma must not outrank a known smaller one.
+    assert resolved["reasoning"] == "ollama/gemma4:8b"
