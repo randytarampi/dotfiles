@@ -76,3 +76,50 @@ def test_category_override_supremacy_for_each_profile():
             classified, ["code-gen=ollama/explicit"]
         )
         assert classified["code-gen"] == "ollama/explicit"
+
+
+def resolve_reasoning_admission(gemma_capabilities, gemma_embedding):
+    models = [
+        {"name": "mellum:6b", "provider": "ollama", "param_count": 6},
+        {"name": "gemma4:12b", "provider": "ollama", "param_count": 12},
+    ]
+    details = {
+        "mellum:6b": {
+            "param_count": 6,
+            "capabilities": ["thinking", "completion", "tools"],
+            "embedding_length": 4096,
+            "is_moe": False,
+        },
+        "gemma4:12b": {
+            "param_count": 12,
+            "capabilities": gemma_capabilities,
+            "embedding_length": gemma_embedding,
+            "is_moe": False,
+        },
+    }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        return tier_resolve.resolve_roles_from_list(
+            models, min_reasoning_embedding=4096, profile="quiet"
+        )
+
+
+def test_quiet_keeps_reasoning_candidate_when_gemma_lacks_thinking():
+    resolved = resolve_reasoning_admission(["completion", "tools"], 2048)
+
+    assert resolved["reasoning"] == "ollama/mellum:6b"
+
+
+def test_quiet_keeps_reasoning_candidate_when_gemma_embedding_is_too_small():
+    resolved = resolve_reasoning_admission(["thinking", "tools"], 2048)
+
+    assert resolved["reasoning"] == "ollama/mellum:6b"
+
+
+def test_quiet_substitutes_qualified_gemma_reasoning_candidate():
+    resolved = resolve_reasoning_admission(["thinking", "tools"], 4096)
+
+    assert resolved["reasoning"] == "ollama/gemma4:12b"
