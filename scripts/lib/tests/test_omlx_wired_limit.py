@@ -45,8 +45,9 @@ def wired(monkeypatch):
 
 
 def test_gate_off_skips(monkeypatch, wired, caplog):
-    monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
     with (
+        patch.object(wired, "_physical_ram_mb") as ram_mock,
+        patch.object(wired, "_read_wired_limit") as read_mock,
         patch.object(wired, "apply_sysctl") as apply_mock,
         patch.object(wired, "install_plist") as install_mock,
         patch.object(sys, "argv", ["configure-omlx-wired-limit.py"]),
@@ -54,9 +55,12 @@ def test_gate_off_skips(monkeypatch, wired, caplog):
         wired.main()
     apply_mock.assert_not_called()
     install_mock.assert_not_called()
+    ram_mock.assert_not_called()
+    read_mock.assert_not_called()
 
 
-def test_gate_on_without_apply_optin_reports_only(monkeypatch, wired):
+def test_gate_on_without_apply_optin_reports_only(monkeypatch, wired, caplog):
+    caplog.set_level("INFO")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
     with (
@@ -67,19 +71,21 @@ def test_gate_on_without_apply_optin_reports_only(monkeypatch, wired):
         wired.main()
     apply_mock.assert_not_called()
     install_mock.assert_not_called()
+    assert "Report-only mode" in caplog.text
 
 
 def test_default_limit_applied_and_installed(monkeypatch, wired):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setenv("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "1")
-    monkeypatch.setattr(wired, "_physical_ram_mb", lambda: 49152)
     with (
+        patch.object(wired, "_physical_ram_mb", return_value=49152) as ram_mock,
         patch.object(wired, "apply_sysctl") as apply_mock,
         patch.object(wired, "install_plist") as install_mock,
         patch.object(sys, "argv", ["configure-omlx-wired-limit.py"]),
     ):
         wired.main()
     apply_mock.assert_called_once_with(40960, dry_run=False)
+    ram_mock.assert_called_once_with()
     install_mock.assert_called_once()
     args, kwargs = install_mock.call_args
     assert args[1] == 40960

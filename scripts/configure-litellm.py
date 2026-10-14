@@ -606,10 +606,22 @@ def main():
         return 0 if provision_app_keys(master_key, service_env_path, strict=True) else 1
     config_path = os.path.expanduser("~/.local/share/litellm/config.yaml")
     try:
-        validate_service_lane_runtime()
+        service_lane_runtime_valid = validate_service_lane_runtime()
         # Compute the snapshot once: write_config reuses it instead of
         # re-enumerating provider catalogues a second time per deploy.
         entries = compute_model_list()
+        if (
+            os.environ.get(litellm_config.OPENAI_SERVICE_LANES_ENV, "0") == "1"
+            and any(
+                entry["litellm_params"].get("service_tier") in ("flex", "fast")
+                for entry in entries
+            )
+            and not service_lane_runtime_valid
+        ):
+            logger.error(
+                "LiteLLM service-lane runtime validation failed; keeping existing config"
+            )
+            return 1
         for note in litellm_config.last_generation_notes:
             logger.warning("LiteLLM coverage: %s", note)
         if args.dry_run:

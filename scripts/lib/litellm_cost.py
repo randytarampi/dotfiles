@@ -162,8 +162,12 @@ def group_rows(rows, by, aliases=None):
         total = totals.setdefault(key, {"spend": 0.0, "tokens": 0})
         total["spend"] += float(row.get("spend") or 0)
         total["tokens"] += int(row.get("total_tokens", row.get("tokens", 0)) or 0)
-        total["service_tier"] = row.get("service_tier") or total.get(
-            "service_tier", "—"
+        tier = row.get("service_tier")
+        previous_tier = total.get("service_tier", "—")
+        total["service_tier"] = (
+            "mixed"
+            if tier and previous_tier not in ("—", tier)
+            else tier or previous_tier
         )
     return totals
 

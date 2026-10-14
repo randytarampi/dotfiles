@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import tier_resolve
+
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parents[2]
 SCRIPT = REPO_ROOT / "scripts/configure-opencode-tier.py"
@@ -135,6 +137,11 @@ def test_jetbrains_dry_run_materializes_profile_tiers(tmp_path, monkeypatch, cap
             jetbrains_profiles,
             "parse_local_models",
             return_value=["mellum-small", "ornith-large", "gemma4:12b", "qwen3:8b"],
+        ),
+        patch.object(
+            tier_resolve,
+            "get_model_details",
+            return_value={"param_count": 8, "capabilities": ["completion", "tools"]},
         ),
         caplog.at_level("INFO"),
     ):

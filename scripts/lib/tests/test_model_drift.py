@@ -77,11 +77,16 @@ def test_openai_lane_alias_checked_against_proxy_inventory(monkeypatch):
     assert DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=True) == []
     violations = DRIFT.check_slim({"model": "openai/gpt-6.1-sol-fast"}, proxy_mode=True)
     assert violations == ["openai/gpt-6.1-sol-fast is not served by the LiteLLM proxy"]
-    # Native allowlist membership does not classify lane aliases as native.
+    # Direct mode must check lane-shaped IDs against the native allowlist.
     monkeypatch.setattr(DRIFT, "get_models", lambda url: None)
-    assert (
-        DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=False) == []
+    data = {"model": "openai/gpt-6.1-sol-flex"}
+    assert DRIFT.check_slim(data, proxy_mode=False) == [
+        "openai/gpt-6.1-sol-flex is not in the openai model allowlist"
+    ]
+    monkeypatch.setattr(
+        DRIFT, "load_allowlists", lambda _: {"openai": {"gpt-6.1-sol-flex"}}
     )
+    assert DRIFT.check_slim(data, proxy_mode=False) == []
 
 
 def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):
