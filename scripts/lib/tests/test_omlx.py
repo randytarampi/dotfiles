@@ -1410,7 +1410,8 @@ def test_mozart_injects_local_engine_gateways(monkeypatch):
     assert "unreachable" not in gateways3
 
 
-def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
+@pytest.mark.parametrize("discovered", [[], None])
+def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path, discovered):
     """OLLAMA_KV_CACHE_TYPE drives oMLX per-model TurboQuant (q8_0→8, q4_0→4)."""
     settings_file = tmp_path / "model_settings.json"
     settings_file.write_text(
@@ -1432,7 +1433,9 @@ def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
     # q8_0 → 8-bit enabled; profiles without TurboQuant keys gain them;
     # unmanaged keys preserved
     env = {"OLLAMA_KV_CACHE_TYPE": "q8_0"}
-    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+    with patch.object(
+        local_engines, "iter_engine_models_strict", return_value=discovered
+    ):
         changed = local_engines.sync_turboquant_kv(settings_file, env)
     assert changed == 2
     document = json.loads(settings_file.read_text())
@@ -1444,10 +1447,14 @@ def test_sync_turboquant_kv_applies_ollama_kv_cache_type(tmp_path):
     assert document["models"]["m2"]["turboquant_kv_enabled"] is True
     assert document["models"]["m2"]["turboquant_kv_bits"] == 8
     # Idempotent: re-run with the same env → no changes
-    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+    with patch.object(
+        local_engines, "iter_engine_models_strict", return_value=discovered
+    ):
         assert local_engines.sync_turboquant_kv(settings_file, env) == 0
     # q4_0 → 4-bit (both models flip)
-    with patch.object(local_engines, "iter_engine_models_strict", return_value=[]):
+    with patch.object(
+        local_engines, "iter_engine_models_strict", return_value=discovered
+    ):
         assert (
             local_engines.sync_turboquant_kv(
                 settings_file, {"OLLAMA_KV_CACHE_TYPE": "q4_0"}
@@ -1519,6 +1526,29 @@ def test_sync_turboquant_kv_seeds_discovered_models_and_is_idempotent(
     assert len(writes) == 1
 
 
+@pytest.mark.parametrize("gate", [None, "0"])
+def test_omlx_turboquant_doctor_gate_off_skips_discovery(tmp_path, gate):
+    verify = _load_script("verify_config", "verify-config.py")
+    environ = {"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+    if gate is not None:
+        environ["DOTFILES_RUN_OMLX_SETUP"] = gate
+    with patch.object(local_engines, "iter_engine_models_strict") as discover:
+        assert verify.omlx_turboquant_status(home=tmp_path, environ=environ) == (
+            "oMLX TurboQuant KV: skipped (DOTFILES_RUN_OMLX_SETUP=0)",
+            None,
+        )
+    discover.assert_not_called()
+
+
+def test_omlx_turboquant_doctor_empty_catalogue_is_active(tmp_path, monkeypatch):
+    verify = _load_script("verify_config", "verify-config.py")
+    monkeypatch.setattr(local_engines, "iter_engine_models_strict", lambda _: [])
+    assert verify.omlx_turboquant_status(
+        home=tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"},
+    ) == ("oMLX TurboQuant KV: applied 0 of 0 discovered models", False)
+
+
 def test_omlx_turboquant_doctor_status(tmp_path, monkeypatch):
     verify = _load_script("verify_config", "verify-config.py")
     monkeypatch.setattr(
@@ -1543,7 +1573,8 @@ def test_omlx_turboquant_doctor_status(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     message, incomplete = verify.omlx_turboquant_status(
-        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+        home=tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"},
     )
     assert message == "oMLX TurboQuant KV: applied 1 of 2 discovered models"
     assert incomplete is True
@@ -1552,7 +1583,8 @@ def test_omlx_turboquant_doctor_status(tmp_path, monkeypatch):
         local_engines, "iter_engine_models_strict", lambda provider: None
     )
     assert verify.omlx_turboquant_status(
-        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+        home=tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"},
     ) == (
         "oMLX TurboQuant KV: discovery unavailable (UNKNOWN)",
         None,
@@ -1584,7 +1616,8 @@ def test_omlx_turboquant_doctor_counts_preserved_skip_last(tmp_path, monkeypatch
     )
 
     assert verify.omlx_turboquant_status(
-        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+        home=tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"},
     ) == ("oMLX TurboQuant KV: applied 1 of 1 discovered models", False)
 
 
@@ -1613,7 +1646,8 @@ def test_omlx_turboquant_doctor_counts_requested_q4(tmp_path, monkeypatch):
     )
 
     assert verify.omlx_turboquant_status(
-        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q4_0"}
+        home=tmp_path,
+        environ={"DOTFILES_RUN_OMLX_SETUP": "1", "OLLAMA_KV_CACHE_TYPE": "q4_0"},
     ) == ("oMLX TurboQuant KV: applied 1 of 1 discovered models", False)
 
 
@@ -1627,7 +1661,9 @@ def test_omlx_turboquant_doctor_unset_policy_is_neutral(tmp_path, monkeypatch):
     settings = tmp_path / ".omlx/model_settings.json"
     settings.parent.mkdir()
     settings.write_text(json.dumps({"models": {"existing": {}}}), encoding="utf-8")
-    assert verify.omlx_turboquant_status(home=tmp_path, environ={}) == (
+    assert verify.omlx_turboquant_status(
+        home=tmp_path, environ={"DOTFILES_RUN_OMLX_SETUP": "1"}
+    ) == (
         "oMLX TurboQuant KV: no KV policy requested (KV type unset/f16); 1 profiles present",
         None,
     )

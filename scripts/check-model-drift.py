@@ -139,14 +139,17 @@ def check_slim(data: dict, proxy_mode=None) -> list[str]:
         if "/" not in model:
             continue
         provider, model_id = model.split("/", 1)
-        if provider == "openai" and model_id.endswith(("-flex", "-fast")):
-            if proxy_mode:
-                if (
-                    proxy_models is not None
-                    and model not in proxy_models
-                    and model_id not in proxy_models
-                ):
-                    violations.append(f"{model} is not served by the LiteLLM proxy")
+        if (
+            proxy_mode
+            and provider == "openai"
+            and model_id.endswith(("-flex", "-fast"))
+        ):
+            if (
+                proxy_models is not None
+                and model not in proxy_models
+                and model_id not in proxy_models
+            ):
+                violations.append(f"{model} is not served by the LiteLLM proxy")
             continue
         allowlist_key = canonical_allowlist_key(model_id)
         if provider not in allowlists:

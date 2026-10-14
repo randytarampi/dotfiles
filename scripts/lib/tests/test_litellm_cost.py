@@ -133,6 +133,34 @@ def test_grouping_includes_served_service_tier_without_changing_totals():
     )
 
 
+@pytest.mark.parametrize("by", ["client", "provider", "model"])
+@pytest.mark.parametrize(
+    ("tiers", "expected"),
+    [
+        (["flex", "priority", "flex"], "mixed"),
+        (["priority", "flex", "priority"], "mixed"),
+        (["flex", "flex", "flex"], "flex"),
+        ([None, "flex", ""], "flex"),
+        ([None, "", None], "—"),
+    ],
+)
+def test_grouping_aggregates_service_tiers(by, tiers, expected):
+    rows = [
+        {
+            "api_key": "hash",
+            "model": "openai/gpt-x",
+            "spend": 0.5,
+            "tokens": 2,
+            "service_tier": tier,
+        }
+        for tier in tiers
+    ]
+    key = {"client": "pi", "provider": "openai", "model": "openai/gpt-x"}[by]
+    assert litellm_cost.group_rows(rows, by, {"hash": "pi"}) == {
+        key: {"spend": 1.5, "tokens": 6, "service_tier": expected}
+    }
+
+
 def test_text_report_renders_served_tier_and_preserves_totals(monkeypatch, caplog):
     import runpy
     import sys

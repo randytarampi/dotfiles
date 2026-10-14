@@ -577,6 +577,8 @@ def omlx_turboquant_status(home=None, environ=None):
     from local_engines import iter_engine_models_strict
 
     environ = os.environ if environ is None else environ
+    if environ.get("DOTFILES_RUN_OMLX_SETUP", "0") != "1":
+        return "oMLX TurboQuant KV: skipped (DOTFILES_RUN_OMLX_SETUP=0)", None
     root = Path(home or environ.get("HOME", HOME)).expanduser()
     kv_type = (environ.get("OLLAMA_KV_CACHE_TYPE") or "").strip().lower()
     bit_map = {"q8_0": 8, "q4_0": 4}

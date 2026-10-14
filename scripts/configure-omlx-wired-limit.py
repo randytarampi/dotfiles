@@ -314,14 +314,15 @@ def main() -> None:
     if not load_env():
         logger.warning("~/.env not found")
 
-    ram_mb = _physical_ram_mb()
-    current = _read_wired_limit()
-    logger.info(f"Physical RAM: {ram_mb} MB; current {SYSCTL_KEY}: {current} MB")
     if os.environ.get("DOTFILES_RUN_OMLX_SETUP", "0") != "1":
         logger.info(
             f"DOTFILES_RUN_OMLX_SETUP='{os.environ.get('DOTFILES_RUN_OMLX_SETUP', '0')}' — skipping oMLX wired-limit configuration"
         )
         return
+
+    ram_mb = _physical_ram_mb()
+    current = _read_wired_limit()
+    logger.info(f"Physical RAM: {ram_mb} MB; current {SYSCTL_KEY}: {current} MB")
 
     if os.environ.get("DOTFILES_APPLY_OMLX_WIRED_LIMIT", "0") != "1":
         logger.info(
@@ -340,7 +341,6 @@ def main() -> None:
         )
         raise SystemExit(1)
 
-    ram_mb = _physical_ram_mb()
     if ram_mb and limit_mb > MAX_WIRED_FRACTION * ram_mb:
         logger.critical(
             f"Refusing OMLX_WIRED_LIMIT_MB={limit_mb}: exceeds {MAX_WIRED_FRACTION:.0%} of physical RAM ({ram_mb} MB)"

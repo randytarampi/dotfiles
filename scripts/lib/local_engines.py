@@ -622,7 +622,7 @@ def sync_turboquant_kv(model_settings_path, environ=None):
     # not seed settings from an unavailable daemon.
     discovered = iter_engine_models_strict("omlx")
     if discovered is None:
-        return 0
+        discovered = []
     discovered_ids = {
         model["name"]
         for model in discovered

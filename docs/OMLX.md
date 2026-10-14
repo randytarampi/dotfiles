@@ -77,7 +77,8 @@ make services-restart
   per-key auth. |
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
-| `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB. `configure-omlx-wired-limit.py` is report-only by default; applying requires both `DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
+| `DOTFILES_APPLY_OMLX_WIRED_LIMIT` | `0` | Apply the wired limit and install a boot LaunchDaemon when `DOTFILES_RUN_OMLX_SETUP=1`. |
+| `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB; when unset, falls back to the script default of 40960 MB. `configure-omlx-wired-limit.py` is report-only by default; applying requires both `DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
 
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
@@ -117,7 +118,7 @@ models, and is idempotent. Discovery failure (`None`) is distinct from a
 successful empty catalogue: failure does not seed settings. The sync preserves
 `turboquant_skip_last=true` by default, leaving the last layer uncompressed as a
 quality safeguard. The doctor reports `applied X of Y discovered models`; when
-discovery is unavailable it reports `UNKNOWN`, and with no requested q8/q4
+discovery is unavailable, it reports `UNKNOWN`, and with no requested q8/q4
 policy it reports a neutral status. Persistent SSD and optional
 hot-cache settings provide the comparable residency and reuse controls. The
 service plist does not inherit `~/.env`, so these values are persisted in

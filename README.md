@@ -551,12 +551,11 @@ Seventeen presets for AI agents, defined in `configs/opencode/oh-my-opencode-sli
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
 | **free** | OpenCode Zen + Google + OpenRouter (all free tiers) | Free cross-provider workflow with cross-provider fallbacks |
 | **local-pro** | Local Ollama (all 4 categories) | Power users with diverse local models |
-| **local** | Local Ollama (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
+| **local** | Local Ollama (reasoning + code-gen + lightweight + vision), balanced profile | Balanced local selection for offline/air-gapped use |
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile ranking | Quiet local selection; policy does not guarantee hardware fit or latency |
-| **local** | Local profile (balanced) | Balanced local selection |
 | **local-loud** | Local profile ranking | Quality-first selection, sequential until measured |
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4.1-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-opencode-zen-free` uses OpenCode Zen with OpenAI fallbacks; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.

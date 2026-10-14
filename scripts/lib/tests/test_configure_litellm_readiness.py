@@ -4,12 +4,65 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts/configure-litellm.py"
 SPEC = importlib.util.spec_from_file_location("configure_litellm_readiness", SCRIPT)
 assert SPEC and SPEC.loader
 CONFIGURE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONFIGURE)
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    ("gate", "lane", "runtime_valid", "expected_status"),
+    [
+        ("1", "flex", False, 1),
+        ("1", "fast", False, 1),
+        ("1", "flex", True, 0),
+        ("0", "flex", False, 0),
+        ("1", None, False, 0),
+    ],
+)
+def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
+    tmp_path, monkeypatch, dry_run, gate, lane, runtime_valid, expected_status
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_OPENAI_SERVICE_LANES", gate)
+    monkeypatch.setattr(CONFIGURE, "load_env", lambda: True)
+    monkeypatch.setattr(CONFIGURE, "_database_url_configured", lambda: True)
+    monkeypatch.setattr(
+        CONFIGURE, "validate_service_lane_runtime", lambda: runtime_valid
+    )
+    entry = {
+        "model_name": "openai/gpt-6.1-sol" + (f"-{lane}" if lane else ""),
+        "litellm_params": {"model": "openai/gpt-6.1-sol"},
+    }
+    if lane:
+        entry["litellm_params"]["service_tier"] = lane
+    monkeypatch.setattr(CONFIGURE, "compute_model_list", lambda: [entry])
+    monkeypatch.setattr(CONFIGURE.litellm_config, "last_generation_notes", [])
+    monkeypatch.setattr(CONFIGURE, "_persist_generation_notes", lambda *_: None)
+    monkeypatch.setattr(
+        CONFIGURE, "_sync_runtime_rates_snapshot", lambda *_, **__: "unchanged"
+    )
+    monkeypatch.setattr(CONFIGURE, "provision_app_keys", lambda *_, **__: True)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)] + (["--dry-run"] if dry_run else []))
+    config = tmp_path / ".local/share/litellm/config.yaml"
+    config.parent.mkdir(parents=True)
+    original = b"existing configuration\n"
+    config.write_bytes(original)
+
+    assert CONFIGURE.main() == expected_status
+    if expected_status or dry_run:
+        assert config.read_bytes() == original
+        assert list(config.parent.iterdir()) == [config]
+    else:
+        assert config.read_text() == CONFIGURE.litellm_config.render_config(
+            entries=[entry]
+        )
 
 
 def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monkeypatch):
