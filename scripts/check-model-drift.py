@@ -121,7 +121,12 @@ def check_slim(data: dict, proxy_mode=None) -> list[str]:
     if proxy_mode:
         port = _configured_litellm_port()
         proxy_models = (
-            get_models(f"http://127.0.0.1:{port}/v1/models") if port else None
+            get_models(
+                f"http://127.0.0.1:{port}/v1/models",
+                api_key=os.environ.get("LITELLM_MASTER_KEY", ""),
+            )
+            if port
+            else None
         )
     for model in set(iter_models(data)):
         if model.startswith("litellm/"):
@@ -144,11 +149,12 @@ def check_slim(data: dict, proxy_mode=None) -> list[str]:
             and provider == "openai"
             and model_id.endswith(("-flex", "-fast"))
         ):
-            if (
-                proxy_models is not None
-                and model not in proxy_models
-                and model_id not in proxy_models
-            ):
+            if proxy_models is None:
+                violations.append(
+                    f"{model} cannot be validated: "
+                    "LiteLLM proxy inventory unavailable"
+                )
+            elif model not in proxy_models and model_id not in proxy_models:
                 violations.append(f"{model} is not served by the LiteLLM proxy")
             continue
         allowlist_key = canonical_allowlist_key(model_id)
