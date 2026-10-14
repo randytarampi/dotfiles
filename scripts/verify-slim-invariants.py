@@ -17,10 +17,10 @@ Invariants enforced:
   4. Preset names are consistent across the role presets, council presets, and
      tier definitions; council synthesizer models and variants are synchronized.
   5. Top-level council alpha/beta/gamma models match each non-profile tier
-     definition; profile-tier (local family) councils are `_local:` placeholder
-     state that lives only under _tiers — top-level council presets are
-     runtime state materialized by the tier switcher and must not mirror
-     placeholder councils or contain `_local:` models.
+    definition; the local-family (local-quiet/local/local-loud) councils are
+    `_local:` placeholder state that lives only under _tiers. Top-level
+    council presets are runtime state materialized by the tier switcher and
+    must not mirror placeholder councils or contain `_local:` models.
   6. Every configured model is present in its provider's model allowlist.
   7. Fallback entries within an array use distinct provider prefixes.
 
@@ -356,9 +356,6 @@ def _preset_violations(presets, council_presets, tiers):
     tier_names = set(tiers)
     all_names = preset_names | council_names | tier_names
 
-    profile_councils = {
-        name for name in tier_names if (tiers.get(name) or {}).get("profile")
-    }
     for label, names in (
         ("presets", preset_names),
         ("_tiers", tier_names),
