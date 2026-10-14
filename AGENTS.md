@@ -213,7 +213,13 @@ Recurring validation quirks — check these before diagnosing failures:
 
 ## Model Tiers
 
-Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md). Switch with: `scripts/configure-opencode-tier.py --preset <tier>`.
+Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md).
+
+The local profile family is `local-quiet` / `local` / `local-loud`; `local` is the balanced profile and evolves in place. Profile policies rank candidates at resolution time and do not promise hardware fit, latency or concurrency. Do not introduce alias machinery for profile names. If a future deprecation is approved, the only permitted alias mechanism is one explicit alias map in `tier_registry.py`, used consistently by consumers.
+
+OpenAI service lanes are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are available only on the direct API-key route. They must not silently escalate from Flex to standard, and spend reporting must identify the tier actually served. See [docs/LITELLM.md](docs/LITELLM.md) for the operational contract.
+
+Switch tiers with `scripts/configure-opencode-tier.py --preset <tier>`; the local profile choices are `local-quiet`, `local` and `local-loud`.
 
 Model changes must preserve exact provider/endpoint model IDs, update every affected
 configured consumer and proxy alias together, and check selected IDs against
@@ -250,7 +256,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 
 Run `make help` for the full command list. For task-specific guidance, see the relevant `docs/` reference.
 
-- Switch AI tier: `scripts/configure-opencode-tier.py --preset <tier>`
+- Switch AI tier: `scripts/configure-opencode-tier.py --preset <tier>` (including `local-quiet`, `local` and `local-loud`)
 - Apply all dotfiles: `make deploy`
 - Full verification: `make verify`
 - Check hash coverage: `make check-hashes`
