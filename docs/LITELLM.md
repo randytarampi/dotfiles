@@ -92,17 +92,36 @@ in `~/.env` to enumerate whole live catalogues again. Any other value is a
 `DOTFILES_USE_OPENAI_SERVICE_LANES` defaults to `0`. When enabled, the generator
 expands only the genuine direct API-key `openai` route: the `OPENAI_API_KEY`
 identity and canonical `https://api.openai.com/v1` base URL must both match.
-OAuth/ChatGPT rows are never expanded. The curated allowlist currently starts
-with `gpt-6.1-sol`; generated aliases are `openai/gpt-6.1-sol-flex` and
-`openai/gpt-6.1-sol-fast`, carrying request-body `service_tier` values `flex`
-and `fast`. A collision with an existing alias is an error. With the gate off,
-rendered output is identical to the unset-gate output.
+OAuth/ChatGPT rows are never expanded. The curated allowlist is
+`gpt-6.1-sol`, `gpt-6-astra` and `gpt-6-luna`; each receives `-flex` and `-fast`
+aliases carrying request-body `service_tier` values `flex` and `fast`. A
+collision with an existing alias is an error. With the gate off, rendered
+output is identical to the unset-gate output. Requesting a tier does not
+guarantee account access to that tier. No model-specific minimum usage-tier
+prerequisite was verifiable; none is enforced here.
 
 Lane rates are 0.5x and 2x the base rate, retaining cache-read, cache-write and
 `cache_creation_input_token_cost` fields. The installed-runtime check verifies
 that `service_tier` survives `drop_params=True` with LiteLLM 1.102.1; if the
 check cannot verify this, setup logs an `UNVERIFIED` warning. This is bounded
 runtime evidence, not a guarantee across other LiteLLM versions.
+
+The documented standard short-context rates (input up to 272K tokens; USD per
+1M tokens) are:
+
+| Model | Input | Cached input | Cache write | Output |
+|-------|------:|-------------:|-----------:|-------:|
+| `gpt-6.1-sol` | $2 | $0.10 | $2.50 | $10 |
+| `gpt-6-astra` | $10 | $1 | $12.50 | $50 |
+| `gpt-6-luna` | $0.10 | $0.01 | $0.125 | $0.50 |
+
+Flex is 0.5x and Fast is 2x these rates; cache fields are scaled likewise.
+For input above 272K, the documented long-context rule doubles input/cache
+rates and multiplies output by 1.5x.
+
+Luna built-in tools and function calling require the Responses API. On Chat
+Completions, function calling is supported only with `reasoning_effort=none`.
+Astra supports function calling; no Chat Completions restriction is stated.
 
 Policy: there is no automatic Flex-to-standard fallback, no mass role migration
 to Flex, no default Fast role and no Ultrafast lane. `litellm-costs` displays the

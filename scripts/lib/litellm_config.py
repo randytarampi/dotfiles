@@ -35,7 +35,7 @@ _MODELS_DEV_FETCH = models_dev.fetch_models_dev
 logger = logging.getLogger(__name__)
 
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
-OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol"}
+OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
