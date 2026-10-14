@@ -77,7 +77,7 @@ make services-restart
   per-key auth. |
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
-| `OMLX_WIRED_LIMIT_MB` | `40960` | Metal wired limit in MB (Apple Silicon). Script 29 runs `configure-omlx-wired-limit.py` to apply `sudo sysctl iogpu.wired_limit_mb=<limit>` and install the root `com.dotfiles.omlx-wired-limit` LaunchDaemon that re-applies it at boot. Apple's default cap (~75% of RAM) rejects model loads above it with HTTP 507; 40960 MB fits a 38 GB model such as a 35B 4-bit on a 48 GB Mac. Values above 90% of physical RAM are refused. |
+| `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB. `configure-omlx-wired-limit.py` is report-only by default; applying requires both `DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
 
 `OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
 origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
@@ -111,8 +111,14 @@ MLX has no global KV-cache quantization knob, but TurboQuant KV is per-model
 (`~/.omlx/model_settings.json`, engine-construction field — reload/restart to
 apply). `OLLAMA_KV_CACHE_TYPE` drives both daemons from one canonical name:
 `q8_0` enables TurboQuant at 8 bits, `q4_0` at 4 bits, and `f16`/unset leaves
-per-model settings untouched (admin-UI managed). Script 29 applies the mapping
-and restarts the service when models change. Persistent SSD and optional
+per-model settings untouched (admin-UI managed). For a requested q8/q4 policy,
+the sync seeds settings for every discovered model ID, including newly installed
+models, and is idempotent. Discovery failure (`None`) is distinct from a
+successful empty catalogue: failure does not seed settings. The sync preserves
+`turboquant_skip_last=true` by default, leaving the last layer uncompressed as a
+quality safeguard. The doctor reports `applied X of Y discovered models`; when
+discovery is unavailable it reports `UNKNOWN`, and with no requested q8/q4
+policy it reports a neutral status. Persistent SSD and optional
 hot-cache settings provide the comparable residency and reuse controls. The
 service plist does not inherit `~/.env`, so these values are persisted in
 `~/.omlx/settings.json`.
@@ -125,6 +131,18 @@ service plist does not inherit `~/.env`, so these values are persisted in
 | `OMLX_HOT_CACHE_MAX_SIZE` | `cache.hot_cache_max_size` | `0` (disabled) |
 | `OMLX_HOT_CACHE_WRITE_THROUGH` | `cache.hot_cache_write_through` | `false` |
 | `OMLX_INITIAL_CACHE_BLOCKS` | `cache.initial_cache_blocks` | `256` |
+
+### Wired-limit lifecycle
+
+The utility reports current state without changing it unless both
+`DOTFILES_RUN_OMLX_SETUP=1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1` are set.
+`OMLX_WIRED_LIMIT_MB` overrides its computed target; values above 90% of
+physical RAM are refused. An applied value is installed in a boot LaunchDaemon.
+To revert, disable the apply gate, remove/unload the LaunchDaemon and restore
+the prior sysctl value. Reboot is not a rollback while the boot LaunchDaemon
+remains installed. This is per-host tuning, not a universal 40960 MB
+recommendation: 16 GB hosts refuse that value under the safety guard, and M3/M5
+hardware needs vary.
 
 ### MCP
 

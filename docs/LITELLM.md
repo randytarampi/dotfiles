@@ -87,6 +87,38 @@ genuinely free (`:free`) are emitted. Set `DOTFILES_LITELLM_CATALOGUE_SCOPE=full
 in `~/.env` to enumerate whole live catalogues again. Any other value is a
 **hard configuration error** at generation time.
 
+## OpenAI service lanes (Flex/Fast)
+
+`DOTFILES_USE_OPENAI_SERVICE_LANES` defaults to `0`. When enabled, the generator
+expands only the genuine direct API-key `openai` route: the `OPENAI_API_KEY`
+identity and canonical `https://api.openai.com/v1` base URL must both match.
+OAuth/ChatGPT rows are never expanded. The curated allowlist currently starts
+with `gpt-6.1-sol`; generated aliases are `openai/gpt-6.1-sol-flex` and
+`openai/gpt-6.1-sol-fast`, carrying request-body `service_tier` values `flex`
+and `fast`. A collision with an existing alias is an error. With the gate off,
+rendered output is identical to the unset-gate output.
+
+Lane rates are 0.5x and 2x the base rate, retaining cache-read, cache-write and
+`cache_creation_input_token_cost` fields. The installed-runtime check verifies
+that `service_tier` survives `drop_params=True` with LiteLLM 1.102.1; if the
+check cannot verify this, setup logs an `UNVERIFIED` warning. This is bounded
+runtime evidence, not a guarantee across other LiteLLM versions.
+
+Policy: there is no automatic Flex-to-standard fallback, no mass role migration
+to Flex, no default Fast role and no Ultrafast lane. `litellm-costs` displays the
+served `service_tier` (`—` when absent); totals are not multiplied at report
+time. Spend backfill skips lane aliases unless an exact per-lane rate entry
+exists and reports the skipped count. Model-drift validation checks lane aliases
+against the proxy inventory, never the native OpenAI catalogue. The curated
+Open WebUI catalogue hides lane aliases.
+
+The live pilot protocol is defined but deferred: after genuine credentials
+exist, make one small request and verify requested versus returned tier and
+cost. Use exactly one Responses-API tool call because Sol tool calls require
+Responses. No genuine `OPENAI_API_KEY` is currently present on the configured
+hosts (the value is an empty placeholder); keep the gate off until real
+credentials are available.
+
 ## Cost rates
 
 Request-time spend tracking resolves per-token rates from the map the proxy
