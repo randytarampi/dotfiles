@@ -627,6 +627,13 @@ def resolve_roles_from_list(
             all_models.extend(classified.get(c, []))
         if index < len(all_models):
             return all_models[index]["name"]
+        if index >= 1 and all_models:
+            # Secondary seats (index >= 1) exist for council diversity; on
+            # fleets too small to supply one, reuse an available resident so
+            # the seat still resolves — diversity then comes from variants,
+            # as in local-solo. Primary seats (index 0) legitimately stay
+            # unset when their category is empty.
+            return all_models[0]["name"]
         return None
 
     role_map = {

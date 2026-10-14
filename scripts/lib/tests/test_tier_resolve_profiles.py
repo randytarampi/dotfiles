@@ -106,18 +106,32 @@ def test_loud_council_gamma_uses_second_codegen_candidate():
 def test_index_three_placeholders_degrade_to_existing_model():
     one_model = [FLEET[0]]
     resolved = resolve(one_model, "loud")
-    assert resolved.get("code-gen_3", resolved["code-gen"]) == resolved["code-gen"]
-    assert (
-        resolved.get("lightweight_3", resolved["lightweight"])
-        == resolved["lightweight"]
-    )
+    assert resolved["code-gen_3"] == resolved["code-gen"]
+    assert resolved["lightweight_3"] == resolved["lightweight"]
 
     two_codegen = FLEET[:2]
     resolved = resolve(two_codegen, "loud")
-    assert resolved.get("code-gen_3", resolved["code-gen"]) in {
-        resolved["code-gen"],
-        resolved.get("code-gen_2", resolved["code-gen"]),
+    assert resolved["code-gen_3"] in {resolved["code-gen"], resolved["code-gen_2"]}
+
+
+def test_loud_council_gamma_resolves_on_small_fleets():
+    models = [{"name": "smol-coder:4b", "provider": "ollama", "param_count": 4}]
+    details = {
+        "smol-coder:4b": {
+            "param_count": 4,
+            "capabilities": ["completion", "tools"],
+            "is_moe": False,
+        }
     }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        resolved = tier_resolve.resolve_roles_from_list(models, profile="loud")
+
+    assert resolved["code-gen_2"] == resolved["code-gen"]
+    assert resolved["code-gen_2"] == "ollama/smol-coder:4b"
 
 
 def test_category_override_supremacy_for_each_profile():
