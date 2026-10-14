@@ -117,6 +117,28 @@ def test_plan_updates_filters_drift_and_keeps_correct_rows():
     assert plan[0][2] == pytest.approx(1000 * 1.5e-07 + 400 * 5e-07)
 
 
+def test_lane_alias_requires_exact_rate_and_standard_rows_keep_rate():
+    row = {
+        "request_id": "flex",
+        "model": "openai/glm-5.3-flash-flex",
+        "spend": 0.0,
+        "prompt_tokens": 100,
+        "completion_tokens": 10,
+    }
+    assert BACKFILL.expected_spend(row, RATES) is None
+    assert BACKFILL.plan_updates([row], RATES) == []
+    lane_rates = {
+        **RATES,
+        "openai/glm-5.3-flash-flex": {
+            "input_cost_per_token": 3e-7,
+            "output_cost_per_token": 1e-6,
+        },
+    }
+    assert BACKFILL.expected_spend(row, lane_rates) == pytest.approx(4e-5)
+    standard = {**row, "model": "openai/glm-5.3-flash"}
+    assert BACKFILL.expected_spend(standard, RATES) == pytest.approx(2e-5)
+
+
 def test_help_exits_zero():
     from subprocess import run
 
@@ -126,6 +148,14 @@ def test_help_exits_zero():
 
 def test_dry_run_plans_without_writes(tmp_path, monkeypatch, caplog):
     rows = [
+        {
+            "request_id": "row-flex",
+            "model": "openai/glm-5.3-flash-flex",
+            "spend": 0.0,
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "cache_hit": "",
+        },
         {
             "request_id": "row-1",
             "model": "ollama/glm-5.3-flash:cloud",
@@ -192,4 +222,8 @@ def test_dry_run_plans_without_writes(tmp_path, monkeypatch, caplog):
     # summary must report the exact unpriced count for these rows (the
     # omlx local model has no rate → 1 unpriced).
     assert all("capped" not in message for message in caplog.messages)
-    assert any("1 unpriced row(s) stay" in message for message in caplog.messages)
+    assert any("2 unpriced row(s) stay" in message for message in caplog.messages)
+    assert any(
+        "1 lane-alias rows skipped (no per-lane rate)" in message
+        for message in caplog.messages
+    )

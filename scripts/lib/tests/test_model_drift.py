@@ -69,6 +69,21 @@ def test_slim_litellm_unknown_normalized_identity_is_error(monkeypatch):
     assert DRIFT.check_slim({"model": "litellm/openai/missing"}, proxy_mode=True)
 
 
+def test_openai_lane_alias_checked_against_proxy_inventory(monkeypatch):
+    monkeypatch.setattr(DRIFT, "load_allowlists", lambda _: {"openai": set()})
+    monkeypatch.setattr(DRIFT, "active_engines", lambda: [])
+    monkeypatch.setattr(DRIFT, "_configured_litellm_port", lambda: 4000)
+    monkeypatch.setattr(DRIFT, "get_models", lambda url: {"gpt-6.1-sol-flex"})
+    assert DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=True) == []
+    violations = DRIFT.check_slim({"model": "openai/gpt-6.1-sol-fast"}, proxy_mode=True)
+    assert violations == ["openai/gpt-6.1-sol-fast is not served by the LiteLLM proxy"]
+    # Native allowlist membership does not classify lane aliases as native.
+    monkeypatch.setattr(DRIFT, "get_models", lambda url: None)
+    assert (
+        DRIFT.check_slim({"model": "openai/gpt-6.1-sol-flex"}, proxy_mode=False) == []
+    )
+
+
 def test_local_engine_drift_is_skipped_when_gate_is_off(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
     assert DRIFT.check_local_engine_models() == []

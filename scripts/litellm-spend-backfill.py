@@ -91,6 +91,22 @@ def wire_to_bare(model):
 
 def rate_for(model, rates):
     """Resolve (input, output) $/token rates for a spend-row model spelling."""
+    model = str(model or "")
+    if model.endswith(("-flex", "-fast")):
+        # Rate snapshots commonly use bare IDs; either spelling is exact for
+        # the lane (unlike falling back to the unsuffixed base model).
+        entry = rates.get(model)
+        if entry is None and "/" in model:
+            entry = rates.get(model.rsplit("/", 1)[-1])
+        if not isinstance(entry, dict):
+            return None
+        input_rate = entry.get("input_cost_per_token")
+        output_rate = entry.get("output_cost_per_token")
+        if isinstance(input_rate, (int, float)) and isinstance(
+            output_rate, (int, float)
+        ):
+            return float(input_rate), float(output_rate)
+        return None
     bare = wire_to_bare(model)
     entry = rates.get(bare) if bare else None
     if isinstance(entry, dict):
@@ -319,6 +335,13 @@ def main():
         logger.error("UNKNOWN spend rows response was not a list")
         return 1
     plan = plan_updates(rows, rates)
+    lane_alias_skipped = sum(
+        1
+        for row in rows
+        if isinstance(row, dict)
+        and str(row.get("model") or "").endswith(("-flex", "-fast"))
+        and rate_for(row.get("model"), rates) is None
+    )
     cache_hits = sum(
         1
         for row in rows
@@ -358,10 +381,11 @@ def main():
             logger.info("…and %d more row(s)", len(capped) - 20)
         logger.info(
             "Backfill dry-run: %d row(s) would update, %d cache-served stay, "
-            "%d unpriced row(s) stay, %d rows total",
+            "%d unpriced row(s) stay, %d lane-alias rows skipped (no per-lane rate), %d rows total",
             len(capped),
             cache_hits,
             len(unpriced),
+            lane_alias_skipped,
             len(rows),
         )
         # Cap contract (idempotent rerun continues the remainder): never hide
@@ -376,10 +400,11 @@ def main():
     if not capped:
         logger.info(
             "Backfill: nothing to correct (%d rows checked, %d cache-served stay, "
-            "%d unpriced stay)",
+            "%d unpriced stay, %d lane-alias rows skipped (no per-lane rate))",
             len(rows),
             cache_hits,
             len(unpriced),
+            lane_alias_skipped,
         )
         return 0
     try:
@@ -395,10 +420,11 @@ def main():
     applied = result.get("applied", 0) if isinstance(result, dict) else "?"
     logger.info(
         "Backfill complete: %s row(s) repriced, %d cache-served stay, "
-        "%d unpriced stay, %d rows total",
+        "%d unpriced stay, %d lane-alias rows skipped (no per-lane rate), %d rows total",
         applied,
         cache_hits,
         len(unpriced),
+        lane_alias_skipped,
         len(rows),
     )
     if len(plan) > MAX_UPDATES:
