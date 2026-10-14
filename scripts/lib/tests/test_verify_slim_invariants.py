@@ -91,9 +91,6 @@ def _profile_fixture():
         ("local-loud", "loud"),
     ):
         presets[tier] = {**roles, "council": {"model": "_local:reasoning"}}
-        councils[tier] = {
-            seat: {"model": "_local:reasoning"} for seat in ("alpha", "beta", "gamma")
-        }
         tiers[tier] = {
             "profile": {"name": name},
             "fallback": {},
@@ -114,11 +111,13 @@ def test_profile_invariants_accept_compliant_family():
     assert INVARIANTS._profile_violations(presets, councils, tiers) == []
 
 
-def test_profile_councils_require_nested_and_top_level_dicts():
+def test_profile_councils_require_nested_and_reject_top_level_mirror():
     presets, councils, tiers = _profile_fixture()
     nested = INVARIANTS._preset_violations(presets, councils, tiers)
     assert any("must be a dict for profile tiers" in issue for issue in nested)
 
+    # Top-level placeholder mirrors are invalid runtime state: the slim
+    # plugin requires provider/model ids in council presets.
     presets, councils, tiers = _profile_fixture()
     for tier in tiers:
         tiers[tier]["council"]["presets"][tier] = {
@@ -126,9 +125,13 @@ def test_profile_councils_require_nested_and_top_level_dicts():
             "beta": {"model": "_local:reasoning"},
             "gamma": {"model": "_local:reasoning"},
         }
-    councils.pop("local")
+    councils["local"] = {
+        seat: {"model": "_local:reasoning"} for seat in ("alpha", "beta", "gamma")
+    }
     issues = INVARIANTS._preset_violations(presets, councils, tiers)
-    assert any("council.presets.local must be a dict" in issue for issue in issues)
+    assert any("mirrors a profile tier" in issue for issue in issues)
+    issues = INVARIANTS._profile_violations(presets, councils, tiers)
+    assert any("is a _local: placeholder" in issue for issue in issues)
 
 
 def test_council_default_preset_must_exist():
