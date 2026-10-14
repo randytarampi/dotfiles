@@ -578,6 +578,8 @@ def omlx_turboquant_status(home=None, environ=None):
 
     environ = os.environ if environ is None else environ
     root = Path(home or environ.get("HOME", HOME)).expanduser()
+    kv_type = (environ.get("OLLAMA_KV_CACHE_TYPE") or "").strip().lower()
+    bit_map = {"q8_0": 8, "q4_0": 4}
     discovered = iter_engine_models_strict("omlx")
     if discovered is None:
         return "oMLX TurboQuant KV: discovery unavailable (UNKNOWN)", None
@@ -593,14 +595,22 @@ def omlx_turboquant_status(home=None, environ=None):
     except (OSError, json.JSONDecodeError):
         data = {}
     profiles = data.get("models", {}) if isinstance(data, dict) else {}
+    if kv_type not in bit_map:
+        profile_count = sum(
+            1 for model_id in ids if isinstance(profiles, dict) and model_id in profiles
+        )
+        return (
+            "oMLX TurboQuant KV: no KV policy requested (KV type unset/f16); "
+            f"{profile_count} profiles present",
+            None,
+        )
     applied = sum(
         1
         for model_id in ids
         if isinstance(profiles, dict)
         and isinstance(profiles.get(model_id), dict)
         and profiles[model_id].get("turboquant_kv_enabled") is True
-        and profiles[model_id].get("turboquant_kv_bits") == 8
-        and profiles[model_id].get("turboquant_skip_last", True) is True
+        and profiles[model_id].get("turboquant_kv_bits") == bit_map[kv_type]
     )
     return (
         f"oMLX TurboQuant KV: applied {applied} of {len(ids)} discovered models",
