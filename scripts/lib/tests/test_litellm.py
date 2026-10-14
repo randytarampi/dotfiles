@@ -39,6 +39,7 @@ def hermetic_environment(monkeypatch):
         if name.startswith(
             (
                 "DOTFILES_",
+                "OPENAI_API_KEY",
                 "OPENAI_",
                 "ANTHROPIC_",
                 "GEMINI_",
@@ -844,6 +845,85 @@ def test_openai_api_key_transport_takes_precedence_over_oauth(tmp_path, monkeypa
     )
     entry = next(item for item in entries if item["model_name"] == "openai/gpt-a")
     assert entry["litellm_params"]["model"] == "openai/gpt-a"
+
+
+def test_openai_service_lanes_are_direct_key_only_and_gate_default_off(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6.1-sol"}
+    )
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *_args: ["gpt-6.1-sol"]
+    )
+    base = {
+        "OPENAI_API_KEY": "test-key",
+        "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+    }
+    off = litellm_config.compute_model_list(base)
+    assert not any(item["model_name"].endswith(("-flex", "-fast")) for item in off)
+    on = litellm_config.compute_model_list(
+        {**base, "DOTFILES_USE_OPENAI_SERVICE_LANES": "1"}
+    )
+    aliases = {item["model_name"]: item for item in on}
+    assert (
+        aliases["openai/gpt-6.1-sol-flex"]["litellm_params"]["service_tier"] == "flex"
+    )
+    assert (
+        aliases["openai/gpt-6.1-sol-fast"]["litellm_params"]["service_tier"] == "fast"
+    )
+    oauth = litellm_config.compute_model_list(
+        {"DOTFILES_USE_OPENAI_SERVICE_LANES": "1"}
+    )
+    assert not any(item["model_name"].endswith(("-flex", "-fast")) for item in oauth)
+
+
+def test_openai_service_lane_unknown_not_expanded_and_collision_fails(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/unknown-model"}
+    )
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *_args: ["unknown-model"]
+    )
+    env = {
+        "OPENAI_API_KEY": "test-key",
+        "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+        "DOTFILES_USE_OPENAI_SERVICE_LANES": "1",
+    }
+    assert not any(
+        "-flex" in item["model_name"] for item in litellm_config.compute_model_list(env)
+    )
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6.1-sol"}
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *_args: ["gpt-6.1-sol", "gpt-6.1-sol-flex"],
+    )
+    with pytest.raises(ValueError, match="service-lane alias collision"):
+        litellm_config.compute_model_list(env)
+
+
+def test_service_lane_rates_and_gate_off_render(monkeypatch):
+    rates_path = (
+        Path(__file__).resolve().parents[3] / "configs/litellm/model-rates.json"
+    )
+    rates = json.loads(rates_path.read_text())["models"]
+    base = {
+        "input_cost_per_token": 2e-6,
+        "output_cost_per_token": 1e-5,
+    }
+    for suffix, multiplier in (("flex", 0.5), ("fast", 2.0)):
+        lane = rates[f"gpt-6.1-sol-{suffix}"]
+        for rate in ("input_cost_per_token", "output_cost_per_token"):
+            assert lane[rate] == base[rate] * multiplier
+        assert "cache_read_input_token_cost" in lane
+        assert "cache_creation_input_token_cost" in lane
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
+    unset = litellm_config.render_config({})
+    head_fixture = litellm_config.render_config(
+        {"DOTFILES_USE_OPENAI_SERVICE_LANES": "0"}
+    )
+    assert unset == head_fixture
 
 
 def test_bare_alias_ambiguity_is_removed_in_either_provider_order(monkeypatch):

@@ -34,6 +34,9 @@ _MODELS_DEV_FETCH = models_dev.fetch_models_dev
 
 logger = logging.getLogger(__name__)
 
+OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
+OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol"}
+
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
 # 403) keep their single curated default alias instead.
@@ -356,7 +359,14 @@ def _model_name(item):
 
 
 def _entry(
-    alias, model, *, api_base=None, key_env=None, alias_kind=None, model_info=None
+    alias,
+    model,
+    *,
+    api_base=None,
+    key_env=None,
+    alias_kind=None,
+    model_info=None,
+    service_tier=None,
 ):
     params = {"model": model}
     if api_base:
@@ -365,6 +375,8 @@ def _entry(
         params["api_key"] = f"os.environ/{key_env}"
     if model_info:
         params["model_info"] = model_info
+    if service_tier:
+        params["service_tier"] = service_tier
     return {
         "model_name": alias,
         "litellm_params": params,
@@ -1049,6 +1061,50 @@ def compute_model_list(environ=None):
                     model_info=model_info,
                 )
             )
+            # Only confirmed direct API-key OpenAI routes may publish service
+            # lanes; OAuth entries use chatgpt/ and never reach this branch.
+            if (
+                provider == "openai"
+                and key_env == "OPENAI_API_KEY"
+                and base_url
+                == PROVIDER_ENDPOINTS.get("openai", {}).get(
+                    "baseUrl", "https://api.openai.com/v1"
+                )
+                and environ.get("OPENAI_API_KEY", "").strip()
+                and environ.get(OPENAI_SERVICE_LANES_ENV, "0") == "1"
+                and model_id in OPENAI_SERVICE_LANE_MODELS
+            ):
+                base_entry = entries[-1]
+                standard = model_info or model_rates("openai", model_id, wire_model)
+                for lane in ("flex", "fast"):
+                    lane_info = dict(standard or {})
+                    multiplier = 0.5 if lane == "flex" else 2.0
+                    for rate_key in (
+                        "input_cost_per_token",
+                        "output_cost_per_token",
+                        "cache_read_input_token_cost",
+                        "cache_creation_input_token_cost",
+                    ):
+                        value = lane_info.get(rate_key)
+                        if isinstance(value, (int, float)):
+                            lane_info[rate_key] = value * multiplier
+                    lane_alias = f"{alias}-{lane}"
+                    if f"{model_id}-{lane}" in confirmed_models or any(
+                        item["model_name"] == lane_alias for item in entries
+                    ):
+                        raise ValueError(
+                            f"OpenAI service-lane alias collision: {lane_alias}"
+                        )
+                    entries.append(
+                        _entry(
+                            lane_alias,
+                            wire_model,
+                            api_base=base_entry["litellm_params"].get("api_base"),
+                            key_env="OPENAI_API_KEY",
+                            model_info=lane_info,
+                            service_tier=lane,
+                        )
+                    )
     # Anthropic coverage comes solely from the meridian block above; the
     # clouds loop has no anthropic entry because no ref collector emits
     # anthropic/-prefixed ids (slim anthropic selections translate to
