@@ -30,6 +30,38 @@ from litellm_config import (  # noqa: E402
 import litellm_config  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
+
+
+def validate_service_lane_runtime():
+    """Validate installed LiteLLM service-tier filtering and model metadata shape."""
+    try:
+        from importlib.metadata import version
+        import litellm
+        from litellm.utils import get_optional_params
+
+        installed_version = version("litellm")
+        params = get_optional_params(
+            model="openai/gpt-6.1-sol",
+            custom_llm_provider="openai",
+            drop_params=True,
+            service_tier="flex",
+        )
+        if params.get("service_tier") != "flex":
+            raise RuntimeError("service_tier was dropped with drop_params=True")
+        info = litellm.get_model_info("gpt-6.1-sol")
+        metadata_path = "top-level model_info" if isinstance(info, dict) else "unknown"
+        logger.info(
+            "LiteLLM service-lane runtime validation VERIFIED: version=%s; "
+            "service_tier survives drop_params; pricing lookup uses %s",
+            installed_version,
+            metadata_path,
+        )
+        return True
+    except Exception as error:
+        logger.warning("LiteLLM service-lane runtime validation UNVERIFIED: %s", error)
+        return False
+
+
 GENERATION_NOTES_PATH = Path(
     "~/.local/share/litellm/last_generation_notes.json"
 ).expanduser()
@@ -574,6 +606,7 @@ def main():
         return 0 if provision_app_keys(master_key, service_env_path, strict=True) else 1
     config_path = os.path.expanduser("~/.local/share/litellm/config.yaml")
     try:
+        validate_service_lane_runtime()
         # Compute the snapshot once: write_config reuses it instead of
         # re-enumerating provider catalogues a second time per deploy.
         entries = compute_model_list()
