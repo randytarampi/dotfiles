@@ -959,7 +959,7 @@
           "model": "_local:code-gen"
         },
         "gamma": {
-          "model": "_local:lightweight"
+          "model": "_local:code-gen_2"
         }
       },
       "local-solo": {
@@ -1361,7 +1361,7 @@
               "model": "_local:code-gen"
             },
             "gamma": {
-              "model": "_local:lightweight"
+              "model": "_local:code-gen_2"
             },
             "council": {
               "model": "_local:reasoning",

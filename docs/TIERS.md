@@ -46,6 +46,11 @@ Profile policy is a resolution-time ranking layer over the same
 `_local:<category>` placeholders — it does not enforce hardware fit, latency or
 concurrency (see Measured Local Profile Contracts below).
 
+The loud council aims for three distinct residents: dense reasoning alpha, MoE
+code-gen beta and secondary code-gen gamma via the indexed `_N` placeholder
+grammar. Quiet's documented posture remains two residents; balanced resolution
+is unchanged and remains the strict-equality anchor.
+
 ### Measured Local Profile Contracts
 
 | Hardware / path | Quiet | Balanced (`local`) | Loud |
