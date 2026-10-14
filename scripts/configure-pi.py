@@ -598,6 +598,7 @@ def main():
             registry,
             resolution_preset,
             args.min_reasoning_embedding,
+            profile=tier_registry.get_profile_name(registry, preset),
         )
         if local_models
         else {}
