@@ -536,7 +536,7 @@ Packages available on both platforms by category:
 
 Use `scripts/run-local-review.sh --help` for the local pre-push review runner; details are in [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md).
 
-Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
+Seventeen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -555,12 +555,17 @@ Fifteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.
 | **local-mini** | Local Ollama (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
+| **local-quiet** | Local profile ranking | Quiet local selection; policy does not guarantee hardware fit or latency |
+| **local** | Local profile (balanced) | Balanced local selection |
+| **local-loud** | Local profile ranking | Quality-first selection, sequential until measured |
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4.1-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-opencode-zen-free` uses OpenCode Zen with OpenAI fallbacks; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5-1`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>`; `--preset` accepts the local profile family `local-quiet`, `local` (balanced) and `local-loud` as well as the other tiers above. For example: `scripts/configure-opencode-tier.py --preset local-quiet` or `--preset local-loud`.
+
+OpenAI service lanes are opt-in via `DOTFILES_USE_OPENAI_SERVICE_LANES=1`; see [docs/LITELLM.md](docs/LITELLM.md).
 
 Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-pro, local-mini, local-nano, and local-solo are manual-only (set via `DOTFILES_OPENCODE_TIER`).
 

@@ -16,7 +16,7 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ## Tier Definitions
 
-Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
+Seventeen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -35,9 +35,9 @@ Fifteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of 
 | **local-mini** | Local Ollama + oMLX under the gate (code-gen + lightweight + vision) | Minimal model diversity |
 | **local-nano** | Local Ollama + oMLX under the gate (single code-gen model + vision) | Single-model systems |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
-| **local-quiet** | Local profile — low-residency, single resident model posture | Quiet local work with specialists kept out of the resident set; policy ranks selections but does not enforce single-residency or shared-daemon concurrency |
-| **local** | Local profile — balanced default | Balanced local model selection |
-| **local-loud** | Local profile — quality-first, specialists on demand; sequential-until-measured | Maximum local quality; specialist models may be admitted as needed (concurrency headroom unmeasured) |
+| **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
+| **local** | Local profile — balanced default | Balanced local model selection; preserves current selection policy |
+| **local-loud** | Local profile — quality-first; sequential-until-measured | Ranks MoE/Ornith, dense Qwen and Gemma vision candidates; no concurrency guarantee |
 
 These profile tiers share the same placeholder map: orchestrator/designer/fixer
 use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer
@@ -45,15 +45,38 @@ use `_local:lightweight`, and observer uses `_local:vision`. Profile policy rank
 and admits discovered models at resolution time; the placeholders remain the
 configuration contract.
 
+The profile name is tier metadata consumed during model resolution. `quiet`
+ranks Mellum-class code-generation and small reasoning candidates, retaining
+one candidate per category; this is a ranking policy, not a hardware or latency
+guarantee. `balanced` leaves current selection unchanged. `loud` ranks MoE or
+Ornith, dense Qwen and Gemma vision candidates and remains sequential until
+qualification measurements support broader use. In particular, 3–5 parallel
+concurrency and 48GB memory-pressure evidence remain pending.
+
 ### Measured Local Profile Contracts
 
 | Hardware / path | Quiet | Balanced (`local`) | Loud |
 |-----------------|-------|--------------------|------|
-| M3/M5, Mellum6 path | UNKNOWN | 131072 context (measured) | UNKNOWN |
+| M3 Max 128GB + M5 Pro 48GB, Mellum6 path | UNKNOWN | 131072 context (measured) | UNKNOWN |
 | Other hardware / model paths | UNKNOWN | UNKNOWN | UNKNOWN |
 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
+
+The sole measured 131072-context evidence is the Mellum6 path on M3 Max 128GB
+and M5 Pro 48GB. Ornith35 has no measured 131072 run; all other hardware/model
+cells remain UNKNOWN. q8 KV-cache settings describe cache precision, not model
+weight quantization.
+
+### OpenAI Service Lanes (Flex/Fast)
+
+OpenAI service-lane aliases are opt-in through
+`DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are published only on the
+genuine direct `OPENAI_API_KEY` route, never OAuth or ChatGPT routes. Lane
+pricing starts from curated `gpt-6.1-sol` rates: Flex is 0.5× and Fast is 2×,
+with cached-input rate fields preserved. Spend reports identify the tier
+actually served. There is no automatic Flex-to-standard fallback. For lane
+configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local-pro` preset uses all four `_local:<category>` placeholders resolved at runtime. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-mini` preset reduces to code-gen + lightweight + vision. The `local-nano` preset uses a single code-gen model for all roles (except vision) with a 2+1 council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models.
 
@@ -385,7 +408,7 @@ Additional classification rules (applied after name heuristics):
 
 **Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories. These warnings are generated from the shared tier registry via `scripts/lib/tier_registry.py`.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local, local-mini, local-nano, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-pro, local-quiet, local, local-loud, local-mini, local-nano, local-solo)
 
 Local Ollama and, when enabled, oMLX models form the multi-provider local pool; oMLX wins engine-equivalent bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
 
