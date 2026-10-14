@@ -562,7 +562,7 @@ Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. 
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5-1`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>`; `--preset` accepts the local profile family `local-quiet`, `local` (balanced) and `local-loud` as well as the other tiers above. For example: `scripts/configure-opencode-tier.py --preset local-quiet` or `--preset local-loud`.
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (see [docs/TIERS.md](docs/TIERS.md) for the full preset list).
 
 OpenAI service lanes are opt-in via `DOTFILES_USE_OPENAI_SERVICE_LANES=1`; see [docs/LITELLM.md](docs/LITELLM.md).
 

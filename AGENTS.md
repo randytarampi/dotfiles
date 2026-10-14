@@ -258,7 +258,7 @@ When editing home-level agent guidance, edit `configs/agents/home-agents.md` fir
 
 Run `make help` for the full command list. For task-specific guidance, see the relevant `docs/` reference.
 
-- Switch AI tier: `scripts/configure-opencode-tier.py --preset <tier>` (including `local-quiet`, `local` and `local-loud`)
+- Switch AI tier: `scripts/configure-opencode-tier.py --preset <tier>`
 - Apply all dotfiles: `make deploy`
 - Full verification: `make verify`
 - Check hash coverage: `make check-hashes`

@@ -45,13 +45,9 @@ use `_local:lightweight`, and observer uses `_local:vision`. Profile policy rank
 and admits discovered models at resolution time; the placeholders remain the
 configuration contract.
 
-The profile name is tier metadata consumed during model resolution. `quiet`
-ranks Mellum-class code-generation and small reasoning candidates, retaining
-one candidate per category; this is a ranking policy, not a hardware or latency
-guarantee. `balanced` leaves current selection unchanged. `loud` ranks MoE or
-Ornith, dense Qwen and Gemma vision candidates and remains sequential until
-qualification measurements support broader use. In particular, 3–5 parallel
-concurrency and 48GB memory-pressure evidence remain pending.
+Profile policy is a resolution-time ranking layer over the same
+`_local:<category>` placeholders — it does not enforce hardware fit, latency or
+concurrency (see Measured Local Profile Contracts below).
 
 ### Measured Local Profile Contracts
 
