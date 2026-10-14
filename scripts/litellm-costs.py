@@ -158,8 +158,13 @@ def main():
             for by, groups in output.items():
                 lines.append("%s:" % by)
                 lines.extend(
-                    "  %s: spend %.6f, tokens %d"
-                    % (name, values["spend"], values["tokens"])
+                    "  %s: spend %.6f, tokens %d, served tier %s"
+                    % (
+                        name,
+                        values["spend"],
+                        values["tokens"],
+                        values.get("service_tier", "—"),
+                    )
                     for name, values in sorted(groups.items())
                 )
             lines.append("Total rows: %s" % data["total"])
