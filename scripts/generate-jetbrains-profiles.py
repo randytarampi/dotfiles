@@ -607,6 +607,7 @@ def main():
                     registry,
                     tier_resolution_preset,
                     args.min_reasoning_embedding,
+                    profile=tier_registry.get_profile_name(registry, tier),
                 )
                 tier_registry.apply_placeholder_overrides(
                     categories, args.category_models

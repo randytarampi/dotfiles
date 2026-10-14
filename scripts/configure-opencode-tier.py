@@ -169,6 +169,8 @@ def orchestrate_tier_switch(
 
     tier_config = tiers_dict[tier]
     preset = tier_registry.get_preset(registry, tier)
+    profile = tier_registry.get_profile_name(registry, tier)
+    logger.info("Resolved tier profile for '%s': %s", tier, profile or "none")
     resolution_preset = local_fallback_preset or (
         tier if tier_registry.uses_local_placeholders(registry, tier) else "local"
     )
@@ -184,6 +186,7 @@ def orchestrate_tier_switch(
                 registry,
                 resolution_preset,
                 min_reasoning_embedding,
+                profile=profile,
             )
 
     tier_registry.apply_placeholder_overrides(local_role_models, category_models)
@@ -220,11 +223,11 @@ def orchestrate_tier_switch(
                 )
             else:
                 logger.info("Cloud role assignments:\n" + "\n".join(role_assignments))
-        if tier.startswith("local"):
+        if tier_registry.uses_local_placeholders(registry, tier):
             tier_council = tier_config.get("council", {})
             council_presets = tier_council.get("presets", {})
             if tier in council_presets:
-                cp = council_presets[tier]
+                cp = council_presets[tier] or {}
                 councillor_models = []
                 for role_key in ["alpha", "beta", "gamma"]:
                     placeholder = cp.get(role_key, {}).get("model", "")
@@ -313,7 +316,11 @@ def orchestrate_tier_switch(
         other_presets = other_council.get("presets", {})
         if other_tier_name in other_presets:
             other_preset = other_presets[other_tier_name]
-            if "council" in other_preset and other_tier_name in source_presets:
+            if (
+                isinstance(other_preset, dict)
+                and "council" in other_preset
+                and other_tier_name in source_presets
+            ):
                 council_preset = other_preset["council"]
                 source_presets[other_tier_name]["council"] = council_preset
 
