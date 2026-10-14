@@ -1117,11 +1117,27 @@ def validate_omlx_settings(data):
     ):
         errors.append("model.model_dirs must be a list of strings")
     memory = sections["memory"]
-    if memory.get("prefill_memory_guard") is not False and memory.get(
-        "memory_guard_tier"
-    ) not in {"safe", "balanced", "aggressive"}:
+    guard_tier = memory.get("memory_guard_tier")
+    guard_ceiling = memory.get("memory_guard_custom_ceiling_gb")
+    guard_ceiling_valid = (
+        isinstance(guard_ceiling, (int, float))
+        and not isinstance(guard_ceiling, bool)
+        and guard_ceiling > 0
+    )
+    if (
+        memory.get("prefill_memory_guard") is not False
+        and guard_tier
+        not in {
+            "safe",
+            "balanced",
+            "aggressive",
+        }
+        and not (guard_tier == "custom" and guard_ceiling_valid)
+    ):
         errors.append(
-            "memory.memory_guard_tier must be safe, balanced, aggressive, or absent when prefill is false (OMLX_MEMORY_GUARD)"
+            "memory.memory_guard_tier must be safe, balanced, aggressive, or "
+            "custom with a positive memory_guard_custom_ceiling_gb; absent is "
+            "allowed when prefill is false (OMLX_MEMORY_GUARD)"
         )
     scheduler = sections["scheduler"]
     if (

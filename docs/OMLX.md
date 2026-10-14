@@ -67,7 +67,7 @@ make services-restart
 | `OMLX_PORT` | `8000` | Bind port for the server (upstream default). |
 | `OMLX_BASE_URL` | — | Endpoint override; origin only, without `/v1`. |
 | `OMLX_MODEL_DIR` | `$HOME/.omlx/models` | MLX model directory. |
-| `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. |
+| `OMLX_MEMORY_GUARD` | `balanced` | Memory tier; `off` sets `prefill_memory_guard=false`, other tiers set `memory_guard_tier`. The oMLX service may also carry tier `custom` with a positive `memory_guard_custom_ceiling_gb` (set service-side); the doctor check accepts it. |
 | `OMLX_SSD_CACHE_DIR` | `$HOME/.omlx/cache` | Persistent SSD KV-cache directory. |
 | `OMLX_MAX_CONCURRENT_REQUESTS` | `8` | Scheduler concurrency. |
 | `OMLX_MAX_AUDIO_UPLOAD_SIZE` | — | Audio upload limit; use an explicit unit such as `128MB` because oMLX treats unitless values as bytes. Invalid values are warned about and preserved at write time; the doctor flags the error. |
