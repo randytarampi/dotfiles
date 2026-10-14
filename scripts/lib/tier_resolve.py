@@ -75,6 +75,9 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
         is_moe = status.get("is_moe")
         if is_moe is None:
             is_moe = status.get("is_moe_model")
+        # Engine-supplied MoE status is authoritative; fall back to the name
+        # pattern (A3B/A2.5B-style active-expert tags) only when the status
+        # does not report it.
         return {
             "param_count": extract_param_count(bare_name) or None,
             "capabilities": capabilities,
@@ -82,7 +85,11 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
             "embedding_length": None,
             "context_length": context_length,
             "quantization": None,
-            "is_moe": bool(re.search(r"A\d+(?:\.\d+)?B", bare_name, re.IGNORECASE)),
+            "is_moe": (
+                bool(is_moe)
+                if is_moe is not None
+                else bool(re.search(r"A\d+(?:\.\d+)?B", bare_name, re.IGNORECASE))
+            ),
             "model_type": model_type,
         }
 
@@ -378,6 +385,11 @@ def resolve_roles_from_list(
                     if isinstance(model, dict) and model.get("equivalent_ollama_names")
                     else {}
                 ),
+                **(
+                    {"is_moe": model["is_moe"]}
+                    if isinstance(model, dict) and model.get("is_moe")
+                    else {}
+                ),
             }
         )
 
@@ -477,7 +489,7 @@ def resolve_roles_from_list(
             model["embedding_length"] = details.get("embedding_length")
             model["context_length"] = details.get("context_length")
             model["quantization"] = details.get("quantization")
-            model["is_moe"] = details.get("is_moe", False)
+            model["is_moe"] = bool(details.get("is_moe")) or bool(model.get("is_moe"))
 
         classified[cat].sort(key=_size_sort_key, reverse=True)
 

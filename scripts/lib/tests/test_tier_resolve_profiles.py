@@ -215,3 +215,41 @@ def test_quiet_gemma_substitution_searches_all_qualified_candidates():
         )
 
     assert resolved["reasoning"] == "ollama/gemma4:12b"
+
+
+def test_omlx_status_moe_metadata_beats_name_pattern():
+    engine = {
+        "metadata_lookup": lambda name: {"is_moe": True},
+        "metadata_capabilities": lambda status: [],
+    }
+    with patch.object(tier_resolve, "resolve_engine", return_value=engine):
+        details = tier_resolve.get_model_details(
+            "dense-named-model-9b", provider="omlx"
+        )
+
+    assert details["is_moe"] is True
+
+
+def test_loud_ranking_preserves_source_moe_metadata():
+    models = [
+        {"name": "moe-coder:9b", "provider": "omlx", "is_moe": True, "param_count": 9},
+        {
+            "name": "dense-coder:30b",
+            "provider": "omlx",
+            "is_moe": False,
+            "param_count": 30,
+        },
+    ]
+    failing_details = {
+        "param_count": None,
+        "capabilities": [],
+        "architecture": None,
+        "embedding_length": None,
+        "context_length": None,
+        "quantization": None,
+        "is_moe": False,
+    }
+    with patch.object(tier_resolve, "get_model_details", return_value=failing_details):
+        resolved = tier_resolve.resolve_roles_from_list(models, profile="loud")
+
+    assert resolved["code-gen"] == "omlx/moe-coder:9b"
