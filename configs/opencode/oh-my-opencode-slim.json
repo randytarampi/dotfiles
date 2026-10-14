@@ -929,50 +929,6 @@
           "model": "anthropic/claude-opus-5-5"
         }
       },
-      "local": {
-        "alpha": {
-          "model": "_local:reasoning"
-        },
-        "beta": {
-          "model": "_local:code-gen"
-        },
-        "gamma": {
-          "model": "_local:lightweight"
-        }
-      },
-      "local-quiet": {
-        "alpha": {
-          "model": "_local:reasoning"
-        },
-        "beta": {
-          "model": "_local:code-gen"
-        },
-        "gamma": {
-          "model": "_local:lightweight"
-        }
-      },
-      "local-loud": {
-        "alpha": {
-          "model": "_local:reasoning"
-        },
-        "beta": {
-          "model": "_local:code-gen"
-        },
-        "gamma": {
-          "model": "_local:code-gen_2"
-        }
-      },
-      "local-solo": {
-        "alpha": {
-          "model": "_local:solo"
-        },
-        "beta": {
-          "model": "_local:solo"
-        },
-        "gamma": {
-          "model": "_local:solo"
-        }
-      },
       "omo-slim-openai": {
         "alpha": {
           "model": "openai/gpt-6.1-sol"

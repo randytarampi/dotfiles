@@ -16,7 +16,11 @@ Invariants enforced:
      `_model_dedupe_violations`).
   4. Preset names are consistent across the role presets, council presets, and
      tier definitions; council synthesizer models and variants are synchronized.
-  5. Top-level council alpha/beta/gamma models match each tier definition.
+  5. Top-level council alpha/beta/gamma models match each non-profile tier
+     definition; profile-tier (local family) councils are `_local:` placeholder
+     state that lives only under _tiers — top-level council presets are
+     runtime state materialized by the tier switcher and must not mirror
+     placeholder councils or contain `_local:` models.
   6. Every configured model is present in its provider's model allowlist.
   7. Fallback entries within an array use distinct provider prefixes.
 
@@ -357,11 +361,15 @@ def _preset_violations(presets, council_presets, tiers):
     }
     for label, names in (
         ("presets", preset_names),
-        ("council.presets", council_names | profile_councils),
         ("_tiers", tier_names),
     ):
         for name in sorted(all_names - names):
             violations.append(f"{label} is missing preset name {name!r}")
+    # Top-level council presets are runtime state: the tier switcher
+    # materializes the active tier's council there. Entries are optional but
+    # must name a real preset.
+    for name in sorted(council_names - all_names):
+        violations.append(f"council.presets names unknown tier {name!r}")
 
     for tier in sorted(tier_names):
         tier_council = (tiers.get(tier) or {}).get("council") or {}
@@ -387,21 +395,26 @@ def _preset_violations(presets, council_presets, tiers):
                 f"expected [{tier!r}]"
             )
 
-        top_preset = council_presets.get(tier) or {}
-        if is_profile_tier and not isinstance(council_presets.get(tier), dict):
+        top_entry = council_presets.get(tier)
+        top_preset = top_entry if isinstance(top_entry, dict) else {}
+        if is_profile_tier and isinstance(top_entry, dict):
             violations.append(
-                f"council.presets.{tier} must be a dict for profile tiers"
+                f"council.presets.{tier} mirrors a profile tier — top-level "
+                "council presets are runtime state and placeholder councils "
+                "cannot resolve there; the local family keeps councils only "
+                "under _tiers"
             )
         nested_preset = tier_presets.get(tier) or {}
-        for member in ("alpha", "beta", "gamma"):
-            top_model = _model(top_preset.get(member))
-            nested_model = _model(nested_preset.get(member))
-            if top_model != nested_model:
-                violations.append(
-                    f"council.presets.{tier}.{member}.model = {top_model!r} "
-                    f"does not match _tiers.{tier}.council.presets.{tier}."
-                    f"{member}.model = {nested_model!r}"
-                )
+        if isinstance(top_entry, dict) and not is_profile_tier:
+            for member in ("alpha", "beta", "gamma"):
+                top_model = _model(top_preset.get(member))
+                nested_model = _model(nested_preset.get(member))
+                if top_model != nested_model:
+                    violations.append(
+                        f"council.presets.{tier}.{member}.model = {top_model!r} "
+                        f"does not match _tiers.{tier}.council.presets.{tier}."
+                        f"{member}.model = {nested_model!r}"
+                    )
 
         top_synth = _model(presets.get(tier, {}).get("council"))
         nested_synth = _model(nested_preset.get("council"))
@@ -481,6 +494,17 @@ def _profile_violations(presets, council_presets, tiers):
                     violations.append(
                         f"{path} = {model!r} uses a forbidden service-lane alias"
                     )
+
+    # Top-level council presets are runtime state: the slim plugin requires
+    # provider/model ids there ("_local:<category>" cannot resolve), so
+    # materialized councils are written by the tier switcher only.
+    for tier, tree in council_presets.items():
+        for path, model in _iter_model_values(tree, f"council.presets.{tier}"):
+            if model.startswith("_local:"):
+                violations.append(
+                    f"{path} = {model!r} is a _local: placeholder; top-level "
+                    "council presets are runtime state (provider/model ids)"
+                )
     return violations
 
 
