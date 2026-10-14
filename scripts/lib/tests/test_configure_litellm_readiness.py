@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import venv
 
 import pytest
 
@@ -12,6 +13,67 @@ SPEC = importlib.util.spec_from_file_location("configure_litellm_readiness", SCR
 assert SPEC and SPEC.loader
 CONFIGURE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONFIGURE)
+
+
+@pytest.mark.parametrize("preserves_tier", [True, False])
+def test_service_lane_validation_uses_managed_gateway_installation(
+    tmp_path, monkeypatch, caplog, preserves_tier
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    gateway_venv = tmp_path / ".local/share/litellm/venv"
+    venv.EnvBuilder(with_pip=False).create(gateway_venv)
+    site_packages = next(gateway_venv.glob("lib/python*/site-packages"))
+    package = site_packages / "litellm"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        'def get_model_info(model):\n    return {"model": model}\n'
+    )
+    (package / "utils.py").write_text(
+        "def get_optional_params(**kwargs):\n"
+        '    assert kwargs["drop_params"] is True\n'
+        + (
+            '    return {"service_tier": "flex"}\n'
+            if preserves_tier
+            else "    return {}\n"
+        )
+    )
+    metadata = site_packages / "litellm-1.102.1.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text("Name: litellm\nVersion: 1.102.1\n")
+    # Neither the caller's modules nor PYTHONPATH may replace the gateway package.
+    monkeypatch.setitem(sys.modules, "litellm", None)
+    shadow = tmp_path / "shadow"
+    shadow.mkdir()
+    (shadow / "litellm.py").write_text('raise RuntimeError("wrong installation")\n')
+    monkeypatch.setenv("PYTHONPATH", str(shadow))
+
+    assert CONFIGURE.validate_service_lane_runtime() is preserves_tier
+    if preserves_tier:
+        assert "VERIFIED: version=1.102.1" in caplog.text
+        assert "pricing lookup uses top-level model_info" in caplog.text
+    else:
+        assert "UNVERIFIED" in caplog.text
+        assert "service_tier was dropped" in caplog.text
+
+
+def test_service_lane_validation_missing_gateway_is_unverified(
+    tmp_path, monkeypatch, caplog
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert CONFIGURE.validate_service_lane_runtime() is False
+    assert "UNVERIFIED" in caplog.text
+    assert str(tmp_path / ".local/share/litellm/venv/bin/python") in caplog.text
+
+
+def test_service_lane_validation_timeout_is_unverified(monkeypatch, caplog):
+    def timeout(command, **kwargs):
+        assert kwargs["timeout"] == 30
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(CONFIGURE.subprocess, "run", timeout)
+    assert CONFIGURE.validate_service_lane_runtime() is False
+    assert "UNVERIFIED" in caplog.text
+    assert "timed out" in caplog.text
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
