@@ -588,7 +588,9 @@ def resolve_roles_from_list(
                     solo_candidates.append(model)
     classified["solo"] = sorted(solo_candidates, key=_density_sort_key, reverse=True)
 
-    _apply_profile_policy(classified, models, profile)
+    _apply_profile_policy(
+        classified, models, profile, min_reasoning_embedding=min_reasoning_embedding
+    )
 
     if not classified["solo"]:
         logger.warning(
@@ -660,7 +662,9 @@ def resolve_roles_from_list(
     return resolved
 
 
-def _apply_profile_policy(classified, model_entries, profile):
+def _apply_profile_policy(
+    classified, model_entries, profile, min_reasoning_embedding=0
+):
     """Apply profile-specific category ranking/admission without model discovery."""
     if profile is None:
         return
@@ -718,4 +722,15 @@ def _apply_profile_policy(classified, model_entries, profile):
             None,
         )
         if preferred is not None:
-            classified["reasoning"] = [preferred]
+            capabilities = preferred.get("capabilities", [])
+            preferred_is_qualified = (
+                not capabilities
+                or all(cap in capabilities for cap in ["thinking", "tools"])
+            ) and (
+                not min_reasoning_embedding
+                or min_reasoning_embedding <= 0
+                or preferred.get("embedding_length") is None
+                or preferred["embedding_length"] >= min_reasoning_embedding
+            )
+            if preferred_is_qualified:
+                classified["reasoning"] = [preferred]
