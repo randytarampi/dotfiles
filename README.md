@@ -672,7 +672,9 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `plus` | openai | `gpt-6.1-sol` | `gpt-6-luna` | 1 |
 | `plus-anthropic` | openai | `gpt-6.1-sol` | `claude-haiku-5-5` (meridian) | 1 |
 | `local-pro` | local | `_local:reasoning` | `_local:lightweight` | 0.6 |
+| `local-quiet` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
+| `local-loud` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-mini` | local | `_local:code-gen` | `_local:vision` | 0.6 |
 | `local-nano` | local | `_local:code-gen` | — | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
