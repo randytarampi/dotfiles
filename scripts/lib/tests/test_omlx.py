@@ -1542,15 +1542,93 @@ def test_omlx_turboquant_doctor_status(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    message, incomplete = verify.omlx_turboquant_status(home=tmp_path, environ={})
+    message, incomplete = verify.omlx_turboquant_status(
+        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+    )
     assert message == "oMLX TurboQuant KV: applied 1 of 2 discovered models"
     assert incomplete is True
 
     monkeypatch.setattr(
         local_engines, "iter_engine_models_strict", lambda provider: None
     )
-    assert verify.omlx_turboquant_status(home=tmp_path, environ={}) == (
+    assert verify.omlx_turboquant_status(
+        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+    ) == (
         "oMLX TurboQuant KV: discovery unavailable (UNKNOWN)",
+        None,
+    )
+
+
+def test_omlx_turboquant_doctor_counts_preserved_skip_last(tmp_path, monkeypatch):
+    verify = _load_script("verify_config", "verify-config.py")
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models_strict",
+        lambda provider: [{"name": "admin-choice"}],
+    )
+    settings = tmp_path / ".omlx/model_settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "admin-choice": {
+                        "turboquant_kv_enabled": True,
+                        "turboquant_kv_bits": 8,
+                        "turboquant_skip_last": False,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert verify.omlx_turboquant_status(
+        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q8_0"}
+    ) == ("oMLX TurboQuant KV: applied 1 of 1 discovered models", False)
+
+
+def test_omlx_turboquant_doctor_counts_requested_q4(tmp_path, monkeypatch):
+    verify = _load_script("verify_config", "verify-config.py")
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models_strict",
+        lambda provider: [{"name": "q4-model"}],
+    )
+    settings = tmp_path / ".omlx/model_settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "q4-model": {
+                        "turboquant_kv_enabled": True,
+                        "turboquant_kv_bits": 4,
+                        "turboquant_skip_last": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert verify.omlx_turboquant_status(
+        home=tmp_path, environ={"OLLAMA_KV_CACHE_TYPE": "q4_0"}
+    ) == ("oMLX TurboQuant KV: applied 1 of 1 discovered models", False)
+
+
+def test_omlx_turboquant_doctor_unset_policy_is_neutral(tmp_path, monkeypatch):
+    verify = _load_script("verify_config", "verify-config.py")
+    monkeypatch.setattr(
+        local_engines,
+        "iter_engine_models_strict",
+        lambda provider: [{"name": "existing"}],
+    )
+    settings = tmp_path / ".omlx/model_settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"models": {"existing": {}}}), encoding="utf-8")
+    assert verify.omlx_turboquant_status(home=tmp_path, environ={}) == (
+        "oMLX TurboQuant KV: no KV policy requested (KV type unset/f16); 1 profiles present",
         None,
     )
 
