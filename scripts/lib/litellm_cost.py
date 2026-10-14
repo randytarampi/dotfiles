@@ -162,6 +162,9 @@ def group_rows(rows, by, aliases=None):
         total = totals.setdefault(key, {"spend": 0.0, "tokens": 0})
         total["spend"] += float(row.get("spend") or 0)
         total["tokens"] += int(row.get("total_tokens", row.get("tokens", 0)) or 0)
+        total["service_tier"] = row.get("service_tier") or total.get(
+            "service_tier", "—"
+        )
     return totals
 
 

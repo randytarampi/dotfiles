@@ -82,21 +82,114 @@ def test_safe_error_message_scrubs_key():
 
 
 def test_provider_grouping_prefix():
-    assert litellm_cost.group_rows(
+    grouped = litellm_cost.group_rows(
         [{"model": "openrouter/xyz", "spend": 1}, {"model": "bare", "spend": 2}],
         "provider",
-    ) == {
+    )
+    assert {
+        key: {k: v for k, v in value.items() if k != "service_tier"}
+        for key, value in grouped.items()
+    } == {
         "openrouter": {"spend": 1.0, "tokens": 0},
         "unknown": {"spend": 2.0, "tokens": 0},
     }
 
 
 def test_client_alias_join():
-    assert litellm_cost.group_rows(
+    result = litellm_cost.group_rows(
         [{"api_key": "hash", "model": "m", "spend": 2, "tokens": 12}],
         "client",
         {"hash": "pi"},
-    )["pi"] == {"spend": 2.0, "tokens": 12}
+    )["pi"]
+    assert {k: v for k, v in result.items() if k != "service_tier"} == {
+        "spend": 2.0,
+        "tokens": 12,
+    }
+
+
+def test_grouping_includes_served_service_tier_without_changing_totals():
+    rows = [
+        {
+            "model": "openai/gpt-x-flex",
+            "spend": 1.25,
+            "tokens": 10,
+            "service_tier": "priority",
+        },
+        {"model": "openai/gpt-x-flex", "spend": 0.75, "tokens": 5},
+    ]
+    grouped = litellm_cost.group_rows(rows, "model")
+    assert grouped == {
+        "openai/gpt-x-flex": {
+            "spend": 2.0,
+            "tokens": 15,
+            "service_tier": "priority",
+        }
+    }
+    assert (
+        litellm_cost.group_rows([{"model": "m", "spend": 1}], "model")["m"][
+            "service_tier"
+        ]
+        == "—"
+    )
+
+
+def test_text_report_renders_served_tier_and_preserves_totals(monkeypatch, caplog):
+    import runpy
+    import sys
+
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "test-key")
+    monkeypatch.setattr(litellm_cost, "fetch_key_aliases", lambda *args: {})
+    monkeypatch.setattr(
+        litellm_cost,
+        "fetch_spend",
+        lambda *args: {
+            "logs": [
+                {
+                    "model": "openai/gpt-x-flex",
+                    "spend": 1.25,
+                    "tokens": 10,
+                    "service_tier": "priority",
+                }
+            ],
+            "total": 1,
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["litellm-costs.py", "--by", "model"])
+    with pytest.raises(SystemExit) as error:
+        runpy.run_path("scripts/litellm-costs.py", run_name="__main__")
+    assert error.value.code == 0
+    assert (
+        "openai/gpt-x-flex: spend 1.250000, tokens 10, served tier priority"
+        in caplog.text
+    )
+    assert "Total rows: 1" in caplog.text
+
+
+def test_openwebui_catalogue_excludes_gateway_lane_aliases(monkeypatch, tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "configure-openwebui.py"
+    spec = importlib.util.spec_from_file_location("configure_openwebui_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    config_dir = tmp_path / "configs/opencode"
+    config_dir.mkdir(parents=True)
+    (config_dir / "openai-models.json").write_text(
+        json.dumps({"models": {"gpt-x": {}, "gpt-x-flex": {}, "gpt-x-fast": {}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "SCRIPT_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(module.os, "environ", {"OPENAI_API_KEY": "test-key"})
+    monkeypatch.setattr(
+        module,
+        "PROVIDER_ENDPOINTS",
+        {
+            provider: {"apiKeyEnv": f"{provider.upper()}_KEY"}
+            for provider in ("google", "openrouter", "opencode")
+        },
+    )
+    assert module._curated_cloud_models() == ["openai/gpt-x"]
 
 
 def test_dry_run_has_no_network(monkeypatch):

@@ -434,7 +434,11 @@ def _curated_cloud_models():
             ids = sorted(
                 json.loads(allowlist.read_text(encoding="utf-8")).get("models", {})
             )
-        models.extend(f"{provider}/{model}" for model in ids)
+        models.extend(
+            f"{provider}/{model}"
+            for model in ids
+            if not (provider == "openai" and re.search(r"-(?:flex|fast)$", model))
+        )
     return sorted(set(models))
 
 
