@@ -25,7 +25,10 @@ from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     MODEL_CATALOGUE_TIMEOUT,
     open_same_origin,
 )
-from ai_models import resolve_model  # noqa: E402 -- scripts/lib bootstrap.
+from ai_models import (
+    is_specialized_model_name,
+    resolve_model,
+)  # noqa: E402 -- scripts/lib bootstrap.
 from cli_helpers import (  # noqa: E402 -- scripts/lib bootstrap.
     add_model_override_args,
     add_min_reasoning_embedding_arg,
@@ -359,9 +362,22 @@ def append_pool_profile_specs(specs, pools=None):
         for model in pool:
             if not isinstance(model, dict):
                 continue
-            if model.get("primary_category") in {"embedding", "reranker", "unknown"}:
+            if model.get("primary_category") in {
+                "embedding",
+                "reranker",
+                "unknown",
+                "audio",
+                "decision",
+                "conversion",
+            }:
                 continue
             if model.get("model_type") not in (None, "llm", "vlm"):
+                continue
+            # Known specialized models never become chat profiles — the
+            # name-level guard covers untyped pool records (Ollama discovery
+            # emits name/size/provider only, so typed filters cannot see
+            # decision/audio/embedding/conversion models in that shape).
+            if is_specialized_model_name(model.get("name", "")):
                 continue
             chat_models.append(model["name"])
         for index, model_name in enumerate(chat_models):

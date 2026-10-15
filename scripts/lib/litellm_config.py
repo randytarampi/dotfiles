@@ -21,6 +21,7 @@ from constants import (
     is_meridian_configured,
 )
 from discover_models import list_cloud_ollama_models
+from ai_models import is_specialized_model_name
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
@@ -659,7 +660,7 @@ def _live_catalogue(provider, key, base_url, timeout=10):
 def _safe_models(provider):
     try:
         return [
-            _model_name(item)
+            dict(item) if isinstance(item, dict) else _model_name(item)
             for item in iter_engine_models(provider)
             if _model_name(item)
         ]
@@ -800,7 +801,21 @@ def compute_model_list(environ=None):
             f"unsupported DOTFILES_LITELLM_CATALOGUE_SCOPE {scope!r}: expected 'free' or 'full'"
         )
     for provider in active_engines():
-        models = sorted(_safe_models(provider))
+        models = [
+            _model_name(model)
+            for model in _safe_models(provider)
+            if not isinstance(model, dict)
+            or model.get("model_type") in (None, "llm", "vlm")
+        ]
+        # Known specialized models are never published as chat candidates.
+        # Typed audio/conversion records are already dropped above; this
+        # name-level guard covers the untyped production Ollama discovery
+        # shape (name/size/provider only — no model_type to filter on).
+        # Gateway modality exposure is a separately approved milestone.
+        models = [
+            name for name in models if name and not is_specialized_model_name(name)
+        ]
+        models = sorted(models)
         if provider == "ollama":
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base

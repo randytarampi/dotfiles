@@ -8,6 +8,8 @@ from litellm_aliases import (
     resolve_canonical_identity,
 )
 from constants import get_litellm_proxy_mode
+import litellm_config
+from unittest.mock import patch
 
 
 @pytest.mark.parametrize(
@@ -167,3 +169,68 @@ def test_raw_model_reference_keeps_endpoint_specific_wire_identity():
         gateway_endpoint: Outcome.UNKNOWN,
     }
     assert not result.complete
+
+
+def test_safe_models_preserves_typed_records_and_chat_catalogue_filters_types():
+    entries = [
+        {"name": "mellum2:12b-a2.5b", "model_type": "llm"},
+        {"name": "whisper-2", "model_type": "audio_stt"},
+        {"name": "nomic-embed-text", "model_type": "embedding"},
+        {"name": "markitdown", "model_type": "conversion"},
+        {"name": "strands-decider:2b", "model_type": "decision"},
+    ]
+    with patch.object(litellm_config, "iter_engine_models", return_value=entries):
+        assert litellm_config._safe_models("ollama") == entries
+        with (
+            patch.object(litellm_config, "active_engines", return_value=["ollama"]),
+            patch.object(
+                litellm_config,
+                "get_ollama_local_base_url",
+                return_value="http://127.0.0.1:11434",
+            ),
+            patch.object(litellm_config, "list_cloud_ollama_models", return_value=[]),
+        ):
+            published = litellm_config.compute_model_list(
+                {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full"}
+            )
+    aliases = {entry["model_name"] for entry in published}
+    assert "mellum2:12b-a2.5b" in aliases
+    assert (
+        not {"whisper-2", "nomic-embed-text", "markitdown", "strands-decider:2b"}
+        & aliases
+    )
+
+
+def test_chat_catalogue_excludes_untyped_specialized_discovery_records():
+    # Real Ollama discovery shape: {name, size_gb, provider} only — no
+    # model_type — so the typed filter cannot see these records. The
+    # name-level guard must keep specialized models out of the chat
+    # catalogue, including Oracle-reproduced shapes (both the bare name and
+    # the provider-qualified form must be absent).
+    entries = [
+        {"name": "mellum2:12b-a2.5b", "size_gb": 8.0, "provider": "ollama"},
+        {"name": "whisper-2", "size_gb": 3.0, "provider": "ollama"},
+        {"name": "strands-decider:2b", "size_gb": 2.0, "provider": "ollama"},
+    ]
+    with (
+        patch.object(litellm_config, "iter_engine_models", return_value=entries),
+        patch.object(litellm_config, "active_engines", return_value=["ollama"]),
+        patch.object(litellm_config, "list_cloud_ollama_models", return_value=[]),
+        patch.object(
+            litellm_config,
+            "get_ollama_local_base_url",
+            return_value="http://127.0.0.1:11434",
+        ),
+    ):
+        published = litellm_config.compute_model_list(
+            {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full"}
+        )
+    aliases = {entry["model_name"] for entry in published}
+    assert aliases, "chat catalogue must not become empty under containment"
+    assert not aliases & {
+        "whisper-2",
+        "ollama/whisper-2",
+        "strands-decider:2b",
+        "ollama/strands-decider:2b",
+    }
+    assert any("mellum2:12b-a2.5b" in alias for alias in aliases)

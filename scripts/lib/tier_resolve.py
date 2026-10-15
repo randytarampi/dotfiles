@@ -17,6 +17,7 @@ import re
 import subprocess
 
 import logger
+from ai_models import is_ollama_decision_model_name, is_specialized_model_name
 from discover_models import find_ollama, list_local_ollama_models
 from local_engines import resolve_engine
 
@@ -95,6 +96,7 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
 
     ollama_bin = find_ollama()
     if not ollama_bin:
+        model_type = "decision" if is_ollama_decision_model_name(model_name) else None
         return {
             "param_count": None,
             "capabilities": [],
@@ -103,6 +105,7 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
             "context_length": None,
             "quantization": None,
             "is_moe": False,
+            "model_type": model_type,
         }
 
     try:
@@ -292,6 +295,22 @@ def resolve_roles_from_list(
         if not model_name:
             continue
 
+        record_type = model.get("model_type") if isinstance(model, dict) else None
+        # Known specialized models (decision, STT/TTS/STS, embedding, rerank,
+        # conversion) never hold chat seats. This name-level guard is what
+        # makes the exclusion real on the production Ollama path, where
+        # discovery is untyped and the healthy `ollama show` lookup supplies
+        # no model_type (typed metadata exists only for oMLX-engine pools or
+        # injected fallbacks). Genuinely unknown legacy chat models stay
+        # eligible. Typed audio records are exempt — the dedicated audio seat
+        # resolves from them (voice's STT/TTS path).
+        if is_specialized_model_name(model_name) and record_type not in {
+            "audio_stt",
+            "audio_tts",
+            "audio_sts",
+        }:
+            continue
+
         if isinstance(model, dict) and model.get("model_type") in {
             "embedding",
             "reranker",
@@ -304,10 +323,21 @@ def resolve_roles_from_list(
         details = get_cached_model_details(model_name, provider)
         if isinstance(model, dict):
             model = dict(model)
+            if model.get("model_type") is None and details.get("model_type"):
+                model["model_type"] = details["model_type"]
             model["capabilities"] = sorted(
                 set(model.get("capabilities", []))
                 | set(details.get("capabilities", []))
             )
+            if model.get("model_type") not in (
+                None,
+                "llm",
+                "vlm",
+                "audio_stt",
+                "audio_tts",
+                "audio_sts",
+            ):
+                continue
 
         name_lower = model_name.lower()
         has_audio_capability = (
@@ -481,7 +511,11 @@ def resolve_roles_from_list(
             # Engine-equivalence bridge: union capability metadata that only
             # the replaced Ollama entry reports (e.g. `audio` from
             # `ollama show` that oMLX discovery does not expose). Must run
-            # before category composition below reads capabilities.
+            # before category composition below reads capabilities. Safe by
+            # construction: local_engines records equivalent_ollama_names
+            # only when the oMLX entry replaced the SAME model (exact name
+            # or (family, params) identity), so the union joins two views of
+            # one model, never two different models.
             for equivalent_name in model.get("equivalent_ollama_names", []):
                 equivalent_details = get_cached_model_details(equivalent_name)
                 capabilities |= set(equivalent_details.get("capabilities", []))
@@ -557,8 +591,17 @@ def resolve_roles_from_list(
     classified["code-gen"] = [
         m
         for m in classified["code-gen"]
-        if m["name"] in _code_gen_name_qualified
-        or _has_required_capabilities(m, ["thinking", "completion"])
+        if (
+            m["name"] in _code_gen_name_qualified
+            and (
+                not m.get("capabilities")
+                or _has_required_capabilities(m, ["completion"])
+            )
+        )
+        or (
+            m["name"] not in _code_gen_name_qualified
+            and _has_required_capabilities(m, ["thinking", "completion"])
+        )
     ]
     classified["lightweight"] = [
         m for m in classified["lightweight"] if _has_required_capabilities(m, ["tools"])
@@ -616,25 +659,43 @@ def resolve_roles_from_list(
         src = classified.get(category, [])
         if index < len(src):
             return src[index]["name"]
+        if (
+            index >= 1
+            and len(src) == 1
+            and (not fallback_category or not classified.get(fallback_category))
+            and _has_required_capabilities(src[0], ["completion"])
+        ):
+            return src[0]["name"]
         if fallback_category:
             src_fb = classified.get(fallback_category, [])
             if index < len(src_fb):
                 return src_fb[index]["name"]
+            if index >= 1 and not src_fb and len(src) == 1:
+                return src[0]["name"]
         else:
             return None
         # Final fallback: scan all categories for the Nth available model
         all_models = []
-        for c in ["reasoning", "code-gen", "lightweight", "vision", "audio"]:
+        for c in ["reasoning", "code-gen", "lightweight", "vision"]:
             all_models.extend(classified.get(c, []))
         if index < len(all_models):
             return all_models[index]["name"]
-        if index >= 1 and all_models:
+        if (
+            index >= 1
+            and all_models
+            and all(
+                _has_required_capabilities(model, ["completion"])
+                for model in all_models
+            )
+        ):
             # Secondary seats (index >= 1) exist for council diversity; on
             # fleets too small to supply one, reuse an available resident so
             # the seat still resolves — diversity then comes from variants,
             # as in local-solo. Primary seats (index 0) legitimately stay
             # unset when their category is empty.
             return all_models[0]["name"]
+        if index >= 1:
+            return None
         return None
 
     role_map = {

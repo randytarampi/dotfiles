@@ -41,6 +41,68 @@ def test_catalogue_uses_private_key_and_exact_known_ids(monkeypatch):
     assert captured["timeout"] == PROFILES.MODEL_CATALOGUE_TIMEOUT == 45
 
 
+@pytest.mark.parametrize("inventory", ["omlx", "untyped", "mixed", "absent", "unknown"])
+def test_junie_pool_excludes_specialized_inventory(inventory):
+    names = [
+        "ornith-1.5:35b-a3b",
+        "mellum2:12b-a2.5b",
+        "gemma4:12b-mxfp8",
+        "whisper-2",
+        "qwen3-asr:1.7b",
+        "qwen3-tts",
+        "chatterbox-tts",
+        "nomic-embed-text",
+        "markitdown",
+        "strands-decider:2b",
+    ]
+    specialized = {
+        "whisper-2": "audio_stt",
+        "qwen3-asr:1.7b": "audio_stt",
+        "qwen3-tts": "audio_tts",
+        "chatterbox-tts": "audio_tts",
+        "nomic-embed-text": "embedding",
+        "markitdown": "conversion",
+        "strands-decider:2b": "decision",
+    }
+    # append_pool_profile_specs processes only non-legacy pools (engines
+    # without resolve_model — oMLX): ollama pools keep group-driven specs.
+    pools = {}
+    if inventory != "absent":
+        typed_pool = [
+            {
+                "name": name,
+                "primary_category": specialized.get(name, "code-gen"),
+                "model_type": specialized.get(name, "llm"),
+            }
+            for name in names
+        ]
+        if inventory == "unknown":
+            typed_pool = [
+                {**entry, "primary_category": "unknown"} for entry in typed_pool
+            ]
+        pools["omlx"] = typed_pool
+        if inventory == "mixed":
+            # Ollama pools are legacy: skipped by the resolve_model guard.
+            pools["ollama"] = [
+                {"name": name, "provider": "ollama", "size_gb": 8.0} for name in names
+            ]
+    # Real discovery shape: untyped records carry name/provider/size only —
+    # neither primary_category nor model_type exists for the filters to see.
+    if inventory == "untyped":
+        pools = {
+            "omlx": [
+                {"name": name, "provider": "omlx", "size_gb": 8.0} for name in names
+            ]
+        }
+    specs = []
+    PROFILES.append_pool_profile_specs(specs, pools)
+    selected = {primary for _, primary, *_ in specs}
+    assert not any(name in ref for name in names[3:] for ref in selected)
+    if inventory in {"omlx", "untyped", "mixed"}:
+        # A real chat model must survive the pool filter.
+        assert any("ornith-1.5:35b-a3b" in ref for ref in selected)
+
+
 def test_delayed_catalogue_succeeds_with_shared_consumer_deadline(monkeypatch):
     class Response:
         def __enter__(self):
