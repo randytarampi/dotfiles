@@ -91,6 +91,7 @@ LITELLM_MODEL_PREFIXES = (
     ("openrouter/", "openrouter"),
     ("openai/", "openai"),
     ("ollama-cloud/", "ollama-cloud"),
+    ("meridian/", "meridian"),
 )
 
 
@@ -222,6 +223,11 @@ def _check_junie_model_reference(name, group, field, allowlists, violations):
     if provider == "litellm":
         for prefix, catalogue in LITELLM_MODEL_PREFIXES:
             if model.startswith(prefix):
+                if catalogue == "meridian":
+                    # Meridian-wire gateway routes keep bare Meridian API
+                    # identifiers, like their direct groups at :219 above;
+                    # bare Claude aliases are not Anthropic allowlist keys.
+                    return
                 _require_allowlisted_model(
                     catalogue, model[len(prefix) :], path, allowlists, violations
                 )
