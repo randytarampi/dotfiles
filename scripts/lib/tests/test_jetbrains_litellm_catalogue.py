@@ -1,7 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError
 from urllib.request import Request
 
 import pytest
@@ -39,6 +39,53 @@ def test_catalogue_uses_private_key_and_exact_known_ids(monkeypatch):
     assert captured["request"].full_url == "http://127.0.0.1:4000/v1/models"
     assert captured["request"].get_header("Authorization") == "Bearer dummy-private-key"
     assert captured["timeout"] == PROFILES.MODEL_CATALOGUE_TIMEOUT == 45
+
+
+def test_routed_groups_derive_twins_including_local_and_verify_pairing():
+    groups = {
+        "google-gemini-flash": {
+            "provider": "google",
+            "primaryModel": "gemini-3.8-flash",
+            "fasterModel": "gemini-3.5-flash-lite",
+            "fasterProvider": "google",
+        },
+        "local-quiet": {"provider": "ollama", "primaryModel": "_local:code-gen"},
+        "meridian-sonnet": {
+            "provider": "meridian",
+            "primaryModel": "claude-sonnet-5-5",
+        },
+    }
+    derived = PROFILES.derive_litellm_groups(groups)
+    assert derived["litellm-google-gemini-flash"] == {
+        "provider": "litellm",
+        "primaryModel": "google/models/gemini-3.8-flash",
+        "fasterModel": "google/models/gemini-3.5-flash-lite",
+        "fasterProvider": "litellm",
+    }
+    assert derived["litellm-local-quiet"]["primaryModel"] == "ollama/_local:code-gen"
+    assert "litellm-meridian-sonnet" not in derived
+    assert (
+        PROFILES.select_model_groups(groups, True)["litellm-local-quiet"]
+        == derived["litellm-local-quiet"]
+    )
+
+
+def test_twin_temperature_identity_preserves_model_family():
+    temperature = PROFILES.lookup_model_temperature
+    overrides = {"gemini": 1, "gpt": 0.9}
+    plain_identity = PROFILES.temperature_identity("google-gemini-flash")
+    twin_identity = PROFILES.temperature_identity("litellm-google-gemini-flash")
+    assert plain_identity == twin_identity
+    assert temperature("gemini-3.8-flash", overrides) == 1
+    assert temperature("google/models/gemini-3.8-flash", overrides) == 1
+
+
+def test_routed_group_verification_rejects_suppressed_twin():
+    groups = {"openai-gpt": {"provider": "openai", "primaryModel": "gpt-6-luna"}}
+    assert PROFILES.routed_group_violations(groups, {}) == [
+        "Routed Junie group openai-gpt has no matching twin litellm-openai-gpt"
+    ]
+    assert PROFILES.routed_group_violations(groups) == []
 
 
 @pytest.mark.parametrize("inventory", ["omlx", "untyped", "mixed", "absent", "unknown"])
@@ -157,30 +204,24 @@ def test_catalogue_known_empty_exact_ids_and_malformed(monkeypatch, payload, exp
     )
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
-        HTTPError("http://127.0.0.1:4000/v1/models", 401, "unauthorized", {}, None),
-        HTTPError("http://127.0.0.1:4000/v1/models", 503, "unavailable", {}, None),
-        URLError("offline"),
-    ],
-)
-def test_unavailable_catalogue_preserves_litellm_groups(monkeypatch, error):
+def test_unavailable_catalogue_omits_litellm_groups_and_keeps_direct(monkeypatch):
     groups = {
         "litellm-openai": {"provider": "litellm", "primaryModel": "openai/gpt-6"},
         "litellm-google": {
             "provider": "litellm",
             "primaryModel": "google/models/gemini-3.8-flash",
         },
+        "google-direct": {"provider": "google", "primaryModel": "gemini-3.8-flash"},
     }
     monkeypatch.setattr(
         PROFILES,
         "open_same_origin",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(error),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("offline")),
     )
     catalogue = PROFILES.litellm_catalogue_models("http://127.0.0.1:4000/v1", "dummy")
     assert catalogue is None
-    assert PROFILES.filter_litellm_groups(groups, catalogue) == groups
+    failed = PROFILES.filter_litellm_groups(groups, catalogue)
+    assert set(failed) == {"google-direct"}
 
 
 def test_known_empty_catalogue_omits_managed_groups_but_direct_google_id_is_distinct():
@@ -197,6 +238,69 @@ def test_known_empty_catalogue_omits_managed_groups_but_direct_google_id_is_dist
         groups["google-direct"]["primaryModel"]
         != groups["litellm-google"]["primaryModel"]
     )
+
+
+def test_missing_faster_alias_drops_only_faster_fields():
+    groups = {
+        "litellm-google": {
+            "provider": "litellm",
+            "primaryModel": "google/models/gemini-3.8-flash",
+            "fasterModel": "google/models/gemini-3.5-flash-lite",
+            "fasterProvider": "litellm",
+        },
+        "litellm-openai": {
+            "provider": "litellm",
+            "primaryModel": "openai/gpt-6-luna",
+            "fasterModel": "openai/gpt-6-mini",
+            "fasterProvider": "litellm",
+        },
+    }
+    catalogue = {
+        "google/models/gemini-3.8-flash",
+        "openai/gpt-6-luna",
+        "openai/gpt-6-mini",
+    }
+    filtered = PROFILES.filter_litellm_groups(groups, catalogue)
+    assert filtered["litellm-google"] == {
+        "provider": "litellm",
+        "primaryModel": "google/models/gemini-3.8-flash",
+    }
+    assert filtered["litellm-openai"] == groups["litellm-openai"]
+
+
+def test_missing_primary_alias_omits_group_and_keeps_available_siblings():
+    groups = {
+        "litellm-google": {
+            "provider": "litellm",
+            "primaryModel": "google/models/gemini-3.8-flash",
+        },
+        "litellm-openai": {
+            "provider": "litellm",
+            "primaryModel": "openai/gpt-6-luna",
+            "fasterModel": "openai/gpt-6-mini",
+            "fasterProvider": "litellm",
+        },
+    }
+    filtered = PROFILES.filter_litellm_groups(groups, {"openai/gpt-6-luna"})
+    assert set(filtered) == {"litellm-openai"}
+
+
+def test_derive_omits_unrouted_faster_provider_with_diagnostic(caplog):
+    groups = {
+        "openai-gpt": {
+            "provider": "openai",
+            "primaryModel": "gpt-6-luna",
+            "fasterModel": "gpt-6-mini",
+            "fasterProvider": "direct-fast-lane",
+        }
+    }
+    derived = PROFILES.derive_litellm_groups(groups)
+    assert derived["litellm-openai-gpt"] == {
+        "provider": "litellm",
+        "primaryModel": "openai/gpt-6-luna",
+    }
+    assert "direct-fast-lane" in caplog.text
+    assert "faster" in caplog.text
 
 
 def test_catalogue_rejects_non_loopback_before_sending_key(monkeypatch):

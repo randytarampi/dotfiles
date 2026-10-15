@@ -47,6 +47,29 @@ from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
     resolve_canonical_identity,
 )  # noqa: E402
 
+_JUNIE_GENERATOR = None
+
+
+def _junie_generator():
+    """Load generate-jetbrains-profiles.py once, for derived-twin checks."""
+    global _JUNIE_GENERATOR
+    if _JUNIE_GENERATOR is None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "generated_junie_profiles",
+            REPO_ROOT / "scripts" / "generate-jetbrains-profiles.py",
+        )
+        if spec is None:
+            raise RuntimeError("could not load generate-jetbrains-profiles.py spec")
+        module = importlib.util.module_from_spec(spec)
+        if spec.loader is None:
+            raise RuntimeError("could not load generate-jetbrains-profiles.py loader")
+        spec.loader.exec_module(module)
+        _JUNIE_GENERATOR = module
+    return _JUNIE_GENERATOR
+
+
 SLIM_PATH = REPO_ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
 MODEL_ALLOWLIST_PATHS = {
     "openai": REPO_ROOT / "configs" / "opencode" / "openai-models.json",
@@ -284,6 +307,11 @@ def _offline_model_parity_violations(junie=None, allowlists=None, codex_source=N
             junie = json.load(f)
     violations = []
     groups = junie.get("groups", {})
+    # Derive-and-compare semantics: static twins live only in mixed states now
+    # (plain groups in the file, litellm twins synthesized by the generator),
+    # so a routed group must match what derivation produces, not require a
+    # static entry in the JSON.
+    violations.extend(_junie_generator().routed_group_violations(groups))
 
     for name, group in groups.items():
         if name.startswith("litellm-") and group.get("provider") == "litellm":

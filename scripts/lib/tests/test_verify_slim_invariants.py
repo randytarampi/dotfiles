@@ -1,5 +1,6 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "verify-slim-invariants.py"
 SPEC = spec_from_file_location("verify_slim_invariants", SCRIPT_PATH)
@@ -204,3 +205,17 @@ def test_litellm_model_reference_rejects_unknown_canonical_model(monkeypatch):
     monkeypatch.setattr(INVARIANTS, "_model_allowlists", lambda: {"openai": set()})
     data = {"presets": {"x": {"orchestrator": {"model": "litellm/openai/unknown"}}}}
     assert INVARIANTS._model_allowlist_violations(data, proxy_mode=True)
+
+
+def test_offline_parity_rejects_suppressed_derived_junie_twin(monkeypatch):
+    groups = {"openai-gpt": {"provider": "openai", "primaryModel": "gpt-6-luna"}}
+    groups["litellm-openai-gpt"] = {
+        "provider": "litellm",
+        "primaryModel": "openai/wrong-model",
+    }
+    violations = INVARIANTS._offline_model_parity_violations(
+        junie={"groups": groups},
+        allowlists={},
+        codex_source="DEFAULT_OLLAMA_CLOUD_MODEL = 'x'",
+    )
+    assert any("does not match direct group" in item for item in violations)

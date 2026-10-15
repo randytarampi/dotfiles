@@ -57,10 +57,13 @@ def test_direct_and_litellm_google_pair_is_valid():
             "fasterModel": "gemini-3.5-flash-lite",
             "fasterProvider": "google",
         },
+        # A hand-written twin must match derivation byte-for-byte, including
+        # the derived fasterProvider marker.
         "litellm-google-gemini-flash": {
             "provider": "litellm",
             "primaryModel": "google/models/gemini-3.8-flash",
             "fasterModel": "google/models/gemini-3.5-flash-lite",
+            "fasterProvider": "litellm",
         },
     }
     assert (

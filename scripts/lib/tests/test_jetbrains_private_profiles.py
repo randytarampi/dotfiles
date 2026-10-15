@@ -49,19 +49,10 @@ def harness(tmp_path, monkeypatch):
                 },
                 "groups": {
                     "openai-main": {"provider": "openai", "primaryModel": "gpt-main"},
-                    "litellm-openai-main": {
-                        "provider": "litellm",
-                        "primaryModel": "main-model",
-                    },
                     "openai-faster": {
                         "provider": "openai",
                         "primaryModel": "gpt-faster",
-                    },
-                    "litellm-openai-faster": {
-                        "provider": "openai",
-                        "primaryModel": "gpt-fast",
                         "fasterModel": "junie-fast",
-                        "fasterProvider": "litellm",
                     },
                 },
             }
@@ -95,17 +86,27 @@ def harness(tmp_path, monkeypatch):
 
 
 def test_generated_litellm_profiles_are_private_and_share_cli_ide_directory(
-    harness, caplog
+    harness, caplog, monkeypatch
 ):
     home, target, key_file, _ = harness
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {
+            "openai/gpt-main",
+            "openai/gpt-faster",
+            "openai/junie-fast",
+        },
+    )
     PROFILES.main()
     primary = json.loads((target / "litellm-openai-main.json").read_text())
     nested = json.loads((target / "litellm-openai-faster.json").read_text())
     assert primary["apiKey"] == "dummy-junie-key-one"
-    assert nested["fasterModel"]["apiKey"] == "dummy-junie-key-one"
-    assert nested["fasterModel"]["baseUrl"] == (
-        "http://127.0.0.1:4000/v1/chat/completions"
-    )
+    assert nested["fasterModel"]["id"] == "openai/junie-fast"
+    assert "apiKey" not in nested["fasterModel"]
+    assert "baseUrl" not in nested["fasterModel"]
+    assert nested["fasterModel"]["temperature"] is not None
+    assert nested["baseUrl"] == "http://127.0.0.1:4000/v1/chat/completions"
     assert (home / ".junie/models").resolve() == (home / ".ai/models").resolve()
     assert (home / ".ai/models").stat().st_mode & 0o777 == 0o700
     assert (target / "litellm-openai-main.json").stat().st_mode & 0o777 == 0o600
@@ -178,16 +179,25 @@ def test_litellm_faster_model_stays_on_proxy_and_direct_group_stays_direct(
     assert direct["baseUrl"].startswith("https://generativelanguage.googleapis.com/")
 
 
-def test_litellm_group_rejects_explicit_direct_faster_provider(harness, caplog):
+def test_handwritten_litellm_static_divergence_is_flagged_and_fail_closed(
+    harness, caplog
+):
     _, target, _, groups_path = harness
     config = json.loads(groups_path.read_text())
-    config["groups"]["litellm-openai-faster"]["provider"] = "litellm"
-    config["groups"]["litellm-openai-faster"]["fasterProvider"] = "google"
+    config["groups"]["litellm-openai-main"] = {
+        "provider": "litellm",
+        "primaryModel": "openai/wrong-alias",
+        "fasterModel": "google/some-model",
+        "fasterProvider": "google",
+    }
     groups_path.write_text(json.dumps(config), encoding="utf-8")
-    with pytest.raises(SystemExit):
-        PROFILES.main()
-    assert "cannot use direct faster provider 'google'" in caplog.text
-    assert not (target / "litellm-openai-faster.json").exists()
+    derived = PROFILES.derive_litellm_groups(config["groups"])
+    assert PROFILES.routed_group_violations(config["groups"], derived)
+    PROFILES.main()
+    assert "Derived Junie twin litellm-openai-main diverges from openai-main" in (
+        caplog.text
+    )
+    assert not (target / "litellm-openai-main.json").exists()
 
 
 def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch):
@@ -386,10 +396,7 @@ def test_unknown_catalogue_omits_tiers_but_preserves_named_and_user_profiles(
     PROFILES.main()
 
     assert not (target / "pro.json").exists()
-    assert (
-        json.loads((target / "litellm-openai-custom.json").read_text())["id"]
-        == "openai/custom/alias"
-    )
+    assert not (target / "litellm-openai-custom.json").exists()
     assert json.loads(user_profile.read_text())["id"] == "user"
 
 
@@ -477,6 +484,10 @@ def test_gate_off_cleans_stale_litellm_but_preserves_unrelated_profile(
     target.chmod(0o700)
     (target / "litellm-openai-main.json").write_text("stale", encoding="utf-8")
     (target / "unrelated.json").write_text('{"user": true}', encoding="utf-8")
+    (target / PROFILES.PROFILE_MANIFEST).write_text(
+        json.dumps(["litellm-openai-main"]), encoding="utf-8"
+    )
+    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
 
     PROFILES.main()
@@ -492,7 +503,11 @@ def test_profile_symlink_is_rejected(harness):
     outside = target.parent / "outside.json"
     outside.write_text("do-not-touch", encoding="utf-8")
     (target / "litellm-openai-main.json").symlink_to(outside)
-    with pytest.raises(OSError, match="symlink"):
+    (target / PROFILES.PROFILE_MANIFEST).write_text(
+        json.dumps(["litellm-openai-main"]), encoding="utf-8"
+    )
+    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
+    with pytest.raises(OSError, match="unsafe stale"):
         PROFILES.main()
     assert outside.read_text(encoding="utf-8") == "do-not-touch"
 
