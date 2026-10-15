@@ -48,6 +48,29 @@ def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "true")
     monkeypatch.setenv("OMLX_API_KEY", "secret")
+    # Voice-LLM resolution is fail-closed (PR1) and is not this test's
+    # subject. Stub its inputs so the STT assertions stay hermetic and do
+    # not depend on a live Ollama daemon or on tier-registry contents.
+    monkeypatch.setattr(
+        voice,
+        "list_local_ollama_models",
+        lambda: [{"name": "smol-coder:4b", "provider": "ollama"}],
+    )
+    monkeypatch.setattr(
+        voice,
+        "resolve_roles_from_list",
+        lambda *args, **kwargs: {"lightweight": "ollama/smol-coder:4b"},
+    )
+    monkeypatch.setattr(
+        voice,
+        "get_model_details",
+        lambda name, provider="ollama": {
+            "param_count": 4,
+            "capabilities": ["completion", "tools"],
+            "is_moe": False,
+            "model_type": "llm",
+        },
+    )
     with (
         patch.dict(
             local_engines.LOCAL_ENGINES["omlx"],
@@ -61,7 +84,14 @@ def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
         patch.object(
             voice.tier_registry,
             "load_registry",
-            return_value={"preset": "local", "presets": {}},
+            return_value={
+                "preset": "local",
+                "presets": {
+                    "local": {
+                        "librarian": {"model": "_local:lightweight"},
+                    }
+                },
+            },
         ),
         patch.object(
             voice.tier_registry, "uses_local_placeholders", return_value=False
