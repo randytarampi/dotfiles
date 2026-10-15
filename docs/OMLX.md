@@ -208,6 +208,21 @@ point and carries `basic_auth` for `lan`/`public` access modes.
 
 ## Capability mapping
 
+### Typed discovery and audio endpoint evidence
+
+Discovery uses typed `model_type` metadata where available: LLM/VLM entries
+receive chat capabilities, audio model types are classified as audio, and
+embedding/reranker/unknown types are excluded from chat role pools. This is
+classification, not proof that every advertised operation works end to end.
+
+Audio-service reality check: the benchmark artifact records measured oMLX
+inference runs for chat models only; its Ollama comparison rows use the Ollama
+OpenAI-compatible endpoint. These rows do not prove an oMLX STT or TTS operation.
+An audio endpoint is PROVEN only when its request/response operation has been
+exercised against that endpoint; metadata-discovered STT/TTS entries alone are
+ASSERTED capability, not end-to-end service evidence. See the [benchmark
+artifact](../../.slim/deepwork/local-ai-unification/bench-m3max-m5pro.md).
+
 | oMLX metadata | Repository capability |
 |---------------|-----------------------|
 | `model_type=llm` or `vlm` | `completion` and optimistic `tools` |

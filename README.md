@@ -21,6 +21,10 @@ On first setup, run `make deploy` twice. The second pass should be a no-op, but 
 
 ## Architecture
 
+- AI model selection and local-service routing use one shared policy across
+  multiple consumers (OpenCode, Junie, Pi and other configured clients); each
+  consumer keeps its own adapter. The local tiers are maintained once in
+  [docs/TIERS.md](docs/TIERS.md), rather than duplicated here.
 - Canonical orchestration doc: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)
 - Agent capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
 - Pi terminal coding agent: [docs/PI.md](docs/PI.md)

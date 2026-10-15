@@ -24,6 +24,15 @@ are routed only through exact aliases present in Junie's authenticated LiteLLM
 catalogue. Missing aliases or an unavailable catalogue omit the owned generated
 profile (and remove a stale manifest-owned profile); missing faster aliases omit
 only `fasterModel`. No eligible profile silently falls back to a direct endpoint.
+In PR2, the generator will derive a `litellm-<plain>` twin for every plain
+group routed through `LITELLM_ROUTED_PROVIDERS`, but only where the gateway
+supports that provider. A verification check will reject routed groups that
+silently resolve to no generated profile. Deployment remains direct by default;
+routed profiles are emitted only under `DOTFILES_USE_LITELLM_PROXY=1`. This is
+fail-closed: missing aliases or keys never trigger a direct substitute. The four
+`litellm-meridian-*` twins remain gated on a reproduced end-to-end Junie gateway
+smoke test (including tools and streaming).
+
 Named `litellm-*` groups keep their existing catalogue-filter behaviour. Meridian groups remain direct because Meridian speaks the
 OpenAI Responses protocol at `/v1/responses`, which the LiteLLM proxy does not
 serve; Copilot remains direct because it uses its own authentication and profile

@@ -9,6 +9,10 @@ The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads
 `~/.local/share/litellm/service.env`, written with mode `600`. A master key is
 generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied.
+The gateway serves chat models by default. Direct loopback service endpoints
+remain the always-available route. Exposing STT, TTS, embedding and reranking
+models through protocol-qualified aliases under `DOTFILES_USE_LITELLM_PROXY=1`
+is a planned milestone; it is not current gateway behaviour.
 
 ### Two-mode client contract
 
@@ -37,7 +41,10 @@ truthy legacy value enables the new gate only when the new value is absent. An
 explicit `DOTFILES_USE_LITELLM_PROXY` value always wins. Run `make migrate`
 after pulling this change.
 
-LiteLLM requires Postgres for key, spend-tracking, and UI state. Set
+LiteLLM requires a database dependency for key, spend-tracking and UI state. A
+local inference backend behind a remote SQLite/Postgres database is not
+standalone for offline operation; `scripts/configure-all.sh:348` is the
+reference. Set
 `LITELLM_DATABASE_URL`; setup translates it to `DATABASE_URL` in `service.env`,
 matching the unchanged `database_url: os.environ/DATABASE_URL` config reference.
 Legacy `DATABASE_URL` remains accepted during migration, behind the new name.

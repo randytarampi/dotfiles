@@ -308,6 +308,12 @@ unmanaged entries are never touched. Direct mode keeps the per-provider
 topology described above, and both directions round-trip through the
 previous-mode catalogue.
 
+Managed-connection reconciliation is regression protection: it must preserve
+unmanaged admin-created connections, update only entries it owns, and fail
+closed on ownership collisions. Regression coverage should verify that both
+managed and unmanaged state survive a read-merge-write cycle and that changing
+direct/proxy mode does not duplicate connections or silently rewrite chat IDs.
+
 The model IDs in the picker consequently change with the prefix migration.
 Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`,
 `google.models/gemini-...`, `openrouter.vendor/model`, and
