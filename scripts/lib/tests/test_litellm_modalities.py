@@ -53,3 +53,34 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
     names = [entry["model_name"] for entry in generated]
     assert names == sorted(names)
     assert len(names) == len(set(names))
+
+
+def test_reranker_type_routes_through_omlx_normalization():
+    import omlx
+
+    models_payload = {"data": [{"id": "rank", "max_model_len": 4096}]}
+    status_payload = {"models": [{"id": "rank", "model_type": "reranker"}]}
+    omlx._STATUS_CACHE.clear()
+    with (
+        patch.object(omlx, "_get_json", side_effect=[models_payload, status_payload]),
+        patch.object(litellm_config, "active_engines", return_value=["omlx"]),
+        patch.object(
+            litellm_config,
+            "iter_engine_models",
+            side_effect=lambda provider, include_cloud=False: omlx.list_omlx_models(),
+        ),
+        patch.object(
+            litellm_config,
+            "local_endpoint_for",
+            return_value=("http://127.0.0.1:11427/v1", "OMLX_API_KEY"),
+        ),
+    ):
+        generated = litellm_config._modality_entries({"OMLX_API_KEY": "key"})
+    names = {entry["model_name"] for entry in generated}
+    assert "rank" in names
+    entry = next(e for e in generated if e["model_name"] == "rank")
+    assert entry["litellm_params"] == {
+        "model": "openai/rank",
+        "api_base": "http://127.0.0.1:11427/v1",
+        "api_key": "os.environ/OMLX_API_KEY",
+    }

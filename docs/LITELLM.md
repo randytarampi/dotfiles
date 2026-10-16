@@ -17,9 +17,10 @@ endpoints remain the always-available route, including when the gateway is off.
 ### Modality exposure
 
 Discovered local models are exposed under their exact model IDs. Qualified
-`audio_stt` models support `POST /v1/audio/transcriptions` and
-`POST /v1/audio/speech`; qualified `audio_tts` models are exposed to speech
-requests except model families explicitly marked unqualified. Embedding and
+`audio_stt` models support `POST /v1/audio/transcriptions`; qualified
+
+`audio_tts` models are exposed to `POST /v1/audio/speech` except
+model families explicitly marked unqualified. Embedding and
 rerank models are added only when discovery reports those modalities; no
 placeholder aliases are created. Modality entries are kept out of the chat
 catalogue. Direct loopback endpoints remain available regardless of the
