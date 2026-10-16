@@ -80,6 +80,16 @@ def local_voice_provider(model_ref):
     return config
 
 
+def add_voice_transport_arguments(parser):
+    """Keep the voice CLI's supported transport options explicit."""
+    parser.add_argument(
+        "--stt-transport",
+        choices=("auto", "local", "openai"),
+        default="auto",
+        help="STT transport policy (auto preserves tier-based behaviour)",
+    )
+
+
 def get_voice_config(
     tier: str,
     local_fallback_preset=None,
@@ -355,6 +365,17 @@ def get_voice_config(
         pass
     # else: local/pro use whisper-cli (no stt config needed — plugin auto-detects)
 
+    # This plugin synthesizes through Piper; HTTP TTS belongs to Open WebUI.
+    discovered_tts = any(
+        model.get("model_type") == "audio_tts" for model in audio_models("omlx")
+    )
+    logger.warning(
+        "The installed opencode-voice consumer (<=0.6.0) synthesizes via local "
+        "Piper and ignores HTTP TTS configuration; local HTTP TTS is served "
+        "through the Open WebUI audio bundle%s",
+        " (oMLX TTS model discovered)" if discovered_tts else "",
+    )
+
     # ── Optional custom prompt files ─────────────────────────────────
     # These are optional — only include if the files exist
     opencode_dir = os.environ.get("OPENCODE_DIR")
@@ -390,12 +411,7 @@ def main():
         choices=available_tiers,
         help="Active OpenCode tier (determines voice LLM/STT endpoints)",
     )
-    parser.add_argument(
-        "--stt-transport",
-        choices=("auto", "local", "openai"),
-        default="auto",
-        help="STT transport policy (auto preserves tier-based behaviour)",
-    )
+    add_voice_transport_arguments(parser)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -482,7 +498,7 @@ def main():
                     opts = plugin_entry[1]
                     for key in ("apiKeyEnv", "sttApiKeyEnv"):
                         if key in opts:
-                            opts[key] = f"<{opts[key]}>"
+                            opts[key] = f"<{opts[key]} >".replace(" >", ">")
             print(json.dumps(safe_config, indent=2))
         return
 

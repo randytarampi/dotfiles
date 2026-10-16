@@ -1,4 +1,5 @@
 import importlib.util
+import argparse
 import json
 import os
 import sys
@@ -79,6 +80,8 @@ def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
                 "audio_discovery": lambda: [
                     {"name": "omlx/whisper", "model_type": "audio_stt"}
                 ],
+                "list_models": lambda include_cloud=False: [],
+                "base_url": lambda: "http://127.0.0.1:8000",
             },
         ),
         patch.object(
@@ -114,9 +117,108 @@ def test_voice_local_stt_absent_falls_back(monkeypatch):
     voice = load_script("configure-opencode-voice.py")
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     with patch.dict(
-        local_engines.LOCAL_ENGINES["omlx"], {"audio_discovery": lambda: []}
+        local_engines.LOCAL_ENGINES["omlx"],
+        {
+            "audio_discovery": lambda: [],
+            "list_models": lambda include_cloud=False: [],
+        },
     ):
         assert "sttEndpoint" not in voice.get_voice_config("local")
+
+
+def _voice_test_config(monkeypatch, voice, discovery, key=None):
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        local_engines, "engine_gate_active", lambda provider: provider == "omlx"
+    )
+    if key is None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("OPENAI_API_KEY", key)
+    with (
+        patch.dict(
+            local_engines.LOCAL_ENGINES["omlx"], {"audio_discovery": lambda: discovery}
+        ),
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+    ):
+        return voice.get_voice_config("pro-plus")
+
+
+def test_voice_auto_discovered_omlx_emits_no_tts_keys(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_VOICE_TTS_VOICE", "vivian")
+    monkeypatch.setenv("OMLX_PORT", "11427")
+    config = _voice_test_config(
+        monkeypatch, voice, [{"name": "omlx/model-a", "model_type": "audio_tts"}]
+    )
+    assert not any(key.lower().startswith("tts") for key in config)
+
+
+def test_voice_auto_without_local_tts_logs_consumer_note(monkeypatch, caplog):
+    voice = load_script("configure-opencode-voice.py")
+    with caplog.at_level("WARNING"):
+        config = _voice_test_config(monkeypatch, voice, [])
+    assert not any(key.lower().startswith("tts") for key in config)
+    assert "synthesizes via local Piper" in caplog.text
+    assert "Open WebUI audio bundle" in caplog.text
+
+
+def test_voice_explicit_piper(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+    ):
+        config = voice.get_voice_config("pro-plus")
+    assert not any(key.lower().startswith("tts") for key in config)
+
+
+def test_voice_openai_credentials_do_not_emit_tts_config(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    monkeypatch.setenv("OPENAI_API_KEY", "key")
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+    ):
+        config = voice.get_voice_config("pro-plus")
+    assert not any(key.lower().startswith("tts") for key in config)
+
+
+def test_voice_parser_rejects_removed_tts_transport(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(voice, "get_available_tiers", lambda: ["pro-plus"])
+    monkeypatch.setattr(voice, "add_model_override_args", lambda parser: None)
+    monkeypatch.setattr(voice, "add_min_reasoning_embedding_arg", lambda parser: None)
+    monkeypatch.setattr(voice, "load_env", lambda *args: True)
+    monkeypatch.setattr(voice.os.path, "exists", lambda path: False)
+    monkeypatch.setattr(voice.os.path, "expanduser", lambda path: "/tmp/not-real-home")
+    monkeypatch.setattr(voice.os, "makedirs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(voice, "write_text_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        sys, "argv", ["configure-opencode-voice.py", "--tts-transport", "auto"]
+    )
+    with pytest.raises(SystemExit) as error:
+        voice.main()
+    assert error.value.code == 2
 
 
 def test_caddy_omlx_route_is_gated(monkeypatch):

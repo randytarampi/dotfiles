@@ -41,10 +41,23 @@ OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.
 **Local Ollama model selection**: All `local-*` tiers reuse the shared tier registry (`scripts/lib/tier_registry.py`) model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models). Cloud tiers respect `DOTFILES_USE_LOCAL_OLLAMA` (default: true) to control whether local models replace the cloud LLM endpoint.
 
 **Normalization LLM selection** uses the shared local pool when the applicable
-local-selection policy allows it; this chooses the text model used to normalize
-transcribed input. **STT selection** is separate: when enabled and reachable,
-the audio-capable pool may select an oMLX `audio_stt` model; TTS remains Piper.
-`DOTFILES_USE_LOCAL_OMLX=false` opts out of the oMLX STT path.
+local-selection policy allows it. STT selection is separate: when enabled and
+reachable, discovery selects an oMLX `audio_stt` model. `DOTFILES_USE_LOCAL_OMLX=false`
+opts out of the oMLX STT path.
+
+The installed `opencode-voice` consumer (0.5.0; upstream through 0.6.0) is
+Piper-only for synthesis by design: its TTS registration accepts no options and
+the implementation unconditionally spawns Piper. The plugin's endpoint, model
+and API-key options configure LLM text normalization, not synthesis. Therefore
+the voice script does not emit HTTP TTS settings and logs this limitation
+honestly. Local HTTP TTS is consumed by the separate Open WebUI audio bundle;
+`DOTFILES_VOICE_TTS_VOICE` is its named-speaker input, defaulting to `serena`
+(used only for Qwen3-TTS-family models). The bundle uses the first discovered
+`audio_tts` model that is not known-unqualified. Chatterbox multilingual v3 requires voice-
+cloning conditionals and is not default-selected. Piper cannot be configured
+away with this voice consumer; the config reflects its unavoidable Piper use.
+See the [audio probe record](../.slim/deepwork/local-ai-unification/audio-slice-probes.md)
+for the qualified endpoint and model behaviour.
 
 Microphone transport is an explicit policy independent of coding-tier model
 selection. The current transport remains the default, preserving existing
@@ -64,7 +77,7 @@ Voice requires local STT/TTS tooling regardless of tier:
 |-----------|---------|---------|
 | `whisper.cpp` | `brew install whisper.cpp` | Local speech-to-text |
 | `sox` | `brew install sox` | Audio format conversion (required by whisper-cli) |
-| `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
+| `piper-tts` | `uv tool install piper-tts` | Required by the voice plugin's Piper-only synthesis path |
 | Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model file |
 | Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice file |
 
@@ -77,7 +90,8 @@ These are installed by `run_onchange_07-install-opencode-plugins.sh.tmpl` (gated
 | Component | Env Var | Default | Notes |
 |-----------|---------|---------|-------|
 | Whisper model | `DOTFILES_WHISPER_MODEL` | `ggml-large-v3-turbo.bin` | Best balance of accuracy (1.5 GiB) |
-| Piper voice | `DOTFILES_PIPER_VOICE` | `en_US-lessac-high` | High-quality English voice |
+| Piper voice | `DOTFILES_PIPER_VOICE` | `en_US-lessac-high` | Voice plugin synthesis |
+| WebUI TTS voice | `DOTFILES_VOICE_TTS_VOICE` | `serena` | Named speaker, passed verbatim to local model |
 
 Piper voice URL is constructed from components: `en_US-lessac-high` → `en/en_US/lessac/high/en_US-lessac-high.onnx`
 
