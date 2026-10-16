@@ -9,12 +9,21 @@ The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads
 `~/.local/share/litellm/service.env`, written with mode `600`. A master key is
 generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied.
-The gateway serves chat models by default. Direct loopback service endpoints
-remain the always-available route. Exposing STT, TTS, embedding and reranking
-models through protocol-qualified aliases under `DOTFILES_USE_LITELLM_PROXY=1`
-is a planned milestone; it is not current gateway behaviour.
+The gateway serves discovered chat and modality models. Direct loopback service
+endpoints remain the always-available route, including when the gateway is off.
 
 ### Two-mode client contract
+
+### Modality exposure
+
+Discovered local models are exposed under their exact model IDs. Qualified
+`audio_stt` models support `POST /v1/audio/transcriptions` and
+`POST /v1/audio/speech`; qualified `audio_tts` models are exposed to speech
+requests except model families explicitly marked unqualified. Embedding and
+rerank models are added only when discovery reports those modalities; no
+placeholder aliases are created. Modality entries are kept out of the chat
+catalogue. Direct loopback endpoints remain available regardless of the
+LiteLLM gateway gate.
 
 `DOTFILES_USE_LITELLM_PROXY` defaults to `0`. In direct mode, clients keep the
 canonical model identity and Ollama Cloud uses `https://ollama.com/v1` with

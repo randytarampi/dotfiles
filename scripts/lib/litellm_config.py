@@ -21,7 +21,7 @@ from constants import (
     is_meridian_configured,
 )
 from discover_models import list_cloud_ollama_models
-from ai_models import is_specialized_model_name
+from ai_models import is_known_unqualified_tts, is_specialized_model_name
 from local_engines import active_engines, iter_engine_models, local_endpoint_for
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
@@ -668,6 +668,34 @@ def _safe_models(provider):
         return []
 
 
+def _modality_entries(environ):
+    """Build exact-id aliases for discovered local non-chat models."""
+    entries = []
+    for provider in active_engines():
+        endpoint = local_endpoint_for(provider, "openai")
+        if endpoint is None:
+            continue
+        base_url, key_env = endpoint
+        key_env = key_env if key_env and environ.get(key_env, "").strip() else None
+        for item in _safe_models(provider):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            model_type = item.get("model_type")
+            if not name:
+                continue
+            include = (
+                model_type == "audio_stt"
+                or (model_type == "audio_tts" and not is_known_unqualified_tts(name))
+                or model_type in {"embedding", "embeddings", "rerank", "reranking"}
+            )
+            if include:
+                entries.append(
+                    _entry(name, f"openai/{name}", api_base=base_url, key_env=key_env)
+                )
+    return entries
+
+
 def _registry_model_refs():
     """Collect canonical references from managed model registries and tier docs."""
     root = Path(__file__).resolve().parents[2]
@@ -792,6 +820,9 @@ def compute_model_list(environ=None):
     # Per-invocation sidecar: rates captured during this fetch cycle only.
     _LIVE_CATALOGUE_PRICES.clear()
     entries = []
+    # Keep modality discovery separate: these rows must never enter chat candidates.
+    modality_entries = _modality_entries(environ)
+    modality_names = {item["model_name"] for item in modality_entries}
     # Catalogue scope gate: free (default) emits only curated selections plus
     # OpenRouter's genuinely-free tier; full restores the whole enumerated
     # catalogue. Unknown values are a hard configuration error.
@@ -1161,6 +1192,11 @@ def compute_model_list(environ=None):
             )
             for model_id in model_ids
         )
+    chat_names = {item["model_name"] for item in entries}
+    collision = chat_names & modality_names
+    if collision:
+        raise ValueError(f"chat/modality model_name collision: {sorted(collision)}")
+    entries.extend(modality_entries)
     try:
         routing_port = int(environ.get("LITELLM_PORT", "4000"))
     except (TypeError, ValueError):
