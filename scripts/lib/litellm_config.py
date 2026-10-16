@@ -688,7 +688,14 @@ def _modality_entries(environ):
                 model_type == "audio_stt"
                 or (model_type == "audio_tts" and not is_known_unqualified_tts(name))
                 or model_type
-                in {"embedding", "embeddings", "rerank", "reranking", "reranker"}
+                in {
+                    "embedding",
+                    "embeddings",
+                    "rerank",
+                    "reranking",
+                    "reranker",
+                    "conversion",
+                }
             )
             if include:
                 entries.append(

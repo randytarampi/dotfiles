@@ -37,10 +37,12 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
         "ranker",
     }
     assert modalities <= by_name.keys()
-    assert (
-        not {"chatterbox-multilingual-v3", "S3TokenizerV2", "MarkItDown"}
-        & by_name.keys()
-    )
+    assert not {"chatterbox-multilingual-v3", "S3TokenizerV2"} & by_name.keys()
+    assert by_name["MarkItDown"]["litellm_params"] == {
+        "model": "openai/MarkItDown",
+        "api_base": "http://127.0.0.1:11427/v1",
+        "api_key": "os.environ/OMLX_API_KEY",
+    }
     for name in modalities:
         assert by_name[name]["litellm_params"] == {
             "model": f"openai/{name}",

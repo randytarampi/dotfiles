@@ -663,6 +663,11 @@ and any recorded Ollama URL, then clears only this projection. It never touches
 vector data. CodeGraph continues to use native embeddings; this slice does not
 alter CodeGraph embedding behaviour.
 
+> **Document conversion**: WebUI document ingestion does NOT route through
+> MarkItDown (protocol mismatch with the external document loader; see
+> docs/LITELLM.md). MarkItDown remains available as a gateway or direct
+> conversion model for unmanaged consumers.
+
 Rollback from Ollama embeddings is also a dimension-changing data migration:
 if 768-dimension vectors may have been created, returning to 384-dimension
 MiniLM is refused until the operator resets/re-embeds the vector store and

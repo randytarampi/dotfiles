@@ -195,8 +195,8 @@ def test_safe_models_preserves_typed_records_and_chat_catalogue_filters_types():
             )
     aliases = {entry["model_name"] for entry in published}
     assert "mellum2:12b-a2.5b" in aliases
-    assert {"whisper-2", "nomic-embed-text"} <= aliases
-    assert not {"markitdown", "strands-decider:2b"} & aliases
+    assert {"whisper-2", "nomic-embed-text", "markitdown"} <= aliases
+    assert not {"strands-decider:2b"} & aliases
 
 
 def test_chat_catalogue_excludes_untyped_specialized_discovery_records():
