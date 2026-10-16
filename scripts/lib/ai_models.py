@@ -55,6 +55,15 @@ SPECIALIZED_MODEL_NAME_PREFIXES = (
     "markitdown",
 )
 
+# Chatterbox failed the 2026-10-16 oMLX TTS probe without voice-cloning
+# conditionals; do not select it as an automatic local TTS default.
+KNOWN_UNQUALIFIED_TTS_PREFIXES = ("chatterbox",)
+
+
+def is_known_unqualified_tts(model_name):
+    """Return True for TTS model families not qualified for default use."""
+    return (model_name or "").lower().startswith(KNOWN_UNQUALIFIED_TTS_PREFIXES)
+
 
 def is_specialized_model_name(model_name):
     """True when the model name is a known specialized (non-chat) model family."""

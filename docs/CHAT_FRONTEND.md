@@ -568,6 +568,52 @@ connection and MCP credentials.
 
 ### Model preset refresh
 
+### Open WebUI audio settings bundle (0.12.0)
+
+On hosts where the oMLX engine gate is active and audio discovery returns
+qualified models, deploy reconciles an owned audio bundle through the authenticated
+API. Owned keys are `stt.ENGINE`, `stt.OPENAI_API_BASE_URL`,
+`stt.OPENAI_API_REQUEST_FORMAT`, `stt.MODEL`, `stt.OPENAI_API_KEY`, and the
+corresponding TTS `ENGINE`, `OPENAI_API_BASE_URL`, `MODEL`, `VOICE`, and
+`OPENAI_API_KEY`. The API key is updated only when `OMLX_API_KEY` is non-empty;
+otherwise stored keys remain untouched. All other audio settings, including realtime, Whisper,
+Azure and Mistral fields, remain operator-managed and are preserved.
+
+STT and TTS model IDs come from oMLX audio discovery in discovery order: the
+first `audio_stt` and first qualified `audio_tts` models are selected.
+`chatterbox` is excluded by a shared family predicate: its 2026-10-16 probe
+failed without voice-cloning conditionals. A chatterbox-only discovery omits
+TTS and warns; STT may still be reconciled. Qwen3-TTS receives the configured
+speaker (`DOTFILES_VOICE_TTS_VOICE`, default `serena`); other TTS families do
+not inherit a Qwen speaker. The OpenAI-compatible local-engine bundle does not
+write cloud voice settings. `OMLX_API_KEY`, when non-empty, supplies both audio
+API keys; otherwise stored keys are preserved.
+
+The owned projection is stored privately at
+`~/.local/share/openwebui/data/managed-audio.json` (mode 600). First adoption
+requires owned identity fields to be at their Open WebUI defaults; customized
+owned settings are refused and logged rather than silently adopted. Once
+adopted, any administrator change to the recorded projection is refused.
+Before each write, the reconciler re-reads audio configuration and checks the
+projection, then reads back and verifies the write. Gate-off restores only
+projected owned fields to the documented OpenAI/multipart defaults and clears
+the projection; realtime, Whisper, Azure, Mistral and other settings are never
+owned or touched.
+
+The external audio engine path shells out to `ffmpeg`/`ffprobe`. The WebUI
+LaunchAgent PATH includes the Homebrew binary directory (added
+homebrew-agnostically in the install template), so the server can find them;
+without `ffprobe` the speech endpoint fails with
+`No such file or directory: 'ffprobe'` (observed 2026-10-16, fixed in the same
+install).
+
+Reads use `GET /api/v1/audio/config`; writes use `POST
+/api/v1/audio/config/update`. The similarly named `/api/v1/configs/audio` path
+is not a config endpoint. API writes run only during deploy (no live POST from
+tests). As elsewhere, persistent database settings are authoritative and are
+reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately
+modelled in this reconciler.
+
 - **Local engines:** models are discovered live through each connection's
   native model-list mechanism (Ollama native API; `/v1/models` for
   OpenAI-protocol connections). Nothing to check in; add/remove a model in

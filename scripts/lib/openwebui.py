@@ -16,10 +16,17 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import constants
-from local_engines import LOCAL_ENGINES, active_engines, local_endpoint_for
+from ai_models import is_known_unqualified_tts
+from local_engines import (
+    LOCAL_ENGINES,
+    active_engines,
+    audio_models,
+    local_endpoint_for,
+)
 from provider_endpoints import PROVIDER_ENDPOINTS
 
 MANAGED_PREFIX_NAMESPACE = "dw-"
@@ -28,6 +35,33 @@ MANAGED_MARKER_VALUE = "dotfiles"
 DISABLED_ENGINES_ENV = "DOTFILES_OPENWEBUI_DISABLED_ENGINES"
 STOCK_OPENAI_URL = "https://api.openai.com/v1"
 STOCK_OPENAI_PREFIXES = ("", "openai")
+AUDIO_OWNED_FIELDS = {
+    "stt": (
+        "ENGINE",
+        "OPENAI_API_REQUEST_FORMAT",
+        "OPENAI_API_BASE_URL",
+        "MODEL",
+        "OPENAI_API_KEY",
+    ),
+    "tts": ("ENGINE", "OPENAI_API_BASE_URL", "MODEL", "VOICE", "OPENAI_API_KEY"),
+}
+AUDIO_STATE_PATH = "~/.local/share/openwebui/data/managed-audio.json"
+AUDIO_DEFAULTS = {
+    "stt": {
+        "ENGINE": "",
+        "OPENAI_API_REQUEST_FORMAT": "multipart",
+        "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+        "MODEL": "",
+        "OPENAI_API_KEY": "",
+    },
+    "tts": {
+        "ENGINE": "",
+        "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+        "MODEL": "",
+        "VOICE": "",
+        "OPENAI_API_KEY": "",
+    },
+}
 
 
 def _litellm_client_key(env_name):
@@ -185,7 +219,7 @@ def ownership_catalogue(proxy_mode=None):
 
 def compute_desired_state():
     """Build desired entries; inactive/keyless providers remain ownership-known."""
-    desired = {"openai": [], "anthropic": [], "ollama": []}
+    desired: dict[str, Any] = {"openai": [], "anthropic": [], "ollama": []}
     disabled = _disabled()
     for provider in active_engines():
         if provider.lower() in disabled:
@@ -278,7 +312,278 @@ def compute_desired_state():
             "anthropic": [],
             "ollama": [],
         }
+    audio = _desired_audio_settings()
+    if audio is not None:
+        desired["audio"] = audio  # type: ignore[assignment]
     return desired
+
+
+def _desired_audio_settings():
+    """Return the owned speech settings, or None when oMLX is unavailable."""
+    if "omlx" in _disabled() or "omlx" not in active_engines():
+        return None
+    endpoint = local_endpoint_for("omlx", "openai")
+    models = audio_models("omlx")
+    stt = next(
+        (
+            item.get("name")
+            for item in models
+            if item.get("model_type") == "audio_stt" and item.get("name")
+        ),
+        None,
+    )
+    tts = next(
+        (
+            item.get("name")
+            for item in models
+            if item.get("model_type") == "audio_tts"
+            and item.get("name")
+            and not is_known_unqualified_tts(item.get("name"))
+        ),
+        None,
+    )
+    if not endpoint or not stt:
+        return None
+    bundle = {
+        "stt": {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": endpoint[0],
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "MODEL": stt,
+            "OPENAI_API_KEY": os.environ.get("OMLX_API_KEY") or None,
+        },
+    }
+    if tts:
+        tts_settings = {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": endpoint[0],
+            "MODEL": tts,
+        }
+        tts_settings["OPENAI_API_KEY"] = os.environ.get("OMLX_API_KEY") or None
+        voice = os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena")
+        if tts.lower().split("/", 1)[-1].startswith("qwen3-tts"):
+            tts_settings["VOICE"] = voice
+        bundle["tts"] = tts_settings
+    else:
+        import logger
+
+        logger.warning(
+            "No qualified oMLX TTS model found; omitting Open WebUI TTS settings"
+        )
+    return bundle
+
+
+def _merge_owned_audio(current, wanted):
+    """Merge only bundle-owned fields, preserving all operator settings."""
+    result = copy.deepcopy(current)
+    changed = False
+    for section, values in wanted.items():
+        if section not in result or not isinstance(result[section], dict):
+            result[section] = {}
+        for key, value in values.items():
+            if value is None:
+                value = result[section].get(key)
+                if value is None:
+                    continue
+            if result[section].get(key) != value:
+                result[section][key] = value
+                changed = True
+    return result, changed
+
+
+def _audio_projection(config):
+    return {
+        section: {
+            key: config.get(section, {}).get(key, AUDIO_DEFAULTS[section].get(key, ""))
+            for key in keys
+        }
+        for section, keys in AUDIO_OWNED_FIELDS.items()
+    }
+
+
+def _audio_state_path():
+    return os.path.expanduser(AUDIO_STATE_PATH)
+
+
+def _read_audio_projection():
+    try:
+        with open(_audio_state_path(), encoding="utf-8") as handle:
+            return json.load(handle).get("projection")
+    except (OSError, ValueError):
+        return None
+
+
+def _write_audio_projection(projection):
+    path = _audio_state_path()
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    if projection is None:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        return
+    temp = f"{path}.{os.getpid()}.tmp"
+    with open(temp, "w", encoding="utf-8") as handle:
+        json.dump({"projection": projection}, handle, indent=2)
+        handle.write("\n")
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+
+
+def _audio_owned_projection(config):
+    return _audio_projection(config)
+
+
+def _audio_refusal(current, projection, allowed_fields=None):
+    observed = _audio_projection(current)
+    if projection is None:
+        fields = allowed_fields or {
+            (section, key)
+            for section, keys in AUDIO_OWNED_FIELDS.items()
+            for key in keys
+        }
+        return [
+            (section, key)
+            for section, key in fields
+            if observed[section][key] != AUDIO_DEFAULTS.get(section, {}).get(key, "")
+        ]
+    return [
+        (section, key)
+        for section, values in projection.items()
+        for key, value in values.items()
+        if observed.get(section, {}).get(key, "") != value
+    ]
+
+
+def _audio_gate_active():
+    return "omlx" not in _disabled() and "omlx" in active_engines()
+
+
+def _audio_projection_subset(config, fields):
+    """Project only the explicitly owned (section, key) subset."""
+    grouped = {}
+    for section, key in fields:
+        grouped.setdefault(section, []).append(key)
+    return {
+        section: {
+            key: config.get(section, {}).get(
+                key, AUDIO_DEFAULTS.get(section, {}).get(key, "")
+            )
+            for key in keys
+        }
+        for section, keys in grouped.items()
+    }
+
+
+def _recorded_fields(projection):
+    return {
+        (section, key)
+        for section, values in (projection or {}).items()
+        for key in values
+    }
+
+
+def _verify_audio_projection(client, expected):
+    import logger
+
+    readback = client.get_audio_config()
+    observed = _audio_projection(readback) if isinstance(readback, dict) else None
+    matches = observed is not None and all(
+        observed.get(section, {}).get(key, "") == value
+        for section, values in expected.items()
+        for key, value in values.items()
+    )
+    if not matches:
+        logger.error("Open WebUI audio readback differs from expected owned projection")
+        raise OpenWebUIError("Open WebUI audio configuration write verification failed")
+
+
+def _reconcile_audio(client, current, wanted):
+    import logger
+
+    if not isinstance(current, dict):
+        raise OpenWebUIError("Open WebUI audio configuration has an invalid shape")
+    projection = _read_audio_projection()
+    wanted_fields = {
+        (section, key) for section, values in (wanted or {}).items() for key in values
+    }
+    recorded_fields = _recorded_fields(projection)
+    # Projection drift is checked only against recorded owned fields; the
+    # first-adoption case (no projection yet) is refused inside the adoption
+    # branch below so its diagnostic names the actual failure mode.
+    if projection is not None:
+        refusal = _audio_refusal(current, projection, recorded_fields)
+        if refusal:
+            logger.error(
+                "Refusing Open WebUI audio reconciliation; owned fields changed: %s",
+                refusal,
+            )
+            return
+    else:
+        refusal = _audio_refusal(current, None, wanted_fields)
+        if refusal:
+            logger.error(
+                "Refusing adoption of customized Open WebUI audio fields: %s",
+                refusal,
+            )
+            return
+    if wanted:
+        # Ownership is recorded only for explicitly adopted fields; fields the
+        # bundle newly claims must pass the same eligibility gate as adoption.
+        new_fields = wanted_fields - recorded_fields
+        if new_fields:
+            new_refusal = _audio_refusal(current, None, new_fields)
+            if new_refusal:
+                logger.error(
+                    "Refusing adoption of customized Open WebUI audio fields: %s",
+                    new_refusal,
+                )
+                return
+        owned_fields = recorded_fields | wanted_fields
+        desired_now = _audio_projection_subset(
+            _merge_owned_audio(current, wanted)[0], owned_fields
+        )
+        if (
+            projection is not None
+            and _audio_projection_subset(current, owned_fields) == desired_now
+        ):
+            return
+        prewrite = client.get_audio_config()
+        if projection is not None:
+            # Recorded-field drift, plus the adoption gate re-run against the
+            # pre-write snapshot for fields newly claimed by this bundle.
+            prewrite_refusal = _audio_refusal(prewrite, projection, recorded_fields)
+            if new_fields:
+                prewrite_refusal += _audio_refusal(prewrite, None, new_fields)
+        else:
+            prewrite_refusal = _audio_refusal(prewrite, None, wanted_fields)
+        if prewrite_refusal:
+            logger.error("Refusing Open WebUI audio write after concurrent edit")
+            return
+        candidate = _merge_owned_audio(prewrite, wanted)[0]
+        desired = _audio_projection_subset(candidate, owned_fields)
+        client.update_audio_config(candidate)
+        _verify_audio_projection(client, desired)
+        _write_audio_projection(desired)
+    elif projection is not None:
+        # Gate-off restores only the recorded owned fields, never whole
+        # sections that may hold administrator settings the bundle never owned.
+        prewrite = client.get_audio_config()
+        if _audio_refusal(prewrite, projection, recorded_fields):
+            logger.error("Refusing Open WebUI audio disable after concurrent edit")
+            return
+        restore = {}
+        for section, key in recorded_fields:
+            restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
+                key, ""
+            )
+        merged, _ = _merge_owned_audio(prewrite, restore)
+        if merged != prewrite:
+            client.update_audio_config(merged)
+        _verify_audio_projection(
+            client, _audio_projection_subset(merged, recorded_fields)
+        )
+        _write_audio_projection(None)
 
 
 class OpenWebUIError(RuntimeError):
@@ -411,6 +716,15 @@ class OpenWebUIClient:
 
     def update_models_config(self, config):
         return self._request(self.MODELS_CONFIG_PATH, "POST", config)
+
+    AUDIO_CONFIG_PATH = "/api/v1/audio/config"
+    AUDIO_CONFIG_UPDATE_PATH = "/api/v1/audio/config/update"
+
+    def get_audio_config(self):
+        return self._request(self.AUDIO_CONFIG_PATH)
+
+    def update_audio_config(self, config):
+        return self._request(self.AUDIO_CONFIG_UPDATE_PATH, "POST", config)
 
     @staticmethod
     def normalize(response, collection):
@@ -911,6 +1225,27 @@ def reconcile_via_api(client, desired):
     result = reconcile(initial_openai, initial_ollama, desired)
     if result.status == "collision":
         return result
+    audio_wanted = desired.get("audio")
+    try:
+        audio_current = (
+            client.get_audio_config() if hasattr(client, "get_audio_config") else None
+        )
+        if audio_current is None:
+            before_openai, before_ollama = (
+                client.get_openai_config(),
+                client.get_ollama_config(),
+            )
+            if before_openai != initial_openai or before_ollama != initial_ollama:
+                raise OpenWebUIError(
+                    "Open WebUI snapshot changed before write; aborting"
+                )
+            audio_current = None
+        if audio_current is None:
+            pass
+        else:
+            _reconcile_audio(client, audio_current, audio_wanted)
+    except OpenWebUIError:
+        raise
     before_openai, before_ollama = (
         client.get_openai_config(),
         client.get_ollama_config(),

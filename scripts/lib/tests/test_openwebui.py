@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import shlex
+from typing import Any
 import subprocess
 from pathlib import Path
 
@@ -85,6 +86,671 @@ def test_exact_native_and_cloud_endpoints(monkeypatch):
     assert {item["config"]["prefix_id"]: item for item in proxied["openai"]}[
         "ollama-cloud"
     ]["url"] == "https://ollama.com/v1"
+
+
+def test_audio_bundle_discovery_and_gate(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("OMLX_API_KEY", "audio-key")
+    monkeypatch.setenv("DOTFILES_VOICE_TTS_VOICE", "ryan")
+    monkeypatch.setattr(
+        openwebui,
+        "local_endpoint_for",
+        lambda *_: ("http://127.0.0.1:11427/v1", "OMLX_API_KEY"),
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [
+            {"name": "asr-first", "model_type": "audio_stt"},
+            {"name": "chatterbox-multilingual-v3", "model_type": "audio_tts"},
+            {"name": "qwen3-tts-12hz", "model_type": "audio_tts"},
+        ],
+    )
+    state = openwebui.compute_desired_state()
+    assert state["audio"] == {
+        "stt": {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": "http://127.0.0.1:11427/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "MODEL": "asr-first",
+            "OPENAI_API_KEY": "audio-key",
+        },
+        "tts": {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": "http://127.0.0.1:11427/v1",
+            "MODEL": "qwen3-tts-12hz",
+            "VOICE": "ryan",
+            "OPENAI_API_KEY": "audio-key",
+        },
+    }
+    monkeypatch.delenv("DOTFILES_RUN_OMLX_SETUP")
+    assert "audio" not in openwebui.compute_desired_state()
+
+
+def test_audio_merge_owns_only_named_fields():
+    current = {
+        "realtime": {"ENGINE": "operator"},
+        "stt": {"MODEL": "old", "WHISPER_MODEL": "large", "OPENAI_API_KEY": "kept"},
+        "tts": {"VOICE": "old", "AZURE": True},
+    }
+    wanted = {
+        "stt": {"ENGINE": "openai", "MODEL": "new", "OPENAI_API_KEY": None},
+        "tts": {"VOICE": "serena"},
+    }
+    merged, changed = openwebui._merge_owned_audio(current, wanted)
+    assert changed
+    assert merged["stt"] == {
+        "MODEL": "new",
+        "WHISPER_MODEL": "large",
+        "OPENAI_API_KEY": "kept",
+        "ENGINE": "openai",
+    }
+    assert merged["tts"] == {"VOICE": "serena", "AZURE": True}
+    assert merged["realtime"] == {"ENGINE": "operator"}
+
+
+def test_audio_bundle_contains_both_discovered_model_fields(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [
+            {"name": "asr", "model_type": "audio_stt"},
+            {"name": "speech", "model_type": "audio_tts"},
+        ],
+    )
+    bundle = openwebui._desired_audio_settings()
+    assert bundle is not None
+    assert bundle["stt"]["MODEL"] == "asr"
+    assert bundle["tts"]["MODEL"] == "speech"
+
+
+def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [
+            {"name": "asr", "model_type": "audio_stt"},
+            {"name": "chatterbox", "model_type": "audio_tts"},
+        ],
+    )
+    bundle = openwebui._desired_audio_settings()
+    assert bundle is not None
+    assert "tts" not in bundle
+    assert "No qualified oMLX TTS model" in caplog.text
+
+
+def test_non_qwen_tts_does_not_receive_qwen_voice(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [
+            {"name": "asr", "model_type": "audio_stt"},
+            {"name": "other-tts", "model_type": "audio_tts"},
+        ],
+    )
+    bundle = openwebui._desired_audio_settings()
+    assert bundle is not None
+    assert "VOICE" not in bundle["tts"]
+
+
+def test_audio_customized_fields_refuse_first_adoption(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
+    )
+    current = {
+        "realtime": {"ENGINE": "operator"},
+        "stt": {
+            "ENGINE": "custom",
+            "MODEL": "operator-model",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        },
+        "tts": {
+            "ENGINE": "",
+            "MODEL": "",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "VOICE": "",
+        },
+    }
+    client = _AudioClient(current)
+    openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio": {
+                "stt": {
+                    "ENGINE": "openai",
+                    "MODEL": "managed",
+                    "OPENAI_API_BASE_URL": "http://omlx/v1",
+                    "OPENAI_API_REQUEST_FORMAT": "multipart",
+                }
+            },
+        },
+    )
+    assert client.audio == current
+    assert client.audio_writes == 0
+    assert "Refusing adoption of customized Open WebUI audio fields" in caplog.text
+    assert not (tmp_path / "managed-audio.json").exists()
+
+
+class _AudioClient:
+    def __init__(self, audio):
+        self.audio = audio
+        self.audio_writes = 0
+        self.concurrent: Any = None
+        self.ignore_writes = False
+        self.alter_writes = False
+
+    def get_openai_config(self):
+        return {"connections": []}
+
+    def get_ollama_config(self):
+        return {"connections": []}
+
+    def get_audio_config(self):
+        if self.concurrent is not None:
+            result, self.concurrent = self.concurrent, None
+            return result
+        return json.loads(json.dumps(self.audio))
+
+    def update_audio_config(self, config):
+        self.audio_writes += 1
+        if self.ignore_writes:
+            return
+        self.audio = json.loads(json.dumps(config))
+        if self.alter_writes:
+            self.audio["stt"]["MODEL"] = "write-was-altered"
+
+
+def test_audio_prewrite_detects_concurrent_change(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
+    )
+    projection = {
+        "stt": {
+            "ENGINE": "openai",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "MODEL": "asr",
+        },
+        "tts": {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "MODEL": "qwen3-tts",
+            "VOICE": "serena",
+        },
+    }
+    current = {
+        "realtime": {"mode": "safe"},
+        "stt": dict(projection["stt"]),
+        "tts": dict(projection["tts"]),
+    }
+    client = _AudioClient(current)
+    openwebui._write_audio_projection(openwebui._audio_projection(current))
+    desired = {
+        "stt": dict(projection["stt"], MODEL="new-asr"),
+        "tts": dict(projection["tts"]),
+    }
+    client.concurrent = {
+        "realtime": current["realtime"],
+        "stt": dict(current["stt"], MODEL="admin-edit"),
+        "tts": current["tts"],
+    }
+    openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "audio": desired}
+    )
+    assert client.audio_writes == 0
+    assert "owned fields changed" in caplog.text
+
+
+def test_audio_gate_off_clears_only_projection_and_is_stable(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    projection = {
+        "stt": {
+            "ENGINE": "openai",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "MODEL": "asr",
+        },
+        "tts": {
+            "ENGINE": "openai",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "MODEL": "qwen3-tts",
+            "VOICE": "serena",
+        },
+    }
+    openwebui._write_audio_projection(projection)
+    client = _AudioClient(
+        {
+            "realtime": {"x": 1},
+            "stt": dict(projection["stt"], WHISPER_MODEL="large"),
+            "tts": dict(projection["tts"], AZURE_KEY="preserve"),
+        }
+    )
+    disabled = {"openai": [], "anthropic": [], "ollama": []}
+    openwebui.reconcile_via_api(client, disabled)
+    assert client.audio["stt"]["MODEL"] == ""
+    assert client.audio["tts"]["MODEL"] == ""
+    assert client.audio["stt"]["WHISPER_MODEL"] == "large"
+    assert client.audio["tts"]["AZURE_KEY"] == "preserve"
+    assert client.audio["realtime"] == {"x": 1}
+    assert not state.exists()
+    writes = client.audio_writes
+    openwebui.reconcile_via_api(client, disabled)
+    assert client.audio_writes == writes
+
+
+def _projection_for_audio(audio):
+    return openwebui._audio_projection(audio)
+
+
+def _projection_for_owned(audio, owned_keys):
+    """Project exactly the explicitly owned (section, key) subset."""
+    grouped = {}
+    for section, key in owned_keys:
+        grouped.setdefault(section, []).append(key)
+    return {
+        section: {
+            key: audio.get(section, {}).get(
+                key, openwebui.AUDIO_DEFAULTS.get(section, {}).get(key, "")
+            )
+            for key in keys
+        }
+        for section, keys in grouped.items()
+    }
+
+
+def test_audio_lifecycle_update_projection_stability_and_gate_off(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    initial = {
+        "realtime": {"keep": 1},
+        "stt": {
+            "ENGINE": "",
+            "MODEL": "",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_KEY": "admin-key",
+            "WHISPER_MODEL": "whisper-op",
+            "AZURE_KEY": "azure-op",
+            "MISTRAL_KEY": "mistral-op",
+            "DEEPGRAM_KEY": "deepgram-op",
+        },
+        "tts": {
+            "ENGINE": "",
+            "MODEL": "",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "VOICE": "",
+        },
+    }
+    client = _AudioClient(initial)
+    original_key = client.audio["stt"]["OPENAI_API_KEY"]
+    bundle1 = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "stt-old",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        },
+        "tts": {
+            "ENGINE": "openai",
+            "MODEL": "qwen3-tts",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "VOICE": "serena",
+        },
+    }
+    openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "audio": bundle1}
+    )
+    assert client.audio_writes == 1
+    bundle2 = {
+        "stt": dict(
+            bundle1["stt"], MODEL="stt-new", OPENAI_API_BASE_URL="http://omlx-next/v1"
+        ),
+        "tts": dict(
+            bundle1["tts"],
+            MODEL="qwen3-tts-next",
+            VOICE="ryan",
+            OPENAI_API_BASE_URL="http://omlx-next/v1",
+        ),
+    }
+    expected_projection = _projection_for_owned(
+        {
+            **initial,
+            "stt": {**initial["stt"], **bundle2["stt"]},
+            "tts": {**initial["tts"], **bundle2["tts"]},
+        },
+        {(section, key) for section, keys in bundle2.items() for key in keys},
+    )
+    openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "audio": bundle2}
+    )
+    assert client.audio_writes == 2
+    assert json.loads(state.read_text())["projection"] == expected_projection
+    before_logs = caplog.text
+    openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "audio": bundle2}
+    )
+    assert client.audio_writes == 2
+    assert caplog.text == before_logs
+    assert client.audio["stt"]["OPENAI_API_KEY"] == original_key
+    assert client.audio["stt"]["WHISPER_MODEL"] == "whisper-op"
+    assert client.audio["stt"]["AZURE_KEY"] == "azure-op"
+    assert client.audio["stt"]["MISTRAL_KEY"] == "mistral-op"
+    assert client.audio["stt"]["DEEPGRAM_KEY"] == "deepgram-op"
+    assert client.audio["realtime"] == {"keep": 1}
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
+    assert client.audio_writes == 3
+    assert not state.exists()
+
+
+def test_audio_stt_only_lifecycle_updates_projection(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        }
+    )
+    for model in ("asr-old", "asr-new"):
+        openwebui.reconcile_via_api(
+            client,
+            {
+                "openai": [],
+                "anthropic": [],
+                "ollama": [],
+                "audio": {
+                    "stt": {
+                        "ENGINE": "openai",
+                        "MODEL": model,
+                        "OPENAI_API_BASE_URL": "http://omlx/v1",
+                        "OPENAI_API_REQUEST_FORMAT": "multipart",
+                    }
+                },
+            },
+        )
+    assert client.audio_writes == 2
+    assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr-new"
+    openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio": {
+                "stt": {
+                    "ENGINE": "openai",
+                    "MODEL": "asr-new",
+                    "OPENAI_API_BASE_URL": "http://omlx/v1",
+                    "OPENAI_API_REQUEST_FORMAT": "multipart",
+                }
+            },
+        },
+    )
+    assert client.audio_writes == 2
+
+
+def test_stt_only_adoption_preserves_customized_tts(monkeypatch, tmp_path):
+    """An STT-only bundle must never claim, alter or erase administrator TTS."""
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    tts_custom = {
+        "ENGINE": "custom",
+        "MODEL": "admin-tts",
+        "OPENAI_API_BASE_URL": "https://tts.example/v1",
+        "VOICE": "admin-voice",
+        "OPENAI_API_KEY": "tts-operator-key",
+    }
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "stt-operator-key",
+            },
+            "tts": dict(tts_custom),
+        }
+    )
+    wanted = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "audio": {
+            "stt": {
+                "ENGINE": "openai",
+                "MODEL": "asr-old",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        },
+    }
+    openwebui.reconcile_via_api(client, wanted)
+    assert client.audio_writes == 1
+    assert client.audio["tts"] == tts_custom
+    persisted = json.loads(state.read_text())["projection"]
+    assert set(persisted) == {"stt"}
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "stt-operator-key"
+    # Managed update advances only the owned subset.
+    openwebui.reconcile_via_api(
+        client,
+        {
+            **wanted,
+            "audio": {"stt": dict(wanted["audio"]["stt"], MODEL="asr-new")},
+        },
+    )
+    assert client.audio_writes == 2
+    assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr-new"
+    assert client.audio["tts"] == tts_custom
+    # Gate-off restores only the owned subset; customized TTS stays intact.
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
+    assert client.audio_writes == 3
+    assert not state.exists()
+    assert client.audio["tts"] == tts_custom
+    assert client.audio["stt"]["MODEL"] == ""
+    assert client.audio["stt"]["OPENAI_API_BASE_URL"] == "https://api.openai.com/v1"
+    assert client.audio["stt"]["OPENAI_API_REQUEST_FORMAT"] == "multipart"
+
+
+class _ConcurrentExpansionClient(_AudioClient):
+    """First read returns the adopted state; the pre-write read returns a
+    snapshot in which an administrator customized the newly-claimed TTS."""
+
+    def __init__(self, audio, prewrite):
+        super().__init__(audio)
+        self._prewrite = prewrite
+        self._reads = 0
+
+    def get_audio_config(self):
+        self._reads += 1
+        if self._reads == 2:
+            return json.loads(json.dumps(self._prewrite))
+        return super().get_audio_config()
+
+
+def test_stt_expansion_refuses_concurrent_tts_customization(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    adopted = {
+        "realtime": {"mode": "safe"},
+        "stt": {
+            "ENGINE": "openai",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "MODEL": "asr",
+            "OPENAI_API_KEY": "stt-key",
+        },
+        "tts": {
+            "ENGINE": "",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "MODEL": "",
+            "VOICE": "",
+        },
+    }
+    stt_fields = frozenset(
+        (section, key)
+        for section in ("stt",)
+        for key in openwebui.AUDIO_OWNED_FIELDS["stt"]
+    )
+    openwebui._write_audio_projection(
+        openwebui._audio_projection_subset(adopted, stt_fields)
+    )
+    concurrent = {
+        **adopted,
+        "tts": {
+            "ENGINE": "custom",
+            "OPENAI_API_BASE_URL": "http://admin-tts/v1",
+            "MODEL": "admin-concurrent",
+            "VOICE": "admin",
+        },
+    }
+    client = _ConcurrentExpansionClient(adopted, concurrent)
+    before = json.dumps(client.audio, sort_keys=True)
+    openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio": {
+                "stt": {
+                    "ENGINE": "openai",
+                    "OPENAI_API_REQUEST_FORMAT": "multipart",
+                    "OPENAI_API_BASE_URL": "http://omlx/v1",
+                    "MODEL": "asr-new",
+                },
+                "tts": {
+                    "ENGINE": "openai",
+                    "OPENAI_API_BASE_URL": "http://omlx/v1",
+                    "MODEL": "qwen3-tts",
+                    "VOICE": "serena",
+                },
+            },
+        },
+    )
+    assert client.audio_writes == 0
+    assert "Refusing Open WebUI audio write after concurrent edit" in caplog.text
+    assert json.dumps(client.audio, sort_keys=True) == before
+    assert set(json.loads(state.read_text())["projection"]) == {"stt"}
+    openwebui._write_audio_projection(None)
+
+
+def test_ignored_audio_adoption_write_raises_without_projection(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        }
+    )
+    client.ignore_writes = True
+    wanted = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        }
+    }
+    with pytest.raises(openwebui.OpenWebUIError, match="verification failed"):
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": [], "audio": wanted}
+        )
+    assert client.audio_writes == 1
+    assert not state.exists()
+
+
+def test_altered_audio_update_raises_and_preserves_projection(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        }
+    )
+    first = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr-old",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        }
+    }
+    openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "audio": first}
+    )
+    prior = json.loads(state.read_text())
+    client.alter_writes = True
+    updated = {"stt": dict(first["stt"], MODEL="asr-new")}
+    with pytest.raises(openwebui.OpenWebUIError, match="verification failed"):
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": [], "audio": updated}
+        )
+    assert client.audio_writes == 2
+    assert json.loads(state.read_text()) == prior
+
+
+def test_ignored_audio_gate_off_write_raises_and_keeps_projection(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    current = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        }
+    }
+    projection = _projection_for_audio(current)
+    openwebui._write_audio_projection(projection)
+    client = _AudioClient(current)
+    client.ignore_writes = True
+    with pytest.raises(openwebui.OpenWebUIError, match="verification failed"):
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": []}
+        )
+    assert client.audio_writes == 1
+    assert json.loads(state.read_text())["projection"] == projection
 
 
 def test_litellm_proxy_requires_openwebui_key_file_and_never_uses_master(
