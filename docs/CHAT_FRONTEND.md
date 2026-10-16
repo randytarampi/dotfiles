@@ -614,6 +614,73 @@ tests). As elsewhere, persistent database settings are authoritative and are
 reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately
 modelled in this reconciler.
 
+### Open WebUI retrieval embeddings (0.12.0; data migration)
+
+The reconciler owns only `RAG_EMBEDDING_ENGINE` and
+`RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama
+target. It never reads credentials into the ownership projection and never
+changes `ollama_config.key`, `openai_config`, or `azure_openai_config`.
+First adoption is limited to the built-in empty-engine
+`sentence-transformers/all-MiniLM-L6-v2` default; a customized model/engine is
+refused with its observed identity. The separate mode-600 state is
+`~/.local/share/openwebui/data/managed-embedding.json`.
+
+Changing from the built-in MiniLM model (384 dimensions) to
+`embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the
+vector representation. The reconciler refuses that migration until an operator
+has used Open WebUI's own data-management paths to reset/re-embed the vector
+store. In v0.12.0, `open_webui/routers/retrieval.py` implements the admin
+`POST /api/v1/retrieval/reset/db` handler (`reset_vector_db`) and
+`open_webui/routers/knowledge.py` implements `POST /api/v1/knowledge/reindex`
+(`reindex_knowledge_files`) for processing knowledge documents again. These
+operations are not called by dotfiles; determine the appropriate reset/reindex
+sequence in WebUI and confirm the resulting vector store before consenting.
+
+After the operator action, edit the acknowledgement in the state file. The
+`projection` (if present) is reconciler-owned; the operator-maintained sibling
+`acknowledgement` is the explicit consent affordance. Match the model identity
+and dimensions exactly and set `acknowledged_at` to an operator-chosen timestamp:
+
+```json
+{
+  "acknowledgement": {
+    "previous_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "previous_engine": "",
+    "previous_output_dims": 384,
+    "new_model": "embeddinggemma-2:740m-mxfp8",
+    "new_output_dims": 768,
+    "acknowledged_at": "2026-10-16T12:00:00Z"
+  }
+}
+```
+
+The first refusal names the old/new models and dimensions and instructs the
+operator to reset/re-embed using WebUI's mechanisms, then edit this exact state
+path with the acknowledgement. Dimensions are captured when the projection is
+recorded; mismatch between the acknowledgement and current model identity or
+dimensions blocks the switch. Gate-off restores the pre-switch engine/model
+and any recorded Ollama URL, then clears only this projection. It never touches
+vector data. CodeGraph continues to use native embeddings; this slice does not
+alter CodeGraph embedding behaviour.
+
+Rollback from Ollama embeddings is also a dimension-changing data migration:
+if 768-dimension vectors may have been created, returning to 384-dimension
+MiniLM is refused until the operator resets/re-embeds the vector store and
+records a matching reverse acknowledgement in the same state file. The
+acknowledgement fields describe the actual direction: current owned Ollama
+model/engine/dimensions in `previous_*`, and restored MiniLM identity and 384
+dimensions in `new_*`. The recorded Ollama URL is checked for drift before
+no-op, switch, or rollback; rollback URL restoration is readback-verified
+before ownership state is cleared.
+
+Reads use `GET /api/v1/retrieval/embedding`; writes use `POST
+/api/v1/retrieval/embedding/update`. The v0.12.0 router validates a complete
+`EmbeddingModelUpdateForm`: engine/model, batch size, async flag, concurrent
+requests and optional provider config blocks. Its handler updates Ollama URL
+only when the selected engine is `ollama` and an `ollama_config` is supplied;
+keys are not part of the ownership projection. Endpoint tests use fixtures and
+never issue a live write.
+
 - **Local engines:** models are discovered live through each connection's
   native model-list mechanism (Ollama native API; `/v1/models` for
   OpenAI-protocol connections). Nothing to check in; add/remove a model in

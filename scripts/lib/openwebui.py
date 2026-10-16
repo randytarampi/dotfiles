@@ -46,6 +46,15 @@ AUDIO_OWNED_FIELDS = {
     "tts": ("ENGINE", "OPENAI_API_BASE_URL", "MODEL", "VOICE", "OPENAI_API_KEY"),
 }
 AUDIO_STATE_PATH = "~/.local/share/openwebui/data/managed-audio.json"
+EMBEDDING_STATE_PATH = "~/.local/share/openwebui/data/managed-embedding.json"
+EMBEDDING_MODEL = "embeddinggemma-2:740m-mxfp8"
+EMBEDDING_OUTPUT_DIMS = 768
+EMBEDDING_OLLAMA_URL = constants.get_ollama_local_base_url()
+EMBEDDING_DEFAULTS = {
+    "RAG_EMBEDDING_ENGINE": "",
+    "RAG_EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
+    "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
+}
 AUDIO_DEFAULTS = {
     "stt": {
         "ENGINE": "",
@@ -315,6 +324,12 @@ def compute_desired_state():
     audio = _desired_audio_settings()
     if audio is not None:
         desired["audio"] = audio  # type: ignore[assignment]
+    desired["embedding"] = {
+        "RAG_EMBEDDING_ENGINE": "ollama",
+        "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
+        "output_dims": EMBEDDING_OUTPUT_DIMS,
+        "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
+    }
     return desired
 
 
@@ -586,6 +601,245 @@ def _reconcile_audio(client, current, wanted):
         _write_audio_projection(None)
 
 
+def _embedding_state_path():
+    return os.path.expanduser(EMBEDDING_STATE_PATH)
+
+
+def _read_embedding_state():
+    try:
+        with open(_embedding_state_path(), encoding="utf-8") as handle:
+            state = json.load(handle)
+        return state if isinstance(state, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_embedding_state(state):
+    path = _embedding_state_path()
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    temp = f"{path}.{os.getpid()}.tmp"
+    with open(temp, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+        handle.write("\n")
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+
+
+def _embedding_identity(config):
+    return {
+        "engine": config.get("RAG_EMBEDDING_ENGINE", ""),
+        "model": config.get("RAG_EMBEDDING_MODEL", ""),
+    }
+
+
+def _embedding_refusal(config, projection):
+    identity = _embedding_identity(config)
+    if projection is None:
+        default = _embedding_identity(EMBEDDING_DEFAULTS)
+        if identity != default:
+            return (
+                "Refusing adoption of customized Open WebUI embedding identity "
+                f"{identity!r}; expected built-in default {default!r}"
+            )
+    else:
+        expected = projection.get("owned", {})
+        if identity != {
+            "engine": expected.get("RAG_EMBEDDING_ENGINE"),
+            "model": expected.get("RAG_EMBEDDING_MODEL"),
+        }:
+            return "Refusing Open WebUI embedding reconciliation; recorded model identity changed"
+        if (
+            config.get("RAG_EMBEDDING_ENGINE") == "ollama"
+            or "ollama_config" in projection
+        ) and config.get("ollama_config", {}).get("url") != projection.get(
+            "ollama_config", {}
+        ).get(
+            "url"
+        ):
+            return "Refusing Open WebUI embedding reconciliation; recorded Ollama URL changed"
+    return None
+
+
+def _reconcile_embedding(client, current, wanted):
+    import logger
+
+    if not isinstance(current, dict) or not isinstance(
+        current.get("ollama_config"), dict
+    ):
+        raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
+    state = _read_embedding_state()
+    projection = state.get("projection")
+    refusal = _embedding_refusal(current, projection)
+    if refusal:
+        logger.error("%s", refusal)
+        return
+    if wanted:
+        if (
+            projection is not None
+            and _embedding_identity(current)
+            == {"engine": "ollama", "model": EMBEDDING_MODEL}
+            and current.get("ollama_config", {}).get("url")
+            == projection.get("ollama_config", {}).get("url")
+        ):
+            return
+        previous = _embedding_identity(current)
+        old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
+        if old_dims != EMBEDDING_OUTPUT_DIMS:
+            acknowledgement = state.get("acknowledgement")
+            if not _embedding_acknowledges(
+                acknowledgement,
+                previous,
+                old_dims,
+                {"engine": "ollama", "model": EMBEDDING_MODEL},
+                EMBEDDING_OUTPUT_DIMS,
+            ):
+                _log_embedding_migration_refusal(
+                    logger,
+                    previous,
+                    old_dims,
+                    {"engine": "ollama", "model": EMBEDDING_MODEL},
+                    EMBEDDING_OUTPUT_DIMS,
+                )
+                return
+        prewrite = client.get_embedding_config()
+        if _embedding_refusal(prewrite, projection):
+            logger.error("Refusing Open WebUI embedding write after concurrent edit")
+            return
+        candidate = {
+            key: prewrite[key]
+            for key in (
+                "RAG_EMBEDDING_BATCH_SIZE",
+                "ENABLE_ASYNC_EMBEDDING",
+                "RAG_EMBEDDING_CONCURRENT_REQUESTS",
+            )
+            if key in prewrite
+        }
+        candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+        candidate["ollama_config"]["url"] = EMBEDDING_OLLAMA_URL
+        for section in ("openai_config", "azure_openai_config"):
+            if section in prewrite:
+                candidate[section] = copy.deepcopy(prewrite[section])
+        candidate.update(
+            {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
+            }
+        )
+        client.update_embedding_config(candidate)
+        readback = client.get_embedding_config()
+        if (
+            _embedding_identity(readback) != _embedding_identity(candidate)
+            or readback.get("ollama_config", {}).get("url") != EMBEDDING_OLLAMA_URL
+        ):
+            raise OpenWebUIError(
+                "Open WebUI embedding configuration write verification failed"
+            )
+        _write_embedding_state(
+            {
+                "projection": {
+                    "owned": {
+                        "RAG_EMBEDDING_ENGINE": "ollama",
+                        "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
+                    },
+                    "previous": previous,
+                    "previous_output_dims": old_dims,
+                    "output_dims": EMBEDDING_OUTPUT_DIMS,
+                    "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
+                    "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
+                },
+                "acknowledgement": state.get("acknowledgement"),
+            }
+        )
+    elif projection is not None:
+        prewrite = client.get_embedding_config()
+        if _embedding_refusal(prewrite, projection):
+            logger.error("Refusing Open WebUI embedding disable after concurrent edit")
+            return
+        previous = projection.get("previous", {})
+        previous_dims = projection.get("previous_output_dims")
+        current_dims = projection.get("output_dims")
+        if previous != _embedding_identity(prewrite):
+            acknowledgement = state.get("acknowledgement")
+            if not _embedding_acknowledges(
+                acknowledgement,
+                _embedding_identity(prewrite),
+                current_dims,
+                previous,
+                previous_dims,
+            ):
+                _log_embedding_migration_refusal(
+                    logger,
+                    _embedding_identity(prewrite),
+                    current_dims,
+                    previous,
+                    previous_dims,
+                )
+                return
+        restored = {
+            key: prewrite[key]
+            for key in (
+                "RAG_EMBEDDING_BATCH_SIZE",
+                "ENABLE_ASYNC_EMBEDDING",
+                "RAG_EMBEDDING_CONCURRENT_REQUESTS",
+            )
+            if key in prewrite
+        }
+        restored["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+        for section in ("openai_config", "azure_openai_config"):
+            if section in prewrite:
+                restored[section] = copy.deepcopy(prewrite[section])
+        restored.update(
+            {
+                "RAG_EMBEDDING_ENGINE": projection.get("previous", {}).get(
+                    "engine", ""
+                ),
+                "RAG_EMBEDDING_MODEL": projection.get("previous", {}).get("model", ""),
+            }
+        )
+        if projection.get("previous_ollama_url") is not None:
+            restored["ollama_config"]["url"] = projection["previous_ollama_url"]
+        client.update_embedding_config(restored)
+        readback = client.get_embedding_config()
+        if _embedding_identity(readback) != _embedding_identity(
+            restored
+        ) or readback.get("ollama_config", {}).get("url") != restored.get(
+            "ollama_config", {}
+        ).get(
+            "url"
+        ):
+            raise OpenWebUIError("Open WebUI embedding restore verification failed")
+        _write_embedding_state(None)
+
+
+def _embedding_acknowledges(acknowledgement, old, old_dims, new, new_dims):
+    expected = {
+        "previous_model": old["model"],
+        "previous_engine": old["engine"],
+        "previous_output_dims": old_dims,
+        "new_model": new["model"],
+        "new_output_dims": new_dims,
+    }
+    return (
+        isinstance(acknowledgement, dict)
+        and all(acknowledgement.get(key) == value for key, value in expected.items())
+        and bool(acknowledgement.get("acknowledged_at"))
+    )
+
+
+def _log_embedding_migration_refusal(logger, old, old_dims, new, new_dims):
+    logger.error(
+        "Refusing dimension-changing Open WebUI embedding migration: "
+        "%s (%s-dim) -> %s (%s-dim). Reset/re-embed the vector store "
+        "using Open WebUI's own mechanisms, then edit %s with the "
+        "required acknowledgement object before retrying.",
+        old["model"],
+        old_dims or "unknown",
+        new["model"],
+        new_dims or "unknown",
+        _embedding_state_path(),
+    )
+
+
 class OpenWebUIError(RuntimeError):
     pass
 
@@ -725,6 +979,15 @@ class OpenWebUIClient:
 
     def update_audio_config(self, config):
         return self._request(self.AUDIO_CONFIG_UPDATE_PATH, "POST", config)
+
+    EMBEDDING_CONFIG_PATH = "/api/v1/retrieval/embedding"
+    EMBEDDING_CONFIG_UPDATE_PATH = "/api/v1/retrieval/embedding/update"
+
+    def get_embedding_config(self):
+        return self._request(self.EMBEDDING_CONFIG_PATH)
+
+    def update_embedding_config(self, config):
+        return self._request(self.EMBEDDING_CONFIG_UPDATE_PATH, "POST", config)
 
     @staticmethod
     def normalize(response, collection):
@@ -1244,6 +1507,9 @@ def reconcile_via_api(client, desired):
             pass
         else:
             _reconcile_audio(client, audio_current, audio_wanted)
+        if hasattr(client, "get_embedding_config"):
+            embedding_current = client.get_embedding_config()
+            _reconcile_embedding(client, embedding_current, desired.get("embedding"))
     except OpenWebUIError:
         raise
     before_openai, before_ollama = (

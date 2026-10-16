@@ -250,6 +250,305 @@ def test_audio_customized_fields_refuse_first_adoption(monkeypatch, tmp_path, ca
     assert not (tmp_path / "managed-audio.json").exists()
 
 
+class _EmbeddingClient:
+    def __init__(self, config):
+        self.config = json.loads(json.dumps(config))
+        self.writes = 0
+        self.ignore_writes = False
+
+    def get_openai_config(self):
+        return {"connections": []}
+
+    def get_ollama_config(self):
+        return {"connections": []}
+
+    def get_embedding_config(self):
+        return json.loads(json.dumps(self.config))
+
+    def update_embedding_config(self, config):
+        self.writes += 1
+        if not self.ignore_writes:
+            self.config = json.loads(json.dumps(config))
+
+
+def _embedding_config(engine="", model="sentence-transformers/all-MiniLM-L6-v2"):
+    return {
+        "status": True,
+        "RAG_EMBEDDING_ENGINE": engine,
+        "RAG_EMBEDDING_MODEL": model,
+        "RAG_EMBEDDING_BATCH_SIZE": 1,
+        "ENABLE_ASYNC_EMBEDDING": True,
+        "RAG_EMBEDDING_CONCURRENT_REQUESTS": 0,
+        "ollama_config": {"url": "http://localhost:11434", "key": "untouched"},
+        "openai_config": {"url": "https://api.openai.com/v1", "key": "secret"},
+        "azure_openai_config": {"url": "", "key": "secret", "version": ""},
+    }
+
+
+def _embedding_reconcile(client):
+    return openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "embedding": {"model": openwebui.EMBEDDING_MODEL},
+        },
+    )
+
+
+def test_embedding_adoption_migration_guard_and_acknowledged_switch(
+    monkeypatch, tmp_path, caplog
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    client = _EmbeddingClient(_embedding_config())
+    _embedding_reconcile(client)
+    assert client.writes == 0
+    assert "384-dim" in caplog.text and "768-dim" in caplog.text
+    assert "Reset/re-embed" in caplog.text
+
+    ack = {
+        "previous_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "previous_engine": "",
+        "previous_output_dims": 384,
+        "new_model": openwebui.EMBEDDING_MODEL,
+        "new_output_dims": 768,
+        "acknowledged_at": "operator-confirmed",
+    }
+    openwebui._write_embedding_state({"acknowledgement": ack})
+    _embedding_reconcile(client)
+    assert client.writes == 1
+    assert client.config["RAG_EMBEDDING_ENGINE"] == "ollama"
+    assert client.config["RAG_EMBEDDING_MODEL"] == openwebui.EMBEDDING_MODEL
+    assert client.config["openai_config"]["key"] == "secret"
+    assert client.config["ollama_config"]["key"] == "untouched"
+    _embedding_reconcile(client)
+    assert client.writes == 1
+
+
+def test_embedding_customized_model_refusal(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    client = _EmbeddingClient(_embedding_config(model="operator-model"))
+    _embedding_reconcile(client)
+    assert client.writes == 0
+    assert "customized Open WebUI embedding identity" in caplog.text
+
+
+def test_embedding_readback_abort_and_gate_off_restore(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    original = _embedding_config()
+    client = _EmbeddingClient(original)
+    openwebui._write_embedding_state(
+        {
+            "acknowledgement": {
+                "previous_model": original["RAG_EMBEDDING_MODEL"],
+                "previous_engine": "",
+                "previous_output_dims": 384,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": 768,
+                "acknowledged_at": "operator-confirmed",
+            }
+        }
+    )
+    client.ignore_writes = True
+    with pytest.raises(openwebui.OpenWebUIError, match="write verification"):
+        _embedding_reconcile(client)
+    client.ignore_writes = False
+    _embedding_reconcile(client)
+    assert (
+        openwebui._read_embedding_state()["projection"]["owned"]["RAG_EMBEDDING_ENGINE"]
+        == "ollama"
+    )
+    # Gate-off restoration changes only configuration; it has no vector-data API.
+    openwebui._write_embedding_state(
+        {
+            "projection": openwebui._read_embedding_state()["projection"],
+            "acknowledgement": {
+                "previous_model": openwebui.EMBEDDING_MODEL,
+                "previous_engine": "ollama",
+                "previous_output_dims": 768,
+                "new_model": original["RAG_EMBEDDING_MODEL"],
+                "new_output_dims": 384,
+                "acknowledged_at": "operator-confirmed-reverse",
+            },
+        }
+    )
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
+    assert client.config["RAG_EMBEDDING_ENGINE"] == ""
+    assert client.config["RAG_EMBEDDING_MODEL"] == original["RAG_EMBEDDING_MODEL"]
+    assert openwebui._read_embedding_state() == {}
+
+
+def test_embedding_url_drift_refusal(monkeypatch, tmp_path, caplog):
+    state_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous": {
+                    "engine": "",
+                    "model": "sentence-transformers/all-MiniLM-L6-v2",
+                },
+                "previous_output_dims": 384,
+                "output_dims": 768,
+                "ollama_config": {"url": "http://localhost:11434"},
+            }
+        }
+    )
+    client.config["ollama_config"]["url"] = "http://operator-changed:11434"
+    _embedding_reconcile(client)
+    assert client.writes == 0
+    assert "recorded Ollama URL changed" in caplog.text
+
+
+def test_embedding_reverse_migration_requires_ack_and_verifies_url(
+    monkeypatch, tmp_path, caplog
+):
+    state_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    original = _embedding_config()
+    client = _EmbeddingClient(original)
+    ack = {
+        "previous_model": original["RAG_EMBEDDING_MODEL"],
+        "previous_engine": "",
+        "previous_output_dims": 384,
+        "new_model": openwebui.EMBEDDING_MODEL,
+        "new_output_dims": 768,
+        "acknowledged_at": "switch-consent",
+    }
+    openwebui._write_embedding_state({"acknowledgement": ack})
+    _embedding_reconcile(client)
+    client.config["knowledge_documents_embedded"] = True
+    client.config.pop("RAG_EMBEDDING_BATCH_SIZE", None)
+    # The client fixture's external document marker is not sent in the API config.
+    client.config.pop("knowledge_documents_embedded")
+    state = openwebui._read_embedding_state()
+    openwebui._write_embedding_state({"projection": state["projection"]})
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
+    assert "768-dim" in caplog.text and "384-dim" in caplog.text
+    assert "embeddinggemma-2:740m-mxfp8" in caplog.text
+    assert openwebui._read_embedding_state().get("projection") is not None
+
+    reverse_ack = {
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "previous_engine": "ollama",
+        "previous_output_dims": 768,
+        "new_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "new_output_dims": 384,
+        "acknowledged_at": "reverse-consent",
+    }
+    openwebui._write_embedding_state(
+        {"projection": state["projection"], "acknowledgement": reverse_ack}
+    )
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
+    assert client.config["RAG_EMBEDDING_ENGINE"] == ""
+    assert (
+        client.config["RAG_EMBEDDING_MODEL"] == "sentence-transformers/all-MiniLM-L6-v2"
+    )
+    assert openwebui._read_embedding_state() == {}
+
+
+def test_embedding_failed_reverse_readback_retains_projection(monkeypatch, tmp_path):
+    state_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    original = _embedding_config()
+    client = _EmbeddingClient(original)
+    openwebui._write_embedding_state(
+        {
+            "acknowledgement": {
+                "previous_model": original["RAG_EMBEDDING_MODEL"],
+                "previous_engine": "",
+                "previous_output_dims": 384,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": 768,
+                "acknowledged_at": "switch-consent",
+            }
+        }
+    )
+    _embedding_reconcile(client)
+    state = openwebui._read_embedding_state()
+    openwebui._write_embedding_state(
+        {
+            "projection": state["projection"],
+            "acknowledgement": {
+                "previous_model": openwebui.EMBEDDING_MODEL,
+                "previous_engine": "ollama",
+                "previous_output_dims": 768,
+                "new_model": "sentence-transformers/all-MiniLM-L6-v2",
+                "new_output_dims": 384,
+                "acknowledged_at": "reverse-consent",
+            },
+        }
+    )
+    client.ignore_writes = True
+    with pytest.raises(openwebui.OpenWebUIError, match="restore verification"):
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": []}
+        )
+    assert openwebui._read_embedding_state().get("projection") is not None
+
+
+def test_embedding_ignored_url_restore_retains_projection(monkeypatch, tmp_path):
+    state_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    original = _embedding_config()
+    original["ollama_config"]["url"] = "http://prior-ollama:11434"
+    client = _EmbeddingClient(original)
+    openwebui._write_embedding_state(
+        {
+            "acknowledgement": {
+                "previous_model": original["RAG_EMBEDDING_MODEL"],
+                "previous_engine": "",
+                "previous_output_dims": 384,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": 768,
+                "acknowledged_at": "switch-consent",
+            }
+        }
+    )
+    _embedding_reconcile(client)
+    state = openwebui._read_embedding_state()
+    openwebui._write_embedding_state(
+        {
+            "projection": state["projection"],
+            "acknowledgement": {
+                "previous_model": openwebui.EMBEDDING_MODEL,
+                "previous_engine": "ollama",
+                "previous_output_dims": 768,
+                "new_model": original["RAG_EMBEDDING_MODEL"],
+                "new_output_dims": 384,
+                "acknowledged_at": "operator-confirmed-reverse",
+            },
+        }
+    )
+    client.ignore_writes = False
+    client.update_embedding_config = lambda config: setattr(
+        client, "writes", client.writes + 1
+    )
+    with pytest.raises(openwebui.OpenWebUIError, match="restore verification"):
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": []}
+        )
+    assert openwebui._read_embedding_state().get("projection") is not None
+
+
 class _AudioClient:
     def __init__(self, audio):
         self.audio = audio
