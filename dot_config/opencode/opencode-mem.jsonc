@@ -4,7 +4,7 @@
   "webServerEnabled": true,
   "webServerPort": 4747,
   "webServerHost": "127.0.0.1",
-  "opencodeModel": "inherit",
+  "opencodeModel": "ollama/gemma4:12b-mxfp8",
   "autoCaptureEnabled": true,
   "memory": {
     "defaultScope": "project"
