@@ -70,9 +70,19 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
     if engine and engine.get("metadata_lookup"):
         bare_name = model_name.split("/", 1)[-1]
         status = engine["metadata_lookup"](bare_name)
-        capabilities = list(engine["metadata_capabilities"](status)) if status else []
-        model_type = status.get("model_type", "llm")
-        context_length = status.get("max_context_window") or status.get("max_model_len")
+        # Real capability words from the engine's own metadata, unioned with
+        # the mapper's derived sets (e.g. the audio category) — chat-model
+        # verification depends on the words actually advertised, not just
+        # the derived category sets.
+        status_caps = list(status.get("capabilities") or []) if status else []
+        derived_caps = list(engine["metadata_capabilities"](status)) if status else []
+        capabilities = list(dict.fromkeys([*status_caps, *derived_caps]))
+        model_type = status.get("model_type")
+        context_length = (
+            status.get("context_length")
+            or status.get("max_context_window")
+            or status.get("max_model_len")
+        )
         is_moe = status.get("is_moe")
         if is_moe is None:
             is_moe = status.get("is_moe_model")
@@ -80,16 +90,26 @@ def get_model_details(model_name: str, provider: str = "ollama") -> dict:
         # pattern (A3B/A2.5B-style active-expert tags) only when the status
         # does not report it.
         return {
-            "param_count": extract_param_count(bare_name) or None,
+            "param_count": (
+                status.get("param_count")
+                if status.get("param_count") is not None
+                else extract_param_count(bare_name) or None
+            ),
             "capabilities": capabilities,
-            "architecture": None,
-            "embedding_length": None,
+            "architecture": status.get("architecture"),
+            "embedding_length": status.get("embedding_length"),
             "context_length": context_length,
-            "quantization": None,
+            "quantization": status.get("quantization"),
             "is_moe": (
                 bool(is_moe)
                 if is_moe is not None
-                else bool(re.search(r"A\d+(?:\.\d+)?B", bare_name, re.IGNORECASE))
+                else bool(
+                    (
+                        status.get("architecture")
+                        and "moe" in status["architecture"].lower()
+                    )
+                    or re.search(r"A\d+(?:\.\d+)?B", bare_name, re.IGNORECASE)
+                )
             ),
             "model_type": model_type,
         }

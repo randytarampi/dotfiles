@@ -123,12 +123,128 @@ def _omlx_capabilities(metadata):
     return map_omlx_capabilities(metadata)
 
 
+def _ollama_capabilities(metadata):
+    """Map Ollama show capability words to the shared model typing contract."""
+    words = {str(word).strip().lower() for word in metadata.get("capabilities", [])}
+    architecture = str(metadata.get("architecture") or "").lower()
+    model_type = None
+    # Ollama may advertise vision/audio on embedding models, and its show
+    # embedding_length can differ from measured /api/embed output dimensions.
+    if words & {"embedding", "embeddings"} or "embedding" in architecture:
+        model_type = "embedding"
+    elif words & {"rerank", "reranking", "reranker"}:
+        model_type = "reranker"
+    if model_type is None:
+        return {}
+    return {"model_type": model_type, "primary_category": model_type}
+
+
+def _ollama_metadata_cached(host, model_name):
+    """Fetch Ollama's read-only /api/show metadata for one installed model.
+
+    Only successful, non-empty lookups are cached — mirroring the oMLX
+    status-cache contract: failures stay uncached so a transient 404 never
+    permanently untypes a model in a long-lived process.
+    """
+    import json
+    import urllib.request
+    import urllib.error
+
+    request = urllib.request.Request(
+        f"{host}/api/show",
+        data=json.dumps({"model": model_name}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        model_info = payload.get("model_info") or {}
+        capabilities = payload.get("capabilities") or []
+        if not isinstance(payload, dict) or not capabilities:
+            return {}
+        architecture = model_info.get("general.architecture")
+        # Prefer Ollama's numeric parameter count (raw units); fall back to
+        # details.parameter_size ("27.0B"/"524.3M"). Both normalize to the
+        # established billions-unit int convention (extract_param_count/parity).
+        param_count_raw = model_info.get("general.parameter_count")
+        details = payload.get("details") or {}
+        parameter_size = details.get("parameter_size")
+        parameter_match = re.fullmatch(
+            r"([\d.]+)\s*([BMK])", str(parameter_size or ""), re.I
+        )
+        param_count = None
+        if isinstance(param_count_raw, (int, float)) and param_count_raw > 0:
+            # Billions-unit int convention; int truncation matches the
+            # subprocess show parser it replaces (0.52B → 0).
+            param_count = int(param_count_raw / 1_000_000_000)
+        elif parameter_match:
+            value = float(parameter_match.group(1))
+            unit = parameter_match.group(2).upper()
+            param_count = int(
+                value
+                if unit == "B"
+                else value / 1000 if unit == "M" else value / 1_000_000
+            )
+        return {
+            "capabilities": capabilities,
+            "model_type": "llm" if "completion" in capabilities else None,
+            "architecture": architecture,
+            "param_count": param_count,
+            "context_length": (
+                model_info.get(f"{architecture}.context_length")
+                if architecture
+                else None
+            ),
+            "embedding_length": (
+                model_info.get(f"{architecture}.embedding_length")
+                if architecture
+                else None
+            ),
+            "quantization": details.get("quantization_level"),
+            "is_moe": bool(architecture and "moe" in architecture.lower()),
+        }
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as error:
+        logger.info("Ollama show metadata unavailable for %s: %s", model_name, error)
+        return {}
+
+
+_OLLAMA_SHOW_CACHE = {}
+
+
+def _show_host():
+    """Daemon root for /api/show (strip the /v1 OpenAI-compat suffix)."""
+    base = get_ollama_local_base_url().rstrip("/")
+    return base[:-3] if base.endswith("/v1") else base
+
+
+def _ollama_metadata(model_name):
+    """Look up ollama show metadata with a non-empty-results-only cache.
+
+    The returned status carries the shared-typing contract's model_type
+    (embedding/reranker when the words evidence it) so consumers reading
+    status["model_type"] mirror the oMLX lookup's typed payload.
+    """
+    host = _show_host()
+    cached = _OLLAMA_SHOW_CACHE.get((host, model_name))
+    if cached is not None:
+        return cached
+    result = _ollama_metadata_cached(host, model_name)
+    if result:
+        typed = _ollama_capabilities(result)
+        if typed:
+            result["model_type"] = typed["model_type"]
+        _OLLAMA_SHOW_CACHE[(host, model_name)] = result
+    return result
+
+
 LOCAL_ENGINES["ollama"]["list_models"] = _list_ollama_models
 LOCAL_ENGINES["omlx"]["list_models"] = _list_omlx_models
 LOCAL_ENGINES["omlx"]["list_models_strict"] = _list_omlx_models_strict
 LOCAL_ENGINES["omlx"]["metadata_lookup"] = _omlx_metadata
 LOCAL_ENGINES["omlx"]["metadata_capabilities"] = _omlx_capabilities
-LOCAL_ENGINES["ollama"]["metadata_lookup"] = None
+LOCAL_ENGINES["ollama"]["metadata_lookup"] = _ollama_metadata
+LOCAL_ENGINES["ollama"]["metadata_capabilities"] = _ollama_capabilities
 LOCAL_ENGINES["ollama"]["audio_discovery"] = lambda: _audio_models("ollama")
 LOCAL_ENGINES["omlx"]["audio_discovery"] = lambda: _audio_models("omlx")
 LOCAL_ENGINES["omlx"]["audio_opt_out_env"] = "DOTFILES_USE_LOCAL_OMLX"
