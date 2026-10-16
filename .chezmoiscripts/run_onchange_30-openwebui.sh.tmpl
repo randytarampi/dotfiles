@@ -200,6 +200,8 @@ fi
 
 PLIST_DIR="$(caddy_launch_agents_dir)"
 PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
+# Homebrew-agnostic tool access for the server's audio pipeline (ffprobe/ffmpeg).
+BREW_BIN="$({ command -v brew >/dev/null 2>&1 && brew --prefix || true; } || printf '%s' /opt/homebrew)/bin"
 mkdir -p "$PLIST_DIR"
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -210,7 +212,7 @@ cat >"$PLIST_PATH" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string><string>-c</string>
-    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV_DIR/bin" DATA_DIR="$DATA_DIR" GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"'</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$BREW_BIN:$VENV_DIR/bin" DATA_DIR="$DATA_DIR" GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"'</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
