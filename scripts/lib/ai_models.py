@@ -53,6 +53,7 @@ SPECIALIZED_MODEL_NAME_PREFIXES = (
     "bge-m3",
     "bge-reranker",
     "markitdown",
+    "s3tokenizer",
 )
 
 # Chatterbox failed the 2026-10-16 oMLX TTS probe without voice-cloning
@@ -66,9 +67,20 @@ def is_known_unqualified_tts(model_name):
 
 
 def is_specialized_model_name(model_name):
-    """True when the model name is a known specialized (non-chat) model family."""
+    """True when the model name is a known specialized (non-chat) model family.
+
+    Names may be HuggingFace-namespaced (e.g. "mlx-community--S3TokenizerV2");
+    the full name and the trailing "--" segment are both tested, so cached
+    repositories like "models--mlx-community--Whisper-large" still match the
+    specialized prefix.
+    """
     name = (model_name or "").lower()
-    return name.startswith(SPECIALIZED_MODEL_NAME_PREFIXES)
+    if name.startswith(SPECIALIZED_MODEL_NAME_PREFIXES):
+        return True
+    if "--" in name:
+        segment = name.rsplit("--", 1)[-1]
+        return segment.startswith(SPECIALIZED_MODEL_NAME_PREFIXES)
+    return False
 
 
 def is_ollama_decision_model_name(model_name):

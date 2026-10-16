@@ -695,6 +695,7 @@ def _modality_entries(environ):
                     "reranking",
                     "reranker",
                     "conversion",
+                    "markitdown",
                 }
             )
             if include:
