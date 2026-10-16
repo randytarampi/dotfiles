@@ -274,3 +274,14 @@ The repository does not pull models or manage model directories.
 - The embeddings API: it is documented and exposed, but has no repository consumer today.
 
 Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align via `OMLX_PORT=<your port>`.
+
+## Splash (external engine)
+
+oMLX 0.7.1rc1 launches Splash — an external Metal engine serving Qwen3.8 and
+Qwen3.6 models with DFlash2 speculative decoding — as a separate process on
+the same model list, API and dashboard; vision checkpoints accept images. The
+brewfile installs it from `incoai/tap` next to the oMLX tap. Splash-served
+models appear in discovery with upstream's own typing (batched engine
+records); the specialized-name guard keeps non-chat entries out of chat
+candidates. Install notes: the formula is `incoai/tap/splash`
+(`/opt/homebrew`-agnostic via the shared Brewfile flow).
