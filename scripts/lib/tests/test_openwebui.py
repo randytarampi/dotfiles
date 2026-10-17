@@ -230,6 +230,170 @@ def test_selection_precedence_and_order_independence():
     )
 
 
+def test_adapter_candidates_remain_discovered_and_unavailable(monkeypatch):
+    from selected_service import Qualification
+
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", None)
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui, "_audio_locator", lambda *_args: None)
+    assert openwebui._desired_audio_settings() is None
+    assert openwebui._desired_embedding_settings() is not None
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    assert openwebui._desired_embedding_settings() is None
+
+
+def test_audio_unavailable_status_preserves_without_reconcile(monkeypatch):
+    class Client:
+        def __init__(self):
+            self.audio_reads = 0
+            self.embedding_reads = 0
+
+        def get_openai_config(self):
+            return []
+
+        def get_ollama_config(self):
+            return []
+
+        def get_audio_config(self):
+            self.audio_reads += 1
+            return {}
+
+        def get_embedding_config(self):
+            self.embedding_reads += 1
+            return {"ollama_config": {}}
+
+    client = Client()
+    openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio_status": "unavailable",
+            "embedding_status": "unavailable",
+        },
+    )
+    assert client.audio_reads == 0
+    assert client.embedding_reads == 0
+
+
+def test_discovered_embedding_preserves_owned_state_without_post(
+    monkeypatch, tmp_path, caplog
+):
+    state_path = tmp_path / "managed-embedding.json"
+    audio_path = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(audio_path))
+    fingerprint = {
+        "engine": "ollama",
+        "model": openwebui.EMBEDDING_MODEL,
+        "output_dims": 768,
+        "backend_identity": {"backend": "ollama", "version": "v1"},
+    }
+    ack = {
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "previous_engine": "ollama",
+        "previous_output_dims": 768,
+        "new_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "new_output_dims": 384,
+        "acknowledged_at": "reverse-migration-approved",
+    }
+    owned_projection = {
+        "owned": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        },
+        "previous": {"engine": "", "model": "sentence-transformers/all-MiniLM-L6-v2"},
+        "previous_output_dims": 384,
+        "output_dims": 768,
+        "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+    }
+    baseline = {
+        "projection": owned_projection,
+        "embedding_fingerprint": fingerprint,
+        "acknowledgement": ack,
+    }
+    openwebui._write_embedding_state(baseline)
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    original_select = openwebui.select
+
+    def discovered_select(operation, candidates, **kwargs):
+        if operation.value == "embedding":
+            from selected_service import Qualification
+
+            candidates = [
+                (provider, model, Qualification.DISCOVERED)
+                for provider, model, _ in candidates
+            ]
+        return original_select(operation, candidates, **kwargs)
+
+    monkeypatch.setattr(openwebui, "select", discovered_select)
+    monkeypatch.setattr(
+        openwebui,
+        "iter_engine_discovery",
+        lambda *_a, **_kw: type("D", (), {"status": "ok_models", "records": ()})(),
+    )
+    monkeypatch.setattr(openwebui, "audio_models", lambda _: [])
+    monkeypatch.setattr(openwebui, "active_engines", lambda: [])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", None)
+    )
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    client.get_audio_config = lambda: {}
+    client.update_audio_config = lambda _config: pytest.fail("unavailable audio wrote")
+    monkeypatch.setattr(
+        openwebui,
+        "reconcile",
+        lambda *_args: openwebui.ReconcileResult(
+            openwebui.ReconcilePlan(), snapshots={}
+        ),
+    )
+    desired = openwebui.compute_desired_state()
+    result = openwebui.reconcile_via_api(client, desired)
+    assert client.writes == 0
+    assert desired["embedding_status"] == "unavailable"
+    assert result.actions["applied"] == []
+    assert result.actions["verified"] == []
+    assert "unavailable" in caplog.text
+    persisted = openwebui._read_embedding_state()
+    assert persisted["projection"] == owned_projection
+    assert persisted["acknowledgement"] == ack
+    assert persisted["embedding_fingerprint"] == fingerprint
+    assert persisted["selection"]["qualification"] == "unavailable"
+
+
+def test_routing_gate_inversion_does_not_mix_local_and_gateway(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local-omlx/v1", None)
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    local = openwebui._desired_audio_settings()
+    assert local is not None
+    assert local["selection"]["stt"]["transport"] == "direct"
+    assert local["selection"]["stt"]["endpoint"] == "http://local-omlx/v1"
+
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    gateway = openwebui._desired_audio_settings()
+    assert gateway is None
+    assert openwebui._desired_embedding_settings() is None
+
+
 def test_unqualified_audio_is_omitted(monkeypatch, caplog):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])

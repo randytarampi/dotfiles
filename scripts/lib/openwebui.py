@@ -364,14 +364,16 @@ def compute_desired_state():
         desired["audio_selection"] = audio["selection"]
         # Persisted after resolving selection; this is decision provenance, not an applied-state claim.
         _persist_audio_selection(audio["selection"])
-    elif discovery.status == "ok_models" and not explicitly_disabled:
-        desired["audio_status"] = "unknown"
+    elif not explicitly_disabled and discovery.status == "ok_models":
+        desired["audio_status"] = "unavailable"
     embedding = _desired_embedding_settings()
     if embedding is not None:
         selection = embedding.pop(SELECTION_PROVENANCE_KEY)
         desired["embedding"] = embedding
         desired["embedding_selection"] = selection
         _persist_embedding_selection(selection)
+    else:
+        desired["embedding_status"] = "unavailable"
     return desired
 
 
@@ -435,7 +437,7 @@ def _desired_audio_settings():
 
 
 def _audio_locator(operation, candidates, endpoint):
-    preference = [(provider, model) for provider, model, _ in candidates]
+    preference = []
     previous = _read_audio_selection()
     previous = previous.get(operation.value) if isinstance(previous, dict) else None
     previous_tuple = None
@@ -449,15 +451,55 @@ def _audio_locator(operation, candidates, endpoint):
             str(previous.get("model")),
             Qualification(previous.get("qualification", "unknown")),
         )
+    if previous_tuple is None:
+        projection = _read_audio_projection() or {}
+        owned = projection.get("stt" if operation == Operation.STT else "tts", {})
+        prior_model = owned.get("MODEL")
+        if prior_model and candidates:
+            previous_tuple = (candidates[0][0], prior_model, candidates[0][2])
     selected = select(
         operation, candidates, preference, previously_selected=previous_tuple
     )
+    gateway = constants.get_litellm_proxy_mode()
+    if gateway:
+        selection = select(
+            operation,
+            candidates,
+            preference=preference,
+            previously_selected=previous_tuple,
+        )
+        _persist_audio_selection(
+            {
+                operation.value: _locator_provenance(
+                    ServiceLocator(
+                        selection,
+                        resolve_transport(
+                            "gateway",
+                            Qualification.UNAVAILABLE,
+                            endpoint=None,
+                            operation=operation,
+                        ),
+                    )
+                )
+            }
+        )
+        import logger
+
+        logger.warning(
+            "Open WebUI %s gateway route unavailable: no verified proxy model mapping",
+            operation.value,
+        )
+        return None
     route = resolve_transport(
-        "gateway",
+        "direct",
         selected.qualification,
         endpoint=endpoint[0],
         wire_model=selected.model,
         key_reference=endpoint[1],
+        direct_endpoint=endpoint[0],
+        direct_wire_model=selected.model,
+        direct_key_reference=endpoint[1],
+        direct_credential_required=False,
         credential_present=not endpoint[1] or bool(os.environ.get(endpoint[1])),
         credential_required=False,
         operation=operation,
@@ -511,21 +553,70 @@ def _persist_embedding_selection(selection):
 
 
 def _desired_embedding_settings():
+    if constants.get_litellm_proxy_mode():
+        selection = select(
+            Operation.EMBEDDING,
+            [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+        )
+        _persist_embedding_selection(
+            {
+                "operation": "embedding",
+                "provider": None,
+                "model": None,
+                "qualification": "unavailable",
+                "reason": selection.reason,
+                "transport": "unavailable",
+                "endpoint": None,
+                "wire_model": None,
+                "key_reference": None,
+            }
+        )
+        import logger
+
+        logger.warning(
+            "Open WebUI embedding gateway route unavailable: no verified proxy model mapping"
+        )
+        return None
+    previous_state = _read_embedding_state()
+    projection = previous_state.get("projection", {})
+    owned = projection.get("owned", {}) if isinstance(projection, dict) else {}
+    previous_model = owned.get("RAG_EMBEDDING_MODEL")
+    previous = (
+        ("ollama", previous_model, Qualification.PROTOCOL_PROBED)
+        if previous_model
+        else None
+    )
     selection = select(
         Operation.EMBEDDING,
-        [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+        [("ollama", EMBEDDING_MODEL, Qualification.PROTOCOL_PROBED)],
         preference=[("ollama", EMBEDDING_MODEL)],
+        previously_selected=previous,
     )
     route = resolve_transport(
-        "gateway",
+        "direct",
         selection.qualification,
         endpoint=EMBEDDING_OLLAMA_URL,
         wire_model=selection.model,
+        direct_endpoint=EMBEDDING_OLLAMA_URL,
+        direct_wire_model=selection.model,
         credential_required=False,
         operation=Operation.EMBEDDING,
     )
     locator = ServiceLocator(selection, route)
     if selection.provider is None or route.transport == Transport.UNAVAILABLE:
+        _persist_embedding_selection(
+            {
+                "operation": "embedding",
+                "provider": selection.provider,
+                "model": selection.model,
+                "qualification": Qualification.UNAVAILABLE.value,
+                "reason": selection.reason,
+                "transport": route.transport.value,
+                "endpoint": route.endpoint,
+                "wire_model": route.wire_model,
+                "key_reference": route.key_reference,
+            }
+        )
         import logger
 
         logger.warning(
@@ -2415,7 +2506,11 @@ def reconcile_via_api(client, desired):
         actions["planned"].append("embedding")
     try:
         if hasattr(client, "get_audio_config"):
-            if audio_wanted is None and audio_status in {"unknown", "empty"}:
+            if audio_wanted is None and audio_status in {
+                "unknown",
+                "empty",
+                "unavailable",
+            }:
                 # Explicitly non-released absence: preserve managed settings.
                 import logger
 
@@ -2460,10 +2555,23 @@ def reconcile_via_api(client, desired):
         raise
     try:
         if hasattr(client, "get_embedding_config"):
-            embedding_current = client.get_embedding_config()
-            embedding_result = _reconcile_embedding(
-                client, embedding_current, desired.get("embedding")
-            )
+            if desired.get("embedding_status") in {"unknown", "unavailable"}:
+                import logger
+
+                logger.warning(
+                    "Open WebUI embedding discovery %s; preserving managed settings",
+                    desired["embedding_status"],
+                )
+                embedding_result = {
+                    "status": "unresolved",
+                    "applied": False,
+                    "verified": False,
+                }
+            else:
+                embedding_current = client.get_embedding_config()
+                embedding_result = _reconcile_embedding(
+                    client, embedding_current, desired.get("embedding")
+                )
             if embedding_result.get("status") == "refused":
                 actions["failed"].append("embedding")
             if desired.get("embedding"):
