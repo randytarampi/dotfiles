@@ -416,7 +416,22 @@ def get_voice_config(
     if os.path.exists(tts_manual_prompt):
         voice_config["ttsManualPrompt"] = tts_manual_prompt
 
-    if unresolved and (no_local_models or is_local_tier):
+    # STT/TTS remain engine-local and independent of the voice LLM pool
+    # (Workstream E): an unresolved LLM selection must not discard a healthy
+    # engine's resolved STT/TTS configuration.
+    if (
+        unresolved
+        and (no_local_models or is_local_tier)
+        and not voice_config.get("sttEndpoint")
+    ):
+        logger.warning(
+            "Voice configuration unresolved: %s",
+            (
+                "no local pools discovered"
+                if no_local_models
+                else "no verified candidates"
+            ),
+        )
         return {"_voice_unresolved": True}
     return voice_config
 
