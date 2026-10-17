@@ -1061,16 +1061,11 @@ def _embedding_identity(config):
     }
 
 
-def _embedding_refusal(
-    config, projection, client=None, state=None, *, allow_backend_change=False
-):
+def _embedding_refusal(config, projection, client=None, state=None):
     identity = _embedding_identity(config)
     fingerprint = (state or _read_embedding_state()).get("embedding_fingerprint", {})
     backend_identity = _embedding_backend_identity(client, config)
-    if (
-        _embedding_backend_changed(fingerprint, backend_identity)
-        and not allow_backend_change
-    ):
+    if _embedding_backend_changed(fingerprint, backend_identity):
         return "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
     if projection is None:
         default = _embedding_identity(EMBEDDING_DEFAULTS)
@@ -1101,6 +1096,13 @@ def _embedding_refusal(
 def _embedding_backend_changed(fingerprint, backend_identity):
     prior = fingerprint.get("backend_identity")
     return prior is not None and (backend_identity is None or prior != backend_identity)
+
+
+def _embedding_refusal_outcome(logger, message):
+    logger.error("%s", message)
+    failure = OpenWebUIError(message)
+    failure.outcome = {"status": "failed", "applied": False, "verified": False}
+    return failure
 
 
 def _embedding_candidate(prewrite):
@@ -1159,6 +1161,12 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         )
         return {"status": "refused", "applied": False, "verified": False}
     acknowledged_backend_change = backend_changed
+    if acknowledged_backend_change and backend_identity is None:
+        return {
+            "status": "refused",
+            "applied": False,
+            "verified": False,
+        }
     if (
         projection is not None
         and not backend_changed
@@ -1226,13 +1234,21 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
             )
             return {"status": "refused", "applied": False, "verified": False}
     prewrite = client.get_embedding_config()
-    if _embedding_refusal(
-        prewrite,
-        projection,
-        client,
-        state,
-        allow_backend_change=acknowledged_backend_change,
+    prewrite_backend_identity = _embedding_backend_identity(client, prewrite)
+    if acknowledged_backend_change and (
+        prewrite_backend_identity is None
+        or prewrite_backend_identity != backend_identity
     ):
+        raise _embedding_refusal_outcome(
+            logger,
+            "Refusing Open WebUI embedding write after concurrent backend change",
+        )
+    prewrite_refusal = _embedding_refusal(prewrite, projection, client, state)
+    if acknowledged_backend_change and prewrite_refusal == (
+        "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
+    ):
+        prewrite_refusal = None
+    if prewrite_refusal:
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
         return {"status": "refused", "applied": False, "verified": False}
     if acknowledged_backend_change and (
@@ -1250,12 +1266,19 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         failure.outcome = {"status": "failed", "applied": True, "verified": False}
         raise
     backend_identity = _embedding_backend_identity(client, candidate)
-    if acknowledged_backend_change and backend_identity is None:
-        logger.error(
-            "Refusing Open WebUI embedding write; backend identity is unavailable"
-        )
-        return {"status": "refused", "applied": False, "verified": False}
     parity_evidence = _embedding_parity_evidence(client, candidate)
+    if acknowledged_backend_change and backend_identity is None:
+        failure = OpenWebUIError(
+            "Open WebUI embedding backend identity became unavailable after write",
+            actions={
+                "planned": ["embedding"],
+                "applied": ["embedding"],
+                "verified": [],
+                "failed": ["embedding"],
+            },
+        )
+        failure.outcome = {"status": "failed", "applied": True, "verified": False}
+        raise failure
     _write_embedding_state(
         {
             "projection": {
@@ -1452,14 +1475,20 @@ def _reconcile_embedding(client, current, wanted):
         raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
     state = _read_embedding_state()
     projection = state.get("projection")
-    allow_backend_change = bool(wanted)
-    refusal = _embedding_refusal(
-        current,
-        projection,
-        client,
-        state,
-        allow_backend_change=allow_backend_change,
-    )
+    refusal = _embedding_refusal(current, projection, client, state)
+    if refusal and wanted:
+        identity = _embedding_identity(current)
+        fingerprint = state.get("embedding_fingerprint", {})
+        backend = _embedding_backend_identity(client, current)
+        changed = _embedding_backend_changed(fingerprint, backend)
+        if changed and _embedding_acknowledges(
+            state.get("acknowledgement"),
+            identity,
+            (projection or {}).get("output_dims"),
+            {"engine": "ollama", "model": EMBEDDING_MODEL},
+            EMBEDDING_OUTPUT_DIMS,
+        ):
+            refusal = None
     if refusal:
         logger.error("%s", refusal)
         return {"status": "refused", "applied": False, "verified": False}

@@ -572,6 +572,75 @@ def test_embedding_backend_change_acknowledgement_authorizes_migration(
     }
 
 
+def test_embedding_backend_change_after_post_keeps_applied_failure_state(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    probes = iter(
+        [
+            {"backend": "ollama", "version": "new"},
+            {"backend": "ollama", "version": "new"},
+            {"backend": "ollama", "version": "new"},
+            {"backend": "ollama", "version": "new"},
+            None,
+            None,
+        ]
+    )
+    request_log = []
+    original_update = client.update_embedding_config
+
+    def log_update(config):
+        request_log.append("POST embedding")
+        original_update(config)
+
+    client.update_embedding_config = log_update
+    setattr(client, "embedding_backend_identity_probe", lambda _config: next(probes))
+    prior_state = {
+        "projection": {
+            "owned": {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            },
+            "previous": {
+                "engine": "",
+                "model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            "previous_output_dims": 384,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+        },
+        "embedding_fingerprint": {
+            "backend_identity": {"backend": "ollama", "version": "old"},
+        },
+        "acknowledgement": {
+            "previous_model": openwebui.EMBEDDING_MODEL,
+            "previous_engine": "ollama",
+            "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "new_model": openwebui.EMBEDDING_MODEL,
+            "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "acknowledged_at": "operator-confirmed-backend-refresh",
+        },
+    }
+    openwebui._write_embedding_state(prior_state)
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(
+            client,
+            {
+                "openai": [],
+                "anthropic": [],
+                "ollama": [],
+                "embedding": {"model": openwebui.EMBEDDING_MODEL},
+            },
+        )
+    assert request_log == ["POST embedding"]
+    assert raised.value.actions["applied"] == ["embedding"]
+    assert raised.value.actions["verified"] == []
+    assert raised.value.actions["failed"] == ["embedding"]
+    assert openwebui._read_embedding_state() == prior_state
+
+
 def test_embedding_backend_acknowledgement_does_not_bypass_concurrent_identity_check(
     monkeypatch, tmp_path
 ):
