@@ -138,43 +138,54 @@ def select_model_groups(groups: dict, use_litellm: bool) -> dict:
     return selected
 
 
+def _twin_for_group(name, group):
+    provider = group.get("provider")
+    twin_name = f"litellm-{name}"
+    twin = {"provider": "litellm"}
+    for field in ("primaryModel", "fasterModel"):
+        model = group.get(field)
+        if not model:
+            continue
+        model_provider_name = (
+            group.get("fasterProvider", provider)
+            if field == "fasterModel"
+            else provider
+        )
+        if (
+            field == "fasterModel"
+            and model_provider_name not in LITELLM_ROUTED_PROVIDERS
+        ):
+            logger.warning(
+                "Routed Junie group %s: faster provider %s is not gateway-routed; omitting the faster model from %s",
+                name,
+                model_provider_name,
+                twin_name,
+            )
+            continue
+        twin[field] = litellm_alias(model, model_provider_name)
+    if group.get("fasterModel") and "fasterModel" in twin:
+        twin["fasterProvider"] = "litellm"
+    return twin_name, twin
+
+
+def _merge_twin(derived, groups, name, twin_name, twin):
+    existing = groups.get(twin_name)
+    if existing and existing != twin:
+        logger.error("Derived Junie twin %s diverges from %s", twin_name, name)
+        return
+    derived[twin_name] = twin
+
+
 def derive_litellm_groups(groups: dict) -> dict:
     """Build gateway twins for routed plain groups, preserving exact model IDs."""
     derived = dict(groups)
     for name, group in groups.items():
-        provider = group.get("provider")
-        if provider not in LITELLM_ROUTED_PROVIDERS or name.startswith("litellm-"):
+        if group.get("provider") not in LITELLM_ROUTED_PROVIDERS or name.startswith(
+            "litellm-"
+        ):
             continue
-        twin_name = f"litellm-{name}"
-        twin = {"provider": "litellm"}
-        for field in ("primaryModel", "fasterModel"):
-            model = group.get(field)
-            if not model:
-                continue
-            model_provider_name = (
-                group.get("fasterProvider", provider)
-                if field == "fasterModel"
-                else provider
-            )
-            if field == "fasterModel" and (
-                model_provider_name not in LITELLM_ROUTED_PROVIDERS
-            ):
-                logger.warning(
-                    "Routed Junie group %s: faster provider %s is not "
-                    "gateway-routed; omitting the faster model from %s",
-                    name,
-                    model_provider_name,
-                    twin_name,
-                )
-                continue
-            twin[field] = litellm_alias(model, model_provider_name)
-        if group.get("fasterModel") and "fasterModel" in twin:
-            twin["fasterProvider"] = "litellm"
-        existing = groups.get(twin_name)
-        if existing and existing != twin:
-            logger.error("Derived Junie twin %s diverges from %s", twin_name, name)
-            continue
-        derived[twin_name] = twin
+        twin_name, twin = _twin_for_group(name, group)
+        _merge_twin(derived, groups, name, twin_name, twin)
     return derived
 
 

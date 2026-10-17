@@ -513,6 +513,19 @@ def _verify_audio_projection(client, expected):
         raise OpenWebUIError("Open WebUI audio configuration write verification failed")
 
 
+def _audio_reconcile_drift(current, projection, wanted_fields, recorded_fields, logger):
+    if projection is not None:
+        refusal = _audio_refusal(current, projection, recorded_fields)
+        message = "Refusing Open WebUI audio reconciliation; owned fields changed: %s"
+    else:
+        refusal = _audio_refusal(current, None, wanted_fields)
+        message = "Refusing adoption of customized Open WebUI audio fields: %s"
+    if refusal:
+        logger.error(message, refusal)
+        return True
+    return False
+
+
 def _reconcile_audio(client, current, wanted):
     import logger
 
@@ -523,25 +536,11 @@ def _reconcile_audio(client, current, wanted):
         (section, key) for section, values in (wanted or {}).items() for key in values
     }
     recorded_fields = _recorded_fields(projection)
-    # Projection drift is checked only against recorded owned fields; the
-    # first-adoption case (no projection yet) is refused inside the adoption
-    # branch below so its diagnostic names the actual failure mode.
-    if projection is not None:
-        refusal = _audio_refusal(current, projection, recorded_fields)
-        if refusal:
-            logger.error(
-                "Refusing Open WebUI audio reconciliation; owned fields changed: %s",
-                refusal,
-            )
-            return
-    else:
-        refusal = _audio_refusal(current, None, wanted_fields)
-        if refusal:
-            logger.error(
-                "Refusing adoption of customized Open WebUI audio fields: %s",
-                refusal,
-            )
-            return
+    # Only compare against recorded ownership; adoption has its own diagnostic.
+    if _audio_reconcile_drift(
+        current, projection, wanted_fields, recorded_fields, logger
+    ):
+        return
     if wanted:
         # Ownership is recorded only for explicitly adopted fields; fields the
         # bundle newly claims must pass the same eligibility gate as adoption.
@@ -1503,9 +1502,7 @@ def reconcile_via_api(client, desired):
                     "Open WebUI snapshot changed before write; aborting"
                 )
             audio_current = None
-        if audio_current is None:
-            pass
-        else:
+        if audio_current is not None:
             _reconcile_audio(client, audio_current, audio_wanted)
         if hasattr(client, "get_embedding_config"):
             embedding_current = client.get_embedding_config()

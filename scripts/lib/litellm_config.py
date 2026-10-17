@@ -668,40 +668,44 @@ def _safe_models(provider):
         return []
 
 
+def _modality_include(name, model_type):
+    return (
+        model_type == "audio_stt"
+        or (model_type == "audio_tts" and not is_known_unqualified_tts(name))
+        or model_type
+        in {
+            "embedding",
+            "embeddings",
+            "rerank",
+            "reranking",
+            "reranker",
+            "conversion",
+            "markitdown",
+        }
+    )
+
+
+def _modality_endpoint_entries(provider, base_url, key_env, environ):
+    key_env = key_env if key_env and environ.get(key_env, "").strip() else None
+    entries = []
+    for item in _safe_models(provider):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if name and _modality_include(name, item.get("model_type")):
+            entries.append(
+                _entry(name, f"openai/{name}", api_base=base_url, key_env=key_env)
+            )
+    return entries
+
+
 def _modality_entries(environ):
     """Build exact-id aliases for discovered local non-chat models."""
     entries = []
     for provider in active_engines():
         endpoint = local_endpoint_for(provider, "openai")
-        if endpoint is None:
-            continue
-        base_url, key_env = endpoint
-        key_env = key_env if key_env and environ.get(key_env, "").strip() else None
-        for item in _safe_models(provider):
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            model_type = item.get("model_type")
-            if not name:
-                continue
-            include = (
-                model_type == "audio_stt"
-                or (model_type == "audio_tts" and not is_known_unqualified_tts(name))
-                or model_type
-                in {
-                    "embedding",
-                    "embeddings",
-                    "rerank",
-                    "reranking",
-                    "reranker",
-                    "conversion",
-                    "markitdown",
-                }
-            )
-            if include:
-                entries.append(
-                    _entry(name, f"openai/{name}", api_base=base_url, key_env=key_env)
-                )
+        if endpoint is not None:
+            entries.extend(_modality_endpoint_entries(provider, *endpoint, environ))
     return entries
 
 

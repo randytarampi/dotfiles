@@ -1,6 +1,5 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from unittest.mock import patch
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "verify-slim-invariants.py"
 SPEC = spec_from_file_location("verify_slim_invariants", SCRIPT_PATH)

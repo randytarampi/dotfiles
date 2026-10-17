@@ -155,6 +155,40 @@ def _ollama_capabilities(metadata):
     return {"model_type": model_type, "primary_category": model_type}
 
 
+def _ollama_parameter_count(model_info, details):
+    """Normalize Ollama's raw or formatted parameter count to billions."""
+    param_count_raw = model_info.get("general.parameter_count")
+    parameter_size = details.get("parameter_size")
+    parameter_match = re.fullmatch(
+        r"([\d.]+)\s*([BMK])", str(parameter_size or ""), re.I
+    )
+    if isinstance(param_count_raw, (int, float)) and param_count_raw > 0:
+        return int(param_count_raw / 1_000_000_000)
+    if not parameter_match:
+        return None
+    value = float(parameter_match.group(1))
+    unit = parameter_match.group(2).upper()
+    if unit == "B":
+        return int(value)
+    if unit == "M":
+        return int(value / 1000)
+    return int(value / 1_000_000)
+
+
+def _validated_ollama_show_url(host):
+    import urllib.parse
+
+    # B310: only explicitly permitted schemes may be opened here; the
+    # daemon's configured host (localhost/127.0.0.1/LAN per the user's
+    # constants) is accepted as-is.
+    parsed = urllib.parse.urlsplit(host)
+    if parsed.scheme != "http":
+        raise ValueError("Ollama show URL must use an HTTP origin")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("Ollama show URL must not contain credentials or query data")
+    return f"{host.rstrip('/')}/api/show"
+
+
 def _ollama_metadata_cached(host, model_name):
     """Fetch Ollama's read-only /api/show metadata for one installed model.
 
@@ -164,10 +198,9 @@ def _ollama_metadata_cached(host, model_name):
     """
     import json
     import urllib.request
-    import urllib.error
 
     request = urllib.request.Request(
-        f"{host}/api/show",
+        _validated_ollama_show_url(host),
         data=json.dumps({"model": model_name}).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -175,33 +208,18 @@ def _ollama_metadata_cached(host, model_name):
     try:
         with urllib.request.urlopen(request, timeout=3) as response:
             payload = json.loads(response.read().decode("utf-8"))
+        if not isinstance(payload, dict):
+            return {}
         model_info = payload.get("model_info") or {}
         capabilities = payload.get("capabilities") or []
-        if not isinstance(payload, dict) or not capabilities:
+        if not capabilities:
             return {}
         architecture = model_info.get("general.architecture")
         # Prefer Ollama's numeric parameter count (raw units); fall back to
         # details.parameter_size ("27.0B"/"524.3M"). Both normalize to the
         # established billions-unit int convention (extract_param_count/parity).
-        param_count_raw = model_info.get("general.parameter_count")
         details = payload.get("details") or {}
-        parameter_size = details.get("parameter_size")
-        parameter_match = re.fullmatch(
-            r"([\d.]+)\s*([BMK])", str(parameter_size or ""), re.I
-        )
-        param_count = None
-        if isinstance(param_count_raw, (int, float)) and param_count_raw > 0:
-            # Billions-unit int convention; int truncation matches the
-            # subprocess show parser it replaces (0.52B → 0).
-            param_count = int(param_count_raw / 1_000_000_000)
-        elif parameter_match:
-            value = float(parameter_match.group(1))
-            unit = parameter_match.group(2).upper()
-            param_count = int(
-                value
-                if unit == "B"
-                else value / 1000 if unit == "M" else value / 1_000_000
-            )
+        param_count = _ollama_parameter_count(model_info, details)
         return {
             "capabilities": capabilities,
             "model_type": "llm" if "completion" in capabilities else None,
@@ -220,7 +238,7 @@ def _ollama_metadata_cached(host, model_name):
             "quantization": details.get("quantization_level"),
             "is_moe": bool(architecture and "moe" in architecture.lower()),
         }
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as error:
+    except (TimeoutError, ValueError, OSError) as error:
         logger.info("Ollama show metadata unavailable for %s: %s", model_name, error)
         return {}
 

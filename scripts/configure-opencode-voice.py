@@ -81,6 +81,22 @@ def local_voice_provider(model_ref):
     return config
 
 
+def _voice_resolution_options(
+    local_fallback_preset,
+    role_models,
+    category_models,
+    min_reasoning_embedding,
+    stt_transport,
+):
+    return {
+        "local_fallback_preset": local_fallback_preset,
+        "role_models": role_models,
+        "category_models": category_models,
+        "min_reasoning_embedding": min_reasoning_embedding,
+        "stt_transport": stt_transport,
+    }
+
+
 def add_voice_transport_arguments(parser):
     """Keep the voice CLI's supported transport options explicit."""
     parser.add_argument(
@@ -93,11 +109,7 @@ def add_voice_transport_arguments(parser):
 
 def get_voice_config(
     tier: str,
-    local_fallback_preset=None,
-    role_models=None,
-    category_models=None,
-    min_reasoning_embedding=None,
-    stt_transport="auto",
+    options=None,
 ) -> dict:
     """Build the opencode-voice plugin config dict based on tier.
 
@@ -105,6 +117,12 @@ def get_voice_config(
       {"endpoint": ..., "model": ..., optional "apiKeyEnv": ...,
        optional "sttEndpoint": ..., optional "sttModel": ..., optional "sttApiKeyEnv": ...}
     """
+    options = options or {}
+    local_fallback_preset = options.get("local_fallback_preset")
+    role_models = options.get("role_models")
+    category_models = options.get("category_models")
+    min_reasoning_embedding = options.get("min_reasoning_embedding")
+    stt_transport = options.get("stt_transport", "auto")
     is_anthropic_tier = tier in ("anthropic", "pro-plus-anthropic")
     is_plus_tier = tier in (
         "plus",
@@ -485,11 +503,13 @@ def main():
     # Build voice config
     voice_config = get_voice_config(
         args.preset,
-        args.local_fallback_preset,
-        args.role_models,
-        args.category_models,
-        args.min_reasoning_embedding,
-        args.stt_transport,
+        _voice_resolution_options(
+            args.local_fallback_preset,
+            args.role_models,
+            args.category_models,
+            args.min_reasoning_embedding,
+            args.stt_transport,
+        ),
     )
     unresolved = voice_config.pop("_voice_unresolved", False)
 
