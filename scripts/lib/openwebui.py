@@ -386,7 +386,7 @@ def _desired_audio_settings():
     if not endpoint:
         return None
     stt_candidates = [
-        ("omlx", item["name"], Qualification.PROTOCOL_PROBED)
+        ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
         if item.get("name") and item.get("model_type") == "audio_stt"
     ]
@@ -407,7 +407,7 @@ def _desired_audio_settings():
     }
     selections = {"stt": _locator_provenance(stt)}
     tts_candidates = [
-        ("omlx", item["name"], Qualification.PROTOCOL_PROBED)
+        ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
         if item.get("name")
         and item.get("model_type") == "audio_tts"
@@ -456,7 +456,7 @@ def _audio_locator(operation, candidates, endpoint):
         owned = projection.get("stt" if operation == Operation.STT else "tts", {})
         prior_model = owned.get("MODEL")
         if prior_model and candidates:
-            previous_tuple = (candidates[0][0], prior_model, candidates[0][2])
+            previous_tuple = (candidates[0][0], prior_model, Qualification.UNKNOWN)
     selected = select(
         operation, candidates, preference, previously_selected=previous_tuple
     )
@@ -470,17 +470,17 @@ def _audio_locator(operation, candidates, endpoint):
         )
         _persist_audio_selection(
             {
-                operation.value: _locator_provenance(
-                    ServiceLocator(
-                        selection,
-                        resolve_transport(
-                            "gateway",
-                            Qualification.UNAVAILABLE,
-                            endpoint=None,
-                            operation=operation,
-                        ),
-                    )
-                )
+                operation.value: {
+                    "operation": operation.value,
+                    "provider": selection.provider,
+                    "model": selection.model,
+                    "qualification": Qualification.UNAVAILABLE.value,
+                    "reason": selection.reason,
+                    "transport": Transport.UNAVAILABLE.value,
+                    "endpoint": None,
+                    "wire_model": None,
+                    "key_reference": endpoint[1],
+                }
             }
         )
         import logger
@@ -506,6 +506,21 @@ def _audio_locator(operation, candidates, endpoint):
     )
     locator = ServiceLocator(selected, route)
     if selected.provider is None or route.transport == Transport.UNAVAILABLE:
+        _persist_audio_selection(
+            {
+                operation.value: {
+                    "operation": operation.value,
+                    "provider": selected.provider,
+                    "model": selected.model,
+                    "qualification": Qualification.UNAVAILABLE.value,
+                    "reason": selected.reason,
+                    "transport": route.transport.value,
+                    "endpoint": route.endpoint,
+                    "wire_model": route.wire_model,
+                    "key_reference": route.key_reference or endpoint[1],
+                }
+            }
+        )
         import logger
 
         logger.warning(
@@ -582,13 +597,11 @@ def _desired_embedding_settings():
     owned = projection.get("owned", {}) if isinstance(projection, dict) else {}
     previous_model = owned.get("RAG_EMBEDDING_MODEL")
     previous = (
-        ("ollama", previous_model, Qualification.PROTOCOL_PROBED)
-        if previous_model
-        else None
+        ("ollama", previous_model, Qualification.UNKNOWN) if previous_model else None
     )
     selection = select(
         Operation.EMBEDDING,
-        [("ollama", EMBEDDING_MODEL, Qualification.PROTOCOL_PROBED)],
+        [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
         preference=[("ollama", EMBEDDING_MODEL)],
         previously_selected=previous,
     )

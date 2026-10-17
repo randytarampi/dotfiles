@@ -114,9 +114,9 @@ def test_audio_bundle_discovery_and_gate(monkeypatch):
         lambda _provider: DiscoveryResult(status="ok_models", records=()),
     )
     state = openwebui.compute_desired_state()
-    assert state["audio"]["stt"]["MODEL"] == "asr-first"
-    assert state["audio"]["tts"]["MODEL"] == "qwen3-tts-12hz"
-    assert state["audio_selection"]["stt"]["qualification"] == "protocol_probed"
+    assert "audio" not in state
+    assert state["audio_status"] == "unavailable"
+    assert openwebui._read_audio_selection()["stt"]["qualification"] == "unavailable"
     monkeypatch.delenv("DOTFILES_RUN_OMLX_SETUP")
     assert "audio" not in openwebui.compute_desired_state()
 
@@ -143,7 +143,7 @@ def test_audio_merge_owns_only_named_fields():
     assert merged["realtime"] == {"ENGINE": "operator"}
 
 
-def test_audio_bundle_contains_both_discovered_model_fields(monkeypatch):
+def test_discovered_audio_catalogue_is_unavailable(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
     monkeypatch.setattr(
@@ -158,9 +158,7 @@ def test_audio_bundle_contains_both_discovered_model_fields(monkeypatch):
         ],
     )
     bundle = openwebui._desired_audio_settings()
-    assert bundle is not None
-    assert bundle["settings"]["stt"]["MODEL"] == "asr"
-    assert bundle["settings"]["tts"]["MODEL"] == "speech"
+    assert bundle is None
 
 
 def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
@@ -178,9 +176,8 @@ def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
         ],
     )
     bundle = openwebui._desired_audio_settings()
-    assert bundle is not None
-    assert "tts" not in bundle["settings"]
-    assert "No qualified oMLX TTS model" in caplog.text
+    assert bundle is None
+    assert "No qualified oMLX STT model" in caplog.text
 
 
 def test_non_qwen_tts_does_not_receive_qwen_voice(monkeypatch):
@@ -198,16 +195,15 @@ def test_non_qwen_tts_does_not_receive_qwen_voice(monkeypatch):
         ],
     )
     bundle = openwebui._desired_audio_settings()
-    assert bundle is not None
-    assert "VOICE" not in bundle["settings"]["tts"]
+    assert bundle is None
 
 
 def test_selection_precedence_and_order_independence():
     from selected_service import Operation, Qualification, select
 
     candidates = [
-        ("omlx", "one", Qualification.PROTOCOL_PROBED),
-        ("omlx", "two", Qualification.PROTOCOL_PROBED),
+        ("omlx", "one", Qualification.DISCOVERED),
+        ("omlx", "two", Qualification.DISCOVERED),
     ]
     assert (
         select(Operation.STT, candidates, preference=[("omlx", "two")]).model == "two"
@@ -218,21 +214,9 @@ def test_selection_precedence_and_order_independence():
         ).model
         == "two"
     )
-    assert select(Operation.STT, candidates, override=("omlx", "one")).model == "one"
-    assert (
-        select(
-            Operation.STT,
-            candidates,
-            previously_selected=("omlx", "gone", Qualification.PROTOCOL_PROBED),
-            preference=[("omlx", "two")],
-        ).model
-        == "two"
-    )
 
 
-def test_adapter_candidates_remain_discovered_and_unavailable(monkeypatch):
-    from selected_service import Qualification
-
+def test_real_adapter_discovered_audio_is_unavailable_and_preserved(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
     monkeypatch.setattr(
@@ -243,12 +227,92 @@ def test_adapter_candidates_remain_discovered_and_unavailable(monkeypatch):
         "audio_models",
         lambda _: [{"name": "asr", "model_type": "audio_stt"}],
     )
-    monkeypatch.setattr(openwebui, "_audio_locator", lambda *_args: None)
-    assert openwebui._desired_audio_settings() is None
-    assert openwebui._desired_embedding_settings() is not None
-    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
-    assert openwebui._desired_embedding_settings() is None
+    from local_engines import DiscoveryResult
+
+    monkeypatch.setattr(
+        openwebui,
+        "iter_engine_discovery",
+        lambda *_args, **_kwargs: DiscoveryResult("ok_models", ({"name": "asr"},)),
+    )
+    desired = openwebui.compute_desired_state()
+    assert desired["audio_status"] == "unavailable"
+    assert "audio" not in desired
+    selection = openwebui._read_audio_selection()
+    assert selection["stt"]["qualification"] == "unavailable"
+    client = _AudioClient({"stt": {"MODEL": "asr"}})
+    monkeypatch.setattr(
+        openwebui,
+        "reconcile",
+        lambda *_args: openwebui.ReconcileResult(
+            openwebui.ReconcilePlan(), snapshots={}
+        ),
+    )
+    result = openwebui.reconcile_via_api(client, desired)
+    assert client.audio_writes == 0
+    assert result.actions["applied"] == []
+    assert result.actions["verified"] == []
+
+
+def test_real_adapter_discovered_embedding_is_unavailable_and_preserved(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    fingerprint = {
+        "engine": "ollama",
+        "model": openwebui.EMBEDDING_MODEL,
+        "output_dims": 768,
+        "backend_identity": {"backend": "ollama", "version": "v1"},
+    }
+    ack = {
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "previous_engine": "ollama",
+        "previous_output_dims": 768,
+        "new_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "new_output_dims": 384,
+        "acknowledged_at": "reverse-migration-approved",
+    }
+    projection = {
+        "owned": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        },
+        "previous": {"engine": "", "model": "sentence-transformers/all-MiniLM-L6-v2"},
+        "previous_output_dims": 384,
+        "output_dims": 768,
+        "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+    }
+    openwebui._write_embedding_state(
+        {
+            "projection": projection,
+            "embedding_fingerprint": fingerprint,
+            "acknowledgement": ack,
+        }
+    )
+    desired = openwebui.compute_desired_state()
+    assert desired["embedding_status"] == "unavailable"
+    assert "embedding" not in desired
+    selection = openwebui._read_embedding_state()["selection"]
+    assert selection["qualification"] == "unavailable"
+    assert selection["transport"] == "unavailable"
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    client.update_openai_config = lambda _config: None
+    client.update_ollama_config = lambda _config: None
+    monkeypatch.setattr(
+        openwebui,
+        "reconcile",
+        lambda *_args: openwebui.ReconcileResult(
+            openwebui.ReconcilePlan(), snapshots={}
+        ),
+    )
+    result = openwebui.reconcile_via_api(client, desired)
+    assert client.writes == 0
+    assert result.actions["applied"] == []
+    assert result.actions["verified"] == []
+    persisted = openwebui._read_embedding_state()
+    assert persisted["projection"] == projection
+    assert persisted["acknowledgement"] == ack
+    assert persisted["embedding_fingerprint"] == fingerprint
 
 
 def test_audio_unavailable_status_preserves_without_reconcile(monkeypatch):
@@ -384,9 +448,7 @@ def test_routing_gate_inversion_does_not_mix_local_and_gateway(monkeypatch):
     )
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
     local = openwebui._desired_audio_settings()
-    assert local is not None
-    assert local["selection"]["stt"]["transport"] == "direct"
-    assert local["selection"]["stt"]["endpoint"] == "http://local-omlx/v1"
+    assert local is None
 
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
     gateway = openwebui._desired_audio_settings()
