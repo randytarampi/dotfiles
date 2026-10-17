@@ -665,9 +665,37 @@ def test_audio_key_rotation_applies_without_persisting_secret(monkeypatch, tmp_p
         client.audio,
         {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "ROTATED_SECRET_92814"}},
     )
-    assert client.audio_writes == 2
+    assert client.audio_writes == 1
     assert client.audio["stt"]["OPENAI_API_KEY"] == "ROTATED_SECRET_92814"
     assert "ROTATED_SECRET_92814" not in state.read_text()
+
+
+def test_credential_rotation_waits_for_release_adoption_authorization(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    audio = {
+        "stt": {"MODEL": "asr", "OPENAI_API_KEY": "stt-key"},
+        "tts": {"MODEL": "admin-tts", "OPENAI_API_KEY": "admin-key"},
+    }
+    client = _AudioClient(audio)
+    desired = {"tts": {"MODEL": "new-tts", "OPENAI_API_KEY": "rotated-key"}}
+    openwebui._reconcile_audio(client, audio, desired)
+    assert client.audio_writes == 0
+    assert client.audio == audio
+
+    client = _AudioClient(audio)
+    client.concurrent = {
+        "stt": {"MODEL": "admin-edited", "OPENAI_API_KEY": "stt-key"},
+        "tts": dict(audio["tts"]),
+    }
+    openwebui._reconcile_audio(
+        client, audio, {"stt": {"MODEL": "new-asr", "OPENAI_API_KEY": "rotated-key"}}
+    )
+    assert client.audio_writes == 0
+    assert client.audio == audio
 
 
 def test_legacy_audio_credential_projection_is_sanitized_and_recovers(
@@ -767,6 +795,45 @@ def test_restart_after_audio_projection_write_does_not_force_restore(
     assert restarted.audio["stt"]["MODEL"] == "asr"
     assert restarted.audio_writes == 0
     assert result.status == "clean"
+
+
+def test_production_shape_audio_noop_and_refusal_reports(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+
+    class ProductionShape(_AudioClient):
+        def __init__(self, audio):
+            super().__init__(audio)
+            del self.audio_writes
+            self.posts = []
+
+        def update_audio_config(self, config):
+            self.posts.append("audio")
+            self.audio = json.loads(json.dumps(config))
+
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    no_op = ProductionShape({"stt": {"MODEL": "asr"}})
+    report = openwebui.reconcile_via_api(
+        no_op,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio": {"stt": {"MODEL": "asr"}},
+        },
+    ).actions
+    assert report["applied"] == [] and no_op.posts == []
+    refusal = ProductionShape({"stt": {"MODEL": "admin"}})
+    report = openwebui.reconcile_via_api(
+        refusal,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "audio": {"stt": {"MODEL": "wanted"}},
+        },
+    ).actions
+    assert report["failed"] == ["audio"] and refusal.posts == []
 
 
 @pytest.mark.parametrize("disable", ["gate", "list"])
