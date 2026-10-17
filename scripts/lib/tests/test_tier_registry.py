@@ -147,6 +147,10 @@ class TierRegistryTests(unittest.TestCase):
                     else "gpt-6-luna"
                 )
                 self.assertEqual(config["model"], expected_model)
+                sidecar = config.get("_voice_state", {})
+                record = sidecar.get("selections", {}).get("cleanup_llm", {})
+                self.assertEqual(record.get("qualification"), "unknown")
+                self.assertIn("tier override", record.get("reason", ""))
 
     def test_google_provider_endpoint_uses_v1beta_compat_path(self):
         providers = generate_profiles.build_provider_configs(

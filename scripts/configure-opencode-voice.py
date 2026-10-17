@@ -82,6 +82,10 @@ VOICE_PREFERENCES = {
     "default": {Operation.STT.value: [], Operation.CLEANUP_LLM.value: []}
 }
 
+# Named exception: tier-curated remote voice defaults are operator product
+# policy (the explicit-override rung), exempt from discovery qualification.
+# R4 may add route-qualification evidence; until then these remain UNKNOWN.
+
 
 def _select_voice_candidate(
     operation, candidates, host="default", previously_selected=None
@@ -133,6 +137,21 @@ def _service_locator(
         operation=operation,
     )
     return ServiceLocator(selection, route)
+
+
+def _tier_override_locator(operation, provider, model, endpoint, api_key_env):
+    selection = select(operation, [], override=(provider, model))
+    rendered = {"provider": provider, "model": model, "endpoint": endpoint}
+    assert rendered["provider"] == selection.provider
+    assert rendered["model"] == selection.model
+    return selection, {
+        "provider": rendered["provider"],
+        "model": rendered["model"],
+        "qualification": selection.qualification.value,
+        "reason": f"tier override: {selection.reason}",
+        "endpoint": endpoint,
+        "apiKeyEnv": api_key_env,
+    }
 
 
 def _render_locator(locator):
@@ -417,44 +436,20 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         orchestrator = tier_registry.materialize_role_models(
             registry, tier, {}, None
         ).get("orchestrator", "opencode/muse-spark-1.3-contributor-free")
-        remote_candidates = [("opencode", orchestrator, Qualification.DISCOVERED)]
-        locator = _service_locator(
+        model = strip_provider_prefix(orchestrator)
+        selection, provenance = _tier_override_locator(
             Operation.CLEANUP_LLM,
-            remote_candidates,
-            "gateway" if gateway_gate else "direct",
-            None,
-            endpoint=(
-                f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
-                if gateway_gate
-                else provider["baseUrl"]
-            ),
-            wire_model=strip_provider_prefix(orchestrator),
-            key_reference=(
-                "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"]
-            ),
-            credential_reference=(
-                "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"]
-            ),
-            credential_present=bool(
-                os.environ.get(
-                    "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"],
-                    "",
-                ).strip()
-            ),
-            credential_required=True,
+            "opencode",
+            model,
+            provider["baseUrl"],
+            provider["apiKeyEnv"],
         )
-        rendered = _render_locator(locator)
-        voice_config = (
-            {
-                "endpoint": rendered["endpoint"],
-                "model": rendered["wire_model"],
-                "apiKeyEnv": provider["apiKeyEnv"],
-            }
-            if rendered
-            else {}
-        )
-        if rendered:
-            locators[Operation.CLEANUP_LLM.value] = locator
+        voice_config = {
+            "endpoint": provider["baseUrl"],
+            "model": model,
+            "apiKeyEnv": provider["apiKeyEnv"],
+        }
+        locators[Operation.CLEANUP_LLM.value] = provenance
 
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
@@ -464,38 +459,28 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             else get_provider_base_url("anthropic")
         )
         key_env = "MERIDIAN_API_KEY" if use_meridian else "ANTHROPIC_API_KEY"
-        remote = [("anthropic", "claude-sonnet-5-5", Qualification.DISCOVERED)]
-        locator = _service_locator(
-            Operation.CLEANUP_LLM,
-            remote,
-            "gateway" if gateway_gate else "direct",
-            None,
-            endpoint=endpoint,
-            wire_model="claude-sonnet-5-5",
-            key_reference="LITELLM_OPENCODE_KEY" if gateway_gate else key_env,
-            credential_reference="LITELLM_OPENCODE_KEY" if gateway_gate else key_env,
-            credential_present=bool(os.environ.get(key_env, "").strip()),
+        selection, provenance = _tier_override_locator(
+            Operation.CLEANUP_LLM, "anthropic", "claude-sonnet-5-5", endpoint, key_env
         )
-        rendered = _render_locator(locator)
-        voice_config = (
-            {
-                "endpoint": rendered["endpoint"],
-                "model": rendered["wire_model"],
-                "apiKeyEnv": key_env,
-            }
-            if rendered
-            else {}
-        )
-        if rendered:
-            locators[Operation.CLEANUP_LLM.value] = locator
+        voice_config = {
+            "endpoint": endpoint,
+            "model": "claude-sonnet-5-5",
+            "apiKeyEnv": key_env,
+        }
+        locators[Operation.CLEANUP_LLM.value] = provenance
 
     elif is_plus_tier or tier == "pro-plus":
         # OpenAI or Ollama Cloud + OpenAI STT
+        endpoint = get_provider_base_url("openai")
+        _, provenance = _tier_override_locator(
+            Operation.CLEANUP_LLM, "openai", "gpt-6-luna", endpoint, "OPENAI_API_KEY"
+        )
         voice_config = {
-            "endpoint": get_provider_base_url("openai"),
+            "endpoint": endpoint,
             "model": "gpt-6-luna",
             "apiKeyEnv": "OPENAI_API_KEY",
         }
+        locators[Operation.CLEANUP_LLM.value] = provenance
 
     else:
         # Fallback: Ollama Cloud
@@ -706,20 +691,24 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         "sttTransport": resolved_transport,
         "sttTransportReason": transport_reason,
         "selections": {
-            name: {
-                "provider": locator.selection.provider,
-                "model": locator.selection.model,
-                "qualification": locator.selection.qualification.value,
-                "reason": locator.selection.reason,
-                "transport": locator.route.transport.value,
-                "endpoint": locator.route.endpoint,
-                "wire_model": locator.route.wire_model,
-                **(
-                    {"key_reference": locator.route.key_reference}
-                    if locator.route.key_reference
-                    else {}
-                ),
-            }
+            name: (
+                {
+                    "provider": locator.selection.provider,
+                    "model": locator.selection.model,
+                    "qualification": locator.selection.qualification.value,
+                    "reason": locator.selection.reason,
+                    "transport": locator.route.transport.value,
+                    "endpoint": locator.route.endpoint,
+                    "wire_model": locator.route.wire_model,
+                    **(
+                        {"key_reference": locator.route.key_reference}
+                        if locator.route.key_reference
+                        else {}
+                    ),
+                }
+                if isinstance(locator, ServiceLocator)
+                else locator
+            )
             for name, locator in locators.items()
         },
     }
