@@ -563,6 +563,7 @@ class _AudioClient:
         self.concurrent: Any = None
         self.ignore_writes = False
         self.alter_writes = False
+        self.fail_connection_write = False
         self.openai = openai if openai is not None else []
         self.ollama = ollama if ollama is not None else []
 
@@ -573,6 +574,8 @@ class _AudioClient:
         return {"connections": json.loads(json.dumps(self.ollama))}
 
     def update_openai_config(self, config):
+        if self.fail_connection_write:
+            raise openwebui.OpenWebUIError("injected connection failure")
         self.openai = config.get("connections", config)
 
     def update_ollama_config(self, config):
@@ -651,6 +654,39 @@ def test_audio_bundle_none_key_never_claimed_and_stored_key_preserved(
     assert "STORED_KEY_SECRET_92814" not in caplog.text
 
 
+def test_audio_key_rotation_applies_without_persisting_secret(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    initial = {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "old-secret"}}
+    client = _AudioClient(initial)
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    openwebui._reconcile_audio(
+        client,
+        client.audio,
+        {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "ROTATED_SECRET_92814"}},
+    )
+    assert client.audio_writes == 2
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "ROTATED_SECRET_92814"
+    assert "ROTATED_SECRET_92814" not in state.read_text()
+
+
+def test_legacy_audio_credential_projection_is_sanitized_and_recovers(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    state.write_text(
+        json.dumps(
+            {"projection": {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "LEGACY_SECRET"}}}
+        )
+    )
+    client = _AudioClient({"stt": {"MODEL": "custom-admin"}})
+    openwebui._reconcile_audio(client, client.audio, {})
+    saved = state.read_text()
+    assert "LEGACY_SECRET" not in saved
+    assert "restore the prior credential manually" in caplog.text
+
+
 def test_audio_release_drops_only_released_projection_fields(monkeypatch, tmp_path):
     state = tmp_path / "managed-audio.json"
     monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
@@ -660,6 +696,96 @@ def test_audio_release_drops_only_released_projection_fields(monkeypatch, tmp_pa
     openwebui._reconcile_audio(client, client.audio, {"stt": {"ENGINE": "openai"}})
     assert client.audio["stt"]["MODEL"] == ""
     assert json.loads(state.read_text())["projection"] == {"stt": {"ENGINE": "openai"}}
+
+
+def test_audio_release_refuses_customized_new_claim_and_prewrite(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    audio = {"stt": {"MODEL": "asr"}, "tts": {"MODEL": "admin-model"}}
+    client = _AudioClient(audio)
+    openwebui._reconcile_audio(client, audio, {"tts": {"MODEL": "new-tts"}})
+    assert client.audio_writes == 0
+    assert "Refusing adoption of customized" in caplog.text
+    client = _AudioClient({"stt": {"MODEL": "asr"}, "tts": {"MODEL": ""}})
+    client.concurrent = {"stt": {"MODEL": "asr"}, "tts": {"MODEL": "admin-edit"}}
+    openwebui._reconcile_audio(client, client.audio, {"tts": {"MODEL": "new-tts"}})
+    assert client.audio_writes == 0
+
+
+def test_audio_release_expansion_defaults_adopts_new_field(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    client = _AudioClient({"stt": {"MODEL": "asr"}, "tts": {"MODEL": ""}})
+    openwebui._reconcile_audio(client, client.audio, {"tts": {"MODEL": "tts"}})
+    assert client.audio["tts"]["MODEL"] == "tts"
+    assert json.loads(state.read_text())["projection"] == {"tts": {"MODEL": "tts"}}
+
+
+def test_audio_then_connection_failure_reports_applied_and_projection(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient({"stt": {"MODEL": ""}})
+    client.fail_connection_write = True
+    desired = {
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
+        "anthropic": [],
+        "ollama": [],
+        "audio": {"stt": {"MODEL": "asr"}},
+    }
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(client, desired)
+    assert client.audio["stt"]["MODEL"] == "asr"
+    assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr"
+    assert raised.value.actions["applied"] == ["audio"]
+    assert raised.value.actions["failed"] == ["openai"]
+
+
+def test_restart_after_audio_projection_write_does_not_force_restore(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    audio = {"stt": {"MODEL": ""}}
+    client = _AudioClient(audio)
+    client.fail_connection_write = True
+    desired = {
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
+        "anthropic": [],
+        "ollama": [],
+        "audio": {"stt": {"MODEL": "asr"}},
+    }
+    with pytest.raises(openwebui.OpenWebUIError):
+        openwebui.reconcile_via_api(client, desired)
+    restarted = _AudioClient(client.audio, client.openai, client.ollama)
+    result = openwebui.reconcile_via_api(restarted, desired)
+    assert restarted.audio["stt"]["MODEL"] == "asr"
+    assert restarted.audio_writes == 0
+    assert result.status == "clean"
+
+
+@pytest.mark.parametrize("disable", ["gate", "list"])
+def test_explicit_omlx_disable_releases_audio(monkeypatch, tmp_path, disable):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
+    )
+    if disable == "gate":
+        monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
+    else:
+        monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+        monkeypatch.setenv("DOTFILES_OPENWEBUI_DISABLED_ENGINES", "omlx")
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    audio = {"stt": {"MODEL": "asr"}}
+    client = _AudioClient(audio)
+    desired = openwebui.compute_desired_state()
+    openwebui.reconcile_via_api(client, desired)
+    assert client.audio["stt"]["MODEL"] == ""
+    assert desired.get("audio") is None
 
 
 def test_audio_prewrite_detects_concurrent_change(monkeypatch, tmp_path, caplog):
@@ -2935,13 +3061,26 @@ def test_unknown_omlx_discovery_preserves_managed_audio(monkeypatch, tmp_path, c
     desired = openwebui.compute_desired_state()
     assert "audio" not in desired
     assert desired.get("audio_status") == "unknown"
-    # The computed desired carries audio_status "unknown"; the dispatch
-    # must see it to preserve instead of release.
+
+
+def test_enabled_omlx_unknown_discovery_preserves_audio(monkeypatch, tmp_path, caplog):
+    from local_engines import DiscoveryResult
+
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
+    )
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui,
+        "iter_engine_discovery",
+        lambda *_args, **_kwargs: DiscoveryResult("unknown_error", (), "offline"),
+    )
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}})
+    client = _AudioClient({"stt": {"MODEL": "asr"}})
+    desired = openwebui.compute_desired_state()
     openwebui.reconcile_via_api(client, desired)
     assert client.audio_writes == 0
-    assert client.audio["stt"]["ENGINE"] == "openai"  # preserved, not released
-    assert json.loads(state.read_text())["projection"] == projection
-    assert "oMLX discovery is unknown" in caplog.text
 
 
 def test_same_dims_model_change_refuses_without_ack_switches_with_ack(

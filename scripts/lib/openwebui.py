@@ -324,7 +324,13 @@ def compute_desired_state():
             "ollama": [],
         }
     audio = _desired_audio_settings()
-    if discovery.status == "unknown_error":
+    explicitly_disabled = (
+        os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "0" or "omlx" in disabled
+    )
+    if explicitly_disabled:
+        audio = None
+        desired["audio_status"] = "disabled"
+    elif discovery.status == "unknown_error":
         import logger
 
         logger.warning(
@@ -529,6 +535,15 @@ def _recorded_fields(projection):
     }
 
 
+def _credential_fields(projection):
+    return {
+        (section, key)
+        for section, values in (projection or {}).items()
+        for key in values
+        if key == "OPENAI_API_KEY"
+    }
+
+
 def _verify_audio_projection(client, expected):
     import logger
 
@@ -573,7 +588,16 @@ def _reconcile_audio_adoption(
     desired_now = _audio_projection_subset(
         _merge_owned_audio(current, wanted)[0], owned_fields
     )
-    if _audio_projection_subset(current, owned_fields) == desired_now:
+    credential_change = any(
+        current.get(section, {}).get(key) != value
+        for section, values in wanted.items()
+        for key, value in values.items()
+        if key == "OPENAI_API_KEY" and value
+    )
+    if (
+        _audio_projection_subset(current, owned_fields) == desired_now
+        and not credential_change
+    ):
         return
     prewrite = client.get_audio_config()
     if projection is not None:
@@ -633,20 +657,72 @@ def _reconcile_audio(client, current, wanted):
         if key != "OPENAI_API_KEY"
     }
     recorded_fields = _recorded_fields(projection)
+    legacy_credentials = _credential_fields(projection)
+    if legacy_credentials:
+        sanitized = {
+            section: {
+                key: value for key, value in values.items() if key != "OPENAI_API_KEY"
+            }
+            for section, values in (projection or {}).items()
+        }
+        sanitized = {section: values for section, values in sanitized.items() if values}
+        _write_audio_projection(sanitized or None)
+        if not any(
+            value
+            for values in wanted.values()
+            for key, value in values.items()
+            if key == "OPENAI_API_KEY"
+        ):
+            logger.error(
+                "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
+            )
+            return
     # Only compare against recorded ownership; adoption has its own diagnostic.
     if _audio_reconcile_drift(
-        current, projection, wanted_fields, recorded_fields, logger
+        current,
+        _read_audio_projection() if legacy_credentials else projection,
+        wanted_fields,
+        recorded_fields,
+        logger,
     ):
         return
     released_fields = recorded_fields - wanted_fields
+    wanted_credentials = {
+        (section, key): value
+        for section, values in wanted.items()
+        for key, value in values.items()
+        if key == "OPENAI_API_KEY" and value
+    }
+    if wanted_credentials:
+        prewrite_credentials = client.get_audio_config()
+        candidate_credentials = copy.deepcopy(prewrite_credentials)
+        for (section, key), value in wanted_credentials.items():
+            candidate_credentials.setdefault(section, {})[key] = value
+        client.update_audio_config(candidate_credentials)
+        _verify_audio_projection(
+            client,
+            _audio_projection_subset(
+                candidate_credentials, recorded_fields | wanted_fields
+            ),
+        )
     if released_fields and projection is not None:
+        new_fields = wanted_fields - recorded_fields
+        new_refusal = _audio_refusal(current, None, new_fields)
+        if new_refusal:
+            logger.error(
+                "Refusing adoption of customized Open WebUI audio fields: %s",
+                new_refusal,
+            )
+            return
         if any(key == "OPENAI_API_KEY" for _, key in released_fields):
             logger.error(
                 "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
             )
             return
         prewrite = client.get_audio_config()
-        if _audio_refusal(prewrite, projection, recorded_fields):
+        prewrite_refusal = _audio_refusal(prewrite, projection, recorded_fields)
+        prewrite_refusal += _audio_refusal(prewrite, None, new_fields)
+        if prewrite_refusal:
             logger.error("Refusing Open WebUI audio release after concurrent edit")
             return
         restore = {}
@@ -1054,7 +1130,14 @@ def _log_embedding_migration_refusal(logger, old, old_dims, new, new_dims):
 
 
 class OpenWebUIError(RuntimeError):
-    pass
+    def __init__(self, message, actions=None):
+        super().__init__(message)
+        self.actions = actions or {
+            "planned": [],
+            "applied": [],
+            "verified": [],
+            "failed": [],
+        }
 
 
 class ReachableError(OpenWebUIError):
@@ -1703,6 +1786,14 @@ def reconcile_via_api(client, desired):
         return result
     audio_wanted = desired.get("audio")
     audio_status = desired.get("audio_status")
+    actions = {
+        "planned": [item["action"] for item in result.plan.entries],
+        "applied": [],
+        "verified": [],
+        "failed": [],
+    }
+    if audio_wanted:
+        actions["planned"].append("audio")
     try:
         if hasattr(client, "get_audio_config"):
             if audio_wanted is None and audio_status in {"unknown", "empty"}:
@@ -1723,11 +1814,38 @@ def reconcile_via_api(client, desired):
                     raise OpenWebUIError(
                         "Open WebUI snapshot changed before write; aborting"
                     )
+                audio_state_before = _read_audio_projection()
+                audio_writes_before = getattr(client, "audio_writes", None)
                 _reconcile_audio(client, audio_current, audio_wanted)
+                audio_writes_after = getattr(client, "audio_writes", None)
+                if audio_wanted:
+                    if (
+                        audio_writes_before is None
+                        or audio_writes_after != audio_writes_before
+                    ):
+                        actions["applied"].append("audio")
+                        actions["verified"].append("audio")
+                    elif _read_audio_projection() != audio_state_before:
+                        actions["applied"].append("audio-state")
         if hasattr(client, "get_embedding_config"):
             embedding_current = client.get_embedding_config()
+            embedding_state_before = _read_embedding_state()
+            embedding_writes_before = getattr(client, "embedding_writes", None)
             _reconcile_embedding(client, embedding_current, desired.get("embedding"))
-    except OpenWebUIError:
+            embedding_writes_after = getattr(client, "embedding_writes", None)
+            if desired.get("embedding"):
+                actions["planned"].append("embedding")
+                if (
+                    embedding_writes_before is not None
+                    and embedding_writes_after != embedding_writes_before
+                ):
+                    actions["applied"].append("embedding")
+                    actions["verified"].append("embedding")
+                elif _read_embedding_state() != embedding_state_before:
+                    actions["applied"].append("embedding-state")
+    except OpenWebUIError as error:
+        actions["failed"].append("audio/embedding reconciliation")
+        error.actions = actions
         raise
     before_openai, before_ollama = (
         client.get_openai_config(),
@@ -1740,22 +1858,34 @@ def reconcile_via_api(client, desired):
         for item in result.plan.entries
         if item["action"] in {"add", "update", "delete"}
     }
-    for collection in changed:
-        entries = [
-            (
-                _serialized(item["entry"])
-                if item["action"] in {"add", "update"}
-                else copy.deepcopy(item["entry"])
+    actions["planned"].extend(sorted(changed))
+    try:
+        for collection in changed:
+            entries = [
+                (
+                    _serialized(item["entry"])
+                    if item["action"] in {"add", "update"}
+                    else copy.deepcopy(item["entry"])
+                )
+                for item in result.plan.entries
+                if item["collection"] == collection and item["action"] != "delete"
+            ]
+            payload = OpenWebUIClient.payload(
+                result.snapshots[collection]["envelope"], entries
             )
-            for item in result.plan.entries
-            if item["collection"] == collection and item["action"] != "delete"
-        ]
-        envelope = result.snapshots[collection]["envelope"]
-        payload = OpenWebUIClient.payload(envelope, entries)
-        if collection == "openai":
-            client.update_openai_config(payload)
-        else:
-            client.update_ollama_config(payload)
+            if collection == "openai":
+                client.update_openai_config(payload)
+            else:
+                client.update_ollama_config(payload)
+            actions["applied"].append(collection)
+    except Exception as error:
+        actions["failed"].append(locals().get("collection", "connections"))
+        if isinstance(error, OpenWebUIError):
+            error.actions = actions
+            raise
+        raise OpenWebUIError(
+            "Open WebUI connection write failed", actions=actions
+        ) from error
     if changed:
         # Unmanaged entries the plan prunes are known upstream seed duplicates;
         # anything else moving must fail the verification. Prunes are tracked
@@ -1844,12 +1974,9 @@ def reconcile_via_api(client, desired):
             or before_unmanaged != after_unmanaged
         ):
             raise OpenWebUIError(
-                "Open WebUI write verification failed or unmanaged state changed"
+                "Open WebUI write verification failed or unmanaged state changed",
+                actions={**actions, "failed": ["connections"]},
             )
-    result.actions = {
-        "planned": [item["action"] for item in result.plan.entries],
-        "applied": sorted(changed),
-        "verified": bool(changed),
-        "failed": [],
-    }
+    actions["verified"].extend(sorted(changed))
+    result.actions = actions
     return result
