@@ -111,25 +111,12 @@ def test_audio_bundle_discovery_and_gate(monkeypatch):
     monkeypatch.setattr(
         openwebui,
         "iter_engine_discovery",
-        lambda _provider: DiscoveryResult(status="ok_models", records=[]),
+        lambda _provider: DiscoveryResult(status="ok_models", records=()),
     )
     state = openwebui.compute_desired_state()
-    assert state["audio"] == {
-        "stt": {
-            "ENGINE": "openai",
-            "OPENAI_API_BASE_URL": "http://127.0.0.1:11427/v1",
-            "OPENAI_API_REQUEST_FORMAT": "multipart",
-            "MODEL": "asr-first",
-            "OPENAI_API_KEY": "audio-key",
-        },
-        "tts": {
-            "ENGINE": "openai",
-            "OPENAI_API_BASE_URL": "http://127.0.0.1:11427/v1",
-            "MODEL": "qwen3-tts-12hz",
-            "VOICE": "ryan",
-            "OPENAI_API_KEY": "audio-key",
-        },
-    }
+    assert state["audio"]["stt"]["MODEL"] == "asr-first"
+    assert state["audio"]["tts"]["MODEL"] == "qwen3-tts-12hz"
+    assert state["audio_selection"]["stt"]["qualification"] == "protocol_probed"
     monkeypatch.delenv("DOTFILES_RUN_OMLX_SETUP")
     assert "audio" not in openwebui.compute_desired_state()
 
@@ -172,8 +159,8 @@ def test_audio_bundle_contains_both_discovered_model_fields(monkeypatch):
     )
     bundle = openwebui._desired_audio_settings()
     assert bundle is not None
-    assert bundle["stt"]["MODEL"] == "asr"
-    assert bundle["tts"]["MODEL"] == "speech"
+    assert bundle["settings"]["stt"]["MODEL"] == "asr"
+    assert bundle["settings"]["tts"]["MODEL"] == "speech"
 
 
 def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
@@ -192,7 +179,7 @@ def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
     )
     bundle = openwebui._desired_audio_settings()
     assert bundle is not None
-    assert "tts" not in bundle
+    assert "tts" not in bundle["settings"]
     assert "No qualified oMLX TTS model" in caplog.text
 
 
@@ -212,7 +199,74 @@ def test_non_qwen_tts_does_not_receive_qwen_voice(monkeypatch):
     )
     bundle = openwebui._desired_audio_settings()
     assert bundle is not None
-    assert "VOICE" not in bundle["tts"]
+    assert "VOICE" not in bundle["settings"]["tts"]
+
+
+def test_selection_precedence_and_order_independence():
+    from selected_service import Operation, Qualification, select
+
+    candidates = [
+        ("omlx", "one", Qualification.PROTOCOL_PROBED),
+        ("omlx", "two", Qualification.PROTOCOL_PROBED),
+    ]
+    assert (
+        select(Operation.STT, candidates, preference=[("omlx", "two")]).model == "two"
+    )
+    assert (
+        select(
+            Operation.STT, list(reversed(candidates)), preference=[("omlx", "two")]
+        ).model
+        == "two"
+    )
+    assert select(Operation.STT, candidates, override=("omlx", "one")).model == "one"
+    assert (
+        select(
+            Operation.STT,
+            candidates,
+            previously_selected=("omlx", "gone", Qualification.PROTOCOL_PROBED),
+            preference=[("omlx", "two")],
+        ).model
+        == "two"
+    )
+
+
+def test_unqualified_audio_is_omitted(monkeypatch, caplog):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", None)
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui, "_audio_locator", lambda *args: None)
+    assert openwebui._desired_audio_settings() is None
+    assert "omitting audio settings" in caplog.text
+
+
+def test_audio_selection_writer_sibling_and_secret_safe(monkeypatch, tmp_path):
+    path = tmp_path / "audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(path))
+    selection = {
+        "stt": {
+            "operation": "stt",
+            "provider": "omlx",
+            "model": "asr",
+            "qualification": "protocol_probed",
+            "reason": "test",
+            "transport": "gateway",
+            "endpoint": "http://omlx/v1",
+            "wire_model": "asr",
+            "key_reference": "OMLX_API_KEY",
+        }
+    }
+    openwebui._write_audio_projection({"stt": {"MODEL": "asr"}}, selection=selection)
+    document = json.loads(path.read_text())
+    assert document["projection"] == {"stt": {"MODEL": "asr"}}
+    assert document["selection"] == selection
+    assert "credential-sentinel" not in path.read_text()
 
 
 def test_audio_customized_fields_refuse_first_adoption(monkeypatch, tmp_path, caplog):

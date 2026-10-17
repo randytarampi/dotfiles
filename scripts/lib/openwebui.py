@@ -20,6 +20,15 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import constants
+from selected_service import (
+    Operation,
+    Qualification,
+    ServiceLocator,
+    Transport,
+    assert_renders_from,
+    resolve_transport,
+    select,
+)
 from ai_models import is_known_unqualified_tts
 from local_engines import (
     LOCAL_ENGINES,
@@ -56,6 +65,7 @@ EMBEDDING_DEFAULTS = {
     "RAG_EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
     "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
 }
+SELECTION_PROVENANCE_KEY = "selection"
 AUDIO_DEFAULTS = {
     "stt": {
         "ENGINE": "",
@@ -350,13 +360,18 @@ def compute_desired_state():
         audio = None
         desired["audio_status"] = "empty"
     if audio is not None:
-        desired["audio"] = audio  # type: ignore[assignment]
-    desired["embedding"] = {
-        "RAG_EMBEDDING_ENGINE": "ollama",
-        "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
-        "output_dims": EMBEDDING_OUTPUT_DIMS,
-        "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
-    }
+        desired["audio"] = audio["settings"]
+        desired["audio_selection"] = audio["selection"]
+        # Persisted after resolving selection; this is decision provenance, not an applied-state claim.
+        _persist_audio_selection(audio["selection"])
+    elif discovery.status == "ok_models" and not explicitly_disabled:
+        desired["audio_status"] = "unknown"
+    embedding = _desired_embedding_settings()
+    if embedding is not None:
+        selection = embedding.pop(SELECTION_PROVENANCE_KEY)
+        desired["embedding"] = embedding
+        desired["embedding_selection"] = selection
+        _persist_embedding_selection(selection)
     return desired
 
 
@@ -366,53 +381,172 @@ def _desired_audio_settings():
         return None
     endpoint = local_endpoint_for("omlx", "openai")
     models = audio_models("omlx")
-    stt = next(
-        (
-            item.get("name")
-            for item in models
-            if item.get("model_type") == "audio_stt" and item.get("name")
-        ),
-        None,
-    )
-    tts = next(
-        (
-            item.get("name")
-            for item in models
-            if item.get("model_type") == "audio_tts"
-            and item.get("name")
-            and not is_known_unqualified_tts(item.get("name"))
-        ),
-        None,
-    )
-    if not endpoint or not stt:
+    if not endpoint:
         return None
-    bundle = {
+    stt_candidates = [
+        ("omlx", item["name"], Qualification.PROTOCOL_PROBED)
+        for item in models
+        if item.get("name") and item.get("model_type") == "audio_stt"
+    ]
+    stt = _audio_locator(Operation.STT, stt_candidates, endpoint)
+    if stt is None:
+        import logger
+
+        logger.warning("No qualified oMLX STT model; omitting audio settings")
+        return None
+    settings = {
         "stt": {
             "ENGINE": "openai",
-            "OPENAI_API_BASE_URL": endpoint[0],
+            "OPENAI_API_BASE_URL": stt.route.endpoint,
             "OPENAI_API_REQUEST_FORMAT": "multipart",
-            "MODEL": stt,
+            "MODEL": stt.route.wire_model,
             "OPENAI_API_KEY": os.environ.get("OMLX_API_KEY") or None,
-        },
+        }
     }
-    if tts:
+    selections = {"stt": _locator_provenance(stt)}
+    tts_candidates = [
+        ("omlx", item["name"], Qualification.PROTOCOL_PROBED)
+        for item in models
+        if item.get("name")
+        and item.get("model_type") == "audio_tts"
+        and not is_known_unqualified_tts(item.get("name"))
+    ]
+    tts = _audio_locator(Operation.TTS, tts_candidates, endpoint)
+    if tts is not None:
+        tts_model = tts.route.wire_model
         tts_settings = {
             "ENGINE": "openai",
-            "OPENAI_API_BASE_URL": endpoint[0],
-            "MODEL": tts,
+            "OPENAI_API_BASE_URL": tts.route.endpoint,
+            "MODEL": tts_model,
+            "OPENAI_API_KEY": os.environ.get("OMLX_API_KEY") or None,
         }
-        tts_settings["OPENAI_API_KEY"] = os.environ.get("OMLX_API_KEY") or None
         voice = os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena")
-        if tts.lower().split("/", 1)[-1].startswith("qwen3-tts"):
+        if tts_model and tts_model.lower().split("/", 1)[-1].startswith("qwen3-tts"):
             tts_settings["VOICE"] = voice
-        bundle["tts"] = tts_settings
+        settings["tts"] = tts_settings
+        selections["tts"] = _locator_provenance(tts)
     else:
         import logger
 
         logger.warning(
             "No qualified oMLX TTS model found; omitting Open WebUI TTS settings"
         )
-    return bundle
+    return {"settings": settings, "selection": selections}
+
+
+def _audio_locator(operation, candidates, endpoint):
+    preference = [(provider, model) for provider, model, _ in candidates]
+    previous = _read_audio_selection()
+    previous = previous.get(operation.value) if isinstance(previous, dict) else None
+    previous_tuple = None
+    if (
+        isinstance(previous, dict)
+        and previous.get("provider")
+        and previous.get("model")
+    ):
+        previous_tuple = (
+            str(previous.get("provider")),
+            str(previous.get("model")),
+            Qualification(previous.get("qualification", "unknown")),
+        )
+    selected = select(
+        operation, candidates, preference, previously_selected=previous_tuple
+    )
+    route = resolve_transport(
+        "gateway",
+        selected.qualification,
+        endpoint=endpoint[0],
+        wire_model=selected.model,
+        key_reference=endpoint[1],
+        credential_present=not endpoint[1] or bool(os.environ.get(endpoint[1])),
+        credential_required=False,
+        operation=operation,
+    )
+    locator = ServiceLocator(selected, route)
+    if selected.provider is None or route.transport == Transport.UNAVAILABLE:
+        import logger
+
+        logger.warning(
+            "Open WebUI %s unavailable: %s",
+            operation.value,
+            route.reason or selected.reason,
+        )
+        return None
+    assert_renders_from(
+        locator,
+        {
+            "provider": selected.provider,
+            "model": selected.model,
+            "transport": route.transport,
+            "endpoint": route.endpoint,
+            "wire_model": route.wire_model,
+        },
+    )
+    return locator
+
+
+def _locator_provenance(locator):
+    selection, route = locator.selection, locator.route
+    return {
+        "operation": selection.operation.value,
+        "provider": selection.provider,
+        "model": selection.model,
+        "qualification": selection.qualification.value,
+        "reason": selection.reason,
+        "transport": route.transport.value,
+        "endpoint": route.endpoint,
+        "wire_model": route.wire_model,
+        "key_reference": route.key_reference,
+    }
+
+
+def _persist_audio_selection(selection):
+    _write_audio_projection(_read_audio_projection() or {}, selection=selection)
+
+
+def _persist_embedding_selection(selection):
+    state = _read_embedding_state()
+    state["selection"] = selection
+    _write_embedding_state(state)
+
+
+def _desired_embedding_settings():
+    selection = select(
+        Operation.EMBEDDING,
+        [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+        preference=[("ollama", EMBEDDING_MODEL)],
+    )
+    route = resolve_transport(
+        "gateway",
+        selection.qualification,
+        endpoint=EMBEDDING_OLLAMA_URL,
+        wire_model=selection.model,
+        credential_required=False,
+        operation=Operation.EMBEDDING,
+    )
+    locator = ServiceLocator(selection, route)
+    if selection.provider is None or route.transport == Transport.UNAVAILABLE:
+        import logger
+
+        logger.warning(
+            "Open WebUI embedding unavailable: %s", route.reason or selection.reason
+        )
+        return None
+    rendered = {
+        "provider": selection.provider,
+        "model": selection.model,
+        "transport": route.transport,
+        "endpoint": route.endpoint,
+        "wire_model": route.wire_model,
+    }
+    assert_renders_from(locator, rendered)
+    return {
+        "RAG_EMBEDDING_ENGINE": rendered["provider"],
+        "RAG_EMBEDDING_MODEL": rendered["wire_model"],
+        "output_dims": EMBEDDING_OUTPUT_DIMS,
+        "ollama_config": {"url": rendered["endpoint"]},
+        SELECTION_PROVENANCE_KEY: _locator_provenance(locator),
+    }
 
 
 def _merge_owned_audio(current, wanted):
@@ -486,7 +620,15 @@ def _read_audio_projection():
         return None
 
 
-def _write_audio_projection(projection):
+def _read_audio_selection():
+    try:
+        with open(_audio_state_path(), encoding="utf-8") as handle:
+            return json.load(handle).get("selection")
+    except (OSError, ValueError):
+        return None
+
+
+def _write_audio_projection(projection, selection=None):
     path = _audio_state_path()
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
     if projection is None:
@@ -495,10 +637,15 @@ def _write_audio_projection(projection):
         except FileNotFoundError:
             pass
         return
-    _guarantee_no_secrets({"projection": projection})
+    if selection is None:
+        selection = _read_audio_selection()
+    state = {"projection": projection}
+    if selection is not None:
+        state["selection"] = selection
+    _guarantee_no_secrets(state, allow_key_reference=True)
     temp = f"{path}.{os.getpid()}.tmp"
     with open(temp, "w", encoding="utf-8") as handle:
-        json.dump({"projection": projection}, handle, indent=2)
+        json.dump(state, handle, indent=2)
         handle.write("\n")
     os.chmod(temp, 0o600)
     os.replace(temp, path)
@@ -1045,7 +1192,18 @@ def _read_embedding_state():
 def _write_embedding_state(state):
     path = _embedding_state_path()
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-    _guarantee_no_secrets(state)
+    if state is None:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        return
+    state = dict(state)
+    if "selection" not in state:
+        previous = _read_embedding_state().get("selection")
+        if previous is not None:
+            state["selection"] = previous
+    _guarantee_no_secrets(state, allow_key_reference=True)
     temp = f"{path}.{os.getpid()}.tmp"
     with open(temp, "w", encoding="utf-8") as handle:
         json.dump(state, handle, indent=2)
@@ -1408,7 +1566,7 @@ PARITY_PROBE_STRINGS = (
 )
 
 
-def _guarantee_no_secrets(payload):
+def _guarantee_no_secrets(payload, allow_key_reference=False):
     """State-writers refuse credential-bearing payloads outright (contract-frozen).
 
     Any dict field whose name matches credential patterns must carry an empty
@@ -1428,6 +1586,7 @@ def _guarantee_no_secrets(payload):
                     any(word in str(name).upper() for word in secret_words)
                     and isinstance(value, str)
                     and value
+                    and not (allow_key_reference and str(name) == "key_reference")
                 ):
                     raise OpenWebUIError(
                         f"Refusing to persist secret-looking managed state: {name}"
