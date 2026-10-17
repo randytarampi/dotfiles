@@ -57,7 +57,7 @@ from tier_resolve import (
     resolve_roles_from_list,
 )
 from provider_endpoints import PROVIDER_ENDPOINTS
-from local_engines import (
+from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     active_engines,
     audio_models,
     iter_engine_discovery,
