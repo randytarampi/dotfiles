@@ -15,6 +15,7 @@ import local_engines
 import omlx
 import opencode_config
 import tier_resolve
+import ai_models
 
 
 def test_mellum_model_is_classified_as_code_gen():
@@ -228,6 +229,21 @@ def test_list_omlx_models_marks_embedding_and_reranker_separately():
     assert models[1]["primary_category"] == "embedding"
     assert models[2]["primary_category"] == "reranker"
     assert "thinking" in models[0]["capabilities"]
+
+
+def test_omlx_embeddinggemma_name_is_specialized_after_provider_normalization():
+    installed_name = "embeddinggemma-2:740m-mxfp8"
+    omlx_record = {
+        "id": installed_name,
+        "model_type": "embedding",
+        "object": "model",
+        "owned_by": "oMLX",
+    }
+
+    assert omlx_record["id"] == "embeddinggemma-2:740m-mxfp8"
+    normalized_name = ai_models.strip_provider_prefix(f"omlx/{omlx_record['id']}")
+    assert normalized_name == installed_name
+    assert ai_models.is_specialized_model_name(normalized_name)
 
 
 def test_status_failure_does_not_cache_empty_result_or_admit_unknown_models():

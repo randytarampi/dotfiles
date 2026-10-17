@@ -46,6 +46,7 @@ SPECIALIZED_MODEL_NAME_PREFIXES = (
     "qwen3-tts",
     "chatterbox",
     "gemma4audio",
+    "embeddinggemma",
     "nomic-embed",
     "mxbai-embed",
     "snowflake-arctic-embed",
