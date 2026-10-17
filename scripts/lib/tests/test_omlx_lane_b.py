@@ -526,6 +526,34 @@ def test_voice_consumer_config_contains_only_supported_fields():
     assert set(config) <= supported
 
 
+def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tmp_path):
+    voice = load_script("configure-opencode-voice.py")
+    existing = [
+        "@renjfk/opencode-voice",
+        {"endpoint": "https://old", "model": "old-model"},
+    ]
+    (tmp_path / "tui.json").write_text(
+        json.dumps({"plugin": [existing]}), encoding="utf-8"
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        sys, "argv", ["voice", "--preset", "omo-slim-openai", "--no-backup"]
+    )
+    monkeypatch.setattr(voice, "load_env", lambda *args: True)
+    monkeypatch.setattr(voice, "get_available_tiers", lambda: ["omo-slim-openai"])
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "active_engines", lambda: [])
+    monkeypatch.setattr(voice, "audio_models", lambda *_: [])
+    monkeypatch.setattr(voice, "logger", voice.logger)
+    monkeypatch.setattr(
+        voice, "get_provider_base_url", lambda *_: "https://api.openai.com/v1"
+    )
+    monkeypatch.setattr(voice, "_render_locator", lambda locator: None)
+    voice.main()
+    written = json.loads((tmp_path / "tui.json").read_text(encoding="utf-8"))
+    assert written["plugin"] == [existing]
+
+
 def test_voice_saved_selection_survives_fresh_process_and_reordered_inventory(
     monkeypatch, tmp_path
 ):
@@ -560,6 +588,54 @@ def test_voice_saved_selection_survives_fresh_process_and_reordered_inventory(
         ),
     )
     assert (selected.provider, selected.model) == (saved.provider, saved.model)
+
+
+@pytest.mark.parametrize("flag", [None, "auto"])
+def test_voice_unset_gate_uses_saved_transport_in_production_path(monkeypatch, flag):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.delenv("DOTFILES_USE_LITELLM_PROXY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice, "check_ollama_daemon", return_value=(False, False)),
+        patch.object(
+            voice, "get_provider_base_url", return_value="https://api.openai.com/v1"
+        ),
+        patch.object(voice, "active_engines", return_value=[]),
+        patch.object(voice, "audio_models", return_value=[]),
+    ):
+        config = voice.get_voice_config(
+            "anthropic", {"stt_transport": flag}, state={"sttTransport": "openai"}
+        )
+    assert config["_voice_state"]["sttTransport"] == "openai"
+    assert config["_voice_state"]["sttTransportReason"] == "saved selection"
+
+
+def test_voice_unset_gate_without_saved_transport_uses_local_default(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.delenv("DOTFILES_USE_LITELLM_PROXY", raising=False)
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice, "check_ollama_daemon", return_value=(False, False)),
+        patch.object(voice, "active_engines", return_value=[]),
+        patch.object(voice, "audio_models", return_value=[]),
+    ):
+        config = voice.get_voice_config("anthropic", {"stt_transport": None}, state={})
+    assert config["_voice_state"]["sttTransport"] == "local"
+    assert (
+        config["_voice_state"]["sttTransportReason"]
+        == "no binding input; local default"
+    )
 
 
 def test_voice_and_webui_select_same_fixture_inventory():

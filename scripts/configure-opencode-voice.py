@@ -116,9 +116,15 @@ def _select_voice_candidate(
 
 
 def _service_locator(
-    operation, candidates, gate, previously_selected=None, **route_options
+    operation,
+    candidates,
+    gate,
+    previously_selected=None,
+    *,
+    selection=None,
+    **route_options,
 ):
-    selection = _select_voice_candidate(
+    selection = selection or _select_voice_candidate(
         operation, candidates, previously_selected=previously_selected
     )
     route = resolve_transport(
@@ -137,21 +143,6 @@ def _service_locator(
         operation=operation,
     )
     return ServiceLocator(selection, route)
-
-
-def _tier_override_locator(operation, provider, model, endpoint, api_key_env):
-    selection = select(operation, [], override=(provider, model))
-    rendered = {"provider": provider, "model": model, "endpoint": endpoint}
-    assert rendered["provider"] == selection.provider
-    assert rendered["model"] == selection.model
-    return selection, {
-        "provider": rendered["provider"],
-        "model": rendered["model"],
-        "qualification": selection.qualification.value,
-        "reason": f"tier override: {selection.reason}",
-        "endpoint": endpoint,
-        "apiKeyEnv": api_key_env,
-    }
 
 
 def _render_locator(locator):
@@ -174,6 +165,49 @@ def _render_locator(locator):
     }
     assert_renders_from(locator, rendered)
     return rendered
+
+
+def _configure_tier_remote(
+    voice_config, locators, provider, model, endpoint, api_key_env, gateway_gate
+):
+    candidates = [(provider, model, Qualification.UNKNOWN)]
+    selection = select(Operation.CLEANUP_LLM, candidates)
+    direct = endpoint if gateway_gate is not True else None
+    locator = _service_locator(
+        Operation.CLEANUP_LLM,
+        candidates,
+        "gateway" if gateway_gate is True else "direct",
+        selection=selection,
+        endpoint=direct,
+        wire_model=model,
+        key_reference=api_key_env,
+        credential_present=bool(os.environ.get(api_key_env, "").strip()),
+        credential_required=True,
+    )
+    rendered = _render_locator(locator)
+    provenance = {
+        "provider": selection.provider,
+        "model": selection.model,
+        "qualification": (
+            Qualification.UNAVAILABLE.value
+            if locator.route.transport is Transport.UNAVAILABLE
+            else selection.qualification.value
+        ),
+        "selection_qualification": selection.qualification.value,
+        "candidate_qualification": candidates[0][2].value,
+        "reason": locator.route.reason or selection.reason,
+        "transport": locator.route.transport.value,
+        "endpoint": locator.route.endpoint,
+        "wire_model": locator.route.wire_model,
+        "key_reference": api_key_env,
+    }
+    locators[Operation.CLEANUP_LLM.value] = provenance
+    if rendered:
+        voice_config.update(
+            endpoint=rendered["endpoint"],
+            model=rendered["wire_model"],
+            apiKeyEnv=api_key_env,
+        )
 
 
 def _voice_config_dir():
@@ -355,9 +389,10 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     state = state if state is not None else {}
     saved_transport = state.get("sttTransport")
     gateway_gate_value = os.environ.get("DOTFILES_USE_LITELLM_PROXY")
-    gateway_gate = gateway_gate_value is not None and gateway_gate_value.lower() in (
-        "1",
-        "true",
+    gateway_gate = (
+        None
+        if gateway_gate_value is None
+        else gateway_gate_value.lower() in ("1", "true")
     )
     resolved_transport, transport_reason = resolve_stt_transport(
         stt_transport, gateway_gate=gateway_gate, saved=saved_transport
@@ -437,19 +472,15 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             registry, tier, {}, None
         ).get("orchestrator", "opencode/muse-spark-1.3-contributor-free")
         model = strip_provider_prefix(orchestrator)
-        selection, provenance = _tier_override_locator(
-            Operation.CLEANUP_LLM,
+        _configure_tier_remote(
+            voice_config,
+            locators,
             "opencode",
-            model,
+            orchestrator,
             provider["baseUrl"],
             provider["apiKeyEnv"],
+            gateway_gate,
         )
-        voice_config = {
-            "endpoint": provider["baseUrl"],
-            "model": model,
-            "apiKeyEnv": provider["apiKeyEnv"],
-        }
-        locators[Operation.CLEANUP_LLM.value] = provenance
 
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
@@ -459,28 +490,28 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             else get_provider_base_url("anthropic")
         )
         key_env = "MERIDIAN_API_KEY" if use_meridian else "ANTHROPIC_API_KEY"
-        selection, provenance = _tier_override_locator(
-            Operation.CLEANUP_LLM, "anthropic", "claude-sonnet-5-5", endpoint, key_env
+        _configure_tier_remote(
+            voice_config,
+            locators,
+            "anthropic",
+            "claude-sonnet-5-5",
+            endpoint,
+            key_env,
+            gateway_gate,
         )
-        voice_config = {
-            "endpoint": endpoint,
-            "model": "claude-sonnet-5-5",
-            "apiKeyEnv": key_env,
-        }
-        locators[Operation.CLEANUP_LLM.value] = provenance
 
     elif is_plus_tier or tier == "pro-plus":
         # OpenAI or Ollama Cloud + OpenAI STT
         endpoint = get_provider_base_url("openai")
-        _, provenance = _tier_override_locator(
-            Operation.CLEANUP_LLM, "openai", "gpt-6-luna", endpoint, "OPENAI_API_KEY"
+        _configure_tier_remote(
+            voice_config,
+            locators,
+            "openai",
+            "gpt-6-luna",
+            endpoint,
+            "OPENAI_API_KEY",
+            gateway_gate,
         )
-        voice_config = {
-            "endpoint": endpoint,
-            "model": "gpt-6-luna",
-            "apiKeyEnv": "OPENAI_API_KEY",
-        }
-        locators[Operation.CLEANUP_LLM.value] = provenance
 
     else:
         # Fallback: Ollama Cloud
@@ -577,18 +608,33 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 metadata[(provider, model_ref)] = (endpoint, item)
         if candidates:
             previous = state.get("selections", {}).get(Operation.STT.value)
+            selection = _select_voice_candidate(
+                Operation.STT, candidates, previously_selected=previous
+            )
+            endpoint, item = metadata[(selection.provider, selection.model)]
+            route_endpoint = (
+                f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                if gateway_gate is True
+                else endpoint[0]
+            )
             locator = _service_locator(
                 Operation.STT,
                 candidates,
                 "gateway" if gateway_gate else "direct",
                 previous,
-                endpoint=(
-                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
-                    if gateway_gate
-                    else metadata[(candidates[0][0], candidates[0][1])][0][0]
+                selection=selection,
+                endpoint=route_endpoint,
+                wire_model=strip_provider_prefix(item["name"]),
+                key_reference=(
+                    "LITELLM_OPENCODE_KEY" if gateway_gate is True else endpoint[1]
                 ),
-                wire_model=strip_provider_prefix(
-                    metadata[(candidates[0][0], candidates[0][1])][1]["name"]
+                credential_reference=(
+                    "LITELLM_OPENCODE_KEY" if gateway_gate is True else None
+                ),
+                credential_present=(
+                    bool(os.environ.get("LITELLM_OPENCODE_KEY", "").strip())
+                    if gateway_gate is True
+                    else bool(endpoint[1] and os.environ.get(endpoint[1], "").strip())
                 ),
                 credential_required=False,
             )
@@ -612,11 +658,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         locator = _service_locator(
             Operation.STT,
             candidate,
-            (
-                "gateway"
-                if os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") in ("1", "true")
-                else "direct"
-            ),
+            ("gateway" if gateway_gate is True else "direct"),
             state.get("selections", {}).get(Operation.STT.value),
             endpoint=(
                 f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
@@ -828,7 +870,12 @@ def main():
         ),
         None,
     )
-    if unresolved:
+    if (
+        voice_state is None
+        or not (voice_config.get("endpoint") and voice_config.get("model"))
+    ) and existing_voice is not None:
+        filtered_plugins.append(existing_voice)
+    elif unresolved:
         existing_options = (
             existing_voice[1]
             if existing_voice is not None
@@ -841,7 +888,11 @@ def main():
                 if key in existing_options:
                     voice_config[key] = existing_options[key]
             filtered_plugins.append(existing_voice)
-    elif voice_state is not None:
+    elif (
+        voice_state is not None
+        and voice_config.get("endpoint")
+        and voice_config.get("model")
+    ):
         filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
     tui_config["plugin"] = filtered_plugins
 
@@ -898,7 +949,7 @@ def main():
         logger.critical(f"Failed to write tui.json: {e}")
         sys.exit(1)
 
-    if not unresolved and voice_state:
+    if voice_state:
         _save_voice_state(config_dir_path, voice_state)
 
     # Summary
@@ -913,7 +964,7 @@ def main():
     ]
     if unresolved:
         summary_lines.append("Voice outcome: unresolved; existing selection preserved")
-    else:
+    elif voice_config.get("endpoint") and voice_config.get("model"):
         summary_lines.extend(
             [
                 f"  • LLM endpoint: {voice_config['endpoint']}",

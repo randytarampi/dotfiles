@@ -127,7 +127,7 @@ class TierRegistryTests(unittest.TestCase):
         self.assertIn("omo-slim-thirty-dollars", tiers)
         self.assertIn("omo-slim-opencode-zen-free", tiers)
 
-    def test_voice_mapping_for_remote_presets_uses_openai_defaults(self):
+    def test_voice_mapping_for_remote_presets_omits_unqualified_routes(self):
         with (
             patch.object(
                 configure_voice, "check_ollama_daemon", return_value=(None, False)
@@ -141,16 +141,14 @@ class TierRegistryTests(unittest.TestCase):
                 "omo-slim-opencode-zen-free",
             ):
                 config = configure_voice.get_voice_config(tier)
-                expected_model = (
-                    "muse-spark-1.3-contributor-free"
-                    if tier == "omo-slim-opencode-zen-free"
-                    else "gpt-6-luna"
-                )
-                self.assertEqual(config["model"], expected_model)
+                self.assertNotIn("model", config)
                 sidecar = config.get("_voice_state", {})
                 record = sidecar.get("selections", {}).get("cleanup_llm", {})
-                self.assertEqual(record.get("qualification"), "unknown")
-                self.assertIn("tier override", record.get("reason", ""))
+                self.assertEqual(record.get("qualification"), "unavailable")
+                self.assertEqual(record.get("candidate_qualification"), "unknown")
+                self.assertEqual(record.get("transport"), "unavailable")
+                self.assertIn("unavailable", record.get("reason", ""))
+                self.assertNotIn("probed", record.get("qualification", ""))
 
     def test_google_provider_endpoint_uses_v1beta_compat_path(self):
         providers = generate_profiles.build_provider_configs(
