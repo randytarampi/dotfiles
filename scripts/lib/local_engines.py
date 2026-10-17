@@ -503,6 +503,26 @@ def local_endpoint_for(provider, protocol):
     return base_url, engine.get("api_key_env") or None
 
 
+def probe_engine_model(provider, model, operation, key_value=None, timeout=5):
+    """Explicitly probe a discovered model; discovery itself stays status-only."""
+    endpoint = local_endpoint_for(provider, "openai")
+    if endpoint is None:
+        return None
+    from route_probes import probe_embeddings, probe_stt, probe_tts
+
+    base_url, key_reference = endpoint
+    probes = {
+        "stt": probe_stt,
+        "tts": probe_tts,
+        "embedding": probe_embeddings,
+        "embeddings": probe_embeddings,
+    }
+    probe = probes.get(operation)
+    if probe is None:
+        raise ValueError("unsupported probe operation")
+    return probe(base_url, model, key_reference, key_value=key_value, timeout=timeout)
+
+
 def local_provider_block(provider, models):
     """Build the shared OpenCode-style local provider block for an engine."""
     engine = resolve_engine(provider)
