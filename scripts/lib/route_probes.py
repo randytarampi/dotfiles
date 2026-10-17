@@ -107,37 +107,65 @@ def probe_stt(base_url, model, key_reference, key_value=None, timeout=5):
     try:
         parsed = json.loads(data.decode("utf-8"))
         text = parsed.get("text")
-        if not isinstance(text, str) or not text.strip():
+        if not isinstance(text, str):
             raise ValueError
     except (ValueError, UnicodeDecodeError, AttributeError):
         return _result(
             "response_shape_error",
             model,
             endpoint,
-            ("expected non-empty transcription text",),
+            ("expected a transcription text field",),
         )
-    return _result("ok", model, endpoint, ("HTTP 200 transcription text",))
+    # A silent probe clip may transcribe to an empty string; the shape
+    # (multipart accepted, JSON with a text field) is the protocol evidence.
+    return _result("ok", model, endpoint, ("HTTP 200 transcription response",))
+
+
+def _available_voices(data):
+    """Parse the server's own speaker guidance from a 500 body, if given."""
+    try:
+        message = json.loads(data.decode("utf-8"))["error"]["message"]
+    except (ValueError, UnicodeDecodeError, KeyError, TypeError):
+        return []
+    if "Speaker" not in message or "Available" not in message:
+        return []
+    try:
+        listed = message.split("Available:", 1)[1].strip().strip("[]")
+        return [name.strip().strip("'") for name in listed.split(",") if name.strip()]
+    except (IndexError, AttributeError):
+        return []
 
 
 def probe_tts(
     base_url, model, voice=None, key_reference=None, key_value=None, timeout=5
 ):
     endpoint = base_url.rstrip("/") + "/audio/speech"
-    payload = {"model": model, "input": "probe", "voice": voice or "alloy"}
-    code, headers, data, _ = _request(
-        endpoint, json.dumps(payload).encode(), key_value, timeout
-    )
-    failed = _status_result(code, model, endpoint)
-    if failed:
-        return failed
-    if not headers.get("Content-Type", "").lower().startswith("audio/") or not data:
-        return _result(
-            "response_shape_error",
-            model,
-            endpoint,
-            ("expected non-empty audio/* response",),
+    attempts = voice or "alloy"
+    notes = []
+    for _attempt in range(2):
+        payload = {"model": model, "input": "probe", "voice": attempts}
+        code, headers, data, _ = _request(
+            endpoint, json.dumps(payload).encode(), key_value, timeout
         )
-    return _result("ok", model, endpoint, ("HTTP 200 binary audio response",))
+        failed = _status_result(code, model, endpoint)
+        if failed:
+            voices = _available_voices(data) if code == 500 else []
+            if not voices or _attempt:
+                return failed
+            attempts = voices[0]
+            notes.append(f"server-recommended voice discovered: {attempts}")
+            continue
+        if not headers.get("Content-Type", "").lower().startswith("audio/") or not data:
+            return _result(
+                "response_shape_error",
+                model,
+                endpoint,
+                ("expected non-empty audio/* response",),
+            )
+        return _result(
+            "ok", model, endpoint, tuple(notes) or ("HTTP 200 binary audio response",)
+        )
+    return _result("unavailable", model, endpoint, ("voice retry exhausted",))
 
 
 def probe_embeddings(base_url, model, key_reference, key_value=None, timeout=5):

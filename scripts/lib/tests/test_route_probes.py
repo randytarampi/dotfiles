@@ -51,6 +51,64 @@ class RouteProbeTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "ok")
 
+    def test_stt_empty_text_is_valid_shape(self):
+        result, _ = self.call(
+            FakeResponse(body=b'{"text":"","language":"en","segments":[]}'),
+            route_probes.probe_stt,
+            "KEY_REF",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(
+            route_probes.qualification_from_probe(result),
+            Qualification.PROTOCOL_PROBED,
+        )
+
+    def test_stt_missing_text_field_is_shape_error(self):
+        result, _ = self.call(
+            FakeResponse(body=b'{"language":"en"}'), route_probes.probe_stt, "KEY_REF"
+        )
+        self.assertEqual(result.status, "response_shape_error")
+
+    def test_tts_voice_retry_from_server_error(self):
+        error = FakeResponse(
+            status=500,
+            body=(
+                b'{"error":{"message":"Speaker \'alloy\' not supported. '
+                b"Available: ['serena', 'vivian']\","
+                b'"type":"server_error","param":null,"code":null}}'
+            ),
+            content_type="application/json",
+        )
+        audio = FakeResponse(body=b"audio", content_type="audio/wav")
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=[error, audio],
+        ) as opened:
+            result = route_probes.probe_tts(
+                "http://engine/v1", "model", key_reference="KEY_REF"
+            )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.notes, ("server-recommended voice discovered: serena",))
+        second = json.loads(opened.call_args_list[1].args[0].data)
+        self.assertEqual(second["voice"], "serena")
+
+    def test_tts_non_voice_error_not_retried(self):
+        error = FakeResponse(
+            status=500,
+            body=b'{"error":{"message":"No conditionals available."}}',
+            content_type="application/json",
+        )
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=[error],
+        ):
+            result = route_probes.probe_tts(
+                "http://engine/v1", "chatterbox", key_reference="KEY_REF"
+            )
+        self.assertEqual(result.status, "unavailable")
+
     def test_embedding_vector_dimension(self):
         result, request = self.call(
             FakeResponse(body=b'{"data":[{"embedding":[0.1,0.2]}]}'),
