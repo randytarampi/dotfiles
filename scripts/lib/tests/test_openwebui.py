@@ -269,6 +269,112 @@ def test_audio_selection_writer_sibling_and_secret_safe(monkeypatch, tmp_path):
     assert "credential-sentinel" not in path.read_text()
 
 
+def test_audio_and_embedding_render_invariants_reject_drift():
+    from selected_service import (
+        CanonicalSelection,
+        Operation,
+        Qualification,
+        RouteResolution,
+        ServiceLocator,
+        Transport,
+        assert_renders_from,
+    )
+
+    locator = ServiceLocator(
+        CanonicalSelection(
+            Operation.STT, "omlx", "asr", Qualification.PROTOCOL_PROBED, "fixture"
+        ),
+        RouteResolution(Transport.GATEWAY, "http://omlx/v1", "asr", "OMLX_API_KEY"),
+    )
+    for drifted in (
+        {
+            "provider": "omlx",
+            "model": "asr",
+            "transport": Transport.GATEWAY,
+            "endpoint": "http://wrong/v1",
+            "wire_model": "asr",
+        },
+        {
+            "provider": "omlx",
+            "model": "wrong",
+            "transport": Transport.GATEWAY,
+            "endpoint": "http://omlx/v1",
+            "wire_model": "wrong",
+        },
+    ):
+        with pytest.raises(AssertionError):
+            assert_renders_from(locator, drifted)
+
+
+def test_embedding_selection_sibling_preserved_and_decision_not_applied(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(path))
+    applied_projection = {
+        "owned": {"RAG_EMBEDDING_ENGINE": "ollama", "RAG_EMBEDDING_MODEL": "applied"}
+    }
+    openwebui._write_embedding_state({"projection": applied_projection})
+    selection = {
+        "operation": "embedding",
+        "provider": "ollama",
+        "model": "intent",
+        "qualification": "protocol_probed",
+        "reason": "resolved",
+        "transport": "gateway",
+        "endpoint": "http://ollama/v1",
+        "wire_model": "intent",
+        "key_reference": None,
+    }
+    openwebui._persist_embedding_selection(selection)
+    openwebui._write_embedding_state(
+        {"projection": applied_projection, "acknowledgement": {"state": "unchanged"}}
+    )
+    persisted = openwebui._read_embedding_state()
+    assert persisted["selection"] == selection
+    assert persisted["projection"] == applied_projection
+    assert persisted["projection"]["owned"]["RAG_EMBEDDING_MODEL"] == "applied"
+
+
+def test_audio_legacy_sanitization_preserves_selection_and_unlink(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(path))
+    selection = {
+        "stt": {
+            "operation": "stt",
+            "provider": "omlx",
+            "model": "asr",
+            "qualification": "protocol_probed",
+            "reason": "decision",
+            "transport": "gateway",
+            "endpoint": "http://omlx/v1",
+            "wire_model": "asr",
+            "key_reference": "OMLX_API_KEY",
+        }
+    }
+    path.write_text(
+        json.dumps(
+            {
+                "projection": {
+                    "stt": {
+                        "ENGINE": "openai",
+                        "MODEL": "asr",
+                        "OPENAI_API_KEY": "legacy-secret",
+                    }
+                },
+                "selection": selection,
+            }
+        )
+    )
+    current = {"stt": {"ENGINE": "openai", "MODEL": "custom-admin"}}
+    openwebui._reconcile_audio(_AudioClient(current), current, {})
+    assert json.loads(path.read_text())["selection"] == selection
+    openwebui._write_audio_projection(None)
+    assert not path.exists()
+
+
 def test_audio_customized_fields_refuse_first_adoption(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(
         openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
@@ -1438,7 +1544,12 @@ def test_legacy_audio_credential_projection_is_sanitized_and_recovers(
     monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
     state.write_text(
         json.dumps(
-            {"projection": {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "LEGACY_SECRET"}}}
+            {
+                "projection": {
+                    "stt": {"MODEL": "asr", "OPENAI_API_KEY": "LEGACY_SECRET"}
+                },
+                "selection": {"stt": {"operation": "stt", "model": "asr"}},
+            }
         )
     )
     client = _AudioClient({"stt": {"MODEL": "custom-admin"}})
@@ -1446,6 +1557,9 @@ def test_legacy_audio_credential_projection_is_sanitized_and_recovers(
     saved = state.read_text()
     assert "LEGACY_SECRET" not in saved
     assert "restore the prior credential manually" in caplog.text
+    assert json.loads(saved)["selection"] == {
+        "stt": {"operation": "stt", "model": "asr"}
+    }
 
 
 def test_audio_release_drops_only_released_projection_fields(monkeypatch, tmp_path):
