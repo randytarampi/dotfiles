@@ -2,6 +2,7 @@
 
 import os
 import re
+from dataclasses import dataclass
 
 import logger
 from constants import (
@@ -65,6 +66,21 @@ LOCAL_ENGINES = {
         },
     },
 }
+
+
+@dataclass(frozen=True)
+class DiscoveryResult:
+    """Ephemeral outcome of one engine discovery attempt."""
+
+    status: str
+    records: tuple
+    reason: str = ""
+
+    def __post_init__(self):
+        if self.status not in {"ok_empty", "ok_models", "unknown_error"}:
+            raise ValueError(f"Invalid discovery status: {self.status}")
+        if self.status == "unknown_error" and self.records:
+            raise ValueError("Unknown discovery results cannot contain records")
 
 
 def engine_gate_active(provider):
@@ -251,7 +267,7 @@ LOCAL_ENGINES["omlx"]["audio_opt_out_env"] = "DOTFILES_USE_LOCAL_OMLX"
 
 
 def iter_engine_models(provider, include_cloud=False):
-    """Yield model entries from one active registered engine."""
+    """Return models from one engine; failures retain the legacy [] contract."""
     if not engine_gate_active(provider):
         return []
     engine = resolve_engine(provider)
@@ -265,6 +281,35 @@ def iter_engine_models(provider, include_cloud=False):
     except Exception as err:
         logger.info("Local engine %s listing failed: %s", provider, err)
         return []
+
+
+def iter_engine_discovery(provider, include_cloud=False):
+    """Return a typed outcome so callers can distinguish empty from unavailable."""
+    if not engine_gate_active(provider):
+        return DiscoveryResult("unknown_error", (), "engine inactive")
+    engine = resolve_engine(provider)
+    if engine is None:
+        return DiscoveryResult("unknown_error", (), "unknown provider")
+    try:
+        health_check = engine.get("health_check")
+        if health_check:
+            healthy, reason = health_check()
+            if not healthy:
+                return DiscoveryResult("unknown_error", (), str(reason))
+        from discover_models import _list_local_ollama_discovery
+
+        if provider == "ollama":
+            return _list_local_ollama_discovery(include_cloud)
+        from omlx import list_omlx_discovery
+
+        if provider == "omlx":
+            return list_omlx_discovery()
+        records = engine["list_models"](include_cloud)
+        return DiscoveryResult("ok_models" if records else "ok_empty", tuple(records))
+    except Exception as err:
+        reason = f"{type(err).__name__}: {err}"
+        logger.info("Local engine %s listing failed: %s", provider, reason)
+        return DiscoveryResult("unknown_error", (), reason)
 
 
 def iter_engine_models_strict(provider, include_cloud=False):
