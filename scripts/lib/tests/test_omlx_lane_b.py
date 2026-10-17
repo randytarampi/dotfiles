@@ -126,6 +126,83 @@ def test_voice_local_stt_absent_falls_back(monkeypatch):
         assert "sttEndpoint" not in voice.get_voice_config("local")
 
 
+def test_voice_empty_pool_is_unresolved_without_partial_config(monkeypatch, caplog):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(
+        voice,
+        "iter_engine_discovery",
+        lambda provider: local_engines.DiscoveryResult("ok_empty", ()),
+    )
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice.tier_registry, "materialize_role_models", return_value={}),
+        caplog.at_level("WARNING"),
+    ):
+        result = voice.get_voice_config("local")
+    assert result == {"_voice_unresolved": True}
+    assert "unresolved" in caplog.text
+
+
+@pytest.mark.parametrize("status", ["unknown_error", "ok_models"])
+def test_voice_unverified_or_unknown_pool_is_unresolved(monkeypatch, status):
+    voice = load_script("configure-opencode-voice.py")
+    records = (
+        ({"name": "omlx/audio", "provider": "omlx"},) if status == "ok_models" else ()
+    )
+    monkeypatch.setattr(
+        voice,
+        "iter_engine_discovery",
+        lambda provider: local_engines.DiscoveryResult(status, records),
+    )
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(
+        voice, "get_model_details", lambda *a, **k: {"capabilities": ["audio"]}
+    )
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice.tier_registry, "materialize_role_models", return_value={}),
+    ):
+        assert voice.get_voice_config("local")["_voice_unresolved"] is True
+
+
+def test_voice_dry_run_never_prints_foreign_plugin_values(
+    monkeypatch, tmp_path, capsys
+):
+    voice = load_script("configure-opencode-voice.py")
+    sentinel = "VOICE_SENTINEL_SECRET_92814"
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "tui.json").write_text(
+        json.dumps(
+            {
+                "plugin": [["foreign", {"nested": {"token": sentinel}}]],
+                "setting": sentinel,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "pro-plus", "--dry-run"])
+    monkeypatch.setattr(
+        voice,
+        "get_voice_config",
+        lambda *a: {"endpoint": "http://example", "model": "model"},
+    )
+    voice.main()
+    assert sentinel not in capsys.readouterr().out
+
+
 def _voice_test_config(monkeypatch, voice, discovery, key=None):
     monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
     monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])

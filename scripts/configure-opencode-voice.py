@@ -60,6 +60,7 @@ from provider_endpoints import PROVIDER_ENDPOINTS
 from local_engines import (
     active_engines,
     audio_models,
+    iter_engine_discovery,
     local_endpoint_for,
     resolve_engine,
 )
@@ -113,6 +114,8 @@ def get_voice_config(
     )
     is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
+    unresolved = False
+    no_local_models = False
     registry = tier_registry.load_registry()
     resolution_preset = local_fallback_preset or (
         tier if tier_registry.uses_local_placeholders(registry, tier) else "local"
@@ -138,7 +141,21 @@ def get_voice_config(
         )
         if use_local_ollama:
             try:
-                local_models = list_local_ollama_models()
+                discovery = iter_engine_discovery("ollama")
+                local_models = list(discovery.records)
+                if discovery.status == "unknown_error":
+                    unresolved = True
+                    logger.warning(
+                        "Local voice discovery unavailable; preserving existing voice selection"
+                    )
+                elif discovery.status == "ok_empty":
+                    unresolved = True
+                    no_local_models = True
+                    logger.warning(
+                        "No local voice models discovered; voice configuration is unresolved"
+                    )
+                if unresolved:
+                    local_models = []
                 if local_models:
                     min_emb = min_reasoning_embedding
                     if min_emb is None:
@@ -200,12 +217,15 @@ def get_voice_config(
                     voice_model = next(iter(verified_candidates), None)
                     if voice_model:
                         voice_config = local_voice_provider(voice_model)
+                    else:
+                        unresolved = True
+                        logger.warning(
+                            "Local voice models lack verified completion capability; voice configuration is unresolved"
+                        )
             except (OSError, ValueError, RuntimeError) as error:
                 logger.warning("Local voice model resolution failed: %s", error)
-                raise RuntimeError(
-                    "Could not resolve a verified local voice LLM"
-                ) from error
-        if "model" not in voice_config:
+                unresolved = True
+        if "model" not in voice_config and not unresolved:
             raise RuntimeError("Could not resolve a verified local voice LLM")
 
     elif is_pro_tier:
@@ -296,7 +316,7 @@ def get_voice_config(
                 voice_model = resolved_roles.get("librarian")
                 if voice_model:
                     voice_config = local_voice_provider(voice_model)
-        except (OSError, ValueError, RuntimeError) as error:
+        except (OSError, ValueError, RuntimeError, KeyError) as error:
             logger.warning(
                 "Local voice model resolution failed; retaining configured tier model: %s",
                 error,
@@ -396,6 +416,8 @@ def get_voice_config(
     if os.path.exists(tts_manual_prompt):
         voice_config["ttsManualPrompt"] = tts_manual_prompt
 
+    if unresolved and (no_local_models or is_local_tier):
+        return {"_voice_unresolved": True}
     return voice_config
 
 
@@ -454,6 +476,7 @@ def main():
         args.min_reasoning_embedding,
         args.stt_transport,
     )
+    unresolved = voice_config.pop("_voice_unresolved", False)
 
     output_path = os.path.join(config_dir_path, "tui.json")
     tui_config = {"plugin": []}
@@ -479,27 +502,53 @@ def main():
             isinstance(entry, list) and entry and entry[0] == "@renjfk/opencode-voice"
         )
     ]
-    filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
+    existing_voice = next(
+        (
+            entry
+            for entry in existing_plugins
+            if isinstance(entry, list)
+            and entry
+            and entry[0] == "@renjfk/opencode-voice"
+        ),
+        None,
+    )
+    if unresolved:
+        if existing_voice is not None:
+            filtered_plugins.append(existing_voice)
+    else:
+        filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
     tui_config["plugin"] = filtered_plugins
 
     # Dry-run mode
     if args.dry_run:
-        print("# Dry-run: tui.json configuration")
+        print("# Dry-run: proposed voice configuration")
         print(f"# Tier: {args.preset}")
         print(f"# Config dir: {config_dir_path}")
         print()
-        if args.show_secrets:
-            print(json.dumps(tui_config, indent=2))
-        else:
-            # Redact apiKeyEnv values
-            safe_config = json.loads(json.dumps(tui_config))
-            for plugin_entry in safe_config.get("plugin", []):
-                if isinstance(plugin_entry, list) and len(plugin_entry) == 2:
-                    opts = plugin_entry[1]
-                    for key in ("apiKeyEnv", "sttApiKeyEnv"):
-                        if key in opts:
-                            opts[key] = f"<{opts[key]} >".replace(" >", ">")
-            print(json.dumps(safe_config, indent=2))
+        if unresolved:
+            print("Voice outcome: unresolved; existing selection preserved")
+        elif not existing_voice or existing_voice != [
+            "@renjfk/opencode-voice",
+            voice_config,
+        ]:
+            print(json.dumps(["@renjfk/opencode-voice", voice_config], indent=2))
+        changed_names = sorted(
+            key
+            for key in voice_config
+            if not existing_voice
+            or len(existing_voice) < 2
+            or not isinstance(existing_voice[1], dict)
+            or existing_voice[1].get(key) != voice_config[key]
+        )
+        print(f"Changed setting names: {', '.join(changed_names) or 'none'}")
+        preserved_names = [
+            str(entry[0])
+            for entry in existing_plugins
+            if isinstance(entry, list)
+            and entry
+            and entry[0] != "@renjfk/opencode-voice"
+        ]
+        print(f"Preserved plugin names: {', '.join(preserved_names) or 'none'}")
         return
 
     # Write tui.json
@@ -532,9 +581,16 @@ def main():
         "OpenCode voice plugin configured!",
         "",
         f"Config written to: {output_path}",
-        f"  • LLM endpoint: {voice_config['endpoint']}",
-        f"  • LLM model: {voice_config['model']}",
     ]
+    if unresolved:
+        summary_lines.append("Voice outcome: unresolved; existing selection preserved")
+    else:
+        summary_lines.extend(
+            [
+                f"  • LLM endpoint: {voice_config['endpoint']}",
+                f"  • LLM model: {voice_config['model']}",
+            ]
+        )
     if "apiKeyEnv" in voice_config:
         summary_lines.append(f"  • LLM API key env: {voice_config['apiKeyEnv']}")
     if has_stt:
