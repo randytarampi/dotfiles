@@ -1061,10 +1061,20 @@ def _embedding_identity(config):
     }
 
 
-def _embedding_refusal(config, projection, client=None, state=None):
+_EMBEDDING_IDENTITY_UNSET = object()
+
+
+def _embedding_refusal(
+    config,
+    projection,
+    client=None,
+    state=None,
+    backend_identity=_EMBEDDING_IDENTITY_UNSET,
+):
     identity = _embedding_identity(config)
     fingerprint = (state or _read_embedding_state()).get("embedding_fingerprint", {})
-    backend_identity = _embedding_backend_identity(client, config)
+    if backend_identity is _EMBEDDING_IDENTITY_UNSET:
+        backend_identity = _embedding_backend_identity(client, config)
     if _embedding_backend_changed(fingerprint, backend_identity):
         return "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
     if projection is None:
@@ -1141,10 +1151,30 @@ def _verify_embedding_readback(client, expected, restore=False):
         raise OpenWebUIError(message)
 
 
-def _reconcile_embedding_adoption(client, state, projection, current, logger):
-    backend_identity = _embedding_backend_identity(client, current)
+def _reconcile_embedding_adoption(
+    client,
+    state,
+    projection,
+    current,
+    logger,
+    planning_backend_identity=_EMBEDDING_IDENTITY_UNSET,
+    planning_backend_changed=_EMBEDDING_IDENTITY_UNSET,
+):
     saved_fingerprint = state.get("embedding_fingerprint", {})
-    backend_changed = _embedding_backend_changed(saved_fingerprint, backend_identity)
+    if (
+        planning_backend_identity is not _EMBEDDING_IDENTITY_UNSET
+        and planning_backend_changed is not _EMBEDDING_IDENTITY_UNSET
+    ):
+        # The planning checkpoint owns the backend-identity decision: the
+        # authorized identity and its changed flag are threaded down so no
+        # later stage can re-probe and silently re-normalize the baseline.
+        backend_identity = planning_backend_identity
+        backend_changed = planning_backend_changed
+    else:
+        backend_identity = _embedding_backend_identity(client, current)
+        backend_changed = _embedding_backend_changed(
+            saved_fingerprint, backend_identity
+        )
     if backend_changed and not _embedding_acknowledges(
         state.get("acknowledgement"),
         _embedding_identity(current),
@@ -1243,11 +1273,20 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
             logger,
             "Refusing Open WebUI embedding write after concurrent backend change",
         )
-    prewrite_refusal = _embedding_refusal(prewrite, projection, client, state)
-    if acknowledged_backend_change and prewrite_refusal == (
-        "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
-    ):
-        prewrite_refusal = None
+    prewrite_state = dict(state)
+    if acknowledged_backend_change:
+        saved = dict(state.get("embedding_fingerprint", {}))
+        prewrite_fingerprint = dict(saved)
+        prewrite_fingerprint["backend_identity"] = prewrite_backend_identity
+        prewrite_state["embedding_fingerprint"] = prewrite_fingerprint
+        prewrite_state["acknowledgement"] = state.get("acknowledgement")
+    prewrite_refusal = _embedding_refusal(
+        prewrite,
+        projection,
+        None,
+        prewrite_state,
+        backend_identity=prewrite_backend_identity,
+    )
     if prewrite_refusal:
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
         return {"status": "refused", "applied": False, "verified": False}
@@ -1267,9 +1306,9 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         raise
     backend_identity = _embedding_backend_identity(client, candidate)
     parity_evidence = _embedding_parity_evidence(client, candidate)
-    if acknowledged_backend_change and backend_identity is None:
+    if acknowledged_backend_change and backend_identity != prewrite_backend_identity:
         failure = OpenWebUIError(
-            "Open WebUI embedding backend identity became unavailable after write",
+            "Open WebUI embedding backend identity changed after write",
             actions={
                 "planned": ["embedding"],
                 "applied": ["embedding"],
@@ -1475,25 +1514,44 @@ def _reconcile_embedding(client, current, wanted):
         raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
     state = _read_embedding_state()
     projection = state.get("projection")
-    refusal = _embedding_refusal(current, projection, client, state)
+    fingerprint = state.get("embedding_fingerprint", {})
+    backend_identity = _embedding_backend_identity(client, current)
+    refusal = _embedding_refusal(
+        current, projection, client, state, backend_identity=backend_identity
+    )
     if refusal and wanted:
         identity = _embedding_identity(current)
-        fingerprint = state.get("embedding_fingerprint", {})
-        backend = _embedding_backend_identity(client, current)
-        changed = _embedding_backend_changed(fingerprint, backend)
-        if changed and _embedding_acknowledges(
-            state.get("acknowledgement"),
-            identity,
-            (projection or {}).get("output_dims"),
-            {"engine": "ollama", "model": EMBEDDING_MODEL},
-            EMBEDDING_OUTPUT_DIMS,
+        changed = _embedding_backend_changed(fingerprint, backend_identity)
+        if (
+            changed
+            and backend_identity is not None
+            and _embedding_acknowledges(
+                state.get("acknowledgement"),
+                identity,
+                (projection or {}).get("output_dims"),
+                {"engine": "ollama", "model": EMBEDDING_MODEL},
+                EMBEDDING_OUTPUT_DIMS,
+            )
         ):
+            # Acknowledgement authorizes exactly THIS probed identity; the
+            # planning values thread down so later stages enforce the same
+            # identity and never re-probe a new baseline.
             refusal = None
     if refusal:
         logger.error("%s", refusal)
         return {"status": "refused", "applied": False, "verified": False}
     if wanted:
-        return _reconcile_embedding_adoption(client, state, projection, current, logger)
+        return _reconcile_embedding_adoption(
+            client,
+            state,
+            projection,
+            current,
+            logger,
+            planning_backend_identity=backend_identity,
+            planning_backend_changed=_embedding_backend_changed(
+                fingerprint, backend_identity
+            ),
+        )
     elif projection is not None:
         return _reconcile_embedding_gate_off(client, state, projection, logger)
     return {"status": "noop", "applied": False, "verified": False}

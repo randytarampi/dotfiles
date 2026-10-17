@@ -578,16 +578,7 @@ def test_embedding_backend_change_after_post_keeps_applied_failure_state(
     state_path = tmp_path / "embedding.json"
     monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
     client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
-    probes = iter(
-        [
-            {"backend": "ollama", "version": "new"},
-            {"backend": "ollama", "version": "new"},
-            {"backend": "ollama", "version": "new"},
-            {"backend": "ollama", "version": "new"},
-            None,
-            None,
-        ]
-    )
+    probes = iter([{"backend": "ollama", "version": "new"}] * 2 + [None])
     request_log = []
     original_update = client.update_embedding_config
 
@@ -597,6 +588,128 @@ def test_embedding_backend_change_after_post_keeps_applied_failure_state(
 
     client.update_embedding_config = log_update
     setattr(client, "embedding_backend_identity_probe", lambda _config: next(probes))
+    prior_state = {
+        "projection": {
+            "owned": {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            },
+            "previous": {
+                "engine": "",
+                "model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            "previous_output_dims": 384,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+        },
+        "embedding_fingerprint": {
+            "backend_identity": {"backend": "ollama", "version": "old"},
+        },
+        "acknowledgement": {
+            "previous_model": openwebui.EMBEDDING_MODEL,
+            "previous_engine": "ollama",
+            "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "new_model": openwebui.EMBEDDING_MODEL,
+            "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "acknowledged_at": "operator-confirmed-backend-refresh",
+        },
+    }
+    openwebui._write_embedding_state(prior_state)
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(
+            client,
+            {
+                "openai": [],
+                "anthropic": [],
+                "ollama": [],
+                "embedding": {"model": openwebui.EMBEDDING_MODEL},
+            },
+        )
+    assert request_log == ["POST embedding"]
+    assert raised.value.actions["applied"] == ["embedding"]
+    assert raised.value.actions["verified"] == []
+    assert raised.value.actions["failed"] == ["embedding"]
+    assert openwebui._read_embedding_state() == prior_state
+
+
+def _identity_probe_sequence(client, versions):
+    """Inject a per-call probe sequence; the last version repeats on later calls."""
+    calls = {"next": 0}
+
+    def probe(_config):
+        index = calls["next"]
+        calls["next"] += 1
+        return {"backend": "ollama", "version": versions[min(index, len(versions) - 1)]}
+
+    setattr(client, "embedding_backend_identity_probe", probe)
+
+
+def test_embedding_backend_prewrite_identity_change_refused_before_post(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    _identity_probe_sequence(client, ["new", "third"])
+    prior_state = {
+        "projection": {
+            "owned": {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            },
+            "previous": {
+                "engine": "",
+                "model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            "previous_output_dims": 384,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+        },
+        "embedding_fingerprint": {
+            "backend_identity": {"backend": "ollama", "version": "old"},
+        },
+        "acknowledgement": {
+            "previous_model": openwebui.EMBEDDING_MODEL,
+            "previous_engine": "ollama",
+            "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "new_model": openwebui.EMBEDDING_MODEL,
+            "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "acknowledged_at": "operator-confirmed-backend-refresh",
+        },
+    }
+    openwebui._write_embedding_state(prior_state)
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(
+            client,
+            {
+                "openai": [],
+                "anthropic": [],
+                "ollama": [],
+                "embedding": {"model": openwebui.EMBEDDING_MODEL},
+            },
+        )
+    assert client.writes == 0
+    assert raised.value.actions["failed"] == ["embedding"]
+    assert raised.value.actions["applied"] == []
+    assert raised.value.actions["verified"] == []
+    assert openwebui._read_embedding_state() == prior_state
+
+
+def test_embedding_backend_identity_mismatch_after_post_refuses_verification(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    _identity_probe_sequence(client, ["new", "new", "third"])
+    request_log = []
+    original_update = client.update_embedding_config
+
+    def log_update(config):
+        request_log.append("POST embedding")
+        original_update(config)
+
+    client.update_embedding_config = log_update
     prior_state = {
         "projection": {
             "owned": {
