@@ -14,24 +14,6 @@ endpoints remain the always-available route, including when the gateway is off.
 
 ### Two-mode client contract
 
-### Modality exposure
-
-Discovered local models are exposed under their exact model IDs. Qualified
-`audio_stt` models support `POST /v1/audio/transcriptions`; qualified
-
-`audio_tts` models are exposed to `POST /v1/audio/speech` except
-model families explicitly marked unqualified. Embedding, rerank and
-conversion models — e.g. MarkItDown on the oMLX engine serving
-`POST /v1/chat/completions` — are added only when discovery reports those
-modalities; no placeholder aliases are created. Modality entries are kept out
-of the chat catalogue. Direct loopback endpoints remain available regardless
-of the LiteLLM gateway gate.
-
-WebUI document ingestion through MarkItDown is intentionally NOT wired:
-WebUI's external document loader speaks a raw-body + `X-Filename` protocol
-that no MarkItDown deployment serves; bridging it would need a separate
-adapter service (deferred until required). See docs/CHAT_FRONTEND.md.
-
 `DOTFILES_USE_LITELLM_PROXY` defaults to `0`. In direct mode, clients keep the
 canonical model identity and Ollama Cloud uses `https://ollama.com/v1` with
 `OLLAMA_API_KEY`; local daemon `:cloud` stubs remain a separate voice/pull
@@ -56,6 +38,22 @@ The old Open WebUI, OpenCode, Pi and Junie canaries migrate by OR: any active
 truthy legacy value enables the new gate only when the new value is absent. An
 explicit `DOTFILES_USE_LITELLM_PROXY` value always wins. Run `make migrate`
 after pulling this change.
+
+### Modality exposure
+
+Discovered local models are exposed under their exact model IDs. Qualified
+`audio_stt` models support `POST /v1/audio/transcriptions`; qualified `audio_tts` models are exposed to `POST /v1/audio/speech` except
+model families explicitly marked unqualified. Embedding, rerank and
+conversion models — e.g. MarkItDown on the oMLX engine serving
+`POST /v1/chat/completions` — are added only when discovery reports those
+modalities; no placeholder aliases are created. Modality entries are kept out
+of the chat catalogue. Direct loopback endpoints remain available regardless
+of the LiteLLM gateway gate.
+
+WebUI document ingestion through MarkItDown is intentionally NOT wired:
+WebUI's external document loader speaks a raw-body + `X-Filename` protocol
+that no MarkItDown deployment serves; bridging it would need a separate
+adapter service (deferred until required). See docs/CHAT_FRONTEND.md.
 
 LiteLLM requires a database dependency for key, spend-tracking and UI state. A
 local inference backend behind a remote SQLite/Postgres database is not

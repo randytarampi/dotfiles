@@ -201,7 +201,30 @@ fi
 PLIST_DIR="$(caddy_launch_agents_dir)"
 PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
 # Homebrew-agnostic tool access for the server's audio pipeline (ffprobe/ffmpeg).
-BREW_BIN="$({ command -v brew >/dev/null 2>&1 && brew --prefix || true; } || printf '%s' /opt/homebrew)/bin"
+BREW_BIN=""
+if command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix)" || die "Failed to discover Homebrew prefix"
+  BREW_BIN="${BREW_PREFIX}/bin"
+else
+  for candidate in /opt/homebrew /usr/local; do
+    if [[ -x "${candidate}/bin/ffprobe" ]]; then
+      BREW_BIN="${candidate}/bin"
+      break
+    fi
+  done
+  if [[ -z "$BREW_BIN" ]]; then
+    for candidate in /opt/homebrew/opt/ffmpeg/bin /usr/local/opt/ffmpeg/bin; do
+      if [[ -x "${candidate}/ffprobe" ]]; then
+        BREW_BIN="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$BREW_BIN" ]] && command -v ffprobe >/dev/null 2>&1; then
+    BREW_BIN="$(dirname "$(command -v ffprobe)")"
+  fi
+  [[ -n "$BREW_BIN" ]] || die "ffprobe not found: tried brew --prefix, /opt/homebrew/bin, /usr/local/bin, /opt/homebrew/opt/ffmpeg/bin, /usr/local/opt/ffmpeg/bin, and PATH"
+fi
 mkdir -p "$PLIST_DIR"
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

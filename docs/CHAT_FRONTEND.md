@@ -695,7 +695,7 @@ never issue a live write.
   the same engines, not a replacement for the slim.json tier registry.
 - Update pinned Open WebUI releases deliberately (change
   `DOTFILES_OPENWEBUI_VERSION`; the default lives at
-  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.0 since this
+  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.3 since this
   change; check release notes for security fixes first). Since 0.12.0 the
   deploy template stops the service and backs up `webui.db` (+ WAL/SHM)
   automatically whenever the pinned version changes, before the upgrade runs.
@@ -710,7 +710,7 @@ never issue a live write.
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
 - Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
-  0.12.0 postdates the fix's merge to `dev`, so after the 0.12.0 deploy the
+  0.12.3 postdates the fix's merge to `dev`, so after the 0.12.3 deploy the
   `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if
   titles such as `settings.admin.connections.title` render correctly.
 
@@ -728,6 +728,12 @@ never issue a live write.
   `LOCAL_ENGINES`, not a new abstraction over it.
 
 ## Sources (primary, retrieved 2026-09-24)
+
+## Delivered and deferred
+
+| Delivered in this change | Deferred |
+|---|---|
+| Containment; Junie derivation and Meridian twins; voice STT with fail-closed behaviour and descope; WebUI audio ownership; guarded WebUI embedding switch; gateway modality exposure including MarkItDown and namespaced-name guard; pinned memory extraction schema; Open WebUI 0.12.3 | AMD Vulkan qualification; WebUI ingestion through a MarkItDown adapter; voice HTTP TTS (unsupported by plugin); local-AI doctor; WebUI TASK_MODEL wiring |
 
 - Open WebUI docs: main, connect-a-provider, env-configuration reference,
   MCP (`/features/extensibility/mcp`), Open Terminal, Computer, licence +

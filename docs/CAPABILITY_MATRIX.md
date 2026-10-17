@@ -43,7 +43,7 @@ bridge or compatibility layer is used.
 | Junie | Ollama/oMLX via generated model profiles | Unsupported | No Junie voice integration |
 | Pi | Ollama/oMLX providers and tier selection | sherpa-onnx STT | TTS unsupported |
 | Codex | Ollama/oMLX through generated provider profiles | Unsupported | No voice integration |
-| Open WebUI | Registry-managed local engine connections | Audio/task configuration is not managed by the current reconciler | Managed audio/task bundle is planned with the audio slice |
+| Open WebUI | Registry-managed local engine connections | Audio settings managed by the reconciler; task configuration is not managed (planned) | — |
 | Other listed agents | No generated local service consumer unless their row explicitly says otherwise | Unsupported | See each tool's local-fallback and voice cells above |
 
 | AMD local service | Disposition |
