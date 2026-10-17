@@ -26,6 +26,7 @@ def test_route_matrix(gate, q, credential):
         q,
         endpoint="http://gateway/v1",
         credential_present=credential,
+        key_reference="TEST_GATEWAY_KEY" if credential else None,
         direct_endpoint="http://local/v1",
         direct_credential_required=False,
     )
@@ -37,6 +38,47 @@ def test_route_matrix(gate, q, credential):
         assert result.transport == Transport.GATEWAY
     else:
         assert result.transport == Transport.UNAVAILABLE
+
+
+def test_credential_required_routes_need_presence_and_reference():
+    """Presence without a real reference no longer satisfies a credential-required route."""
+
+    for gate in ("gateway", "direct"):
+        assert (
+            resolve_transport(
+                gate if gate == "direct" else "gateway",
+                Q.PROTOCOL_PROBED,
+                endpoint="http://gateway/v1",
+                credential_present=True,
+                key_reference=None,
+            ).transport
+            == Transport.UNAVAILABLE
+        )
+
+
+def test_generic_endpoint_honours_credential_requirements_in_direct_mode():
+    assert (
+        resolve_transport(
+            "direct",
+            Q.PROTOCOL_PROBED,
+            endpoint="https://auth.example/v1",
+            credential_required=True,
+            credential_present=False,
+            key_reference="API_KEY",
+        ).transport
+        == Transport.UNAVAILABLE
+    )
+    assert (
+        resolve_transport(
+            "direct",
+            Q.PROTOCOL_PROBED,
+            endpoint="https://auth.example/v1",
+            credential_required=True,
+            credential_present=True,
+            key_reference="API_KEY",
+        ).transport
+        == Transport.DIRECT
+    )
 
 
 def test_direct_exception_is_reported():

@@ -85,7 +85,7 @@ def resolve_transport(
     wire_model: str | None = None,
     key_reference: str | None = None,
     credential_present: bool = True,
-    credential_reference: str | None = "ROUTE_KEY",
+    credential_reference: str | None = None,
     credential_required: bool = True,
     direct_endpoint: str | None = None,
     direct_wire_model: str | None = None,
@@ -104,25 +104,29 @@ def resolve_transport(
     if gate not in ("direct", "gateway"):
         raise ValueError("gate must be direct or gateway")
     if gate == "direct":
+        use_direct_facts = direct_endpoint is not None
         return _direct_route(
             qualification,
             direct_endpoint or endpoint,
             direct_wire_model or wire_model,
             direct_key_reference or key_reference,
-            direct_credential_required if direct_endpoint else False,
-            direct_credential_present if direct_endpoint else True,
+            direct_credential_required if use_direct_facts else credential_required,
+            direct_credential_present if use_direct_facts else credential_present,
             credential_reference,
         )
     qualified = _RANK.get(qualification, 0) >= _RANK[Qualification.PROTOCOL_PROBED]
+    effective_reference = key_reference or credential_reference
     if (
         qualified
         and endpoint
         and (
             not credential_required
-            or (credential_present and (key_reference or credential_reference))
+            or (credential_present and bool(effective_reference))
         )
     ):
-        return RouteResolution(Transport.GATEWAY, endpoint, wire_model, key_reference)
+        return RouteResolution(
+            Transport.GATEWAY, endpoint, wire_model, effective_reference
+        )
     if operation in DIRECT_EXCEPTIONS:
         return _direct_route(
             qualification,
@@ -151,7 +155,12 @@ def _direct_route(
         credential_present and bool(key_reference or credential_reference)
     )
     if qualified and endpoint and credential_ok:
-        return RouteResolution(Transport.DIRECT, endpoint, wire_model, key_reference)
+        return RouteResolution(
+            Transport.DIRECT,
+            endpoint,
+            wire_model,
+            key_reference or credential_reference,
+        )
     return RouteResolution(
         Transport.UNAVAILABLE,
         reason="direct unavailable: qualification, endpoint, or credential missing",
