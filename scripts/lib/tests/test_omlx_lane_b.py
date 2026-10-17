@@ -554,6 +554,137 @@ def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tm
     assert written["plugin"] == [existing]
 
 
+@pytest.mark.parametrize(
+    "gate,transport,endpoint,key_name",
+    [
+        ("1", Transport.GATEWAY, "http://127.0.0.1:4000/v1", "LITELLM_OPENCODE_KEY"),
+        ("0", Transport.DIRECT, "http://127.0.0.1:8123/v1", "OMLX_API_KEY"),
+    ],
+)
+def test_voice_stt_render_uses_resolved_route_credentials(
+    monkeypatch, gate, transport, endpoint, key_name
+):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", gate)
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-secret")
+    monkeypatch.setenv("OMLX_API_KEY", "backend-secret")
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice, "check_ollama_daemon", return_value=(False, False)),
+        patch.object(voice, "active_engines", return_value=["omlx"]),
+        patch.object(voice, "resolve_engine", return_value={}),
+        patch.object(
+            voice,
+            "audio_models",
+            return_value=[{"name": "omlx/whisper-picked", "model_type": "audio_stt"}],
+        ),
+        patch.object(
+            voice,
+            "local_endpoint_for",
+            return_value=("http://127.0.0.1:8123/v1", "OMLX_API_KEY"),
+        ),
+        patch.object(
+            voice,
+            "_select_voice_candidate",
+            return_value=selected_service.CanonicalSelection(
+                Operation.STT,
+                "omlx",
+                "omlx/whisper-picked",
+                Qualification.PROTOCOL_PROBED,
+                "fixture probe",
+            ),
+        ),
+    ):
+        config = voice.get_voice_config("anthropic", {"stt_transport": "local"})
+    expected_wire = "whisper-picked"
+    assert config["sttEndpoint"] == endpoint
+    assert config["sttModel"] == expected_wire
+    assert config["sttApiKeyEnv"] == key_name
+    locator = voice._service_locator(
+        Operation.STT,
+        [("omlx", "omlx/whisper-picked", Qualification.PROTOCOL_PROBED)],
+        "gateway" if gate == "1" else "direct",
+        endpoint=endpoint,
+        wire_model=expected_wire,
+        key_reference=key_name,
+        credential_present=True,
+        credential_required=gate == "1",
+    )
+    assert config["sttEndpoint"] == locator.route.endpoint
+    assert config["sttModel"] == locator.route.wire_model
+    assert config["sttApiKeyEnv"] == locator.route.key_reference
+
+
+@pytest.mark.parametrize(
+    "gate,endpoint,key_name",
+    [
+        ("1", "http://127.0.0.1:4000/v1", "LITELLM_OPENCODE_KEY"),
+        ("0", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+    ],
+)
+def test_voice_openai_stt_render_uses_resolved_route_credentials(
+    monkeypatch, gate, endpoint, key_name
+):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", gate)
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice, "check_ollama_daemon", return_value=(False, False)),
+        patch.object(
+            voice, "get_provider_base_url", return_value="https://api.openai.com/v1"
+        ),
+        patch.object(
+            voice,
+            "_select_voice_candidate",
+            return_value=selected_service.CanonicalSelection(
+                Operation.STT,
+                "openai",
+                "whisper-1",
+                Qualification.PROTOCOL_PROBED,
+                "fixture probe",
+            ),
+        ),
+    ):
+        config = voice.get_voice_config("anthropic", {"stt_transport": "openai"})
+    assert config["sttEndpoint"] == endpoint
+    assert config["sttModel"] == "whisper-1"
+    assert config["sttApiKeyEnv"] == key_name
+    selection = selected_service.CanonicalSelection(
+        Operation.STT,
+        "openai",
+        "whisper-1",
+        Qualification.PROTOCOL_PROBED,
+        "fixture probe",
+    )
+    locator = voice._service_locator(
+        Operation.STT,
+        [("openai", "whisper-1", Qualification.PROTOCOL_PROBED)],
+        "gateway" if gate == "1" else "direct",
+        selection=selection,
+        endpoint=endpoint,
+        wire_model="whisper-1",
+        key_reference=key_name,
+        credential_reference=key_name if gate == "1" else None,
+        credential_present=True,
+        credential_required=True,
+    )
+    assert config["sttEndpoint"] == locator.route.endpoint
+    assert config["sttModel"] == locator.route.wire_model
+    assert config["sttApiKeyEnv"] == locator.route.key_reference
+
+
 def test_voice_saved_selection_survives_fresh_process_and_reordered_inventory(
     monkeypatch, tmp_path
 ):

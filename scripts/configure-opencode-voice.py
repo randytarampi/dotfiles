@@ -636,7 +636,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     if gateway_gate is True
                     else bool(endpoint[1] and os.environ.get(endpoint[1], "").strip())
                 ),
-                credential_required=False,
+                credential_required=(gateway_gate is True),
             )
             endpoint, item = metadata[
                 (locator.selection.provider, locator.selection.model)
@@ -646,8 +646,8 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 voice_config.update(
                     sttEndpoint=rendered["endpoint"], sttModel=rendered["wire_model"]
                 )
-                if endpoint[1] and os.environ.get(endpoint[1], "").strip():
-                    voice_config["sttApiKeyEnv"] = endpoint[1]
+                if locator.route.key_reference:
+                    voice_config["sttApiKeyEnv"] = locator.route.key_reference
                 locators[Operation.STT.value] = locator
             else:
                 for key in ("sttEndpoint", "sttModel", "sttApiKeyEnv"):
@@ -662,13 +662,21 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             state.get("selections", {}).get(Operation.STT.value),
             endpoint=(
                 f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
-                if gateway_gate
+                if gateway_gate is True
                 else get_provider_base_url("openai")
             ),
-            key_reference="LITELLM_OPENCODE_KEY" if gateway_gate else "OPENAI_API_KEY",
-            credential_reference="LITELLM_OPENCODE_KEY" if gateway_gate else None,
+            key_reference=(
+                "LITELLM_OPENCODE_KEY" if gateway_gate is True else "OPENAI_API_KEY"
+            ),
+            credential_reference=(
+                "LITELLM_OPENCODE_KEY" if gateway_gate is True else None
+            ),
             wire_model="whisper-1",
-            credential_present=has_openai_key,
+            credential_present=bool(
+                os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+                if gateway_gate is True
+                else os.environ.get("OPENAI_API_KEY", "").strip()
+            ),
             credential_required=True,
         )
         rendered = _render_locator(locator)
@@ -676,8 +684,9 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             voice_config.update(
                 sttEndpoint=rendered["endpoint"],
                 sttModel=rendered["wire_model"],
-                sttApiKeyEnv="OPENAI_API_KEY",
             )
+            if locator.route.key_reference:
+                voice_config["sttApiKeyEnv"] = locator.route.key_reference
             locators[Operation.STT.value] = locator
         else:
             for key in ("sttEndpoint", "sttModel", "sttApiKeyEnv"):
