@@ -59,6 +59,7 @@ class RouteResolution:
     endpoint: str | None = None
     wire_model: str | None = None
     key_reference: str | None = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,27 +85,77 @@ def resolve_transport(
     wire_model: str | None = None,
     key_reference: str | None = None,
     credential_present: bool = True,
+    credential_reference: str | None = "ROUTE_KEY",
+    credential_required: bool = True,
+    direct_endpoint: str | None = None,
+    direct_wire_model: str | None = None,
+    direct_key_reference: str | None = None,
+    direct_credential_required: bool = False,
+    direct_credential_present: bool = True,
     operation: Operation | None = None,
 ) -> RouteResolution:
     """Resolve the gated route; never switch routes based on availability.
 
-    Gateway requires at least protocol_probed evidence plus endpoint and
-    credentials. A disappeared once-qualified gateway is unavailable with a
-    reason; consumers re-resolve. Direct exceptions require code review here.
+    Both routes require protocol_probed evidence or stronger, a route endpoint,
+    and credentials when that route requires them. Direct exceptions require
+    code review here and explicit direct-route facts. A disappeared once-
+    qualified gateway is unavailable; consumers re-resolve.
     """
     if gate not in ("direct", "gateway"):
         raise ValueError("gate must be direct or gateway")
     if gate == "direct":
-        if qualification not in _RANK:
-            return RouteResolution(Transport.UNAVAILABLE)
-        return RouteResolution(Transport.DIRECT, endpoint, wire_model, key_reference)
+        return _direct_route(
+            qualification,
+            direct_endpoint or endpoint,
+            direct_wire_model or wire_model,
+            direct_key_reference or key_reference,
+            direct_credential_required if direct_endpoint else False,
+            direct_credential_present if direct_endpoint else True,
+            credential_reference,
+        )
     qualified = _RANK.get(qualification, 0) >= _RANK[Qualification.PROTOCOL_PROBED]
-    if qualified and endpoint and credential_present:
+    if (
+        qualified
+        and endpoint
+        and (
+            not credential_required
+            or (credential_present and (key_reference or credential_reference))
+        )
+    ):
         return RouteResolution(Transport.GATEWAY, endpoint, wire_model, key_reference)
     if operation in DIRECT_EXCEPTIONS:
-        return RouteResolution(Transport.DIRECT, endpoint, wire_model, key_reference)
+        return _direct_route(
+            qualification,
+            direct_endpoint,
+            direct_wire_model,
+            direct_key_reference,
+            direct_credential_required,
+            direct_credential_present,
+            None,
+        )
     reason = "gateway unavailable: qualification, endpoint, or credential missing"
-    return RouteResolution(Transport.UNAVAILABLE, reason)
+    return RouteResolution(Transport.UNAVAILABLE, reason=reason)
+
+
+def _direct_route(
+    qualification,
+    endpoint,
+    wire_model,
+    key_reference,
+    credential_required,
+    credential_present,
+    credential_reference=None,
+):
+    qualified = _RANK.get(qualification, 0) >= _RANK[Qualification.PROTOCOL_PROBED]
+    credential_ok = not credential_required or (
+        credential_present and bool(key_reference or credential_reference)
+    )
+    if qualified and endpoint and credential_ok:
+        return RouteResolution(Transport.DIRECT, endpoint, wire_model, key_reference)
+    return RouteResolution(
+        Transport.UNAVAILABLE,
+        reason="direct unavailable: qualification, endpoint, or credential missing",
+    )
 
 
 def select(
@@ -127,9 +178,14 @@ def select(
         return CanonicalSelection(operation, provider, model, q, "explicit override")
     if previously_selected:
         provider, model, q = previously_selected
-        if (provider, model) in by_identity and q in _RANK:
+        current_q = by_identity.get((provider, model))
+        if current_q in _RANK and q in _RANK:
             return CanonicalSelection(
-                operation, provider, model, q, "previous selection remains qualified"
+                operation,
+                provider,
+                model,
+                current_q,
+                "previous selection remains qualified",
             )
     preference = preference or []
     positions = {identity: index for index, identity in enumerate(preference)}
