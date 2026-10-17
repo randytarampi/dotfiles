@@ -145,7 +145,8 @@ def test_voice_empty_pool_is_unresolved_without_partial_config(monkeypatch, capl
         caplog.at_level("WARNING"),
     ):
         result = voice.get_voice_config("local")
-    assert result == {"_voice_unresolved": True}
+    assert result["_voice_unresolved"] is True
+    assert result["_voice_state"] is None
     assert "unresolved" in caplog.text
 
 
@@ -394,19 +395,91 @@ def test_voice_transport_precedence(flag, gate, saved, expected):
 def test_voice_selector_omits_unqualified_stt_and_cleanup(monkeypatch):
     voice = load_script("configure-opencode-voice.py")
     candidates = [("omlx", "whisper", Qualification.DISCOVERED)]
-    selection = selected_service.select(Operation.STT, candidates)
-    route = selected_service.resolve_transport(
+    locator = voice._service_locator(
+        Operation.STT,
+        candidates,
         "direct",
-        selection.qualification,
         endpoint="http://localhost/v1",
         wire_model="whisper",
-        direct_credential_required=False,
+        credential_required=False,
     )
-    locator = selected_service.ServiceLocator(selection, route)
+    selection, route = locator.selection, locator.route
     assert selection.qualification is Qualification.DISCOVERED
     assert route.transport is Transport.UNAVAILABLE
     with pytest.raises(AssertionError):
         selected_service.assert_renders_from(locator, {"provider": "omlx"})
+
+
+def test_voice_discovered_candidates_stay_unavailable_and_state_is_not_written(
+    monkeypatch, tmp_path
+):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("LITELLM_API_KEY", "scoped-key")
+    candidate = [("omlx", "whisper", Qualification.DISCOVERED)]
+    locator = voice._service_locator(
+        Operation.STT,
+        candidate,
+        "gateway",
+        endpoint="http://127.0.0.1:4000/v1",
+        key_reference="LITELLM_API_KEY",
+        credential_present=True,
+    )
+    assert locator.selection.qualification is Qualification.DISCOVERED
+    assert locator.route.transport is Transport.UNAVAILABLE
+    assert voice._render_locator(locator) is None
+    state = {"sentinel": "preserve"}
+    path = tmp_path / "opencode-voice.json"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    assert voice._load_voice_state(str(tmp_path)) == state
+    assert json.loads(path.read_text(encoding="utf-8")) == state
+
+
+def test_voice_gateway_gate_uses_litellm_and_scoped_key(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("LITELLM_API_KEY", "scoped-key")
+    candidate = [("openai", "whisper-1", Qualification.PROTOCOL_PROBED)]
+    gateway = voice._service_locator(
+        Operation.STT,
+        candidate,
+        "gateway",
+        endpoint="http://127.0.0.1:4000/v1",
+        wire_model="openai/whisper-1",
+        key_reference="LITELLM_API_KEY",
+        credential_present=True,
+    )
+    assert gateway.route.transport is Transport.GATEWAY
+    assert gateway.route.endpoint == "http://127.0.0.1:4000/v1"
+    assert gateway.route.key_reference == "LITELLM_API_KEY"
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    direct = voice._service_locator(
+        Operation.STT,
+        candidate,
+        "direct",
+        endpoint="https://api.openai.com/v1",
+        wire_model="whisper-1",
+        key_reference="OPENAI_API_KEY",
+        credential_present=True,
+    )
+    assert direct.route.transport is Transport.DIRECT
+
+
+def test_voice_openai_binding_without_credentials_is_unavailable(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    locator = voice._service_locator(
+        Operation.STT,
+        [("openai", "whisper-1", Qualification.PROTOCOL_PROBED)],
+        "gateway",
+        endpoint="http://127.0.0.1:4000/v1",
+        wire_model="openai/whisper-1",
+        key_reference="LITELLM_OPENCODE_KEY",
+        credential_reference="LITELLM_OPENCODE_KEY",
+        credential_present=False,
+    )
+    assert locator.route.transport is Transport.UNAVAILABLE
 
 
 def test_voice_tier_switch_preserves_previous_selection():
@@ -431,7 +504,7 @@ def test_voice_fixture_preference_is_host_scoped_and_deterministic():
     first = voice._select_voice_candidate(Operation.STT, candidates)
     second = voice._select_voice_candidate(Operation.STT, candidates)
     assert (first.provider, first.model) == (second.provider, second.model)
-    assert voice.VOICE_PREFERENCES == {"default": {}}
+    assert voice.VOICE_PREFERENCES == {"default": {"stt": [], "cleanup_llm": []}}
 
 
 def test_voice_consumer_config_contains_only_supported_fields():
@@ -451,6 +524,60 @@ def test_voice_consumer_config_contains_only_supported_fields():
     config.pop("_voice_state", None)
     config.pop("_voice_unresolved", None)
     assert set(config) <= supported
+
+
+def test_voice_saved_selection_survives_fresh_process_and_reordered_inventory(
+    monkeypatch, tmp_path
+):
+    voice = load_script("configure-opencode-voice.py")
+    candidates = [
+        ("omlx", "whisper-a", Qualification.PROTOCOL_PROBED),
+        ("ollama", "whisper-b", Qualification.PROTOCOL_PROBED),
+    ]
+    saved = voice._select_voice_candidate(Operation.STT, candidates)
+    state = {
+        "sttTransport": "local",
+        "selections": {
+            "stt": {
+                "provider": saved.provider,
+                "model": saved.model,
+                "qualification": saved.qualification.value,
+            }
+        },
+    }
+    voice._save_voice_state(str(tmp_path), state)
+    fresh = load_script("configure-opencode-voice.py")
+    restored = fresh._load_voice_state(str(tmp_path))
+    selected = fresh._select_voice_candidate(
+        Operation.STT,
+        list(reversed(candidates)),
+        previously_selected=selected_service.CanonicalSelection(
+            Operation.STT,
+            restored["selections"]["stt"]["provider"],
+            restored["selections"]["stt"]["model"],
+            Qualification(restored["selections"]["stt"]["qualification"]),
+            "saved",
+        ),
+    )
+    assert (selected.provider, selected.model) == (saved.provider, saved.model)
+
+
+def test_voice_and_webui_select_same_fixture_inventory():
+    inventory = [
+        ("omlx", "whisper-a", Qualification.PROTOCOL_PROBED),
+        ("ollama", "whisper-b", Qualification.PROTOCOL_PROBED),
+    ]
+    voice = load_script("configure-opencode-voice.py")
+    voice_selection = voice._select_voice_candidate(Operation.STT, inventory)
+    webui_selection = selected_service.select(
+        Operation.STT,
+        inventory,
+        preference=[(provider, model) for provider, model, _ in inventory],
+    )
+    assert (voice_selection.provider, voice_selection.model) == (
+        webui_selection.provider,
+        webui_selection.model,
+    )
 
 
 def test_caddy_omlx_route_is_gated(monkeypatch):

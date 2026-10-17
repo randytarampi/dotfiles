@@ -66,6 +66,7 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     resolve_engine,
 )
 import tier_registry
+from model_catalogues import _configured_litellm_port
 from selected_service import (
     Operation,
     Qualification,
@@ -77,7 +78,9 @@ from selected_service import (
     assert_renders_from,
 )
 
-VOICE_PREFERENCES = {"default": {}}
+VOICE_PREFERENCES = {
+    "default": {Operation.STT.value: [], Operation.CLEANUP_LLM.value: []}
+}
 
 
 def _select_voice_candidate(
@@ -90,46 +93,41 @@ def _select_voice_candidate(
         preference=list(VOICE_PREFERENCES.get(host, {}).get(operation.value, [])),
         previously_selected=(
             (
-                previously_selected.provider,
-                previously_selected.model,
-                previously_selected.qualification,
+                previously_selected["provider"],
+                previously_selected["model"],
+                Qualification(previously_selected["qualification"]),
             )
-            if previously_selected is not None
-            else None
+            if isinstance(previously_selected, dict)
+            else (
+                (
+                    previously_selected.provider,
+                    previously_selected.model,
+                    previously_selected.qualification,
+                )
+                if previously_selected is not None
+                else None
+            )
         ),
     )
 
 
-def _service_locator(operation, candidates, provider, model, gate, **route_options):
-    selection = _select_voice_candidate(operation, candidates)
-    qualification = (
-        Qualification.PROTOCOL_PROBED
-        if route_options.get("direct_protocol_probe")
-        else selection.qualification
+def _service_locator(
+    operation, candidates, gate, previously_selected=None, **route_options
+):
+    selection = _select_voice_candidate(
+        operation, candidates, previously_selected=previously_selected
     )
     route = resolve_transport(
         gate,
-        qualification,
+        selection.qualification,
         wire_model=route_options.get("wire_model", selection.model),
         endpoint=route_options.get("endpoint"),
         key_reference=route_options.get("key_reference"),
         credential_present=route_options.get("credential_present", True),
         credential_required=route_options.get("credential_required", True),
-        direct_endpoint=(
-            route_options.get("endpoint")
-            if route_options.get("direct_protocol_probe")
-            else None
-        ),
-        direct_wire_model=(
-            route_options.get("wire_model")
-            if route_options.get("direct_protocol_probe")
-            else None
-        ),
-        direct_key_reference=(
-            route_options.get("key_reference")
-            if route_options.get("direct_protocol_probe")
-            else None
-        ),
+        direct_endpoint=route_options.get("endpoint"),
+        direct_wire_model=route_options.get("wire_model", selection.model),
+        direct_key_reference=route_options.get("key_reference"),
         direct_credential_required=route_options.get("credential_required", True),
         direct_credential_present=route_options.get("credential_present", True),
         operation=operation,
@@ -237,7 +235,12 @@ def _voice_llm_capable(model_ref):
 
 
 def _resolve_local_voice_model(
-    registry, resolution_preset, role_models, category_models, min_reasoning_embedding
+    registry,
+    resolution_preset,
+    role_models,
+    category_models,
+    min_reasoning_embedding,
+    previous=None,
 ):
     """Resolve a verified local completion candidate while preserving discovery status."""
     discovery = iter_engine_discovery("ollama")
@@ -280,17 +283,24 @@ def _resolve_local_voice_model(
             candidates.append(
                 (provider or "ollama", model_ref, Qualification.DISCOVERED)
             )
-    selection = _select_voice_candidate(Operation.CLEANUP_LLM, candidates)
     locator = _service_locator(
         Operation.CLEANUP_LLM,
         candidates,
-        selection.provider,
-        selection.model,
-        "direct",
+        (
+            "gateway"
+            if os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") in ("1", "true")
+            else "direct"
+        ),
+        previous,
         endpoint=(
-            (local_endpoint_for(selection.provider, "openai") or (None, None))[0]
-            if selection.provider
-            else None
+            f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+            if os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0").lower()
+            in ("1", "true")
+            else (
+                (local_endpoint_for(candidates[0][0], "openai") or (None, None))[0]
+                if candidates
+                else None
+            )
         ),
         credential_required=False,
     )
@@ -325,11 +335,11 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     stt_transport = options.get("stt_transport")
     state = state if state is not None else {}
     saved_transport = state.get("sttTransport")
-    gateway_gate = None
-    if os.environ.get("DOTFILES_USE_OPENAI_SERVICE_LANES") is not None:
-        gateway_gate = os.environ.get(
-            "DOTFILES_USE_OPENAI_SERVICE_LANES", ""
-        ).lower() in ("1", "true", "yes")
+    gateway_gate_value = os.environ.get("DOTFILES_USE_LITELLM_PROXY")
+    gateway_gate = gateway_gate_value is not None and gateway_gate_value.lower() in (
+        "1",
+        "true",
+    )
     resolved_transport, transport_reason = resolve_stt_transport(
         stt_transport, gateway_gate=gateway_gate, saved=saved_transport
     )
@@ -377,6 +387,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     role_models,
                     category_models,
                     min_reasoning_embedding,
+                    state.get("selections", {}).get(Operation.CLEANUP_LLM.value),
                 )
                 if voice_model:
                     voice_config = local_voice_provider(voice_model)
@@ -406,26 +417,77 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         orchestrator = tier_registry.materialize_role_models(
             registry, tier, {}, None
         ).get("orchestrator", "opencode/muse-spark-1.3-contributor-free")
-        voice_config = {
-            "endpoint": provider["baseUrl"],
-            "model": strip_provider_prefix(orchestrator),
-            "apiKeyEnv": provider["apiKeyEnv"],
-        }
+        remote_candidates = [("opencode", orchestrator, Qualification.DISCOVERED)]
+        locator = _service_locator(
+            Operation.CLEANUP_LLM,
+            remote_candidates,
+            "gateway" if gateway_gate else "direct",
+            None,
+            endpoint=(
+                f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                if gateway_gate
+                else provider["baseUrl"]
+            ),
+            wire_model=strip_provider_prefix(orchestrator),
+            key_reference=(
+                "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"]
+            ),
+            credential_reference=(
+                "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"]
+            ),
+            credential_present=bool(
+                os.environ.get(
+                    "LITELLM_OPENCODE_KEY" if gateway_gate else provider["apiKeyEnv"],
+                    "",
+                ).strip()
+            ),
+            credential_required=True,
+        )
+        rendered = _render_locator(locator)
+        voice_config = (
+            {
+                "endpoint": rendered["endpoint"],
+                "model": rendered["wire_model"],
+                "apiKeyEnv": provider["apiKeyEnv"],
+            }
+            if rendered
+            else {}
+        )
+        if rendered:
+            locators[Operation.CLEANUP_LLM.value] = locator
 
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
-        if use_meridian:
-            voice_config = {
-                "endpoint": get_meridian_base_url(),
-                "model": "claude-sonnet-5-5",
-                "apiKeyEnv": "MERIDIAN_API_KEY",
+        endpoint = (
+            get_meridian_base_url()
+            if use_meridian
+            else get_provider_base_url("anthropic")
+        )
+        key_env = "MERIDIAN_API_KEY" if use_meridian else "ANTHROPIC_API_KEY"
+        remote = [("anthropic", "claude-sonnet-5-5", Qualification.DISCOVERED)]
+        locator = _service_locator(
+            Operation.CLEANUP_LLM,
+            remote,
+            "gateway" if gateway_gate else "direct",
+            None,
+            endpoint=endpoint,
+            wire_model="claude-sonnet-5-5",
+            key_reference="LITELLM_OPENCODE_KEY" if gateway_gate else key_env,
+            credential_reference="LITELLM_OPENCODE_KEY" if gateway_gate else key_env,
+            credential_present=bool(os.environ.get(key_env, "").strip()),
+        )
+        rendered = _render_locator(locator)
+        voice_config = (
+            {
+                "endpoint": rendered["endpoint"],
+                "model": rendered["wire_model"],
+                "apiKeyEnv": key_env,
             }
-        else:
-            voice_config = {
-                "endpoint": get_provider_base_url("anthropic"),
-                "model": "claude-sonnet-5-5",
-                "apiKeyEnv": "ANTHROPIC_API_KEY",
-            }
+            if rendered
+            else {}
+        )
+        if rendered:
+            locators[Operation.CLEANUP_LLM.value] = locator
 
     elif is_plus_tier or tier == "pro-plus":
         # OpenAI or Ollama Cloud + OpenAI STT
@@ -474,12 +536,17 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 voice_model = resolved_roles.get("librarian")
                 if voice_model:
                     provider, _, model = voice_model.partition("/")
+                    candidates = [(provider, voice_model, Qualification.DISCOVERED)]
                     locator = _service_locator(
                         Operation.CLEANUP_LLM,
-                        [(provider, voice_model, Qualification.DISCOVERED)],
-                        provider,
-                        voice_model,
-                        "direct",
+                        candidates,
+                        (
+                            "gateway"
+                            if os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0").lower()
+                            in ("1", "true")
+                            else "direct"
+                        ),
+                        state.get("selections", {}).get(Operation.CLEANUP_LLM.value),
                         endpoint=(
                             local_endpoint_for(provider, "openai") or (None, None)
                         )[0],
@@ -524,18 +591,25 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 candidates.append((provider, model_ref, Qualification.DISCOVERED))
                 metadata[(provider, model_ref)] = (endpoint, item)
         if candidates:
-            selection = _select_voice_candidate(Operation.STT, candidates)
-            endpoint, item = metadata[(selection.provider, selection.model)]
+            previous = state.get("selections", {}).get(Operation.STT.value)
             locator = _service_locator(
                 Operation.STT,
                 candidates,
-                selection.provider,
-                selection.model,
-                "direct",
-                endpoint=endpoint[0],
-                wire_model=strip_provider_prefix(item["name"]),
+                "gateway" if gateway_gate else "direct",
+                previous,
+                endpoint=(
+                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                    if gateway_gate
+                    else metadata[(candidates[0][0], candidates[0][1])][0][0]
+                ),
+                wire_model=strip_provider_prefix(
+                    metadata[(candidates[0][0], candidates[0][1])][1]["name"]
+                ),
                 credential_required=False,
             )
+            endpoint, item = metadata[
+                (locator.selection.provider, locator.selection.model)
+            ]
             rendered = _render_locator(locator)
             if rendered:
                 voice_config.update(
@@ -553,13 +627,20 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         locator = _service_locator(
             Operation.STT,
             candidate,
-            "openai",
-            "whisper-1",
-            "direct",
-            endpoint=get_provider_base_url("openai"),
-            key_reference="OPENAI_API_KEY",
+            (
+                "gateway"
+                if os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") in ("1", "true")
+                else "direct"
+            ),
+            state.get("selections", {}).get(Operation.STT.value),
+            endpoint=(
+                f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                if gateway_gate
+                else get_provider_base_url("openai")
+            ),
+            key_reference="LITELLM_OPENCODE_KEY" if gateway_gate else "OPENAI_API_KEY",
+            credential_reference="LITELLM_OPENCODE_KEY" if gateway_gate else None,
             wire_model="whisper-1",
-            direct_protocol_probe=True,
             credential_present=has_openai_key,
             credential_required=True,
         )
@@ -571,6 +652,9 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 sttApiKeyEnv="OPENAI_API_KEY",
             )
             locators[Operation.STT.value] = locator
+        else:
+            for key in ("sttEndpoint", "sttModel", "sttApiKeyEnv"):
+                voice_config.pop(key, None)
     elif resolved_transport == "local":
         configure_local_stt()
 
@@ -617,8 +701,6 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 else "no verified candidates"
             ),
         )
-        if not voice_config.get("sttEndpoint"):
-            return {"_voice_unresolved": True}
         voice_config["_voice_unresolved"] = True
     voice_config["_voice_state"] = {
         "sttTransport": resolved_transport,
@@ -641,6 +723,10 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             for name, locator in locators.items()
         },
     }
+    if not voice_config["_voice_state"]["selections"]:
+        voice_config["_voice_state"] = None
+    if unresolved and no_local_models and not locators:
+        return {"_voice_unresolved": True, "_voice_state": None}
     return voice_config
 
 
@@ -753,8 +839,6 @@ def main():
         ),
         None,
     )
-    if voice_state is None:
-        unresolved = True
     if unresolved:
         existing_options = (
             existing_voice[1]
@@ -768,7 +852,7 @@ def main():
                 if key in existing_options:
                     voice_config[key] = existing_options[key]
             filtered_plugins.append(existing_voice)
-    else:
+    elif voice_state is not None:
         filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
     tui_config["plugin"] = filtered_plugins
 
