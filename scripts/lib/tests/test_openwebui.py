@@ -572,6 +572,67 @@ def test_embedding_backend_change_acknowledgement_authorizes_migration(
     }
 
 
+def test_embedding_backend_acknowledgement_does_not_bypass_concurrent_identity_check(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    setattr(
+        client,
+        "embedding_backend_identity_probe",
+        lambda _config: {"backend": "ollama", "version": "new"},
+    )
+    original_get = client.get_embedding_config
+    calls = 0
+
+    def changed_after_prewrite():
+        nonlocal calls
+        calls += 1
+        config = original_get()
+        if calls == 2:
+            config["RAG_EMBEDDING_MODEL"] = "concurrent-model-change"
+        return config
+
+    client.get_embedding_config = changed_after_prewrite
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous": {"engine": "ollama", "model": openwebui.EMBEDDING_MODEL},
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+            },
+            "embedding_fingerprint": {
+                "backend_identity": {"backend": "ollama", "version": "old"},
+            },
+            "acknowledgement": {
+                "previous_model": openwebui.EMBEDDING_MODEL,
+                "previous_engine": "ollama",
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "acknowledged_at": "operator-confirmed-backend-refresh",
+            },
+        }
+    )
+    report = openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "embedding": {"model": openwebui.EMBEDDING_MODEL},
+        },
+    ).actions
+    assert client.writes == 0
+    assert report["failed"] == ["embedding"]
+
+
 def test_embedding_customized_model_refusal(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(
         openwebui,

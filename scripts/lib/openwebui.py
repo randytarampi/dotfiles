@@ -1235,6 +1235,13 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
     ):
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
         return {"status": "refused", "applied": False, "verified": False}
+    if acknowledged_backend_change and (
+        _embedding_identity(prewrite) != _embedding_identity(current)
+        or prewrite.get("ollama_config", {}).get("url")
+        != current.get("ollama_config", {}).get("url")
+    ):
+        logger.error("Refusing Open WebUI embedding write after concurrent edit")
+        return {"status": "refused", "applied": False, "verified": False}
     candidate = _embedding_candidate(prewrite)
     client.update_embedding_config(candidate)
     try:
