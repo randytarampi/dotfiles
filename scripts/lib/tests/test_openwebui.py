@@ -106,6 +106,13 @@ def test_audio_bundle_discovery_and_gate(monkeypatch):
             {"name": "qwen3-tts-12hz", "model_type": "audio_tts"},
         ],
     )
+    from local_engines import DiscoveryResult
+
+    monkeypatch.setattr(
+        openwebui,
+        "iter_engine_discovery",
+        lambda _provider: DiscoveryResult(status="ok_models", records=[]),
+    )
     state = openwebui.compute_desired_state()
     assert state["audio"] == {
         "stt": {
@@ -279,7 +286,7 @@ def _embedding_config(engine="", model="sentence-transformers/all-MiniLM-L6-v2")
         "RAG_EMBEDDING_BATCH_SIZE": 1,
         "ENABLE_ASYNC_EMBEDDING": True,
         "RAG_EMBEDDING_CONCURRENT_REQUESTS": 0,
-        "ollama_config": {"url": "http://localhost:11434", "key": "untouched"},
+        "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL, "key": "untouched"},
         "openai_config": {"url": "https://api.openai.com/v1", "key": "secret"},
         "azure_openai_config": {"url": "", "key": "secret", "version": ""},
     }
@@ -550,18 +557,26 @@ def test_embedding_ignored_url_restore_retains_projection(monkeypatch, tmp_path)
 
 
 class _AudioClient:
-    def __init__(self, audio):
+    def __init__(self, audio, openai=None, ollama=None):
         self.audio = audio
         self.audio_writes = 0
         self.concurrent: Any = None
         self.ignore_writes = False
         self.alter_writes = False
+        self.openai = openai if openai is not None else []
+        self.ollama = ollama if ollama is not None else []
 
     def get_openai_config(self):
-        return {"connections": []}
+        return {"connections": json.loads(json.dumps(self.openai))}
 
     def get_ollama_config(self):
-        return {"connections": []}
+        return {"connections": json.loads(json.dumps(self.ollama))}
+
+    def update_openai_config(self, config):
+        self.openai = config.get("connections", config)
+
+    def update_ollama_config(self, config):
+        self.ollama = config.get("connections", config)
 
     def get_audio_config(self):
         if self.concurrent is not None:
@@ -576,6 +591,75 @@ class _AudioClient:
         self.audio = json.loads(json.dumps(config))
         if self.alter_writes:
             self.audio["stt"]["MODEL"] = "write-was-altered"
+
+
+def test_audio_transition_empty_wanted_does_not_adopt_or_write(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient({"stt": {"MODEL": "administrator-model"}})
+    openwebui._reconcile_audio(client, client.audio, {})
+    assert client.audio_writes == 0
+    assert not state.exists()
+
+
+def test_audio_none_field_is_not_claimed_or_written(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient({"stt": {"MODEL": "administrator-model"}})
+    openwebui._reconcile_audio(client, client.audio, {"stt": {"OPENAI_API_KEY": None}})
+    assert client.audio_writes == 0
+    assert not state.exists()
+
+
+def test_audio_projection_never_persists_credentials(tmp_path, monkeypatch):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    sentinel = "R3_AUDIO_SENTINEL_SECRET"
+    projection = openwebui._audio_projection(
+        {"stt": {"MODEL": "asr", "OPENAI_API_KEY": sentinel}}
+    )
+    openwebui._write_audio_projection(projection)
+    assert sentinel not in state.read_text()
+    assert all("OPENAI_API_KEY" not in fields for fields in projection.values())
+
+
+def test_audio_bundle_none_key_never_claimed_and_stored_key_preserved(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    # Only the stored key is customized; every other owned field sits at the
+    # unmanaged default, so the adoption is eligible — the None bundle value
+    # must neither claim nor disturb the stored key.
+    client = _AudioClient(
+        {
+            "stt": {
+                "MODEL": "",
+                "OPENAI_API_KEY": "STORED_KEY_SECRET_92814",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        }
+    )
+    openwebui._reconcile_audio(
+        client, client.audio, {"stt": {"MODEL": "asr-new", "OPENAI_API_KEY": None}}
+    )
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "STORED_KEY_SECRET_92814"
+    assert client.audio["stt"]["MODEL"] == "asr-new"
+    assert client.audio_writes == 1
+    assert json.loads(state.read_text())["projection"] == {"stt": {"MODEL": "asr-new"}}
+    assert "STORED_KEY_SECRET_92814" not in caplog.text
+
+
+def test_audio_release_drops_only_released_projection_fields(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    projection = {"stt": {"MODEL": "asr", "ENGINE": "openai"}}
+    openwebui._write_audio_projection(projection)
+    client = _AudioClient({"stt": {"MODEL": "asr", "ENGINE": "openai"}})
+    openwebui._reconcile_audio(client, client.audio, {"stt": {"ENGINE": "openai"}})
+    assert client.audio["stt"]["MODEL"] == ""
+    assert json.loads(state.read_text())["projection"] == {"stt": {"ENGINE": "openai"}}
 
 
 def test_audio_prewrite_detects_concurrent_change(monkeypatch, tmp_path, caplog):
@@ -1041,6 +1125,10 @@ def test_ignored_audio_gate_off_write_raises_and_keeps_projection(
         }
     }
     projection = _projection_for_audio(current)
+    # The genuine explicit-disable path: the engine is DISABLED, so the
+    # discovery-derived audio bundle is omitted and reconcile proceeds to the
+    # gate-off release (empty wanted -> _reconcile_audio_gate_off).
+    monkeypatch.setenv("DOTFILES_OPENWEBUI_DISABLED_ENGINES", "omlx")
     openwebui._write_audio_projection(projection)
     client = _AudioClient(current)
     client.ignore_writes = True
@@ -2776,3 +2864,137 @@ def test_openwebui_default_locale_resolution(tmp_path):
         )
         assert result.returncode == 0
         assert result.stdout.strip() == expected
+
+
+def test_same_dims_other_model_requires_parity_or_ack(monkeypatch, tmp_path):
+    import logging
+
+    state = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state))
+    # Same output dims (768), a DIFFERENT model: the dimension-only guard
+    # would let this through; parity is inconclusive (no probe wired), so the
+    # acknowledgement gate must refuse without ack and accept with ack.
+    current = {
+        "RAG_EMBEDDING_ENGINE": "ollama",
+        "RAG_EMBEDDING_MODEL": "other-768-model",
+        "RAG_EMBEDDING_BATCH_SIZE": 1,
+        "ENABLE_ASYNC_EMBEDDING": True,
+        "RAG_EMBEDDING_CONCURRENT_REQUESTS": 0,
+        "ollama_config": {"url": "http://localhost:11434/v1"},
+    }
+    ref = logging.getLogger()
+    assert not openwebui._embedding_vector_parity(None, None)
+    parity = openwebui._embedding_vector_parity(
+        lambda: {t: [1.0, 0.0] for t in openwebui.PARITY_PROBE_STRINGS},
+        lambda: {t: [1.0, 0.0] for t in openwebui.PARITY_PROBE_STRINGS},
+    )
+    assert parity
+    other = openwebui._embedding_vector_parity(
+        lambda: {t: [1.0, 0.0] for t in openwebui.PARITY_PROBE_STRINGS},
+        lambda: {t: [0.0, 1.0] for t in openwebui.PARITY_PROBE_STRINGS},
+    )
+    assert not other
+
+
+def test_audio_state_writer_refuses_secret_payload(tmp_path):
+    state = tmp_path / "managed-audio.json"
+    openwebui._audio_state_path = lambda: str(state)
+    bad = {"stt": {"ENGINE": "openai", "OPENAI_API_KEY": "sk-live-secret"}}
+    with pytest.raises(openwebui.OpenWebUIError, match="Refusing to persist secret"):
+        openwebui._write_audio_projection(bad)
+    assert not state.exists()
+    openwebui._write_audio_projection(
+        {"stt": {"ENGINE": "openai", "OPENAI_API_KEY": ""}}
+    )
+    assert state.exists()
+
+
+def test_unknown_omlx_discovery_preserves_managed_audio(monkeypatch, tmp_path, caplog):
+    from local_engines import DiscoveryResult
+
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    current = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+        }
+    }
+    projection = _projection_for_audio(current)
+    openwebui._write_audio_projection(projection)
+    monkeypatch.setattr(
+        openwebui,
+        "iter_engine_discovery",
+        lambda _provider, include_cloud=False: DiscoveryResult(
+            status="unknown_error", records=[], reason="simulated outage"
+        ),
+    )
+    client = _AudioClient(current)
+    desired = openwebui.compute_desired_state()
+    assert "audio" not in desired
+    assert desired.get("audio_status") == "unknown"
+    # The computed desired carries audio_status "unknown"; the dispatch
+    # must see it to preserve instead of release.
+    openwebui.reconcile_via_api(client, desired)
+    assert client.audio_writes == 0
+    assert client.audio["stt"]["ENGINE"] == "openai"  # preserved, not released
+    assert json.loads(state.read_text())["projection"] == projection
+    assert "oMLX discovery is unknown" in caplog.text
+
+
+def test_same_dims_model_change_refuses_without_ack_switches_with_ack(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state))
+    client = _EmbeddingClient(
+        _embedding_config(engine="ollama", model="other-768-model")
+    )
+    # An owned same-dims state: the recorded model differs from the target,
+    # the recorded dims match — dimension-only guard would pass this; parity
+    # is inconclusive (no probe wired) -> the acknowledgement gate.
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": "other-768-model",
+                },
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+            }
+        }
+    )
+    _embedding_reconcile(client)
+    assert client.writes == 0
+    assert client.config["RAG_EMBEDDING_MODEL"] == "other-768-model"
+    assert "migration" in caplog.text
+    ack = {
+        "previous_model": "other-768-model",
+        "previous_engine": "ollama",
+        "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "new_model": openwebui.EMBEDDING_MODEL,
+        "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "acknowledged_at": "operator-confirmed",
+    }
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": "other-768-model",
+                },
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+            },
+            "acknowledgement": ack,
+        }
+    )
+    _embedding_reconcile(client)
+    assert client.writes == 1
+    assert client.config["RAG_EMBEDDING_MODEL"] == openwebui.EMBEDDING_MODEL
+    saved = json.loads(state.read_text())
+    assert saved["embedding_fingerprint"]["model"] == openwebui.EMBEDDING_MODEL
+    assert saved["embedding_fingerprint"]["parity"] in {"acknowledged", "pass", "n-a"}

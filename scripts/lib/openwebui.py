@@ -25,6 +25,7 @@ from local_engines import (
     LOCAL_ENGINES,
     active_engines,
     audio_models,
+    iter_engine_discovery,
     local_endpoint_for,
 )
 from provider_endpoints import PROVIDER_ENDPOINTS
@@ -229,6 +230,7 @@ def ownership_catalogue(proxy_mode=None):
 def compute_desired_state():
     """Build desired entries; inactive/keyless providers remain ownership-known."""
     desired: dict[str, Any] = {"openai": [], "anthropic": [], "ollama": []}
+    discovery = iter_engine_discovery("omlx")
     disabled = _disabled()
     for provider in active_engines():
         if provider.lower() in disabled:
@@ -322,6 +324,25 @@ def compute_desired_state():
             "ollama": [],
         }
     audio = _desired_audio_settings()
+    if discovery.status == "unknown_error":
+        import logger
+
+        logger.warning(
+            "oMLX discovery is unknown; preserving managed Open WebUI settings"
+        )
+        audio = None
+        # The reconciler cannot distinguish an unknown backend from an
+        # explicitly disabled engine by the mere absence of the audio bundle;
+        # carry the reason so unknown/empty preserve while disabled releases.
+        desired["audio_status"] = "unknown"
+    elif discovery.status == "ok_empty" and _read_audio_projection() is not None:
+        import logger
+
+        logger.warning(
+            "oMLX discovery is empty; preserving managed Open WebUI settings"
+        )
+        audio = None
+        desired["audio_status"] = "empty"
     if audio is not None:
         desired["audio"] = audio  # type: ignore[assignment]
     desired["embedding"] = {
@@ -411,6 +432,7 @@ def _audio_projection(config):
         section: {
             key: config.get(section, {}).get(key, AUDIO_DEFAULTS[section].get(key, ""))
             for key in keys
+            if key != "OPENAI_API_KEY"
         }
         for section, keys in AUDIO_OWNED_FIELDS.items()
     }
@@ -437,6 +459,7 @@ def _write_audio_projection(projection):
         except FileNotFoundError:
             pass
         return
+    _guarantee_no_secrets({"projection": projection})
     temp = f"{path}.{os.getpid()}.tmp"
     with open(temp, "w", encoding="utf-8") as handle:
         json.dump({"projection": projection}, handle, indent=2)
@@ -452,15 +475,20 @@ def _audio_owned_projection(config):
 def _audio_refusal(current, projection, allowed_fields=None):
     observed = _audio_projection(current)
     if projection is None:
-        fields = allowed_fields or {
-            (section, key)
-            for section, keys in AUDIO_OWNED_FIELDS.items()
-            for key in keys
-        }
+        fields = (
+            allowed_fields
+            if allowed_fields is not None
+            else {
+                (section, key)
+                for section, keys in AUDIO_OWNED_FIELDS.items()
+                for key in keys
+            }
+        )
         return [
             (section, key)
             for section, key in fields
-            if observed[section][key] != AUDIO_DEFAULTS.get(section, {}).get(key, "")
+            if observed.get(section, {}).get(key, "")
+            != AUDIO_DEFAULTS.get(section, {}).get(key, "")
         ]
     return [
         (section, key)
@@ -478,6 +506,8 @@ def _audio_projection_subset(config, fields):
     """Project only the explicitly owned (section, key) subset."""
     grouped = {}
     for section, key in fields:
+        if key == "OPENAI_API_KEY":
+            continue
         grouped.setdefault(section, []).append(key)
     return {
         section: {
@@ -495,6 +525,7 @@ def _recorded_fields(projection):
         (section, key)
         for section, values in (projection or {}).items()
         for key in values
+        if key != "OPENAI_API_KEY"
     }
 
 
@@ -542,10 +573,7 @@ def _reconcile_audio_adoption(
     desired_now = _audio_projection_subset(
         _merge_owned_audio(current, wanted)[0], owned_fields
     )
-    if (
-        projection is not None
-        and _audio_projection_subset(current, owned_fields) == desired_now
-    ):
+    if _audio_projection_subset(current, owned_fields) == desired_now:
         return
     prewrite = client.get_audio_config()
     if projection is not None:
@@ -572,6 +600,11 @@ def _reconcile_audio_gate_off(client, projection, recorded_fields, logger):
         return
     restore = {}
     for section, key in recorded_fields:
+        if key == "OPENAI_API_KEY":
+            logger.error(
+                "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
+            )
+            return
         restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
             key, ""
         )
@@ -588,14 +621,59 @@ def _reconcile_audio(client, current, wanted):
     if not isinstance(current, dict):
         raise OpenWebUIError("Open WebUI audio configuration has an invalid shape")
     projection = _read_audio_projection()
+    wanted = {
+        section: {key: value for key, value in values.items() if value is not None}
+        for section, values in (wanted or {}).items()
+    }
+    wanted = {section: values for section, values in wanted.items() if values}
     wanted_fields = {
-        (section, key) for section, values in (wanted or {}).items() for key in values
+        (section, key)
+        for section, values in wanted.items()
+        for key in values
+        if key != "OPENAI_API_KEY"
     }
     recorded_fields = _recorded_fields(projection)
     # Only compare against recorded ownership; adoption has its own diagnostic.
     if _audio_reconcile_drift(
         current, projection, wanted_fields, recorded_fields, logger
     ):
+        return
+    released_fields = recorded_fields - wanted_fields
+    if released_fields and projection is not None:
+        if any(key == "OPENAI_API_KEY" for _, key in released_fields):
+            logger.error(
+                "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
+            )
+            return
+        prewrite = client.get_audio_config()
+        if _audio_refusal(prewrite, projection, recorded_fields):
+            logger.error("Refusing Open WebUI audio release after concurrent edit")
+            return
+        restore = {}
+        for section, key in released_fields:
+            restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
+                key, ""
+            )
+        candidate = _merge_owned_audio(prewrite, restore)[0]
+        retained = recorded_fields & wanted_fields
+        candidate = _merge_owned_audio(candidate, wanted)[0]
+        # Verify the FULL owned set: released fields must read back at their
+        # baseline values and retained/wanted fields at their new values. An
+        # empty retained∪wanted must still verify the released restoration —
+        # otherwise an ignored write releases ownership unverified.
+        expected = None
+        expected_fields = retained | wanted_fields | released_fields
+        if expected_fields:
+            expected = _audio_projection_subset(candidate, expected_fields)
+            client.update_audio_config(candidate)
+            _verify_audio_projection(client, expected)
+        # Ownership persists only over CLAIMED fields; released fields are
+        # verified-restored above but not owned afterwards.
+        _write_audio_projection(
+            _audio_projection_subset(candidate, retained | wanted_fields)
+            if (retained | wanted_fields)
+            else None
+        )
         return
     if wanted:
         _reconcile_audio_adoption(
@@ -621,6 +699,7 @@ def _read_embedding_state():
 def _write_embedding_state(state):
     path = _embedding_state_path()
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    _guarantee_no_secrets(state)
     temp = f"{path}.{os.getpid()}.tmp"
     with open(temp, "w", encoding="utf-8") as handle:
         json.dump(state, handle, indent=2)
@@ -711,7 +790,39 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         return
     previous = _embedding_identity(current)
     old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
-    if old_dims != EMBEDDING_OUTPUT_DIMS:
+    recorded_dims = (projection or {}).get("output_dims")
+    parity = None
+    same_dims_gate_applied = False
+    same_dims_other_model = (
+        previous != {"engine": "ollama", "model": EMBEDDING_MODEL}
+        and recorded_dims == EMBEDDING_OUTPUT_DIMS
+    )
+    if same_dims_other_model:
+        # Dimensions never establish representation compatibility: a
+        # same-dimension model change requires probe parity; probes are
+        # injectable and none is wired for this path, so parity is
+        # inconclusive here and the acknowledgement gate stays. The recorded
+        # output_dims are the acknowledged baseline dimensions.
+        parity = _embedding_vector_parity(None, None)
+        if not parity:
+            acknowledgement = state.get("acknowledgement")
+            if not _embedding_acknowledges(
+                acknowledgement,
+                previous,
+                recorded_dims,
+                {"engine": "ollama", "model": EMBEDDING_MODEL},
+                EMBEDDING_OUTPUT_DIMS,
+            ):
+                _log_embedding_migration_refusal(
+                    logger,
+                    previous,
+                    recorded_dims,
+                    {"engine": "ollama", "model": EMBEDDING_MODEL},
+                    EMBEDDING_OUTPUT_DIMS,
+                )
+                return
+        same_dims_gate_applied = True
+    if not same_dims_gate_applied and old_dims != EMBEDDING_OUTPUT_DIMS:
         acknowledgement = state.get("acknowledgement")
         if not _embedding_acknowledges(
             acknowledgement,
@@ -748,9 +859,94 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
                 "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
                 "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
             },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": EMBEDDING_MODEL,
+                "output_dims": EMBEDDING_OUTPUT_DIMS,
+                "parity": (
+                    "n-a"
+                    if not same_dims_other_model
+                    else ("pass" if parity else "acknowledged")
+                ),
+            },
             "acknowledgement": state.get("acknowledgement"),
         }
     )
+
+
+def _embedding_vector_parity(previous_probe, target_probe, tolerance=1e-6):
+    """Deterministic embedding representation-parity check (contract-frozen).
+
+    Both probes are injectable callables returning {text -> vector}; the check
+    verifies identical dimensions per text and near-identical vectors
+    (normalized cosine/norm within `tolerance`). Parity is used ONLY for
+    transport-only changes of the SAME qualified backend/model. Any
+    model-identity change without probe evidence keeps the acknowledgement
+    gate; a live unavailable probe = parity inconclusive => the gate stays.
+    """
+    if not callable(previous_probe) or not callable(target_probe):
+        return False
+    try:
+        prev_vectors = previous_probe()
+        target_vectors = target_probe()
+    except Exception:
+        return False
+    if not isinstance(prev_vectors, dict) or not isinstance(target_vectors, dict):
+        return False
+    if set(prev_vectors) != set(target_vectors) or not prev_vectors:
+        return False
+    for text in prev_vectors:
+        a, b = prev_vectors[text], target_vectors[text]
+        if len(a) != len(b) or not a:
+            return False
+        norm_a = sum(x * x for x in a) ** 0.5
+        norm_b = sum(x * x for x in b) ** 0.5
+        if norm_a == 0 or norm_b == 0:
+            return False
+        if abs(norm_a - norm_b) / max(norm_a, 1.0) > tolerance:
+            return False
+        cosine = sum(x * y for x, y in zip(a, b)) / (norm_a * norm_b)
+        if cosine < 1.0 - tolerance:
+            return False
+    return True
+
+
+PARITY_PROBE_STRINGS = (
+    "short probe",
+    "unicode probe \u2734 \u2744",
+    "a longer context probe string for embedding parity",
+)
+
+
+def _guarantee_no_secrets(payload):
+    """State-writers refuse credential-bearing payloads outright (contract-frozen).
+
+    Any dict field whose name matches credential patterns must carry an empty
+    value; otherwise reconciliation refuses to persist the state. mode 0600 is
+    not permission for cleartext.
+    """
+    import re
+
+    secret_words = ("KEY", "TOKEN", "SECRET", "PASSWORD")
+
+    def _scan(node):
+        if isinstance(node, dict):
+            for name, value in node.items():
+                if isinstance(value, (dict, list)):
+                    _scan(value)
+                elif (
+                    any(word in str(name).upper() for word in secret_words)
+                    and isinstance(value, str)
+                    and value
+                ):
+                    raise OpenWebUIError(
+                        f"Refusing to persist secret-looking managed state: {name}"
+                    )
+        elif isinstance(node, list):
+            for item in node:
+                _scan(item)
+
+    _scan(payload)
 
 
 def _embedding_restore(prewrite, projection):
@@ -1506,22 +1702,28 @@ def reconcile_via_api(client, desired):
     if result.status == "collision":
         return result
     audio_wanted = desired.get("audio")
+    audio_status = desired.get("audio_status")
     try:
-        audio_current = (
-            client.get_audio_config() if hasattr(client, "get_audio_config") else None
-        )
-        if audio_current is None:
-            before_openai, before_ollama = (
-                client.get_openai_config(),
-                client.get_ollama_config(),
-            )
-            if before_openai != initial_openai or before_ollama != initial_ollama:
-                raise OpenWebUIError(
-                    "Open WebUI snapshot changed before write; aborting"
+        if hasattr(client, "get_audio_config"):
+            if audio_wanted is None and audio_status in {"unknown", "empty"}:
+                # Explicitly non-released absence: preserve managed settings.
+                import logger
+
+                logger.warning(
+                    "Open WebUI audio discovery %s; preserving managed settings",
+                    audio_status,
                 )
-            audio_current = None
-        if audio_current is not None:
-            _reconcile_audio(client, audio_current, audio_wanted)
+            else:
+                audio_current = client.get_audio_config()
+                before_openai, before_ollama = (
+                    client.get_openai_config(),
+                    client.get_ollama_config(),
+                )
+                if before_openai != initial_openai or before_ollama != initial_ollama:
+                    raise OpenWebUIError(
+                        "Open WebUI snapshot changed before write; aborting"
+                    )
+                _reconcile_audio(client, audio_current, audio_wanted)
         if hasattr(client, "get_embedding_config"):
             embedding_current = client.get_embedding_config()
             _reconcile_embedding(client, embedding_current, desired.get("embedding"))
@@ -1644,4 +1846,10 @@ def reconcile_via_api(client, desired):
             raise OpenWebUIError(
                 "Open WebUI write verification failed or unmanaged state changed"
             )
+    result.actions = {
+        "planned": [item["action"] for item in result.plan.entries],
+        "applied": sorted(changed),
+        "verified": bool(changed),
+        "failed": [],
+    }
     return result
