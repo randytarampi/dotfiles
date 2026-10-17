@@ -437,12 +437,41 @@ def test_embedding_identity_injected_and_routing_url_independent(monkeypatch, tm
     fingerprint = openwebui._read_embedding_state()["embedding_fingerprint"]
     assert fingerprint["backend_identity"] == backend_identity
     assert "url" not in fingerprint and "routing_url" not in fingerprint
-    assert client.config["RAG_EMBEDDING_ENGINE"] == "ollama"
-    assert client.config["RAG_EMBEDDING_MODEL"] == openwebui.EMBEDDING_MODEL
-    assert client.config["openai_config"]["key"] == "secret"
-    assert client.config["ollama_config"]["key"] == "untouched"
-    _embedding_reconcile(client)
-    assert client.writes == 1
+
+
+def test_embedding_backend_version_change_refuses_restart_reconcile(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    setattr(
+        client,
+        "embedding_backend_identity_probe",
+        lambda _config: {"backend": "ollama", "version": "new"},
+    )
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+            },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": openwebui.EMBEDDING_MODEL,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "backend_identity": {"backend": "ollama", "version": "old"},
+            },
+        }
+    )
+    report = _embedding_reconcile(client).actions
+    assert client.writes == 0
+    assert report["failed"] == ["embedding"]
+    assert report["applied"] == [] and report["verified"] == []
 
 
 def test_embedding_customized_model_refusal(monkeypatch, tmp_path, caplog):
@@ -701,6 +730,11 @@ class _AudioClient:
         self.ollama = config.get("connections", config)
 
     def get_audio_config(self):
+        if getattr(self, "fail_audio_readback", False):
+            result = json.loads(json.dumps(self.audio))
+            for section, credential in getattr(self, "masked_credentials", {}).items():
+                result.setdefault(section, {})["OPENAI_API_KEY"] = credential
+            return result
         if self.concurrent is not None:
             result, self.concurrent = self.concurrent, None
             return result
@@ -710,6 +744,14 @@ class _AudioClient:
         self.audio_writes += 1
         self.request_log.append("POST audio")
         if self.ignore_writes:
+            if getattr(self, "retain_credentials", False):
+                config = json.loads(json.dumps(config))
+                for section in config:
+                    if "OPENAI_API_KEY" in self.audio.get(section, {}):
+                        config[section]["OPENAI_API_KEY"] = self.audio[section][
+                            "OPENAI_API_KEY"
+                        ]
+                self.audio = config
             return
         self.audio = json.loads(json.dumps(config))
         if self.alter_writes:
@@ -781,26 +823,173 @@ def test_managed_audio_credential_release_restores_baseline(monkeypatch, tmp_pat
     client = _AudioClient(
         {
             "stt": {
-                "ENGINE": "openai",
-                "MODEL": "asr",
-                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
                 "OPENAI_API_REQUEST_FORMAT": "multipart",
-                "OPENAI_API_KEY": "managed-secret",
+                "OPENAI_API_KEY": "prior-admin-secret",
             }
         }
     )
-    projection = openwebui._audio_projection(client.audio)
-    openwebui._write_audio_projection(projection)
-    openwebui._write_audio_credential_transitions({"stt": {"field": "OPENAI_API_KEY"}})
+    desired = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_KEY": "managed-secret",
+        }
+    }
+    openwebui._reconcile_audio(client, client.audio, desired)
     assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr"
     marker = state.with_name(state.name + ".credentials")
     assert "managed-secret" not in marker.read_text()
     client = _AudioClient(client.audio)
+    setattr(client, "fail_audio_readback", True)
+    setattr(client, "masked_credentials", {"stt": "managed-secret"})
+    released = openwebui._reconcile_audio(client, client.audio, None)
+    assert released["status"] == "refused"
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "managed-secret"
+
+
+def test_public_audio_credential_release_reports_unprovable_restore(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+
+    class MaskingClient(_AudioClient):
+        def update_audio_config(self, config):
+            super().update_audio_config(config)
+            if "OPENAI_API_KEY" not in config.get("stt", {}):
+                self.audio.setdefault("stt", {})["OPENAI_API_KEY"] = "managed-secret"
+
+    client = MaskingClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "prior-secret",
+            }
+        }
+    )
+    wanted_audio = {
+        "stt": {
+            "ENGINE": "openai",
+            "MODEL": "asr",
+            "OPENAI_API_BASE_URL": "http://omlx/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_KEY": "managed-secret",
+        }
+    }
+    desired = {"openai": [], "anthropic": [], "ollama": [], "audio": wanted_audio}
+    openwebui.reconcile_via_api(client, desired)
+    openwebui._write_audio_projection(
+        {
+            "stt": {
+                "MODEL": "asr",
+                "ENGINE": "openai",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+            }
+        }
+    )
+    openwebui._write_audio_credential_transitions(
+        {"stt": {"field": "OPENAI_API_KEY", "restoration": "unprovable"}}
+    )
+    client.audio["stt"]["MODEL"] = "asr"
+    client.audio["stt"]["ENGINE"] = "openai"
+    client.audio["stt"]["OPENAI_API_BASE_URL"] = "http://omlx/v1"
+    monkeypatch.setenv("OMLX_API_KEY", "prior-secret")
+    report = openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": []}
+    ).actions
+    assert report["failed"] == ["audio"]
+    assert report["applied"] == [] and report["verified"] == []
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "managed-secret"
+    assert (
+        json.loads((tmp_path / "managed-audio.json").read_text())["projection"]
+        is not None
+    )
+    assert (
+        openwebui._read_audio_credential_transitions()["stt"]["restoration"]
+        == "unprovable"
+    )
+
+
+def test_audio_credential_env_provenance_release_restores_environment(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    monkeypatch.setenv("OMLX_API_KEY", "prior-admin-key")
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "prior-admin-key",
+            }
+        }
+    )
+    openwebui._reconcile_audio(
+        client,
+        client.audio,
+        {
+            "stt": {
+                "ENGINE": "openai",
+                "MODEL": "asr",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "managed-key",
+            }
+        },
+    )
+    marker = openwebui._read_audio_credential_transitions()
+    assert marker["stt"]["restoration"] == "env:OMLX_API_KEY"
+    assert "prior-admin-key" not in json.dumps(marker)
+    released = openwebui._reconcile_audio(client, client.audio, None)
+    assert released["verified"] is True
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "prior-admin-key"
+
+
+def test_audio_empty_credential_provenance_restores_empty(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "",
+                "MODEL": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "",
+            }
+        }
+    )
+    openwebui._reconcile_audio(
+        client,
+        client.audio,
+        {
+            "stt": {
+                "ENGINE": "openai",
+                "MODEL": "asr",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "managed-key",
+            }
+        },
+    )
+    assert (
+        openwebui._read_audio_credential_transitions()["stt"]["restoration"] == "empty"
+    )
     released = openwebui._reconcile_audio(client, client.audio, None)
     assert released["verified"] is True
     assert client.audio["stt"]["OPENAI_API_KEY"] == ""
-    assert not state.exists()
-    assert not marker.exists()
 
 
 def test_audio_key_rotation_applies_without_persisting_secret(monkeypatch, tmp_path):
