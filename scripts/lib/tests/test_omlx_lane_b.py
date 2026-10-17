@@ -10,6 +10,8 @@ import pytest
 from constants import OMLX_DEFAULT_PORT
 
 import local_engines
+import selected_service
+from selected_service import Operation, Qualification, Transport
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,9 +102,8 @@ def test_voice_local_stt_uses_registered_engine_and_opt_out(monkeypatch):
         ),
     ):
         config = voice.get_voice_config("local")
-    assert config["sttEndpoint"].endswith("/v1")
-    assert config["sttModel"] == "whisper"
-    assert config["sttApiKeyEnv"] == "OMLX_API_KEY"
+    # Local STT remains omitted without qualification evidence.
+    assert "sttEndpoint" not in config
 
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "false")
     monkeypatch.delenv("OMLX_API_KEY", raising=False)
@@ -227,8 +228,8 @@ def test_voice_main_preserves_llm_fields_when_unresolved_with_stt(
     assert entry["model"] == original["model"]
     assert entry["apiKeyEnv"] == original["apiKeyEnv"]
     assert entry["ttsVoice"] == original["ttsVoice"]
-    assert entry["sttEndpoint"] == "http://127.0.0.1:11427/v1"
-    assert entry["sttModel"] == f"whisper-{status}"
+    assert entry["sttEndpoint"] == original["sttEndpoint"]
+    assert entry["sttModel"] == original["sttModel"]
 
 
 def test_voice_main_keeps_unresolved_marker_without_existing_entry(
@@ -368,6 +369,88 @@ def test_voice_parser_rejects_removed_tts_transport(monkeypatch):
     with pytest.raises(SystemExit) as error:
         voice.main()
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "flag,gate,saved,expected",
+    [
+        (None, True, "local", "openai"),
+        ("auto", True, "local", "openai"),
+        (None, False, "openai", "local"),
+        ("auto", None, "openai", "openai"),
+        (None, None, None, "local"),
+        ("local", True, "openai", "local"),
+        ("openai", False, "local", "openai"),
+    ],
+)
+def test_voice_transport_precedence(flag, gate, saved, expected):
+    voice = load_script("configure-opencode-voice.py")
+    assert (
+        selected_service.resolve_stt_transport(flag, gateway_gate=gate, saved=saved)[0]
+        == expected
+    )
+
+
+def test_voice_selector_omits_unqualified_stt_and_cleanup(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    candidates = [("omlx", "whisper", Qualification.DISCOVERED)]
+    selection = selected_service.select(Operation.STT, candidates)
+    route = selected_service.resolve_transport(
+        "direct",
+        selection.qualification,
+        endpoint="http://localhost/v1",
+        wire_model="whisper",
+        direct_credential_required=False,
+    )
+    locator = selected_service.ServiceLocator(selection, route)
+    assert selection.qualification is Qualification.DISCOVERED
+    assert route.transport is Transport.UNAVAILABLE
+    with pytest.raises(AssertionError):
+        selected_service.assert_renders_from(locator, {"provider": "omlx"})
+
+
+def test_voice_tier_switch_preserves_previous_selection():
+    voice = load_script("configure-opencode-voice.py")
+    candidates = [
+        ("omlx", "whisper", Qualification.PROTOCOL_PROBED),
+        ("ollama", "whisper", Qualification.PROTOCOL_PROBED),
+    ]
+    first = voice._select_voice_candidate(Operation.STT, candidates, "local")
+    second = voice._select_voice_candidate(
+        Operation.STT, list(reversed(candidates)), "local", previously_selected=first
+    )
+    assert (second.provider, second.model) == (first.provider, first.model)
+
+
+def test_voice_fixture_preference_is_host_scoped_and_deterministic():
+    voice = load_script("configure-opencode-voice.py")
+    candidates = [
+        ("omlx", "whisper-a", Qualification.PROTOCOL_PROBED),
+        ("ollama", "whisper-b", Qualification.PROTOCOL_PROBED),
+    ]
+    first = voice._select_voice_candidate(Operation.STT, candidates)
+    second = voice._select_voice_candidate(Operation.STT, candidates)
+    assert (first.provider, first.model) == (second.provider, second.model)
+    assert voice.VOICE_PREFERENCES == {"default": {}}
+
+
+def test_voice_consumer_config_contains_only_supported_fields():
+    voice = load_script("configure-opencode-voice.py")
+    supported = {
+        "endpoint",
+        "model",
+        "apiKeyEnv",
+        "sttEndpoint",
+        "sttModel",
+        "sttApiKeyEnv",
+        "sttPrompt",
+        "ttsAutoPrompt",
+        "ttsManualPrompt",
+    }
+    config = voice.get_voice_config("local")
+    config.pop("_voice_state", None)
+    config.pop("_voice_unresolved", None)
+    assert set(config) <= supported
 
 
 def test_caddy_omlx_route_is_gated(monkeypatch):

@@ -30,6 +30,7 @@ import sys
 import json
 import argparse
 import os
+import json
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -65,6 +66,123 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     resolve_engine,
 )
 import tier_registry
+from selected_service import (
+    Operation,
+    Qualification,
+    ServiceLocator,
+    Transport,
+    resolve_stt_transport,
+    resolve_transport,
+    select,
+    assert_renders_from,
+)
+
+VOICE_PREFERENCES = {"default": {}}
+
+
+def _select_voice_candidate(
+    operation, candidates, host="default", previously_selected=None
+):
+    """Select with host-specific fixture preferences and honest evidence."""
+    return select(
+        operation,
+        candidates,
+        preference=list(VOICE_PREFERENCES.get(host, {}).get(operation.value, [])),
+        previously_selected=(
+            (
+                previously_selected.provider,
+                previously_selected.model,
+                previously_selected.qualification,
+            )
+            if previously_selected is not None
+            else None
+        ),
+    )
+
+
+def _service_locator(operation, candidates, provider, model, gate, **route_options):
+    selection = _select_voice_candidate(operation, candidates)
+    qualification = (
+        Qualification.PROTOCOL_PROBED
+        if route_options.get("direct_protocol_probe")
+        else selection.qualification
+    )
+    route = resolve_transport(
+        gate,
+        qualification,
+        wire_model=route_options.get("wire_model", selection.model),
+        endpoint=route_options.get("endpoint"),
+        key_reference=route_options.get("key_reference"),
+        credential_present=route_options.get("credential_present", True),
+        credential_required=route_options.get("credential_required", True),
+        direct_endpoint=(
+            route_options.get("endpoint")
+            if route_options.get("direct_protocol_probe")
+            else None
+        ),
+        direct_wire_model=(
+            route_options.get("wire_model")
+            if route_options.get("direct_protocol_probe")
+            else None
+        ),
+        direct_key_reference=(
+            route_options.get("key_reference")
+            if route_options.get("direct_protocol_probe")
+            else None
+        ),
+        direct_credential_required=route_options.get("credential_required", True),
+        direct_credential_present=route_options.get("credential_present", True),
+        operation=operation,
+    )
+    return ServiceLocator(selection, route)
+
+
+def _render_locator(locator):
+    if (
+        locator.selection.qualification
+        in (Qualification.UNAVAILABLE, Qualification.UNKNOWN)
+        or locator.route.transport is Transport.UNAVAILABLE
+    ):
+        logger.warning(
+            "Omitting voice operation: %s",
+            locator.route.reason or locator.selection.reason,
+        )
+        return None
+    rendered = {
+        "provider": locator.selection.provider,
+        "model": locator.selection.model,
+        "transport": locator.route.transport,
+        "endpoint": locator.route.endpoint,
+        "wire_model": locator.route.wire_model,
+    }
+    assert_renders_from(locator, rendered)
+    return rendered
+
+
+def _voice_config_dir():
+    configured = os.environ.get("OPENCODE_DIR")
+    return (
+        os.path.abspath(os.path.expanduser(configured))
+        if configured
+        else os.path.join(os.path.expanduser("~"), ".config", "opencode")
+    )
+
+
+def _load_voice_state(config_dir):
+    path = os.path.join(config_dir, "opencode-voice.json")
+    try:
+        with open(path, encoding="utf-8") as state_file:
+            return json.load(state_file)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_voice_state(config_dir, state):
+    os.makedirs(config_dir, exist_ok=True)
+    path = os.path.join(config_dir, "opencode-voice.json")
+    write_text_file(
+        path, json.dumps(state, indent=2, sort_keys=True) + "\n", backup=False
+    )
 
 
 def local_voice_provider(model_ref):
@@ -146,7 +264,7 @@ def _resolve_local_voice_model(
     resolved_roles = tier_registry.materialize_role_models(
         registry, resolution_preset, categories, role_models
     )
-    candidates = [
+    candidate_refs = [
         (
             categories.get("solo")
             if resolution_preset == "local-solo"
@@ -155,13 +273,31 @@ def _resolve_local_voice_model(
         categories.get("lightweight"),
         resolved_roles.get("librarian"),
     ]
-    for candidate in dict.fromkeys(item for item in candidates if item):
-        if _voice_llm_capable(candidate):
-            return candidate, False, False
-    logger.warning(
-        "Local voice models lack verified completion capability; voice configuration is unresolved"
+    candidates = []
+    for model_ref in dict.fromkeys(item for item in candidate_refs if item):
+        if _voice_llm_capable(model_ref):
+            provider, _, model = model_ref.partition("/")
+            candidates.append(
+                (provider or "ollama", model_ref, Qualification.DISCOVERED)
+            )
+    selection = _select_voice_candidate(Operation.CLEANUP_LLM, candidates)
+    locator = _service_locator(
+        Operation.CLEANUP_LLM,
+        candidates,
+        selection.provider,
+        selection.model,
+        "direct",
+        endpoint=(
+            (local_endpoint_for(selection.provider, "openai") or (None, None))[0]
+            if selection.provider
+            else None
+        ),
+        credential_required=False,
     )
-    return None, True, False
+    rendered = _render_locator(locator)
+    if rendered is None:
+        return None, True, False
+    return rendered["model"], False, False
 
 
 def add_voice_transport_arguments(parser):
@@ -169,15 +305,12 @@ def add_voice_transport_arguments(parser):
     parser.add_argument(
         "--stt-transport",
         choices=("auto", "local", "openai"),
-        default="auto",
+        default=None,
         help="STT transport policy (auto preserves tier-based behaviour)",
     )
 
 
-def get_voice_config(
-    tier: str,
-    options=None,
-) -> dict:
+def get_voice_config(tier: str, options=None, state=None) -> dict:
     """Build the opencode-voice plugin config dict based on tier.
 
     Returns a dict suitable for the plugin entry in tui.json:
@@ -189,7 +322,19 @@ def get_voice_config(
     role_models = options.get("role_models")
     category_models = options.get("category_models")
     min_reasoning_embedding = options.get("min_reasoning_embedding")
-    stt_transport = options.get("stt_transport", "auto")
+    stt_transport = options.get("stt_transport")
+    state = state if state is not None else {}
+    saved_transport = state.get("sttTransport")
+    gateway_gate = None
+    if os.environ.get("DOTFILES_USE_OPENAI_SERVICE_LANES") is not None:
+        gateway_gate = os.environ.get(
+            "DOTFILES_USE_OPENAI_SERVICE_LANES", ""
+        ).lower() in ("1", "true", "yes")
+    resolved_transport, transport_reason = resolve_stt_transport(
+        stt_transport, gateway_gate=gateway_gate, saved=saved_transport
+    )
+    voice_config = {}
+    locators = {}
     is_anthropic_tier = tier in ("anthropic", "pro-plus-anthropic")
     is_plus_tier = tier in (
         "plus",
@@ -328,7 +473,22 @@ def get_voice_config(
                 )
                 voice_model = resolved_roles.get("librarian")
                 if voice_model:
-                    voice_config = local_voice_provider(voice_model)
+                    provider, _, model = voice_model.partition("/")
+                    locator = _service_locator(
+                        Operation.CLEANUP_LLM,
+                        [(provider, voice_model, Qualification.DISCOVERED)],
+                        provider,
+                        voice_model,
+                        "direct",
+                        endpoint=(
+                            local_endpoint_for(provider, "openai") or (None, None)
+                        )[0],
+                        credential_required=False,
+                    )
+                    rendered = _render_locator(locator)
+                    if rendered:
+                        voice_config = local_voice_provider(rendered["model"])
+                        locators[Operation.CLEANUP_LLM.value] = locator
         except (OSError, ValueError, RuntimeError, KeyError) as error:
             logger.warning(
                 "Local voice model resolution failed; retaining configured tier model: %s",
@@ -343,6 +503,8 @@ def get_voice_config(
     has_openai_key = bool(os.environ.get("OPENAI_API_KEY", ""))
 
     def configure_local_stt():
+        candidates = []
+        metadata = {}
         for provider in active_engines():
             engine = resolve_engine(provider)
             opt_out_env = engine.get("audio_opt_out_env") if engine else None
@@ -357,46 +519,60 @@ def get_voice_config(
             endpoint = local_endpoint_for(provider, "openai")
             if not models or endpoint is None:
                 continue
-            voice_config["sttEndpoint"] = endpoint[0]
-            voice_config["sttModel"] = strip_provider_prefix(models[0]["name"])
-            if endpoint[1] and os.environ.get(endpoint[1], "").strip():
-                voice_config["sttApiKeyEnv"] = endpoint[1]
-            return True
-        return False
-
-    if stt_transport == "local":
-        configure_local_stt()
-    elif stt_transport == "openai":
-        if not has_openai_key:
-            raise RuntimeError(
-                "OpenAI STT transport requested but OPENAI_API_KEY is unavailable"
+            for item in models:
+                model_ref = item["name"]
+                candidates.append((provider, model_ref, Qualification.DISCOVERED))
+                metadata[(provider, model_ref)] = (endpoint, item)
+        if candidates:
+            selection = _select_voice_candidate(Operation.STT, candidates)
+            endpoint, item = metadata[(selection.provider, selection.model)]
+            locator = _service_locator(
+                Operation.STT,
+                candidates,
+                selection.provider,
+                selection.model,
+                "direct",
+                endpoint=endpoint[0],
+                wire_model=strip_provider_prefix(item["name"]),
+                credential_required=False,
             )
-        voice_config["sttEndpoint"] = get_provider_base_url("openai")
-        voice_config["sttModel"] = "whisper-1"
-        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif stt_transport == "auto" and is_plus_tier:
-        # OpenAI tiers — use OpenAI for STT too
-        voice_config["sttEndpoint"] = get_provider_base_url("openai")
-        voice_config["sttModel"] = "whisper-1"
-        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif stt_transport == "auto" and is_anthropic_tier and has_openai_key:
-        # Anthropic tiers — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = get_provider_base_url("openai")
-        voice_config["sttModel"] = "whisper-1"
-        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif stt_transport == "auto" and tier == "pro-plus" and has_openai_key:
-        # pro-plus — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = get_provider_base_url("openai")
-        voice_config["sttModel"] = "whisper-1"
-        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif stt_transport == "auto" and tier == "pro-plus-anthropic" and has_openai_key:
-        # pro-plus-anthropic — upgrade STT to OpenAI if key available
-        voice_config["sttEndpoint"] = get_provider_base_url("openai")
-        voice_config["sttModel"] = "whisper-1"
-        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif stt_transport == "auto" and configure_local_stt():
-        pass
-    # else: local/pro use whisper-cli (no stt config needed — plugin auto-detects)
+            rendered = _render_locator(locator)
+            if rendered:
+                voice_config.update(
+                    sttEndpoint=rendered["endpoint"], sttModel=rendered["wire_model"]
+                )
+                if endpoint[1] and os.environ.get(endpoint[1], "").strip():
+                    voice_config["sttApiKeyEnv"] = endpoint[1]
+                locators[Operation.STT.value] = locator
+            else:
+                for key in ("sttEndpoint", "sttModel", "sttApiKeyEnv"):
+                    voice_config.pop(key, None)
+
+    if resolved_transport == "openai":
+        candidate = [("openai", "whisper-1", Qualification.DISCOVERED)]
+        locator = _service_locator(
+            Operation.STT,
+            candidate,
+            "openai",
+            "whisper-1",
+            "direct",
+            endpoint=get_provider_base_url("openai"),
+            key_reference="OPENAI_API_KEY",
+            wire_model="whisper-1",
+            direct_protocol_probe=True,
+            credential_present=has_openai_key,
+            credential_required=True,
+        )
+        rendered = _render_locator(locator)
+        if rendered:
+            voice_config.update(
+                sttEndpoint=rendered["endpoint"],
+                sttModel=rendered["wire_model"],
+                sttApiKeyEnv="OPENAI_API_KEY",
+            )
+            locators[Operation.STT.value] = locator
+    elif resolved_transport == "local":
+        configure_local_stt()
 
     # This plugin synthesizes through Piper; HTTP TTS belongs to Open WebUI.
     discovered_tts = any(
@@ -444,6 +620,27 @@ def get_voice_config(
         if not voice_config.get("sttEndpoint"):
             return {"_voice_unresolved": True}
         voice_config["_voice_unresolved"] = True
+    voice_config["_voice_state"] = {
+        "sttTransport": resolved_transport,
+        "sttTransportReason": transport_reason,
+        "selections": {
+            name: {
+                "provider": locator.selection.provider,
+                "model": locator.selection.model,
+                "qualification": locator.selection.qualification.value,
+                "reason": locator.selection.reason,
+                "transport": locator.route.transport.value,
+                "endpoint": locator.route.endpoint,
+                "wire_model": locator.route.wire_model,
+                **(
+                    {"key_reference": locator.route.key_reference}
+                    if locator.route.key_reference
+                    else {}
+                ),
+            }
+            for name, locator in locators.items()
+        },
+    }
     return voice_config
 
 
@@ -494,16 +691,32 @@ def main():
         load_env(home_env)
 
     # Build voice config
-    voice_config = get_voice_config(
-        args.preset,
-        _voice_resolution_options(
-            args.local_fallback_preset,
-            args.role_models,
-            args.category_models,
-            args.min_reasoning_embedding,
-            args.stt_transport,
-        ),
+    prior_state = _load_voice_state(config_dir_path)
+    voice_config = (
+        get_voice_config(
+            args.preset,
+            _voice_resolution_options(
+                args.local_fallback_preset,
+                args.role_models,
+                args.category_models,
+                args.min_reasoning_embedding,
+                args.stt_transport,
+            ),
+            state=prior_state,
+        )
+        if "state" in get_voice_config.__code__.co_varnames
+        else get_voice_config(
+            args.preset,
+            _voice_resolution_options(
+                args.local_fallback_preset,
+                args.role_models,
+                args.category_models,
+                args.min_reasoning_embedding,
+                args.stt_transport,
+            ),
+        )
     )
+    voice_state = voice_config.pop("_voice_state", None)
     unresolved = voice_config.pop("_voice_unresolved", False)
 
     output_path = os.path.join(config_dir_path, "tui.json")
@@ -540,6 +753,8 @@ def main():
         ),
         None,
     )
+    if voice_state is None:
+        unresolved = True
     if unresolved:
         existing_options = (
             existing_voice[1]
@@ -548,12 +763,10 @@ def main():
             and isinstance(existing_voice[1], dict)
             else {}
         )
-        if "sttEndpoint" in voice_config and existing_voice is not None:
+        if existing_voice is not None:
             for key in ("endpoint", "model", "apiKeyEnv", "ttsVoice"):
                 if key in existing_options:
                     voice_config[key] = existing_options[key]
-            filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
-        elif existing_voice is not None:
             filtered_plugins.append(existing_voice)
     else:
         filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
@@ -611,6 +824,9 @@ def main():
     except Exception as e:
         logger.critical(f"Failed to write tui.json: {e}")
         sys.exit(1)
+
+    if not unresolved and voice_state:
+        _save_voice_state(config_dir_path, voice_state)
 
     # Summary
     whisper_model = os.environ.get("DOTFILES_WHISPER_MODEL", "ggml-large-v3-turbo.bin")
