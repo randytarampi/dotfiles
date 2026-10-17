@@ -206,6 +206,7 @@ def _ollama_metadata_cached(host, model_name):
         method="POST",
     )
     try:
+        # nosec B310 -- scheme allowlist enforced by _validated_ollama_show_url above.
         with urllib.request.urlopen(request, timeout=3) as response:
             payload = json.loads(response.read().decode("utf-8"))
         if not isinstance(payload, dict):
