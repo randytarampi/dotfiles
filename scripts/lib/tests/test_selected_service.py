@@ -10,6 +10,7 @@ from selected_service import (
     Transport,
     assert_renders_from,
     render_invariant_test,
+    resolve_stt_transport,
     resolve_transport,
     select,
 )
@@ -231,3 +232,43 @@ def test_render_invariant():
     rendered["endpoint"] = "http://direct/v1"
     with pytest.raises(AssertionError):
         assert_renders_from(locator, rendered)
+
+
+def test_resolve_stt_transport_precedence():
+    # Explicit user choice binds over everything, with its own reason.
+    assert resolve_stt_transport("local", gateway_gate=True, saved="openai") == (
+        "local",
+        "explicit --stt-transport local",
+    )
+    assert resolve_stt_transport("openai", gateway_gate=False, saved="local") == (
+        "openai",
+        "explicit --stt-transport openai",
+    )
+    # Omitted flag and explicit auto both defer to the global gateway gate.
+    assert resolve_stt_transport(None, gateway_gate=True) == (
+        "openai",
+        "global gateway gate",
+    )
+    assert resolve_stt_transport("auto", gateway_gate=False, saved="openai") == (
+        "local",
+        "global gateway gate",
+    )
+    # Unset gate falls to the saved selection.
+    assert resolve_stt_transport(None, gateway_gate=None, saved="local") == (
+        "local",
+        "saved selection",
+    )
+    assert resolve_stt_transport("auto", gateway_gate=None, saved="openai") == (
+        "openai",
+        "saved selection",
+    )
+    # Nothing binding: conservative local default.
+    assert resolve_stt_transport(None, gateway_gate=None, saved=None) == (
+        "local",
+        "no binding input; local default",
+    )
+    # Invalid inputs are rejected, not coerced.
+    with pytest.raises(ValueError):
+        resolve_stt_transport("piper", gateway_gate=True)
+    with pytest.raises(ValueError):
+        resolve_stt_transport(None, gateway_gate=None, saved="gateway")

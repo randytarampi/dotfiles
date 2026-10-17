@@ -216,6 +216,37 @@ def select(
     )
 
 
+def resolve_stt_transport(
+    flag: str | None,
+    *,
+    gateway_gate: bool | None,
+    saved: str | None = None,
+) -> tuple[str, str]:
+    """Resolve the client-native STT transport axis; returns (transport, reason).
+
+    The axis is the USER's locality/provider preference, distinct from the
+    gateway-vs-direct routing policy. Precedence: an explicit ``local`` or
+    ``openai`` flag binds; an omitted flag or an explicit ``auto`` defers to
+    the global gateway gate (``True`` -> openai, ``False`` -> local); an
+    unset gate falls to the saved selection; with nothing binding, the local
+    default applies. No store is read or written here; callers persist the
+    resolved choice in their canonical repo-owned configuration.
+    """
+    if flag in ("local", "openai"):
+        return flag, f"explicit --stt-transport {flag}"
+    if flag not in (None, "auto"):
+        raise ValueError("stt transport flag must be local, openai, auto, or omitted")
+    if saved not in (None, "local", "openai"):
+        raise ValueError("saved selection must be local or openai")
+    if gateway_gate is True:
+        return "openai", "global gateway gate"
+    if gateway_gate is False:
+        return "local", "global gateway gate"
+    if saved in ("local", "openai"):
+        return saved, "saved selection"
+    return "local", "no binding input; local default"
+
+
 def assert_renders_from(selection_or_locator, rendered):
     """Raise AssertionError unless rendered route fields match the locator."""
     locator = selection_or_locator
