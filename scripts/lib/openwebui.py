@@ -1954,6 +1954,89 @@ class OpenWebUIClient:
         self.admin_credentials = admin_credentials or {}
         self._session_token = None
 
+    def _request_bytes(self, path, data, content_type, method="POST", retry_auth=True):
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": content_type,
+            },
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=self.timeout
+            ) as response:  # nosec B310
+                return response.headers.get("Content-Type", ""), response.read()
+        except urllib.error.HTTPError as error:
+            if error.code in {401, 403}:
+                if retry_auth and self._try_signin():
+                    return self._request_bytes(path, data, content_type, method, False)
+                raise AuthError(f"Open WebUI API HTTP {error.code}") from error
+            raise ReachableError(f"Open WebUI API HTTP {error.code}") from error
+        except (urllib.error.URLError, OSError) as error:
+            raise ReachableError(f"Open WebUI API unavailable: {error}") from error
+
+    @staticmethod
+    def _multipart(fields, filename, content, content_type):
+        boundary = "----OpenWebUIClientBoundary7MA4YWxkTrZu0gW"
+        chunks = []
+        for name, value in fields.items():
+            chunks.extend(
+                (
+                    f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode(),
+                )
+            )
+        chunks.extend(
+            (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: {content_type}\r\n\r\n'.encode(),
+                content,
+                f"\r\n--{boundary}--\r\n".encode(),
+            )
+        )
+        return f"multipart/form-data; boundary={boundary}", b"".join(chunks)
+
+    def transcribe_audio(self, wav_bytes, filename):
+        """Submit audio to the configured consumer transcription route."""
+        content_type, body = self._multipart({}, filename, wav_bytes, "audio/wav")
+        _, response = self._request_bytes(
+            "/api/v1/audio/transcriptions", body, content_type
+        )
+        return json.loads(response.decode())
+
+    def speech(self, text, model=None, voice=None):
+        """Return the configured consumer speech route's content type and audio bytes."""
+        payload = {"input": text}
+        if model is not None:
+            payload["model"] = model
+        if voice is not None:
+            payload["voice"] = voice
+        content_type, response = self._request_bytes(
+            "/api/v1/audio/speech", json.dumps(payload).encode(), "application/json"
+        )
+        return content_type, response
+
+    def upload_file(self, content, filename, content_type):
+        """Upload a file through Open WebUI's file API."""
+        multipart_type, body = self._multipart({}, filename, content, content_type)
+        _, response = self._request_bytes("/api/v1/files/", body, multipart_type)
+        return json.loads(response.decode())
+
+    def process_file(self, file_id):
+        """ProcessFileForm requires JSON file_id; content and collection_name are optional."""
+        return self._request(
+            "/api/v1/retrieval/process/file", "POST", {"file_id": file_id}
+        )
+
+    def retrieval_query(self, query, file_ids=None, collection_id=None, k=2):
+        """QueryDocForm uses collection_name; QueryCollectionsForm uses collection_names."""
+        if collection_id is not None:
+            payload = {"collection_name": collection_id, "query": query, "k": k}
+            return self._request("/api/v1/retrieval/query/doc", "POST", payload)
+        payload = {"collection_names": file_ids or [], "query": query, "k": k}
+        return self._request("/api/v1/retrieval/query/collection", "POST", payload)
+
     def _request(self, path, method="GET", payload=None, retry_auth=True):
         request = urllib.request.Request(
             self.base_url + path,

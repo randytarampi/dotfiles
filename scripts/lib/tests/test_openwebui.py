@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import shlex
@@ -11,6 +12,80 @@ import route_probes
 
 import constants
 import openwebui
+
+
+class _FakeResponse:
+    def __init__(self, body, content_type="application/json"):
+        self.body = body
+        self.headers = {"Content-Type": content_type}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def test_consumer_outcome_client_methods(monkeypatch, caplog):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request)
+        if request.full_url.endswith("/audio/speech"):
+            return _FakeResponse(b"audio", "audio/wav")
+        if request.full_url.endswith("/audio/transcriptions"):
+            return _FakeResponse(b'{"text":"hello","language":"en"}')
+        return _FakeResponse(b'{"id":"file-1"}')
+
+    monkeypatch.setattr(openwebui.urllib.request, "urlopen", fake_urlopen)
+    client = openwebui.OpenWebUIClient("http://127.0.0.1:8080", "test-secret")
+    transcription = client.transcribe_audio(b"wav", "sample.wav")
+    speech = client.speech("hello", "voice-model", "alloy")
+    uploaded = client.upload_file(b"doc", "sample.txt", "text/plain")
+    assert transcription["text"] == "hello"
+    assert speech == ("audio/wav", b"audio")
+    assert uploaded["id"] == "file-1"
+    assert b'name="file"; filename="sample.wav"' in calls[0].data
+    assert "boundary=" in calls[0].get_header("Content-type")
+    assert json.loads(calls[1].data) == {
+        "input": "hello",
+        "model": "voice-model",
+        "voice": "alloy",
+    }
+    for call in calls:
+        assert call.get_header("Authorization") == "Bearer test-secret"
+        assert "test-secret" not in call.data.decode("latin-1")
+    assert "test-secret" not in repr((transcription, speech, uploaded))
+    assert "test-secret" not in caplog.text
+
+
+def test_retrieval_client_payloads(caplog):
+    client = openwebui.OpenWebUIClient("http://127.0.0.1:8080", "test-secret")
+    calls = []
+    client._request = lambda path, method, payload: calls.append(
+        (path, method, payload)
+    ) or {"hits": []}
+    processed = client.process_file("file-1")
+    client.retrieval_query("find", file_ids=["collection"], k=3)
+    document_hits = client.retrieval_query("find", collection_id="collection", k=4)
+    assert "test-secret" not in repr((processed, document_hits, calls))
+    assert "test-secret" not in caplog.text
+    assert calls == [
+        ("/api/v1/retrieval/process/file", "POST", {"file_id": "file-1"}),
+        (
+            "/api/v1/retrieval/query/collection",
+            "POST",
+            {"collection_names": ["collection"], "query": "find", "k": 3},
+        ),
+        (
+            "/api/v1/retrieval/query/doc",
+            "POST",
+            {"collection_name": "collection", "query": "find", "k": 4},
+        ),
+    ]
 
 
 @pytest.fixture(autouse=True)
