@@ -381,7 +381,9 @@ def _probe_qualification(probe, endpoint, model, key_reference, **kwargs):
     from route_probes import qualification_from_probe
 
     key_value = os.environ.get(key_reference, "") if key_reference else None
-    result = probe(endpoint, model, key_reference, key_value=key_value, **kwargs)
+    result = probe(
+        endpoint, model, key_reference=key_reference, key_value=key_value, **kwargs
+    )
     return qualification_from_probe(result), "; ".join(result.notes) or result.status
 
 
