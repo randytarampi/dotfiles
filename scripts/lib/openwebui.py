@@ -583,7 +583,7 @@ def _reconcile_audio_adoption(
                 "Refusing adoption of customized Open WebUI audio fields: %s",
                 new_refusal,
             )
-            return
+            return {"status": "refused", "applied": False, "verified": False}
     owned_fields = recorded_fields | wanted_fields
     desired_now = _audio_projection_subset(
         _merge_owned_audio(current, wanted)[0], owned_fields
@@ -598,7 +598,7 @@ def _reconcile_audio_adoption(
         _audio_projection_subset(current, owned_fields) == desired_now
         and not credential_change
     ):
-        return
+        return {"status": "noop", "applied": False, "verified": False}
     prewrite = client.get_audio_config()
     if projection is not None:
         # Recheck recorded-field drift and newly claimed fields before writing.
@@ -609,11 +609,15 @@ def _reconcile_audio_adoption(
         prewrite_refusal = _audio_refusal(prewrite, None, wanted_fields)
     if prewrite_refusal:
         logger.error("Refusing Open WebUI audio write after concurrent edit")
-        return
+        return {"status": "refused", "applied": False, "verified": False}
     candidate = _merge_owned_audio(prewrite, wanted)[0]
     desired = _audio_projection_subset(candidate, owned_fields)
     client.update_audio_config(candidate)
-    _verify_audio_projection(client, desired)
+    try:
+        _verify_audio_projection(client, desired)
+    except OpenWebUIError as failure:
+        failure.outcome = {"status": "failed", "applied": True, "verified": False}
+        raise
     _write_audio_projection(desired)
 
 
@@ -621,21 +625,28 @@ def _reconcile_audio_gate_off(client, projection, recorded_fields, logger):
     prewrite = client.get_audio_config()
     if _audio_refusal(prewrite, projection, recorded_fields):
         logger.error("Refusing Open WebUI audio disable after concurrent edit")
-        return
+        return {"status": "refused", "applied": False, "verified": False}
     restore = {}
     for section, key in recorded_fields:
         if key == "OPENAI_API_KEY":
             logger.error(
                 "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
             )
-            return
+            return {"status": "refused", "applied": False, "verified": False}
         restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
             key, ""
         )
     merged, _ = _merge_owned_audio(prewrite, restore)
-    if merged != prewrite:
+    changed = merged != prewrite
+    if changed:
         client.update_audio_config(merged)
-    _verify_audio_projection(client, _audio_projection_subset(merged, recorded_fields))
+    try:
+        _verify_audio_projection(
+            client, _audio_projection_subset(merged, recorded_fields)
+        )
+    except OpenWebUIError as failure:
+        failure.outcome = {"status": "failed", "applied": changed, "verified": False}
+        raise
     _write_audio_projection(None)
 
 
@@ -676,7 +687,7 @@ def _reconcile_audio(client, current, wanted):
             logger.error(
                 "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
             )
-            return
+            return {"status": "refused", "applied": False, "verified": False}
     effective_projection = (
         _read_audio_projection() if legacy_credentials else projection
     )
@@ -699,7 +710,7 @@ def _reconcile_audio(client, current, wanted):
                 "Refusing adoption of customized Open WebUI audio fields: %s",
                 new_refusal,
             )
-            return {"status": "refused"}
+            return {"status": "refused", "applied": False, "verified": False}
     prewrite = client.get_audio_config()
     prewrite_refusal = _audio_refusal(prewrite, effective_projection, recorded_fields)
     prewrite_refusal += _audio_refusal(prewrite, None, new_fields)
@@ -732,10 +743,23 @@ def _reconcile_audio(client, current, wanted):
         # otherwise an ignored write releases ownership unverified.
         expected = None
         expected_fields = retained | wanted_fields | released_fields
+        applied = False
+        verified = False
         if expected_fields:
             expected = _audio_projection_subset(candidate, expected_fields)
+            applied = candidate != prewrite
             client.update_audio_config(candidate)
-            _verify_audio_projection(client, expected)
+            try:
+                _verify_audio_projection(client, expected)
+            except OpenWebUIError as failure:
+                failure.outcome = {
+                    "status": "failed",
+                    "applied": applied,
+                    "verified": False,
+                    "released": sorted(released_fields),
+                }
+                raise
+            verified = True
         # Ownership persists only over CLAIMED fields; released fields are
         # verified-restored above but not owned afterwards.
         _write_audio_projection(
@@ -745,15 +769,23 @@ def _reconcile_audio(client, current, wanted):
         )
         return {
             "status": "verified" if expected_fields else "noop",
-            "applied": bool(expected_fields),
-            "verified": bool(expected_fields),
+            "applied": applied,
+            "verified": verified,
             "released": sorted(released_fields),
         }
     if wanted:
         expected = _audio_projection_subset(candidate, recorded_fields | wanted_fields)
         if candidate != prewrite or wanted_credentials:
             client.update_audio_config(candidate)
-            _verify_audio_projection(client, expected)
+            try:
+                _verify_audio_projection(client, expected)
+            except OpenWebUIError as failure:
+                failure.outcome = {
+                    "status": "failed",
+                    "applied": True,
+                    "verified": False,
+                }
+                raise
             _write_audio_projection(expected)
             return {"status": "verified", "applied": True, "verified": True}
         return {"status": "noop", "applied": False, "verified": False}
@@ -766,11 +798,21 @@ def _reconcile_audio(client, current, wanted):
             for section in {s for s, _ in recorded_fields}
         }
         candidate = _merge_owned_audio(prewrite, restore)[0]
-        if candidate != prewrite:
+        applied = candidate != prewrite
+        if applied:
             client.update_audio_config(candidate)
-        _verify_audio_projection(
-            client, _audio_projection_subset(candidate, recorded_fields)
-        )
+        try:
+            _verify_audio_projection(
+                client, _audio_projection_subset(candidate, recorded_fields)
+            )
+        except OpenWebUIError as failure:
+            failure.outcome = {
+                "status": "failed",
+                "applied": applied,
+                "verified": False,
+                "released": sorted(recorded_fields),
+            }
+            raise
         _write_audio_projection(None)
         return {
             "status": "verified",
@@ -885,7 +927,7 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         and current.get("ollama_config", {}).get("url")
         == projection.get("ollama_config", {}).get("url")
     ):
-        return
+        return {"status": "noop", "applied": False, "verified": False}
     previous = _embedding_identity(current)
     old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
     recorded_dims = (projection or {}).get("output_dims")
@@ -918,7 +960,7 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
                     {"engine": "ollama", "model": EMBEDDING_MODEL},
                     EMBEDDING_OUTPUT_DIMS,
                 )
-                return
+                return {"status": "refused", "applied": False, "verified": False}
         same_dims_gate_applied = True
     if not same_dims_gate_applied and old_dims != EMBEDDING_OUTPUT_DIMS:
         acknowledgement = state.get("acknowledgement")
@@ -936,14 +978,18 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
                 {"engine": "ollama", "model": EMBEDDING_MODEL},
                 EMBEDDING_OUTPUT_DIMS,
             )
-            return
+            return {"status": "refused", "applied": False, "verified": False}
     prewrite = client.get_embedding_config()
     if _embedding_refusal(prewrite, projection):
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
-        return
+        return {"status": "refused", "applied": False, "verified": False}
     candidate = _embedding_candidate(prewrite)
     client.update_embedding_config(candidate)
-    _verify_embedding_readback(client, candidate)
+    try:
+        _verify_embedding_readback(client, candidate)
+    except OpenWebUIError as failure:
+        failure.outcome = {"status": "failed", "applied": True, "verified": False}
+        raise
     _write_embedding_state(
         {
             "projection": {
@@ -1076,7 +1122,7 @@ def _reconcile_embedding_gate_off(client, state, projection, logger):
     prewrite = client.get_embedding_config()
     if _embedding_refusal(prewrite, projection):
         logger.error("Refusing Open WebUI embedding disable after concurrent edit")
-        return
+        return {"status": "refused", "applied": False, "verified": False}
     previous = projection.get("previous", {})
     previous_dims = projection.get("previous_output_dims")
     current_dims = projection.get("output_dims")
@@ -1096,10 +1142,14 @@ def _reconcile_embedding_gate_off(client, state, projection, logger):
                 previous,
                 previous_dims,
             )
-            return
+            return {"status": "refused", "applied": False, "verified": False}
     restored = _embedding_restore(prewrite, projection)
     client.update_embedding_config(restored)
-    _verify_embedding_readback(client, restored, restore=True)
+    try:
+        _verify_embedding_readback(client, restored, restore=True)
+    except OpenWebUIError as failure:
+        failure.outcome = {"status": "failed", "applied": True, "verified": False}
+        raise
     _write_embedding_state(None)
 
 
@@ -1868,6 +1918,12 @@ def reconcile_via_api(client, desired):
                     actions["verified"].append("audio-release")
     except OpenWebUIError as error:
         actions["failed"].append("audio")
+        outcome = getattr(error, "outcome", None)
+        if outcome:
+            if outcome.get("applied"):
+                actions["applied"].append("audio")
+            if outcome.get("verified"):
+                actions["verified"].append("audio")
         error.actions = actions
         raise
     try:
@@ -1888,6 +1944,12 @@ def reconcile_via_api(client, desired):
                 actions["verified"].append("embedding-release")
     except OpenWebUIError as error:
         actions["failed"].append("embedding")
+        outcome = getattr(error, "outcome", None)
+        if outcome:
+            if outcome.get("applied"):
+                actions["applied"].append("embedding")
+            if outcome.get("verified"):
+                actions["verified"].append("embedding")
         error.actions = actions
         raise
     before_openai, before_ollama = (

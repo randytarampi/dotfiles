@@ -3204,3 +3204,54 @@ def test_same_dims_model_change_refuses_without_ack_switches_with_ack(
     saved = json.loads(state.read_text())
     assert saved["embedding_fingerprint"]["model"] == openwebui.EMBEDDING_MODEL
     assert saved["embedding_fingerprint"]["parity"] in {"acknowledged", "pass", "n-a"}
+
+
+def test_audio_failed_readback_keeps_applied_evidence_and_projection(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    client = _AudioClient({"stt": {"MODEL": ""}})
+    client.alter_writes = (
+        True  # the POST succeeds; the readback returns a changed model
+    )
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(
+            client,
+            {
+                "openai": [],
+                "anthropic": [],
+                "ollama": [],
+                "audio": {"stt": {"ENGINE": "openai", "MODEL": "new-model"}},
+            },
+        )
+    # The carried evidence: the POST already happened; verification did not.
+    assert getattr(raised.value, "outcome") == {
+        "status": "failed",
+        "applied": True,
+        "verified": False,
+    }
+    assert raised.value.actions["failed"] == ["audio"]
+    assert "audio" in raised.value.actions["applied"]
+    assert client.audio_writes == 1  # the applied write is not lost
+    assert not state.exists()  # ownership is not persisted on failed verification
+
+
+def test_legacy_audio_release_refusal_reports_refused_outcome(
+    monkeypatch, tmp_path, caplog
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    state.write_text(
+        json.dumps(
+            {"projection": {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "LEGACY_SECRET"}}}
+        )
+    )
+    client = _AudioClient({"stt": {"MODEL": "asr"}})
+    result = openwebui._reconcile_audio(client, client.audio, {})
+    assert result["status"] == "refused"
+    assert result["applied"] is False
+    assert result["verified"] is False
+    assert client.audio_writes == 0
+    assert "LEGACY_SECRET" not in caplog.text
+    assert "restore the prior credential manually" in caplog.text
