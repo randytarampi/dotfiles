@@ -513,6 +513,65 @@ def test_embedding_release_checks_backend_identity_before_restoration(
     assert report["applied"] == [] and report["verified"] == []
 
 
+def test_embedding_backend_change_acknowledgement_authorizes_migration(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state_path))
+    current = _embedding_config("ollama", openwebui.EMBEDDING_MODEL)
+    client = _EmbeddingClient(current)
+    setattr(
+        client,
+        "embedding_backend_identity_probe",
+        lambda _config: {"backend": "ollama", "version": "new"},
+    )
+    state = {
+        "projection": {
+            "owned": {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            },
+            "previous": {
+                "engine": "",
+                "model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            "previous_output_dims": 384,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+        },
+        "embedding_fingerprint": {
+            "backend_identity": {"backend": "ollama", "version": "old"},
+        },
+        "acknowledgement": {
+            "previous_model": openwebui.EMBEDDING_MODEL,
+            "previous_engine": "ollama",
+            "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "new_model": openwebui.EMBEDDING_MODEL,
+            "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "acknowledged_at": "operator-confirmed-backend-refresh",
+        },
+    }
+    openwebui._write_embedding_state(state)
+    report = openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "embedding": {"model": openwebui.EMBEDDING_MODEL},
+        },
+    ).actions
+    assert client.writes == 1
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+    assert report["failed"] == []
+    saved = openwebui._read_embedding_state()
+    assert saved["embedding_fingerprint"]["backend_identity"] == {
+        "backend": "ollama",
+        "version": "new",
+    }
+
+
 def test_embedding_customized_model_refusal(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(
         openwebui,

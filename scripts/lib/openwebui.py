@@ -833,6 +833,8 @@ def _reconcile_audio(client, current, wanted):
     for (section, key), value in wanted_credentials.items():
         candidate.setdefault(section, {})[key] = value
     for section, key in wanted_credentials:
+        if section in credential_transitions:
+            continue
         prior = prewrite.get(section, {}).get(key, "")
         referenced_env = next(
             (
@@ -1059,11 +1061,16 @@ def _embedding_identity(config):
     }
 
 
-def _embedding_refusal(config, projection, client=None, state=None):
+def _embedding_refusal(
+    config, projection, client=None, state=None, *, allow_backend_change=False
+):
     identity = _embedding_identity(config)
     fingerprint = (state or _read_embedding_state()).get("embedding_fingerprint", {})
     backend_identity = _embedding_backend_identity(client, config)
-    if _embedding_backend_changed(fingerprint, backend_identity):
+    if (
+        _embedding_backend_changed(fingerprint, backend_identity)
+        and not allow_backend_change
+    ):
         return "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
     if projection is None:
         default = _embedding_identity(EMBEDDING_DEFAULTS)
@@ -1151,6 +1158,7 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
             EMBEDDING_OUTPUT_DIMS,
         )
         return {"status": "refused", "applied": False, "verified": False}
+    acknowledged_backend_change = backend_changed
     if (
         projection is not None
         and not backend_changed
@@ -1196,7 +1204,11 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
                 )
                 return {"status": "refused", "applied": False, "verified": False}
         same_dims_gate_applied = True
-    if not same_dims_gate_applied and old_dims != EMBEDDING_OUTPUT_DIMS:
+    if (
+        not same_dims_gate_applied
+        and not acknowledged_backend_change
+        and old_dims != EMBEDDING_OUTPUT_DIMS
+    ):
         acknowledgement = state.get("acknowledgement")
         if not _embedding_acknowledges(
             acknowledgement,
@@ -1214,7 +1226,13 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
             )
             return {"status": "refused", "applied": False, "verified": False}
     prewrite = client.get_embedding_config()
-    if _embedding_refusal(prewrite, projection, client, state):
+    if _embedding_refusal(
+        prewrite,
+        projection,
+        client,
+        state,
+        allow_backend_change=acknowledged_backend_change,
+    ):
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
         return {"status": "refused", "applied": False, "verified": False}
     candidate = _embedding_candidate(prewrite)
@@ -1225,6 +1243,11 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         failure.outcome = {"status": "failed", "applied": True, "verified": False}
         raise
     backend_identity = _embedding_backend_identity(client, candidate)
+    if acknowledged_backend_change and backend_identity is None:
+        logger.error(
+            "Refusing Open WebUI embedding write; backend identity is unavailable"
+        )
+        return {"status": "refused", "applied": False, "verified": False}
     parity_evidence = _embedding_parity_evidence(client, candidate)
     _write_embedding_state(
         {
@@ -1422,7 +1445,14 @@ def _reconcile_embedding(client, current, wanted):
         raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
     state = _read_embedding_state()
     projection = state.get("projection")
-    refusal = _embedding_refusal(current, projection, client, state)
+    allow_backend_change = bool(wanted)
+    refusal = _embedding_refusal(
+        current,
+        projection,
+        client,
+        state,
+        allow_backend_change=allow_backend_change,
+    )
     if refusal:
         logger.error("%s", refusal)
         return {"status": "refused", "applied": False, "verified": False}
