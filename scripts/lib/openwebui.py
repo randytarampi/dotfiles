@@ -444,6 +444,36 @@ def _audio_projection(config):
     }
 
 
+def _audio_credential_transition_path():
+    return f"{_audio_state_path()}.credentials"
+
+
+def _read_audio_credential_transitions():
+    try:
+        with open(_audio_credential_transition_path(), encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_audio_credential_transitions(transitions):
+    path = _audio_credential_transition_path()
+    if not transitions:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        return
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    _guarantee_no_secrets(transitions)
+    temp = f"{path}.{os.getpid()}.tmp"
+    with open(temp, "w", encoding="utf-8") as handle:
+        json.dump(transitions, handle, indent=2)
+        handle.write("\n")
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+
+
 def _audio_state_path():
     return os.path.expanduser(AUDIO_STATE_PATH)
 
@@ -667,6 +697,7 @@ def _reconcile_audio(client, current, wanted):
         for key in values
         if key != "OPENAI_API_KEY"
     }
+    credential_transitions = _read_audio_credential_transitions()
     recorded_fields = _recorded_fields(projection)
     legacy_credentials = _credential_fields(projection)
     if legacy_credentials:
@@ -696,6 +727,11 @@ def _reconcile_audio(client, current, wanted):
     ):
         return {"status": "refused"}
     released_fields = recorded_fields - wanted_fields
+    released_credentials = {
+        (section, "OPENAI_API_KEY")
+        for section in credential_transitions
+        if section not in wanted or "OPENAI_API_KEY" not in wanted[section]
+    }
     wanted_credentials = {
         (section, key): value
         for section, values in wanted.items()
@@ -720,15 +756,30 @@ def _reconcile_audio(client, current, wanted):
     candidate = _merge_owned_audio(prewrite, wanted)[0]
     for (section, key), value in wanted_credentials.items():
         candidate.setdefault(section, {})[key] = value
+    for section, key in wanted_credentials:
+        credential_transitions[section] = {"field": key}
+    if wanted_credentials:
+        _write_audio_credential_transitions(credential_transitions)
+    if wanted_credentials:
+        logger.warning(
+            "Open WebUI audio credential transition recorded without persisting credential values"
+        )
     if (
         released_fields
         and projection is not None
         and any(key == "OPENAI_API_KEY" for _, key in released_fields)
+        and not released_credentials
     ):
         logger.error(
             "Cannot safely restore released audio credential; restore the prior credential manually and remove managed-audio.json"
         )
         return {"status": "refused"}
+    if released_credentials:
+        restore = {
+            section: {"OPENAI_API_KEY": AUDIO_DEFAULTS[section]["OPENAI_API_KEY"]}
+            for section, _ in released_credentials
+        }
+        candidate = _merge_owned_audio(candidate, restore)[0]
     if released_fields and projection is not None:
         restore = {}
         for section, key in released_fields:
@@ -743,12 +794,14 @@ def _reconcile_audio(client, current, wanted):
         # otherwise an ignored write releases ownership unverified.
         expected = None
         expected_fields = retained | wanted_fields | released_fields
+        expected_fields |= released_credentials
         applied = False
         verified = False
         if expected_fields:
             expected = _audio_projection_subset(candidate, expected_fields)
             applied = candidate != prewrite
-            client.update_audio_config(candidate)
+            if candidate != prewrite:
+                client.update_audio_config(candidate)
             try:
                 _verify_audio_projection(client, expected)
             except OpenWebUIError as failure:
@@ -767,6 +820,12 @@ def _reconcile_audio(client, current, wanted):
             if (retained | wanted_fields)
             else None
         )
+        remaining_credentials = {
+            section: marker
+            for section, marker in credential_transitions.items()
+            if (section, "OPENAI_API_KEY") not in released_credentials
+        }
+        _write_audio_credential_transitions(remaining_credentials)
         return {
             "status": "verified" if expected_fields else "noop",
             "applied": applied,
@@ -789,7 +848,28 @@ def _reconcile_audio(client, current, wanted):
             _write_audio_projection(expected)
             return {"status": "verified", "applied": True, "verified": True}
         return {"status": "noop", "applied": False, "verified": False}
-    elif projection is not None:
+        return {"status": "noop", "applied": False, "verified": False}
+    elif projection is not None or released_credentials:
+        if released_credentials:
+            expected = _audio_projection_subset(candidate, released_credentials)
+            client.update_audio_config(candidate)
+            try:
+                _verify_audio_projection(client, expected)
+            except OpenWebUIError as failure:
+                failure.outcome = {
+                    "status": "failed",
+                    "applied": True,
+                    "verified": False,
+                }
+                raise
+            _write_audio_projection(None)
+            _write_audio_credential_transitions({})
+            return {
+                "status": "verified",
+                "applied": True,
+                "verified": True,
+                "released": sorted(released_credentials),
+            }
         restore = {
             section: {
                 key: AUDIO_DEFAULTS.get(section, {}).get(key, "")
@@ -865,6 +945,16 @@ def _embedding_refusal(config, projection):
                 f"{identity!r}; expected built-in default {default!r}"
             )
     else:
+        fingerprint = _read_embedding_state().get("embedding_fingerprint", {})
+        backend_identity = _embedding_backend_identity(None, config)
+        if (
+            fingerprint.get("backend_identity") is not None
+            and backend_identity is not None
+            and fingerprint.get("backend_identity") != backend_identity
+        ):
+            return (
+                "Refusing Open WebUI embedding reconciliation; backend identity changed"
+            )
         expected = projection.get("owned", {})
         if identity != {
             "engine": expected.get("RAG_EMBEDDING_ENGINE"),
@@ -920,8 +1010,13 @@ def _verify_embedding_readback(client, expected, restore=False):
 
 
 def _reconcile_embedding_adoption(client, state, projection, current, logger):
+    backend_identity = _embedding_backend_identity(client, current)
     if (
         projection is not None
+        and (
+            (projection.get("embedding_fingerprint") or {}).get("backend_identity")
+            in (None, backend_identity)
+        )
         and _embedding_identity(current)
         == {"engine": "ollama", "model": EMBEDDING_MODEL}
         and current.get("ollama_config", {}).get("url")
@@ -943,7 +1038,9 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
         # injectable and none is wired for this path, so parity is
         # inconclusive here and the acknowledgement gate stays. The recorded
         # output_dims are the acknowledged baseline dimensions.
-        parity = _embedding_vector_parity(None, None)
+        previous_probe = getattr(client, "previous_embedding_probe", None)
+        target_probe = getattr(client, "target_embedding_probe", None)
+        parity = _embedding_vector_parity(previous_probe, target_probe)
         if not parity:
             acknowledgement = state.get("acknowledgement")
             if not _embedding_acknowledges(
@@ -990,6 +1087,8 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
     except OpenWebUIError as failure:
         failure.outcome = {"status": "failed", "applied": True, "verified": False}
         raise
+    backend_identity = _embedding_backend_identity(client, candidate)
+    parity_evidence = _embedding_parity_evidence(client, candidate)
     _write_embedding_state(
         {
             "projection": {
@@ -1012,10 +1111,28 @@ def _reconcile_embedding_adoption(client, state, projection, current, logger):
                     if not same_dims_other_model
                     else ("pass" if parity else "acknowledged")
                 ),
+                "backend_identity": backend_identity,
+                "version_evidence": (
+                    backend_identity.get("version")
+                    if isinstance(backend_identity, dict)
+                    else None
+                ),
+                "parity_evidence": parity_evidence,
             },
             "acknowledgement": state.get("acknowledgement"),
         }
     )
+    return {"status": "verified", "applied": True, "verified": True}
+
+
+def _embedding_backend_identity(client, config):
+    probe = getattr(client, "embedding_backend_identity_probe", None)
+    return probe(config) if callable(probe) else None
+
+
+def _embedding_parity_evidence(client, config):
+    probe = getattr(client, "embedding_parity_probe", None)
+    return probe(config) if callable(probe) else "inconclusive"
 
 
 def _embedding_vector_parity(previous_probe, target_probe, tolerance=1e-6):
@@ -1151,6 +1268,12 @@ def _reconcile_embedding_gate_off(client, state, projection, logger):
         failure.outcome = {"status": "failed", "applied": True, "verified": False}
         raise
     _write_embedding_state(None)
+    return {
+        "status": "verified",
+        "applied": True,
+        "verified": True,
+        "released": ["embedding"],
+    }
 
 
 def _reconcile_embedding(client, current, wanted):
@@ -1167,25 +1290,9 @@ def _reconcile_embedding(client, current, wanted):
         logger.error("%s", refusal)
         return {"status": "refused", "applied": False, "verified": False}
     if wanted:
-        before = _read_embedding_state()
-        _reconcile_embedding_adoption(client, state, projection, current, logger)
-        after = _read_embedding_state()
-        applied = after != before
-        return {
-            "status": "verified" if applied else "noop",
-            "applied": applied,
-            "verified": applied,
-        }
+        return _reconcile_embedding_adoption(client, state, projection, current, logger)
     elif projection is not None:
-        _reconcile_embedding_gate_off(client, state, projection, logger)
-        after = _read_embedding_state()
-        released = projection is not None and after.get("projection") is None
-        return {
-            "status": "verified" if released else "refused",
-            "applied": released,
-            "verified": released,
-            "released": ["embedding"] if released else [],
-        }
+        return _reconcile_embedding_gate_off(client, state, projection, logger)
     return {"status": "noop", "applied": False, "verified": False}
 
 
@@ -1952,17 +2059,31 @@ def reconcile_via_api(client, desired):
                 actions["verified"].append("embedding")
         error.actions = actions
         raise
-    before_openai, before_ollama = (
-        client.get_openai_config(),
-        client.get_ollama_config(),
+    try:
+        before_openai, before_ollama = (
+            client.get_openai_config(),
+            client.get_ollama_config(),
+        )
+        if before_openai != initial_openai or before_ollama != initial_ollama:
+            raise OpenWebUIError("Open WebUI snapshot changed before write; aborting")
+    except OpenWebUIError as error:
+        actions["failed"].append("connections-snapshot")
+        error.actions = actions
+        raise
+    except Exception as error:
+        actions["failed"].append("connections-snapshot")
+        raise OpenWebUIError(
+            "Open WebUI connection snapshot read failed", actions=actions
+        ) from error
+    changed = tuple(
+        collection
+        for collection in ("openai", "anthropic", "ollama")
+        if any(
+            item["collection"] == collection
+            and item["action"] in {"add", "update", "delete"}
+            for item in result.plan.entries
+        )
     )
-    if before_openai != initial_openai or before_ollama != initial_ollama:
-        raise OpenWebUIError("Open WebUI snapshot changed before write; aborting")
-    changed = {
-        item["collection"]
-        for item in result.plan.entries
-        if item["action"] in {"add", "update", "delete"}
-    }
     actions["planned"].extend(sorted(changed))
     try:
         for collection in changed:
@@ -2064,9 +2185,19 @@ def reconcile_via_api(client, desired):
             collection: _unmanaged(result.snapshots[collection]["entries"], collection)
             for collection in result.snapshots
         }
-        verified = reconcile(
-            client.get_openai_config(), client.get_ollama_config(), desired
-        )
+        try:
+            verified = reconcile(
+                client.get_openai_config(), client.get_ollama_config(), desired
+            )
+        except OpenWebUIError as error:
+            actions["failed"].append("connections-verification")
+            error.actions = actions
+            raise
+        except Exception as error:
+            actions["failed"].append("connections-verification")
+            raise OpenWebUIError(
+                "Open WebUI connection verification read failed", actions=actions
+            ) from error
         after_unmanaged = {
             collection: _unmanaged(
                 verified.snapshots[collection]["entries"], collection
@@ -2078,9 +2209,10 @@ def reconcile_via_api(client, desired):
             or any(item["action"] != "keep" for item in verified.plan.entries)
             or before_unmanaged != after_unmanaged
         ):
+            actions["failed"].append("connections")
             raise OpenWebUIError(
                 "Open WebUI write verification failed or unmanaged state changed",
-                actions={**actions, "failed": ["connections"]},
+                actions=actions,
             )
     actions["verified"].extend(sorted(changed))
     result.actions = actions

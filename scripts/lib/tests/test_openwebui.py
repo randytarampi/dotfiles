@@ -329,6 +329,114 @@ def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     openwebui._write_embedding_state({"acknowledgement": ack})
     _embedding_reconcile(client)
     assert client.writes == 1
+
+
+def test_embedding_migration_refusal_is_reported(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    client = _EmbeddingClient(_embedding_config())
+    report = _embedding_reconcile(client).actions
+    assert "embedding" in report["planned"]
+    assert report["applied"] == []
+    assert report["verified"] == []
+    assert report["failed"] == ["embedding"]
+    assert client.writes == 0
+
+
+def test_embedding_failed_readback_reports_applied_and_failed(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    client = _EmbeddingClient(_embedding_config())
+    openwebui._write_embedding_state(
+        {
+            "acknowledgement": {
+                "previous_model": client.config["RAG_EMBEDDING_MODEL"],
+                "previous_engine": "",
+                "previous_output_dims": 384,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": 768,
+                "acknowledged_at": "test",
+            }
+        }
+    )
+    client.ignore_writes = True
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        _embedding_reconcile(client)
+    assert raised.value.actions["applied"] == ["embedding"]
+    assert raised.value.actions["verified"] == []
+    assert raised.value.actions["failed"] == ["embedding"]
+    assert client.writes == 1
+
+
+def test_embedding_release_failed_readback_reports_applied_and_failed(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    projection = {
+        "owned": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        },
+        "previous": {"engine": "", "model": "sentence-transformers/all-MiniLM-L6-v2"},
+        "previous_output_dims": 384,
+        "output_dims": 768,
+        "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+    }
+    openwebui._write_embedding_state(
+        {
+            "projection": projection,
+            "acknowledgement": {
+                "previous_model": openwebui.EMBEDDING_MODEL,
+                "previous_engine": "ollama",
+                "previous_output_dims": 768,
+                "new_model": "sentence-transformers/all-MiniLM-L6-v2",
+                "new_output_dims": 384,
+                "acknowledged_at": "test",
+            },
+        }
+    )
+    client.ignore_writes = True
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(
+            client, {"openai": [], "anthropic": [], "ollama": []}
+        )
+    assert raised.value.actions["applied"] == ["embedding"]
+    assert raised.value.actions["verified"] == []
+    assert raised.value.actions["failed"] == ["embedding"]
+    assert client.writes == 1
+
+
+def test_embedding_identity_injected_and_routing_url_independent(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    client = _EmbeddingClient(_embedding_config())
+    backend_identity = {"backend": "ollama", "version": "0.6.2"}
+    setattr(
+        client, "embedding_backend_identity_probe", lambda _config: backend_identity
+    )
+    setattr(client, "embedding_parity_probe", lambda _config: "inconclusive")
+    openwebui._write_embedding_state(
+        {
+            "acknowledgement": {
+                "previous_model": client.config["RAG_EMBEDDING_MODEL"],
+                "previous_engine": "",
+                "previous_output_dims": 384,
+                "new_model": openwebui.EMBEDDING_MODEL,
+                "new_output_dims": 768,
+                "acknowledged_at": "test",
+            }
+        }
+    )
+    _embedding_reconcile(client)
+    fingerprint = openwebui._read_embedding_state()["embedding_fingerprint"]
+    assert fingerprint["backend_identity"] == backend_identity
+    assert "url" not in fingerprint and "routing_url" not in fingerprint
     assert client.config["RAG_EMBEDDING_ENGINE"] == "ollama"
     assert client.config["RAG_EMBEDDING_MODEL"] == openwebui.EMBEDDING_MODEL
     assert client.config["openai_config"]["key"] == "secret"
@@ -566,19 +674,30 @@ class _AudioClient:
         self.fail_connection_write = False
         self.openai = openai if openai is not None else []
         self.ollama = ollama if ollama is not None else []
+        self.request_log = []
+        self.fail_connection_read = False
+        self.fail_snapshot_read = False
 
     def get_openai_config(self):
+        self.request_log.append("GET openai")
         return {"connections": json.loads(json.dumps(self.openai))}
 
     def get_ollama_config(self):
+        self.request_log.append("GET ollama")
+        if self.fail_snapshot_read and "POST audio" in self.request_log:
+            raise openwebui.OpenWebUIError("snapshot read failed")
+        if self.fail_connection_read and "POST openai" in self.request_log:
+            raise openwebui.OpenWebUIError("connection verification read failed")
         return {"connections": json.loads(json.dumps(self.ollama))}
 
     def update_openai_config(self, config):
+        self.request_log.append("POST openai")
         if self.fail_connection_write:
             raise openwebui.OpenWebUIError("injected connection failure")
         self.openai = config.get("connections", config)
 
     def update_ollama_config(self, config):
+        self.request_log.append("POST ollama")
         self.ollama = config.get("connections", config)
 
     def get_audio_config(self):
@@ -589,6 +708,7 @@ class _AudioClient:
 
     def update_audio_config(self, config):
         self.audio_writes += 1
+        self.request_log.append("POST audio")
         if self.ignore_writes:
             return
         self.audio = json.loads(json.dumps(config))
@@ -654,6 +774,35 @@ def test_audio_bundle_none_key_never_claimed_and_stored_key_preserved(
     assert "STORED_KEY_SECRET_92814" not in caplog.text
 
 
+def test_managed_audio_credential_release_restores_baseline(monkeypatch, tmp_path):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    monkeypatch.setenv("OMLX_API_KEY", "managed-secret")
+    client = _AudioClient(
+        {
+            "stt": {
+                "ENGINE": "openai",
+                "MODEL": "asr",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "managed-secret",
+            }
+        }
+    )
+    projection = openwebui._audio_projection(client.audio)
+    openwebui._write_audio_projection(projection)
+    openwebui._write_audio_credential_transitions({"stt": {"field": "OPENAI_API_KEY"}})
+    assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr"
+    marker = state.with_name(state.name + ".credentials")
+    assert "managed-secret" not in marker.read_text()
+    client = _AudioClient(client.audio)
+    released = openwebui._reconcile_audio(client, client.audio, None)
+    assert released["verified"] is True
+    assert client.audio["stt"]["OPENAI_API_KEY"] == ""
+    assert not state.exists()
+    assert not marker.exists()
+
+
 def test_audio_key_rotation_applies_without_persisting_secret(monkeypatch, tmp_path):
     state = tmp_path / "managed-audio.json"
     monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
@@ -709,7 +858,7 @@ def test_legacy_audio_credential_projection_is_sanitized_and_recovers(
         )
     )
     client = _AudioClient({"stt": {"MODEL": "custom-admin"}})
-    openwebui._reconcile_audio(client, client.audio, {})
+    openwebui.reconcile_via_api(client, {"openai": [], "anthropic": [], "ollama": []})
     saved = state.read_text()
     assert "LEGACY_SECRET" not in saved
     assert "restore the prior credential manually" in caplog.text
@@ -758,7 +907,15 @@ def test_audio_then_connection_failure_reports_applied_and_projection(
 ):
     state = tmp_path / "managed-audio.json"
     monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
-    client = _AudioClient({"stt": {"MODEL": ""}})
+    client = _AudioClient(
+        {
+            "stt": {
+                "MODEL": "",
+                "ENGINE": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            }
+        }
+    )
     client.fail_connection_write = True
     desired = {
         "openai": [_entry("openai", "https://api.openai.com/v1")],
@@ -772,6 +929,122 @@ def test_audio_then_connection_failure_reports_applied_and_projection(
     assert json.loads(state.read_text())["projection"]["stt"]["MODEL"] == "asr"
     assert raised.value.actions["applied"] == ["audio"]
     assert raised.value.actions["failed"] == ["openai"]
+
+
+def test_audio_apply_survives_later_snapshot_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "audio.json")
+    )
+    client = _AudioClient(
+        {
+            "stt": {
+                "MODEL": "",
+                "ENGINE": "",
+                "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            }
+        }
+    )
+    client.fail_snapshot_read = True
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [_entry("ollama", "http://ollama", collection="ollama")],
+        "audio": {"stt": {"MODEL": "asr"}},
+    }
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(client, desired)
+    assert raised.value.actions["applied"] == ["audio"]
+    assert raised.value.actions["failed"] == ["connections-snapshot"]
+    assert "POST audio" in client.request_log
+
+
+def test_connection_verification_read_failure_retains_applied(monkeypatch):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: "/tmp/openwebui-test-no-audio.json"
+    )
+    client = _AudioClient({}, openai=[], ollama=[])
+    client.fail_connection_read = True
+    desired = {
+        "openai": [_entry("openai", "https://api.openai.com/v1")],
+        "anthropic": [],
+        "ollama": [],
+    }
+    with pytest.raises(openwebui.OpenWebUIError) as raised:
+        openwebui.reconcile_via_api(client, desired)
+    assert raised.value.actions["applied"] == ["openai"]
+    assert raised.value.actions["failed"] == ["connections-verification"]
+    assert client.request_log.count("POST openai") == 1
+
+
+def test_connection_write_order_is_deterministic(monkeypatch):
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: None)
+    monkeypatch.setattr(openwebui, "_reconcile_audio", lambda *_: {"status": "noop"})
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui, "_reconcile_embedding", lambda *_: {"status": "noop"}
+    )
+
+    class Plan:
+        entries = []
+
+    class Result:
+        status = "clean"
+        plan = Plan()
+        snapshots = {
+            collection: {"envelope": {"connections": []}, "entries": []}
+            for collection in ("openai", "ollama")
+        }
+
+    Result.plan.entries = [
+        {
+            "collection": "ollama",
+            "action": "add",
+            "entry": _entry("ollama", "http://ollama", collection="ollama"),
+        },
+        {
+            "collection": "openai",
+            "action": "add",
+            "entry": _entry("openai", "https://api.openai.com/v1"),
+        },
+    ]
+    monkeypatch.setattr(openwebui, "reconcile", lambda *_args: Result())
+
+    class ConnectionsOnly:
+        def __init__(self):
+            self.requests = []
+            self.openai = []
+            self.ollama = []
+
+        def get_openai_config(self):
+            return {"connections": self.openai}
+
+        def get_ollama_config(self):
+            return {"connections": self.ollama}
+
+        def update_openai_config(self, config):
+            self.requests.append("openai")
+            self.openai = config.get("connections", config)
+
+        def update_ollama_config(self, config):
+            self.requests.append("ollama")
+            self.ollama = config.get("connections", config)
+
+        def get_audio_config(self):
+            return {}
+
+        def get_embedding_config(self):
+            return {"ollama_config": {}}
+
+        def reconcile(self, *_args):
+            if self.requests:
+                Result.plan.entries = []
+            return Result()
+
+    client = ConnectionsOnly()
+    monkeypatch.setattr(openwebui, "reconcile", client.reconcile)
+    desired = {"openai": [], "anthropic": [], "ollama": []}
+    openwebui.reconcile_via_api(client, desired)
+    assert client.requests == ["openai", "ollama"]
 
 
 def test_restart_after_audio_projection_write_does_not_force_restore(
