@@ -97,6 +97,73 @@ def _voice_resolution_options(
     }
 
 
+def _voice_llm_capable(model_ref):
+    """Require verified completion capability for the voice LLM."""
+    provider, _, name = model_ref.partition("/")
+    engine_provider = provider if provider in ("ollama", "omlx") else "ollama"
+    try:
+        details = get_model_details(name, engine_provider)
+    except (OSError, ValueError, RuntimeError) as error:
+        logger.warning(
+            "Voice model capability lookup failed for %s: %s", model_ref, error
+        )
+        return False
+    caps = details.get("capabilities") or []
+    if "completion" in caps:
+        return True
+    logger.info(
+        "Voice LLM: skipping STT-only audio winner %s (no completion capability)",
+        model_ref,
+    )
+    return False
+
+
+def _resolve_local_voice_model(
+    registry, resolution_preset, role_models, category_models, min_reasoning_embedding
+):
+    """Resolve a verified local completion candidate while preserving discovery status."""
+    discovery = iter_engine_discovery("ollama")
+    if discovery.status == "unknown_error":
+        logger.warning(
+            "Local voice discovery unavailable; preserving existing voice selection"
+        )
+        return None, True, False
+    if discovery.status == "ok_empty":
+        logger.warning(
+            "No local voice models discovered; voice configuration is unresolved"
+        )
+        return None, True, True
+    local_models = list(discovery.records)
+    if not local_models:
+        return None, False, False
+    min_emb = min_reasoning_embedding
+    if min_emb is None:
+        min_emb = int(os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0")
+    categories = resolve_roles_from_list(
+        local_models, min_reasoning_embedding=min_emb, moe_codegen_reuse=False
+    )
+    tier_registry.apply_placeholder_overrides(categories, category_models)
+    resolved_roles = tier_registry.materialize_role_models(
+        registry, resolution_preset, categories, role_models
+    )
+    candidates = [
+        (
+            categories.get("solo")
+            if resolution_preset == "local-solo"
+            else categories.get("audio")
+        ),
+        categories.get("lightweight"),
+        resolved_roles.get("librarian"),
+    ]
+    for candidate in dict.fromkeys(item for item in candidates if item):
+        if _voice_llm_capable(candidate):
+            return candidate, False, False
+    logger.warning(
+        "Local voice models lack verified completion capability; voice configuration is unresolved"
+    )
+    return None, True, False
+
+
 def add_voice_transport_arguments(parser):
     """Keep the voice CLI's supported transport options explicit."""
     parser.add_argument(
@@ -159,87 +226,15 @@ def get_voice_config(
         )
         if use_local_ollama:
             try:
-                discovery = iter_engine_discovery("ollama")
-                local_models = list(discovery.records)
-                if discovery.status == "unknown_error":
-                    unresolved = True
-                    logger.warning(
-                        "Local voice discovery unavailable; preserving existing voice selection"
-                    )
-                elif discovery.status == "ok_empty":
-                    unresolved = True
-                    no_local_models = True
-                    logger.warning(
-                        "No local voice models discovered; voice configuration is unresolved"
-                    )
-                if unresolved:
-                    local_models = []
-                if local_models:
-                    min_emb = min_reasoning_embedding
-                    if min_emb is None:
-                        min_emb = int(
-                            os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0")
-                            or "0"
-                        )
-                    categories = resolve_roles_from_list(
-                        local_models,
-                        min_reasoning_embedding=min_emb,
-                        moe_codegen_reuse=False,
-                    )
-                    tier_registry.apply_placeholder_overrides(
-                        categories, category_models
-                    )
-                    resolved_roles = tier_registry.materialize_role_models(
-                        registry, resolution_preset, categories, role_models
-                    )
-
-                    def _voice_llm_capable(model_ref):
-                        """Require verified completion capability for the voice LLM."""
-                        provider, _, name = model_ref.partition("/")
-                        engine_provider = (
-                            provider if provider in ("ollama", "omlx") else "ollama"
-                        )
-                        try:
-                            details = get_model_details(name, engine_provider)
-                        except (OSError, ValueError, RuntimeError) as error:
-                            logger.warning(
-                                "Voice model capability lookup failed for %s: %s",
-                                model_ref,
-                                error,
-                            )
-                            return False
-                        caps = details.get("capabilities") or []
-                        if "completion" in caps:
-                            return True
-                        logger.info(
-                            "Voice LLM: skipping STT-only audio winner %s "
-                            "(no completion capability)",
-                            model_ref,
-                        )
-                        return False
-
-                    candidates = [
-                        (
-                            categories.get("solo")
-                            if resolution_preset == "local-solo"
-                            else categories.get("audio")
-                        ),
-                        categories.get("lightweight"),
-                        resolved_roles.get("librarian"),
-                    ]
-                    verified_candidates = [
-                        candidate
-                        for candidate in dict.fromkeys(c for c in candidates if c)
-                        if _voice_llm_capable(candidate)
-                    ]
-                    voice_model = next(iter(verified_candidates), None)
-                    if voice_model:
-                        voice_config = local_voice_provider(voice_model)
-                    else:
-                        unresolved = True
-                        logger.warning(
-                            "Local voice models lack verified completion capability; voice configuration is unresolved"
-                        )
+                voice_model, unresolved, no_local_models = _resolve_local_voice_model(
+                    registry,
+                    resolution_preset,
+                    role_models,
+                    category_models,
+                    min_reasoning_embedding,
+                )
+                if voice_model:
+                    voice_config = local_voice_provider(voice_model)
             except (OSError, ValueError, RuntimeError) as error:
                 logger.warning("Local voice model resolution failed: %s", error)
                 unresolved = True

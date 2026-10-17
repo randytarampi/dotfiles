@@ -526,6 +526,62 @@ def _audio_reconcile_drift(current, projection, wanted_fields, recorded_fields, 
     return False
 
 
+def _reconcile_audio_adoption(
+    client, current, wanted, projection, wanted_fields, recorded_fields, logger
+):
+    new_fields = wanted_fields - recorded_fields
+    if new_fields:
+        new_refusal = _audio_refusal(current, None, new_fields)
+        if new_refusal:
+            logger.error(
+                "Refusing adoption of customized Open WebUI audio fields: %s",
+                new_refusal,
+            )
+            return
+    owned_fields = recorded_fields | wanted_fields
+    desired_now = _audio_projection_subset(
+        _merge_owned_audio(current, wanted)[0], owned_fields
+    )
+    if (
+        projection is not None
+        and _audio_projection_subset(current, owned_fields) == desired_now
+    ):
+        return
+    prewrite = client.get_audio_config()
+    if projection is not None:
+        # Recheck recorded-field drift and newly claimed fields before writing.
+        prewrite_refusal = _audio_refusal(prewrite, projection, recorded_fields)
+        if new_fields:
+            prewrite_refusal += _audio_refusal(prewrite, None, new_fields)
+    else:
+        prewrite_refusal = _audio_refusal(prewrite, None, wanted_fields)
+    if prewrite_refusal:
+        logger.error("Refusing Open WebUI audio write after concurrent edit")
+        return
+    candidate = _merge_owned_audio(prewrite, wanted)[0]
+    desired = _audio_projection_subset(candidate, owned_fields)
+    client.update_audio_config(candidate)
+    _verify_audio_projection(client, desired)
+    _write_audio_projection(desired)
+
+
+def _reconcile_audio_gate_off(client, projection, recorded_fields, logger):
+    prewrite = client.get_audio_config()
+    if _audio_refusal(prewrite, projection, recorded_fields):
+        logger.error("Refusing Open WebUI audio disable after concurrent edit")
+        return
+    restore = {}
+    for section, key in recorded_fields:
+        restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
+            key, ""
+        )
+    merged, _ = _merge_owned_audio(prewrite, restore)
+    if merged != prewrite:
+        client.update_audio_config(merged)
+    _verify_audio_projection(client, _audio_projection_subset(merged, recorded_fields))
+    _write_audio_projection(None)
+
+
 def _reconcile_audio(client, current, wanted):
     import logger
 
@@ -542,62 +598,11 @@ def _reconcile_audio(client, current, wanted):
     ):
         return
     if wanted:
-        # Ownership is recorded only for explicitly adopted fields; fields the
-        # bundle newly claims must pass the same eligibility gate as adoption.
-        new_fields = wanted_fields - recorded_fields
-        if new_fields:
-            new_refusal = _audio_refusal(current, None, new_fields)
-            if new_refusal:
-                logger.error(
-                    "Refusing adoption of customized Open WebUI audio fields: %s",
-                    new_refusal,
-                )
-                return
-        owned_fields = recorded_fields | wanted_fields
-        desired_now = _audio_projection_subset(
-            _merge_owned_audio(current, wanted)[0], owned_fields
+        _reconcile_audio_adoption(
+            client, current, wanted, projection, wanted_fields, recorded_fields, logger
         )
-        if (
-            projection is not None
-            and _audio_projection_subset(current, owned_fields) == desired_now
-        ):
-            return
-        prewrite = client.get_audio_config()
-        if projection is not None:
-            # Recorded-field drift, plus the adoption gate re-run against the
-            # pre-write snapshot for fields newly claimed by this bundle.
-            prewrite_refusal = _audio_refusal(prewrite, projection, recorded_fields)
-            if new_fields:
-                prewrite_refusal += _audio_refusal(prewrite, None, new_fields)
-        else:
-            prewrite_refusal = _audio_refusal(prewrite, None, wanted_fields)
-        if prewrite_refusal:
-            logger.error("Refusing Open WebUI audio write after concurrent edit")
-            return
-        candidate = _merge_owned_audio(prewrite, wanted)[0]
-        desired = _audio_projection_subset(candidate, owned_fields)
-        client.update_audio_config(candidate)
-        _verify_audio_projection(client, desired)
-        _write_audio_projection(desired)
     elif projection is not None:
-        # Gate-off restores only the recorded owned fields, never whole
-        # sections that may hold administrator settings the bundle never owned.
-        prewrite = client.get_audio_config()
-        if _audio_refusal(prewrite, projection, recorded_fields):
-            logger.error("Refusing Open WebUI audio disable after concurrent edit")
-            return
-        restore = {}
-        for section, key in recorded_fields:
-            restore.setdefault(section, {})[key] = AUDIO_DEFAULTS.get(section, {}).get(
-                key, ""
-            )
-        merged, _ = _merge_owned_audio(prewrite, restore)
-        if merged != prewrite:
-            client.update_audio_config(merged)
-        _verify_audio_projection(
-            client, _audio_projection_subset(merged, recorded_fields)
-        )
-        _write_audio_projection(None)
+        _reconcile_audio_gate_off(client, projection, recorded_fields, logger)
 
 
 def _embedding_state_path():
@@ -659,6 +664,151 @@ def _embedding_refusal(config, projection):
     return None
 
 
+def _embedding_candidate(prewrite):
+    candidate = {
+        key: prewrite[key]
+        for key in (
+            "RAG_EMBEDDING_BATCH_SIZE",
+            "ENABLE_ASYNC_EMBEDDING",
+            "RAG_EMBEDDING_CONCURRENT_REQUESTS",
+        )
+        if key in prewrite
+    }
+    candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+    candidate["ollama_config"]["url"] = EMBEDDING_OLLAMA_URL
+    for section in ("openai_config", "azure_openai_config"):
+        if section in prewrite:
+            candidate[section] = copy.deepcopy(prewrite[section])
+    candidate.update(
+        {"RAG_EMBEDDING_ENGINE": "ollama", "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL}
+    )
+    return candidate
+
+
+def _verify_embedding_readback(client, expected, restore=False):
+    readback = client.get_embedding_config()
+    expected_url = expected.get("ollama_config", {}).get("url")
+    if (
+        _embedding_identity(readback) != _embedding_identity(expected)
+        or readback.get("ollama_config", {}).get("url") != expected_url
+    ):
+        message = (
+            "Open WebUI embedding restore verification failed"
+            if restore
+            else "Open WebUI embedding configuration write verification failed"
+        )
+        raise OpenWebUIError(message)
+
+
+def _reconcile_embedding_adoption(client, state, projection, current, logger):
+    if (
+        projection is not None
+        and _embedding_identity(current)
+        == {"engine": "ollama", "model": EMBEDDING_MODEL}
+        and current.get("ollama_config", {}).get("url")
+        == projection.get("ollama_config", {}).get("url")
+    ):
+        return
+    previous = _embedding_identity(current)
+    old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
+    if old_dims != EMBEDDING_OUTPUT_DIMS:
+        acknowledgement = state.get("acknowledgement")
+        if not _embedding_acknowledges(
+            acknowledgement,
+            previous,
+            old_dims,
+            {"engine": "ollama", "model": EMBEDDING_MODEL},
+            EMBEDDING_OUTPUT_DIMS,
+        ):
+            _log_embedding_migration_refusal(
+                logger,
+                previous,
+                old_dims,
+                {"engine": "ollama", "model": EMBEDDING_MODEL},
+                EMBEDDING_OUTPUT_DIMS,
+            )
+            return
+    prewrite = client.get_embedding_config()
+    if _embedding_refusal(prewrite, projection):
+        logger.error("Refusing Open WebUI embedding write after concurrent edit")
+        return
+    candidate = _embedding_candidate(prewrite)
+    client.update_embedding_config(candidate)
+    _verify_embedding_readback(client, candidate)
+    _write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
+                },
+                "previous": previous,
+                "previous_output_dims": old_dims,
+                "output_dims": EMBEDDING_OUTPUT_DIMS,
+                "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
+                "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
+            },
+            "acknowledgement": state.get("acknowledgement"),
+        }
+    )
+
+
+def _embedding_restore(prewrite, projection):
+    restored = {
+        key: prewrite[key]
+        for key in (
+            "RAG_EMBEDDING_BATCH_SIZE",
+            "ENABLE_ASYNC_EMBEDDING",
+            "RAG_EMBEDDING_CONCURRENT_REQUESTS",
+        )
+        if key in prewrite
+    }
+    restored["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+    for section in ("openai_config", "azure_openai_config"):
+        if section in prewrite:
+            restored[section] = copy.deepcopy(prewrite[section])
+    restored.update(
+        {
+            "RAG_EMBEDDING_ENGINE": projection.get("previous", {}).get("engine", ""),
+            "RAG_EMBEDDING_MODEL": projection.get("previous", {}).get("model", ""),
+        }
+    )
+    if projection.get("previous_ollama_url") is not None:
+        restored["ollama_config"]["url"] = projection["previous_ollama_url"]
+    return restored
+
+
+def _reconcile_embedding_gate_off(client, state, projection, logger):
+    prewrite = client.get_embedding_config()
+    if _embedding_refusal(prewrite, projection):
+        logger.error("Refusing Open WebUI embedding disable after concurrent edit")
+        return
+    previous = projection.get("previous", {})
+    previous_dims = projection.get("previous_output_dims")
+    current_dims = projection.get("output_dims")
+    if previous != _embedding_identity(prewrite):
+        acknowledgement = state.get("acknowledgement")
+        if not _embedding_acknowledges(
+            acknowledgement,
+            _embedding_identity(prewrite),
+            current_dims,
+            previous,
+            previous_dims,
+        ):
+            _log_embedding_migration_refusal(
+                logger,
+                _embedding_identity(prewrite),
+                current_dims,
+                previous,
+                previous_dims,
+            )
+            return
+    restored = _embedding_restore(prewrite, projection)
+    client.update_embedding_config(restored)
+    _verify_embedding_readback(client, restored, restore=True)
+    _write_embedding_state(None)
+
+
 def _reconcile_embedding(client, current, wanted):
     import logger
 
@@ -673,141 +823,9 @@ def _reconcile_embedding(client, current, wanted):
         logger.error("%s", refusal)
         return
     if wanted:
-        if (
-            projection is not None
-            and _embedding_identity(current)
-            == {"engine": "ollama", "model": EMBEDDING_MODEL}
-            and current.get("ollama_config", {}).get("url")
-            == projection.get("ollama_config", {}).get("url")
-        ):
-            return
-        previous = _embedding_identity(current)
-        old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
-        if old_dims != EMBEDDING_OUTPUT_DIMS:
-            acknowledgement = state.get("acknowledgement")
-            if not _embedding_acknowledges(
-                acknowledgement,
-                previous,
-                old_dims,
-                {"engine": "ollama", "model": EMBEDDING_MODEL},
-                EMBEDDING_OUTPUT_DIMS,
-            ):
-                _log_embedding_migration_refusal(
-                    logger,
-                    previous,
-                    old_dims,
-                    {"engine": "ollama", "model": EMBEDDING_MODEL},
-                    EMBEDDING_OUTPUT_DIMS,
-                )
-                return
-        prewrite = client.get_embedding_config()
-        if _embedding_refusal(prewrite, projection):
-            logger.error("Refusing Open WebUI embedding write after concurrent edit")
-            return
-        candidate = {
-            key: prewrite[key]
-            for key in (
-                "RAG_EMBEDDING_BATCH_SIZE",
-                "ENABLE_ASYNC_EMBEDDING",
-                "RAG_EMBEDDING_CONCURRENT_REQUESTS",
-            )
-            if key in prewrite
-        }
-        candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
-        candidate["ollama_config"]["url"] = EMBEDDING_OLLAMA_URL
-        for section in ("openai_config", "azure_openai_config"):
-            if section in prewrite:
-                candidate[section] = copy.deepcopy(prewrite[section])
-        candidate.update(
-            {
-                "RAG_EMBEDDING_ENGINE": "ollama",
-                "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
-            }
-        )
-        client.update_embedding_config(candidate)
-        readback = client.get_embedding_config()
-        if (
-            _embedding_identity(readback) != _embedding_identity(candidate)
-            or readback.get("ollama_config", {}).get("url") != EMBEDDING_OLLAMA_URL
-        ):
-            raise OpenWebUIError(
-                "Open WebUI embedding configuration write verification failed"
-            )
-        _write_embedding_state(
-            {
-                "projection": {
-                    "owned": {
-                        "RAG_EMBEDDING_ENGINE": "ollama",
-                        "RAG_EMBEDDING_MODEL": EMBEDDING_MODEL,
-                    },
-                    "previous": previous,
-                    "previous_output_dims": old_dims,
-                    "output_dims": EMBEDDING_OUTPUT_DIMS,
-                    "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
-                    "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
-                },
-                "acknowledgement": state.get("acknowledgement"),
-            }
-        )
+        _reconcile_embedding_adoption(client, state, projection, current, logger)
     elif projection is not None:
-        prewrite = client.get_embedding_config()
-        if _embedding_refusal(prewrite, projection):
-            logger.error("Refusing Open WebUI embedding disable after concurrent edit")
-            return
-        previous = projection.get("previous", {})
-        previous_dims = projection.get("previous_output_dims")
-        current_dims = projection.get("output_dims")
-        if previous != _embedding_identity(prewrite):
-            acknowledgement = state.get("acknowledgement")
-            if not _embedding_acknowledges(
-                acknowledgement,
-                _embedding_identity(prewrite),
-                current_dims,
-                previous,
-                previous_dims,
-            ):
-                _log_embedding_migration_refusal(
-                    logger,
-                    _embedding_identity(prewrite),
-                    current_dims,
-                    previous,
-                    previous_dims,
-                )
-                return
-        restored = {
-            key: prewrite[key]
-            for key in (
-                "RAG_EMBEDDING_BATCH_SIZE",
-                "ENABLE_ASYNC_EMBEDDING",
-                "RAG_EMBEDDING_CONCURRENT_REQUESTS",
-            )
-            if key in prewrite
-        }
-        restored["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
-        for section in ("openai_config", "azure_openai_config"):
-            if section in prewrite:
-                restored[section] = copy.deepcopy(prewrite[section])
-        restored.update(
-            {
-                "RAG_EMBEDDING_ENGINE": projection.get("previous", {}).get(
-                    "engine", ""
-                ),
-                "RAG_EMBEDDING_MODEL": projection.get("previous", {}).get("model", ""),
-            }
-        )
-        if projection.get("previous_ollama_url") is not None:
-            restored["ollama_config"]["url"] = projection["previous_ollama_url"]
-        client.update_embedding_config(restored)
-        readback = client.get_embedding_config()
-        if _embedding_identity(readback) != _embedding_identity(
-            restored
-        ) or readback.get("ollama_config", {}).get("url") != restored.get(
-            "ollama_config", {}
-        ).get(
-            "url"
-        ):
-            raise OpenWebUIError("Open WebUI embedding restore verification failed")
-        _write_embedding_state(None)
+        _reconcile_embedding_gate_off(client, state, projection, logger)
 
 
 def _embedding_acknowledges(acknowledgement, old, old_dims, new, new_dims):
