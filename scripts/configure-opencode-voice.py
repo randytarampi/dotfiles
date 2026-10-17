@@ -432,11 +432,7 @@ def get_voice_config(
     # STT/TTS remain engine-local and independent of the voice LLM pool
     # (Workstream E): an unresolved LLM selection must not discard a healthy
     # engine's resolved STT/TTS configuration.
-    if (
-        unresolved
-        and (no_local_models or is_local_tier)
-        and not voice_config.get("sttEndpoint")
-    ):
+    if unresolved and (no_local_models or is_local_tier):
         logger.warning(
             "Voice configuration unresolved: %s",
             (
@@ -445,7 +441,9 @@ def get_voice_config(
                 else "no verified candidates"
             ),
         )
-        return {"_voice_unresolved": True}
+        if not voice_config.get("sttEndpoint"):
+            return {"_voice_unresolved": True}
+        voice_config["_voice_unresolved"] = True
     return voice_config
 
 
@@ -543,7 +541,19 @@ def main():
         None,
     )
     if unresolved:
-        if existing_voice is not None:
+        existing_options = (
+            existing_voice[1]
+            if existing_voice is not None
+            and len(existing_voice) > 1
+            and isinstance(existing_voice[1], dict)
+            else {}
+        )
+        if "sttEndpoint" in voice_config and existing_voice is not None:
+            for key in ("endpoint", "model", "apiKeyEnv", "ttsVoice"):
+                if key in existing_options:
+                    voice_config[key] = existing_options[key]
+            filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
+        elif existing_voice is not None:
             filtered_plugins.append(existing_voice)
     else:
         filtered_plugins.append(["@renjfk/opencode-voice", voice_config])

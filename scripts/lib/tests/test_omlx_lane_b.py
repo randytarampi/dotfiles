@@ -175,6 +175,79 @@ def test_voice_unverified_or_unknown_pool_is_unresolved(monkeypatch, status):
         assert voice.get_voice_config("local")["_voice_unresolved"] is True
 
 
+@pytest.mark.parametrize("status", ["unknown_error", "ok_empty", "ok_models"])
+def test_voice_main_preserves_llm_fields_when_unresolved_with_stt(
+    monkeypatch, tmp_path, status
+):
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / status
+    config_dir.mkdir()
+    original = {
+        "endpoint": "https://working.example/v1",
+        "model": "working-model",
+        "apiKeyEnv": "WORKING_KEY",
+        "ttsVoice": "vivian",
+        "sttEndpoint": "https://old-stt.example/v1",
+        "sttModel": "old-whisper",
+    }
+    (config_dir / "tui.json").write_text(
+        json.dumps({"plugin": [["@renjfk/opencode-voice", original]]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "local", "--no-backup"])
+    # Drive the REAL get_voice_config; stub only the adapter boundary so the
+    # unresolved gate itself is exercised (a stubbed get_voice_config would
+    # make the gate invisible to mutation checks).
+    from local_engines import DiscoveryResult
+
+    monkeypatch.setattr(
+        voice,
+        "iter_engine_discovery",
+        lambda _provider: DiscoveryResult(
+            status="ok_models",
+            records=[{"name": f"plain-llm-{status}", "provider": "ollama"}],
+        ),
+    )
+    monkeypatch.setattr(voice, "get_model_details", lambda *a, **k: {})
+    monkeypatch.setattr(
+        voice,
+        "audio_models",
+        lambda _provider: [{"name": f"whisper-{status}", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(
+        voice,
+        "local_endpoint_for",
+        lambda _provider, _kind: ("http://127.0.0.1:11427/v1", "OMLX_API_KEY"),
+    )
+    assert voice.main() is None
+    written = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    entry = written["plugin"][0][1]
+    assert entry["endpoint"] == original["endpoint"]
+    assert entry["model"] == original["model"]
+    assert entry["apiKeyEnv"] == original["apiKeyEnv"]
+    assert entry["ttsVoice"] == original["ttsVoice"]
+    assert entry["sttEndpoint"] == "http://127.0.0.1:11427/v1"
+    assert entry["sttModel"] == f"whisper-{status}"
+
+
+def test_voice_main_keeps_unresolved_marker_without_existing_entry(
+    monkeypatch, tmp_path
+):
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / "no-prior-entry"
+    config_dir.mkdir()
+    (config_dir / "tui.json").write_text('{"plugin": []}', encoding="utf-8")
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(sys, "argv", ["voice", "--no-backup"])
+    monkeypatch.setattr(
+        voice, "get_voice_config", lambda *args: {"_voice_unresolved": True}
+    )
+    assert voice.main() is None
+    written = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    assert written["plugin"] == []
+
+
 def test_voice_dry_run_never_prints_foreign_plugin_values(
     monkeypatch, tmp_path, capsys
 ):
