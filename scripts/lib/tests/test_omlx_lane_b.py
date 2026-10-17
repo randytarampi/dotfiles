@@ -769,6 +769,86 @@ def test_voice_unset_gate_without_saved_transport_uses_local_default(monkeypatch
     )
 
 
+def _voice_probe_fixture(monkeypatch, voice, status="ok"):
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OMLX", "true")
+    monkeypatch.setenv("OMLX_API_KEY", "voice-probe-secret")
+    monkeypatch.setattr(voice, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(voice, "resolve_engine", lambda *_: {})
+    monkeypatch.setattr(
+        voice,
+        "audio_models",
+        lambda *_: [{"name": "voice-asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(
+        voice,
+        "local_endpoint_for",
+        lambda *_: ("http://engine.local/v1", "OMLX_API_KEY"),
+    )
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    results = []
+
+    def probe(endpoint, model, key_reference, key_value=None, **kwargs):
+        results.append((endpoint, model, key_reference, key_value))
+        return type("Result", (), {"status": status, "notes": (status,)})()
+
+    import route_probes
+
+    monkeypatch.setattr(route_probes, "probe_stt", probe)
+    with (
+        patch.object(
+            voice.tier_registry, "load_registry", return_value={"presets": {}}
+        ),
+        patch.object(
+            voice.tier_registry, "uses_local_placeholders", return_value=False
+        ),
+        patch.object(voice, "check_ollama_daemon", return_value=(False, False)),
+    ):
+        return results, probe
+
+
+def test_voice_probe_opt_in_qualification_and_secret_safety(monkeypatch, caplog):
+    voice = load_script("configure-opencode-voice.py")
+    calls, _probe = _voice_probe_fixture(monkeypatch, voice)
+    off = voice.get_voice_config("anthropic", {"stt_transport": "local"})
+    assert calls == []
+    assert "sttEndpoint" not in off
+
+    calls, _probe = _voice_probe_fixture(monkeypatch, voice)
+    on = voice.get_voice_config(
+        "anthropic", {"stt_transport": "local", "probe_routes": True}
+    )
+    assert calls == [
+        ("http://engine.local/v1", "voice-asr", "OMLX_API_KEY", "voice-probe-secret")
+    ]
+    stt = on["_voice_state"]["selections"]["stt"]
+    assert stt["qualification"] == Qualification.PROTOCOL_PROBED.value
+    assert stt["reason"] == "ok"
+    assert "voice-probe-secret" not in repr(on)
+    assert "voice-probe-secret" not in caplog.text
+
+
+def test_voice_probe_connection_failure_preserves_without_claim(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    _voice_probe_fixture(monkeypatch, voice, status="unknown")
+    config = voice.get_voice_config(
+        "anthropic",
+        {"stt_transport": "local", "probe_routes": True},
+        state={
+            "selections": {
+                "stt": {
+                    "provider": "omlx",
+                    "model": "voice-asr",
+                    "qualification": "discovered",
+                }
+            }
+        },
+    )
+    assert "sttEndpoint" not in config
+    assert config["_voice_state"] is None or "protocol_probed" not in repr(config)
+
+
 def test_voice_and_webui_select_same_fixture_inventory():
     inventory = [
         ("omlx", "whisper-a", Qualification.PROTOCOL_PROBED),

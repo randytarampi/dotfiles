@@ -256,6 +256,7 @@ def _voice_resolution_options(
     category_models,
     min_reasoning_embedding,
     stt_transport,
+    probe_routes=False,
 ):
     return {
         "local_fallback_preset": local_fallback_preset,
@@ -263,6 +264,7 @@ def _voice_resolution_options(
         "category_models": category_models,
         "min_reasoning_embedding": min_reasoning_embedding,
         "stt_transport": stt_transport,
+        "probe_routes": probe_routes,
     }
 
 
@@ -386,6 +388,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     category_models = options.get("category_models")
     min_reasoning_embedding = options.get("min_reasoning_embedding")
     stt_transport = options.get("stt_transport")
+    probe_routes = options.get("probe_routes", False)
     state = state if state is not None else {}
     saved_transport = state.get("sttTransport")
     gateway_gate_value = os.environ.get("DOTFILES_USE_LITELLM_PROXY")
@@ -584,6 +587,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     # plus/plus-anthropic use OpenAI STT (bundled with their OpenAI LLM endpoint).
 
     has_openai_key = bool(os.environ.get("OPENAI_API_KEY", ""))
+    probe_reasons = {}
 
     def configure_local_stt():
         candidates = []
@@ -607,10 +611,35 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 candidates.append((provider, model_ref, Qualification.DISCOVERED))
                 metadata[(provider, model_ref)] = (endpoint, item)
         if candidates:
+            if probe_routes:
+                from route_probes import qualification_from_probe, probe_stt
+
+                probed = []
+                for provider, model_ref, _ in candidates:
+                    endpoint, _item = metadata[(provider, model_ref)]
+                    key_ref = endpoint[1]
+                    key_value = os.environ.get(key_ref, "") if key_ref else None
+                    result = probe_stt(
+                        endpoint[0],
+                        strip_provider_prefix(model_ref),
+                        key_ref,
+                        key_value=key_value,
+                    )
+                    probed.append(
+                        (provider, model_ref, qualification_from_probe(result))
+                    )
+                    probe_reasons[(provider, model_ref)] = (
+                        "; ".join(result.notes) or result.status
+                    )
+                candidates = probed
             previous = state.get("selections", {}).get(Operation.STT.value)
             selection = _select_voice_candidate(
                 Operation.STT, candidates, previously_selected=previous
             )
+            if selection.provider is None:
+                if selection.qualification is Qualification.UNKNOWN:
+                    voice_config["_voice_unresolved"] = True
+                return
             endpoint, item = metadata[(selection.provider, selection.model)]
             route_endpoint = (
                 f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
@@ -649,7 +678,13 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 if locator.route.key_reference:
                     voice_config["sttApiKeyEnv"] = locator.route.key_reference
                 locators[Operation.STT.value] = locator
+                if (selection.provider, selection.model) in probe_reasons:
+                    locators[Operation.STT.value + "_probe_reason"] = probe_reasons[
+                        (selection.provider, selection.model)
+                    ]
             else:
+                if locator.selection.qualification is Qualification.UNKNOWN:
+                    voice_config["_voice_unresolved"] = True
                 for key in ("sttEndpoint", "sttModel", "sttApiKeyEnv"):
                     voice_config.pop(key, None)
 
@@ -747,7 +782,14 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     "provider": locator.selection.provider,
                     "model": locator.selection.model,
                     "qualification": locator.selection.qualification.value,
-                    "reason": locator.selection.reason,
+                    "reason": (
+                        probe_reasons.get(
+                            (locator.selection.provider, locator.selection.model),
+                            locator.selection.reason,
+                        )
+                        if name == Operation.STT.value
+                        else locator.selection.reason
+                    ),
                     "transport": locator.route.transport.value,
                     "endpoint": locator.route.endpoint,
                     "wire_model": locator.route.wire_model,
@@ -789,6 +831,11 @@ def main():
         help="Print config to stdout without writing files",
     )
     parser.add_argument(
+        "--probe-routes",
+        action="store_true",
+        help="Explicitly probe local voice routes before qualification",
+    )
+    parser.add_argument(
         "--show-secrets",
         action="store_true",
         help="Include API key env var names in dry-run output (keys are never printed)",
@@ -827,6 +874,7 @@ def main():
                 args.category_models,
                 args.min_reasoning_embedding,
                 args.stt_transport,
+                args.probe_routes,
             ),
             state=prior_state,
         )
@@ -839,6 +887,7 @@ def main():
                 args.category_models,
                 args.min_reasoning_embedding,
                 args.stt_transport,
+                args.probe_routes,
             ),
         )
     )

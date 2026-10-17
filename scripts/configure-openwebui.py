@@ -48,6 +48,11 @@ GATE_ENV = "DOTFILES_RUN_OPENWEBUI_SETUP"
 def _parser():
     parser = argparse.ArgumentParser(description="Configure Open WebUI connections.")
     add_common_args(parser)
+    parser.add_argument(
+        "--probe-routes",
+        action="store_true",
+        help="Explicitly probe local audio and embedding routes before qualification",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--reconcile", action="store_true")
     mode.add_argument("--check", action="store_true")
@@ -751,7 +756,11 @@ def main():
             logger.error("Catalogue reconciliation failed: %s", error)
             return 1
 
-    desired = compute_desired_state()
+    desired = (
+        compute_desired_state(probe_routes=True)
+        if args.probe_routes
+        else compute_desired_state()
+    )
     base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
     if not (args.reconcile or args.check):
         args.reconcile = True

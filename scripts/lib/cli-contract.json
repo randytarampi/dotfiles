@@ -472,7 +472,8 @@
         "--category-model",
         "--local-fallback-placeholder",
         "--min-reasoning-embedding",
-        "--stt-transport"
+        "--stt-transport",
+        "--probe-routes"
       ],
       "positional_operand": null,
       "child_scripts": []
@@ -1041,7 +1042,8 @@
         "--reconcile-terminal",
         "--reconcile-mcp",
         "--reconcile-catalogue",
-        "--check"
+        "--check",
+        "--probe-routes"
       ],
       "positional_operand": null,
       "child_scripts": []

@@ -237,7 +237,7 @@ def ownership_catalogue(proxy_mode=None):
     return catalogue
 
 
-def compute_desired_state():
+def compute_desired_state(probe_routes=False):
     """Build desired entries; inactive/keyless providers remain ownership-known."""
     desired: dict[str, Any] = {"openai": [], "anthropic": [], "ollama": []}
     discovery = iter_engine_discovery("omlx")
@@ -333,7 +333,7 @@ def compute_desired_state():
             "anthropic": [],
             "ollama": [],
         }
-    audio = _desired_audio_settings()
+    audio = _desired_audio_settings(probe_routes=probe_routes)
     explicitly_disabled = (
         os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "0" or "omlx" in disabled
     )
@@ -366,7 +366,7 @@ def compute_desired_state():
         _persist_audio_selection(audio["selection"])
     elif not explicitly_disabled and discovery.status == "ok_models":
         desired["audio_status"] = "unavailable"
-    embedding = _desired_embedding_settings()
+    embedding = _desired_embedding_settings(probe_routes=probe_routes)
     if embedding is not None:
         selection = embedding.pop(SELECTION_PROVENANCE_KEY)
         desired["embedding"] = embedding
@@ -377,7 +377,15 @@ def compute_desired_state():
     return desired
 
 
-def _desired_audio_settings():
+def _probe_qualification(probe, endpoint, model, key_reference, **kwargs):
+    from route_probes import qualification_from_probe
+
+    key_value = os.environ.get(key_reference, "") if key_reference else None
+    result = probe(endpoint, model, key_reference, key_value=key_value, **kwargs)
+    return qualification_from_probe(result), "; ".join(result.notes) or result.status
+
+
+def _desired_audio_settings(probe_routes=False):
     """Return the owned speech settings, or None when oMLX is unavailable."""
     if "omlx" in _disabled() or "omlx" not in active_engines():
         return None
@@ -390,6 +398,18 @@ def _desired_audio_settings():
         for item in models
         if item.get("name") and item.get("model_type") == "audio_stt"
     ]
+    audio_probe_reasons = {}
+    if probe_routes:
+        from route_probes import probe_stt
+
+        probed = []
+        for provider, model, _ in stt_candidates:
+            qualification, reason = _probe_qualification(
+                probe_stt, endpoint[0], model, endpoint[1]
+            )
+            probed.append((provider, model, qualification))
+            audio_probe_reasons[(provider, model)] = reason
+        stt_candidates = probed
     stt = _audio_locator(Operation.STT, stt_candidates, endpoint)
     if stt is None:
         import logger
@@ -406,6 +426,10 @@ def _desired_audio_settings():
         }
     }
     selections = {"stt": _locator_provenance(stt)}
+    if (stt.selection.provider, stt.selection.model) in audio_probe_reasons:
+        selections["stt"]["reason"] = audio_probe_reasons[
+            (stt.selection.provider, stt.selection.model)
+        ]
     tts_candidates = [
         ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
@@ -413,6 +437,21 @@ def _desired_audio_settings():
         and item.get("model_type") == "audio_tts"
         and not is_known_unqualified_tts(item.get("name"))
     ]
+    if probe_routes:
+        from route_probes import probe_tts
+
+        probed = []
+        for provider, model, _ in tts_candidates:
+            qualification, reason = _probe_qualification(
+                probe_tts,
+                endpoint[0],
+                model,
+                endpoint[1],
+                voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
+            )
+            probed.append((provider, model, qualification))
+            audio_probe_reasons[(provider, model)] = reason
+        tts_candidates = probed
     tts = _audio_locator(Operation.TTS, tts_candidates, endpoint)
     if tts is not None:
         tts_model = tts.route.wire_model
@@ -427,6 +466,10 @@ def _desired_audio_settings():
             tts_settings["VOICE"] = voice
         settings["tts"] = tts_settings
         selections["tts"] = _locator_provenance(tts)
+        if (tts.selection.provider, tts.selection.model) in audio_probe_reasons:
+            selections["tts"]["reason"] = audio_probe_reasons[
+                (tts.selection.provider, tts.selection.model)
+            ]
     else:
         import logger
 
@@ -476,6 +519,8 @@ def _audio_locator(operation, candidates, endpoint):
                     "model": selection.model,
                     "qualification": Qualification.UNAVAILABLE.value,
                     "reason": selection.reason,
+                    "candidate_qualification": selection.qualification.value,
+                    "candidate_qualification": selection.qualification.value,
                     "transport": Transport.UNAVAILABLE.value,
                     "endpoint": None,
                     "wire_model": None,
@@ -512,8 +557,16 @@ def _audio_locator(operation, candidates, endpoint):
                     "operation": operation.value,
                     "provider": selected.provider,
                     "model": selected.model,
-                    "qualification": Qualification.UNAVAILABLE.value,
+                    "qualification": (
+                        selected.qualification.value
+                        if any(
+                            candidate[2] != Qualification.DISCOVERED
+                            for candidate in candidates
+                        )
+                        else Qualification.UNAVAILABLE.value
+                    ),
                     "reason": selected.reason,
+                    "candidate_qualification": selected.qualification.value,
                     "transport": route.transport.value,
                     "endpoint": route.endpoint,
                     "wire_model": route.wire_model,
@@ -567,7 +620,7 @@ def _persist_embedding_selection(selection):
     _write_embedding_state(state)
 
 
-def _desired_embedding_settings():
+def _desired_embedding_settings(probe_routes=False):
     if constants.get_litellm_proxy_mode():
         selection = select(
             Operation.EMBEDDING,
@@ -599,9 +652,17 @@ def _desired_embedding_settings():
     previous = (
         ("ollama", previous_model, Qualification.UNKNOWN) if previous_model else None
     )
+    qualification = Qualification.DISCOVERED
+    probe_reason = None
+    if probe_routes:
+        from route_probes import probe_embeddings
+
+        qualification, probe_reason = _probe_qualification(
+            probe_embeddings, EMBEDDING_OLLAMA_URL, EMBEDDING_MODEL, None
+        )
     selection = select(
         Operation.EMBEDDING,
-        [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+        [("ollama", EMBEDDING_MODEL, qualification)],
         preference=[("ollama", EMBEDDING_MODEL)],
         previously_selected=previous,
     )
@@ -623,7 +684,7 @@ def _desired_embedding_settings():
                 "provider": selection.provider,
                 "model": selection.model,
                 "qualification": Qualification.UNAVAILABLE.value,
-                "reason": selection.reason,
+                "reason": probe_reason or selection.reason,
                 "transport": route.transport.value,
                 "endpoint": route.endpoint,
                 "wire_model": route.wire_model,
@@ -649,7 +710,10 @@ def _desired_embedding_settings():
         "RAG_EMBEDDING_MODEL": rendered["wire_model"],
         "output_dims": EMBEDDING_OUTPUT_DIMS,
         "ollama_config": {"url": rendered["endpoint"]},
-        SELECTION_PROVENANCE_KEY: _locator_provenance(locator),
+        SELECTION_PROVENANCE_KEY: {
+            **_locator_provenance(locator),
+            "reason": probe_reason or selection.reason,
+        },
     }
 
 

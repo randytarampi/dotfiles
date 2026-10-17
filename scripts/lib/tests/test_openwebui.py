@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import route_probes
 
 import constants
 import openwebui
@@ -251,6 +252,164 @@ def test_real_adapter_discovered_audio_is_unavailable_and_preserved(monkeypatch)
     assert client.audio_writes == 0
     assert result.actions["applied"] == []
     assert result.actions["verified"] == []
+
+
+def test_probe_routes_are_opt_in_and_attach_qualification(monkeypatch):
+    import openwebui
+
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [
+            {"name": "stt-model", "model_type": "audio_stt"},
+            {"name": "tts-model", "model_type": "audio_tts"},
+        ],
+    )
+    calls = []
+
+    def success(endpoint, model, key_reference, key_value=None, **kwargs):
+        calls.append((endpoint, model, key_reference, key_value))
+        return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr("route_probes.probe_stt", success)
+    monkeypatch.setattr("route_probes.probe_tts", success)
+    monkeypatch.setattr("openwebui._read_audio_selection", lambda: None)
+    monkeypatch.setattr("openwebui._read_audio_projection", lambda: {})
+    monkeypatch.setattr("openwebui._persist_audio_selection", lambda *_: None)
+    monkeypatch.delenv("OMLX_API_KEY", raising=False)
+
+    assert openwebui._desired_audio_settings() is None
+    assert calls == []
+    audio = openwebui._desired_audio_settings(probe_routes=True)
+    assert len(calls) == 2
+    assert audio["selection"]["stt"]["qualification"] == "protocol_probed"
+    assert audio["selection"]["tts"]["qualification"] == "protocol_probed"
+
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("response_shape_error", openwebui.Qualification.UNAVAILABLE),
+        ("unknown", openwebui.Qualification.UNKNOWN),
+        ("unauthorized", openwebui.Qualification.UNKNOWN),
+    ],
+)
+def test_audio_probe_failures_keep_routes_unqualified(monkeypatch, status, expected):
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://engine/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "stt", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    persisted = []
+    monkeypatch.setattr(
+        openwebui, "_persist_audio_selection", lambda value: persisted.append(value)
+    )
+    monkeypatch.setenv("OMLX_API_KEY", "probe-secret-sentinel")
+    result = type("ProbeResult", (), {"status": status, "notes": (status,)})()
+    monkeypatch.setattr(route_probes, "probe_stt", lambda *args, **kwargs: result)
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    bundle = openwebui._desired_audio_settings(probe_routes=True)
+    assert bundle is None
+    assert persisted[-1]["stt"]["qualification"] == "unavailable"
+    assert persisted[-1]["stt"].get("candidate_qualification") == "unavailable"
+    assert persisted[-1]["stt"]["reason"] == "no qualified candidate"
+    assert "probe-secret-sentinel" not in repr(persisted)
+
+
+@pytest.mark.parametrize("status", ["response_shape_error", "unknown", "unauthorized"])
+def test_embedding_probe_failure_does_not_claim_success(monkeypatch, status):
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    persisted = {}
+    monkeypatch.setattr(
+        openwebui, "_persist_embedding_selection", lambda value: persisted.update(value)
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    result = type("ProbeResult", (), {"status": status, "notes": (status,)})()
+    monkeypatch.setattr(
+        route_probes, "probe_embeddings", lambda *args, **kwargs: result
+    )
+    result_settings = openwebui._desired_embedding_settings(probe_routes=True)
+    assert result_settings is None
+    assert persisted["qualification"] == "unavailable"
+    assert status in persisted["reason"]
+
+
+def test_gateway_audio_probe_uses_discovered_alias(monkeypatch):
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://engine/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "exact-asr-id", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    observed = []
+
+    def success(endpoint, model, key_reference, key_value=None, **kwargs):
+        observed.append((endpoint, model, key_reference))
+        return type("ProbeResult", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr(route_probes, "probe_stt", success)
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "_persist_audio_selection", lambda *_: None)
+    monkeypatch.setenv("OMLX_API_KEY", "alias-secret")
+    assert openwebui._desired_audio_settings(probe_routes=True) is None
+    assert observed == [("http://engine/v1", "exact-asr-id", "OMLX_API_KEY")]
+
+
+def test_fake_route_probe_http_surfaces_shapes_auth_and_refusal(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    class Response:
+        def __init__(self, status, content_type, payload):
+            self.status = status
+            self.headers = {"Content-Type": content_type}
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return self.payload
+
+    responses = iter(
+        [
+            Response(200, "text/html", b"<html>no transcription</html>"),
+            Response(200, "application/json", b'{"data":[{"embedding":[]}]}'),
+            urllib.error.HTTPError(
+                "http://fake", 401, "unauthorized", {}, io.BytesIO()
+            ),
+        ]
+    )
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: next(responses))
+    stt = route_probes.probe_stt("http://fake/v1", "asr", "KEY", "sentinel")
+    embedding = route_probes.probe_embeddings("http://fake/v1", "emb", None)
+    auth = route_probes.probe_tts("http://fake/v1", "tts", key_value="sentinel")
+    assert stt.status == "response_shape_error"
+    assert embedding.status == "response_shape_error"
+    assert auth.auth_failure == "unauthorized"
+    assert route_probes.qualification_from_probe(auth).value == "unknown"
 
 
 def test_real_adapter_discovered_embedding_is_unavailable_and_preserved(
