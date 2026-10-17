@@ -6,7 +6,7 @@ bridge or compatibility layer is used.
 
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, 15 tiers | yes | yes | native tiers | not collected | full (STT+TTS) | env-vars |
+| opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (14) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
 | codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
 | junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
 | pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin |
@@ -20,8 +20,12 @@ bridge or compatibility layer is used.
 
 ## Tier families and service lanes
 
-- OpenCode supports the local profile family presets `local-quiet`, `local` and
-  `local-loud`, selected with `scripts/configure-opencode-tier.py --preset`.
+- The registry contains 14 tiers: three local resolution profiles
+  (`local-quiet`, `local`, `local-loud`) plus standalone `local-solo`; see
+  [TIERS.md](TIERS.md) for the canonical table. The verifier derives the count
+  from the registry.
+- OpenCode also supports `local-solo`, selected with
+  `scripts/configure-opencode-tier.py --preset`.
   Junie and Pi receive the selected family through their generators.
 - OpenAI Flex/Fast lane aliases are gated by
   `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`). Clients receive aliases
@@ -30,6 +34,21 @@ bridge or compatibility layer is used.
 - Pi's local effective context window is capped at the minimum of native
   context, when known, and client cap; unknown native context has a 32768
   fallback floor. The default client cap is 131072. See [Pi](PI.md#effective-context-window).
+
+## Local-service fleet disposition
+
+| Tool | Local chat service use | Audio service use | Unsupported disposition |
+|---|---|---|---|
+| OpenCode | Ollama and gated oMLX via shared tier selection | Voice plugin: whisper-cli/OpenAI STT and optional discovered oMLX STT; Piper TTS | — |
+| Junie | Ollama/oMLX via generated model profiles | Unsupported | No Junie voice integration |
+| Pi | Ollama/oMLX providers and tier selection | sherpa-onnx STT | TTS unsupported |
+| Codex | Ollama/oMLX through generated provider profiles | Unsupported | No voice integration |
+| Open WebUI | Registry-managed local engine connections | Audio settings managed by the reconciler; task configuration is not managed (planned) | — |
+| Other listed agents | No generated local service consumer unless their row explicitly says otherwise | Unsupported | See each tool's local-fallback and voice cells above |
+
+| AMD local service | Disposition |
+|---|---|
+| Ollama via Vulkan | Planned; serving and discovery verification only. Not benchmarked. |
 
 ## Configuration notes
 

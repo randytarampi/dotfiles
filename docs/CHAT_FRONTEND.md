@@ -308,6 +308,12 @@ unmanaged entries are never touched. Direct mode keeps the per-provider
 topology described above, and both directions round-trip through the
 previous-mode catalogue.
 
+Managed-connection reconciliation is regression protection: it must preserve
+unmanaged admin-created connections, update only entries it owns, and fail
+closed on ownership collisions. Regression coverage should verify that both
+managed and unmanaged state survive a read-merge-write cycle and that changing
+direct/proxy mode does not duplicate connections or silently rewrite chat IDs.
+
 The model IDs in the picker consequently change with the prefix migration.
 Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`,
 `google.models/gemini-...`, `openrouter.vendor/model`, and
@@ -562,6 +568,124 @@ connection and MCP credentials.
 
 ### Model preset refresh
 
+### Open WebUI audio settings bundle (0.12.0)
+
+On hosts where the oMLX engine gate is active and audio discovery returns
+qualified models, deploy reconciles an owned audio bundle through the authenticated
+API. Owned keys are `stt.ENGINE`, `stt.OPENAI_API_BASE_URL`,
+`stt.OPENAI_API_REQUEST_FORMAT`, `stt.MODEL`, `stt.OPENAI_API_KEY`, and the
+corresponding TTS `ENGINE`, `OPENAI_API_BASE_URL`, `MODEL`, `VOICE`, and
+`OPENAI_API_KEY`. The API key is updated only when `OMLX_API_KEY` is non-empty;
+otherwise stored keys remain untouched. All other audio settings, including realtime, Whisper,
+Azure and Mistral fields, remain operator-managed and are preserved.
+
+STT and TTS model IDs come from oMLX audio discovery in discovery order: the
+first `audio_stt` and first qualified `audio_tts` models are selected.
+`chatterbox` is excluded by a shared family predicate: its 2026-10-16 probe
+failed without voice-cloning conditionals. A chatterbox-only discovery omits
+TTS and warns; STT may still be reconciled. Qwen3-TTS receives the configured
+speaker (`DOTFILES_VOICE_TTS_VOICE`, default `serena`); other TTS families do
+not inherit a Qwen speaker. The OpenAI-compatible local-engine bundle does not
+write cloud voice settings. `OMLX_API_KEY`, when non-empty, supplies both audio
+API keys; otherwise stored keys are preserved.
+
+The owned projection is stored privately at
+`~/.local/share/openwebui/data/managed-audio.json` (mode 600). First adoption
+requires owned identity fields to be at their Open WebUI defaults; customized
+owned settings are refused and logged rather than silently adopted. Once
+adopted, any administrator change to the recorded projection is refused.
+Before each write, the reconciler re-reads audio configuration and checks the
+projection, then reads back and verifies the write. Gate-off restores only
+projected owned fields to the documented OpenAI/multipart defaults and clears
+the projection; realtime, Whisper, Azure, Mistral and other settings are never
+owned or touched.
+
+The external audio engine path shells out to `ffmpeg`/`ffprobe`. The WebUI
+LaunchAgent PATH includes the Homebrew binary directory (added
+homebrew-agnostically in the install template), so the server can find them;
+without `ffprobe` the speech endpoint fails with
+`No such file or directory: 'ffprobe'` (observed 2026-10-16, fixed in the same
+install).
+
+Reads use `GET /api/v1/audio/config`; writes use `POST
+/api/v1/audio/config/update`. The similarly named `/api/v1/configs/audio` path
+is not a config endpoint. API writes run only during deploy (no live POST from
+tests). As elsewhere, persistent database settings are authoritative and are
+reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately
+modelled in this reconciler.
+
+### Open WebUI retrieval embeddings (0.12.0; data migration)
+
+The reconciler owns only `RAG_EMBEDDING_ENGINE` and
+`RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama
+target. It never reads credentials into the ownership projection and never
+changes `ollama_config.key`, `openai_config`, or `azure_openai_config`.
+First adoption is limited to the built-in empty-engine
+`sentence-transformers/all-MiniLM-L6-v2` default; a customized model/engine is
+refused with its observed identity. The separate mode-600 state is
+`~/.local/share/openwebui/data/managed-embedding.json`.
+
+Changing from the built-in MiniLM model (384 dimensions) to
+`embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the
+vector representation. The reconciler refuses that migration until an operator
+has used Open WebUI's own data-management paths to reset/re-embed the vector
+store. In v0.12.0, `open_webui/routers/retrieval.py` implements the admin
+`POST /api/v1/retrieval/reset/db` handler (`reset_vector_db`) and
+`open_webui/routers/knowledge.py` implements `POST /api/v1/knowledge/reindex`
+(`reindex_knowledge_files`) for processing knowledge documents again. These
+operations are not called by dotfiles; determine the appropriate reset/reindex
+sequence in WebUI and confirm the resulting vector store before consenting.
+
+After the operator action, edit the acknowledgement in the state file. The
+`projection` (if present) is reconciler-owned; the operator-maintained sibling
+`acknowledgement` is the explicit consent affordance. Match the model identity
+and dimensions exactly and set `acknowledged_at` to an operator-chosen timestamp:
+
+```json
+{
+  "acknowledgement": {
+    "previous_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "previous_engine": "",
+    "previous_output_dims": 384,
+    "new_model": "embeddinggemma-2:740m-mxfp8",
+    "new_output_dims": 768,
+    "acknowledged_at": "2026-10-16T12:00:00Z"
+  }
+}
+```
+
+The first refusal names the old/new models and dimensions and instructs the
+operator to reset/re-embed using WebUI's mechanisms, then edit this exact state
+path with the acknowledgement. Dimensions are captured when the projection is
+recorded; mismatch between the acknowledgement and current model identity or
+dimensions blocks the switch. Gate-off restores the pre-switch engine/model
+and any recorded Ollama URL, then clears only this projection. It never touches
+vector data. CodeGraph continues to use native embeddings; this slice does not
+alter CodeGraph embedding behaviour.
+
+> **Document conversion**: WebUI document ingestion does NOT route through
+> MarkItDown (protocol mismatch with the external document loader; see
+> docs/LITELLM.md). MarkItDown remains available as a gateway or direct
+> conversion model for unmanaged consumers.
+
+Rollback from Ollama embeddings is also a dimension-changing data migration:
+if 768-dimension vectors may have been created, returning to 384-dimension
+MiniLM is refused until the operator resets/re-embeds the vector store and
+records a matching reverse acknowledgement in the same state file. The
+acknowledgement fields describe the actual direction: current owned Ollama
+model/engine/dimensions in `previous_*`, and restored MiniLM identity and 384
+dimensions in `new_*`. The recorded Ollama URL is checked for drift before
+no-op, switch, or rollback; rollback URL restoration is readback-verified
+before ownership state is cleared.
+
+Reads use `GET /api/v1/retrieval/embedding`; writes use `POST
+/api/v1/retrieval/embedding/update`. The v0.12.0 router validates a complete
+`EmbeddingModelUpdateForm`: engine/model, batch size, async flag, concurrent
+requests and optional provider config blocks. Its handler updates Ollama URL
+only when the selected engine is `ollama` and an `ollama_config` is supplied;
+keys are not part of the ownership projection. Endpoint tests use fixtures and
+never issue a live write.
+
 - **Local engines:** models are discovered live through each connection's
   native model-list mechanism (Ollama native API; `/v1/models` for
   OpenAI-protocol connections). Nothing to check in; add/remove a model in
@@ -571,7 +695,7 @@ connection and MCP credentials.
   the same engines, not a replacement for the slim.json tier registry.
 - Update pinned Open WebUI releases deliberately (change
   `DOTFILES_OPENWEBUI_VERSION`; the default lives at
-  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.0 since this
+  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.3 since this
   change; check release notes for security fixes first). Since 0.12.0 the
   deploy template stops the service and backs up `webui.db` (+ WAL/SHM)
   automatically whenever the pinned version changes, before the upgrade runs.
@@ -586,7 +710,7 @@ connection and MCP credentials.
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
 - Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
-  0.12.0 postdates the fix's merge to `dev`, so after the 0.12.0 deploy the
+  0.12.3 postdates the fix's merge to `dev`, so after the 0.12.3 deploy the
   `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if
   titles such as `settings.admin.connections.title` render correctly.
 
@@ -604,6 +728,12 @@ connection and MCP credentials.
   `LOCAL_ENGINES`, not a new abstraction over it.
 
 ## Sources (primary, retrieved 2026-09-24)
+
+## Delivered and deferred
+
+| Delivered in this change | Deferred |
+|---|---|
+| Containment; Junie derivation and Meridian twins; voice STT with fail-closed behaviour and descope; WebUI audio ownership; guarded WebUI embedding switch; gateway modality exposure including MarkItDown and namespaced-name guard; pinned memory extraction schema; Open WebUI 0.12.3 | AMD Vulkan qualification; WebUI ingestion through a MarkItDown adapter; voice HTTP TTS (unsupported by plugin); local-AI doctor; WebUI TASK_MODEL wiring |
 
 - Open WebUI docs: main, connect-a-provider, env-configuration reference,
   MCP (`/features/extensibility/mcp`), Open Terminal, Computer, licence +

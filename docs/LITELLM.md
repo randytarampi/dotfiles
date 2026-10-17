@@ -9,6 +9,8 @@ The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads
 `~/.local/share/litellm/service.env`, written with mode `600`. A master key is
 generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied.
+The gateway serves discovered chat and modality models. Direct loopback service
+endpoints remain the always-available route, including when the gateway is off.
 
 ### Two-mode client contract
 
@@ -37,7 +39,26 @@ truthy legacy value enables the new gate only when the new value is absent. An
 explicit `DOTFILES_USE_LITELLM_PROXY` value always wins. Run `make migrate`
 after pulling this change.
 
-LiteLLM requires Postgres for key, spend-tracking, and UI state. Set
+### Modality exposure
+
+Discovered local models are exposed under their exact model IDs. Qualified
+`audio_stt` models support `POST /v1/audio/transcriptions`; qualified `audio_tts` models are exposed to `POST /v1/audio/speech` except
+model families explicitly marked unqualified. Embedding, rerank and
+conversion models — e.g. MarkItDown on the oMLX engine serving
+`POST /v1/chat/completions` — are added only when discovery reports those
+modalities; no placeholder aliases are created. Modality entries are kept out
+of the chat catalogue. Direct loopback endpoints remain available regardless
+of the LiteLLM gateway gate.
+
+WebUI document ingestion through MarkItDown is intentionally NOT wired:
+WebUI's external document loader speaks a raw-body + `X-Filename` protocol
+that no MarkItDown deployment serves; bridging it would need a separate
+adapter service (deferred until required). See docs/CHAT_FRONTEND.md.
+
+LiteLLM requires a database dependency for key, spend-tracking and UI state. A
+local inference backend behind a remote SQLite/Postgres database is not
+standalone for offline operation; `scripts/configure-all.sh:348` is the
+reference. Set
 `LITELLM_DATABASE_URL`; setup translates it to `DATABASE_URL` in `service.env`,
 matching the unchanged `database_url: os.environ/DATABASE_URL` config reference.
 Legacy `DATABASE_URL` remains accepted during migration, behind the new name.

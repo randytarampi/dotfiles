@@ -2,6 +2,21 @@
 
 from pathlib import Path
 
+# Single source of truth for providers whose Junie plain groups get a derived
+# `litellm-` gateway twin. Consumed by generate-jetbrains-profiles.py (derivation
+# and routing) and verify-slim-invariants.py (twin parity check).
+LITELLM_ROUTED_PROVIDERS = frozenset(
+    {
+        "ollama",
+        "omlx",
+        "ollama-cloud",
+        "openai",
+        "google",
+        "openrouter",
+        "opencode",
+    }
+)
+
 
 def resolve_alias(
     canonical_identity,

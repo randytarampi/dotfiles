@@ -355,6 +355,14 @@ deploy-time shape check.
 
 ## 4. Local-model analysis
 
+### Unified local AI — ordered approved work
+
+The delivery order is: PR1 containment and documentation truth → PR2 Junie
+normalization → audio slice → gateway modality exposure → embeddings → retrieval
+and document ingestion → memory extraction → AMD Vulkan. The detailed contract
+and evidence live in [TIERS](TIERS.md), [JUNIE](JUNIE.md), [VOICE](VOICE.md),
+[LiteLLM](LITELLM.md) and [oMLX](OMLX.md); this roadmap tracks ordering only.
+
 ### Decision summary
 
 | Component | Disposition | Rationale and acceptance |

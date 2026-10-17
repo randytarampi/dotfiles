@@ -217,7 +217,7 @@ Recurring validation quirks — check these before diagnosing failures:
 
 Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md).
 
-The local profile family is `local-quiet` / `local` / `local-loud`; `local` is the balanced profile and evolves in place. Profile policies rank candidates at resolution time and do not promise hardware fit, latency or concurrency. Do not introduce alias machinery for profile names. If a future deprecation is approved, the only permitted alias mechanism is one explicit alias map in `tier_registry.py`, used consistently by consumers.
+The local resolution profiles are `local-quiet` / `local` / `local-loud`; `local` is the balanced profile and evolves in place. `local-solo` is a separate standalone tier, not a fourth profile. Profile policies rank candidates at resolution time and do not promise hardware fit, latency or concurrency. Do not introduce alias machinery for profile names. If a future deprecation is approved, the only permitted alias mechanism is one explicit alias map in `tier_registry.py`, used consistently by consumers.
 
 OpenAI service lanes are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are available only on the direct API-key route. They must not silently escalate from Flex to standard, and spend reporting must identify the tier actually served. See [docs/LITELLM.md](docs/LITELLM.md) for the operational contract.
 

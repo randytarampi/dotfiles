@@ -1,5 +1,8 @@
 from unittest.mock import patch
 
+import pytest
+
+import ai_models
 import tier_registry
 import tier_resolve
 
@@ -144,6 +147,139 @@ def test_category_override_supremacy_for_each_profile():
             classified, ["code-gen=ollama/explicit"]
         )
         assert classified["code-gen"] == "ollama/explicit"
+
+
+@pytest.mark.parametrize(
+    "inventory", ["ollama", "omlx", "mixed", "absent", "unknown", "untyped"]
+)
+def test_specialized_inventory_never_fills_chat_seats(inventory):
+    names = [
+        "ornith-1.5:35b-a3b",
+        "mellum2:12b-a2.5b",
+        "gemma4:12b-mxfp8",
+        "whisper-2",
+        "qwen3-asr:1.7b",
+        "qwen3-tts",
+        "chatterbox-tts",
+        "nomic-embed-text",
+        "markitdown",
+        "strands-decider:2b",
+    ]
+    specialized = {
+        "whisper-2": "audio_stt",
+        "qwen3-asr:1.7b": "audio_stt",
+        "qwen3-tts": "audio_tts",
+        "chatterbox-tts": "audio_tts",
+        "nomic-embed-text": "embedding",
+        "markitdown": "conversion",
+        "strands-decider:2b": "decision",
+    }
+    provider = "omlx" if inventory == "omlx" else "ollama"
+    models = (
+        [
+            {
+                "name": name,
+                "provider": provider,
+                "model_type": specialized.get(name, "llm"),
+            }
+            for name in names
+        ]
+        if inventory != "absent"
+        else []
+    )
+    # Real discovery shape: Ollama discovery emits only name/size/provider —
+    # no model_type — and the healthy `ollama show` lookup supplies no
+    # model_type either. The name-level exclusion must still fire.
+    untyped = inventory == "untyped"
+    if untyped:
+        models = [
+            {"name": name, "provider": provider, "size_gb": 8.0} for name in names
+        ]
+    if inventory == "mixed":
+        models.extend({**model, "provider": "omlx"} for model in models[:3])
+    details = {
+        name: {
+            "param_count": 12,
+            "capabilities": [],
+            "model_type": specialized.get(name, "llm"),
+        }
+        for name in names
+    }
+    if untyped:
+        # Healthy-path details carry no model_type; nothing is typed here.
+        details = {name: {"param_count": 12, "capabilities": []} for name in names}
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details.get(name, {}),
+    ):
+        selected = tier_resolve.resolve_roles_from_list(models)
+    chat_seats = {role: ref for role, ref in selected.items() if role != "audio"}
+    # Normalized comparison: selected refs are provider-qualified, so bare
+    # names would intersect nothing and the assertion would pass vacuously.
+    forbidden = {ai_models.strip_provider_prefix(ref) for ref in chat_seats.values()}
+    chat_violations = forbidden & set(specialized)
+    assert (
+        not chat_violations
+    ), f"specialized models on chat seats ({inventory}): {chat_violations}"
+    if inventory != "absent":
+        # A real chat model must survive selection: containment must not be
+        # achieved by emptying the chat pool.
+        assert chat_seats.get("code-gen"), f"no chat seat filled ({inventory})"
+        assert chat_seats["code-gen"].endswith("ornith-1.5:35b-a3b")
+    if untyped:
+        # Untyped specialized audio cannot be identified, so it must resolve
+        # no seat at all — the conservative outcome (voice keeps its typed
+        # oMLX path); it must never leak into a chat seat instead.
+        assert selected.get("audio") is None
+
+
+def test_untyped_gemma4audio_never_reaches_any_seat():
+    # gemma4audio:12b normalizes through the same family-prefix identity as
+    # gemma4:12b (local_engines._model_identity discards family-prefix
+    # tokens), so name-level admission is the guard that matters — the
+    # untyped audio model must hold no seat, chat or audio.
+    models = [
+        {"name": "strands-decider:2b", "provider": "ollama", "size_gb": 2.0},
+        {"name": "gemma4audio:12b", "provider": "ollama", "size_gb": 8.0},
+        {"name": "ornith-1.5:35b-a3b", "provider": "ollama", "size_gb": 24.0},
+    ]
+    with patch.object(
+        tier_resolve, "get_model_details", side_effect=lambda *a, **k: {}
+    ):
+        selected = tier_resolve.resolve_roles_from_list(models)
+    refs = {ai_models.strip_provider_prefix(ref) for ref in selected.values() if ref}
+    assert not refs & {"strands-decider:2b", "gemma4audio:12b"}
+    assert selected.get("audio") is None
+    assert selected.get("code-gen") == "ollama/ornith-1.5:35b-a3b"
+
+
+def test_ollama_metadata_type_excludes_decider_and_name_qualified_candidates_need_caps():
+    models = [
+        {"name": "strands-decider:2b", "provider": "ollama"},
+        {"name": "ornith-1.5:35b-a3b", "provider": "ollama"},
+    ]
+    details = {
+        "strands-decider:2b": {
+            "param_count": 2,
+            "model_type": "decision",
+            "capabilities": [],
+        },
+        "ornith-1.5:35b-a3b": {
+            "param_count": 35,
+            "model_type": "llm",
+            "capabilities": [],
+        },
+    }
+    with patch.object(
+        tier_resolve,
+        "get_model_details",
+        side_effect=lambda name, provider="ollama": details[name],
+    ):
+        selected = tier_resolve.resolve_roles_from_list(models)
+    assert all("strands-decider" not in value for value in selected.values() if value)
+    assert selected["code-gen"] == "ollama/ornith-1.5:35b-a3b"
+    assert selected["code-gen_2"] == selected["code-gen"]
 
 
 def resolve_reasoning_admission(gemma_capabilities, gemma_embedding):

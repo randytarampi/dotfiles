@@ -24,8 +24,22 @@ are routed only through exact aliases present in Junie's authenticated LiteLLM
 catalogue. Missing aliases or an unavailable catalogue omit the owned generated
 profile (and remove a stale manifest-owned profile); missing faster aliases omit
 only `fasterModel`. No eligible profile silently falls back to a direct endpoint.
-Named `litellm-*` groups keep their existing catalogue-filter behaviour. Meridian groups remain direct because Meridian speaks the
-OpenAI Responses protocol at `/v1/responses`, which the LiteLLM proxy does not
+The generator derives a `litellm-<plain>` twin for every plain group routed
+through `LITELLM_ROUTED_PROVIDERS`, including future `local-*` groups, using the
+existing alias mapping and live-catalogue filter. A verification check rejects
+routed groups that fail to produce a matching twin. Deployment remains direct by default;
+routed profiles are emitted only under `DOTFILES_USE_LITELLM_PROXY=1`. This is
+fail-closed: missing aliases or keys never trigger a direct substitute, and an
+unavailable catalogue omits gateway groups instead of publishing unverified
+aliases. The four `litellm-meridian-*` twins shipped after a reproduced
+end-to-end Junie gateway smoke test (2026-10-16): the live catalogue listed all
+four `meridian/claude-*` aliases, and real completion, streaming, and
+tool-calling requests through the gateway succeeded.
+
+Named `litellm-*` groups keep their existing catalogue-filter behaviour.
+Gateway meridian routes serve the chat-completions wire; Meridian direct groups
+remain direct because they speak the native OpenAI Responses protocol at
+`/v1/responses`, which the LiteLLM proxy does not
 serve; Copilot remains direct because it uses its own authentication and profile
 shape. The gate defaults to `0`, and disabled mode emits the existing groups
 unchanged.
@@ -56,6 +70,10 @@ compatibility are confirmed.
 | `fasterModel` | Shared registry's `librarian` role | Strip provider prefix; add `fasterProvider` if different from `provider` |
 | `temperature` | Per-provider defaults | `ollama-cloud`: 0.7, `openai`: 1, `meridian`: 1, `ollama`: 0.6 |
 | `modelTemperatures` | — (Junie-specific) | Model-family temperature map; applied per-role at profile generation time |
+
+Gateway twins are derived from routed plain groups by the profile generator;
+the `litellm-` prefix does not change the source model-family temperature.
+See the generator and invariant check for the mapping and no-silent-drop contract.
 
 ## Local profile family passthrough
 

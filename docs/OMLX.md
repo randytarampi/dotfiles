@@ -208,6 +208,21 @@ point and carries `basic_auth` for `lan`/`public` access modes.
 
 ## Capability mapping
 
+### Typed discovery and audio endpoint evidence
+
+Discovery uses typed `model_type` metadata where available: LLM/VLM entries
+receive chat capabilities, audio model types are classified as audio, and
+embedding/reranker/unknown types are excluded from chat role pools. This is
+classification, not proof that every advertised operation works end to end.
+
+Audio-service reality check: the benchmark artifact records measured oMLX
+inference runs for chat models only; its Ollama comparison rows use the Ollama
+OpenAI-compatible endpoint. These rows do not prove an oMLX STT or TTS operation.
+An audio endpoint is PROVEN only when its request/response operation has been
+exercised against that endpoint; metadata-discovered STT/TTS entries alone are
+ASSERTED capability, not end-to-end service evidence. See the [benchmark
+artifact](../../.slim/deepwork/local-ai-unification/bench-m3max-m5pro.md).
+
 | oMLX metadata | Repository capability |
 |---------------|-----------------------|
 | `model_type=llm` or `vlm` | `completion` and optimistic `tools` |
@@ -259,3 +274,14 @@ The repository does not pull models or manage model directories.
 - The embeddings API: it is documented and exposed, but has no repository consumer today.
 
 Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align via `OMLX_PORT=<your port>`.
+
+## Splash (external engine)
+
+oMLX 0.7.1rc1 launches Splash — an external Metal engine serving Qwen3.8 and
+Qwen3.6 models with DFlash2 speculative decoding — as a separate process on
+the same model list, API and dashboard; vision checkpoints accept images. The
+brewfile installs it from `incoai/tap` next to the oMLX tap. Splash-served
+models appear in discovery with upstream's own typing (batched engine
+records); the specialized-name guard keeps non-chat entries out of chat
+candidates. Install notes: the formula is `incoai/tap/splash`
+(`/opt/homebrew`-agnostic via the shared Brewfile flow).

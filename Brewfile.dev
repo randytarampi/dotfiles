@@ -192,3 +192,5 @@ npm "pi-acp"
 
 tap "jundot/omlx", "https://github.com/jundot/omlx"
 brew "jundot/omlx/omlx"
+tap "incoai/tap"
+brew "incoai/tap/splash", trusted: true

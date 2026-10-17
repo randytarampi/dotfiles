@@ -16,7 +16,7 @@ Changing `prompt`, `skills`, `mcps`, or `displayName` requires an OpenCode resta
 
 ## Tier Definitions
 
-Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
+The tier count is derived from the tier registry in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -33,8 +33,7 @@ Fourteen tiers defined in `configs/opencode/oh-my-opencode-slim.json` (source of
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
-| **local** | Local profile — balanced default | Balanced local model selection; preserves current selection policy |
-| **local-loud** | Local profile — quality-first; sequential-until-measured | Ranks MoE/Ornith, dense Qwen and Gemma vision candidates; no concurrency guarantee |
+| **local-loud** | Local profile — quality-first ranking | Ranks MoE/Ornith, dense Qwen and Gemma vision candidates; no hardware-fit, latency or concurrency guarantee |
 
 These profile tiers share the same placeholder map: orchestrator/designer/fixer
 use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer
@@ -42,9 +41,9 @@ use `_local:lightweight`, and observer uses `_local:vision`. Profile policy rank
 and admits discovered models at resolution time; the placeholders remain the
 configuration contract.
 
-Profile policy is a resolution-time ranking layer over the same
-`_local:<category>` placeholders — it does not enforce hardware fit, latency or
-concurrency (see Measured Local Profile Contracts below).
+Quiet, balanced (`local`) and loud are resolution-time ranking policies over
+the same `_local:<category>` placeholders. They do not guarantee hardware fit,
+latency or concurrency (see Measured Local Profile Contracts below).
 
 The loud council aims for three distinct residents: dense reasoning alpha, MoE
 code-gen beta and secondary code-gen gamma via the indexed `_N` placeholder
@@ -53,18 +52,38 @@ is unchanged and remains the strict-equality anchor.
 
 ### Measured Local Profile Contracts
 
-| Hardware / path | Quiet | Balanced (`local`) | Loud |
-|-----------------|-------|--------------------|------|
-| M3 Max 128GB + M5 Pro 48GB, Mellum6 path | UNKNOWN | 131072 context (measured) | UNKNOWN |
-| Other hardware / model paths | UNKNOWN | UNKNOWN | UNKNOWN |
+| Hardware / path | Measured evidence |
+|-----------------|-------------------|
+| M3 Max 128GB, Mellum2-12B | 32K, 64K and 131072; exact results below |
+| M3 Max 128GB, Ornith-1.5-35B | 131072: TTFT 225.95 s, peak 23.59 GB ([M3 Max artifact](https://omlx.ai/my/f7eb660385d723465a8befb0ccd33b2ebeed0b78d6e8aa8d6c9b99dced9f1531)) |
+| M5 Pro 48GB, Ornith-1.5-35B | Measured to 64K only; 128K unverified ([M5 Pro artifact](https://omlx.ai/my/4b5e53c6eea9410263de24d08b9dbf2d7f68f5674d46f0a7cab62b664d60540a)) |
+| Other hardware / model paths | UNKNOWN |
 
 > [!NOTE]
 > When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-The sole measured 131072-context evidence is the Mellum6 path on M3 Max 128GB
-and M5 Pro 48GB. Ornith35 has no measured 131072 run; all other hardware/model
-cells remain UNKNOWN. q8 KV-cache settings describe cache precision, not model
-weight quantization.
+Benchmark rows use oMLX Auto except the Ollama endpoint comparisons, which use
+`http://127.0.0.1:11434/v1` (External OpenAI-compatible endpoint); all use Code
+(Mixed), tg128. On 2026-10-17, Ornith-1.5-35B MLX 4-bit at 131072 on M3 Max
+measured TTFT 225.95 s / 26.4 tok/s / 23.59 GB peak; M5 Pro 35B was measured
+to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b` via the Ollama endpoint were
+slower, with architecture-confounded comparisons. The full
+`bench-m3max-m5pro.md` is a local-only session artifact and is not in this
+repository.
+
+| Model / host | Context and observed results |
+|---|---|
+| M3 Max Mellum2-12B-A2.5B-Instruct-6bit | 32K: TTFT 25.13 s / tg 76.5 / 10.28 GB; 64K: TTFT 59.62 s / tg 53.9 / 10.97 GB; 131072: TTFT 148.71 s / tg 35.9 / 12.66 GB |
+| M5 Pro Mellum2-12B-A2.5B-Instruct-6bit | 32K: TTFT 11.42 s / tg 66.5 / 10.29 GB; 64K: TTFT 28.50 s / tg 48.3 / 10.98 GB; 131072: TTFT 74.95 s / tg 31.5 / 12.68 GB |
+| M3 Max `gemma4:12b-mxfp8` via Ollama | 131072 (actual pp132535): TTFT 462.45 s / tg 35.1 / pp 286.6; requested pp 1024 → actual ≈1091 |
+| M3 Max `qwen3.8:27b-mlx` via Ollama | 131072 (actual pp118737): TTFT 883.74 s / tg 14.0 / pp 134.4 |
+| M5 Pro `gemma4:12b-mxfp8` via Ollama | 131072 (actual pp132538): TTFT 269.49 s / tg 15.2 |
+| M5 Pro `qwen3.8:27b-mlx` via Ollama | Measured to 64K only (actual pp63016): TTFT 176.85 s / tg 22.0 |
+
+The M3 Max Ornith-35B 131072 run is verified by its linked artifact; M5 Pro
+Ornith-35B has no 131072 row and remains unverified at that context. These
+measurements do not establish guarantees for other hosts or concurrent loads.
+q8 KV-cache settings describe cache precision, not model weight quantization.
 
 ### OpenAI Service Lanes (Flex/Fast)
 

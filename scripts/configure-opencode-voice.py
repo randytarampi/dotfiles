@@ -57,9 +57,10 @@ from tier_resolve import (
     resolve_roles_from_list,
 )
 from provider_endpoints import PROVIDER_ENDPOINTS
-from local_engines import (
+from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     active_engines,
     audio_models,
+    iter_engine_discovery,
     local_endpoint_for,
     resolve_engine,
 )
@@ -80,12 +81,102 @@ def local_voice_provider(model_ref):
     return config
 
 
+def _voice_resolution_options(
+    local_fallback_preset,
+    role_models,
+    category_models,
+    min_reasoning_embedding,
+    stt_transport,
+):
+    return {
+        "local_fallback_preset": local_fallback_preset,
+        "role_models": role_models,
+        "category_models": category_models,
+        "min_reasoning_embedding": min_reasoning_embedding,
+        "stt_transport": stt_transport,
+    }
+
+
+def _voice_llm_capable(model_ref):
+    """Require verified completion capability for the voice LLM."""
+    provider, _, name = model_ref.partition("/")
+    engine_provider = provider if provider in ("ollama", "omlx") else "ollama"
+    try:
+        details = get_model_details(name, engine_provider)
+    except (OSError, ValueError, RuntimeError) as error:
+        logger.warning(
+            "Voice model capability lookup failed for %s: %s", model_ref, error
+        )
+        return False
+    caps = details.get("capabilities") or []
+    if "completion" in caps:
+        return True
+    logger.info(
+        "Voice LLM: skipping STT-only audio winner %s (no completion capability)",
+        model_ref,
+    )
+    return False
+
+
+def _resolve_local_voice_model(
+    registry, resolution_preset, role_models, category_models, min_reasoning_embedding
+):
+    """Resolve a verified local completion candidate while preserving discovery status."""
+    discovery = iter_engine_discovery("ollama")
+    if discovery.status == "unknown_error":
+        logger.warning(
+            "Local voice discovery unavailable; preserving existing voice selection"
+        )
+        return None, True, False
+    if discovery.status == "ok_empty":
+        logger.warning(
+            "No local voice models discovered; voice configuration is unresolved"
+        )
+        return None, True, True
+    local_models = list(discovery.records)
+    if not local_models:
+        return None, False, False
+    min_emb = min_reasoning_embedding
+    if min_emb is None:
+        min_emb = int(os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0")
+    categories = resolve_roles_from_list(
+        local_models, min_reasoning_embedding=min_emb, moe_codegen_reuse=False
+    )
+    tier_registry.apply_placeholder_overrides(categories, category_models)
+    resolved_roles = tier_registry.materialize_role_models(
+        registry, resolution_preset, categories, role_models
+    )
+    candidates = [
+        (
+            categories.get("solo")
+            if resolution_preset == "local-solo"
+            else categories.get("audio")
+        ),
+        categories.get("lightweight"),
+        resolved_roles.get("librarian"),
+    ]
+    for candidate in dict.fromkeys(item for item in candidates if item):
+        if _voice_llm_capable(candidate):
+            return candidate, False, False
+    logger.warning(
+        "Local voice models lack verified completion capability; voice configuration is unresolved"
+    )
+    return None, True, False
+
+
+def add_voice_transport_arguments(parser):
+    """Keep the voice CLI's supported transport options explicit."""
+    parser.add_argument(
+        "--stt-transport",
+        choices=("auto", "local", "openai"),
+        default="auto",
+        help="STT transport policy (auto preserves tier-based behaviour)",
+    )
+
+
 def get_voice_config(
     tier: str,
-    local_fallback_preset=None,
-    role_models=None,
-    category_models=None,
-    min_reasoning_embedding=None,
+    options=None,
 ) -> dict:
     """Build the opencode-voice plugin config dict based on tier.
 
@@ -93,6 +184,12 @@ def get_voice_config(
       {"endpoint": ..., "model": ..., optional "apiKeyEnv": ...,
        optional "sttEndpoint": ..., optional "sttModel": ..., optional "sttApiKeyEnv": ...}
     """
+    options = options or {}
+    local_fallback_preset = options.get("local_fallback_preset")
+    role_models = options.get("role_models")
+    category_models = options.get("category_models")
+    min_reasoning_embedding = options.get("min_reasoning_embedding")
+    stt_transport = options.get("stt_transport", "auto")
     is_anthropic_tier = tier in ("anthropic", "pro-plus-anthropic")
     is_plus_tier = tier in (
         "plus",
@@ -102,6 +199,8 @@ def get_voice_config(
     )
     is_local_tier = tier.startswith("local")
     is_pro_tier = tier == "pro"
+    unresolved = False
+    no_local_models = False
     registry = tier_registry.load_registry()
     resolution_preset = local_fallback_preset or (
         tier if tier_registry.uses_local_placeholders(registry, tier) else "local"
@@ -127,66 +226,20 @@ def get_voice_config(
         )
         if use_local_ollama:
             try:
-                local_models = list_local_ollama_models()
-                if local_models:
-                    min_emb = min_reasoning_embedding
-                    if min_emb is None:
-                        min_emb = int(
-                            os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0")
-                            or "0"
-                        )
-                    categories = resolve_roles_from_list(
-                        local_models,
-                        min_reasoning_embedding=min_emb,
-                        moe_codegen_reuse=False,
-                    )
-                    tier_registry.apply_placeholder_overrides(
-                        categories, category_models
-                    )
-                    resolved_roles = tier_registry.materialize_role_models(
-                        registry, resolution_preset, categories, role_models
-                    )
-
-                    def _voice_llm_capable(model_ref):
-                        """STT-only models transcribe but cannot serve as the
-                        voice LLM. Capability lookup is fail-open: an unknown
-                        capability set keeps the pre-existing selection."""
-                        provider, _, name = model_ref.partition("/")
-                        engine_provider = (
-                            provider if provider in ("ollama", "omlx") else "ollama"
-                        )
-                        try:
-                            details = get_model_details(name, engine_provider)
-                        except Exception:
-                            return True
-                        caps = details.get("capabilities") or []
-                        if not caps or "completion" in caps:
-                            return True
-                        logger.info(
-                            "Voice LLM: skipping STT-only audio winner %s "
-                            "(no completion capability)",
-                            model_ref,
-                        )
-                        return False
-
-                    candidates = [
-                        (
-                            categories.get("solo")
-                            if resolution_preset == "local-solo"
-                            else categories.get("audio")
-                        ),
-                        categories.get("lightweight"),
-                        resolved_roles.get("librarian"),
-                    ]
-                    voice_model = next(
-                        (c for c in candidates if c and _voice_llm_capable(c)), None
-                    )
-                    if voice_model:
-                        voice_config = local_voice_provider(voice_model)
-            except Exception:
-                pass
-        if "model" not in voice_config:
-            voice_config["model"] = "gemma4:e4b"
+                voice_model, unresolved, no_local_models = _resolve_local_voice_model(
+                    registry,
+                    resolution_preset,
+                    role_models,
+                    category_models,
+                    min_reasoning_embedding,
+                )
+                if voice_model:
+                    voice_config = local_voice_provider(voice_model)
+            except (OSError, ValueError, RuntimeError) as error:
+                logger.warning("Local voice model resolution failed: %s", error)
+                unresolved = True
+        if "model" not in voice_config and not unresolved:
+            raise RuntimeError("Could not resolve a verified local voice LLM")
 
     elif is_pro_tier:
         # Ollama Cloud — route through local daemon if cloud-capable
@@ -276,8 +329,11 @@ def get_voice_config(
                 voice_model = resolved_roles.get("librarian")
                 if voice_model:
                     voice_config = local_voice_provider(voice_model)
-        except Exception:
-            pass
+        except (OSError, ValueError, RuntimeError, KeyError) as error:
+            logger.warning(
+                "Local voice model resolution failed; retaining configured tier model: %s",
+                error,
+            )
 
     # ── STT config ──────────────────────────────────────────────────
     # Cloud tiers use OpenAI Whisper for STT when OPENAI_API_KEY is available.
@@ -308,29 +364,50 @@ def get_voice_config(
             return True
         return False
 
-    if is_plus_tier:
+    if stt_transport == "local":
+        configure_local_stt()
+    elif stt_transport == "openai":
+        if not has_openai_key:
+            raise RuntimeError(
+                "OpenAI STT transport requested but OPENAI_API_KEY is unavailable"
+            )
+        voice_config["sttEndpoint"] = get_provider_base_url("openai")
+        voice_config["sttModel"] = "whisper-1"
+        voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
+    elif stt_transport == "auto" and is_plus_tier:
         # OpenAI tiers — use OpenAI for STT too
         voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif is_anthropic_tier and has_openai_key:
+    elif stt_transport == "auto" and is_anthropic_tier and has_openai_key:
         # Anthropic tiers — upgrade STT to OpenAI if key available
         voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif tier == "pro-plus" and has_openai_key:
+    elif stt_transport == "auto" and tier == "pro-plus" and has_openai_key:
         # pro-plus — upgrade STT to OpenAI if key available
         voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif tier == "pro-plus-anthropic" and has_openai_key:
+    elif stt_transport == "auto" and tier == "pro-plus-anthropic" and has_openai_key:
         # pro-plus-anthropic — upgrade STT to OpenAI if key available
         voice_config["sttEndpoint"] = get_provider_base_url("openai")
         voice_config["sttModel"] = "whisper-1"
         voice_config["sttApiKeyEnv"] = "OPENAI_API_KEY"
-    elif configure_local_stt():
+    elif stt_transport == "auto" and configure_local_stt():
         pass
     # else: local/pro use whisper-cli (no stt config needed — plugin auto-detects)
+
+    # This plugin synthesizes through Piper; HTTP TTS belongs to Open WebUI.
+    discovered_tts = any(
+        model.get("model_type") == "audio_tts" for model in audio_models("omlx")
+    )
+    logger.warning(
+        "The installed opencode-voice consumer (<=0.6.0) synthesizes via local "
+        "Piper and ignores HTTP TTS configuration; local HTTP TTS is served "
+        "through the Open WebUI audio bundle%s",
+        " (oMLX TTS model discovered)" if discovered_tts else "",
+    )
 
     # ── Optional custom prompt files ─────────────────────────────────
     # These are optional — only include if the files exist
@@ -352,6 +429,21 @@ def get_voice_config(
     if os.path.exists(tts_manual_prompt):
         voice_config["ttsManualPrompt"] = tts_manual_prompt
 
+    # STT/TTS remain engine-local and independent of the voice LLM pool
+    # (Workstream E): an unresolved LLM selection must not discard a healthy
+    # engine's resolved STT/TTS configuration.
+    if unresolved and (no_local_models or is_local_tier):
+        logger.warning(
+            "Voice configuration unresolved: %s",
+            (
+                "no local pools discovered"
+                if no_local_models
+                else "no verified candidates"
+            ),
+        )
+        if not voice_config.get("sttEndpoint"):
+            return {"_voice_unresolved": True}
+        voice_config["_voice_unresolved"] = True
     return voice_config
 
 
@@ -367,6 +459,7 @@ def main():
         choices=available_tiers,
         help="Active OpenCode tier (determines voice LLM/STT endpoints)",
     )
+    add_voice_transport_arguments(parser)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -403,38 +496,99 @@ def main():
     # Build voice config
     voice_config = get_voice_config(
         args.preset,
-        args.local_fallback_preset,
-        args.role_models,
-        args.category_models,
-        args.min_reasoning_embedding,
+        _voice_resolution_options(
+            args.local_fallback_preset,
+            args.role_models,
+            args.category_models,
+            args.min_reasoning_embedding,
+            args.stt_transport,
+        ),
     )
+    unresolved = voice_config.pop("_voice_unresolved", False)
 
-    # Build full tui.json
-    tui_config = {
-        "$schema": "https://opencode.ai/tui.json",
-        "plugin": [
-            ["@renjfk/opencode-voice", voice_config],
-        ],
-    }
+    output_path = os.path.join(config_dir_path, "tui.json")
+    tui_config = {"plugin": []}
+    if os.path.exists(output_path):
+        try:
+            with open(output_path, "r", encoding="utf-8") as config_file:
+                tui_config = json.load(config_file)
+            if not isinstance(tui_config, dict):
+                raise ValueError("tui.json root must be an object")
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            logger.critical(f"Could not read existing tui.json safely: {error}")
+            return 1
+    existing_plugins = tui_config.get("plugin", [])
+    if not isinstance(existing_plugins, list):
+        logger.critical(
+            "Could not merge voice plugin: tui.json 'plugin' must be a list"
+        )
+        return 1
+    filtered_plugins = [
+        entry
+        for entry in existing_plugins
+        if not (
+            isinstance(entry, list) and entry and entry[0] == "@renjfk/opencode-voice"
+        )
+    ]
+    existing_voice = next(
+        (
+            entry
+            for entry in existing_plugins
+            if isinstance(entry, list)
+            and entry
+            and entry[0] == "@renjfk/opencode-voice"
+        ),
+        None,
+    )
+    if unresolved:
+        existing_options = (
+            existing_voice[1]
+            if existing_voice is not None
+            and len(existing_voice) > 1
+            and isinstance(existing_voice[1], dict)
+            else {}
+        )
+        if "sttEndpoint" in voice_config and existing_voice is not None:
+            for key in ("endpoint", "model", "apiKeyEnv", "ttsVoice"):
+                if key in existing_options:
+                    voice_config[key] = existing_options[key]
+            filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
+        elif existing_voice is not None:
+            filtered_plugins.append(existing_voice)
+    else:
+        filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
+    tui_config["plugin"] = filtered_plugins
 
     # Dry-run mode
     if args.dry_run:
-        print("# Dry-run: tui.json configuration")
+        print("# Dry-run: proposed voice configuration")
         print(f"# Tier: {args.preset}")
         print(f"# Config dir: {config_dir_path}")
         print()
-        if args.show_secrets:
-            print(json.dumps(tui_config, indent=2))
-        else:
-            # Redact apiKeyEnv values
-            safe_config = json.loads(json.dumps(tui_config))
-            for plugin_entry in safe_config.get("plugin", []):
-                if isinstance(plugin_entry, list) and len(plugin_entry) == 2:
-                    opts = plugin_entry[1]
-                    for key in ("apiKeyEnv", "sttApiKeyEnv"):
-                        if key in opts:
-                            opts[key] = f"<{opts[key]}>"
-            print(json.dumps(safe_config, indent=2))
+        if unresolved:
+            print("Voice outcome: unresolved; existing selection preserved")
+        elif not existing_voice or existing_voice != [
+            "@renjfk/opencode-voice",
+            voice_config,
+        ]:
+            print(json.dumps(["@renjfk/opencode-voice", voice_config], indent=2))
+        changed_names = sorted(
+            key
+            for key in voice_config
+            if not existing_voice
+            or len(existing_voice) < 2
+            or not isinstance(existing_voice[1], dict)
+            or existing_voice[1].get(key) != voice_config[key]
+        )
+        print(f"Changed setting names: {', '.join(changed_names) or 'none'}")
+        preserved_names = [
+            str(entry[0])
+            for entry in existing_plugins
+            if isinstance(entry, list)
+            and entry
+            and entry[0] != "@renjfk/opencode-voice"
+        ]
+        print(f"Preserved plugin names: {', '.join(preserved_names) or 'none'}")
         return
 
     # Write tui.json
@@ -446,28 +600,6 @@ def main():
         backup_path = backup_file(output_path, enabled=True)
         if backup_path:
             logger.info(f"Backed up existing tui.json to {backup_path}")
-
-    # Merge with existing config if it has other plugins
-    existing_plugins = []
-    if os.path.exists(output_path):
-        try:
-            with open(output_path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-            existing_plugins = existing.get("plugin", [])
-        except Exception:
-            existing_plugins = []
-
-    # Remove any existing @renjfk/opencode-voice entry
-    filtered_plugins = []
-    for entry in existing_plugins:
-        if isinstance(entry, list) and len(entry) >= 1:
-            if entry[0] == "@renjfk/opencode-voice":
-                continue
-        filtered_plugins.append(entry)
-
-    # Add the new voice plugin entry at the end
-    filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
-    tui_config["plugin"] = filtered_plugins
 
     try:
         write_text_file(
@@ -489,9 +621,16 @@ def main():
         "OpenCode voice plugin configured!",
         "",
         f"Config written to: {output_path}",
-        f"  • LLM endpoint: {voice_config['endpoint']}",
-        f"  • LLM model: {voice_config['model']}",
     ]
+    if unresolved:
+        summary_lines.append("Voice outcome: unresolved; existing selection preserved")
+    else:
+        summary_lines.extend(
+            [
+                f"  • LLM endpoint: {voice_config['endpoint']}",
+                f"  • LLM model: {voice_config['model']}",
+            ]
+        )
     if "apiKeyEnv" in voice_config:
         summary_lines.append(f"  • LLM API key env: {voice_config['apiKeyEnv']}")
     if has_stt:

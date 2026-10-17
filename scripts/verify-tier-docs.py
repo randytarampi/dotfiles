@@ -40,6 +40,21 @@ def registry_models(registry: dict) -> Set[str]:
     return models
 
 
+def registry_tiers(registry: dict) -> Set[str]:
+    """Return tier names from the authoritative tier preset registry."""
+    return set(registry.get("presets", {}))
+
+
+def documented_tiers(document: str) -> Set[str]:
+    """Extract tier IDs from the tier definition table."""
+    tiers = set()
+    for line in document.splitlines():
+        match = re.match(r"^\|\s*\*\*([^*]+)\*\*\s*\|", line)
+        if match:
+            tiers.add(match.group(1))
+    return tiers
+
+
 def documented_models(document: str) -> Set[str]:
     """Extract model IDs from Markdown rows within tier definition tables."""
     models = set()
@@ -73,6 +88,26 @@ def drift_messages(registry: dict, document: str) -> list[str]:
     return messages
 
 
+def tier_set_messages(registry: dict, document: str) -> list[str]:
+    """Compare the registry tier set against the tier definition table.
+
+    Kept separate from `drift_messages` because synthetic documents used by
+    focused tests exercise model-identity drift without tier tables.
+    """
+    registry_tier_set = registry_tiers(registry)
+    docs_tier_set = documented_tiers(document)
+    if registry_tier_set != docs_tier_set:
+        return [
+            "Tier count mismatch: registry has "
+            f"{len(registry_tier_set)} tiers, docs table has {len(docs_tier_set)}; "
+            "registry-only: "
+            + ", ".join(sorted(registry_tier_set - docs_tier_set))
+            + "; docs-only: "
+            + ", ".join(sorted(docs_tier_set - registry_tier_set))
+        ]
+    return []
+
+
 def check(slim_path: Path = SLIM_PATH, docs_path: Path = DOCS_PATH) -> int:
     try:
         registry = json.loads(slim_path.read_text(encoding="utf-8"))
@@ -81,7 +116,9 @@ def check(slim_path: Path = SLIM_PATH, docs_path: Path = DOCS_PATH) -> int:
         print(f"Could not check tier documentation: {exc}", file=sys.stderr)
         return 1
 
-    messages = drift_messages(registry, document)
+    messages = drift_messages(registry, document) + tier_set_messages(
+        registry, document
+    )
     if messages:
         print("Tier documentation drift detected:", file=sys.stderr)
         for message in messages:

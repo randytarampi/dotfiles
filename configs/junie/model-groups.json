@@ -91,6 +91,22 @@
       "provider": "meridian",
       "primaryModel": "claude-fable-5-1"
     },
+    "litellm-meridian-opus": {
+      "provider": "litellm",
+      "primaryModel": "meridian/claude-opus-5-5"
+    },
+    "litellm-meridian-sonnet": {
+      "provider": "litellm",
+      "primaryModel": "meridian/claude-sonnet-5-5"
+    },
+    "litellm-meridian-haiku": {
+      "provider": "litellm",
+      "primaryModel": "meridian/claude-haiku-5-5"
+    },
+    "litellm-meridian-fable": {
+      "provider": "litellm",
+      "primaryModel": "meridian/claude-fable-5-1"
+    },
     "google-gemini-flash": {
       "provider": "google",
       "primaryModel": "gemini-3.8-flash",
@@ -105,19 +121,6 @@
       "provider": "openai",
       "primaryModel": "gpt-6.1-sol"
     },
-    "litellm-google-gemini-flash": {
-      "provider": "litellm",
-      "primaryModel": "google/models/gemini-3.8-flash",
-      "fasterModel": "google/models/gemini-3.5-flash-lite"
-    },
-    "litellm-openai-gpt-6-luna": {
-      "provider": "litellm",
-      "primaryModel": "openai/gpt-6-luna"
-    },
-    "litellm-openai-gpt-6.1-sol": {
-      "provider": "litellm",
-      "primaryModel": "openai/gpt-6.1-sol"
-    },
     "ollama-cloud-glm": {
       "provider": "ollama-cloud",
       "primaryModel": "glm-5.3",
@@ -129,16 +132,6 @@
       "primaryModel": "nemotron-3-ultra",
       "fasterModel": "nemotron-3-super",
       "fasterProvider": "ollama-cloud"
-    },
-    "litellm-ollama-cloud-glm": {
-      "provider": "litellm",
-      "primaryModel": "ollama-cloud/glm-5.3",
-      "fasterModel": "ollama-cloud/glm-5.3-flash"
-    },
-    "litellm-ollama-cloud-nemotron": {
-      "provider": "litellm",
-      "primaryModel": "ollama-cloud/nemotron-3-ultra",
-      "fasterModel": "ollama-cloud/nemotron-3-super"
     }
   }
 }

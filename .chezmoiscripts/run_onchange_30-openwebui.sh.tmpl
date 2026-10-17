@@ -32,7 +32,7 @@ source "${LIB_DIR}/openwebui_service.sh"
 # configs/opencode/openrouter-models.json: {{ include "configs/opencode/openrouter-models.json" | sha256sum }}
 # configs/opencode/opencode-models.json: {{ include "configs/opencode/opencode-models.json" | sha256sum }}
 # configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.3" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
 # terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
 # computer fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_COMPUTER_VERSION" | default "0.9.21" }}:{{ env "OPENWEBUI_COMPUTER_PORT" | default "8124" }}
@@ -84,7 +84,7 @@ VENV_DIR="$OPENWEBUI_HOME/venv"
 DATA_DIR="$OPENWEBUI_HOME/data"
 LOG_DIR="$OPENWEBUI_HOME/logs"
 SERVICE_ENV="$OPENWEBUI_HOME/service.env"
-VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.12.0}"
+VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.12.3}"
 
 PYTHON_BIN=""
 for candidate in python3.11 python3.12; do
@@ -200,6 +200,31 @@ fi
 
 PLIST_DIR="$(caddy_launch_agents_dir)"
 PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
+# Homebrew-agnostic tool access for the server's audio pipeline (ffprobe/ffmpeg).
+BREW_BIN=""
+if command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix)" || die "Failed to discover Homebrew prefix"
+  BREW_BIN="${BREW_PREFIX}/bin"
+else
+  for candidate in /opt/homebrew /usr/local; do
+    if [[ -x "${candidate}/bin/ffprobe" ]]; then
+      BREW_BIN="${candidate}/bin"
+      break
+    fi
+  done
+  if [[ -z "$BREW_BIN" ]]; then
+    for candidate in /opt/homebrew/opt/ffmpeg/bin /usr/local/opt/ffmpeg/bin; do
+      if [[ -x "${candidate}/ffprobe" ]]; then
+        BREW_BIN="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$BREW_BIN" ]] && command -v ffprobe >/dev/null 2>&1; then
+    BREW_BIN="$(dirname "$(command -v ffprobe)")"
+  fi
+  [[ -n "$BREW_BIN" ]] || die "ffprobe not found: tried brew --prefix, /opt/homebrew/bin, /usr/local/bin, /opt/homebrew/opt/ffmpeg/bin, /usr/local/opt/ffmpeg/bin, and PATH"
+fi
 mkdir -p "$PLIST_DIR"
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -210,7 +235,7 @@ cat >"$PLIST_PATH" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string><string>-c</string>
-    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$VENV_DIR/bin" DATA_DIR="$DATA_DIR" GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"'</string>
+    <string>exec /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin:$BREW_BIN:$VENV_DIR/bin" DATA_DIR="$DATA_DIR" GLOBAL_LOG_LEVEL=INFO /bin/bash --noprofile --norc -c 'set -a &amp;&amp; source "$SERVICE_ENV" &amp;&amp; set +a &amp;&amp; exec "$VENV_DIR/bin/open-webui" serve --host 127.0.0.1 --port "\${OPENWEBUI_PORT:-8080}"'</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

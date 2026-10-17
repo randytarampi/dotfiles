@@ -25,7 +25,13 @@ from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     MODEL_CATALOGUE_TIMEOUT,
     open_same_origin,
 )
-from ai_models import resolve_model  # noqa: E402 -- scripts/lib bootstrap.
+from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
+    LITELLM_ROUTED_PROVIDERS,
+)
+from ai_models import (
+    is_specialized_model_name,
+    resolve_model,
+)  # noqa: E402 -- scripts/lib bootstrap.
 from cli_helpers import (  # noqa: E402 -- scripts/lib bootstrap.
     add_model_override_args,
     add_min_reasoning_embedding_arg,
@@ -47,15 +53,6 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     resolve_engine,
 )
 
-LITELLM_ROUTED_PROVIDERS = {
-    "ollama",
-    "omlx",
-    "ollama-cloud",
-    "openai",
-    "google",
-    "openrouter",
-    "opencode",
-}
 JUNIE_KEY_FILE = "~/.local/share/litellm/clients/junie.key"
 PROFILE_MANIFEST = ".dotfiles-generated-profiles.json"
 
@@ -122,6 +119,7 @@ def select_model_groups(groups: dict, use_litellm: bool) -> dict:
             for name, group in groups.items()
             if group.get("provider") != "litellm"
         }
+    groups = derive_litellm_groups(groups)
     selected = {}
     for name, group in groups.items():
         provider = group.get("provider")
@@ -131,9 +129,84 @@ def select_model_groups(groups: dict, use_litellm: bool) -> dict:
             routed_name = f"litellm-{name}"
             if routed_name in groups:
                 selected[routed_name] = groups[routed_name]
+            else:
+                logger.error(
+                    "Routed Junie group %s failed to derive %s", name, routed_name
+                )
             continue
         selected[name] = group
     return selected
+
+
+def _twin_for_group(name, group):
+    provider = group.get("provider")
+    twin_name = f"litellm-{name}"
+    twin = {"provider": "litellm"}
+    for field in ("primaryModel", "fasterModel"):
+        model = group.get(field)
+        if not model:
+            continue
+        model_provider_name = (
+            group.get("fasterProvider", provider)
+            if field == "fasterModel"
+            else provider
+        )
+        if (
+            field == "fasterModel"
+            and model_provider_name not in LITELLM_ROUTED_PROVIDERS
+        ):
+            logger.warning(
+                "Routed Junie group %s: faster provider %s is not gateway-routed; omitting the faster model from %s",
+                name,
+                model_provider_name,
+                twin_name,
+            )
+            continue
+        twin[field] = litellm_alias(model, model_provider_name)
+    if group.get("fasterModel") and "fasterModel" in twin:
+        twin["fasterProvider"] = "litellm"
+    return twin_name, twin
+
+
+def _merge_twin(derived, groups, name, twin_name, twin):
+    existing = groups.get(twin_name)
+    if existing and existing != twin:
+        logger.error("Derived Junie twin %s diverges from %s", twin_name, name)
+        return
+    derived[twin_name] = twin
+
+
+def derive_litellm_groups(groups: dict) -> dict:
+    """Build gateway twins for routed plain groups, preserving exact model IDs."""
+    derived = dict(groups)
+    for name, group in groups.items():
+        if group.get("provider") not in LITELLM_ROUTED_PROVIDERS or name.startswith(
+            "litellm-"
+        ):
+            continue
+        twin_name, twin = _twin_for_group(name, group)
+        _merge_twin(derived, groups, name, twin_name, twin)
+    return derived
+
+
+def routed_group_violations(
+    groups: dict, derived_groups: dict | None = None
+) -> list[str]:
+    derived_groups = (
+        derived_groups if derived_groups is not None else derive_litellm_groups(groups)
+    )
+    errors = []
+    for name, group in groups.items():
+        if (
+            name.startswith("litellm-")
+            or group.get("provider") not in LITELLM_ROUTED_PROVIDERS
+        ):
+            continue
+        twin_name = f"litellm-{name}"
+        expected = derive_litellm_groups({name: group}).get(twin_name)
+        if not expected or derived_groups.get(twin_name) != expected:
+            errors.append(f"Routed Junie group {name} has no matching twin {twin_name}")
+    return errors
 
 
 def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
@@ -179,19 +252,47 @@ def litellm_catalogue_models(base_url: str, api_key: str) -> set[str] | None:
 
 
 def filter_litellm_groups(groups: dict, available_models: set[str] | None) -> dict:
-    """Omit known-unavailable LiteLLM model groups; preserve on unknown catalogue."""
+    """Filter gateway groups against the live LiteLLM catalogue.
+
+    Fail-closed: when catalogue availability is unknown, every gateway
+    (``provider == "litellm"``) group is omitted with a diagnostic so no
+    unverified alias is published; direct-provider groups are preserved. With a
+    known catalogue the primary alias is required and the faster alias is
+    validated independently: an unavailable faster alias drops only the faster
+    fields from an otherwise usable group.
+    """
     if available_models is None:
-        return groups
-    return {
-        name: group
-        for name, group in groups.items()
-        if group.get("provider") != "litellm"
-        or all(
-            model in available_models
-            for model in (group.get("primaryModel", ""), group.get("fasterModel", ""))
-            if model
-        )
-    }
+        omitted = [
+            name for name, group in groups.items() if group.get("provider") == "litellm"
+        ]
+        if omitted:
+            logger.warning(
+                "LiteLLM model catalogue unavailable; omitting gateway groups: %s",
+                ", ".join(sorted(omitted)),
+            )
+        return {
+            name: group
+            for name, group in groups.items()
+            if group.get("provider") != "litellm"
+        }
+    filtered = {}
+    for name, group in groups.items():
+        if group.get("provider") != "litellm":
+            filtered[name] = group
+            continue
+        if group.get("primaryModel", "") not in available_models:
+            logger.warning("Omitting %s: LiteLLM primary alias unavailable", name)
+            continue
+        faster = group.get("fasterModel", "")
+        if faster and faster not in available_models:
+            logger.info("Omitting faster model for %s: LiteLLM alias unavailable", name)
+            group = {
+                key: value
+                for key, value in group.items()
+                if key not in ("fasterModel", "fasterProvider")
+            }
+        filtered[name] = group
+    return filtered
 
 
 def normalize_endpoint(base_url: str, api_type: str) -> str:
@@ -322,8 +423,21 @@ def litellm_alias(model_ref: str, provider: str) -> str:
 
 
 def lookup_model_temperature(model_name: str, overrides: dict) -> float | None:
+    model_name = resolve_canonical_temperature_ref(model_name)
     matches = [p for p in overrides if model_name.lower().startswith(p.lower())]
     return overrides[max(matches, key=len)] if matches else None
+
+
+def temperature_identity(group_name: str) -> str:
+    return group_name.removeprefix("litellm-")
+
+
+def resolve_canonical_temperature_ref(model_ref: str) -> str:
+    model = model_ref.removeprefix("litellm/")
+    for prefix in ("google/models/", "openrouter/", "openai/", "ollama-cloud/"):
+        if model.startswith(prefix):
+            return model[len(prefix) :]
+    return model.split("/", 1)[-1]
 
 
 def parse_local_models(value: str):
@@ -359,9 +473,22 @@ def append_pool_profile_specs(specs, pools=None):
         for model in pool:
             if not isinstance(model, dict):
                 continue
-            if model.get("primary_category") in {"embedding", "reranker", "unknown"}:
+            if model.get("primary_category") in {
+                "embedding",
+                "reranker",
+                "unknown",
+                "audio",
+                "decision",
+                "conversion",
+            }:
                 continue
             if model.get("model_type") not in (None, "llm", "vlm"):
+                continue
+            # Known specialized models never become chat profiles — the
+            # name-level guard covers untyped pool records (Ollama discovery
+            # emits name/size/provider only, so typed filters cannot see
+            # decision/audio/embedding/conversion models in that shape).
+            if is_specialized_model_name(model.get("name", "")):
                 continue
             chat_models.append(model["name"])
         for index, model_name in enumerate(chat_models):
@@ -649,6 +776,11 @@ def main():
     if use_litellm:
         catalogue = litellm_catalogue_models(providers["litellm"]["baseUrl"], junie_key)
         groups = filter_litellm_groups(groups, catalogue)
+    specs_temperature_identity = {
+        f"litellm-{name}": group.get("primaryModel", "")
+        for name, group in cfg.get("groups", {}).items()
+        if group.get("provider") in LITELLM_ROUTED_PROVIDERS
+    }
     specs = tier_specs + [
         (
             name,
@@ -682,6 +814,7 @@ def main():
     logger.info("Generating JetBrains AI model profiles...")
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
+        temperature_ref = specs_temperature_identity.get(name, primary_ref)
         provider = explicit_provider or model_provider(primary_ref)
         is_routed_spec = name in tier_names or name in pool_profile_names
         route_primary = (
@@ -762,7 +895,9 @@ def main():
             faster = resolve_model(faster, ollama_model_names)
         data = providers[provider].copy()
         data["id"] = primary
-        primary_temperature = lookup_model_temperature(primary, temperatures)
+        primary_temperature = lookup_model_temperature(
+            resolve_canonical_temperature_ref(temperature_ref), temperatures
+        )
         data["primaryModel"] = {
             "id": primary,
             "temperature": float(

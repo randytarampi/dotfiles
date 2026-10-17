@@ -57,37 +57,48 @@ def is_ollama_cloud_model(name: str) -> bool:
 
 def _list_local_ollama_models(include_cloud=False) -> list:
     """List only models returned by the Ollama local engine."""
+    return list(_list_local_ollama_discovery(include_cloud).records)
+
+
+def _list_local_ollama_discovery(include_cloud=False):
+    """Return typed Ollama discovery status; subprocess errors remain unknown."""
+    from local_engines import DiscoveryResult
+
     ollama_bin = find_ollama()
+    if not ollama_bin:
+        return DiscoveryResult("unknown_error", (), "Ollama binary not found")
     models = []
     try:
-        if ollama_bin:
-            result = subprocess.run(
-                [ollama_bin, "list"], capture_output=True, text=True, timeout=5
+        result = subprocess.run(
+            [ollama_bin, "list"], capture_output=True, text=True, timeout=5
+        )
+        returncode = getattr(result, "returncode", 0)
+        if isinstance(returncode, int) and returncode:
+            return DiscoveryResult(
+                "unknown_error", (), f"ollama exited {result.returncode}"
             )
-            lines = result.stdout.splitlines()
-            for line in lines[1:]:
-                parts = line.split()
-                if len(parts) >= 3:
-                    name = parts[0]
-                    if not include_cloud and is_ollama_cloud_model(name):
-                        continue
-                    models.append(
-                        {
-                            "name": name,
-                            "size_gb": parse_size_gb(" ".join(parts[2:4])),
-                        }
-                    )
-                elif parts:
-                    name = parts[0]
-                    if not include_cloud and is_ollama_cloud_model(name):
-                        continue
-                    models.append({"name": name, "size_gb": 0.0})
-    except Exception:
-        models = []
+        lines = result.stdout.splitlines()
+        for line in lines[1:]:
+            parts = line.split()
+            if not parts:
+                continue
+            name = parts[0]
+            if not include_cloud and is_ollama_cloud_model(name):
+                continue
+            models.append(
+                {
+                    "name": name,
+                    "size_gb": (
+                        parse_size_gb(" ".join(parts[2:4])) if len(parts) >= 3 else 0.0
+                    ),
+                }
+            )
+    except Exception as err:
+        return DiscoveryResult("unknown_error", (), f"{type(err).__name__}: {err}")
 
     for model in models:
         model["provider"] = "ollama"
-    return models
+    return DiscoveryResult("ok_models" if models else "ok_empty", tuple(models))
 
 
 def list_local_ollama_models(include_cloud=False) -> list:

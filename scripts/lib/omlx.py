@@ -147,3 +147,14 @@ def list_omlx_models(strict=False):
         if strict:
             raise
         return []
+
+
+def list_omlx_discovery():
+    """List models without erasing the distinction between empty and failed."""
+    from local_engines import DiscoveryResult
+
+    try:
+        models = list_omlx_models(strict=True)
+    except Exception as err:
+        return DiscoveryResult("unknown_error", (), f"{type(err).__name__}: {err}")
+    return DiscoveryResult("ok_models" if models else "ok_empty", tuple(models))
