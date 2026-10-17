@@ -98,8 +98,9 @@ Voice remains TUI-owned and is configured by `configure-opencode-voice.py`.
 
 `opencode-mem` is controlled by `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1` and
 defaults to off. The managed `opencode-mem.jsonc` configuration uses loopback web hosting, local
-embeddings, and pins memory extraction to the shared fast local LLM
-(`ollama/gemma4:12b-mxfp8`) instead of inheriting the session's routing —
+embeddings, and pins memory extraction to the shared fast local LLM using
+`opencodeProvider: "ollama"` and the bare `opencodeModel: "gemma4:12b-mxfp8"`
+wire ID instead of inheriting the session's routing —
 extraction is deterministic and offline-capable. Update the pin through the
 model-update flow when the fast model changes. The plugin's own embedding
 (`Xenova/nomic-embed-text-v1`) stays local and unchanged. Remote embedding endpoints
