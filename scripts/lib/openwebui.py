@@ -60,6 +60,20 @@ EMBEDDING_STATE_PATH = "~/.local/share/openwebui/data/managed-embedding.json"
 EMBEDDING_MODEL = "embeddinggemma-2:740m-mxfp8"
 EMBEDDING_OUTPUT_DIMS = 768
 EMBEDDING_OLLAMA_URL = constants.get_ollama_local_base_url()
+
+
+def _ollama_native_base(openai_url):
+    """Derive WebUI's native Ollama base from an OpenAI-compatible URL.
+
+    WebUI's native ``ollama`` embedding engine appends ``/api/embed`` to the
+    configured URL, so the value written into ``ollama_config.url`` must be
+    the bare origin; the OpenAI-compatible ``/v1`` endpoint stays the probe
+    and route fact. Deriving (never free-constructing) keeps the render
+    invariant.
+    """
+    return openai_url[:-3] if openai_url.endswith("/v1") else openai_url
+
+
 EMBEDDING_DEFAULTS = {
     "RAG_EMBEDDING_ENGINE": "",
     "RAG_EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
@@ -711,7 +725,7 @@ def _desired_embedding_settings(probe_routes=False):
         "RAG_EMBEDDING_ENGINE": rendered["provider"],
         "RAG_EMBEDDING_MODEL": rendered["wire_model"],
         "output_dims": EMBEDDING_OUTPUT_DIMS,
-        "ollama_config": {"url": rendered["endpoint"]},
+        "ollama_config": {"url": _ollama_native_base(rendered["endpoint"])},
         SELECTION_PROVENANCE_KEY: {
             **_locator_provenance(locator),
             "reason": probe_reason or selection.reason,
@@ -1454,7 +1468,7 @@ def _embedding_candidate(prewrite):
         if key in prewrite
     }
     candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
-    candidate["ollama_config"]["url"] = EMBEDDING_OLLAMA_URL
+    candidate["ollama_config"]["url"] = _ollama_native_base(EMBEDDING_OLLAMA_URL)
     for section in ("openai_config", "azure_openai_config"):
         if section in prewrite:
             candidate[section] = copy.deepcopy(prewrite[section])
@@ -1657,7 +1671,7 @@ def _reconcile_embedding_adoption(
                 "previous_output_dims": old_dims,
                 "output_dims": EMBEDDING_OUTPUT_DIMS,
                 "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
-                "ollama_config": {"url": EMBEDDING_OLLAMA_URL},
+                "ollama_config": {"url": _ollama_native_base(EMBEDDING_OLLAMA_URL)},
             },
             "embedding_fingerprint": {
                 "engine": "ollama",

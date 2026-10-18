@@ -421,6 +421,17 @@ def test_embedding_probe_failure_does_not_claim_success(monkeypatch, status):
     assert status in persisted["reason"]
 
 
+def test_ollama_native_base_derivation_and_rendered_field(monkeypatch):
+    # Route/probe facts keep the OpenAI-compatible endpoint.
+    assert openwebui.EMBEDDING_OLLAMA_URL.endswith("/v1")
+    # WebUI's native engine field gets the bare origin, derived (not assumed).
+    assert (
+        openwebui._ollama_native_base(openwebui.EMBEDDING_OLLAMA_URL)
+        == openwebui.EMBEDDING_OLLAMA_URL[: -len("/v1")]
+    )
+    assert openwebui._ollama_native_base("http://host:9999") == "http://host:9999"
+
+
 def test_gateway_audio_probe_uses_discovered_alias(monkeypatch):
     monkeypatch.setattr(openwebui, "_disabled", lambda: set())
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
