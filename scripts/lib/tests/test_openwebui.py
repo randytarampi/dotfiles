@@ -4697,3 +4697,55 @@ def test_legacy_audio_release_refusal_reports_refused_outcome(
     assert client.audio_writes == 0
     assert "LEGACY_SECRET" not in caplog.text
     assert "restore the prior credential manually" in caplog.text
+
+
+def test_embedding_wanted_native_url_update_is_not_a_noop(monkeypatch, tmp_path):
+    """A wanted URL change is a managed transition: written and verified."""
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+    setattr(client, "embedding_backend_identity_probe", lambda _config: None)
+    prior = {
+        "projection": {
+            "owned": {
+                "RAG_EMBEDDING_ENGINE": "ollama",
+                "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            },
+            "previous": {"engine": "ollama", "model": openwebui.EMBEDDING_MODEL},
+            "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {"url": openwebui.EMBEDDING_OLLAMA_URL},
+        },
+    }
+    openwebui._write_embedding_state(prior)
+
+    def desired(probe_routes=False):
+        return {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+            "ollama_config": {
+                "url": openwebui._ollama_native_base(openwebui.EMBEDDING_OLLAMA_URL)
+            },
+        }
+
+    wanted_full = desired()
+    assert not openwebui._wanted_embedding_matches_current(
+        wanted_full, client.get_embedding_config()
+    )
+    report = openwebui.reconcile_via_api(
+        client,
+        {
+            "openai": [],
+            "anthropic": [],
+            "ollama": [],
+            "embedding": wanted_full,
+        },
+    ).actions
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+    native = openwebui._ollama_native_base(openwebui.EMBEDDING_OLLAMA_URL)
+    assert client.get_embedding_config()["ollama_config"]["url"] == native
+    saved = openwebui._read_embedding_state()
+    assert saved["projection"]["ollama_config"]["url"] == native

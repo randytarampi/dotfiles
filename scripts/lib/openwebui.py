@@ -1457,6 +1457,36 @@ def _embedding_refusal_outcome(logger, message):
     return failure
 
 
+def _wanted_is_route_only(wanted, current):
+    """True when the wanted state changes only the Ollama routing URL.
+
+    A routing-URL update is a transport change: the resolved backend identity
+    and the vector representation are untouched, so no re-embedding
+    acknowledgement is required.
+    """
+    if wanted is None:
+        return False
+    for key in ("RAG_EMBEDDING_ENGINE", "RAG_EMBEDDING_MODEL"):
+        if wanted.get(key) != current.get(key):
+            return False
+    return (wanted.get("ollama_config") or {}).get("url") != current.get(
+        "ollama_config", {}
+    ).get("url")
+
+
+def _wanted_embedding_matches_current(wanted, current):
+    """True only when the wanted state introduces no managed transition."""
+    if wanted is None:
+        return True
+    for key in ("RAG_EMBEDDING_ENGINE", "RAG_EMBEDDING_MODEL"):
+        if key in wanted and wanted[key] != current.get(key):
+            return False
+    wanted_url = (wanted.get("ollama_config") or {}).get("url")
+    if wanted_url and wanted_url != current.get("ollama_config", {}).get("url"):
+        return False
+    return True
+
+
 def _embedding_candidate(prewrite):
     candidate = {
         key: prewrite[key]
@@ -1499,6 +1529,7 @@ def _reconcile_embedding_adoption(
     projection,
     current,
     logger,
+    wanted=None,
     planning_backend_identity=_EMBEDDING_IDENTITY_UNSET,
     planning_backend_changed=_EMBEDDING_IDENTITY_UNSET,
 ):
@@ -1546,15 +1577,20 @@ def _reconcile_embedding_adoption(
         == {"engine": "ollama", "model": EMBEDDING_MODEL}
         and current.get("ollama_config", {}).get("url")
         == projection.get("ollama_config", {}).get("url")
+        # A no-op requires the resolved wanted state to agree too: a wanted
+        # URL/identity update is a managed transition, never drifted state.
+        and _wanted_embedding_matches_current(wanted, current)
     ):
         return {"status": "noop", "applied": False, "verified": False}
+    route_only = _wanted_is_route_only(wanted, current)
     previous = _embedding_identity(current)
     old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
     recorded_dims = (projection or {}).get("output_dims")
     parity = None
-    same_dims_gate_applied = False
+    same_dims_gate_applied = route_only
     same_dims_other_model = (
-        previous != {"engine": "ollama", "model": EMBEDDING_MODEL}
+        not route_only
+        and previous != {"engine": "ollama", "model": EMBEDDING_MODEL}
         and recorded_dims == EMBEDDING_OUTPUT_DIMS
     )
     if same_dims_other_model:
@@ -1890,6 +1926,7 @@ def _reconcile_embedding(client, current, wanted):
             projection,
             current,
             logger,
+            wanted=wanted or None,
             planning_backend_identity=backend_identity,
             planning_backend_changed=_embedding_backend_changed(
                 fingerprint, backend_identity
