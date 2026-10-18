@@ -627,7 +627,12 @@ def main():
         service_lane_runtime_valid = validate_service_lane_runtime()
         # Compute the snapshot once: write_config reuses it instead of
         # re-enumerating provider catalogues a second time per deploy.
-        entries = compute_model_list()
+        previous_entries = []
+        try:
+            previous_entries = litellm_config.read_previous_entries(config_path)
+        except (OSError, ValueError, TypeError):
+            pass
+        entries = compute_model_list(previous_entries=previous_entries)
         if (
             os.environ.get(litellm_config.OPENAI_SERVICE_LANES_ENV, "0") == "1"
             and any(
@@ -654,6 +659,7 @@ def main():
             )
             return 0
         changed = write_config(config_path, entries=entries)
+        litellm_config.write_previous_entries(config_path, entries)
         _persist_generation_notes(litellm_config.last_generation_notes)
         logger.info(
             "LiteLLM config %s (%d model entries)",

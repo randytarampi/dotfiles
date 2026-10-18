@@ -825,7 +825,7 @@ def _markdown_model_refs(document):
     return refs
 
 
-def compute_model_list(environ=None):
+def compute_model_list(environ=None, previous_entries=None):
     """Return LiteLLM model entries without reading secrets or doing writes."""
     environ = environ or os.environ
     global last_generation_notes
@@ -833,6 +833,12 @@ def compute_model_list(environ=None):
     # Per-invocation sidecar: rates captured during this fetch cycle only.
     _LIVE_CATALOGUE_PRICES.clear()
     entries = []
+    previous_entries = previous_entries or []
+    previous_by_alias = {
+        item.get("model_name"): item
+        for item in previous_entries
+        if isinstance(item, dict) and isinstance(item.get("model_name"), str)
+    }
     # Keep modality discovery separate: these rows must never enter chat candidates.
     modality_entries = _modality_entries(environ)
     modality_names = {item["model_name"] for item in modality_entries}
@@ -1031,6 +1037,19 @@ def compute_model_list(environ=None):
                 confirmed = set(_live_catalogue(provider, key, live_base))
             except LiveCatalogueError as error:
                 last_generation_notes.append(f"{provider}: UNKNOWN ({error})")
+                # Unknown live evidence cannot revoke a model already served.
+                entries.extend(
+                    {
+                        **item,
+                        "_alias_kind": "qualified",
+                        "_upstream_ref": item.get("litellm_params", {}).get(
+                            "model", ""
+                        ),
+                    }
+                    for item in previous_entries
+                    if isinstance(item, dict)
+                    and str(item.get("model_name", "")).startswith(provider + "/")
+                )
                 continue
         else:
             confirmed = set()
@@ -1083,6 +1102,26 @@ def compute_model_list(environ=None):
         if not confirmed_models:
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
+        if provider in LIVE_CATALOGUE_PROVIDERS:
+            retained = []
+            for alias, previous in previous_by_alias.items():
+                if not isinstance(alias, str) or not alias.startswith(provider + "/"):
+                    continue
+                model_id = alias.split("/", 1)[1]
+                if (
+                    canonical_allowlist_key(model_id) in canonical_requested
+                    and canonical_allowlist_key(model_id) not in confirmed
+                ):
+                    retained.append(
+                        {
+                            **previous,
+                            "_alias_kind": "qualified",
+                            "_upstream_ref": previous.get("litellm_params", {}).get(
+                                "model", ""
+                            ),
+                        }
+                    )
+            entries.extend(retained)
         for model_id in sorted(confirmed_models):
             if provider == "cohere":
                 alias = wire_model = f"cohere_chat/{model_id}"
@@ -1299,4 +1338,40 @@ def write_config(path, environ=None, entries=None):
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(rendered)
     os.replace(temp_name, path)
+    return True
+
+
+def previous_entries_ledger_path(config_path):
+    """Companion JSON ledger alongside the deployed YAML config."""
+    path = Path(config_path)
+    return path.parent / (path.stem + ".models.json")
+
+
+def read_previous_entries(config_path):
+    """Read previously deployed model entries from the stdlib JSON ledger.
+
+    The ledger is written beside the config on every successful generation;
+    it must exist for retention. Reads stay stdlib-only: the deploy template's
+    interpreter has no PyYAML.
+    """
+    ledger = previous_entries_ledger_path(config_path)
+    if not ledger.is_file():
+        return []
+    try:
+        entries = json.loads(ledger.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return entries if isinstance(entries, list) else []
+
+
+def write_previous_entries(config_path, entries):
+    """Persist the deployed model entries to the companion JSON ledger."""
+    ledger = previous_entries_ledger_path(config_path)
+    if not ledger.parent.exists():
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(dir=ledger.parent, prefix=".models.", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(list(entries or []), handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.replace(temp_name, ledger)
     return True

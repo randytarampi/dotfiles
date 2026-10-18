@@ -779,6 +779,34 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         )
 
 
+def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_unknown(
+    tmp_path, monkeypatch, caplog
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    selection = "ollama-cloud/glm-5.3-flash"
+    slim = {"roles": {"orchestrator": {"model": selection}}}
+    routed = configure_opencode.apply_litellm_slim_gate(
+        slim, {"provider": {"litellm": {"models": {}}}}, slim
+    )
+    assert routed["roles"]["orchestrator"]["model"] == selection
+    assert (
+        "preserving previous gateway selection; live evidence unavailable"
+        in caplog.text
+    )
+
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"orchestrator": {"model": "cerebras/new-model"}}},
+            {"provider": {"litellm": {"models": {}}}},
+        )
+
+
 def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
     tmp_path, monkeypatch
 ):

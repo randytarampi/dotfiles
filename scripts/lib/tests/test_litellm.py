@@ -232,6 +232,34 @@ def test_live_catalogue_failure_is_recorded_and_other_providers_continue(monkeyp
     )
 
 
+def test_unknown_catalogue_retains_previous_cloud_entries_but_not_new_models(
+    monkeypatch,
+):
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "full")
+    previous = [
+        {
+            "model_name": "ollama-cloud/glm-5.3-flash",
+            "litellm_params": {
+                "model": "openai/glm-5.3-flash",
+                "api_base": "https://ollama.com/v1",
+                "api_key": "os.environ/OLLAMA_API_KEY",
+            },
+        }
+    ]
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: (_ for _ in ()).throw(
+            litellm_config.LiveCatalogueError("offline")
+        ),
+    )
+    entries = litellm_config.compute_model_list(previous_entries=previous)
+    aliases = {entry["model_name"] for entry in entries}
+    assert "ollama-cloud/glm-5.3-flash" in aliases
+    assert "ollama-cloud/new-model" not in aliases
+
+
 def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
     from pathlib import Path
 
@@ -2864,3 +2892,24 @@ def test_meridian_entries_carry_cached_claude_rates(monkeypatch):
     info = target["litellm_params"]["model_info"]
     assert info["input_cost_per_token"] == 2e-06
     assert info["output_cost_per_token"] == 1e-05
+
+
+def test_previous_entries_ledger_round_trip(tmp_path):
+    """The deployed-entries ledger writes and reads back stdlib-only."""
+    config_path = tmp_path / "config.yaml"
+    entries = [
+        {
+            "model_name": "ollama-cloud/glm-5.3-flash",
+            "litellm_params": {"model": "openai/glm-5.3-flash"},
+        }
+    ]
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    assert litellm_config.read_previous_entries(config_path) == []
+    litellm_config.write_previous_entries(config_path, entries)
+    ledger = litellm_config.previous_entries_ledger_path(config_path)
+    assert ledger.name == "config.models.json"
+    assert litellm_config.read_previous_entries(config_path) == entries
+    # No PyYAML anywhere in the module: the deploy template's interpreter
+    # lacks it, so retention must ride the stdlib JSON ledger.
+    module_source = Path(litellm_config.__file__).read_text(encoding="utf-8")
+    assert "import yaml" not in module_source

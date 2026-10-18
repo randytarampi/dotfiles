@@ -328,7 +328,7 @@ def apply_litellm_client_gate(config: dict) -> None:
             config[key] = rewrite(config[key])
 
 
-def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
+def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dict:
     """Route every Slim selection using the gateway inventory built for OpenCode."""
     if not get_litellm_proxy_mode():
         return slim
@@ -344,6 +344,27 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
     # LiteLLM aliases; project and global inventories can omit their catalogues.
     direct_exceptions = {"meridian"}
     local_owners = {"ollama", "omlx", "llamacpp"}
+    previous_values = set()
+    if isinstance(previous_slim, dict):
+
+        def collect_previous(node):
+            if isinstance(node, dict):
+                for field, child in node.items():
+                    if field in {"model", "primaryModel"} and isinstance(child, str):
+                        previous_values.add(child)
+                    elif field == "fallback" and isinstance(child, dict):
+                        for chain in child.values():
+                            if isinstance(chain, list):
+                                previous_values.update(
+                                    item for item in chain if isinstance(item, str)
+                                )
+                    else:
+                        collect_previous(child)
+            elif isinstance(node, list):
+                for child in node:
+                    collect_previous(child)
+
+        collect_previous(previous_slim)
 
     def rewrite_model(value):
         """Resolve one gateway alias, preserving direct exceptions and local models.
@@ -380,6 +401,12 @@ def apply_litellm_slim_gate(slim: dict, config: dict) -> dict:
                 and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
             ]
         if not matches and owner in local_owners:
+            return value
+        if not matches and value in previous_values:
+            logger.warning(
+                "preserving previous gateway selection; live evidence unavailable: %s",
+                value,
+            )
             return value
         if len(matches) != 1:
             if (
@@ -1123,7 +1150,15 @@ def main():
     try:
         with open(presets_json_path, "r", encoding="utf-8") as f:
             slim_data = json.load(f)
-        slim_data = apply_litellm_slim_gate(slim_data, config)
+        previous_slim_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
+        previous_slim = None
+        if os.path.isfile(previous_slim_path):
+            try:
+                with open(previous_slim_path, encoding="utf-8") as f:
+                    previous_slim = json.load(f)
+            except (OSError, ValueError):
+                previous_slim = None
+        slim_data = apply_litellm_slim_gate(slim_data, config, previous_slim)
     except Exception as e:
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
         sys.exit(1)
