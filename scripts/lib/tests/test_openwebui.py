@@ -1163,6 +1163,87 @@ def test_embedding_route_change_authorized_by_valid_parity_evidence(
     )
 
 
+def test_embedding_route_change_binds_evidence_to_installed_destination(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    current = _embedding_config("ollama", openwebui.EMBEDDING_MODEL)
+    current["ollama_config"]["url"] = "http://old-backend:11434"
+    client = _EmbeddingClient(current)
+    calls = []
+
+    def _identity(config):
+        url = config["ollama_config"]["url"]
+        calls.append(url)
+        if url == "http://old-backend:11434":
+            return {"backend": "ollama", "version": "old"}
+        return {"backend": "ollama", "version": "target"}
+
+    setattr(client, "embedding_backend_identity_probe", _identity)
+    setattr(
+        client,
+        "embedding_parity_probe",
+        lambda *_: calls.append("parity")
+        or {
+            "parity": True,
+            "source_backend_identity": {"backend": "ollama", "version": "old"},
+            "target_backend_identity": {"backend": "ollama", "version": "target"},
+        },
+    )
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": "http://old-backend:11434"},
+            },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": openwebui.EMBEDDING_MODEL,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "backend_identity": {"backend": "ollama", "version": "old"},
+            },
+        }
+    )
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            "ollama_config": {"url": "http://different-backend:9999"},
+        },
+    }
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+    assert report["failed"] == []
+    assert client.writes == 1
+    # The authorized destination is the ONE destination installed, served
+    # back on readback, probed post-write, and persisted.
+    assert client.get_embedding_config()["ollama_config"]["url"] == (
+        "http://different-backend:9999"
+    )
+    state = openwebui._read_embedding_state()
+    assert state["projection"]["ollama_config"]["url"] == (
+        "http://different-backend:9999"
+    )
+    assert state["embedding_fingerprint"]["backend_identity"] == {
+        "backend": "ollama",
+        "version": "target",
+    }
+    assert "http://different-backend:9999" in calls
+
+
 def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     monkeypatch, tmp_path, caplog
 ):

@@ -1564,7 +1564,7 @@ def _wanted_embedding_matches_current(wanted, current):
     return True
 
 
-def _embedding_candidate(prewrite):
+def _embedding_candidate(prewrite, target_url=None):
     candidate = {
         key: prewrite[key]
         for key in (
@@ -1575,7 +1575,9 @@ def _embedding_candidate(prewrite):
         if key in prewrite
     }
     candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
-    candidate["ollama_config"]["url"] = _ollama_native_base(EMBEDDING_OLLAMA_URL)
+    candidate["ollama_config"]["url"] = _ollama_native_base(
+        target_url or EMBEDDING_OLLAMA_URL
+    )
     for section in ("openai_config", "azure_openai_config"):
         if section in prewrite:
             candidate[section] = copy.deepcopy(prewrite[section])
@@ -1734,10 +1736,17 @@ def _reconcile_embedding_adoption(
         and (wanted.get("ollama_config") or {}).get("url")
         != current.get("ollama_config", {}).get("url")
     )
+    authorized_target_url = None
     if route_change:
         # Same model, but the routing target leaves the proven same-origin
         # normalization: the frozen contract requires backend-identity plus
         # parity evidence (or the explicit acknowledgement) before any write.
+        # Whatever authorizes this transition, the parity authorization, the
+        # POST, the readback and the persisted projection must all bind to the
+        # SAME resolved wanted destination.
+        authorized_target_url = _ollama_native_base(
+            (wanted.get("ollama_config") or {}).get("url")
+        )
         parity_evidence = _embedding_parity_evidence(client, wanted)
         saved_backend = (state.get("embedding_fingerprint", {}) or {}).get(
             "backend_identity"
@@ -1793,7 +1802,7 @@ def _reconcile_embedding_adoption(
     ):
         logger.error("Refusing Open WebUI embedding write after concurrent edit")
         return {"status": "refused", "applied": False, "verified": False}
-    candidate = _embedding_candidate(prewrite)
+    candidate = _embedding_candidate(prewrite, target_url=authorized_target_url)
     client.update_embedding_config(candidate)
     try:
         _verify_embedding_readback(client, candidate)
@@ -1825,7 +1834,10 @@ def _reconcile_embedding_adoption(
                 "previous_output_dims": old_dims,
                 "output_dims": EMBEDDING_OUTPUT_DIMS,
                 "previous_ollama_url": prewrite.get("ollama_config", {}).get("url"),
-                "ollama_config": {"url": _ollama_native_base(EMBEDDING_OLLAMA_URL)},
+                "ollama_config": {
+                    "url": authorized_target_url
+                    or _ollama_native_base(EMBEDDING_OLLAMA_URL)
+                },
             },
             "embedding_fingerprint": {
                 "engine": "ollama",
