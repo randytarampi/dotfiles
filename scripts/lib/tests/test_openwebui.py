@@ -432,7 +432,7 @@ def test_ollama_native_base_derivation_and_rendered_field(monkeypatch):
     assert openwebui._ollama_native_base("http://host:9999") == "http://host:9999"
 
 
-def test_gateway_audio_probe_uses_discovered_alias(monkeypatch):
+def test_gateway_audio_probe_uses_discovered_alias(monkeypatch, tmp_path):
     monkeypatch.setattr(openwebui, "_disabled", lambda: set())
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
     monkeypatch.setattr(
@@ -444,10 +444,20 @@ def test_gateway_audio_probe_uses_discovered_alias(monkeypatch):
         lambda *_: [{"name": "exact-asr-id", "model_type": "audio_stt"}],
     )
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    key_dir = tmp_path / "litellm" / "clients"
+    key_dir.mkdir(parents=True, mode=0o700)
+    key_file = key_dir / "openwebui.key"
+    key_file.write_text("gateway-test-sentinel")
+    key_dir.chmod(0o700)
+    key_file.chmod(0o600)
+    monkeypatch.setattr(openwebui, "LITELLM_OPENWEBUI_KEY_PATH", str(key_file))
+    monkeypatch.setattr(
+        openwebui, "_litellm_endpoint", lambda: "http://proxy.test:4567/v1"
+    )
     observed = []
 
     def success(endpoint, model, key_reference, key_value=None, **kwargs):
-        observed.append((endpoint, model, key_reference))
+        observed.append((endpoint, model, key_reference, key_value))
         return type("ProbeResult", (), {"status": "ok", "notes": ("HTTP 200",)})()
 
     monkeypatch.setattr(route_probes, "probe_stt", success)
@@ -455,8 +465,19 @@ def test_gateway_audio_probe_uses_discovered_alias(monkeypatch):
     monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
     monkeypatch.setattr(openwebui, "_persist_audio_selection", lambda *_: None)
     monkeypatch.setenv("OMLX_API_KEY", "alias-secret")
-    assert openwebui._desired_audio_settings(probe_routes=True) is None
-    assert observed == [("http://engine/v1", "exact-asr-id", "OMLX_API_KEY")]
+    audio = openwebui._desired_audio_settings(probe_routes=True)
+    assert (
+        audio["settings"]["stt"]["OPENAI_API_BASE_URL"] == "http://proxy.test:4567/v1"
+    )
+    assert audio["settings"]["stt"]["MODEL"] == "exact-asr-id"
+    assert audio["settings"]["stt"]["OPENAI_API_KEY"] == "gateway-test-sentinel"
+    assert observed[0] == (
+        "http://proxy.test:4567/v1",
+        "exact-asr-id",
+        str(key_file),
+        "gateway-test-sentinel",
+    )
+    assert "gateway-test-sentinel" not in repr(audio["selection"])
 
 
 def test_fake_route_probe_http_surfaces_shapes_auth_and_refusal(monkeypatch):

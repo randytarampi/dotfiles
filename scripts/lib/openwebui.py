@@ -60,6 +60,41 @@ EMBEDDING_STATE_PATH = "~/.local/share/openwebui/data/managed-embedding.json"
 EMBEDDING_MODEL = "embeddinggemma-2:740m-mxfp8"
 EMBEDDING_OUTPUT_DIMS = 768
 EMBEDDING_OLLAMA_URL = constants.get_ollama_local_base_url()
+LITELLM_OPENWEBUI_KEY_PATH = "~/.local/share/litellm/clients/openwebui.key"
+
+
+def _litellm_key_value():
+    """Read the scoped WebUI proxy key only for a runtime probe/render."""
+    import stat
+    from pathlib import Path
+
+    path = Path(LITELLM_OPENWEBUI_KEY_PATH).expanduser()
+    try:
+        if any(
+            candidate.is_symlink()
+            for candidate in (path.parent.parent, path.parent, path)
+        ):
+            return None
+        metadata = path.stat()
+        directory = path.parent.stat()
+        if (
+            not path.is_file()
+            or metadata.st_uid != os.getuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or directory.st_uid != os.getuid()
+            or stat.S_IMODE(directory.st_mode) & 0o077
+        ):
+            return None
+        value = path.read_text(encoding="utf-8").strip()
+        return value or None
+    except OSError:
+        return None
+
+
+def _litellm_endpoint():
+    from model_catalogues import _configured_litellm_port
+
+    return f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
 
 
 def _ollama_native_base(openai_url):
@@ -394,7 +429,9 @@ def compute_desired_state(probe_routes=False):
 def _probe_qualification(probe, endpoint, model, key_reference, **kwargs):
     from route_probes import qualification_from_probe
 
-    key_value = os.environ.get(key_reference, "") if key_reference else None
+    key_value = kwargs.pop(
+        "key_value", os.environ.get(key_reference, "") if key_reference else None
+    )
     result = probe(
         endpoint, model, key_reference=key_reference, key_value=key_value, **kwargs
     )
@@ -414,6 +451,10 @@ def _desired_audio_settings(probe_routes=False):
         for item in models
         if item.get("name") and item.get("model_type") == "audio_stt"
     ]
+    gateway = constants.get_litellm_proxy_mode()
+    gateway_endpoint = _litellm_endpoint() if gateway else None
+    gateway_key = _litellm_key_value() if gateway and probe_routes else None
+    key_reference = LITELLM_OPENWEBUI_KEY_PATH if gateway else endpoint[1]
     audio_probe_reasons = {}
     if probe_routes:
         from route_probes import probe_stt
@@ -421,12 +462,21 @@ def _desired_audio_settings(probe_routes=False):
         probed = []
         for provider, model, _ in stt_candidates:
             qualification, reason = _probe_qualification(
-                probe_stt, endpoint[0], model, endpoint[1]
+                probe_stt,
+                gateway_endpoint or endpoint[0],
+                model,
+                key_reference,
+                key_value=gateway_key,
             )
             probed.append((provider, model, qualification))
             audio_probe_reasons[(provider, model)] = reason
         stt_candidates = probed
-    stt = _audio_locator(Operation.STT, stt_candidates, endpoint)
+    locator_options = (
+        {"gateway_route": (gateway_endpoint, key_reference, gateway_key)}
+        if gateway and probe_routes
+        else {}
+    )
+    stt = _audio_locator(Operation.STT, stt_candidates, endpoint, **locator_options)
     if stt is None:
         import logger
 
@@ -438,7 +488,10 @@ def _desired_audio_settings(probe_routes=False):
             "OPENAI_API_BASE_URL": stt.route.endpoint,
             "OPENAI_API_REQUEST_FORMAT": "multipart",
             "MODEL": stt.route.wire_model,
-            "OPENAI_API_KEY": os.environ.get("OMLX_API_KEY") or None,
+            "OPENAI_API_KEY": (
+                gateway_key if gateway else os.environ.get("OMLX_API_KEY")
+            )
+            or None,
         }
     }
     selections = {"stt": _locator_provenance(stt)}
@@ -460,22 +513,26 @@ def _desired_audio_settings(probe_routes=False):
         for provider, model, _ in tts_candidates:
             qualification, reason = _probe_qualification(
                 probe_tts,
-                endpoint[0],
+                gateway_endpoint or endpoint[0],
                 model,
-                endpoint[1],
+                key_reference,
+                key_value=gateway_key,
                 voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
             )
             probed.append((provider, model, qualification))
             audio_probe_reasons[(provider, model)] = reason
         tts_candidates = probed
-    tts = _audio_locator(Operation.TTS, tts_candidates, endpoint)
+    tts = _audio_locator(Operation.TTS, tts_candidates, endpoint, **locator_options)
     if tts is not None:
         tts_model = tts.route.wire_model
         tts_settings = {
             "ENGINE": "openai",
             "OPENAI_API_BASE_URL": tts.route.endpoint,
             "MODEL": tts_model,
-            "OPENAI_API_KEY": os.environ.get("OMLX_API_KEY") or None,
+            "OPENAI_API_KEY": (
+                gateway_key if gateway else os.environ.get("OMLX_API_KEY")
+            )
+            or None,
         }
         voice = os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena")
         if tts_model and tts_model.lower().split("/", 1)[-1].startswith("qwen3-tts"):
@@ -495,7 +552,7 @@ def _desired_audio_settings(probe_routes=False):
     return {"settings": settings, "selection": selections}
 
 
-def _audio_locator(operation, candidates, endpoint):
+def _audio_locator(operation, candidates, endpoint, gateway_route=None):
     preference = []
     previous = _read_audio_selection()
     previous = previous.get(operation.value) if isinstance(previous, dict) else None
@@ -520,7 +577,7 @@ def _audio_locator(operation, candidates, endpoint):
         operation, candidates, preference, previously_selected=previous_tuple
     )
     gateway = constants.get_litellm_proxy_mode()
-    if gateway:
+    if gateway and gateway_route is None:
         selection = select(
             operation,
             candidates,
@@ -551,6 +608,24 @@ def _audio_locator(operation, candidates, endpoint):
             operation.value,
         )
         return None
+    if gateway:
+        if gateway_route is None:
+            return None
+        gateway_endpoint, key_reference, key_value = gateway_route
+        route = resolve_transport(
+            "gateway",
+            selected.qualification,
+            endpoint=gateway_endpoint,
+            wire_model=selected.model,
+            key_reference=key_reference,
+            credential_present=bool(key_value),
+            credential_required=True,
+            operation=operation,
+        )
+        locator = ServiceLocator(selected, route)
+        if selected.provider is None or route.transport == Transport.UNAVAILABLE:
+            return None
+        return locator
     route = resolve_transport(
         "direct",
         selected.qualification,
