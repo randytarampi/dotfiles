@@ -990,6 +990,66 @@ def _embedding_reconcile(client):
     )
 
 
+def test_embedding_different_origin_route_requires_acknowledgement(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    current = _embedding_config("ollama", openwebui.EMBEDDING_MODEL)
+    current["ollama_config"]["url"] = "http://old-backend:11434"
+    client = _EmbeddingClient(current)
+    calls = []
+    setattr(
+        client,
+        "embedding_backend_identity_probe",
+        lambda config: calls.append(config["ollama_config"]["url"])
+        or {"backend": "ollama", "version": "same"},
+    )
+    setattr(
+        client,
+        "embedding_parity_probe",
+        lambda *_: calls.append("parity") or "inconclusive",
+    )
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": "http://old-backend:11434"},
+            },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": openwebui.EMBEDDING_MODEL,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "backend_identity": {"backend": "ollama", "version": "same"},
+            },
+        }
+    )
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            "ollama_config": {"url": "http://different-backend:9999"},
+        },
+    }
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["applied"] == []
+    assert report["verified"] == []
+    assert report["failed"] == ["embedding"]
+    assert client.writes == 0
+    assert calls == ["http://old-backend:11434", "parity"]
+
+
 def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     monkeypatch, tmp_path, caplog
 ):

@@ -1544,9 +1544,11 @@ def _wanted_is_route_only(wanted, current):
     for key in ("RAG_EMBEDDING_ENGINE", "RAG_EMBEDDING_MODEL"):
         if wanted.get(key) != current.get(key):
             return False
-    return (wanted.get("ollama_config") or {}).get("url") != current.get(
-        "ollama_config", {}
-    ).get("url")
+    wanted_url = (wanted.get("ollama_config") or {}).get("url")
+    current_url = current.get("ollama_config", {}).get("url")
+    if not wanted_url or not current_url or wanted_url == current_url:
+        return False
+    return _ollama_native_base(wanted_url) == _ollama_native_base(current_url)
 
 
 def _wanted_embedding_matches_current(wanted, current):
@@ -1661,6 +1663,14 @@ def _reconcile_embedding_adoption(
     previous = _embedding_identity(current)
     old_dims = 384 if previous == _embedding_identity(EMBEDDING_DEFAULTS) else None
     recorded_dims = (projection or {}).get("output_dims")
+    if (
+        previous == {"engine": "ollama", "model": EMBEDDING_MODEL}
+        and recorded_dims is not None
+    ):
+        # The store is already managed under the recorded model identity: the
+        # recorded output_dims are its acknowledged baseline dimensions, so a
+        # same-model route change is never a dimension migration.
+        old_dims = recorded_dims
     parity = None
     same_dims_gate_applied = route_only
     same_dims_other_model = (
@@ -1716,6 +1726,33 @@ def _reconcile_embedding_adoption(
                 EMBEDDING_OUTPUT_DIMS,
             )
             return {"status": "refused", "applied": False, "verified": False}
+    route_change = (
+        projection is not None
+        and wanted is not None
+        and not route_only
+        and _embedding_identity(wanted) == _embedding_identity(current)
+        and (wanted.get("ollama_config") or {}).get("url")
+        != current.get("ollama_config", {}).get("url")
+    )
+    if route_change:
+        # Same model, but the routing target leaves the proven same-origin
+        # normalization: the frozen contract requires backend-identity plus
+        # parity evidence (or the explicit acknowledgement) before any write.
+        parity_evidence = _embedding_parity_evidence(client, wanted)
+        if not isinstance(parity_evidence, dict) or not parity_evidence:
+            acknowledgement = state.get("acknowledgement")
+            if not _embedding_acknowledges(
+                acknowledgement,
+                previous,
+                recorded_dims,
+                {"engine": "ollama", "model": EMBEDDING_MODEL},
+                EMBEDDING_OUTPUT_DIMS,
+            ):
+                logger.error(
+                    "Refusing Open WebUI embedding route change without parity "
+                    "evidence or acknowledgement"
+                )
+                return {"status": "refused", "applied": False, "verified": False}
     prewrite = client.get_embedding_config()
     prewrite_backend_identity = _embedding_backend_identity(client, prewrite)
     if acknowledged_backend_change and (
