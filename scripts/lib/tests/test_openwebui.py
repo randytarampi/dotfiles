@@ -1050,6 +1050,119 @@ def test_embedding_different_origin_route_requires_acknowledgement(
     assert calls == ["http://old-backend:11434", "parity"]
 
 
+def _route_change_fixture(monkeypatch, tmp_path, parity_result):
+    """Different-origin route change with a scripted parity probe result."""
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    current = _embedding_config("ollama", openwebui.EMBEDDING_MODEL)
+    current["ollama_config"]["url"] = "http://old-backend:11434"
+    client = _EmbeddingClient(current)
+    calls = []
+    setattr(
+        client,
+        "embedding_backend_identity_probe",
+        lambda config: calls.append(config["ollama_config"]["url"])
+        or {"backend": "ollama", "version": "same"},
+    )
+    setattr(
+        client,
+        "embedding_parity_probe",
+        lambda *_: calls.append("parity") or parity_result,
+    )
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": "http://old-backend:11434"},
+            },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": openwebui.EMBEDDING_MODEL,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "backend_identity": {"backend": "ollama", "version": "same"},
+            },
+        }
+    )
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+            "ollama_config": {"url": "http://different-backend:9999"},
+        },
+    }
+    return client, calls, desired
+
+
+def _valid_route_parity_evidence():
+    return {
+        "parity": True,
+        "source_backend_identity": {"backend": "ollama", "version": "same"},
+        "target_backend_identity": {"backend": "ollama", "version": "same"},
+    }
+
+
+def test_embedding_route_change_rejects_failed_parity_evidence(monkeypatch, tmp_path):
+    client, calls, desired = _route_change_fixture(
+        monkeypatch, tmp_path, {"status": "failed", "parity": False}
+    )
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["applied"] == []
+    assert report["verified"] == []
+    assert report["failed"] == ["embedding"]
+    assert client.writes == 0
+    assert calls == ["http://old-backend:11434", "parity"]
+
+
+def test_embedding_route_change_rejects_incomplete_parity_evidence(
+    monkeypatch, tmp_path
+):
+    client, calls, desired = _route_change_fixture(
+        monkeypatch, tmp_path, {"parity": True}
+    )
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["failed"] == ["embedding"]
+    assert client.writes == 0
+    assert calls == ["http://old-backend:11434", "parity"]
+
+
+def test_embedding_route_change_rejects_stale_source_identity(monkeypatch, tmp_path):
+    stale = _valid_route_parity_evidence()
+    stale["source_backend_identity"] = {"backend": "ollama", "version": "stale"}
+    client, calls, desired = _route_change_fixture(monkeypatch, tmp_path, stale)
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["failed"] == ["embedding"]
+    assert client.writes == 0
+    assert calls == ["http://old-backend:11434", "parity"]
+
+
+def test_embedding_route_change_authorized_by_valid_parity_evidence(
+    monkeypatch, tmp_path
+):
+    client, calls, desired = _route_change_fixture(
+        monkeypatch, tmp_path, _valid_route_parity_evidence()
+    )
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+    assert report["failed"] == []
+    assert client.writes == 1
+    state = openwebui._read_embedding_state()
+    assert state["embedding_fingerprint"]["parity_evidence"] == (
+        _valid_route_parity_evidence()
+    )
+
+
 def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     monkeypatch, tmp_path, caplog
 ):

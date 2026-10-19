@@ -1739,7 +1739,13 @@ def _reconcile_embedding_adoption(
         # normalization: the frozen contract requires backend-identity plus
         # parity evidence (or the explicit acknowledgement) before any write.
         parity_evidence = _embedding_parity_evidence(client, wanted)
-        if not isinstance(parity_evidence, dict) or not parity_evidence:
+        saved_backend = (state.get("embedding_fingerprint", {}) or {}).get(
+            "backend_identity"
+        )
+        evidence_valid = _embedding_route_parity_conclusive(
+            parity_evidence, saved_backend, client, wanted
+        )
+        if not evidence_valid:
             acknowledgement = state.get("acknowledgement")
             if not _embedding_acknowledges(
                 acknowledgement,
@@ -1852,6 +1858,33 @@ def _embedding_backend_identity(client, config):
 def _embedding_parity_evidence(client, config):
     probe = getattr(client, "embedding_parity_probe", None)
     return probe(config) if callable(probe) else "inconclusive"
+
+
+def _embedding_route_parity_conclusive(evidence, source_identity, client, wanted):
+    """True when route-change parity evidence affirms the transition.
+
+    Conclusive evidence is an affirmative record bound to this transition: it
+    must report parity success (affirmative ``parity`` is True), carry the
+    verified source backend identity equal to the persisted fingerprint, and
+    carry the target backend identity confirmed by a live probe at the wanted
+    configuration. Failed, unknown, incomplete, stale or unrelated evidence —
+    including any non-dict, failed-status or identity-mismatched payload —
+    keeps the acknowledgement/refusal boundary.
+    """
+    if not isinstance(evidence, dict):
+        return False
+    if evidence.get("parity") is not True:
+        return False
+    recorded_source = evidence.get("source_backend_identity")
+    recorded_target = evidence.get("target_backend_identity")
+    if not recorded_source or not recorded_target:
+        return False
+    if source_identity is None or recorded_source != source_identity:
+        return False
+    target_identity = _embedding_backend_identity(client, wanted)
+    if target_identity is None or recorded_target != target_identity:
+        return False
+    return True
 
 
 def _embedding_vector_parity(previous_probe, target_probe, tolerance=1e-6):
