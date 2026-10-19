@@ -829,6 +829,28 @@ def test_voice_probe_opt_in_qualification_and_secret_safety(monkeypatch, caplog)
     assert "voice-probe-secret" not in caplog.text
 
 
+def test_voice_gateway_probe_uses_gateway_route_and_credential_scope(monkeypatch):
+    voice = load_script("configure-opencode-voice.py")
+    calls, _probe = _voice_probe_fixture(monkeypatch, voice)
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-probe-secret")
+    monkeypatch.setattr(voice, "_configured_litellm_port", lambda: 4000)
+    config = voice.get_voice_config(
+        "anthropic", {"stt_transport": "local", "probe_routes": True}
+    )
+    assert calls == [
+        (
+            "http://127.0.0.1:4000/v1",
+            "voice-asr",
+            "LITELLM_OPENCODE_KEY",
+            "gateway-probe-secret",
+        )
+    ]
+    assert config["sttEndpoint"] == "http://127.0.0.1:4000/v1"
+    assert config["sttApiKeyEnv"] == "LITELLM_OPENCODE_KEY"
+    assert "gateway-probe-secret" not in repr(config)
+
+
 def test_voice_probe_connection_failure_preserves_without_claim(monkeypatch):
     voice = load_script("configure-opencode-voice.py")
     _voice_probe_fixture(monkeypatch, voice, status="unknown")

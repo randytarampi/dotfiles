@@ -615,12 +615,21 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 from route_probes import qualification_from_probe, probe_stt
 
                 probed = []
+                gateway_probe_endpoint = (
+                    f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                    if gateway_gate is True
+                    else None
+                )
                 for provider, model_ref, _ in candidates:
                     endpoint, _item = metadata[(provider, model_ref)]
-                    key_ref = endpoint[1]
+                    key_ref = (
+                        "LITELLM_OPENCODE_KEY"
+                        if gateway_probe_endpoint
+                        else endpoint[1]
+                    )
                     key_value = os.environ.get(key_ref, "") if key_ref else None
                     result = probe_stt(
-                        endpoint[0],
+                        gateway_probe_endpoint or endpoint[0],
                         strip_provider_prefix(model_ref),
                         key_ref,
                         key_value=key_value,
