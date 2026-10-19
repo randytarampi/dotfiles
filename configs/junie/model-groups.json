@@ -91,22 +91,6 @@
       "provider": "meridian",
       "primaryModel": "claude-fable-5-1"
     },
-    "litellm-meridian-opus": {
-      "provider": "litellm",
-      "primaryModel": "meridian/claude-opus-5-5"
-    },
-    "litellm-meridian-sonnet": {
-      "provider": "litellm",
-      "primaryModel": "meridian/claude-sonnet-5-5"
-    },
-    "litellm-meridian-haiku": {
-      "provider": "litellm",
-      "primaryModel": "meridian/claude-haiku-5-5"
-    },
-    "litellm-meridian-fable": {
-      "provider": "litellm",
-      "primaryModel": "meridian/claude-fable-5-1"
-    },
     "google-gemini-flash": {
       "provider": "google",
       "primaryModel": "gemini-3.8-flash",

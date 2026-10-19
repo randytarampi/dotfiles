@@ -14,6 +14,7 @@ LITELLM_ROUTED_PROVIDERS = frozenset(
         "google",
         "openrouter",
         "opencode",
+        "meridian",
     }
 )
 

@@ -67,7 +67,7 @@ def test_junie_litellm_group_gate_replaces_only_eligible_groups():
     direct = generate_profiles.select_model_groups(groups, False)
     assert set(direct) == {"openai-one", "meridian-one", "copilot"}
     routed = generate_profiles.select_model_groups(groups, True)
-    assert set(routed) == {"litellm-openai-one", "meridian-one", "copilot"}
+    assert set(routed) == {"litellm-openai-one", "litellm-meridian-one", "copilot"}
 
 
 def test_junie_provider_config_reads_private_file_not_inherited_environment(

@@ -32,17 +32,20 @@ routed profiles are emitted only under `DOTFILES_USE_LITELLM_PROXY=1`. This is
 fail-closed: missing aliases or keys never trigger a direct substitute, and an
 unavailable catalogue omits gateway groups instead of publishing unverified
 aliases. The four `litellm-meridian-*` twins shipped after a reproduced
-end-to-end Junie gateway smoke test (2026-10-16): the live catalogue listed all
-four `meridian/claude-*` aliases, and real completion, streaming, and
-tool-calling requests through the gateway succeeded.
+end-to-end Junie gateway smoke test (2026-10-16). These four twins are derived
+from the plain groups by the same generator contract as other routed providers;
+their exact `meridian/claude-*` aliases remain subject to the authenticated live
+catalogue filter.
 
 Named `litellm-*` groups keep their existing catalogue-filter behaviour.
-Gateway meridian routes serve the chat-completions wire; Meridian direct groups
-remain direct because they speak the native OpenAI Responses protocol at
-`/v1/responses`, which the LiteLLM proxy does not
-serve; Copilot remains direct because it uses its own authentication and profile
-shape. The gate defaults to `0`, and disabled mode emits the existing groups
-unchanged.
+With the gate off, Meridian groups keep their native OpenAI Responses endpoint
+and protocol at `/v1/responses`. With the gate on, the derived Meridian twins
+use authenticated, catalogue-qualified `meridian/<model>` aliases through the
+LiteLLM chat-completions endpoint. The Meridian gateway qualification and
+protocol smoke evidence is recorded above; no direct Responses profile is
+rewritten into a gateway profile. Copilot remains direct because it uses its own
+authentication and profile shape. The gate defaults to `0`, and disabled mode
+emits the original direct groups unchanged.
 
 After enabling, disabling or rotating the Junie LiteLLM key, regenerate profiles
 with `make deploy`. Restart Junie CLI sessions and reload/restart the IntelliJ

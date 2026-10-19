@@ -65,6 +65,16 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setenv("LITELLM_JUNIE_KEY", "stale-env-dummy")
     monkeypatch.setattr(PROFILES, "load_env", lambda: True)
     monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_args: set(),
+    )
+    import model_stamp
+
+    monkeypatch.setattr(
+        model_stamp, "STAMP_PATH", home / ".local/share/dotfiles/model-sync-stamp"
+    )
+    monkeypatch.setattr(
         PROFILES.tier_registry, "load_registry", lambda: {"presets": {}}
     )
     monkeypatch.setattr(PROFILES, "list_local_ollama_models", lambda: [])
@@ -277,6 +287,9 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
             "omlx/pool/last",
             "openai/gpt-faster",
             "openai/gpt-present",
+            "meridian/claude-sonnet",
+            "meridian/claude-opus",
+            "openai/anthropic/claude-sonnet",
             "opencode/free-present",
             "openai/custom/alias",
         },
@@ -332,9 +345,9 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     assert free["id"] == "opencode/free-present"
     assert "fasterModel" not in free
     meridian = json.loads((target / "meridian.json").read_text())
-    assert meridian["id"] == "claude-sonnet"
+    assert meridian["id"] == "meridian/claude-sonnet"
     assert meridian["fasterModel"]["id"] == "openai/gpt-present"
-    assert meridian["fasterModel"]["baseUrl"] == "http://127.0.0.1:4000/v1"
+    assert "baseUrl" not in meridian["fasterModel"]
     assert (
         json.loads((target / "litellm-openai-custom.json").read_text())["id"]
         == "openai/custom/alias"
@@ -422,7 +435,7 @@ def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
     assert (target / "manual.json").read_text(encoding="utf-8") == '{"user": true}'
 
 
-def test_gate_on_with_invalid_litellm_endpoint_omits_direct_groups_but_keeps_meridian(
+def test_gate_on_with_invalid_litellm_endpoint_omits_gateway_groups(
     harness, monkeypatch
 ):
     _, target, _, groups_path = harness
@@ -444,9 +457,7 @@ def test_gate_on_with_invalid_litellm_endpoint_omits_direct_groups_but_keeps_mer
     assert not (target / "openai-main.json").exists()
     assert not (target / "openai-faster.json").exists()
     assert not any(target.glob("litellm-*.json"))
-    assert (
-        json.loads((target / "meridian-opus.json").read_text())["id"] == "claude-opus"
-    )
+    assert not (target / "meridian-opus.json").exists()
 
 
 def test_unsafe_key_path_and_endpoint_fail_closed(harness, monkeypatch):

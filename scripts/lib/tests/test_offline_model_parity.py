@@ -1,9 +1,11 @@
 """Focused offline tests for provider-exact static model parity."""
 
 import importlib.util
+import json
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "verify-slim-invariants.py"
+ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = ROOT / "scripts" / "verify-slim-invariants.py"
 SPEC = importlib.util.spec_from_file_location("verify_slim_invariants", SCRIPT)
 assert SPEC is not None
 assert SPEC.loader is not None
@@ -72,6 +74,81 @@ def test_direct_and_litellm_google_pair_is_valid():
             {
                 "google": {"gemini-3.8-flash", "gemini-3.5-flash-lite"},
                 "ollama-cloud": {"cloud-default"},
+            },
+        )
+        == []
+    )
+
+
+def test_meridian_twins_are_derived_with_exact_wire_ids_and_direct_mode():
+    model_groups = ROOT / "configs/junie/model-groups.json"
+    groups = json.loads(model_groups.read_text(encoding="utf-8"))["groups"]
+    meridian_groups = {
+        name: group
+        for name, group in groups.items()
+        if group.get("provider") == "meridian"
+    }
+    assert set(meridian_groups) == {
+        "meridian-opus",
+        "meridian-sonnet",
+        "meridian-haiku",
+        "meridian-fable",
+    }
+    generator = VERIFY._junie_generator()
+    selected = generator.select_model_groups(meridian_groups, True)
+    expected = {
+        f"litellm-{name}": {
+            "provider": "litellm",
+            "primaryModel": generator.litellm_alias(group["primaryModel"], "meridian"),
+        }
+        for name, group in meridian_groups.items()
+    }
+    assert {name: selected[name] for name in expected} == expected
+    assert generator.select_model_groups(meridian_groups, False) == meridian_groups
+    allowlists = VERIFY._model_allowlists()
+    allowlists["ollama-cloud"].update(
+        {"glm-5.3", "qwen3-coder-next", "qwen3-coder-plus", "deepseek-v4"}
+    )
+    assert (
+        run(
+            groups,
+            {
+                **allowlists,
+                "ollama-cloud": allowlists["ollama-cloud"] | {"cloud-default"},
+            },
+        )
+        == []
+    )
+    changed = {
+        **meridian_groups,
+        "meridian-sonnet": {
+            **meridian_groups["meridian-sonnet"],
+            "primaryModel": "claude-sonnet-next",
+        },
+    }
+    assert (
+        generator.select_model_groups(changed, True)["litellm-meridian-sonnet"][
+            "primaryModel"
+        ]
+        == "meridian/claude-sonnet-next"
+    )
+
+
+def test_checked_in_meridian_twins_are_absent_and_generator_parity_is_clean():
+    groups = json.loads(
+        (ROOT / "configs/junie/model-groups.json").read_text(encoding="utf-8")
+    )["groups"]
+    assert not {name for name in groups if name.startswith("litellm-meridian-")}
+    allowlists = VERIFY._model_allowlists()
+    allowlists["ollama-cloud"].update(
+        {"glm-5.3", "qwen3-coder-next", "qwen3-coder-plus", "deepseek-v4"}
+    )
+    assert (
+        run(
+            groups,
+            {
+                **allowlists,
+                "ollama-cloud": allowlists["ollama-cloud"] | {"cloud-default"},
             },
         )
         == []
