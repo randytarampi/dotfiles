@@ -296,36 +296,46 @@ def apply_litellm_client_gate(config: dict) -> None:
         }
     }
 
-    def rewrite(value):
-        if isinstance(value, dict):
-            return {key: rewrite(child) for key, child in value.items()}
-        if isinstance(value, list):
-            return [rewrite(child) for child in value]
-        if (
-            isinstance(value, str)
-            and "/" in value
-            and not value.startswith(("http://", "https://"))
-        ):
-            owner, model_id = value.split("/", 1)
-            routed_owner = inventory_owner(owner)
-            if owner in source_provider_names:
-                identity = (
-                    f"google/models/{model_id.removeprefix('models/')}"
-                    if owner == "google"
-                    else f"{routed_owner}/{model_id.removeprefix('models/')}"
-                )
-                if identity not in models:
-                    raise RuntimeError(
-                        f"OpenCode gateway alias is not configured for canonical model {value}"
-                    )
-                return resolve_alias(
-                    identity, True, client_key=key_path.resolve(), gateway_url=base_url
-                )["model"]
-        return value
+    model_fields = {"model", "small_model", "primaryModel", "smallModel"}
 
-    for key in list(config):
-        if key != "provider":
-            config[key] = rewrite(config[key])
+    def rewrite_model(value):
+        if not isinstance(value, str) or "/" not in value:
+            return value
+        owner, model_id = value.split("/", 1)
+        if not owner or not model_id:
+            raise RuntimeError(f"Malformed OpenCode model selection: {value!r}")
+        identity = (
+            f"google/models/{model_id.removeprefix('models/')}"
+            if owner == "google"
+            else f"{inventory_owner(owner)}/{model_id}"
+        )
+        if identity not in models:
+            raise RuntimeError(
+                f"OpenCode gateway alias is not configured for canonical model {value}"
+            )
+        return resolve_alias(
+            identity, True, client_key=key_path.resolve(), gateway_url=base_url
+        )["model"]
+
+    def rewrite_models(node):
+        if isinstance(node, dict):
+            return {
+                key: (
+                    rewrite_model(child)
+                    if key in model_fields
+                    else rewrite_models(child)
+                )
+                for key, child in node.items()
+            }
+        if isinstance(node, list):
+            return [rewrite_models(child) for child in node]
+        return node
+
+    for field in model_fields:
+        if field in config:
+            config[field] = rewrite_model(config[field])
+    for field in (key for key in config if key != "provider"):
+        config[field] = rewrite_models(config[field])
 
 
 def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dict:
@@ -372,13 +382,22 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
         Raise RuntimeError when a selection requires an alias but has no unique
         match in the gateway inventory.
         """
-        if (
-            not isinstance(value, str)
-            or "/" not in value
-            or value.startswith("litellm/")
-        ):
+        if not isinstance(value, str):
             return value
+        if value.startswith("_local:"):
+            return value
+        if value.startswith("litellm/"):
+            value = value[len("litellm/") :]
+            if not value or value.startswith("litellm/") or "/" not in value:
+                raise RuntimeError(f"Malformed wrapped LiteLLM selection: {value!r}")
+            wrapped = True
+        else:
+            wrapped = False
+        if "/" not in value:
+            raise RuntimeError(f"Malformed OpenCode model selection: {value!r}")
         owner, model = value.split("/", 1)
+        if not owner or not model:
+            raise RuntimeError(f"Malformed OpenCode model selection: {value!r}")
         if owner in direct_exceptions:
             return value
         # Anthropic selections route through the Meridian gateway aliases
@@ -401,13 +420,15 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
                 and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
             ]
         if not matches and owner in local_owners:
+            if wrapped:
+                raise RuntimeError(
+                    f"Wrapped LiteLLM selection has no gateway alias: {value}"
+                )
             return value
-        if not matches and value in previous_values:
-            logger.warning(
-                "preserving previous gateway selection; live evidence unavailable: %s",
-                value,
+        if not matches and owner == "ollama-cloud":
+            raise RuntimeError(
+                f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
             )
-            return value
         if len(matches) != 1:
             if (
                 owner == "github-copilot"
@@ -419,9 +440,14 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
             raise RuntimeError(
                 f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
             )
-        return resolve_alias(
+        if wrapped and matches[0] not in available:
+            raise RuntimeError(
+                f"Wrapped LiteLLM selection has no gateway alias: {value}"
+            )
+        routed = resolve_alias(
             matches[0], True, client_key=key_path, gateway_url=base_url
         )["model"]
+        return routed
 
     model_fields = {"model", "primaryModel"}
 
@@ -448,6 +474,39 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
         return node
 
     return visit(slim)
+
+
+def prepare_config_candidates(config, slim_data, previous_slim=None):
+    """Validate both generated payloads before the caller installs either."""
+    apply_litellm_client_gate(config)
+    slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
+    return (
+        json.dumps(config, indent=2) + "\n",
+        json.dumps(slim_candidate, indent=2) + "\n",
+    )
+
+
+def prepare_project_candidate(config):
+    apply_litellm_client_gate(config)
+    return config
+
+
+def prepare_tier_candidate(config_dir, tier_args, consumer_config):
+    """Run the existing tier writer in an isolated config dir, then validate its output."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="opencode-tier-") as staging_dir:
+        (Path(staging_dir) / "opencode.json").write_text(
+            json.dumps(consumer_config, indent=2), encoding="utf-8"
+        )
+        staged_env = {**os.environ, "OPENCODE_DIR": staging_dir}
+        subprocess.run(tier_args, check=True, env=staged_env)
+        staged_path = Path(staging_dir) / "oh-my-opencode-slim.json"
+        if not staged_path.is_file():
+            raise RuntimeError("tier staging did not produce Slim config")
+        staged_slim = json.loads(staged_path.read_text(encoding="utf-8"))
+        routed = apply_litellm_slim_gate(staged_slim, consumer_config)
+        return json.dumps(routed, indent=2) + "\n"
 
 
 def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
@@ -1091,23 +1150,28 @@ def main():
         else:
             config["server"] = server_config
 
-    apply_litellm_client_gate(config)
-
-    # Write opencode.json
+    # Prepare both managed outputs before either one is installed.
     output_path = os.path.join(config_dir_path, "opencode.json")
-    if args.dry_run:
-        logger.info(f"[dry-run] Would write opencode.json to {output_path}")
-    else:
-        try:
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-                f.write("\n")
-            logger.info("opencode.json written")
-        except Exception as e:
-            logger.critical(f"Failed to write opencode.json: {e}")
-            sys.exit(1)
 
     if args.mode == "project":
+        try:
+            project_candidate = prepare_project_candidate(config)
+            opencode_candidate = json.dumps(project_candidate, indent=2) + "\n"
+        except Exception as e:
+            logger.critical(f"Failed to prepare OpenCode project config: {e}")
+            sys.exit(1)
+        if args.dry_run:
+            logger.info(f"[dry-run] Would write opencode.json to {output_path}")
+        else:
+            with open(output_path, "w", encoding="utf-8") as handle:
+                handle.write(opencode_candidate)
+        vibeguard_src = os.path.join(
+            configs_dir_path, "opencode", "vibeguard.config.json"
+        )
+        if os.path.exists(vibeguard_src) and not args.dry_run:
+            shutil.copy(
+                vibeguard_src, os.path.join(config_dir_path, "vibeguard.config.json")
+            )
         summary_lines = [
             "OpenCode project config written!",
             "",
@@ -1124,17 +1188,7 @@ def main():
     # global mode:
     # 2. Write vibeguard.config.json
     vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
-    if os.path.exists(vibeguard_src) and args.dry_run:
-        logger.info(f"[dry-run] Would copy vibeguard.config.json to {config_dir_path}")
-    elif os.path.exists(vibeguard_src):
-        vibeguard_dst = os.path.join(config_dir_path, "vibeguard.config.json")
-        try:
-            shutil.copy(vibeguard_src, vibeguard_dst)
-            logger.info("vibeguard.config.json written (sensitive-string redaction)")
-        except Exception as e:
-            logger.warning(f"Failed to copy vibeguard.config.json: {e}")
-    else:
-        logger.warning(f"vibeguard.config.json not found at {vibeguard_src}")
+    # Vibeguard installation is deferred until all candidates validate.
 
     # 3. Write oh-my-opencode-slim.json
     presets_json_path = os.path.join(
@@ -1158,10 +1212,36 @@ def main():
                     previous_slim = json.load(f)
             except (OSError, ValueError):
                 previous_slim = None
-        slim_data = apply_litellm_slim_gate(slim_data, config, previous_slim)
+        opencode_candidate, slim_candidate = prepare_config_candidates(
+            config, slim_data, previous_slim
+        )
+        tier_candidate = None
+        if "tier" not in skipped and not args.dry_run:
+            tier_args_list = (
+                build_tier_args(
+                    tier=args.preset, no_local_fallbacks=not with_local_ollama
+                )
+                + forward_model_override_args(args)
+                + forward_min_reasoning_embedding_arg(args)
+            )
+            tier_args = [
+                sys.executable,
+                os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
+            ] + tier_args_list
+            tier_candidate = prepare_tier_candidate(config_dir_path, tier_args, config)
     except Exception as e:
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
         sys.exit(1)
+
+    if args.dry_run:
+        logger.info(f"[dry-run] Would write opencode.json to {output_path}")
+    else:
+        try:
+            Path(output_path).write_text(opencode_candidate, encoding="utf-8")
+            logger.info("opencode.json written")
+        except Exception as e:
+            logger.critical(f"Failed to write opencode.json: {e}")
+            sys.exit(1)
 
     if args.dry_run:
         logger.info(
@@ -1174,12 +1254,24 @@ def main():
                 "w",
                 encoding="utf-8",
             ) as f:
-                json.dump(slim_data, f, indent=2)
-                f.write("\n")
+                f.write(
+                    tier_candidate if tier_candidate is not None else slim_candidate
+                )
             logger.info("oh-my-opencode-slim.json written (base config)")
         except Exception as e:
             logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
             sys.exit(1)
+
+    vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
+    if os.path.exists(vibeguard_src) and not args.dry_run:
+        shutil.copy(
+            vibeguard_src, os.path.join(config_dir_path, "vibeguard.config.json")
+        )
+    elif os.path.exists(vibeguard_src):
+        logger.info(f"[dry-run] Would copy vibeguard.config.json to {config_dir_path}")
+
+    if args.mode == "project":
+        return
 
     # 3b. Generate and merge acpAgents (ACP-capable agent wrappers)
     acp_agents_source_path = os.path.join(
@@ -1258,30 +1350,6 @@ def main():
         if "tier" in skipped:
             pass
         else:
-            tier_args_list = (
-                build_tier_args(
-                    tier=args.preset,
-                    no_local_fallbacks=not with_local_ollama,
-                )
-                + forward_model_override_args(args)
-                + forward_min_reasoning_embedding_arg(args)
-            )
-            # configure-opencode-tier.py accepts --dry-run, but not --no-backup.
-            if args.dry_run:
-                tier_args_list.append("--dry-run")
-            tier_args = [
-                sys.executable,
-                os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
-            ] + tier_args_list
-            subprocess.run(tier_args, check=True)
-            slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
-            if get_litellm_proxy_mode() and not args.dry_run:
-                with open(slim_output_path, "r", encoding="utf-8") as f:
-                    final_slim = json.load(f)
-                final_slim = apply_litellm_slim_gate(final_slim, config)
-                with open(slim_output_path, "w", encoding="utf-8") as f:
-                    json.dump(final_slim, f, indent=2)
-                    f.write("\n")
             logger.info(f"Active tier set to {args.preset}")
     except Exception as e:
         logger.error(f"Failed to set active tier: {e}")

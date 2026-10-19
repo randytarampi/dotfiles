@@ -2913,3 +2913,37 @@ def test_previous_entries_ledger_round_trip(tmp_path):
     # lacks it, so retention must ride the stdlib JSON ledger.
     module_source = Path(litellm_config.__file__).read_text(encoding="utf-8")
     assert "import yaml" not in module_source
+
+
+def test_backup_recovery_is_explicit_staged_and_regenerated(tmp_path, monkeypatch):
+    backup = tmp_path / "recovery.yaml"
+    backup.write_text(
+        'model_list:\n  - model_name: "openai/gpt-6-luna"\n'
+        '    litellm_params:\n      model: "openai/gpt-6-luna"\n'
+        "      api_key: os.environ/OPENAI_API_KEY\n"
+        '      api_base: "https://api.openai.com/v1"\n'
+        "litellm_settings:\n  drop_params: true\n  telemetry: false\n"
+        "general_settings:\n  master_key: os.environ/LITELLM_MASTER_KEY\n"
+        "  database_url: os.environ/DATABASE_URL\n",
+        encoding="utf-8",
+    )
+    authorized = [
+        {
+            "model_name": "openai/gpt-6-luna",
+            "litellm_params": {"model": "openai/gpt-6-luna"},
+        }
+    ]
+    rendered, entries = litellm_config.stage_backup_entries(backup, authorized)
+    assert entries[0]["model_name"] == "openai/gpt-6-luna"
+    assert 'model_name: "openai/gpt-6-luna"' in rendered
+    assert backup.exists()
+    with pytest.raises(ValueError, match="no currently authorized"):
+        litellm_config.stage_backup_entries(backup, [])
+    with pytest.raises(ValueError, match="truncated"):
+        litellm_config.stage_backup_text(
+            'model_list:\n  - model_name: "openai/a"\n    litellm_params:\n', authorized
+        )
+    with pytest.raises(ValueError, match="truncated|malformed|trailing"):
+        litellm_config.stage_backup_text(
+            backup.read_text(encoding="utf-8") + "garbage\n", authorized
+        )

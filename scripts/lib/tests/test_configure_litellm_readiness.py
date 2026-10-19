@@ -104,7 +104,18 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
     }
     if lane:
         entry["litellm_params"]["service_tier"] = lane
-    monkeypatch.setattr(CONFIGURE, "compute_model_list", lambda: [entry])
+    previous_entries_expected = [{"model_name": "existing/model"}]
+    monkeypatch.setattr(
+        CONFIGURE.litellm_config,
+        "read_previous_entries",
+        lambda path: previous_entries_expected,
+    )
+
+    def compute_model_list(*, previous_entries=None):
+        assert previous_entries == previous_entries_expected
+        return [entry]
+
+    monkeypatch.setattr(CONFIGURE, "compute_model_list", compute_model_list)
     monkeypatch.setattr(CONFIGURE.litellm_config, "last_generation_notes", [])
     monkeypatch.setattr(CONFIGURE, "_persist_generation_notes", lambda *_: None)
     monkeypatch.setattr(

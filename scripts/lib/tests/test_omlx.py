@@ -760,6 +760,26 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
     ]
     assert routed_refs == [f"litellm/{ref}" for ref in refs]
     assert routed["skills"] == ["frontend/design"]
+    wrapped_slim = {"roles": {"x": {"model": "litellm/openai/fixture-model"}}}
+    assert (
+        configure_opencode.apply_litellm_slim_gate(wrapped_slim, config)["roles"]["x"][
+            "model"
+        ]
+        == "litellm/openai/fixture-model"
+    )
+    for malformed in (
+        "litellm/no-prefix",
+        "litellm/litellm/openai/fixture-model",
+        "litellm/openai/",
+    ):
+        with pytest.raises(RuntimeError):
+            configure_opencode.apply_litellm_slim_gate(
+                {"roles": {"x": {"model": malformed}}}, config
+            )
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": "litellm/openai/missing"}}}, config
+        )
     with (
         patch.dict(
             os.environ,
@@ -791,20 +811,389 @@ def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_un
     monkeypatch.setenv("HOME", str(tmp_path))
     selection = "ollama-cloud/glm-5.3-flash"
     slim = {"roles": {"orchestrator": {"model": selection}}}
-    routed = configure_opencode.apply_litellm_slim_gate(
-        slim, {"provider": {"litellm": {"models": {}}}}, slim
-    )
-    assert routed["roles"]["orchestrator"]["model"] == selection
-    assert (
-        "preserving previous gateway selection; live evidence unavailable"
-        in caplog.text
-    )
-
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
-            {"roles": {"orchestrator": {"model": "cerebras/new-model"}}},
+            {"roles": {"orchestrator": {"model": selection}}},
             {"provider": {"litellm": {"models": {}}}},
         )
+
+
+def test_opencode_slim_gate_does_not_return_raw_gateway_selection(
+    tmp_path, monkeypatch
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": "ollama-cloud/absent"}}},
+            {"provider": {"litellm": {"models": {}}}},
+            {"roles": {"x": {"model": "ollama-cloud/absent"}}},
+        )
+
+
+def test_opencode_candidates_prepare_before_any_install(tmp_path, monkeypatch):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    target = tmp_path / "opencode.json"
+    slim_target = tmp_path / "oh-my-opencode-slim.json"
+    target.write_bytes(b"installed-opencode\n")
+    slim_target.write_bytes(b"installed-slim\n")
+    before = target.read_bytes(), slim_target.read_bytes()
+    monkeypatch.setattr(
+        configure_opencode,
+        "apply_litellm_client_gate",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("validation failed")),
+    )
+    with pytest.raises(RuntimeError, match="validation failed"):
+        configure_opencode.prepare_config_candidates(
+            {"model": "example/model"}, {"roles": {}}
+        )
+    assert (target.read_bytes(), slim_target.read_bytes()) == before
+
+
+def test_opencode_inventory_missing_alias_fails_before_candidate_write(
+    tmp_path, monkeypatch
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    config = {"model": "cerebras/new-model", "provider": {}}
+    with pytest.raises(RuntimeError, match="not configured for canonical model"):
+        configure_opencode.prepare_config_candidates(config, {"roles": {}})
+    assert config["model"] == "cerebras/new-model"
+
+
+def test_opencode_client_gate_only_rewrites_model_fields(tmp_path, monkeypatch):
+    script = _load_script("configure_opencode_field_gate", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(script, "get_models", lambda *args: {"openai/present"})
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {
+            "base_url": "http://gateway/v1",
+            "api_key": "key",
+            "model": f"litellm/{alias}",
+        },
+    )
+    config = {
+        "model": "openai/present",
+        "plugin": ["@scope/plugin@1.0"],
+        "instructions": "docs/AGENTS.md",
+        "command": {"run": "tools/build.sh"},
+        "provider": {"openai": {"models": {"present": {"name": "Present"}}}},
+    }
+    script.apply_litellm_client_gate(config)
+    assert config["model"] == "litellm/openai/present"
+    assert config["plugin"] == ["@scope/plugin@1.0"]
+    assert config["instructions"] == "docs/AGENTS.md"
+    assert config["command"] == {"run": "tools/build.sh"}
+
+    config["model"] = "openai/missing"
+    with pytest.raises(RuntimeError, match="not configured for canonical model"):
+        script.apply_litellm_client_gate(config)
+
+
+def test_opencode_main_missing_model_preserves_installed_managed_files(
+    monkeypatch, tmp_path
+):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    script = _load_script("configure_opencode_main_missing", "configure-opencode.py")
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    paths = {
+        "opencode": config_dir / "opencode.json",
+        "slim": config_dir / "oh-my-opencode-slim.json",
+        "vibeguard": config_dir / "vibeguard.config.json",
+    }
+    sentinels = {name: f"{name} sentinel\n".encode() for name in paths}
+    for name, path in paths.items():
+        path.write_bytes(sentinels[name])
+    scripts = tmp_path / "scripts"
+    configs = scripts.parent / "configs"
+    (configs / "opencode").mkdir(parents=True)
+    (configs / "opencode/oh-my-opencode-slim.json").write_text(
+        json.dumps({"roles": {"x": {"model": "openai/missing"}}})
+    )
+    (configs / "opencode/vibeguard.config.json").write_text("{}")
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(scripts))
+    lock = home / ".cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(f"source_root={scripts.parent.resolve()}\n")
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    monkeypatch.setattr(script, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(script, "fetch_models_dev", lambda: {})
+    monkeypatch.setattr(script, "build_opencode_server_config", lambda: None)
+    monkeypatch.setattr(
+        script, "active_plugin_specs", lambda: ["@plannotator/opencode@test", "plugin"]
+    )
+    monkeypatch.setattr(script, "plugin_specs", lambda: ["plugin"])
+    monkeypatch.setattr(script, "get_preset_providers", lambda *args: set())
+    monkeypatch.setattr(script, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(script, "get_models", lambda *args: {"openai/present"})
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {
+            "base_url": "http://gateway/v1",
+            "api_key": "key",
+            "model": f"litellm/{alias}",
+        },
+    )
+    key_path = home / ".local/share/litellm/clients/opencode.key"
+    key_path.parent.mkdir(parents=True)
+    key_path.write_text("test-key")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--preset",
+            "pro-plus",
+            "--skip",
+            "mcps,acp-agents,tier,voice,dcp",
+        ],
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    with pytest.raises(SystemExit):
+        script.main()
+    for name, path in paths.items():
+        assert path.read_bytes() == sentinels[name]
+
+
+def _run_opencode_main(
+    monkeypatch, tmp_path, *, mode, extra_args=(), fail_validation=False
+):
+    lock_home = tmp_path / "lock-home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: lock_home))
+    script = _load_script("configure_opencode_main", "configure-opencode.py")
+    project = tmp_path / "project"
+    config_dir = (
+        project / ".opencode"
+        if mode == "project"
+        else tmp_path / "home/.config/opencode"
+    )
+    config_dir.mkdir(parents=True)
+    if mode == "project":
+        (project / "opencode.json").write_text('{"model":"existing/model"}\n')
+    config_path = config_dir / "opencode.json"
+    slim_path = config_dir / "oh-my-opencode-slim.json"
+    config_path.write_bytes(b"prior-opencode\n")
+    slim_path.write_bytes(b"prior-slim\n")
+    scripts = tmp_path / "scripts"
+    configs = scripts.parent / "configs"
+    (configs / "opencode").mkdir(parents=True)
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(scripts))
+    lock = tmp_path / "lock-home/.cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(f"source_root={scripts.parent.resolve()}\n")
+    slim_source = configs / "opencode/oh-my-opencode-slim.json"
+    slim_source.write_text(json.dumps({"roles": {"x": {"model": "openai/fixture"}}}))
+    monkeypatch.setattr(script, "CONFIGS_DIR", str(configs), raising=False)
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    monkeypatch.setattr(script, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(script, "fetch_models_dev", lambda: {})
+    monkeypatch.setattr(script, "build_opencode_server_config", lambda: None)
+    monkeypatch.setattr(
+        script,
+        "active_plugin_specs",
+        lambda: ["@plannotator/opencode@test", "plugin-a", "plugin-b"],
+    )
+    monkeypatch.setattr(script, "plugin_specs", lambda: ["plugin-a", "plugin-b"])
+    monkeypatch.setattr(script, "get_preset_providers", lambda *args: set())
+    monkeypatch.setattr(
+        script,
+        "apply_litellm_slim_gate",
+        lambda slim, config, previous=None: {
+            "roles": {"x": {"model": "litellm/openai/fixture"}}
+        },
+    )
+    monkeypatch.setattr(
+        script.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "R", (), {"stdout": "{}", "returncode": 0, "stderr": ""}
+        )(),
+    )
+    monkeypatch.setattr(script, "get_litellm_proxy_mode", lambda: False)
+    if fail_validation:
+        monkeypatch.setattr(
+            script,
+            "prepare_project_candidate",
+            lambda *args: (_ for _ in ()).throw(RuntimeError("project validation")),
+        )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--mode",
+            mode,
+            "--skip",
+            "mcps,acp-agents,tier,voice,dcp",
+            *extra_args,
+        ],
+    )
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    script.main()
+    return config_path, slim_path
+
+
+def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
+    monkeypatch, tmp_path
+):
+    config_path, _ = _run_opencode_main(
+        monkeypatch, tmp_path, mode="project", extra_args=("--dry-run",)
+    )
+    assert config_path.read_bytes() == b"prior-opencode\n"
+    config_path, _ = _run_opencode_main(monkeypatch, tmp_path / "write", mode="project")
+    written = json.loads(config_path.read_text())
+    assert written["$schema"] == "https://opencode.ai/config.json"
+
+    dry_dir = tmp_path / "dry-project/.opencode"
+    dry_dir.mkdir(parents=True)
+    (tmp_path / "dry-project/opencode.json").write_text('{"model":"dry/model"}')
+    dry_main = _load_script("configure_opencode_dry", "configure-opencode.py")
+    monkeypatch.setattr(dry_main, "SCRIPT_DIR", str(tmp_path / "scripts"))
+    (tmp_path / "configs/opencode").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "configs/opencode/oh-my-opencode-slim.json").write_text("{}")
+    for name, value in {
+        "load_env": lambda *args: False,
+        "list_local_ollama_models": lambda: [],
+        "fetch_models_dev": lambda: {},
+        "build_opencode_server_config": lambda: None,
+        "active_plugin_specs": lambda: [
+            "@plannotator/opencode@test",
+            "plugin-a",
+            "plugin-b",
+        ],
+        "plugin_specs": lambda: ["plugin-a", "plugin-b"],
+        "get_preset_providers": lambda *args: set(),
+        "get_litellm_proxy_mode": lambda: False,
+    }.items():
+        monkeypatch.setattr(dry_main, name, value)
+    before = (
+        (dry_dir / "opencode.json").read_bytes()
+        if (dry_dir / "opencode.json").exists()
+        else None
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["configure-opencode.py", "--mode", "project", "--dry-run"]
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(dry_dir))
+    monkeypatch.setenv("HOME", str(tmp_path / "dry-home"))
+    dry_main.main.__wrapped__()
+    assert (
+        (dry_dir / "opencode.json").read_bytes()
+        if (dry_dir / "opencode.json").exists()
+        else None
+    ) == before
+
+
+def test_opencode_main_project_validation_failure_preserves_bytes(
+    monkeypatch, tmp_path
+):
+    config_path = tmp_path / "project/.opencode/opencode.json"
+    with pytest.raises(SystemExit) as error:
+        _run_opencode_main(monkeypatch, tmp_path, mode="project", fail_validation=True)
+    assert error.value.code == 1
+    assert config_path.read_bytes() == b"prior-opencode\n"
+
+
+def test_opencode_main_global_installs_final_routed_slim(monkeypatch, tmp_path):
+    _, slim_path = _run_opencode_main(
+        monkeypatch,
+        tmp_path,
+        mode="global",
+        extra_args=("--skip", "mcps,acp-agents,tier,voice,dcp"),
+    )
+    assert json.loads(slim_path.read_text()) == {
+        "roles": {"x": {"model": "litellm/openai/fixture"}}
+    }
+
+
+def test_opencode_main_global_tier_failure_preserves_both_outputs(
+    monkeypatch, tmp_path
+):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    script = _load_script("configure_opencode_global_failure", "configure-opencode.py")
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    opencode_path = config_dir / "opencode.json"
+    slim_path = config_dir / "oh-my-opencode-slim.json"
+    opencode_path.write_bytes(b"opencode sentinel\n")
+    slim_path.write_bytes(b"slim sentinel\n")
+    scripts = tmp_path / "scripts"
+    (tmp_path / "configs/opencode").mkdir(parents=True)
+    (tmp_path / "configs/opencode/oh-my-opencode-slim.json").write_text("{}")
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(scripts))
+    lock = home / ".cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(f"source_root={Path(__file__).resolve().parents[3]}\n")
+    for name, value in {
+        "load_env": lambda *args: False,
+        "list_local_ollama_models": lambda: [],
+        "fetch_models_dev": lambda: {},
+        "build_opencode_server_config": lambda: None,
+        "active_plugin_specs": lambda: [
+            "@plannotator/opencode@test",
+            "plugin-a",
+            "plugin-b",
+        ],
+        "plugin_specs": lambda: ["plugin-a", "plugin-b"],
+        "get_preset_providers": lambda *args: set(),
+        "get_litellm_proxy_mode": lambda: False,
+        "apply_litellm_client_gate": lambda config: None,
+        "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
+        "prepare_tier_candidate": lambda config_dir, args, consumer: (
+            _ for _ in ()
+        ).throw(RuntimeError("final tier validation")),
+    }.items():
+        monkeypatch.setattr(script, name, value)
+    monkeypatch.setattr(
+        script.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unexpected subprocess")
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--preset",
+            "pro-plus",
+            "--skip",
+            "mcps,acp-agents,voice,dcp",
+        ],
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    script.main = script.main.__wrapped__
+    with pytest.raises(SystemExit):
+        script.main()
+    assert opencode_path.read_bytes() == b"opencode sentinel\n"
+    assert slim_path.read_bytes() == b"slim sentinel\n"
 
 
 def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
@@ -1077,11 +1466,19 @@ def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
     assert "apiKey" not in provider
 
 
-def test_jetbrains_wrapper_preserves_mixed_provider_metadata():
+def test_jetbrains_wrapper_preserves_mixed_provider_metadata(monkeypatch, tmp_path):
     wrapper = _load_script("configure_jetbrains_ai", "configure-jetbrains-ai.py")
     generator = _load_script(
         "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
     )
+    # Generation-lock acceptance is checkout-dependent: seed a temp HOME lock
+    # whose source_root matches THIS checkout, mirroring the established
+    # isolated-generation-lock pattern used by the configure-opencode tests.
+    home = tmp_path / "lock-home"
+    monkeypatch.setenv("HOME", str(home))
+    lock = home / ".cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(f"source_root={Path(wrapper.SCRIPT_DIR).resolve().parent}\n")
     mixed_models = [
         {"name": "ollama-chat", "provider": "ollama"},
         {"name": "omlx-chat", "provider": "omlx", "model_type": "llm"},

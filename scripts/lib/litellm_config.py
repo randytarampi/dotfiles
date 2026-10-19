@@ -6,6 +6,7 @@ import json
 import math
 import logging
 import os
+import re
 import stat
 import time
 import tempfile
@@ -1362,6 +1363,77 @@ def read_previous_entries(config_path):
     except (OSError, json.JSONDecodeError):
         return []
     return entries if isinstance(entries, list) else []
+
+
+def stage_backup_entries(backup_path, authorized_entries, environ=None):
+    """Stage backup aliases only where current caller-supplied authorization exists."""
+    backup = Path(backup_path)
+    if not backup.is_file():
+        raise FileNotFoundError(f"LiteLLM recovery backup is unavailable: {backup}")
+    text = backup.read_text(encoding="utf-8")
+    return stage_backup_text(text, authorized_entries, environ=environ)
+
+
+def stage_backup_text(text, authorized_entries, environ=None):
+    """Stage restricted backup YAML, using only independently authorized routes."""
+    lines = text.splitlines()
+    if not lines or lines[0] not in {"model_list:", "model_list: []"}:
+        raise ValueError("unsupported LiteLLM recovery document header")
+    index = 1
+    while index < len(lines) and lines[index].startswith("  - model_name: "):
+        index += 1
+        if index >= len(lines) or lines[index] != "    litellm_params:":
+            raise ValueError("truncated LiteLLM recovery entry")
+        index += 1
+        while index < len(lines) and lines[index].startswith("      "):
+            index += 1
+    if index >= len(lines) or lines[index] != "litellm_settings:":
+        raise ValueError("truncated or malformed LiteLLM recovery model list")
+    expected_tail = [
+        "litellm_settings:",
+        "  drop_params: true",
+        "  telemetry: false",
+        "general_settings:",
+        "  master_key: os.environ/LITELLM_MASTER_KEY",
+        "  database_url: os.environ/DATABASE_URL",
+    ]
+    if lines[index : index + len(expected_tail)] != expected_tail or any(
+        line.strip() for line in lines[index + len(expected_tail) :]
+    ):
+        raise ValueError("unsupported or trailing LiteLLM recovery document content")
+    entries = []
+    matches = re.findall(
+        r'^  - model_name: ("(?:[^"\\]|\\.)*")\n    litellm_params:\n((?:      [^\n]+\n)+)',
+        text,
+        re.MULTILINE,
+    )
+    if not matches and text.strip() != "model_list: []":
+        raise ValueError("unsupported or empty LiteLLM recovery backup")
+    if len(matches) != sum(line.startswith("  - model_name: ") for line in lines):
+        raise ValueError("incomplete LiteLLM recovery entry")
+    for model_name, params in matches:
+        parsed = {}
+        for line in params.splitlines():
+            key, separator, value = line.strip().partition(": ")
+            if not separator:
+                raise ValueError("unsupported LiteLLM backup parameter syntax")
+            parsed[key] = value if key == "api_key" else json.loads(value)
+        entries.append({"model_name": json.loads(model_name), "litellm_params": parsed})
+    backup_aliases = {entry["model_name"]: entry for entry in entries}
+    authorized = {
+        entry["model_name"]: entry
+        for entry in authorized_entries
+        if isinstance(entry, dict) and isinstance(entry.get("model_name"), str)
+    }
+    candidate = [authorized[alias] for alias in backup_aliases if alias in authorized]
+    if not candidate:
+        raise ValueError("backup contains no currently authorized model aliases")
+    missing = sorted(set(authorized) - set(backup_aliases))
+    if missing:
+        logger.warning(
+            "Authorized routes absent from recovery backup: %s", ", ".join(missing)
+        )
+    return render_config(environ=environ, entries=candidate), candidate
 
 
 def write_previous_entries(config_path, entries):

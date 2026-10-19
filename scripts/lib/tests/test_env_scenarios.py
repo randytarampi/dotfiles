@@ -86,6 +86,12 @@ def run_configure(home, **values):
             line
             for line in combined_output(result).splitlines()
             if "config source:" not in line
+            and "configure-opencode-tier.py:" not in line
+            and not (
+                line.startswith("[INFO]")
+                and "Copied " in line
+                and "oh-my-opencode-slim.json → " in line
+            )
         )
         assert str(Path.home()) not in output
     return result
