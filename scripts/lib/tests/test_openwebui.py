@@ -366,6 +366,40 @@ def test_probe_routes_are_opt_in_and_attach_qualification(monkeypatch):
     assert audio["selection"]["tts"]["qualification"] == "protocol_probed"
 
 
+def test_direct_audio_probes_resolve_backend_credential(monkeypatch):
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [
+            {"name": "stt-model", "model_type": "audio_stt"},
+            {"name": "tts-model", "model_type": "audio_tts"},
+        ],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    monkeypatch.setenv("OMLX_API_KEY", "backend-secret-sentinel")
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "_persist_audio_selection", lambda *_: None)
+    observed = []
+
+    def probe(endpoint, model, key_reference, key_value=None, **kwargs):
+        observed.append((endpoint, model, key_reference, key_value))
+        return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr(route_probes, "probe_stt", probe)
+    monkeypatch.setattr(route_probes, "probe_tts", probe)
+    openwebui._desired_audio_settings(probe_routes=True)
+    assert observed == [
+        ("http://local/v1", "stt-model", "OMLX_API_KEY", "backend-secret-sentinel"),
+        ("http://local/v1", "tts-model", "OMLX_API_KEY", "backend-secret-sentinel"),
+    ]
+
+
 @pytest.mark.parametrize(
     "status,expected",
     [

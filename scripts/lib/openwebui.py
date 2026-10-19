@@ -466,7 +466,7 @@ def _desired_audio_settings(probe_routes=False):
                 gateway_endpoint or endpoint[0],
                 model,
                 key_reference,
-                key_value=gateway_key,
+                **({"key_value": gateway_key} if gateway else {}),
             )
             probed.append((provider, model, qualification))
             audio_probe_reasons[(provider, model)] = reason
@@ -516,7 +516,7 @@ def _desired_audio_settings(probe_routes=False):
                 gateway_endpoint or endpoint[0],
                 model,
                 key_reference,
-                key_value=gateway_key,
+                **({"key_value": gateway_key} if gateway else {}),
                 voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
             )
             probed.append((provider, model, qualification))
