@@ -42,8 +42,10 @@ after pulling this change.
 ### Modality exposure
 
 Discovered local models are exposed under their exact model IDs. Qualified
-`audio_stt` models support `POST /v1/audio/transcriptions`; qualified `audio_tts` models are exposed to `POST /v1/audio/speech` except
-model families explicitly marked unqualified. Embedding, rerank and
+`audio_stt` models support `POST /v1/audio/transcriptions`; probe qualification
+is not a consumer outcome. Qualified `audio_tts` models are exposed to
+`POST /v1/audio/speech` except model families explicitly marked unqualified.
+Embedding, rerank and
 conversion models — e.g. MarkItDown on the oMLX engine serving
 `POST /v1/chat/completions` — are added only when discovery reports those
 modalities; no placeholder aliases are created. Modality entries are kept out

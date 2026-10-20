@@ -53,11 +53,15 @@ the voice script does not emit HTTP TTS settings and logs this limitation
 honestly. Local HTTP TTS is consumed by the separate Open WebUI audio bundle;
 `DOTFILES_VOICE_TTS_VOICE` is its named-speaker input, defaulting to `serena`
 (used only for Qwen3-TTS-family models). The bundle uses the first discovered
-`audio_tts` model that is not known-unqualified. Chatterbox multilingual v3 requires voice-
+`audio_tts` model that is not known-unqualified. Discovery or a successful
+probe alone does not establish a consumer outcome; see the acceptance ledger
+in [CHAT_FRONTEND.md](CHAT_FRONTEND.md) for the delivered, probe-qualified and
+consumer-verified distinctions. Chatterbox multilingual v3 requires voice-
 cloning conditionals and is not default-selected. Piper cannot be configured
 away with this voice consumer; the config reflects its unavoidable Piper use.
-See the [audio probe record](../.slim/deepwork/local-ai-unification/audio-slice-probes.md)
-for the qualified endpoint and model behaviour.
+The detailed audio probe record is local-only session evidence and is not
+tracked; the committed acceptance ledger in [CHAT_FRONTEND.md](CHAT_FRONTEND.md)
+records the shareable outcome and evidence status.
 
 Microphone transport is an explicit policy independent of coding-tier model
 selection. The current transport remains the default, preserving existing

@@ -813,7 +813,12 @@ item and how it is disposed: **satisfied** by evidence in this change, or a
 **limitation** explicitly carried forward instead of being silent.
 
 | Item | Origin | Disposition |
-|---|---|---|
+| R6 source gate (R6.1–R6.10) | Source review at `61cab98` | PASS — all ten items are source-supported in the fresh reviewer's final table. |
+| Gateway-mode reconciliation | R6 live-evidence round (2026-10-20/21) | PASS — baseline and post-restart reconciles were clean; health was reached by attempt 3, consistent with the documented LiteLLM boot delay. |
+| Gateway consumer outcomes | R6 live-evidence round (2026-10-20/21) | PASS — STT returned a valid shape; TTS returned `audio/mpeg` (~11.9 KB); upload → processing → retrieval found the marker. All outcomes survived restart. These are consumer-verified outcomes, distinct from delivery or probe qualification. |
+| Revoked-key negative and recovery | R6 live-evidence round (2026-10-20/21) | PASS — missing LiteLLM key file failed closed with “LiteLLM key file is unavailable”; nothing was written and ownership was preserved, consistent with R6.6 configuration-error behaviour. Restoring the key and reconciling cleanly recovered service. |
+| Retention ledger refresh | R6 live-evidence round (2026-10-20/21) | PASS — refreshed ledger contains 82 entries, including the target; this closes the R4-era 63-versus-82 drift finding. |
+| Disposable offline re-run | Final head, `61cab98` | PASS — unknowns remained honestly UNKNOWN, the refreshed ledger was retained, and no aliases were invented. |
 | Ownership transition table, credential-restoration provenance, interrupted-state reporting, embedding identity/parity binding | Gate 7 (R3, attempt 8) | Satisfied — reviewer-verified at the public reconciler boundary, including credential release restoration, repeat-reconcile provenance, acknowledged recovery bound to one backend identity, and route changes bound to one destination. |
 | Backup-wide secret sentinel sweep | Gate 7 item (b) | Limitation — redaction is enforced at writer level (statewriter secret guard, credential-free ownership records, masked readback); a sweep of every state file, backup and diagnostic surface was not independently run. |
 | Repeated-UNKNOWN retention policy | Gate 7 item (c) | Limitation — absence/UNKNOWN/explicit-disable are separated and UNKNOWN preserves last-known-good, but that retention policy is implicit (preservation by default), not explicitly specified or tested. |
@@ -823,15 +828,14 @@ item and how it is disposed: **satisfied** by evidence in this change, or a
 | Direct-mode consumer outcomes | R4 attempt 1/4 | Limitation — live direct-route outcomes are orchestrator-supplied evidence; not independently repeated by the reviewer. |
 | Silent STT transcription | R4 | Limitation — a tone input proves the response shape only, not recognition accuracy. |
 | Credential-leak tests | R4 | Limitation — request-header/payload leak coverage is useful but is not a full sentinel sweep of state, backups and diagnostics. |
-| Gateway embedding qualification | R4 | Limitation — conservatively unavailable fail-closed: no verified LiteLLM proxy-model mapping is established, so the managed embedding is preserved (never released) until a mapping and probes exist. |
-| Gateway consumer outcomes | Approved runtime window (2026-10-19/20) | Satisfied — gateway-mode reconcile clean twice (including after a bounded restart); live audio config routes STT and TTS through the LiteLLM gateway (`http://127.0.0.1:4000/v1`) with a scoped key reference; transcription returned a valid response shape and speech returned audio/mpeg; upload → process → document retrieval found the marker through the gateway; all outcomes restart-resilient. |
-| Offline-first evidence | Approved runtime window (disposable environment) | Satisfied — isolated-HOME run with WAN blocked exited 0, reported honest UNKNOWN coverage (catalogue fetches refused, OAuth caches absent), retained the previous-entries ledger exactly, invented no aliases, and kept the chat target `ollama-cloud/glm-5.3-flash` present. Slim-selection preservation under the same conditions is covered by the committed hermetic tests. |
-| Previous-entries ledger drift | Offline run finding | Limitation — the live gateway serves 82 aliases while the retention ledger records 63, so offline retention is ledger-bounded. Refreshing the ledger (write `config.models.json` from the live inventory) is cheap follow-up work. |
+| Gateway embedding qualification | R4; completed at R6.7 | Satisfied — gateway embeddings are complete; source-gate and final offline evidence are recorded above. |
+| Gateway consumer outcomes | R6 live-evidence round (2026-10-20/21) | Satisfied — see the R6 consumer-outcomes row above. |
+| Offline-first evidence | Final-head disposable re-run | Satisfied — see the R6 offline re-run row above. |
+| Previous-entries ledger drift | R4 finding; refreshed in R6 | Satisfied — refreshed ledger contains 82 entries, including the target; see the R6 retention row above. |
 | Caddy host validation | Recovery-era host item | Partially resolved — deployed Caddyfile and repo template are `caddy fmt`-clean (no drift on future deploys); `caddy validate` still fails on the root-owned `pki/authorities/local/intermediate.crt` at mode 600, which needs an operator `sudo chmod 644` (or equivalent) before `make verify` passes. |
 
-Merge preconditions: Ubuntu CI green on the final pushed head, the Caddy
-operator action above, and owner verification of gateway-mode chat. The PR
-stays draft until the owner's gateway-mode verification.
+Merge preconditions: final-head CI green and owner verification of gateway mode.
+Merge only after both; the PR stays draft in the meantime.
 
 Evidence vocabulary — **delivered** (reconciled and readback-verified),
 **probe-qualified** (`PROTOCOL_PROBED` from an opt-in `--probe-routes` run),
