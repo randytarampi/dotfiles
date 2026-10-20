@@ -803,7 +803,6 @@ def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_un
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("HOME", str(tmp_path))
     selection = "ollama-cloud/glm-5.3-flash"
-    slim = {"roles": {"orchestrator": {"model": selection}}}
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
             {"roles": {"orchestrator": {"model": selection}}},

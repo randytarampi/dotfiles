@@ -1,5 +1,4 @@
 import importlib.util
-import io
 import json
 import os
 import shlex
@@ -1273,7 +1272,7 @@ def test_embedding_route_change_rejects_stale_source_identity(monkeypatch, tmp_p
 def test_embedding_route_change_authorized_by_valid_parity_evidence(
     monkeypatch, tmp_path
 ):
-    client, calls, desired = _route_change_fixture(
+    client, _, desired = _route_change_fixture(
         monkeypatch, tmp_path, _valid_route_parity_evidence()
     )
     report = openwebui.reconcile_via_api(client, desired).actions
@@ -5178,22 +5177,11 @@ def test_openwebui_default_locale_resolution(tmp_path):
 
 
 def test_same_dims_other_model_requires_parity_or_ack(monkeypatch, tmp_path):
-    import logging
-
     state = tmp_path / "managed-embedding.json"
     monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(state))
     # Same output dims (768), a DIFFERENT model: the dimension-only guard
     # would let this through; parity is inconclusive (no probe wired), so the
     # acknowledgement gate must refuse without ack and accept with ack.
-    current = {
-        "RAG_EMBEDDING_ENGINE": "ollama",
-        "RAG_EMBEDDING_MODEL": "other-768-model",
-        "RAG_EMBEDDING_BATCH_SIZE": 1,
-        "ENABLE_ASYNC_EMBEDDING": True,
-        "RAG_EMBEDDING_CONCURRENT_REQUESTS": 0,
-        "ollama_config": {"url": "http://localhost:11434/v1"},
-    }
-    ref = logging.getLogger()
     assert not openwebui._embedding_vector_parity(None, None)
     parity = openwebui._embedding_vector_parity(
         lambda: {t: [1.0, 0.0] for t in openwebui.PARITY_PROBE_STRINGS},
@@ -5242,7 +5230,6 @@ def test_unknown_omlx_discovery_preserves_managed_audio(monkeypatch, tmp_path, c
             status="unknown_error", records=[], reason="simulated outage"
         ),
     )
-    client = _AudioClient(current)
     desired = openwebui.compute_desired_state()
     assert "audio" not in desired
     assert desired.get("audio_status") == "unknown"

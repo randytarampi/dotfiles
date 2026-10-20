@@ -385,7 +385,7 @@ def test_voice_parser_rejects_removed_tts_transport(monkeypatch):
     ],
 )
 def test_voice_transport_precedence(flag, gate, saved, expected):
-    voice = load_script("configure-opencode-voice.py")
+    load_script("configure-opencode-voice.py")
     assert (
         selected_service.resolve_stt_transport(flag, gateway_gate=gate, saved=saved)[0]
         == expected
