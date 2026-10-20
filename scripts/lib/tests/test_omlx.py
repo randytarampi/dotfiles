@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1099,6 +1100,7 @@ def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
     config_path, _ = _run_opencode_main(monkeypatch, tmp_path / "write", mode="project")
     written = json.loads(config_path.read_text())
     assert written["$schema"] == "https://opencode.ai/config.json"
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
     dry_dir = tmp_path / "dry-project/.opencode"
     dry_dir.mkdir(parents=True)
@@ -1160,6 +1162,71 @@ def test_opencode_main_global_installs_final_routed_slim(monkeypatch, tmp_path):
     assert json.loads(slim_path.read_text()) == {
         "roles": {"x": {"model": "litellm/openai/fixture"}}
     }
+    assert stat.S_IMODE(slim_path.stat().st_mode) == 0o600
+
+
+def test_opencode_atomic_private_writer_preserves_old_output_on_replace_failure(
+    monkeypatch, tmp_path
+):
+    script = _load_script("configure_opencode_atomic", "configure-opencode.py")
+    target = tmp_path / "opencode.json"
+    target.write_text("old-output", encoding="utf-8")
+    real_replace = script.os.replace
+
+    def fail_replace(source, destination):
+        if Path(destination) == target:
+            raise OSError("simulated replace crash")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(script.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated replace crash"):
+        script.write_private_atomic(target, "new-secret-bearing-output")
+    assert target.read_text(encoding="utf-8") == "old-output"
+    assert list(tmp_path.iterdir()) == [target]
+
+
+def test_opencode_tier_staging_is_private_and_staging_dir_is_private(
+    monkeypatch, tmp_path
+):
+    script = _load_script("configure_opencode_staging", "configure-opencode.py")
+    observed = {}
+
+    def fake_run(_args, *, check, env):
+        stage_file = Path(env["OPENCODE_DIR"]) / "opencode.json"
+        observed["directory_mode"] = stat.S_IMODE(stage_file.parent.stat().st_mode)
+        observed["file_mode"] = stat.S_IMODE(stage_file.stat().st_mode)
+        observed["contents"] = stage_file.read_text(encoding="utf-8")
+        (stage_file.parent / "oh-my-opencode-slim.json").write_text("{}")
+
+    monkeypatch.setattr(script.subprocess, "run", fake_run)
+    script.prepare_tier_candidate(
+        str(tmp_path), ["tier-writer"], {"provider": {"key": "staged-secret"}}
+    )
+    assert observed["directory_mode"] == 0o700
+    assert observed["file_mode"] == 0o600
+    assert "staged-secret" in observed["contents"]
+
+
+def test_opencode_staging_and_final_outputs_are_private_atomic(monkeypatch, tmp_path):
+    script = _load_script("configure_opencode_atomic_modes", "configure-opencode.py")
+    config_path = tmp_path / "opencode.json"
+    slim_path = tmp_path / "oh-my-opencode-slim.json"
+    script.write_private_atomic(config_path, '{"provider":{"key":"sentinel"}}\n')
+    script.write_private_atomic(slim_path, '{"model":"sentinel"}\n')
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(slim_path.stat().st_mode) == 0o600
+    old_bytes = config_path.read_bytes()
+    real_replace = script.os.replace
+
+    def crash_replace(source, destination):
+        if Path(destination) == config_path:
+            raise OSError("simulated crash before atomic replace")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(script.os, "replace", crash_replace)
+    with pytest.raises(OSError, match="simulated crash"):
+        script.write_private_atomic(config_path, '{"provider":{"key":"rotated"}}\n')
+    assert config_path.read_bytes() == old_bytes
 
 
 def test_opencode_main_global_tier_failure_preserves_both_outputs(

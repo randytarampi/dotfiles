@@ -13,6 +13,7 @@ import argparse
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -499,13 +500,26 @@ def prepare_project_candidate(config):
 
 
 def prepare_tier_candidate(config_dir, tier_args, consumer_config):
-    """Run the existing tier writer in an isolated config dir, then validate its output."""
-    import tempfile
-
+    """Run the tier writer with a private, owner-only consumer config."""
     with tempfile.TemporaryDirectory(prefix="opencode-tier-") as staging_dir:
-        (Path(staging_dir) / "opencode.json").write_text(
-            json.dumps(consumer_config, indent=2), encoding="utf-8"
-        )
+        staged_input = Path(staging_dir) / "opencode.json"
+        fd, temporary = tempfile.mkstemp(prefix=".opencode.", dir=staging_dir)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(consumer_config, indent=2))
+                handle.write("\n")
+            os.replace(temporary, staged_input)
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+            raise
         staged_env = {**os.environ, "OPENCODE_DIR": staging_dir}
         subprocess.run(tier_args, check=True, env=staged_env)
         staged_path = Path(staging_dir) / "oh-my-opencode-slim.json"
@@ -514,6 +528,30 @@ def prepare_tier_candidate(config_dir, tier_args, consumer_config):
         staged_slim = json.loads(staged_path.read_text(encoding="utf-8"))
         routed = apply_litellm_slim_gate(staged_slim, consumer_config)
         return json.dumps(routed, indent=2) + "\n"
+
+
+def write_private_atomic(path, content):
+    """Atomically replace a credential-bearing config with owner-only bytes."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
@@ -1170,8 +1208,7 @@ def main():
         if args.dry_run:
             logger.info(f"[dry-run] Would write opencode.json to {output_path}")
         else:
-            with open(output_path, "w", encoding="utf-8") as handle:
-                handle.write(opencode_candidate)
+            write_private_atomic(output_path, opencode_candidate)
         vibeguard_src = os.path.join(
             configs_dir_path, "opencode", "vibeguard.config.json"
         )
@@ -1244,7 +1281,7 @@ def main():
         logger.info(f"[dry-run] Would write opencode.json to {output_path}")
     else:
         try:
-            Path(output_path).write_text(opencode_candidate, encoding="utf-8")
+            write_private_atomic(output_path, opencode_candidate)
             logger.info("opencode.json written")
         except Exception as e:
             logger.critical(f"Failed to write opencode.json: {e}")
@@ -1256,14 +1293,10 @@ def main():
         )
     else:
         try:
-            with open(
+            write_private_atomic(
                 os.path.join(config_dir_path, "oh-my-opencode-slim.json"),
-                "w",
-                encoding="utf-8",
-            ) as f:
-                f.write(
-                    tier_candidate if tier_candidate is not None else slim_candidate
-                )
+                tier_candidate if tier_candidate is not None else slim_candidate,
+            )
             logger.info("oh-my-opencode-slim.json written (base config)")
         except Exception as e:
             logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
