@@ -829,6 +829,46 @@ def test_opencode_slim_gate_does_not_return_raw_gateway_selection(
         )
 
 
+def test_opencode_slim_gateway_preserves_only_existing_local_direct_selection(
+    tmp_path, monkeypatch, caplog
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    selection = "omlx/existing-model"
+    config = {"provider": {"litellm": {"models": {}}}}
+    routed = configure_opencode.apply_litellm_slim_gate(
+        {"roles": {"x": {"model": selection}}},
+        config,
+        {"roles": {"x": {"model": selection}}},
+    )
+    assert routed["roles"]["x"]["model"] == selection
+    assert "unchanged (direct, local-owner)" in caplog.text
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": "omlx/new-model"}}}, config
+        )
+
+
+def test_opencode_slim_wrapped_gateway_alias_unwraps_uniquely(tmp_path, monkeypatch):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    routed = configure_opencode.apply_litellm_slim_gate(
+        {"roles": {"x": {"model": "litellm/openai/unique"}}},
+        {"provider": {"litellm": {"models": {"x": {"id": "openai/unique"}}}}},
+    )
+    assert routed["roles"]["x"]["model"] == "litellm/openai/unique"
+
+
 def test_opencode_candidates_prepare_before_any_install(tmp_path, monkeypatch):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     target = tmp_path / "opencode.json"
@@ -1319,7 +1359,9 @@ def test_opencode_slim_keeps_local_engine_selections_direct(
     slim = {"roles": {"observer": {"model": f"{owner}/fixture-model"}}}
     consumer = {"provider": {"litellm": {"models": {}}}}
 
-    routed = configure_opencode.apply_litellm_slim_gate(slim, consumer)
+    routed = configure_opencode.apply_litellm_slim_gate(
+        slim, consumer, previous_slim=slim
+    )
 
     assert routed["roles"]["observer"]["model"] == f"{owner}/fixture-model"
 

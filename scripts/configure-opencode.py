@@ -424,7 +424,14 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
                 raise RuntimeError(
                     f"Wrapped LiteLLM selection has no gateway alias: {value}"
                 )
-            return value
+            if value in previous_values:
+                logger.info(
+                    "OpenCode Slim model unchanged (direct, local-owner): %s", value
+                )
+                return value
+            raise RuntimeError(
+                f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
+            )
         if not matches and owner == "ollama-cloud":
             raise RuntimeError(
                 f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
