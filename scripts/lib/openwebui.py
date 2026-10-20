@@ -645,8 +645,7 @@ def _qualify_candidates(
         if (
             not full_probe
             and _selection_record_fresh(prior)
-            and should_probe
-            and build is not None
+            and (build is not None or not should_probe)
             and evidence == binding
             and prior.get("qualification")
             in {

@@ -685,6 +685,10 @@ def _route_evidence_audio_fixture(monkeypatch, *, selection=None, probe_result=N
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
     monkeypatch.setattr(openwebui, "_route_engine_build", lambda *a, **k: "9.9.9")
     monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
+    if selection and "stt" in selection:
+        evidence = selection["stt"].get("route_evidence", {})
+        if evidence.get("credential_digest") is None:
+            evidence["credential_digest"] = openwebui._credential_digest("fixture-key")
     persisted = {}
     monkeypatch.setattr(
         openwebui, "_persist_audio_selection", lambda record: persisted.update(record)
@@ -744,6 +748,16 @@ def test_route_evidence_reused_without_probing_when_binding_matches(monkeypatch)
     calls, _persisted = _route_evidence_audio_fixture(
         monkeypatch, selection={"stt": _route_evidence_record()}
     )
+    monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
+    selection = {"stt": _route_evidence_record()}
+    selection["stt"]["route_evidence"]["credential_digest"] = (
+        openwebui._credential_digest("fixture-key")
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: selection)
+    builds = []
+    monkeypatch.setattr(
+        openwebui, "_route_engine_build", lambda *args: builds.append(args) or "9.9.9"
+    )
     monkeypatch.setattr(
         openwebui,
         "resolve_transport",
@@ -761,6 +775,7 @@ def test_route_evidence_reused_without_probing_when_binding_matches(monkeypatch)
     )
     bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
     assert calls == []  # valid persisted binding: no probe on the reused route
+    assert builds == [("omlx", "http://local/v1")]
     assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
     assert (
         bundle["selection"]["stt"]["reason"] == "previous selection remains qualified"
@@ -881,7 +896,15 @@ def test_route_build_fetch_is_gated_by_probe_mode(monkeypatch):
     def probe(*_args, **_kwargs):
         return type("Result", (), {"status": "ok", "notes": ("ok",)})()
 
-    for flags in ({}, {"probe_on_missing": True}, {"full_probe": True}):
+    openwebui._qualify_candidates(
+        [("ollama", "embed", openwebui.Qualification.DISCOVERED)],
+        openwebui.Operation.EMBEDDING,
+        "http://127.0.0.1:11434/v1",
+        None,
+        probe,
+    )
+    assert requests == []
+    for flags in ({"probe_on_missing": True}, {"full_probe": True}):
         openwebui._qualify_candidates(
             [("ollama", "embed", openwebui.Qualification.DISCOVERED)],
             openwebui.Operation.EMBEDDING,
