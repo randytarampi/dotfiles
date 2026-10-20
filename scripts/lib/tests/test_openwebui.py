@@ -164,7 +164,10 @@ def test_exact_native_and_cloud_endpoints(monkeypatch):
     ]["url"] == "https://ollama.com/v1"
 
 
-def test_audio_bundle_discovery_and_gate(monkeypatch):
+def test_audio_bundle_discovery_and_gate(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "managed-audio.json")
+    )
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setenv("OMLX_API_KEY", "audio-key")
     monkeypatch.setenv("DOTFILES_VOICE_TTS_VOICE", "ryan")
@@ -192,7 +195,7 @@ def test_audio_bundle_discovery_and_gate(monkeypatch):
     state = openwebui.compute_desired_state()
     assert "audio" not in state
     assert state["audio_status"] == "unavailable"
-    assert openwebui._read_audio_selection()["stt"]["qualification"] == "unavailable"
+    assert openwebui._read_audio_selection() is None
     monkeypatch.delenv("DOTFILES_RUN_OMLX_SETUP")
     assert "audio" not in openwebui.compute_desired_state()
 
@@ -313,8 +316,7 @@ def test_real_adapter_discovered_audio_is_unavailable_and_preserved(monkeypatch)
     desired = openwebui.compute_desired_state()
     assert desired["audio_status"] == "unavailable"
     assert "audio" not in desired
-    selection = openwebui._read_audio_selection()
-    assert selection["stt"]["qualification"] == "unavailable"
+    assert desired["audio_selection"]["stt"]["qualification"] == "unavailable"
     client = _AudioClient({"stt": {"MODEL": "asr"}})
     monkeypatch.setattr(
         openwebui,
@@ -421,38 +423,36 @@ def test_audio_probe_failures_keep_routes_unqualified(monkeypatch, status, expec
     )
     monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
     monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
-    persisted = []
-    monkeypatch.setattr(
-        openwebui, "_persist_audio_selection", lambda value: persisted.append(value)
-    )
+    proposed = {}
     monkeypatch.setenv("OMLX_API_KEY", "probe-secret-sentinel")
     result = type("ProbeResult", (), {"status": status, "notes": (status,)})()
     monkeypatch.setattr(route_probes, "probe_stt", lambda *args, **kwargs: result)
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
-    bundle = openwebui._desired_audio_settings(probe_routes=True)
+    bundle = openwebui._desired_audio_settings(
+        probe_routes=True, selection_records=proposed
+    )
     assert bundle is None
-    assert persisted[-1]["stt"]["qualification"] == "unavailable"
-    assert persisted[-1]["stt"].get("candidate_qualification") == "unavailable"
-    assert persisted[-1]["stt"]["reason"] == "no qualified candidate"
-    assert "probe-secret-sentinel" not in repr(persisted)
+    assert proposed["_unavailable"]["stt"]["qualification"] == "unavailable"
+    assert proposed["_unavailable"]["stt"]["candidate_qualification"] == "unavailable"
+    assert proposed["_unavailable"]["stt"]["reason"] == "no qualified candidate"
+    assert "probe-secret-sentinel" not in repr(proposed)
 
 
 @pytest.mark.parametrize("status", ["response_shape_error", "unknown", "unauthorized"])
 def test_embedding_probe_failure_does_not_claim_success(monkeypatch, status):
     monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
-    persisted = {}
-    monkeypatch.setattr(
-        openwebui, "_persist_embedding_selection", lambda value: persisted.update(value)
-    )
+    proposed = {}
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
     result = type("ProbeResult", (), {"status": status, "notes": (status,)})()
     monkeypatch.setattr(
         route_probes, "probe_embeddings", lambda *args, **kwargs: result
     )
-    result_settings = openwebui._desired_embedding_settings(probe_routes=True)
+    result_settings = openwebui._desired_embedding_settings(
+        probe_routes=True, selection_records=proposed
+    )
     assert result_settings is None
-    assert persisted["qualification"] == "unavailable"
-    assert status in persisted["reason"]
+    assert proposed["_unavailable"]["qualification"] == "unavailable"
+    assert status in proposed["_unavailable"]["reason"]
 
 
 def test_ollama_native_base_derivation_and_rendered_field(monkeypatch):
@@ -592,9 +592,7 @@ def test_real_adapter_discovered_embedding_is_unavailable_and_preserved(
     desired = openwebui.compute_desired_state()
     assert desired["embedding_status"] == "unavailable"
     assert "embedding" not in desired
-    selection = openwebui._read_embedding_state()["selection"]
-    assert selection["qualification"] == "unavailable"
-    assert selection["transport"] == "unavailable"
+    assert "selection" not in openwebui._read_embedding_state()
     client = _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
     client.update_openai_config = lambda _config: None
     client.update_ollama_config = lambda _config: None
@@ -4173,22 +4171,22 @@ def test_cli_exit_codes(monkeypatch):
     monkeypatch.setattr(module, "load_env", lambda: True)
     monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
     monkeypatch.setattr(
-        module, "compute_desired_state", lambda: {"openai": [], "ollama": []}
+        module, "compute_desired_state", lambda **_kwargs: {"openai": [], "ollama": []}
     )
     monkeypatch.setattr(module.OpenWebUIClient, "get_openai_config", lambda self: [])
     monkeypatch.setattr(module.OpenWebUIClient, "get_ollama_config", lambda self: [])
     assert module.main.__name__ == "main"
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--check"])
-    assert module.main() == 0
+    assert module.main() == 2
     monkeypatch.setattr(
         module,
         "compute_desired_state",
-        lambda: {
+        lambda **_kwargs: {
             "openai": [_entry("openai", "https://api.openai.com/v1")],
             "ollama": [],
         },
     )
-    assert module.main() == 1
+    assert module.main() == 2
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--dry-run"])
     assert module.main() == 0
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--invalid"])

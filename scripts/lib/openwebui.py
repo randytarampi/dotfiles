@@ -382,7 +382,10 @@ def compute_desired_state(probe_routes=False):
             "anthropic": [],
             "ollama": [],
         }
-    audio = _desired_audio_settings(probe_routes=probe_routes)
+    audio_selection = {}
+    audio = _desired_audio_settings(
+        probe_routes=probe_routes, selection_records=audio_selection
+    )
     explicitly_disabled = (
         os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "0" or "omlx" in disabled
     )
@@ -411,17 +414,27 @@ def compute_desired_state(probe_routes=False):
     if audio is not None:
         desired["audio"] = audio["settings"]
         desired["audio_selection"] = audio["selection"]
-        # Persisted after resolving selection; this is decision provenance, not an applied-state claim.
-        _persist_audio_selection(audio["selection"])
-    elif not explicitly_disabled and discovery.status == "ok_models":
+    if audio_selection:
+        if "_unavailable" in audio_selection:
+            desired["audio_selection"] = audio_selection["_unavailable"]
+        else:
+            desired["audio_selection"] = audio_selection
+    if audio is None and not explicitly_disabled and discovery.status == "ok_models":
         desired["audio_status"] = "unavailable"
-    embedding = _desired_embedding_settings(probe_routes=probe_routes)
+    embedding_selection = {}
+    embedding = _desired_embedding_settings(
+        probe_routes=probe_routes, selection_records=embedding_selection
+    )
     if embedding is not None:
         selection = embedding.pop(SELECTION_PROVENANCE_KEY)
         desired["embedding"] = embedding
         desired["embedding_selection"] = selection
-        _persist_embedding_selection(selection)
-    else:
+        embedding_selection = selection
+    elif embedding_selection:
+        desired["embedding_selection"] = embedding_selection.get(
+            "_unavailable", embedding_selection
+        )
+    if embedding is None:
         desired["embedding_status"] = "unavailable"
     return desired
 
@@ -438,7 +451,7 @@ def _probe_qualification(probe, endpoint, model, key_reference, **kwargs):
     return qualification_from_probe(result), "; ".join(result.notes) or result.status
 
 
-def _desired_audio_settings(probe_routes=False):
+def _desired_audio_settings(probe_routes=False, selection_records=None):
     """Return the owned speech settings, or None when oMLX is unavailable."""
     if "omlx" in _disabled() or "omlx" not in active_engines():
         return None
@@ -446,6 +459,7 @@ def _desired_audio_settings(probe_routes=False):
     models = audio_models("omlx")
     if not endpoint:
         return None
+    selection_records = selection_records if selection_records is not None else {}
     stt_candidates = [
         ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
@@ -476,8 +490,12 @@ def _desired_audio_settings(probe_routes=False):
         if gateway and probe_routes
         else {}
     )
-    stt = _audio_locator(Operation.STT, stt_candidates, endpoint, **locator_options)
+    stt = _audio_locator(
+        Operation.STT, stt_candidates, endpoint, selection_records, **locator_options
+    )
     if stt is None:
+        if selection_records and "_unavailable" in selection_records:
+            selection_records.update(selection_records["_unavailable"])
         import logger
 
         logger.warning("No qualified oMLX STT model; omitting audio settings")
@@ -499,6 +517,8 @@ def _desired_audio_settings(probe_routes=False):
         selections["stt"]["reason"] = audio_probe_reasons[
             (stt.selection.provider, stt.selection.model)
         ]
+    if selection_records is not None:
+        selection_records["stt"] = selections["stt"]
     tts_candidates = [
         ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
@@ -522,7 +542,9 @@ def _desired_audio_settings(probe_routes=False):
             probed.append((provider, model, qualification))
             audio_probe_reasons[(provider, model)] = reason
         tts_candidates = probed
-    tts = _audio_locator(Operation.TTS, tts_candidates, endpoint, **locator_options)
+    tts = _audio_locator(
+        Operation.TTS, tts_candidates, endpoint, selection_records, **locator_options
+    )
     if tts is not None:
         tts_model = tts.route.wire_model
         tts_settings = {
@@ -543,6 +565,8 @@ def _desired_audio_settings(probe_routes=False):
             selections["tts"]["reason"] = audio_probe_reasons[
                 (tts.selection.provider, tts.selection.model)
             ]
+        if selection_records is not None:
+            selection_records["tts"] = selections["tts"]
     else:
         import logger
 
@@ -552,7 +576,9 @@ def _desired_audio_settings(probe_routes=False):
     return {"settings": settings, "selection": selections}
 
 
-def _audio_locator(operation, candidates, endpoint, gateway_route=None):
+def _audio_locator(
+    operation, candidates, endpoint, selection_records=None, gateway_route=None
+):
     preference = []
     previous = _read_audio_selection()
     previous = previous.get(operation.value) if isinstance(previous, dict) else None
@@ -573,6 +599,7 @@ def _audio_locator(operation, candidates, endpoint, gateway_route=None):
         prior_model = owned.get("MODEL")
         if prior_model and candidates:
             previous_tuple = (candidates[0][0], prior_model, Qualification.UNKNOWN)
+    selection_records = selection_records if selection_records is not None else {}
     selected = select(
         operation, candidates, preference, previously_selected=previous_tuple
     )
@@ -584,23 +611,22 @@ def _audio_locator(operation, candidates, endpoint, gateway_route=None):
             preference=preference,
             previously_selected=previous_tuple,
         )
-        _persist_audio_selection(
-            {
-                operation.value: {
-                    "operation": operation.value,
-                    "provider": selection.provider,
-                    "model": selection.model,
-                    "qualification": Qualification.UNAVAILABLE.value,
-                    "reason": selection.reason,
-                    "candidate_qualification": selection.qualification.value,
-                    "candidate_qualification": selection.qualification.value,
-                    "transport": Transport.UNAVAILABLE.value,
-                    "endpoint": None,
-                    "wire_model": None,
-                    "key_reference": endpoint[1],
-                }
+        selection_record = {
+            operation.value: {
+                "operation": operation.value,
+                "provider": selection.provider,
+                "model": selection.model,
+                "qualification": Qualification.UNAVAILABLE.value,
+                "reason": selection.reason,
+                "candidate_qualification": selection.qualification.value,
+                "transport": Transport.UNAVAILABLE.value,
+                "endpoint": None,
+                "wire_model": None,
+                "key_reference": endpoint[1],
             }
-        )
+        }
+        if selection_records is not None:
+            selection_records["_unavailable"] = selection_record
         import logger
 
         logger.warning(
@@ -642,29 +668,29 @@ def _audio_locator(operation, candidates, endpoint, gateway_route=None):
     )
     locator = ServiceLocator(selected, route)
     if selected.provider is None or route.transport == Transport.UNAVAILABLE:
-        _persist_audio_selection(
-            {
-                operation.value: {
-                    "operation": operation.value,
-                    "provider": selected.provider,
-                    "model": selected.model,
-                    "qualification": (
-                        selected.qualification.value
-                        if any(
-                            candidate[2] != Qualification.DISCOVERED
-                            for candidate in candidates
-                        )
-                        else Qualification.UNAVAILABLE.value
-                    ),
-                    "reason": selected.reason,
-                    "candidate_qualification": selected.qualification.value,
-                    "transport": route.transport.value,
-                    "endpoint": route.endpoint,
-                    "wire_model": route.wire_model,
-                    "key_reference": route.key_reference or endpoint[1],
-                }
+        selection_record = {
+            operation.value: {
+                "operation": operation.value,
+                "provider": selected.provider,
+                "model": selected.model,
+                "qualification": (
+                    selected.qualification.value
+                    if any(
+                        candidate[2] != Qualification.DISCOVERED
+                        for candidate in candidates
+                    )
+                    else Qualification.UNAVAILABLE.value
+                ),
+                "reason": selected.reason,
+                "candidate_qualification": selected.qualification.value,
+                "transport": route.transport.value,
+                "endpoint": route.endpoint,
+                "wire_model": route.wire_model,
+                "key_reference": route.key_reference or endpoint[1],
             }
-        )
+        }
+        if selection_records is not None:
+            selection_records["_unavailable"] = selection_record
         import logger
 
         logger.warning(
@@ -683,6 +709,8 @@ def _audio_locator(operation, candidates, endpoint, gateway_route=None):
             "wire_model": route.wire_model,
         },
     )
+    if selection_records is not None:
+        selection_records[operation.value] = _locator_provenance(locator)
     return locator
 
 
@@ -711,25 +739,26 @@ def _persist_embedding_selection(selection):
     _write_embedding_state(state)
 
 
-def _desired_embedding_settings(probe_routes=False):
+def _desired_embedding_settings(probe_routes=False, selection_records=None):
+    selection_records = selection_records if selection_records is not None else {}
     if constants.get_litellm_proxy_mode():
         selection = select(
             Operation.EMBEDDING,
             [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
         )
-        _persist_embedding_selection(
-            {
-                "operation": "embedding",
-                "provider": None,
-                "model": None,
-                "qualification": "unavailable",
-                "reason": selection.reason,
-                "transport": "unavailable",
-                "endpoint": None,
-                "wire_model": None,
-                "key_reference": None,
-            }
-        )
+        selection_record = {
+            "operation": "embedding",
+            "provider": None,
+            "model": None,
+            "qualification": "unavailable",
+            "reason": selection.reason,
+            "transport": "unavailable",
+            "endpoint": None,
+            "wire_model": None,
+            "key_reference": None,
+        }
+        if selection_records is not None:
+            selection_records["_unavailable"] = selection_record
         import logger
 
         logger.warning(
@@ -769,19 +798,19 @@ def _desired_embedding_settings(probe_routes=False):
     )
     locator = ServiceLocator(selection, route)
     if selection.provider is None or route.transport == Transport.UNAVAILABLE:
-        _persist_embedding_selection(
-            {
-                "operation": "embedding",
-                "provider": selection.provider,
-                "model": selection.model,
-                "qualification": Qualification.UNAVAILABLE.value,
-                "reason": probe_reason or selection.reason,
-                "transport": route.transport.value,
-                "endpoint": route.endpoint,
-                "wire_model": route.wire_model,
-                "key_reference": route.key_reference,
-            }
-        )
+        selection_record = {
+            "operation": "embedding",
+            "provider": selection.provider,
+            "model": selection.model,
+            "qualification": Qualification.UNAVAILABLE.value,
+            "reason": probe_reason or selection.reason,
+            "transport": route.transport.value,
+            "endpoint": route.endpoint,
+            "wire_model": route.wire_model,
+            "key_reference": route.key_reference,
+        }
+        if selection_records is not None:
+            selection_records["_unavailable"] = selection_record
         import logger
 
         logger.warning(
@@ -796,15 +825,18 @@ def _desired_embedding_settings(probe_routes=False):
         "wire_model": route.wire_model,
     }
     assert_renders_from(locator, rendered)
+    provenance = {
+        **_locator_provenance(locator),
+        "reason": probe_reason or selection.reason,
+    }
+    if selection_records is not None:
+        selection_records.update(provenance)
     return {
         "RAG_EMBEDDING_ENGINE": rendered["provider"],
         "RAG_EMBEDDING_MODEL": rendered["wire_model"],
         "output_dims": EMBEDDING_OUTPUT_DIMS,
         "ollama_config": {"url": _ollama_native_base(rendered["endpoint"])},
-        SELECTION_PROVENANCE_KEY: {
-            **_locator_provenance(locator),
-            "reason": probe_reason or selection.reason,
-        },
+        SELECTION_PROVENANCE_KEY: provenance,
     }
 
 
@@ -2876,6 +2908,7 @@ def reconcile_via_api(client, desired):
         actions["planned"].append("embedding")
     try:
         if hasattr(client, "get_audio_config"):
+            audio_selection = desired.get("audio_selection")
             if audio_wanted is None and audio_status in {
                 "unknown",
                 "empty",
@@ -2913,6 +2946,11 @@ def reconcile_via_api(client, desired):
                 if audio_result.get("released"):
                     actions["applied"].append("audio-release")
                     actions["verified"].append("audio-release")
+            if audio_selection:
+                if "_unavailable" in audio_selection:
+                    _persist_audio_selection(audio_selection["_unavailable"])
+                else:
+                    _persist_audio_selection(audio_selection)
     except OpenWebUIError as error:
         actions["failed"].append("audio")
         outcome = getattr(error, "outcome", None)
@@ -2925,6 +2963,7 @@ def reconcile_via_api(client, desired):
         raise
     try:
         if hasattr(client, "get_embedding_config"):
+            embedding_selection = desired.get("embedding_selection")
             if desired.get("embedding_status") in {"unknown", "unavailable"}:
                 import logger
 
@@ -2949,6 +2988,10 @@ def reconcile_via_api(client, desired):
                     actions["applied"].append("embedding")
                 if embedding_result.get("verified"):
                     actions["verified"].append("embedding")
+            if embedding_selection:
+                _persist_embedding_selection(
+                    embedding_selection.get("_unavailable", embedding_selection)
+                )
             if embedding_result.get("released"):
                 actions["applied"].append("embedding-release")
                 actions["verified"].append("embedding-release")

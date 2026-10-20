@@ -756,11 +756,7 @@ def main():
             logger.error("Catalogue reconciliation failed: %s", error)
             return 1
 
-    desired = (
-        compute_desired_state(probe_routes=True)
-        if args.probe_routes
-        else compute_desired_state()
-    )
+    desired = compute_desired_state(probe_routes=args.probe_routes)
     base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
     if not (args.reconcile or args.check):
         args.reconcile = True
@@ -789,12 +785,13 @@ def main():
                 client.get_openai_config(), client.get_ollama_config(), desired
             )
             logger.info(result.summary())
+            logger.info("connections checked; audio/embedding not checked")
             drift = result.status != "clean" or any(
                 item["action"] != "keep" for item in result.plan.entries
             )
             if args.dry_run:
                 return 1 if result.status == "collision" else 0
-            return 1 if drift else 0
+            return 2
         result = reconcile_via_api(client, desired)
         logger.info(result.summary())
         return 0

@@ -192,7 +192,7 @@ EOF
     if curl -fsS --max-time 3 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/api/version" >/dev/null 2>&1; then break; fi
     sleep 2
   done
-  "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
+  "$CONFIGURE_SCRIPT" || die "Open WebUI reconciliation failed"
   "$CONFIGURE_SCRIPT" --reconcile-mcp || warn "Open WebUI MCP registration failed"
   "$CONFIGURE_SCRIPT" --reconcile-catalogue || warn "Open WebUI catalogue reconciliation failed"
   info "Open Terminal and cptr LaunchAgents are macOS-only; LiteLLM remains a separate optional service"
@@ -271,7 +271,7 @@ set -a
 source "$SERVICE_ENV"
 set +a
 if [[ -f "$CONFIGURE_SCRIPT" ]]; then
-  "$CONFIGURE_SCRIPT" || warn "Open WebUI reconciliation failed"
+  "$CONFIGURE_SCRIPT" || die "Open WebUI reconciliation failed"
   "$CONFIGURE_SCRIPT" --reconcile-mcp || warn "Open WebUI MCP registration failed"
   "$CONFIGURE_SCRIPT" --reconcile-catalogue || warn "Open WebUI catalogue reconciliation failed"
 else
