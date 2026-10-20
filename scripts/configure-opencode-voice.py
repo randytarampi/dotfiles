@@ -30,7 +30,6 @@ import sys
 import json
 import argparse
 import os
-import json
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:

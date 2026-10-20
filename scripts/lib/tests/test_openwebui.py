@@ -717,7 +717,6 @@ def _route_evidence_record(engine_build="9.9.9", recorded_at=None):
         "qualification": "protocol_probed",
         "reason": "HTTP 200",
         "recorded_at": recorded_at or datetime.now(timezone.utc).isoformat(),
-        "recorded_at": recorded_at or datetime.now(timezone.utc).isoformat(),
         "route_evidence": {
             "provider": "omlx",
             "model": "stt-model",
@@ -1078,7 +1077,6 @@ def test_gateway_audio_probe_uses_discovered_alias(monkeypatch, tmp_path):
 
 
 def test_fake_route_probe_http_surfaces_shapes_auth_and_refusal(monkeypatch):
-    import io
     import urllib.error
     import urllib.request
 

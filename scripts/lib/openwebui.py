@@ -2382,7 +2382,6 @@ def _reconcile_embedding_gateway(client, state, current, wanted, logger):
         )
         return {"status": "refused", "applied": False, "verified": False}
     projection = state.get("projection")
-    fingerprint = state.get("embedding_fingerprint", {})
     recorded = (
         (projection or {}).get("owned", {}) if isinstance(projection, dict) else {}
     )
@@ -2589,7 +2588,6 @@ def _guarantee_no_secrets(payload, allow_key_reference=False):
     value; otherwise reconciliation refuses to persist the state. mode 0600 is
     not permission for cleartext.
     """
-    import re
 
     secret_words = ("KEY", "TOKEN", "SECRET", "PASSWORD")
 
