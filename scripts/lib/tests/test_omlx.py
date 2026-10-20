@@ -1295,7 +1295,18 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
     assert slim_path.read_bytes() == b"slim sentinel\n"
 
 
-def test_opencode_main_slim_write_failure_restores_prior_pair(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "prior_slim",
+    [
+        b"slim sentinel\n",
+        b"prior-slim\xff\n",  # undecodable bytes must restore byte-exact
+        b"prior-slim\r\n",  # CRLF must not be normalised by recovery
+    ],
+    ids=["utf8", "undecodable", "crlf"],
+)
+def test_opencode_main_slim_write_failure_restores_prior_pair(
+    monkeypatch, tmp_path, prior_slim
+):
     home = tmp_path / "home"
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     script = _load_script("configure_opencode_pair_recovery", "configure-opencode.py")
@@ -1304,7 +1315,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(monkeypatch, tmp_p
     opencode_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
     opencode_path.write_bytes(b"opencode sentinel\n")
-    slim_path.write_bytes(b"slim sentinel\n")
+    slim_path.write_bytes(prior_slim)
     scripts = tmp_path / "scripts"
     (tmp_path / "configs/opencode").mkdir(parents=True)
     (tmp_path / "configs/opencode/oh-my-opencode-slim.json").write_text("{}")
@@ -1363,9 +1374,9 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(monkeypatch, tmp_p
     with pytest.raises(SystemExit):
         script.main()
     assert write_names == ["slim-ok", "opencode-FAIL", "slim-ok"]
-    # The PRIOR slim generation is restored with its private mode; the pair
-    # is never left mixed.
-    assert slim_path.read_bytes() == b"slim sentinel\n"
+    # The PRIOR slim generation is restored byte-exact with its private mode;
+    # the pair is never left mixed, normalised or lost.
+    assert slim_path.read_bytes() == prior_slim
     assert stat.S_IMODE(slim_path.stat().st_mode) == 0o600
     assert opencode_path.read_bytes() == b"opencode sentinel\n"
 

@@ -531,14 +531,20 @@ def prepare_tier_candidate(config_dir, tier_args, consumer_config):
 
 
 def write_private_atomic(path, content):
-    """Atomically replace a credential-bearing config with owner-only bytes."""
+    """Atomically replace a credential-bearing config with owner-only bytes.
+
+    Accepts ``str`` (encoded UTF-8) or ``bytes`` payloads; byte payloads are
+    restored byte-exact so pair recovery never normalises or loses an
+    existing generation.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
     try:
         os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
+        data = content.encode("utf-8") if isinstance(content, str) else bytes(content)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, target)
@@ -1285,15 +1291,16 @@ def main():
         )
         logger.info(f"[dry-run] Would write opencode.json to {output_path}")
     else:
-        # R6.4 pair recovery: snapshot BOTH prior generations first, install
-        # in the production order (Slim, then opencode.json), and restore the
-        # prior first-installed generation (or remove the fresh orphan) when
-        # a later installation fails — never leave a mixed pair.
+        # R6.4 pair recovery: snapshot BOTH prior generations BYTE-EXACT,
+        # install in the production order (Slim, then opencode.json), and
+        # restore the prior first-installed generation (or remove the fresh
+        # orphan) when a later installation fails — never leave a mixed or
+        # normalised pair. An undecodable prior stays byte-representable.
         for target_path in (slim_output_path, output_path):
             try:
-                with open(target_path, "r", encoding="utf-8") as _prior_handle:
+                with open(target_path, "rb") as _prior_handle:
                     prior_pair[target_path] = _prior_handle.read()
-            except (FileNotFoundError, UnicodeDecodeError):
+            except FileNotFoundError:
                 prior_pair[target_path] = None
         try:
             write_private_atomic(
