@@ -38,6 +38,11 @@ indent_size = 2
 indent_style = space
 indent_size = 2
 
+# Caddyfiles are formatted by `caddy fmt`, which emits tab indentation; keep
+# the generated source template in the formatter's own convention.
+configs/caddy/*.tmpl
+indent_style = tab
+
 [.chezmoidata/*]
 indent_size = 2
 
