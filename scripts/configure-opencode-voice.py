@@ -68,6 +68,7 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
 import tier_registry
 from model_catalogues import _configured_litellm_port
 from selected_service import (
+    DirectRoute,
     Operation,
     Qualification,
     ServiceLocator,
@@ -135,11 +136,13 @@ def _service_locator(
         key_reference=route_options.get("key_reference"),
         credential_present=route_options.get("credential_present", True),
         credential_required=route_options.get("credential_required", True),
-        direct_endpoint=route_options.get("endpoint"),
-        direct_wire_model=route_options.get("wire_model", selection.model),
-        direct_key_reference=route_options.get("key_reference"),
-        direct_credential_required=route_options.get("credential_required", True),
-        direct_credential_present=route_options.get("credential_present", True),
+        direct=DirectRoute(
+            endpoint=route_options.get("endpoint"),
+            wire_model=route_options.get("wire_model", selection.model),
+            key_reference=route_options.get("key_reference"),
+            credential_required=route_options.get("credential_required", True),
+            credential_present=route_options.get("credential_present", True),
+        ),
         operation=operation,
     )
     return ServiceLocator(selection, route)

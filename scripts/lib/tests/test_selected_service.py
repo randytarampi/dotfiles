@@ -3,6 +3,7 @@ import pytest
 from selected_service import (
     DIRECT_EXCEPTIONS,
     CanonicalSelection,
+    DirectRoute,
     Operation,
     Qualification as Q,
     RouteResolution,
@@ -28,8 +29,7 @@ def test_route_matrix(gate, q, credential):
         endpoint="http://gateway/v1",
         credential_present=credential,
         key_reference="TEST_GATEWAY_KEY" if credential else None,
-        direct_endpoint="http://local/v1",
-        direct_credential_required=False,
+        direct=DirectRoute(endpoint="http://local/v1"),
     )
     if gate == "direct":
         assert result.transport == (
@@ -89,8 +89,7 @@ def test_direct_exception_is_reported():
             "gateway",
             Q.PROTOCOL_PROBED,
             operation=Operation.STT,
-            direct_endpoint="http://local/v1",
-            direct_wire_model="local-id",
+            direct=DirectRoute(endpoint="http://local/v1", wire_model="local-id"),
         )
         assert result.transport == Transport.DIRECT
         assert result.endpoint == "http://local/v1"
@@ -111,15 +110,17 @@ def test_direct_route_requires_qualification_endpoint_and_credentials():
         resolve_transport(
             "direct",
             Q.PROTOCOL_PROBED,
-            direct_endpoint="http://local/v1",
-            direct_credential_required=True,
-            direct_credential_present=False,
-            direct_key_reference="LOCAL_KEY",
+            direct=DirectRoute(
+                endpoint="http://local/v1",
+                key_reference="LOCAL_KEY",
+                credential_required=True,
+                credential_present=False,
+            ),
         ).transport
         == Transport.UNAVAILABLE
     )
     local = resolve_transport(
-        "direct", Q.PROTOCOL_PROBED, direct_endpoint="http://local/v1"
+        "direct", Q.PROTOCOL_PROBED, direct=DirectRoute(endpoint="http://local/v1")
     )
     assert local.transport == Transport.DIRECT
 
@@ -132,7 +133,7 @@ def test_exception_requires_qualified_explicit_usable_direct_route():
             Q.DISCOVERED,
             operation=Operation.STT,
             endpoint="http://gateway/v1",
-            direct_endpoint="http://local/v1",
+            direct=DirectRoute(endpoint="http://local/v1"),
         )
         assert result.transport == Transport.UNAVAILABLE
         assert result.endpoint is None

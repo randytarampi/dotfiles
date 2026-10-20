@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import constants
 from selected_service import (
+    DirectRoute,
     Operation,
     Qualification,
     ServiceLocator,
@@ -826,12 +827,14 @@ def _audio_locator(
         endpoint=endpoint[0],
         wire_model=selected.model,
         key_reference=endpoint[1],
-        direct_endpoint=endpoint[0],
-        direct_wire_model=selected.model,
-        direct_key_reference=endpoint[1],
-        direct_credential_required=False,
         credential_present=not endpoint[1] or bool(os.environ.get(endpoint[1])),
         credential_required=False,
+        direct=DirectRoute(
+            endpoint=endpoint[0],
+            wire_model=selected.model,
+            key_reference=endpoint[1],
+            credential_required=False,
+        ),
         operation=operation,
     )
     locator = ServiceLocator(selected, route)
@@ -1074,8 +1077,7 @@ def _desired_embedding_settings(
         selection.qualification,
         endpoint=EMBEDDING_OLLAMA_URL,
         wire_model=selection.model,
-        direct_endpoint=EMBEDDING_OLLAMA_URL,
-        direct_wire_model=selection.model,
+        direct=DirectRoute(endpoint=EMBEDDING_OLLAMA_URL, wire_model=selection.model),
         credential_required=False,
         operation=Operation.EMBEDDING,
     )

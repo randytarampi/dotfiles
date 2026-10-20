@@ -77,6 +77,22 @@ _RANK = {
 }
 
 
+@dataclass(frozen=True)
+class DirectRoute:
+    """Bound direct-route facts for ``resolve_transport`` (S107 param cluster).
+
+    Bundles the former five ``direct_*`` keyword parameters into one frozen
+    value object; resolution semantics are unchanged (``endpoint=None`` keeps
+    the legacy absent-facts behavior).
+    """
+
+    endpoint: str | None = None
+    wire_model: str | None = None
+    key_reference: str | None = None
+    credential_required: bool = False
+    credential_present: bool = True
+
+
 def resolve_transport(
     gate: Literal["direct", "gateway"],
     qualification: Qualification,
@@ -87,11 +103,7 @@ def resolve_transport(
     credential_present: bool = True,
     credential_reference: str | None = None,
     credential_required: bool = True,
-    direct_endpoint: str | None = None,
-    direct_wire_model: str | None = None,
-    direct_key_reference: str | None = None,
-    direct_credential_required: bool = False,
-    direct_credential_present: bool = True,
+    direct: DirectRoute | None = None,
     operation: Operation | None = None,
 ) -> RouteResolution:
     """Resolve the gated route; never switch routes based on availability.
@@ -103,17 +115,66 @@ def resolve_transport(
     """
     if gate not in ("direct", "gateway"):
         raise ValueError("gate must be direct or gateway")
+    direct_facts = direct if direct is not None else DirectRoute()
     if gate == "direct":
-        use_direct_facts = direct_endpoint is not None
-        return _direct_route(
+        return _direct_transport(
             qualification,
-            direct_endpoint or endpoint,
-            direct_wire_model or wire_model,
-            direct_key_reference or key_reference,
-            direct_credential_required if use_direct_facts else credential_required,
-            direct_credential_present if use_direct_facts else credential_present,
+            direct_facts,
+            endpoint,
+            wire_model,
+            key_reference,
+            credential_present,
+            credential_required,
             credential_reference,
         )
+    return _gateway_transport(
+        qualification,
+        direct_facts,
+        endpoint,
+        wire_model,
+        key_reference,
+        credential_present,
+        credential_required,
+        credential_reference,
+        operation,
+    )
+
+
+def _direct_transport(
+    qualification,
+    direct_facts,
+    endpoint,
+    wire_model,
+    key_reference,
+    credential_present,
+    credential_required,
+    credential_reference,
+):
+    """Bind the direct-route facts; explicit direct facts take precedence."""
+    use_direct_facts = direct_facts.endpoint is not None
+    return _direct_route(
+        qualification,
+        direct_facts.endpoint or endpoint,
+        direct_facts.wire_model or wire_model,
+        direct_facts.key_reference or key_reference,
+        direct_facts.credential_required if use_direct_facts else credential_required,
+        direct_facts.credential_present if use_direct_facts else credential_present,
+        credential_reference,
+    )
+
+
+def _gateway_transport(
+    qualification,
+    direct_facts,
+    endpoint,
+    wire_model,
+    key_reference,
+    credential_present,
+    credential_required,
+    credential_reference,
+    operation,
+):
+    """Resolve the gateway route; approve the registered direct exceptions."""
     qualified = _RANK.get(qualification, 0) >= _RANK[Qualification.PROTOCOL_PROBED]
     effective_reference = key_reference or credential_reference
     if (
@@ -130,11 +191,11 @@ def resolve_transport(
     if operation in DIRECT_EXCEPTIONS:
         return _direct_route(
             qualification,
-            direct_endpoint,
-            direct_wire_model,
-            direct_key_reference,
-            direct_credential_required,
-            direct_credential_present,
+            direct_facts.endpoint,
+            direct_facts.wire_model,
+            direct_facts.key_reference,
+            direct_facts.credential_required,
+            direct_facts.credential_present,
             None,
         )
     reason = "gateway unavailable: qualification, endpoint, or credential missing"
@@ -268,7 +329,10 @@ def assert_renders_from(selection_or_locator, rendered):
             if isinstance(rendered, dict)
             else getattr(rendered, field, None)
         )
-        assert actual == value, f"rendered {field} {actual!r} != resolved {value!r}"
+        if actual != value:
+            # Explicit raise (not an assert statement): the failure must
+            # survive optimised bytecode (qlty bandit B101).
+            raise AssertionError(f"rendered {field} {actual!r} != resolved {value!r}")
 
 
 def render_invariant_test(selection_or_locator, rendered):
