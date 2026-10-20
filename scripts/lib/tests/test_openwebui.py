@@ -4759,6 +4759,69 @@ def test_cli_exit_codes(monkeypatch):
     assert error.value.code == 2
 
 
+def test_entrypoint_diagnostic_modes_never_probe(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.delenv("OPENWEBUI_API_KEY", raising=False)
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module, "_openwebui_service_value", lambda _name: "")
+    captured = {}
+
+    def recorder(**kwargs):
+        captured.update(kwargs)
+        return {"openai": [], "ollama": []}
+
+    monkeypatch.setattr(module, "compute_desired_state", recorder)
+    monkeypatch.setattr(
+        module.sys, "argv", ["configure-openwebui.py", "--reconcile", "--dry-run"]
+    )
+    assert module.main() == 0
+    assert captured == {}  # construction never ran: no probes precede the key gate
+    assert any("OPENWEBUI_API_KEY is absent" in line for line in caplog.messages)
+
+
+def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
+    captured = {}
+
+    def recorder(**kwargs):
+        captured.update(kwargs)
+        return {"openai": [], "ollama": []}
+
+    monkeypatch.setattr(module, "compute_desired_state", recorder)
+    monkeypatch.setattr(module.OpenWebUIClient, "get_openai_config", lambda self: [])
+    monkeypatch.setattr(module.OpenWebUIClient, "get_ollama_config", lambda self: [])
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        ["configure-openwebui.py", "--check", "--probe-routes"],
+    )
+    assert module.main() == 2
+    assert captured["probe_routes"] is False
+    assert captured["allow_auto_probe"] is False
+    assert any("ignored in check/dry-run" in line for line in caplog.messages)
+
+
+def test_entrypoint_unhealthy_service_never_probes(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: False)
+    called = []
+    monkeypatch.setattr(
+        module, "compute_desired_state", lambda **kwargs: called.append(kwargs) or {}
+    )
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 0
+    assert called == []
+    assert any("not healthy" in line for line in caplog.messages)
+
+
 def test_terminal_helpers_error_paths_are_hermetic(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "openwebui_service.sh"
     env_file = tmp_path / "terminal.env"

@@ -756,12 +756,15 @@ def main():
             logger.error("Catalogue reconciliation failed: %s", error)
             return 1
 
-    desired = compute_desired_state(
-        probe_routes=args.probe_routes, allow_auto_probe=bool(args.reconcile)
-    )
     base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
     if not (args.reconcile or args.check):
         args.reconcile = True
+    # Effective mode FIRST: diagnostic modes (check/dry-run) never run
+    # inference probes — neither the explicit --probe-routes flag nor the
+    # healthy-apply auto-qualifier. Automatic qualification is enabled only
+    # for apply runs, and desired-state construction (which may probe) happens
+    # only after the apply prerequisites (API key, service health) succeed.
+    read_only = bool(args.check or args.dry_run)
     api_key = os.environ.get(
         "OPENWEBUI_API_KEY", ""
     ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
@@ -781,6 +784,12 @@ def main():
     if not client.health_check():
         logger.warning("Open WebUI is not healthy at %s; skipping", base_url)
         return 0
+    if read_only and getattr(args, "probe_routes", False):
+        logger.warning("--probe-routes is ignored in check/dry-run modes")
+    desired = compute_desired_state(
+        probe_routes=bool(getattr(args, "probe_routes", False)) and not read_only,
+        allow_auto_probe=bool(args.reconcile) and not read_only,
+    )
     try:
         if args.check or args.dry_run:
             result = reconcile(
