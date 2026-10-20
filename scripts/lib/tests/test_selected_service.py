@@ -164,6 +164,26 @@ def test_precedence_ladder_and_stale_previous():
         ).provider
         == "b"
     )
+
+
+def test_previous_selection_and_tie_break_are_order_stable():
+    candidates = [
+        ("a", "one", Q.PROTOCOL_PROBED),
+        ("b", "two", Q.PROTOCOL_PROBED),
+    ]
+    previous = ("b", "two", Q.PROTOCOL_PROBED)
+    preference = [("a", "one"), ("b", "two")]
+    for ordered in (candidates, list(reversed(candidates))):
+        selected = select(
+            Operation.STT,
+            ordered,
+            preference=preference,
+            previously_selected=previous,
+        )
+        assert (selected.provider, selected.model) == ("b", "two")
+    for ordered in (candidates, list(reversed(candidates))):
+        selected = select(Operation.STT, ordered, preference=preference)
+        assert (selected.provider, selected.model) == ("a", "one")
     downgraded = select(
         Operation.STT,
         [("a", "one", Q.UNAVAILABLE), ("b", "two", Q.CONSUMER_VERIFIED)],
@@ -181,7 +201,7 @@ def test_precedence_ladder_and_stale_previous():
         select(
             Operation.STT, candidates, preference=[("a", "one"), ("b", "two")]
         ).provider
-        == "b"
+        == "a"
     )
 
 

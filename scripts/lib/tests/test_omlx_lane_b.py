@@ -881,7 +881,6 @@ def test_voice_and_webui_select_same_fixture_inventory():
     webui_selection = selected_service.select(
         Operation.STT,
         inventory,
-        preference=[(provider, model) for provider, model, _ in inventory],
     )
     assert (voice_selection.provider, voice_selection.model) == (
         webui_selection.provider,

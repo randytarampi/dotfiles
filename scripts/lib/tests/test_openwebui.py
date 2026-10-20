@@ -294,6 +294,103 @@ def test_selection_precedence_and_order_independence():
     )
 
 
+def test_audio_and_embedding_selection_survive_reversed_model_enumeration(
+    monkeypatch, tmp_path
+):
+    audio_path = tmp_path / "managed-audio.json"
+    embedding_path = tmp_path / "managed-embedding.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(audio_path))
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(embedding_path))
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui,
+        "local_endpoint_for",
+        lambda *_: ("http://omlx.local/v1", "OMLX_API_KEY"),
+    )
+    candidates = ["first-asr", "second-asr"]
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda _provider: [
+            {"name": name, "model_type": "audio_stt"} for name in candidates
+        ],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    previous_audio = {
+        "stt": {
+            "operation": "stt",
+            "provider": "omlx",
+            "model": "second-asr",
+            "qualification": "protocol_probed",
+            "reason": "persisted valid binding",
+            "transport": "direct",
+            "endpoint": "http://omlx.local/v1",
+            "wire_model": "second-asr",
+            "key_reference": "OMLX_API_KEY",
+            "route_evidence": openwebui._route_binding(
+                "omlx",
+                "second-asr",
+                openwebui.Operation.STT,
+                "http://omlx.local/v1",
+                "OMLX_API_KEY",
+                "test-build",
+            ),
+        }
+    }
+    audio_path.write_text(json.dumps({"selection": previous_audio}))
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "test-build")
+    monkeypatch.setenv("OMLX_API_KEY", "test-wire-secret")
+
+    def probe(*_args, **_kwargs):
+        pytest.fail("valid persisted route must be reused without probing")
+
+    monkeypatch.setattr(route_probes, "probe_stt", probe)
+    first = openwebui._desired_audio_settings()
+    candidates.reverse()
+    second = openwebui._desired_audio_settings()
+    assert first["selection"]["stt"] == second["selection"]["stt"]
+    assert first["settings"]["stt"] == second["settings"]["stt"]
+    assert first["selection"]["stt"]["model"] == "second-asr"
+    assert first["selection"]["stt"]["endpoint"] == "http://omlx.local/v1"
+    assert first["settings"]["stt"]["MODEL"] == "second-asr"
+    assert first["settings"]["stt"]["OPENAI_API_KEY"] == "test-wire-secret"
+
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    previous_selection = {
+        "operation": "embedding",
+        "provider": "ollama",
+        "model": "second-embedding",
+        "qualification": "protocol_probed",
+        "reason": "persisted selection",
+    }
+    openwebui._persist_embedding_selection(previous_selection)
+    embedding_candidates = [
+        ("ollama", "first-embedding", openwebui.Qualification.PROTOCOL_PROBED),
+        ("ollama", "second-embedding", openwebui.Qualification.PROTOCOL_PROBED),
+    ]
+    previous_embedding = (
+        "ollama",
+        "second-embedding",
+        openwebui.Qualification.PROTOCOL_PROBED,
+    )
+    selected_forward = openwebui.select(
+        openwebui.Operation.EMBEDDING,
+        embedding_candidates,
+        previously_selected=previous_embedding,
+    )
+    selected_reverse = openwebui.select(
+        openwebui.Operation.EMBEDDING,
+        list(reversed(embedding_candidates)),
+        previously_selected=previous_embedding,
+    )
+    assert (selected_forward.provider, selected_forward.model) == (
+        selected_reverse.provider,
+        selected_reverse.model,
+    )
+    assert selected_forward.model == "second-embedding"
+
+
 def test_audio_credentials_rotation_refuses_release_and_unchanged_restores(
     monkeypatch, tmp_path
 ):

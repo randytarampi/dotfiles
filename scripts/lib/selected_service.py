@@ -259,21 +259,26 @@ def select(
             )
     preference = preference or []
     positions = {identity: index for index, identity in enumerate(preference)}
-    ranked = [(p, m, q, i) for i, (p, m, q) in enumerate(candidates) if q in _RANK]
+    ranked = [(p, m, q) for p, m, q in candidates if q in _RANK]
     if not ranked:
         return CanonicalSelection(
             operation, None, None, Qualification.UNAVAILABLE, "no qualified candidate"
         )
-    provider, model, q, _ = max(
+    provider, model, q = min(
         ranked,
         key=lambda item: (
-            _RANK[item[2]],
-            -positions.get((item[0], item[1]), len(positions)),
-            -item[3],
+            -_RANK[item[2]],
+            positions.get((item[0], item[1]), len(positions)),
+            item[0],
+            item[1],
         ),
     )
     return CanonicalSelection(
-        operation, provider, model, q, "highest qualification; caller order breaks ties"
+        operation,
+        provider,
+        model,
+        q,
+        "highest qualification; canonical identity breaks ties",
     )
 
 
