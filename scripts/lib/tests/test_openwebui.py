@@ -1,7 +1,9 @@
 import importlib.util
+import io
 import json
 import os
 import shlex
+from datetime import datetime, timedelta, timezone
 from typing import Any
 import subprocess
 from pathlib import Path
@@ -324,6 +326,7 @@ def test_audio_and_embedding_selection_survive_reversed_model_enumeration(
             "model": "second-asr",
             "qualification": "protocol_probed",
             "reason": "persisted valid binding",
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
             "transport": "direct",
             "endpoint": "http://omlx.local/v1",
             "wire_model": "second-asr",
@@ -335,6 +338,7 @@ def test_audio_and_embedding_selection_survive_reversed_model_enumeration(
                 "http://omlx.local/v1",
                 "OMLX_API_KEY",
                 "test-build",
+                credential_digest=openwebui._credential_digest("test-wire-secret"),
             ),
         }
     }
@@ -685,19 +689,21 @@ def _route_evidence_audio_fixture(monkeypatch, *, selection=None, probe_result=N
     return calls, persisted
 
 
-def _route_evidence_record(engine_build="9.9.9"):
+def _route_evidence_record(engine_build="9.9.9", recorded_at=None):
     return {
         "operation": "stt",
         "provider": "omlx",
         "model": "stt-model",
         "qualification": "protocol_probed",
         "reason": "HTTP 200",
+        "recorded_at": recorded_at or datetime.now(timezone.utc).isoformat(),
         "route_evidence": {
             "provider": "omlx",
             "model": "stt-model",
             "operation": "stt",
             "url": "http://local/v1",
             "credential_reference": "OMLX_API_KEY",
+            "credential_digest": None,
             "engine_build": engine_build,
         },
     }
@@ -754,6 +760,45 @@ def test_route_evidence_auth_failure_stays_unqualified(monkeypatch):
     assert bundle is None
     assert provenance["_unavailable"]["stt"]["qualification"] == "unavailable"
     assert "route_evidence" not in provenance["stt"]  # failed probe binds no evidence
+
+
+def test_route_evidence_rotated_credential_forces_reprobe(monkeypatch):
+    rotated = _route_evidence_record()
+    rotated["route_evidence"]["credential_digest"] = "stale-digest"
+    calls, _persisted = _route_evidence_audio_fixture(
+        monkeypatch, selection={"stt": rotated}
+    )
+    provenance = {}
+    bundle = openwebui._desired_audio_settings(
+        allow_auto_probe=True, selection_records=provenance
+    )
+    assert calls == [("http://local/v1", "stt-model")]  # rotated digest: re-probe
+    assert (
+        bundle["selection"]["stt"]["route_evidence"]["credential_digest"]
+        != "stale-digest"
+    )
+
+
+def test_route_evidence_unknown_build_never_reused(monkeypatch):
+    unknown = _route_evidence_record(engine_build=None)
+    calls, _persisted = _route_evidence_audio_fixture(
+        monkeypatch, selection={"stt": unknown}
+    )
+    openwebui._desired_audio_settings(allow_auto_probe=True, selection_records={})
+    assert calls == [
+        ("http://local/v1", "stt-model")
+    ]  # unknown build: not authoritative
+
+
+def test_route_evidence_stale_record_is_reprobed(monkeypatch):
+    stale = _route_evidence_record(
+        recorded_at=(datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    )
+    calls, _persisted = _route_evidence_audio_fixture(
+        monkeypatch, selection={"stt": stale}
+    )
+    openwebui._desired_audio_settings(allow_auto_probe=True, selection_records={})
+    assert calls == [("http://local/v1", "stt-model")]  # stale evidence: re-probe
 
 
 def test_read_only_mode_neither_probes_nor_persists(monkeypatch):

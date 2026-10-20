@@ -17,6 +17,7 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -527,15 +528,55 @@ def _route_engine_build(provider, base_url=None):
     return build
 
 
-def _route_binding(provider, model, operation, endpoint, key_reference, engine_build):
+def _route_binding(
+    provider,
+    model,
+    operation,
+    endpoint,
+    key_reference,
+    engine_build,
+    credential_digest=None,
+):
     return {
         "provider": provider,
         "model": model,
         "operation": operation.value,
         "url": endpoint,
         "credential_reference": key_reference,
+        "credential_digest": credential_digest,
         "engine_build": engine_build,
     }
+
+
+# Persisted route evidence older than this is stale: reuse never authorizes a
+# qualification without a fresh, build-known, credential-bound binding.
+_SELECTION_REUSE_MAX_AGE = timedelta(hours=24)
+
+
+def _credential_digest(key_value):
+    """Non-secret credential-generation fingerprint (16-hex prefix, or None)."""
+    if not key_value:
+        return None
+    return hashlib.sha256(key_value.encode("utf-8")).hexdigest()[:16]
+
+
+def _selection_record_fresh(record):
+    """True when the record was probed recently enough to reuse.
+
+    Missing or malformed timestamps refuse reuse (conservative legacy
+    behavior); timestamps in the future beyond a small clock-skew allowance
+    also refuse.
+    """
+    recorded = record.get("recorded_at")
+    if not recorded:
+        return False
+    try:
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(
+            str(recorded).replace("Z", "+00:00")
+        )
+    except ValueError:
+        return False
+    return -timedelta(minutes=5) <= age <= _SELECTION_REUSE_MAX_AGE
 
 
 def _qualify_candidates(
@@ -578,13 +619,29 @@ def _qualify_candidates(
     for provider, model, discovered in candidates:
         engine_endpoint = endpoint
         build = _route_engine_build(provider, engine_endpoint)
+        if key_value is None and key_reference:
+            # Direct-mode probes resolve the referenced environment value;
+            # empty strings count as absent for credential probing.
+            resolved = os.environ.get(key_reference)
+            key_value = resolved if resolved else None
+        # Non-secret credential-generation proof: reuse must survive
+        # rotations only when the digest (and everything else in the
+        # binding) is byte-identical; the value itself is never stored.
         binding = _route_binding(
-            provider, model, operation, engine_endpoint, key_reference, build
+            provider,
+            model,
+            operation,
+            engine_endpoint,
+            key_reference,
+            build,
+            credential_digest=_credential_digest(key_value),
         )
         prior = previous_by_identity.get((provider, model), {})
         evidence = prior.get("route_evidence")
         if (
             not full_probe
+            and _selection_record_fresh(prior)
+            and build is not None
             and evidence == binding
             and prior.get("qualification")
             in {
@@ -595,11 +652,6 @@ def _qualify_candidates(
             qualification = Qualification(prior["qualification"])
             reason = prior.get("reason", "persisted route evidence reused")
         elif full_probe or probe_on_missing:
-            if key_value is None and key_reference:
-                # Direct-mode probes resolve the referenced environment value;
-                # empty strings count as absent for credential probing.
-                resolved = os.environ.get(key_reference)
-                key_value = resolved if resolved else None
             result = probe(
                 engine_endpoint,
                 model,
@@ -615,6 +667,9 @@ def _qualify_candidates(
                 Qualification.CONSUMER_VERIFIED,
             }:
                 reason_record["route_evidence"] = binding
+                # Freshness proof recorded with the evidence: reuse decisions
+                # are bounded by _selection_record_fresh.
+                reason_record["recorded_at"] = datetime.now(timezone.utc).isoformat()
                 if getattr(result, "dimension", None):
                     # Embedding probes carry the served representation width;
                     # gateway transitions need it for the dimension gates.
