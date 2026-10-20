@@ -50,8 +50,15 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
             "api_key": "os.environ/OMLX_API_KEY",
         }
     assert "chat-model" in {entry["model_name"] for entry in chat_fixture}
-    # Typed modality records do not acquire qualified chat aliases.
-    assert not {f"omlx/{name}" for name in modalities} & by_name.keys()
+    # R6.10 canonical aliases: every modality carries its namespaced
+    # omlx/<exact-id> alias alongside the bare alias, which stays because the
+    # id is globally unique in this single-engine inventory.
+    for name in modalities:
+        assert by_name[f"omlx/{name}"]["litellm_params"] == {
+            "model": f"openai/{name}",
+            "api_base": "http://127.0.0.1:11427/v1",
+            "api_key": "os.environ/OMLX_API_KEY",
+        }
     names = [entry["model_name"] for entry in generated]
     assert names == sorted(names)
     assert len(names) == len(set(names))
