@@ -7,12 +7,56 @@ import subprocess
 import urllib.error
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 import litellm_config
 import model_catalogues
 from constants import OMLX_DEFAULT_PORT
+
+
+@pytest.mark.parametrize("engine_order", [("omlx", "ollama"), ("ollama", "omlx")])
+def test_modality_cross_engine_collision_emits_both_qualified_aliases(engine_order):
+    models = {
+        "omlx": [{"name": "shared-model", "model_type": "embedding"}],
+        "ollama": [{"name": "shared-model", "model_type": "reranker"}],
+    }
+    with (
+        patch.object(litellm_config, "active_engines", return_value=engine_order),
+        patch.object(
+            litellm_config, "_safe_models", side_effect=lambda engine: models[engine]
+        ),
+        patch.object(
+            litellm_config,
+            "local_endpoint_for",
+            side_effect=lambda engine, _kind: (f"http://{engine}/v1", None),
+        ),
+    ):
+        rows = litellm_config._modality_entries({})
+
+    qualified = {row["model_name"] for row in rows if row["_alias_kind"] == "qualified"}
+    assert qualified == {"ollama/shared-model", "omlx/shared-model"}
+    assert not [row for row in rows if row["model_name"] == "shared-model"]
+
+
+def test_single_engine_modality_alias_keeps_bare_and_namespaced_twins():
+    with (
+        patch.object(litellm_config, "active_engines", return_value=["omlx"]),
+        patch.object(
+            litellm_config,
+            "_safe_models",
+            return_value=[{"name": "only-model", "model_type": "embedding"}],
+        ),
+        patch.object(
+            litellm_config,
+            "local_endpoint_for",
+            return_value=("http://omlx/v1", None),
+        ),
+    ):
+        rows = litellm_config._modality_entries({})
+    assert {row["model_name"] for row in rows} == {"only-model", "omlx/only-model"}
+
 
 LIVE_CATALOGUE = litellm_config._live_catalogue
 

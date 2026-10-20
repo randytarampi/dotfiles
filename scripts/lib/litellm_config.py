@@ -23,7 +23,11 @@ from constants import (
 )
 from discover_models import list_cloud_ollama_models
 from ai_models import is_known_unqualified_tts, is_specialized_model_name
-from local_engines import active_engines, iter_engine_models, local_endpoint_for
+from local_engines import (
+    active_engines,
+    iter_engine_models,
+    local_endpoint_for,
+)
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
 from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
@@ -694,8 +698,15 @@ def _modality_endpoint_entries(provider, base_url, key_env, environ):
             continue
         name = item.get("name")
         if name and _modality_include(name, item.get("model_type")):
-            entries.append(
-                _entry(name, f"openai/{name}", api_base=base_url, key_env=key_env)
+            entries.extend(
+                [
+                    _entry(
+                        f"{provider}/{name}",
+                        f"openai/{name}",
+                        api_base=base_url,
+                        key_env=key_env,
+                    ),
+                ]
             )
     return entries
 
@@ -703,10 +714,31 @@ def _modality_endpoint_entries(provider, base_url, key_env, environ):
 def _modality_entries(environ):
     """Build exact-id aliases for discovered local non-chat models."""
     entries = []
-    for provider in active_engines():
+    for provider in sorted(active_engines()):
         endpoint = local_endpoint_for(provider, "openai")
         if endpoint is not None:
             entries.extend(_modality_endpoint_entries(provider, *endpoint, environ))
+    names = {}
+    for item in entries:
+        names.setdefault(item["model_name"].split("/", 1)[1], []).append(item)
+    for model_id, qualified in sorted(names.items()):
+        if len(qualified) == 1:
+            item = qualified[0]
+            provider = item["model_name"].split("/", 1)[0]
+            entries.append(
+                _entry(
+                    model_id,
+                    item["litellm_params"]["model"],
+                    api_base=item["litellm_params"].get("api_base"),
+                    key_env=(
+                        item["litellm_params"]
+                        .get("api_key", "")
+                        .removeprefix("os.environ/")
+                        or None
+                    ),
+                    alias_kind="bare",
+                )
+            )
     return entries
 
 
@@ -842,7 +874,9 @@ def compute_model_list(environ=None, previous_entries=None):
     }
     # Keep modality discovery separate: these rows must never enter chat candidates.
     modality_entries = _modality_entries(environ)
-    modality_names = {item["model_name"] for item in modality_entries}
+    modality_names = {
+        item["model_name"] for item in modality_entries if item["_alias_kind"] == "bare"
+    }
     # Catalogue scope gate: free (default) emits only curated selections plus
     # OpenRouter's genuinely-free tier; full restores the whole enumerated
     # catalogue. Unknown values are a hard configuration error.
