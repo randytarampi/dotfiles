@@ -651,6 +651,14 @@ def _qualify_candidates(
         ):
             qualification = Qualification(prior["qualification"])
             reason = prior.get("reason", "persisted route evidence reused")
+            # Reused evidence keeps its record minus the reason override: the
+            # locator's select-reason stays authoritative for the consumer, and
+            # the measured width + fresh binding ride through for enforcement.
+            reasons[(provider, model)] = {
+                "route_evidence": evidence,
+                "recorded_at": prior.get("recorded_at"),
+                "output_dims": prior.get("output_dims"),
+            }
         elif full_probe or probe_on_missing:
             result = probe(
                 engine_endpoint,
@@ -1092,6 +1100,10 @@ def _desired_embedding_settings(
             "RAG_EMBEDDING_ENGINE": "openai",
             "RAG_EMBEDDING_MODEL": rendered["wire_model"],
             "openai_config": {"url": rendered["endpoint"]},
+            # MEASURED served width (planning evidence, never an assumed
+            # constant); the reconciler enforces it and the WebUI payload
+            # construction strips it.
+            "_served_dims": evidence_record.get("output_dims"),
             SELECTION_PROVENANCE_KEY: provenance,
         }
     previous_state = _read_embedding_state()
@@ -1986,7 +1998,11 @@ def _embedding_candidate(prewrite, target_url=None):
         )
         if key in prewrite
     }
-    candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+    candidate["ollama_config"] = copy.deepcopy(
+        prewrite.get("ollama_config")
+        if isinstance(prewrite.get("ollama_config"), dict)
+        else {}
+    )
     candidate["ollama_config"]["url"] = _ollama_native_base(
         target_url or EMBEDDING_OLLAMA_URL
     )
@@ -2413,6 +2429,25 @@ def _reconcile_embedding_gateway(client, state, current, wanted, logger):
             "is unresolved"
         )
         return {"status": "refused", "applied": False, "verified": False}
+    served_dims = wanted.get("_served_dims")
+    if served_dims != EMBEDDING_OUTPUT_DIMS:
+        # Alias membership does not establish the vector representation: the
+        # MEASURED served width from the planning probe is what binds.
+        logger.error(
+            "Refusing Open WebUI gateway embedding; served width %s does not "
+            "match the managed representation width %s",
+            served_dims,
+            EMBEDDING_OUTPUT_DIMS,
+        )
+        return {"status": "refused", "applied": False, "verified": False}
+    if (
+        recorded_engine == "openai"
+        and (prewrite.get("openai_config") or {}).get("key") == key_value
+    ):
+        # Already-managed gateway route with a matching effective
+        # configuration: no-op. Repeated applies and key refreshes must never
+        # rewrite the original restoration baseline.
+        return {"status": "noop", "applied": False, "verified": False}
     candidate = {
         key: prewrite[key]
         for key in (
@@ -2429,6 +2464,11 @@ def _reconcile_embedding_gateway(client, state, current, wanted, logger):
             "openai_config": {"url": route_url, "key": key_value},
         }
     )
+    if isinstance(prewrite.get("ollama_config"), dict):
+        # Explicitly preserve the native restoration data: the Ollama section
+        # passes through so replacement-style server stores keep it and the
+        # reverse transition's prewrite checks stay truthful.
+        candidate["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
     client.update_embedding_config(candidate)
     try:
         _verify_embedding_readback(client, candidate)
@@ -2443,6 +2483,22 @@ def _reconcile_embedding_gateway(client, state, current, wanted, logger):
         else None
     )
     parity_evidence = _embedding_parity_evidence(client, candidate)
+    if recorded_engine == "openai":
+        # Rotation/refresh re-apply: carry the ORIGINAL restoration baseline
+        # verbatim — the pre-switch identity, its width and the preserved
+        # Ollama route are never rewritten by repeated gateway applies.
+        carry = projection or {}
+        baseline_identity = carry.get("previous")
+        baseline_dims = carry.get("previous_output_dims")
+        preserved_ollama_url = (carry.get("ollama_config") or {}).get("url")
+    else:
+        baseline_identity = identity
+        baseline_dims = (
+            recorded_dims
+            if recorded_dims is not None
+            else (384 if _embedding_identity(EMBEDDING_DEFAULTS) == identity else None)
+        )
+        preserved_ollama_url = (prewrite.get("ollama_config") or {}).get("url")
     _write_embedding_state(
         {
             "projection": {
@@ -2450,21 +2506,11 @@ def _reconcile_embedding_gateway(client, state, current, wanted, logger):
                     "RAG_EMBEDDING_ENGINE": "openai",
                     "RAG_EMBEDDING_MODEL": alias,
                 },
-                "previous": identity,
-                "previous_output_dims": (
-                    recorded_dims
-                    if recorded_dims is not None
-                    else (
-                        384
-                        if _embedding_identity(EMBEDDING_DEFAULTS) == identity
-                        else None
-                    )
-                ),
+                "previous": baseline_identity,
+                "previous_output_dims": baseline_dims,
                 "output_dims": EMBEDDING_OUTPUT_DIMS,
-                "previous_ollama_url": (prewrite.get("ollama_config") or {}).get("url"),
-                "ollama_config": {
-                    "url": (prewrite.get("ollama_config") or {}).get("url")
-                },
+                "previous_ollama_url": preserved_ollama_url,
+                "ollama_config": {"url": preserved_ollama_url},
                 "route": {
                     "engine": "openai",
                     "url": route_url,
@@ -2572,7 +2618,11 @@ def _embedding_restore(prewrite, projection):
         )
         if key in prewrite
     }
-    restored["ollama_config"] = copy.deepcopy(prewrite["ollama_config"])
+    restored["ollama_config"] = copy.deepcopy(
+        prewrite.get("ollama_config")
+        if isinstance(prewrite.get("ollama_config"), dict)
+        else {}
+    )
     for section in ("openai_config", "azure_openai_config"):
         if section in prewrite:
             restored[section] = copy.deepcopy(prewrite[section])
@@ -2631,8 +2681,13 @@ def _reconcile_embedding_gate_off(client, state, projection, logger):
 def _reconcile_embedding(client, current, wanted):
     import logger
 
-    if not isinstance(current, dict) or not isinstance(
-        current.get("ollama_config"), dict
+    if not isinstance(current, dict) or (
+        # Replacement-style gateway snapshots may omit the native Ollama
+        # section entirely once the openai engine is active; the guard accepts
+        # either engine's section and the engine-specific paths validate the
+        # rest.
+        not isinstance(current.get("ollama_config"), dict)
+        and not isinstance(current.get("openai_config"), dict)
     ):
         raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
     state = _read_embedding_state()
@@ -3477,6 +3532,7 @@ def reconcile_via_api(client, desired):
     if embedding_planned:
         actions["planned"].append("embedding")
     try:
+        audio_result = None
         if hasattr(client, "get_audio_config"):
             audio_selection = desired.get("audio_selection")
             if audio_wanted is None and audio_status in {
@@ -3517,10 +3573,16 @@ def reconcile_via_api(client, desired):
                     actions["applied"].append("audio-release")
                     actions["verified"].append("audio-release")
             if audio_selection:
-                if "_unavailable" in audio_selection:
-                    _persist_audio_selection(audio_selection["_unavailable"])
-                else:
-                    _persist_audio_selection(audio_selection)
+                record = audio_selection.get("_unavailable", audio_selection)
+                if (
+                    "_unavailable" in audio_selection
+                    or record.get("qualification") in {"unavailable", "unknown"}
+                    or (audio_result is not None and audio_result.get("applied"))
+                ):
+                    # Unavailable/unknown markers and verified applies persist;
+                    # refused/unresolved qualified decisions never replace
+                    # reusable successful evidence.
+                    _persist_audio_selection(record)
     except OpenWebUIError as error:
         actions["failed"].append("audio")
         outcome = getattr(error, "outcome", None)
@@ -3559,9 +3621,16 @@ def reconcile_via_api(client, desired):
                 if embedding_result.get("verified"):
                     actions["verified"].append("embedding")
             if embedding_selection:
-                _persist_embedding_selection(
-                    embedding_selection.get("_unavailable", embedding_selection)
-                )
+                record = embedding_selection.get("_unavailable", embedding_selection)
+                if (
+                    "_unavailable" in embedding_selection
+                    or record.get("qualification") in {"unavailable", "unknown"}
+                    or embedding_result.get("applied")
+                ):
+                    # Unavailable/unknown markers and verified applies persist;
+                    # refused/unresolved qualified decisions never replace
+                    # reusable successful evidence.
+                    _persist_embedding_selection(record)
             if embedding_result.get("released"):
                 actions["applied"].append("embedding-release")
                 actions["verified"].append("embedding-release")

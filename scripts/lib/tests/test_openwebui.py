@@ -1617,6 +1617,7 @@ def _gateway_wanted():
         "RAG_EMBEDDING_ENGINE": "openai",
         "RAG_EMBEDDING_MODEL": f"ollama/{openwebui.EMBEDDING_MODEL}",
         "openai_config": {"url": "http://127.0.0.1:4000/v1"},
+        "_served_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
     }
 
 
@@ -1849,6 +1850,130 @@ def test_gateway_embedding_alias_unresolved_is_unavailable(monkeypatch):
     record = desired["embedding_selection"]
     assert record["qualification"] == "unavailable"
     assert record["reason"] == "no verified proxy model mapping"
+
+
+def test_gateway_embedding_repeat_apply_is_noop_and_reverse_restores(
+    monkeypatch, tmp_path
+):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    state = openwebui._read_embedding_state()
+    state["acknowledgement"] = _gateway_ack()
+    openwebui._write_embedding_state(state)
+    client = _gateway_test_client()  # replacement-style: update stores wholesale
+
+    # Pass 1: the acknowledged switch installs the gateway route.
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+    assert client.writes == 1
+    assert report["verified"] == ["embedding"]
+    baseline = openwebui._read_embedding_state()["projection"]
+    original_previous = baseline["previous"]
+    assert original_previous["engine"] == "ollama"
+
+    # Pass 2: the identical apply is a no-op on the same client instance; the
+    # original restoration baseline is never rewritten.
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+    assert client.writes == 1
+    assert report["applied"] == []
+    assert report["verified"] == []
+    after = openwebui._read_embedding_state()["projection"]
+    assert after["previous"] == original_previous
+    assert after["previous_output_dims"] == baseline["previous_output_dims"]
+
+    # Reverse transition back to the managed Ollama route (new_engine absent
+    # in the legacy reverse ack; dims unchanged, so it authorizes).
+    reverse_state = openwebui._read_embedding_state()
+    reverse_state["acknowledgement"] = {
+        "previous_engine": "openai",
+        "previous_model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "new_model": openwebui.EMBEDDING_MODEL,
+        "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "acknowledged_at": "2026-10-20T08:30:00Z",
+    }
+    openwebui._write_embedding_state(reverse_state)
+    reverse_wanted = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        },
+    }
+    report = openwebui.reconcile_via_api(client, reverse_wanted).actions
+    assert client.writes == 2
+    assert report["verified"] == ["embedding"]
+    restored = openwebui._read_embedding_state()["projection"]
+    assert restored["owned"]["RAG_EMBEDDING_ENGINE"] == "ollama"
+    assert restored["previous"]["engine"] == "openai"
+
+
+def test_gateway_embedding_served_width_mismatch_refused_before_post(
+    monkeypatch, tmp_path
+):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    state = openwebui._read_embedding_state()
+    state["acknowledgement"] = _gateway_ack()
+    openwebui._write_embedding_state(state)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    client = _gateway_test_client()
+    wanted = _gateway_wanted()
+    wanted["_served_dims"] = 384
+    report = openwebui.reconcile_via_api(
+        client, {"openai": [], "anthropic": [], "ollama": [], "embedding": wanted}
+    ).actions
+    assert client.writes == 0
+    assert report["failed"] == ["embedding"]
+    assert (
+        openwebui._read_embedding_state()["projection"]["owned"]["RAG_EMBEDDING_ENGINE"]
+        == "ollama"
+    )
+
+
+def test_gateway_selection_record_persists_only_after_apply(monkeypatch, tmp_path):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    persisted = []
+    monkeypatch.setattr(
+        openwebui,
+        "_persist_embedding_selection",
+        lambda record: persisted.append(record),
+    )
+    record = {
+        "operation": "embedding",
+        "provider": "gateway",
+        "model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "qualification": "protocol_probed",
+        "reason": "HTTP 200 numeric embedding vector",
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "transport": "gateway",
+        "endpoint": "http://127.0.0.1:4000/v1",
+        "wire_model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "key_reference": openwebui.LITELLM_OPENWEBUI_KEY_PATH,
+        "route_evidence": {
+            "provider": "gateway",
+            "model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+            "operation": "embedding",
+            "url": "http://127.0.0.1:4000/v1",
+            "credential_reference": openwebui.LITELLM_OPENWEBUI_KEY_PATH,
+            "credential_digest": openwebui._credential_digest("sentinel-scoped-key"),
+            "engine_build": None,
+        },
+        "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+    }
+    client = _gateway_test_client()
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": _gateway_wanted(),
+        "embedding_selection": record,
+    }
+    report = openwebui.reconcile_via_api(client, desired).actions
+    assert report["failed"] == ["embedding"]  # no acknowledgement: refused
+    assert client.writes == 0
+    assert persisted == []  # the unresolved decision never replaces evidence
 
 
 def test_embedding_adoption_migration_guard_and_acknowledged_switch(
