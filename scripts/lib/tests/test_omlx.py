@@ -1295,6 +1295,81 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
     assert slim_path.read_bytes() == b"slim sentinel\n"
 
 
+def test_opencode_main_slim_write_failure_restores_prior_pair(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    script = _load_script("configure_opencode_pair_recovery", "configure-opencode.py")
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    opencode_path = config_dir / "opencode.json"
+    slim_path = config_dir / "oh-my-opencode-slim.json"
+    opencode_path.write_bytes(b"opencode sentinel\n")
+    slim_path.write_bytes(b"slim sentinel\n")
+    scripts = tmp_path / "scripts"
+    (tmp_path / "configs/opencode").mkdir(parents=True)
+    (tmp_path / "configs/opencode/oh-my-opencode-slim.json").write_text("{}")
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(scripts))
+    lock = home / ".cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(f"source_root={Path(__file__).resolve().parents[3]}\n")
+    for name, value in {
+        "load_env": lambda *args: False,
+        "list_local_ollama_models": lambda: [],
+        "fetch_models_dev": lambda: {},
+        "build_opencode_server_config": lambda: None,
+        "active_plugin_specs": lambda: ["@plannotator/opencode@test"],
+        "plugin_specs": lambda: ["plugin-a"],
+        "get_preset_providers": lambda *args: set(),
+        "get_litellm_proxy_mode": lambda: False,
+        "apply_litellm_client_gate": lambda config: None,
+        "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
+        "prepare_tier_candidate": lambda config_dir, args, consumer: (
+            '{"model": "stub-slim-target"}'
+        ),
+    }.items():
+        monkeypatch.setattr(script, name, value)
+    monkeypatch.setattr(
+        script.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unexpected subprocess")
+        ),
+    )
+    real_write = script.write_private_atomic
+    write_names = []
+
+    def failing_opencode_write(path, payload):
+        if Path(path).name == "opencode.json":
+            write_names.append("opencode-FAIL")
+            raise OSError("simulated opencode failure")
+        write_names.append("slim-ok")
+        return real_write(path, payload)
+
+    monkeypatch.setattr(script, "write_private_atomic", failing_opencode_write)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--preset",
+            "pro-plus",
+            "--skip",
+            "mcps,acp-agents,voice,dcp",
+        ],
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    script.main = script.main.__wrapped__
+    with pytest.raises(SystemExit):
+        script.main()
+    assert write_names == ["slim-ok", "opencode-FAIL", "slim-ok"]
+    # The PRIOR slim generation is restored with its private mode; the pair
+    # is never left mixed.
+    assert slim_path.read_bytes() == b"slim sentinel\n"
+    assert stat.S_IMODE(slim_path.stat().st_mode) == 0o600
+    assert opencode_path.read_bytes() == b"opencode sentinel\n"
+
+
 def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
     tmp_path, monkeypatch
 ):

@@ -1277,29 +1277,45 @@ def main():
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
         sys.exit(1)
 
-    if args.dry_run:
-        logger.info(f"[dry-run] Would write opencode.json to {output_path}")
-    else:
-        try:
-            write_private_atomic(output_path, opencode_candidate)
-            logger.info("opencode.json written")
-        except Exception as e:
-            logger.critical(f"Failed to write opencode.json: {e}")
-            sys.exit(1)
-
+    prior_pair = {}
+    slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
     if args.dry_run:
         logger.info(
             f"[dry-run] Would write routed oh-my-opencode-slim.json to {config_dir_path}"
         )
+        logger.info(f"[dry-run] Would write opencode.json to {output_path}")
     else:
+        # R6.4 pair recovery: snapshot BOTH prior generations first, install
+        # in the production order (Slim, then opencode.json), and restore the
+        # prior first-installed generation (or remove the fresh orphan) when
+        # a later installation fails — never leave a mixed pair.
+        for target_path in (slim_output_path, output_path):
+            try:
+                with open(target_path, "r", encoding="utf-8") as _prior_handle:
+                    prior_pair[target_path] = _prior_handle.read()
+            except (FileNotFoundError, UnicodeDecodeError):
+                prior_pair[target_path] = None
         try:
             write_private_atomic(
-                os.path.join(config_dir_path, "oh-my-opencode-slim.json"),
+                slim_output_path,
                 tier_candidate if tier_candidate is not None else slim_candidate,
             )
             logger.info("oh-my-opencode-slim.json written (base config)")
         except Exception as e:
-            logger.critical(f"Failed to copy oh-my-opencode-slim.json: {e}")
+            logger.critical(f"Failed to write oh-my-opencode-slim.json: {e}")
+            sys.exit(1)
+        try:
+            write_private_atomic(output_path, opencode_candidate)
+            logger.info("opencode.json written")
+        except Exception as e:
+            if prior_pair[slim_output_path] is not None:
+                write_private_atomic(slim_output_path, prior_pair[slim_output_path])
+            elif os.path.exists(slim_output_path):
+                os.remove(slim_output_path)
+            logger.critical(
+                f"Failed to write opencode.json: {e}; restored the prior "
+                "oh-my-opencode-slim.json generation"
+            )
             sys.exit(1)
 
     vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
