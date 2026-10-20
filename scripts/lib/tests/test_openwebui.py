@@ -294,6 +294,105 @@ def test_selection_precedence_and_order_independence():
     )
 
 
+def test_audio_credentials_rotation_refuses_release_and_unchanged_restores(
+    monkeypatch, tmp_path
+):
+    state_path = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state_path))
+    monkeypatch.setenv("OMLX_API_KEY", "baseline-env-secret")
+    current = {
+        "stt": {
+            "ENGINE": "",
+            "MODEL": "",
+            "OPENAI_API_BASE_URL": "https://api.openai.com/v1",
+            "OPENAI_API_REQUEST_FORMAT": "multipart",
+            "OPENAI_API_KEY": "baseline-env-secret",
+        }
+    }
+    desired = {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "audio": {
+            "stt": {
+                "ENGINE": "openai",
+                "MODEL": "asr",
+                "OPENAI_API_BASE_URL": "http://omlx/v1",
+                "OPENAI_API_REQUEST_FORMAT": "multipart",
+                "OPENAI_API_KEY": "managed-secret",
+            }
+        },
+    }
+
+    class Client(_AudioClient):
+        def get_openai_config(self):
+            return {"connections": []}
+
+        def get_ollama_config(self):
+            return {"connections": []}
+
+    client = Client(current)
+    monkeypatch.setattr(
+        openwebui,
+        "reconcile",
+        lambda *_: openwebui.ReconcileResult(openwebui.ReconcilePlan(), snapshots={}),
+    )
+    openwebui.reconcile_via_api(client, desired)
+    marker_path = state_path.with_name(state_path.name + ".credentials")
+    marker = json.loads(marker_path.read_text())
+    assert marker["stt"]["restoration"] == "env:OMLX_API_KEY"
+    assert (
+        marker["stt"]["baseline_sha256"]
+        == openwebui.hashlib.sha256(b"baseline-env-secret").hexdigest()
+    )
+    assert "baseline-env-secret" not in marker_path.read_text()
+    assert "managed-secret" not in marker_path.read_text()
+
+    monkeypatch.setenv("OMLX_API_KEY", "rotated-env-secret")
+    rotated = Client(client.audio)
+    result = openwebui.reconcile_via_api(
+        rotated, {"openai": [], "anthropic": [], "ollama": []}
+    )
+    assert result.actions["failed"] == ["audio"]
+    assert result.actions["applied"] == []
+    assert result.actions["verified"] == []
+    assert rotated.audio["stt"]["OPENAI_API_KEY"] == "managed-secret"
+    assert json.loads(state_path.read_text())["projection"] is not None
+    assert marker_path.exists()
+
+    monkeypatch.setenv("OMLX_API_KEY", "baseline-env-secret")
+    unchanged = Client(client.audio)
+    released = openwebui.reconcile_via_api(
+        unchanged, {"openai": [], "anthropic": [], "ollama": []}
+    )
+    assert "audio-release" in released.actions["verified"]
+    assert released.actions["failed"] == []
+    assert unchanged.audio["stt"]["OPENAI_API_KEY"] == "baseline-env-secret"
+    assert not state_path.exists()
+    assert not marker_path.exists()
+
+
+def test_audio_credential_marker_never_stores_baseline_or_managed_values(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(path))
+    monkeypatch.setenv("OMLX_API_KEY", "sentinel-baseline-value")
+    client = _AudioClient(
+        {"stt": {"OPENAI_API_KEY": "sentinel-baseline-value", "MODEL": ""}}
+    )
+    openwebui._reconcile_audio(
+        client,
+        client.audio,
+        {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "sentinel-managed-value"}},
+    )
+    marker_text = (tmp_path / "managed-audio.json.credentials").read_text()
+    assert '"restoration": "env:OMLX_API_KEY"' in marker_text
+    assert "baseline_sha256" in marker_text
+    assert "sentinel-baseline-value" not in marker_text
+    assert "sentinel-managed-value" not in marker_text
+
+
 def test_real_adapter_discovered_audio_is_unavailable_and_preserved(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])

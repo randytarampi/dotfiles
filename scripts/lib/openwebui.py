@@ -11,6 +11,7 @@ the native collection and is not duplicated in OpenAI connections.
 """
 
 import copy
+import hashlib
 import json
 import os
 import urllib.error
@@ -1321,10 +1322,16 @@ def _audio_credential_expectations(transitions):
         if restoration == "empty":
             expected[(section, "OPENAI_API_KEY")] = ("empty", "")
         elif restoration.startswith("env:"):
-            expected[(section, "OPENAI_API_KEY")] = (
-                "env",
-                os.environ.get(restoration[4:]),
-            )
+            current = os.environ.get(restoration[4:])
+            proof = marker.get("baseline_sha256")
+            if (
+                not current
+                or not proof
+                or hashlib.sha256(current.encode()).hexdigest() != proof
+            ):
+                expected[(section, "OPENAI_API_KEY")] = ("unprovable", None)
+            else:
+                expected[(section, "OPENAI_API_KEY")] = ("env", current)
         else:
             expected[(section, "OPENAI_API_KEY")] = ("unprovable", None)
     return expected
@@ -1511,16 +1518,36 @@ def _reconcile_audio(client, current, wanted):
         }
     )
     if released_credentials and any(
-        kind == "unprovable" or value is None
-        for kind, value in credential_expectations.values()
+        marker.get("restoration", "unprovable").startswith("env:")
+        and _audio_credential_expectations({section: marker}).get(
+            (section, "OPENAI_API_KEY"), ("unprovable", None)
+        )[0]
+        == "unprovable"
+        for section, marker in credential_transitions.items()
+        if (section, "OPENAI_API_KEY") in released_credentials
     ):
         logger.error(
-            "Cannot safely restore released audio credential; restore the prior credential manually, then remove managed-audio.json and its credentials marker"
+            "Cannot safely restore released audio credential: environment baseline changed; restore the previous credential manually."
         )
         return {
             "status": "refused",
             "applied": False,
             "verified": False,
+            "failed": ["audio-credential-restore"],
+            "released": [],
+        }
+    if released_credentials and any(
+        kind == "unprovable" or value is None
+        for kind, value in credential_expectations.values()
+    ):
+        logger.error(
+            "Cannot safely restore released audio credential: baseline reference changed or is unverifiable. Restore the prior credential manually; managed ownership is retained."
+        )
+        return {
+            "status": "refused",
+            "applied": False,
+            "verified": False,
+            "failed": ["audio-credential-restore"],
             "released": [],
         }
     if released_credentials and projection is None:
@@ -1531,6 +1558,7 @@ def _reconcile_audio(client, current, wanted):
             "status": "refused",
             "applied": False,
             "verified": False,
+            "failed": ["audio-credential-restore"],
             "released": [],
         }
     wanted_credentials = {
@@ -1577,6 +1605,11 @@ def _reconcile_audio(client, current, wanted):
         credential_transitions[section] = {
             "field": key,
             "restoration": restoration,
+            **(
+                {"baseline_sha256": hashlib.sha256(prior.encode()).hexdigest()}
+                if referenced_env and prior
+                else {}
+            ),
         }
     if projection is not None:
         projection.setdefault("credentials", {}).update(credential_transitions)
