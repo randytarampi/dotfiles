@@ -756,7 +756,9 @@ def main():
             logger.error("Catalogue reconciliation failed: %s", error)
             return 1
 
-    desired = compute_desired_state(probe_routes=args.probe_routes)
+    desired = compute_desired_state(
+        probe_routes=args.probe_routes, allow_auto_probe=bool(args.reconcile)
+    )
     base_url = f"http://127.0.0.1:{os.environ.get('OPENWEBUI_PORT', '8080')}"
     if not (args.reconcile or args.check):
         args.reconcile = True

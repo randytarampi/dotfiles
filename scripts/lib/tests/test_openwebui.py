@@ -455,6 +455,132 @@ def test_embedding_probe_failure_does_not_claim_success(monkeypatch, status):
     assert status in proposed["_unavailable"]["reason"]
 
 
+def _route_evidence_audio_fixture(monkeypatch, *, selection=None, probe_result=None):
+    """Healthy fake oMLX host with scripted route probes and record writes."""
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "stt-model", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *a, **k: "9.9.9")
+    persisted = {}
+    monkeypatch.setattr(
+        openwebui, "_persist_audio_selection", lambda record: persisted.update(record)
+    )
+    if selection is None:
+        monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    else:
+        monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: selection)
+    calls = []
+
+    def probe(endpoint, model, key_reference, key_value=None, **kwargs):
+        calls.append((endpoint, model))
+        if probe_result is None:
+            return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+        return probe_result
+
+    monkeypatch.setattr(route_probes, "probe_stt", probe)
+    return calls, persisted
+
+
+def _route_evidence_record(engine_build="9.9.9"):
+    return {
+        "operation": "stt",
+        "provider": "omlx",
+        "model": "stt-model",
+        "qualification": "protocol_probed",
+        "reason": "HTTP 200",
+        "route_evidence": {
+            "provider": "omlx",
+            "model": "stt-model",
+            "operation": "stt",
+            "url": "http://local/v1",
+            "credential_reference": "OMLX_API_KEY",
+            "engine_build": engine_build,
+        },
+    }
+
+
+def test_route_evidence_probed_when_missing_on_healthy_apply(monkeypatch):
+    calls, persisted = _route_evidence_audio_fixture(monkeypatch)
+    provenance = {}
+    bundle = openwebui._desired_audio_settings(
+        allow_auto_probe=True, selection_records=provenance
+    )
+    assert calls == [("http://local/v1", "stt-model")]
+    assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
+    assert bundle["selection"]["stt"]["route_evidence"] == (
+        _route_evidence_record()["route_evidence"]
+    )
+    assert persisted == {}  # provenance is proposed; persistence happens at apply
+
+
+def test_route_evidence_reused_without_probing_when_binding_matches(monkeypatch):
+    calls, _persisted = _route_evidence_audio_fixture(
+        monkeypatch, selection={"stt": _route_evidence_record()}
+    )
+    bundle = openwebui._desired_audio_settings()
+    assert calls == []  # valid persisted binding: no probe on the reused route
+    assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
+    assert (
+        bundle["selection"]["stt"]["reason"] == "previous selection remains qualified"
+    )
+
+
+def test_route_evidence_reprobes_once_when_binding_changes(monkeypatch):
+    calls, _persisted = _route_evidence_audio_fixture(
+        monkeypatch, selection={"stt": _route_evidence_record(engine_build="0.0.1")}
+    )
+    provenance = {}
+    bundle = openwebui._desired_audio_settings(
+        allow_auto_probe=True, selection_records=provenance
+    )
+    assert calls == [("http://local/v1", "stt-model")]  # exactly one re-probe
+    assert bundle["selection"]["stt"]["route_evidence"]["engine_build"] == "9.9.9"
+
+
+def test_route_evidence_auth_failure_stays_unqualified(monkeypatch):
+    failure = type(
+        "Result", (), {"status": "unauthorized", "notes": ("unauthorized",)}
+    )()
+    calls, _persisted = _route_evidence_audio_fixture(monkeypatch, probe_result=failure)
+    provenance = {}
+    bundle = openwebui._desired_audio_settings(
+        allow_auto_probe=True, selection_records=provenance
+    )
+    assert calls == [("http://local/v1", "stt-model")]
+    assert bundle is None
+    assert provenance["_unavailable"]["stt"]["qualification"] == "unavailable"
+    assert "route_evidence" not in provenance["stt"]  # failed probe binds no evidence
+
+
+def test_read_only_mode_neither_probes_nor_persists(monkeypatch):
+    calls, persisted = _route_evidence_audio_fixture(monkeypatch)
+    provenance = {}
+    bundle = openwebui._desired_audio_settings(selection_records=provenance)
+    assert calls == []  # no network side effects in read-only mode
+    assert persisted == {}
+    assert bundle is None  # honest not-yet-probed state, never advertised as probed
+    assert provenance["_unavailable"]["stt"]["candidate_qualification"] == "discovered"
+
+
+def test_webui_template_fails_deploy_when_reconciler_fails():
+    template_path = (
+        Path(openwebui.__file__).resolve().parents[2]
+        / ".chezmoiscripts/run_onchange_30-openwebui.sh.tmpl"
+    )
+    template = template_path.read_text()
+    assert template.count('|| die "Open WebUI reconciliation failed"') == 2
+    assert '|| warn "OpenWebUI reconciliation failed"' not in template
+
+
 def test_ollama_native_base_derivation_and_rendered_field(monkeypatch):
     # Route/probe facts keep the OpenAI-compatible endpoint.
     assert openwebui.EMBEDDING_OLLAMA_URL.endswith("/v1")

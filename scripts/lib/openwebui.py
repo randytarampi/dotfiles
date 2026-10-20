@@ -286,7 +286,7 @@ def ownership_catalogue(proxy_mode=None):
     return catalogue
 
 
-def compute_desired_state(probe_routes=False):
+def compute_desired_state(probe_routes=False, allow_auto_probe=False):
     """Build desired entries; inactive/keyless providers remain ownership-known."""
     desired: dict[str, Any] = {"openai": [], "anthropic": [], "ollama": []}
     discovery = iter_engine_discovery("omlx")
@@ -384,7 +384,9 @@ def compute_desired_state(probe_routes=False):
         }
     audio_selection = {}
     audio = _desired_audio_settings(
-        probe_routes=probe_routes, selection_records=audio_selection
+        probe_routes=probe_routes,
+        allow_auto_probe=allow_auto_probe,
+        selection_records=audio_selection,
     )
     explicitly_disabled = (
         os.environ.get("DOTFILES_RUN_OMLX_SETUP") == "0" or "omlx" in disabled
@@ -416,7 +418,9 @@ def compute_desired_state(probe_routes=False):
         desired["audio_selection"] = audio["selection"]
     if audio_selection:
         if "_unavailable" in audio_selection:
-            desired["audio_selection"] = audio_selection["_unavailable"]
+            unavailable = audio_selection["_unavailable"]
+            unavailable.update(audio_selection.get("_evidence", {}))
+            desired["audio_selection"] = unavailable
         else:
             desired["audio_selection"] = audio_selection
     if audio is None and not explicitly_disabled and discovery.status == "ok_models":
@@ -431,27 +435,169 @@ def compute_desired_state(probe_routes=False):
         desired["embedding_selection"] = selection
         embedding_selection = selection
     elif embedding_selection:
-        desired["embedding_selection"] = embedding_selection.get(
-            "_unavailable", embedding_selection
-        )
+        unavailable = embedding_selection.get("_unavailable", embedding_selection)
+        unavailable.update(embedding_selection.get("_evidence", {}))
+        desired["embedding_selection"] = unavailable
     if embedding is None:
         desired["embedding_status"] = "unavailable"
     return desired
 
 
-def _probe_qualification(probe, endpoint, model, key_reference, **kwargs):
+_ROUTE_BUILD_CACHE = {}
+
+
+def _route_engine_build(provider, base_url=None):
+    """Return an authoritative running/local engine version, cached per run.
+
+    The build is a property of the daemon/install for the whole provider, so
+    provider-only caching is deliberate (endpoint independence); endpoint is
+    bound separately in the route-evidence record.
+
+    oMLX has no stable version endpoint. Its installed package version is the
+    available build identity; an in-place upgrade before restart may differ
+    from the still-running process, so endpoint changes remain independently
+    bound.
+    """
+    if provider in _ROUTE_BUILD_CACHE:
+        return _ROUTE_BUILD_CACHE[provider]
+    build = None
+    if provider == "ollama":
+        try:
+            version_url = (base_url or constants.get_ollama_local_base_url()).rstrip(
+                "/"
+            )
+            root = version_url[:-3] if version_url.endswith("/v1") else version_url
+            if not root.startswith(("http://", "https://")):
+                build = None
+            else:
+                from urllib.request import Request, urlopen
+
+                request = Request(f"{root}/api/version", method="GET")
+                with urlopen(
+                    request, timeout=3
+                ) as response:  # nosec B310 - scheme-checked above
+                    payload = json.loads(response.read().decode("utf-8"))
+                build = payload.get("version") if isinstance(payload, dict) else None
+        except Exception:
+            build = None
+    elif provider == "omlx":
+        import subprocess
+
+        try:
+            completed = subprocess.run(
+                ["brew", "list", "--versions", "omlx"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            fields = completed.stdout.strip().split()
+            build = fields[-1] if len(fields) >= 2 else None
+        except (OSError, subprocess.SubprocessError):
+            build = None
+    _ROUTE_BUILD_CACHE[provider] = build
+    return build
+
+
+def _route_binding(provider, model, operation, endpoint, key_reference, engine_build):
+    return {
+        "provider": provider,
+        "model": model,
+        "operation": operation.value,
+        "url": endpoint,
+        "credential_reference": key_reference,
+        "engine_build": engine_build,
+    }
+
+
+def _qualify_candidates(
+    candidates,
+    operation,
+    endpoint,
+    key_reference,
+    probe,
+    *,
+    full_probe=False,
+    probe_on_missing=False,
+    key_value=None,
+    **probe_options,
+):
+    """Reuse exact route-bound evidence; probe selected stale/missing routes.
+
+    ``full_probe`` is the explicit --probe-routes opt-in (probe every
+    candidate). ``probe_on_missing`` is the healthy-apply auto-probe: probe a
+    candidate only when it lacks valid persisted route evidence. With both
+    false (read-only modes), a missing/stale binding keeps the candidate's
+    discovered qualification and records that it was not probed in this mode.
+    """
     from route_probes import qualification_from_probe
 
-    key_value = kwargs.pop(
-        "key_value", os.environ.get(key_reference, "") if key_reference else None
-    )
-    result = probe(
-        endpoint, model, key_reference=key_reference, key_value=key_value, **kwargs
-    )
-    return qualification_from_probe(result), "; ".join(result.notes) or result.status
+    saved = _read_audio_selection() or {}
+    active = _read_embedding_state().get("selection") or {}
+    previous_by_identity = {}
+    if isinstance(saved, dict):
+        previous_by_identity.update(
+            {
+                (entry.get("provider"), entry.get("model")): entry
+                for entry in saved.values()
+                if isinstance(entry, dict)
+            }
+        )
+    if isinstance(active, dict) and active.get("operation"):
+        previous_by_identity[(active.get("provider"), active.get("model"))] = active
+
+    qualified, reasons = [], {}
+    for provider, model, discovered in candidates:
+        engine_endpoint = endpoint
+        build = _route_engine_build(provider, engine_endpoint)
+        binding = _route_binding(
+            provider, model, operation, engine_endpoint, key_reference, build
+        )
+        prior = previous_by_identity.get((provider, model), {})
+        evidence = prior.get("route_evidence")
+        if (
+            not full_probe
+            and evidence == binding
+            and prior.get("qualification")
+            in {
+                Qualification.PROTOCOL_PROBED.value,
+                Qualification.CONSUMER_VERIFIED.value,
+            }
+        ):
+            qualification = Qualification(prior["qualification"])
+            reason = prior.get("reason", "persisted route evidence reused")
+        elif full_probe or probe_on_missing:
+            if key_value is None and key_reference:
+                # Direct-mode probes resolve the referenced environment value;
+                # empty strings count as absent for credential probing.
+                resolved = os.environ.get(key_reference)
+                key_value = resolved if resolved else None
+            result = probe(
+                engine_endpoint,
+                model,
+                key_reference=key_reference,
+                key_value=key_value,
+                **probe_options,
+            )
+            qualification = qualification_from_probe(result)
+            reason = "; ".join(result.notes) or result.status
+            reason_record = {"reason": reason}
+            if qualification in {
+                Qualification.PROTOCOL_PROBED,
+                Qualification.CONSUMER_VERIFIED,
+            }:
+                reason_record["route_evidence"] = binding
+            reasons[(provider, model)] = reason_record
+        else:
+            qualification = discovered
+            reason = "route evidence missing or stale; not probed in read-only mode"
+        qualified.append((provider, model, qualification))
+    return qualified, reasons
 
 
-def _desired_audio_settings(probe_routes=False, selection_records=None):
+def _desired_audio_settings(
+    probe_routes=False, allow_auto_probe=False, selection_records=None
+):
     """Return the owned speech settings, or None when oMLX is unavailable."""
     if "omlx" in _disabled() or "omlx" not in active_engines():
         return None
@@ -469,22 +615,18 @@ def _desired_audio_settings(probe_routes=False, selection_records=None):
     gateway_endpoint = _litellm_endpoint() if gateway else None
     gateway_key = _litellm_key_value() if gateway and probe_routes else None
     key_reference = LITELLM_OPENWEBUI_KEY_PATH if gateway else endpoint[1]
-    audio_probe_reasons = {}
-    if probe_routes:
-        from route_probes import probe_stt
+    from route_probes import probe_stt
 
-        probed = []
-        for provider, model, _ in stt_candidates:
-            qualification, reason = _probe_qualification(
-                probe_stt,
-                gateway_endpoint or endpoint[0],
-                model,
-                key_reference,
-                **({"key_value": gateway_key} if gateway else {}),
-            )
-            probed.append((provider, model, qualification))
-            audio_probe_reasons[(provider, model)] = reason
-        stt_candidates = probed
+    stt_candidates, audio_probe_reasons = _qualify_candidates(
+        stt_candidates,
+        Operation.STT,
+        gateway_endpoint or endpoint[0],
+        key_reference,
+        probe_stt,
+        full_probe=probe_routes,
+        probe_on_missing=probe_routes or allow_auto_probe,
+        key_value=gateway_key if gateway else None,
+    )
     locator_options = (
         {"gateway_route": (gateway_endpoint, key_reference, gateway_key)}
         if gateway and probe_routes
@@ -513,12 +655,11 @@ def _desired_audio_settings(probe_routes=False, selection_records=None):
         }
     }
     selections = {"stt": _locator_provenance(stt)}
-    if (stt.selection.provider, stt.selection.model) in audio_probe_reasons:
-        selections["stt"]["reason"] = audio_probe_reasons[
-            (stt.selection.provider, stt.selection.model)
-        ]
-    if selection_records is not None:
-        selection_records["stt"] = selections["stt"]
+    stt_evidence = audio_probe_reasons.get(
+        (stt.selection.provider, stt.selection.model), {}
+    )
+    if stt_evidence:
+        selections["stt"].update(stt_evidence)
     tts_candidates = [
         ("omlx", item["name"], Qualification.DISCOVERED)
         for item in models
@@ -526,22 +667,20 @@ def _desired_audio_settings(probe_routes=False, selection_records=None):
         and item.get("model_type") == "audio_tts"
         and not is_known_unqualified_tts(item.get("name"))
     ]
-    if probe_routes:
-        from route_probes import probe_tts
+    from route_probes import probe_tts
 
-        probed = []
-        for provider, model, _ in tts_candidates:
-            qualification, reason = _probe_qualification(
-                probe_tts,
-                gateway_endpoint or endpoint[0],
-                model,
-                key_reference,
-                **({"key_value": gateway_key} if gateway else {}),
-                voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
-            )
-            probed.append((provider, model, qualification))
-            audio_probe_reasons[(provider, model)] = reason
-        tts_candidates = probed
+    tts_candidates, tts_reasons = _qualify_candidates(
+        tts_candidates,
+        Operation.TTS,
+        gateway_endpoint or endpoint[0],
+        key_reference,
+        probe_tts,
+        full_probe=probe_routes,
+        probe_on_missing=probe_routes or allow_auto_probe,
+        key_value=gateway_key if gateway else None,
+        voice=os.environ.get("DOTFILES_VOICE_TTS_VOICE", "serena"),
+    )
+    audio_probe_reasons.update(tts_reasons)
     tts = _audio_locator(
         Operation.TTS, tts_candidates, endpoint, selection_records, **locator_options
     )
@@ -561,12 +700,11 @@ def _desired_audio_settings(probe_routes=False, selection_records=None):
             tts_settings["VOICE"] = voice
         settings["tts"] = tts_settings
         selections["tts"] = _locator_provenance(tts)
-        if (tts.selection.provider, tts.selection.model) in audio_probe_reasons:
-            selections["tts"]["reason"] = audio_probe_reasons[
-                (tts.selection.provider, tts.selection.model)
-            ]
-        if selection_records is not None:
-            selection_records["tts"] = selections["tts"]
+        tts_evidence = audio_probe_reasons.get(
+            (tts.selection.provider, tts.selection.model), {}
+        )
+        if tts_evidence:
+            selections["tts"].update(tts_evidence)
     else:
         import logger
 
@@ -710,7 +848,8 @@ def _audio_locator(
         },
     )
     if selection_records is not None:
-        selection_records[operation.value] = _locator_provenance(locator)
+        provenance = _locator_provenance(locator)
+        selection_records[operation.value] = provenance
     return locator
 
 
@@ -739,7 +878,9 @@ def _persist_embedding_selection(selection):
     _write_embedding_state(state)
 
 
-def _desired_embedding_settings(probe_routes=False, selection_records=None):
+def _desired_embedding_settings(
+    probe_routes=False, allow_auto_probe=False, selection_records=None
+):
     selection_records = selection_records if selection_records is not None else {}
     if constants.get_litellm_proxy_mode():
         selection = select(
@@ -772,14 +913,27 @@ def _desired_embedding_settings(probe_routes=False, selection_records=None):
     previous = (
         ("ollama", previous_model, Qualification.UNKNOWN) if previous_model else None
     )
-    qualification = Qualification.DISCOVERED
-    probe_reason = None
-    if probe_routes:
-        from route_probes import probe_embeddings
+    from route_probes import probe_embeddings
 
-        qualification, probe_reason = _probe_qualification(
-            probe_embeddings, EMBEDDING_OLLAMA_URL, EMBEDDING_MODEL, None
+    key_reference = "OLLAMA_API_KEY" if constants.get_litellm_proxy_mode() else None
+    candidates, qualification_reasons = _qualify_candidates(
+        [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+        Operation.EMBEDDING,
+        EMBEDDING_OLLAMA_URL,
+        key_reference,
+        probe_embeddings,
+        full_probe=probe_routes,
+        probe_on_missing=probe_routes or allow_auto_probe,
+        key_value=None,
+    )
+    if selection_records is not None:
+        selection_records["_evidence"] = qualification_reasons.get(
+            ("ollama", EMBEDDING_MODEL), {}
         )
+    qualification = candidates[0][2]
+    probe_reason = qualification_reasons.get(("ollama", EMBEDDING_MODEL), {}).get(
+        "reason"
+    )
     selection = select(
         Operation.EMBEDDING,
         [("ollama", EMBEDDING_MODEL, qualification)],
@@ -829,8 +983,10 @@ def _desired_embedding_settings(probe_routes=False, selection_records=None):
         **_locator_provenance(locator),
         "reason": probe_reason or selection.reason,
     }
-    if selection_records is not None:
-        selection_records.update(provenance)
+    if qualification_reasons:
+        provenance["route_evidence"] = qualification_reasons[
+            ("ollama", EMBEDDING_MODEL)
+        ]["route_evidence"]
     return {
         "RAG_EMBEDDING_ENGINE": rendered["provider"],
         "RAG_EMBEDDING_MODEL": rendered["wire_model"],
