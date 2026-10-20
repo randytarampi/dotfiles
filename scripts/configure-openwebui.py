@@ -770,7 +770,10 @@ def main():
     ).strip() or _openwebui_service_value("OPENWEBUI_API_KEY")
     if not api_key:
         logger.warning("OPENWEBUI_API_KEY is absent; skipping Open WebUI API operation")
-        return 0
+        if read_only:
+            return 0
+        logger.error("Opted-in Open WebUI reconciliation requires an API key")
+        return 1
     client = OpenWebUIClient(
         base_url,
         api_key,
@@ -783,7 +786,10 @@ def main():
     )
     if not client.health_check():
         logger.warning("Open WebUI is not healthy at %s; skipping", base_url)
-        return 0
+        if read_only:
+            return 0
+        logger.error("Opted-in Open WebUI reconciliation requires a healthy service")
+        return 1
     if read_only and getattr(args, "probe_routes", False):
         logger.warning("--probe-routes is ignored in check/dry-run modes")
     desired = compute_desired_state(
@@ -805,6 +811,10 @@ def main():
             return 2
         result = reconcile_via_api(client, desired)
         logger.info(result.summary())
+        if result.actions.get("failed"):
+            failed = ", ".join(result.actions["failed"])
+            logger.error("Open WebUI reconciliation failed actions: %s", failed)
+            return 1
         return 0
     except OpenWebUIError as error:
         logger.error("Open WebUI operation failed: %s", error)
