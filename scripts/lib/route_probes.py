@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 from dataclasses import dataclass
@@ -207,3 +208,47 @@ def qualification_from_probe(result):
     if result.status == "response_shape_error" or result.status == "unavailable":
         return Qualification.UNAVAILABLE
     return Qualification.UNKNOWN
+
+
+def fetch_gateway_models(base_url, key_value=None, timeout=5):
+    """Return the gateway's sorted ``/v1/models`` ids (None = unresolvable).
+
+    The served inventory is the real alias source for gateway embedding
+    resolution; a guessed alias cannot establish any qualification. The key
+    value is used only at wire time here and is never logged or persisted; an
+    unreachable, unauthorized or non-JSON response degrades to None so callers
+    emit the honest unavailable/preserve record instead of inventing aliases.
+    Every response body is discarded after parsing — never echoed.
+    """
+    if not base_url:
+        return None
+    parsed = urllib.parse.urlparse(str(base_url))
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    endpoint = str(base_url).rstrip("/") + "/models"
+    headers = {"Authorization": "Bearer " + key_value} if key_value else {}
+    request = urllib.request.Request(endpoint, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(
+            request, timeout=timeout
+        ) as response:  # nosec B310 - scheme validated above
+            code, data = response.status, response.read()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None
+    if code != 200:
+        return None
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    items = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return None
+    ids = sorted(
+        {
+            str(item.get("id"))
+            for item in items
+            if isinstance(item, dict) and item.get("id")
+        }
+    )
+    return ids or None

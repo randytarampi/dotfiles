@@ -1368,6 +1368,249 @@ def test_embedding_route_change_binds_evidence_to_installed_destination(
     assert "http://different-backend:9999" in calls
 
 
+def _gateway_test_client():
+    return _EmbeddingClient(_embedding_config("ollama", openwebui.EMBEDDING_MODEL))
+
+
+def _gateway_wanted():
+    return {
+        "RAG_EMBEDDING_ENGINE": "openai",
+        "RAG_EMBEDDING_MODEL": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "openai_config": {"url": "http://127.0.0.1:4000/v1"},
+    }
+
+
+def _gateway_desired():
+    return {
+        "openai": [],
+        "anthropic": [],
+        "ollama": [],
+        "embedding": _gateway_wanted(),
+    }
+
+
+def _write_gateway_managed_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    openwebui._write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "ollama",
+                    "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+                },
+                "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "ollama_config": {"url": "http://127.0.0.1:11434"},
+            },
+            "embedding_fingerprint": {
+                "engine": "ollama",
+                "model": openwebui.EMBEDDING_MODEL,
+                "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+                "backend_identity": {"backend": "ollama", "version": "same"},
+            },
+        }
+    )
+
+
+def _gateway_ack():
+    return {
+        "previous_engine": "ollama",
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "new_engine": "openai",
+        "new_model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "new_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "acknowledged_at": "2026-10-20T08:00:00Z",
+    }
+
+
+def test_gateway_embedding_switch_requires_acknowledgement(monkeypatch, tmp_path):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    client = _gateway_test_client()
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+    assert client.writes == 0
+    assert report["applied"] == []
+    assert report["verified"] == []
+    assert report["failed"] == ["embedding"]
+    assert (
+        openwebui._read_embedding_state()["projection"]["owned"]["RAG_EMBEDDING_ENGINE"]
+        == "ollama"
+    )
+    state = openwebui._read_embedding_state()
+    state["acknowledgement"] = _gateway_ack()
+    openwebui._write_embedding_state(state)
+    client = _gateway_test_client()
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+    assert client.writes == 1
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+    state = openwebui._read_embedding_state()
+    assert state["projection"]["route"]["url"] == "http://127.0.0.1:4000/v1"
+    assert state["projection"]["route"]["key_reference"].endswith("openwebui.key")
+    assert "sentinel-scoped-key" not in openwebui.json.dumps(state)
+    assert state["embedding_fingerprint"]["parity"] == "inconclusive"
+
+
+def test_gateway_embedding_key_readback_mismatch_reports_applied_failed(
+    monkeypatch, tmp_path
+):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    state = openwebui._read_embedding_state()
+    state["acknowledgement"] = _gateway_ack()
+    openwebui._write_embedding_state(state)
+    client = _gateway_test_client()
+    original_get = client.get_embedding_config
+
+    def shifted_readback():
+        payload = json.loads(json.dumps(original_get()))
+        payload.setdefault("openai_config", {})["key"] = "server-stored-other"
+        return payload
+
+    client.get_embedding_config = shifted_readback
+    with pytest.raises(openwebui.OpenWebUIError, match="write verification") as raised:
+        openwebui.reconcile_via_api(client, _gateway_desired())
+    report = raised.value.actions
+    assert client.writes == 1
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == []
+    assert report["failed"] == ["embedding"]
+    assert (
+        openwebui._read_embedding_state()["projection"]["owned"]["RAG_EMBEDDING_ENGINE"]
+        == "ollama"
+    )
+
+
+def test_gateway_embedding_parity_honesty(monkeypatch, tmp_path):
+    _write_gateway_managed_state(tmp_path, monkeypatch)
+    state = openwebui._read_embedding_state()
+    state["acknowledgement"] = _gateway_ack()
+    openwebui._write_embedding_state(state)
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    client = _gateway_test_client()
+    openwebui.reconcile_via_api(client, _gateway_desired())
+    assert openwebui._read_embedding_state()["embedding_fingerprint"]["parity"] == (
+        "inconclusive"
+    )
+    state = openwebui._read_embedding_state()
+    state["projection"] = {  # reset to the pre-switch record for a second pass
+        "owned": {
+            "RAG_EMBEDDING_ENGINE": "ollama",
+            "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        },
+        "previous_output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+        "ollama_config": {"url": "http://127.0.0.1:11434"},
+    }
+    state["embedding_fingerprint"]["engine"] = "ollama"
+    openwebui._write_embedding_state(state)
+    client = _gateway_test_client()
+    client.previous_embedding_probe = lambda: {"x": [0.1, 0.2, 0.3]}
+    client.target_embedding_probe = lambda: {"x": [0.1, 0.2, 0.3]}
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+    assert report["verified"] == ["embedding"]
+    assert (
+        openwebui._read_embedding_state()["embedding_fingerprint"]["parity"] == "pass"
+    )
+
+
+def test_gateway_embedding_desired_render(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui,
+        "_gateway_embedding_alias",
+        lambda fetch=None, endpoint=None, key_value=None: (
+            f"ollama/{openwebui.EMBEDDING_MODEL}"
+        ),
+    )
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    import route_probes
+
+    captured = {}
+
+    def fake_probe(endpoint, model, key_reference=None, key_value=None, **options):
+        captured.update(
+            {
+                "endpoint": endpoint,
+                "model": model,
+                "key_reference": key_reference,
+                "wire_key": key_value == "sentinel-scoped-key",
+            }
+        )
+        return route_probes._result(
+            "ok",
+            model,
+            endpoint,
+            ("HTTP 200 numeric embedding vector",),
+            dimension=768,
+        )
+
+    monkeypatch.setattr(route_probes, "probe_embeddings", fake_probe)
+    desired = openwebui.compute_desired_state(allow_auto_probe=True)
+    assert desired["embedding"]["RAG_EMBEDDING_ENGINE"] == "openai"
+    assert desired["embedding"]["openai_config"]["url"] == captured["endpoint"]
+    assert "ollama_config" not in desired["embedding"]
+    record = desired["embedding_selection"]
+    assert record["qualification"] == "protocol_probed"
+    assert record["route_evidence"]["url"] == captured["endpoint"]
+    assert record["output_dims"] == 768
+    assert record["key_reference"].endswith("openwebui.key")
+    assert captured["wire_key"] is True
+    assert captured["model"] == f"ollama/{openwebui.EMBEDDING_MODEL}"
+    assert "sentinel-scoped-key" not in openwebui.json.dumps(desired)
+
+
+def test_gateway_embedding_readonly_mode_not_resolved(monkeypatch):
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    import route_probes
+
+    called = []
+
+    def fake_probe(*_args, **_kwargs):
+        called.append(True)
+        return route_probes._result("ok", "m", "e")
+
+    monkeypatch.setattr(route_probes, "probe_embeddings", fake_probe)
+
+    def must_not_fetch(*_args, **_kwargs):
+        raise AssertionError("inventory fetch must not run in read-only mode")
+
+    monkeypatch.setattr(openwebui, "_gateway_embedding_alias", must_not_fetch)
+    desired = openwebui.compute_desired_state()
+    assert "embedding" not in desired
+    assert desired["embedding_status"] == "unavailable"
+    record = desired["embedding_selection"]
+    assert record["qualification"] == "unknown"
+    assert record["reason"] == "gateway inventory not resolved in read-only mode"
+    assert called == []
+
+
+def test_gateway_embedding_alias_unresolved_is_unavailable(monkeypatch):
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui,
+        "_gateway_embedding_alias",
+        lambda fetch=None, endpoint=None, key_value=None: None,
+    )
+    desired = openwebui.compute_desired_state(allow_auto_probe=True)
+    assert "embedding" not in desired
+    assert desired["embedding_status"] == "unavailable"
+    record = desired["embedding_selection"]
+    assert record["qualification"] == "unavailable"
+    assert record["reason"] == "no verified proxy model mapping"
+
+
 def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     monkeypatch, tmp_path, caplog
 ):

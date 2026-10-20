@@ -171,6 +171,42 @@ class RouteProbeTests(unittest.TestCase):
             Qualification.PROTOCOL_PROBED,
         )
 
+    def test_fetch_gateway_models_inventory_and_degradation(self):
+        ok = FakeResponse(
+            body=json.dumps({"data": [{"id": "b"}, {"id": "a"}]}).encode()
+        )
+        with patch.object(
+            route_probes.urllib.request, "urlopen", return_value=ok
+        ) as opened:
+            ids = route_probes.fetch_gateway_models(
+                "http://gateway:4000/v1", "wire-key"
+            )
+        self.assertEqual(ids, ["a", "b"])
+        request = opened.call_args.args[0]
+        self.assertEqual(request.full_url, "http://gateway:4000/v1/models")
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(request.get_header("Authorization"), "Bearer " + "wire-key")
+        cases = [
+            FakeResponse(body=b"<html>"),
+            FakeResponse(body=b'{"data": "not-a-list"}'),
+        ]
+        for response in cases:
+            with patch.object(
+                route_probes.urllib.request, "urlopen", return_value=response
+            ):
+                self.assertIsNone(
+                    route_probes.fetch_gateway_models("http://gateway:4000/v1", "k")
+                )
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=route_probes.urllib.error.URLError("no route"),
+        ):
+            self.assertIsNone(
+                route_probes.fetch_gateway_models("http://gateway:4000/v1", "k")
+            )
+        self.assertIsNone(route_probes.fetch_gateway_models("ftp://gateway/v1", "k"))
+
 
 if __name__ == "__main__":
     unittest.main()

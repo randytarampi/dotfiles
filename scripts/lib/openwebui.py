@@ -97,6 +97,30 @@ def _litellm_endpoint():
     return f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
 
 
+def _gateway_embedding_alias(fetch=None, endpoint=None, key_value=None):
+    """Resolve the served namespaced alias for the managed embedding model.
+
+    Reads the REAL served gateway inventory once per render; the alias must
+    exist as ``ollama/<EMBEDDING_MODEL>`` (the canonical namespaced alias every
+    modality emits). A guessed alias cannot establish qualification, so an
+    unresolvable inventory or a missing alias returns None and the caller
+    degrades to the honest unavailable/preserve record. Values are never
+    persisted; the key value is a wire-time read only.
+    """
+    from route_probes import fetch_gateway_models
+
+    resolved_endpoint = endpoint if endpoint is not None else _litellm_endpoint()
+    resolved_key = key_value if key_value is not None else _litellm_key_value()
+    fetch = fetch or fetch_gateway_models
+    inventory = fetch(resolved_endpoint, resolved_key)
+    if not inventory:
+        return None
+    candidate = f"ollama/{EMBEDDING_MODEL}"
+    if candidate in inventory:
+        return candidate
+    return None
+
+
 def _ollama_native_base(openai_url):
     """Derive WebUI's native Ollama base from an OpenAI-compatible URL.
 
@@ -427,7 +451,9 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False):
         desired["audio_status"] = "unavailable"
     embedding_selection = {}
     embedding = _desired_embedding_settings(
-        probe_routes=probe_routes, selection_records=embedding_selection
+        probe_routes=probe_routes,
+        allow_auto_probe=allow_auto_probe,
+        selection_records=embedding_selection,
     )
     if embedding is not None:
         selection = embedding.pop(SELECTION_PROVENANCE_KEY)
@@ -587,6 +613,10 @@ def _qualify_candidates(
                 Qualification.CONSUMER_VERIFIED,
             }:
                 reason_record["route_evidence"] = binding
+                if getattr(result, "dimension", None):
+                    # Embedding probes carry the served representation width;
+                    # gateway transitions need it for the dimension gates.
+                    reason_record["output_dims"] = result.dimension
             reasons[(provider, model)] = reason_record
         else:
             qualification = discovered
@@ -883,29 +913,128 @@ def _desired_embedding_settings(
 ):
     selection_records = selection_records if selection_records is not None else {}
     if constants.get_litellm_proxy_mode():
+        if not (probe_routes or allow_auto_probe):
+            selection_record = {
+                "operation": "embedding",
+                "provider": None,
+                "model": None,
+                "qualification": "unknown",
+                "reason": "gateway inventory not resolved in read-only mode",
+                "transport": "unavailable",
+                "endpoint": None,
+                "wire_model": None,
+                "key_reference": None,
+            }
+            if selection_records is not None:
+                selection_records["_unavailable"] = selection_record
+            import logger
+
+            logger.warning(
+                "Open WebUI embedding gateway route not resolved in read-only mode"
+            )
+            return None
+        alias = _gateway_embedding_alias()
+        if not alias:
+            selection_record = {
+                "operation": "embedding",
+                "provider": None,
+                "model": None,
+                "qualification": "unavailable",
+                "reason": "no verified proxy model mapping",
+                "transport": "unavailable",
+                "endpoint": None,
+                "wire_model": None,
+                "key_reference": LITELLM_OPENWEBUI_KEY_PATH,
+            }
+            if selection_records is not None:
+                selection_records["_unavailable"] = selection_record
+            import logger
+
+            logger.warning(
+                "Open WebUI embedding gateway route unavailable: "
+                "no verified proxy model mapping"
+            )
+            return None
+        gateway_endpoint = _litellm_endpoint()
+        gateway_key = _litellm_key_value()
+        from route_probes import probe_embeddings
+
+        candidates, qualification_reasons = _qualify_candidates(
+            [("gateway", alias, Qualification.DISCOVERED)],
+            Operation.EMBEDDING,
+            gateway_endpoint,
+            LITELLM_OPENWEBUI_KEY_PATH,
+            probe_embeddings,
+            full_probe=probe_routes,
+            probe_on_missing=probe_routes or allow_auto_probe,
+            key_value=gateway_key,
+        )
+        qualification = candidates[0][2]
+        evidence_record = qualification_reasons.get(("gateway", alias), {})
+        probe_reason = evidence_record.get("reason")
         selection = select(
             Operation.EMBEDDING,
-            [("ollama", EMBEDDING_MODEL, Qualification.DISCOVERED)],
+            [("gateway", alias, qualification)],
+            preference=[("gateway", alias)],
         )
-        selection_record = {
-            "operation": "embedding",
-            "provider": None,
-            "model": None,
-            "qualification": "unavailable",
-            "reason": selection.reason,
-            "transport": "unavailable",
-            "endpoint": None,
-            "wire_model": None,
-            "key_reference": None,
-        }
-        if selection_records is not None:
-            selection_records["_unavailable"] = selection_record
-        import logger
+        route = resolve_transport(
+            "gateway",
+            selection.qualification,
+            endpoint=gateway_endpoint,
+            wire_model=selection.model,
+            key_reference=LITELLM_OPENWEBUI_KEY_PATH,
+            credential_present=bool(gateway_key),
+            credential_required=True,
+            operation=Operation.EMBEDDING,
+        )
+        if selection.provider is None or route.transport == Transport.UNAVAILABLE:
+            selection_record = {
+                "operation": "embedding",
+                "provider": selection.provider,
+                "model": selection.model,
+                "qualification": (
+                    Qualification.UNAVAILABLE.value
+                    if qualification == Qualification.UNAVAILABLE
+                    else Qualification.UNKNOWN.value
+                ),
+                "reason": probe_reason or selection.reason,
+                "transport": route.transport.value,
+                "endpoint": route.endpoint,
+                "wire_model": route.wire_model,
+                "key_reference": LITELLM_OPENWEBUI_KEY_PATH,
+            }
+            if selection_records is not None:
+                selection_records["_unavailable"] = selection_record
+            import logger
 
-        logger.warning(
-            "Open WebUI embedding gateway route unavailable: no verified proxy model mapping"
-        )
-        return None
+            logger.warning(
+                "Open WebUI embedding gateway route unavailable: %s",
+                probe_reason or selection.reason,
+            )
+            return None
+        rendered = {
+            "provider": selection.provider,
+            "model": selection.model,
+            "transport": route.transport,
+            "endpoint": route.endpoint,
+            "wire_model": route.wire_model,
+        }
+        locator = ServiceLocator(selection, route)
+        assert_renders_from(locator, rendered)
+        provenance = {
+            **_locator_provenance(locator),
+            "reason": probe_reason or selection.reason,
+        }
+        if evidence_record.get("route_evidence"):
+            provenance["route_evidence"] = evidence_record["route_evidence"]
+        if evidence_record.get("output_dims"):
+            provenance["output_dims"] = evidence_record["output_dims"]
+        return {
+            "RAG_EMBEDDING_ENGINE": "openai",
+            "RAG_EMBEDDING_MODEL": rendered["wire_model"],
+            "openai_config": {"url": rendered["endpoint"]},
+            SELECTION_PROVENANCE_KEY: provenance,
+        }
     previous_state = _read_embedding_state()
     projection = previous_state.get("projection", {})
     owned = projection.get("owned", {}) if isinstance(projection, dict) else {}
@@ -1680,7 +1809,12 @@ def _embedding_refusal(
     fingerprint = (state or _read_embedding_state()).get("embedding_fingerprint", {})
     if backend_identity is _EMBEDDING_IDENTITY_UNSET:
         backend_identity = _embedding_backend_identity(client, config)
-    if _embedding_backend_changed(fingerprint, backend_identity):
+    if (
+        # Gateway-owned fingerprints (openai engine) have no ollama daemon
+        # identity to probe; their route binding lives in the route record.
+        fingerprint.get("engine") != "openai"
+        and _embedding_backend_changed(fingerprint, backend_identity)
+    ):
         return "Refusing Open WebUI embedding reconciliation; backend identity changed or is unavailable"
     if projection is None:
         default = _embedding_identity(EMBEDDING_DEFAULTS)
@@ -1777,6 +1911,29 @@ def _embedding_candidate(prewrite, target_url=None):
 
 def _verify_embedding_readback(client, expected, restore=False):
     readback = client.get_embedding_config()
+    if expected.get("RAG_EMBEDDING_ENGINE") == "openai":
+        # Active-engine readback for the gateway route: engine/model and the
+        # OpenAI URL (plus the written key, compared but never persisted).
+        expected_openai = expected.get("openai_config") or {}
+        readback_openai = readback.get("openai_config") or {}
+        if (
+            _embedding_identity(readback) != _embedding_identity(expected)
+            or (
+                expected_openai.get("url")
+                and readback_openai.get("url") != expected_openai.get("url")
+            )
+            or (
+                "key" in expected_openai
+                and readback_openai.get("key") != expected_openai.get("key")
+            )
+        ):
+            message = (
+                "Open WebUI embedding restore verification failed"
+                if restore
+                else "Open WebUI embedding configuration write verification failed"
+            )
+            raise OpenWebUIError(message)
+        return
     expected_url = expected.get("ollama_config", {}).get("url")
     if (
         _embedding_identity(readback) != _embedding_identity(expected)
@@ -2087,6 +2244,158 @@ def _embedding_route_parity_conclusive(evidence, source_identity, client, wanted
     return True
 
 
+def _reconcile_embedding_gateway(client, state, current, wanted, logger):
+    """Reconcile the managed embedding model through a gateway route (R6.7).
+
+    The alias and route URL arrive rendered against the SERVED gateway
+    inventory; only the canonical namespaced alias of the managed model is
+    reconciled here — any other alias is refused. The frozen acknowledgement
+    machinery applies to the engine switch (the extended schema carries the
+    new engine identity); nothing is written without it. OpenAI settings are
+    never owned: the key is resolved from the scoped reference at write time,
+    compared at readback without persisting, and only this explicit
+    engine-openai payload is written. The preserved Ollama route stays in the
+    projection for gate-off restoration, and parity is recorded honestly —
+    affirmative only when the injectable machinery proves it.
+    """
+    alias = wanted.get("RAG_EMBEDDING_MODEL")
+    route_url = (wanted.get("openai_config") or {}).get("url")
+    canonical = f"ollama/{EMBEDDING_MODEL}"
+    if alias != canonical or not route_url:
+        logger.error(
+            "Refusing Open WebUI embedding gateway alias %r; only the managed "
+            "model alias %s is reconciled through the gateway route",
+            alias,
+            canonical,
+        )
+        return {"status": "refused", "applied": False, "verified": False}
+    projection = state.get("projection")
+    fingerprint = state.get("embedding_fingerprint", {})
+    recorded = (
+        (projection or {}).get("owned", {}) if isinstance(projection, dict) else {}
+    )
+    recorded_engine = recorded.get("RAG_EMBEDDING_ENGINE")
+    recorded_dims = (
+        (projection or {}).get("output_dims") if isinstance(projection, dict) else None
+    )
+    prewrite = client.get_embedding_config()
+    identity = _embedding_identity(prewrite)
+    if _embedding_identity(current) != identity:
+        logger.error("Refusing Open WebUI embedding write after concurrent edit")
+        return {"status": "refused", "applied": False, "verified": False}
+    if recorded_engine == "openai":
+        route_record = (projection or {}).get("route") or {}
+        if (
+            recorded.get("RAG_EMBEDDING_MODEL") != alias
+            or route_record.get("url") != route_url
+            or identity != {"engine": "openai", "model": alias}
+            or (prewrite.get("openai_config") or {}).get("url") != route_url
+        ):
+            logger.error("Refusing Open WebUI embedding write after concurrent edit")
+            return {"status": "refused", "applied": False, "verified": False}
+    else:
+        old_dims = (
+            recorded_dims
+            if recorded_dims is not None
+            else (384 if _embedding_identity(EMBEDDING_DEFAULTS) == identity else None)
+        )
+        if not _embedding_acknowledges(
+            state.get("acknowledgement"),
+            identity,
+            old_dims,
+            {"engine": "openai", "model": alias},
+            EMBEDDING_OUTPUT_DIMS,
+        ):
+            logger.error(
+                "Refusing Open WebUI embedding engine switch to the gateway "
+                "route without the required acknowledgement; edit %s with the "
+                "previous_engine/previous_model/previous_output_dims, "
+                "new_engine=new_model and acknowledged_at fields matching this "
+                "transition, after resetting/re-embedding the vector store if "
+                "its representation changes",
+                _embedding_state_path(),
+            )
+            return {"status": "refused", "applied": False, "verified": False}
+    key_value = _litellm_key_value()
+    if not key_value:
+        logger.error(
+            "Refusing Open WebUI gateway embedding; the scoped key reference "
+            "is unresolved"
+        )
+        return {"status": "refused", "applied": False, "verified": False}
+    candidate = {
+        key: prewrite[key]
+        for key in (
+            "RAG_EMBEDDING_BATCH_SIZE",
+            "ENABLE_ASYNC_EMBEDDING",
+            "RAG_EMBEDDING_CONCURRENT_REQUESTS",
+        )
+        if key in prewrite
+    }
+    candidate.update(
+        {
+            "RAG_EMBEDDING_ENGINE": "openai",
+            "RAG_EMBEDDING_MODEL": alias,
+            "openai_config": {"url": route_url, "key": key_value},
+        }
+    )
+    client.update_embedding_config(candidate)
+    try:
+        _verify_embedding_readback(client, candidate)
+    except OpenWebUIError as failure:
+        failure.outcome = {"status": "failed", "applied": True, "verified": False}
+        raise
+    previous_probe = getattr(client, "previous_embedding_probe", None)
+    target_probe = getattr(client, "target_embedding_probe", None)
+    parity = (
+        _embedding_vector_parity(previous_probe, target_probe)
+        if callable(previous_probe) and callable(target_probe)
+        else None
+    )
+    parity_evidence = _embedding_parity_evidence(client, candidate)
+    _write_embedding_state(
+        {
+            "projection": {
+                "owned": {
+                    "RAG_EMBEDDING_ENGINE": "openai",
+                    "RAG_EMBEDDING_MODEL": alias,
+                },
+                "previous": identity,
+                "previous_output_dims": (
+                    recorded_dims
+                    if recorded_dims is not None
+                    else (
+                        384
+                        if _embedding_identity(EMBEDDING_DEFAULTS) == identity
+                        else None
+                    )
+                ),
+                "output_dims": EMBEDDING_OUTPUT_DIMS,
+                "previous_ollama_url": (prewrite.get("ollama_config") or {}).get("url"),
+                "ollama_config": {
+                    "url": (prewrite.get("ollama_config") or {}).get("url")
+                },
+                "route": {
+                    "engine": "openai",
+                    "url": route_url,
+                    "key_reference": LITELLM_OPENWEBUI_KEY_PATH,
+                },
+            },
+            "embedding_fingerprint": {
+                "engine": "openai",
+                "model": alias,
+                "output_dims": EMBEDDING_OUTPUT_DIMS,
+                "parity": "pass" if parity else "inconclusive",
+                "backend_identity": None,
+                "version_evidence": None,
+                "parity_evidence": parity_evidence,
+            },
+            "acknowledgement": state.get("acknowledgement"),
+        }
+    )
+    return {"status": "verified", "applied": True, "verified": True}
+
+
 def _embedding_vector_parity(previous_probe, target_probe, tolerance=1e-6):
     """Deterministic embedding representation-parity check (contract-frozen).
 
@@ -2239,7 +2548,13 @@ def _reconcile_embedding(client, current, wanted):
     state = _read_embedding_state()
     projection = state.get("projection")
     fingerprint = state.get("embedding_fingerprint", {})
-    backend_identity = _embedding_backend_identity(client, current)
+    if wanted and wanted.get("RAG_EMBEDDING_ENGINE") == "openai":
+        return _reconcile_embedding_gateway(client, state, current, wanted, logger)
+    backend_identity = (
+        None
+        if fingerprint.get("engine") == "openai"
+        else _embedding_backend_identity(client, current)
+    )
     refusal = _embedding_refusal(
         current, projection, client, state, backend_identity=backend_identity
     )
@@ -2283,6 +2598,8 @@ def _reconcile_embedding(client, current, wanted):
 
 
 def _embedding_acknowledges(acknowledgement, old, old_dims, new, new_dims):
+    if not isinstance(acknowledgement, dict):
+        return False
     expected = {
         "previous_model": old["model"],
         "previous_engine": old["engine"],
@@ -2290,11 +2607,18 @@ def _embedding_acknowledges(acknowledgement, old, old_dims, new, new_dims):
         "new_model": new["model"],
         "new_output_dims": new_dims,
     }
-    return (
-        isinstance(acknowledgement, dict)
-        and all(acknowledgement.get(key) == value for key, value in expected.items())
-        and bool(acknowledgement.get("acknowledged_at"))
-    )
+    new_engine = new.get("engine", "ollama")
+    if "new_engine" in acknowledgement:
+        # Engine-aware transitions (e.g. the R6.7 gateway route) carry the new
+        # engine identity inside the acknowledgement itself.
+        expected["new_engine"] = new_engine
+    elif new_engine == "openai":
+        # A legacy acknowledgement (omitting new_engine) cannot authorize a
+        # gateway switch; it predates the engine-aware schema.
+        return False
+    return all(
+        acknowledgement.get(key) == value for key, value in expected.items()
+    ) and bool(acknowledgement.get("acknowledged_at"))
 
 
 def _log_embedding_migration_refusal(logger, old, old_dims, new, new_dims):
