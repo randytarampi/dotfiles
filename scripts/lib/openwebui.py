@@ -574,9 +574,9 @@ def _selection_record_fresh(record):
         age = datetime.now(timezone.utc) - datetime.fromisoformat(
             str(recorded).replace("Z", "+00:00")
         )
-    except ValueError:
+    except (ValueError, TypeError):
         return False
-    return -timedelta(minutes=5) <= age <= _SELECTION_REUSE_MAX_AGE
+    return age >= timedelta(0) and age <= _SELECTION_REUSE_MAX_AGE
 
 
 def _qualify_candidates(
@@ -618,12 +618,14 @@ def _qualify_candidates(
     qualified, reasons = [], {}
     for provider, model, discovered in candidates:
         engine_endpoint = endpoint
-        build = _route_engine_build(provider, engine_endpoint)
-        if key_value is None and key_reference:
+        should_probe = full_probe or probe_on_missing
+        build = _route_engine_build(provider, engine_endpoint) if should_probe else None
+        resolved_key_value = key_value
+        if should_probe and resolved_key_value is None and key_reference:
             # Direct-mode probes resolve the referenced environment value;
             # empty strings count as absent for credential probing.
             resolved = os.environ.get(key_reference)
-            key_value = resolved if resolved else None
+            resolved_key_value = resolved if resolved else None
         # Non-secret credential-generation proof: reuse must survive
         # rotations only when the digest (and everything else in the
         # binding) is byte-identical; the value itself is never stored.
@@ -634,13 +636,16 @@ def _qualify_candidates(
             engine_endpoint,
             key_reference,
             build,
-            credential_digest=_credential_digest(key_value),
+            credential_digest=(
+                _credential_digest(resolved_key_value) if should_probe else None
+            ),
         )
         prior = previous_by_identity.get((provider, model), {})
         evidence = prior.get("route_evidence")
         if (
             not full_probe
             and _selection_record_fresh(prior)
+            and should_probe
             and build is not None
             and evidence == binding
             and prior.get("qualification")
@@ -664,7 +669,7 @@ def _qualify_candidates(
                 engine_endpoint,
                 model,
                 key_reference=key_reference,
-                key_value=key_value,
+                key_value=resolved_key_value,
                 **probe_options,
             )
             qualification = qualification_from_probe(result)
@@ -708,7 +713,9 @@ def _desired_audio_settings(
     ]
     gateway = constants.get_litellm_proxy_mode()
     gateway_endpoint = _litellm_endpoint() if gateway else None
-    gateway_key = _litellm_key_value() if gateway and probe_routes else None
+    gateway_key = (
+        _litellm_key_value() if gateway and (probe_routes or allow_auto_probe) else None
+    )
     key_reference = LITELLM_OPENWEBUI_KEY_PATH if gateway else endpoint[1]
     from route_probes import probe_stt
 
@@ -724,7 +731,7 @@ def _desired_audio_settings(
     )
     locator_options = (
         {"gateway_route": (gateway_endpoint, key_reference, gateway_key)}
-        if gateway and probe_routes
+        if gateway and (probe_routes or allow_auto_probe)
         else {}
     )
     stt = _audio_locator(

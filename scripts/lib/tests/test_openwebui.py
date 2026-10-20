@@ -345,6 +345,21 @@ def test_audio_and_embedding_selection_survive_reversed_model_enumeration(
     audio_path.write_text(json.dumps({"selection": previous_audio}))
     monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "test-build")
     monkeypatch.setenv("OMLX_API_KEY", "test-wire-secret")
+    monkeypatch.setattr(
+        openwebui,
+        "resolve_transport",
+        lambda *_args, **_kwargs: type(
+            "ResolvedRoute",
+            (),
+            {
+                "transport": openwebui.Transport.DIRECT,
+                "endpoint": "http://omlx.local/v1",
+                "wire_model": "second-asr",
+                "key_reference": "OMLX_API_KEY",
+                "reason": None,
+            },
+        )(),
+    )
 
     def probe(*_args, **_kwargs):
         pytest.fail("valid persisted route must be reused without probing")
@@ -669,6 +684,7 @@ def _route_evidence_audio_fixture(monkeypatch, *, selection=None, probe_result=N
     monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: False)
     monkeypatch.setattr(openwebui, "_route_engine_build", lambda *a, **k: "9.9.9")
+    monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
     persisted = {}
     monkeypatch.setattr(
         openwebui, "_persist_audio_selection", lambda record: persisted.update(record)
@@ -697,13 +713,14 @@ def _route_evidence_record(engine_build="9.9.9", recorded_at=None):
         "qualification": "protocol_probed",
         "reason": "HTTP 200",
         "recorded_at": recorded_at or datetime.now(timezone.utc).isoformat(),
+        "recorded_at": recorded_at or datetime.now(timezone.utc).isoformat(),
         "route_evidence": {
             "provider": "omlx",
             "model": "stt-model",
             "operation": "stt",
             "url": "http://local/v1",
             "credential_reference": "OMLX_API_KEY",
-            "credential_digest": None,
+            "credential_digest": openwebui._credential_digest("fixture-key"),
             "engine_build": engine_build,
         },
     }
@@ -727,12 +744,71 @@ def test_route_evidence_reused_without_probing_when_binding_matches(monkeypatch)
     calls, _persisted = _route_evidence_audio_fixture(
         monkeypatch, selection={"stt": _route_evidence_record()}
     )
-    bundle = openwebui._desired_audio_settings()
+    monkeypatch.setattr(
+        openwebui,
+        "resolve_transport",
+        lambda *_args, **_kwargs: type(
+            "ResolvedRoute",
+            (),
+            {
+                "transport": openwebui.Transport.DIRECT,
+                "endpoint": "http://local/v1",
+                "wire_model": "stt-model",
+                "key_reference": "OMLX_API_KEY",
+                "reason": None,
+            },
+        )(),
+    )
+    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
     assert calls == []  # valid persisted binding: no probe on the reused route
     assert bundle["selection"]["stt"]["qualification"] == "protocol_probed"
     assert (
         bundle["selection"]["stt"]["reason"] == "previous selection remains qualified"
     )
+
+
+def test_gateway_audio_auto_probe_resolves_scoped_key_and_renders_proxy(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(
+        openwebui, "_litellm_endpoint", lambda: "http://127.0.0.1:4000/v1"
+    )
+    key = tmp_path / "openwebui.key"
+    key.write_text("scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "LITELLM_OPENWEBUI_KEY_PATH", str(key))
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "test-build")
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    observed = []
+
+    def success(endpoint, model, key_reference, key_value=None, **_kwargs):
+        observed.append((endpoint, model, key_reference, key_value))
+        return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr(route_probes, "probe_stt", success)
+    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
+    assert observed == [
+        ("http://127.0.0.1:4000/v1", "asr", str(key), "scoped-wire-secret")
+    ]
+    assert (
+        bundle["settings"]["stt"]["OPENAI_API_BASE_URL"] == "http://127.0.0.1:4000/v1"
+    )
+    assert bundle["settings"]["stt"]["MODEL"] == "asr"
+    assert bundle["settings"]["stt"]["OPENAI_API_KEY"] == "scoped-wire-secret"
+    assert bundle["selection"]["stt"]["key_reference"] == str(key)
+    assert "scoped-wire-secret" not in repr(bundle["selection"])
 
 
 def test_route_evidence_reprobes_once_when_binding_changes(monkeypatch):
@@ -760,6 +836,104 @@ def test_route_evidence_auth_failure_stays_unqualified(monkeypatch):
     assert bundle is None
     assert provenance["_unavailable"]["stt"]["qualification"] == "unavailable"
     assert "route_evidence" not in provenance["stt"]  # failed probe binds no evidence
+
+
+def test_read_only_route_evaluation_skips_build_lookup(monkeypatch):
+    builds = []
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui, "_route_engine_build", lambda *args: builds.append(args)
+    )
+    candidates, _ = openwebui._qualify_candidates(
+        [("ollama", "embedding", openwebui.Qualification.DISCOVERED)],
+        openwebui.Operation.EMBEDDING,
+        "http://127.0.0.1:11434/v1",
+        None,
+        lambda *_a, **_kw: pytest.fail("read-only must not probe"),
+    )
+    assert candidates[0][2] is openwebui.Qualification.DISCOVERED
+    assert builds == []
+
+
+def test_route_build_fetch_is_gated_by_probe_mode(monkeypatch):
+    monkeypatch.setattr(openwebui, "_ROUTE_BUILD_CACHE", {})
+    requests = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"version":"0.40.6"}'
+
+    monkeypatch.setattr(
+        openwebui.urllib.request,
+        "urlopen",
+        lambda request, timeout: requests.append(request.full_url) or Response(),
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+
+    def probe(*_args, **_kwargs):
+        return type("Result", (), {"status": "ok", "notes": ("ok",)})()
+
+    for flags in ({}, {"probe_on_missing": True}, {"full_probe": True}):
+        openwebui._qualify_candidates(
+            [("ollama", "embed", openwebui.Qualification.DISCOVERED)],
+            openwebui.Operation.EMBEDDING,
+            "http://127.0.0.1:11434/v1",
+            None,
+            probe,
+            **flags,
+        )
+    assert requests == ["http://127.0.0.1:11434/api/version"]
+
+
+@pytest.mark.parametrize(
+    "recorded_at",
+    [
+        datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        "broken",
+        "2999-01-01T00:00:00+00:00",
+    ],
+)
+def test_selection_record_naive_bad_or_future_timestamp_is_not_fresh(recorded_at):
+    assert not openwebui._selection_record_fresh({"recorded_at": recorded_at})
+
+
+def test_read_only_audio_probe_path_does_not_resolve_gateway_credential(monkeypatch):
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://local/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "stt", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "_litellm_endpoint", lambda: "http://proxy/v1")
+    monkeypatch.setattr(
+        openwebui, "_litellm_key_value", lambda: pytest.fail("read-only key lookup")
+    )
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: None)
+    monkeypatch.setattr(
+        route_probes, "probe_stt", lambda *_a, **_kw: pytest.fail("read-only probe")
+    )
+    bundle = openwebui._desired_audio_settings(selection_records={})
+    assert bundle is None
+
+
+@pytest.mark.parametrize("recorded_at", ["bad timestamp", "2025-01-01T00:00:00"])
+def test_selection_freshness_rejects_malformed_timestamps(recorded_at):
+    assert not openwebui._selection_record_fresh({"recorded_at": recorded_at})
 
 
 def test_route_evidence_rotated_credential_forces_reprobe(monkeypatch):
@@ -4987,9 +5161,60 @@ def test_entrypoint_unhealthy_service_never_probes(monkeypatch, caplog):
         module, "compute_desired_state", lambda **kwargs: called.append(kwargs) or {}
     )
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
-    assert module.main() == 0
+    assert module.main() == 1
     assert called == []
     assert any("not healthy" in line for line in caplog.messages)
+
+
+def test_entrypoint_apply_without_key_fails_but_dry_run_skips(monkeypatch):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.delenv("OPENWEBUI_API_KEY", raising=False)
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module, "_openwebui_service_value", lambda _name: "")
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 1
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        ["configure-openwebui.py", "--reconcile", "--dry-run"],
+    )
+    assert module.main() == 0
+
+
+def test_entrypoint_failed_reconcile_actions_exit_nonzero(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
+    monkeypatch.setattr(
+        module, "compute_desired_state", lambda **_kwargs: {"openai": [], "ollama": []}
+    )
+    result = openwebui.ReconcileResult(openwebui.ReconcilePlan(), snapshots={})
+    result.actions = {
+        "planned": [],
+        "applied": [],
+        "verified": [],
+        "failed": ["embedding"],
+    }
+    monkeypatch.setattr(module, "reconcile_via_api", lambda *_: result)
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 1
+    assert "embedding" in caplog.text
+
+
+def test_entrypoint_dry_run_missing_key_remains_successful(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.delenv("OPENWEBUI_API_KEY", raising=False)
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module, "_openwebui_service_value", lambda _name: "")
+    monkeypatch.setattr(
+        module.sys, "argv", ["configure-openwebui.py", "--reconcile", "--dry-run"]
+    )
+    assert module.main() == 0
+    assert "OPENWEBUI_API_KEY is absent" in caplog.text
 
 
 def test_terminal_helpers_error_paths_are_hermetic(tmp_path):
