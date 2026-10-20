@@ -737,10 +737,14 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         "_tiers": {"active": {"fallback": {"orchestrator": refs[2:]}}},
         "skills": ["frontend/design"],
     }
+    # Direct mode preserves canonical provider/model identifiers end-to-end.
     with patch.dict(os.environ, {"DOTFILES_USE_LITELLM_PROXY": "0"}, clear=False):
         assert configure_opencode.apply_litellm_slim_gate(slim, config) == slim
 
     key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.write_text("test-key")
+    # All assertions below exercise gateway mode; keep the gate active throughout.
     with patch.dict(
         os.environ,
         {
@@ -750,53 +754,42 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
         },
         clear=False,
     ):
-        key.parent.mkdir(parents=True, exist_ok=True)
-        key.write_text("test-key")
+        # This sanity check fails if the fixture silently runs in direct mode.
+        assert configure_opencode.apply_litellm_slim_gate(slim, config) != slim
         routed = configure_opencode.apply_litellm_slim_gate(slim, config)
-    routed_refs = [
-        routed["roles"]["orchestrator"]["model"],
-        routed["council"]["presets"]["active"]["alpha"]["model"],
-        *routed["_tiers"]["active"]["fallback"]["orchestrator"],
-    ]
-    assert routed_refs == [f"litellm/{ref}" for ref in refs]
-    assert routed["skills"] == ["frontend/design"]
-    wrapped_slim = {"roles": {"x": {"model": "litellm/openai/fixture-model"}}}
-    assert (
-        configure_opencode.apply_litellm_slim_gate(wrapped_slim, config)["roles"]["x"][
-            "model"
+        routed_refs = [
+            routed["roles"]["orchestrator"]["model"],
+            routed["council"]["presets"]["active"]["alpha"]["model"],
+            *routed["_tiers"]["active"]["fallback"]["orchestrator"],
         ]
-        == "litellm/openai/fixture-model"
-    )
-    for malformed in (
-        "litellm/no-prefix",
-        "litellm/litellm/openai/fixture-model",
-        "litellm/openai/",
-    ):
-        with pytest.raises(RuntimeError):
+        assert routed_refs == [f"litellm/{ref}" for ref in refs]
+        assert routed["skills"] == ["frontend/design"]
+        wrapped_slim = {"roles": {"x": {"model": "litellm/openai/fixture-model"}}}
+        assert (
+            configure_opencode.apply_litellm_slim_gate(wrapped_slim, config)["roles"][
+                "x"
+            ]["model"]
+            == "litellm/openai/fixture-model"
+        )
+        for malformed in (
+            "litellm/no-prefix",
+            "litellm/litellm/openai/fixture-model",
+            "litellm/openai/",
+        ):
+            with pytest.raises(RuntimeError):
+                configure_opencode.apply_litellm_slim_gate(
+                    {"roles": {"x": {"model": malformed}}}, config
+                )
+        with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
             configure_opencode.apply_litellm_slim_gate(
-                {"roles": {"x": {"model": malformed}}}, config
+                {"roles": {"x": {"model": "litellm/openai/missing"}}}, config
             )
-    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
-        configure_opencode.apply_litellm_slim_gate(
-            {"roles": {"x": {"model": "litellm/openai/missing"}}}, config
-        )
-    with (
-        patch.dict(
-            os.environ,
-            {
-                "DOTFILES_USE_LITELLM_PROXY": "1",
-                "DOTFILES_RUN_LITELLM_SETUP": "1",
-                "HOME": str(tmp_path),
-            },
-            clear=False,
-        ),
-        pytest.raises(
+        with pytest.raises(
             RuntimeError, match="no LiteLLM gateway alias: cerebras/unmapped"
-        ),
-    ):
-        configure_opencode.apply_litellm_slim_gate(
-            {"roles": {"unknown": {"model": "cerebras/unmapped"}}}, config
-        )
+        ):
+            configure_opencode.apply_litellm_slim_gate(
+                {"roles": {"unknown": {"model": "cerebras/unmapped"}}}, config
+            )
 
 
 def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_unknown(
