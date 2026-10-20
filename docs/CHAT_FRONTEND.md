@@ -581,6 +581,21 @@ Azure and Mistral fields, remain operator-managed and are preserved.
 
 STT and TTS model IDs come from oMLX audio discovery in discovery order: the
 first `audio_stt` and first qualified `audio_tts` models are selected.
+
+Three evidence levels apply to audio routing (and qualify every claim made
+elsewhere in this document):
+
+- **Delivered** — the reconciler rendered, wrote and readback-verified the
+  configuration. This is the default guarantee of every reconcile.
+- **Probe-qualified** — an opt-in `--probe-routes` run attached
+  `PROTOCOL_PROBED` evidence to candidates (real multipart STT, binary TTS
+  and shape-checked embedding requests; auth failures never qualify).
+  Without a probe run, discovery evidence stays `DISCOVERED`.
+- **Consumer-verified** — a real consumer outcome was served through the
+  configured route (transcription, speech or retrieval). Gateway audio is
+  consumer-verified: WebUI's STT and TTS routes resolve to the LiteLLM
+  gateway with a scoped key reference, and live transcription/speech
+  outcomes were captured through that route (see the acceptance ledger).
 `chatterbox` is excluded by a shared family predicate: its 2026-10-16 probe
 failed without voice-cloning conditionals. A chatterbox-only discovery omits
 TTS and warns; STT may still be reconciled. Qwen3-TTS receives the configured
@@ -765,11 +780,12 @@ live-validated against `open-webui==0.11.4`:
    as a reconciler-managed `meridian` connection whenever
    `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
-2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.12.0}`
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.12.3}`
    in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
    3.14 unsupported upstream). LaunchAgent behaviour verified live
    (KeepAlive respawn works; see the bootout/bootstrap retry note below).
-   Early Phase 4 validation was against 0.11.4; the pinned default is 0.12.0.
+   Early Phase 4 validation was against 0.11.4; the pinned default is
+   0.12.3 (live deployment verified on 0.12.3).
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
    `chat.<CADDY_DOMAIN>`, LAN-only by default with the explicit
    `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
@@ -789,3 +805,35 @@ live-validated against `open-webui==0.11.4`:
    full strings and preserves empty-prefix seed entries verbatim. The
    LaunchAgent wiring also absorbed an upstream launchd quirk: `bootout` is
    asynchronous, so the bootstrap step retries with a bounded backoff.
+
+## Acceptance ledger (local-AI unification PR)
+
+Recorded at PR review closure. Each row names the review gate that raised the
+item and how it is disposed: **satisfied** by evidence in this change, or a
+**limitation** explicitly carried forward instead of being silent.
+
+| Item | Origin | Disposition |
+|---|---|---|
+| Ownership transition table, credential-restoration provenance, interrupted-state reporting, embedding identity/parity binding | Gate 7 (R3, attempt 8) | Satisfied — reviewer-verified at the public reconciler boundary, including credential release restoration, repeat-reconcile provenance, acknowledged recovery bound to one backend identity, and route changes bound to one destination. |
+| Backup-wide secret sentinel sweep | Gate 7 item (b) | Limitation — redaction is enforced at writer level (statewriter secret guard, credential-free ownership records, masked readback); a sweep of every state file, backup and diagnostic surface was not independently run. |
+| Repeated-UNKNOWN retention policy | Gate 7 item (c) | Limitation — absence/UNKNOWN/explicit-disable are separated and UNKNOWN preserves last-known-good, but that retention policy is implicit (preservation by default), not explicitly specified or tested. |
+| Legacy reconciler path cleanup | Gate 7 item (f) | Limitation — unused audio adoption/gate-off helpers and other non-blocking cleanup qualifications remain. |
+| R3 mutation checks (released-restore inverted, empty-wanted, UNKNOWN-omission, parity-gate removal) | Gate 7 item (g) | Limitation — the checks were run during remediation rounds; the final reviewer verified the behaviour with independent probes rather than re-running the historical mutations. |
+| R2b evidence limitations at contract freeze | R2b attempt 4 | Limitation — qualification at freeze time was config-only (`DISCOVERED`); probe and consumer evidence arrived with R4. Details in the PR review thread. |
+| Direct-mode consumer outcomes | R4 attempt 1/4 | Limitation — live direct-route outcomes are orchestrator-supplied evidence; not independently repeated by the reviewer. |
+| Silent STT transcription | R4 | Limitation — a tone input proves the response shape only, not recognition accuracy. |
+| Credential-leak tests | R4 | Limitation — request-header/payload leak coverage is useful but is not a full sentinel sweep of state, backups and diagnostics. |
+| Gateway embedding qualification | R4 | Limitation — conservatively unavailable fail-closed: no verified LiteLLM proxy-model mapping is established, so the managed embedding is preserved (never released) until a mapping and probes exist. |
+| Gateway consumer outcomes | Approved runtime window (2026-10-19/20) | Satisfied — gateway-mode reconcile clean twice (including after a bounded restart); live audio config routes STT and TTS through the LiteLLM gateway (`http://127.0.0.1:4000/v1`) with a scoped key reference; transcription returned a valid response shape and speech returned audio/mpeg; upload → process → document retrieval found the marker through the gateway; all outcomes restart-resilient. |
+| Offline-first evidence | Approved runtime window (disposable environment) | Satisfied — isolated-HOME run with WAN blocked exited 0, reported honest UNKNOWN coverage (catalogue fetches refused, OAuth caches absent), retained the previous-entries ledger exactly, invented no aliases, and kept the chat target `ollama-cloud/glm-5.3-flash` present. Slim-selection preservation under the same conditions is covered by the committed hermetic tests. |
+| Previous-entries ledger drift | Offline run finding | Limitation — the live gateway serves 82 aliases while the retention ledger records 63, so offline retention is ledger-bounded. Refreshing the ledger (write `config.models.json` from the live inventory) is cheap follow-up work. |
+| Caddy host validation | Recovery-era host item | Partially resolved — deployed Caddyfile and repo template are `caddy fmt`-clean (no drift on future deploys); `caddy validate` still fails on the root-owned `pki/authorities/local/intermediate.crt` at mode 600, which needs an operator `sudo chmod 644` (or equivalent) before `make verify` passes. |
+
+Merge preconditions: Ubuntu CI green on the final pushed head, the Caddy
+operator action above, and owner verification of gateway-mode chat. The PR
+stays draft until the owner's gateway-mode verification.
+
+Evidence vocabulary — **delivered** (reconciled and readback-verified),
+**probe-qualified** (`PROTOCOL_PROBED` from an opt-in `--probe-routes` run),
+**consumer-verified** (a real consumer outcome served through the configured
+route) — applies to every claim in this document.
