@@ -5173,6 +5173,28 @@ def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):
     assert any("ignored in check/dry-run" in line for line in caplog.messages)
 
 
+def test_entrypoint_collision_result_exits_nonzero(monkeypatch, caplog):
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
+    monkeypatch.setattr(module, "compute_desired_state", lambda **kwargs: {})
+
+    class _Collision:
+        status = "collision"
+
+        def summary(self):
+            return "collision summary"
+
+    monkeypatch.setattr(
+        module, "reconcile_via_api", lambda client, desired: _Collision()
+    )
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 1
+    assert any("collision" in line for line in caplog.messages)
+
+
 def test_entrypoint_unhealthy_service_never_probes(monkeypatch, caplog):
     module = _script()
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")

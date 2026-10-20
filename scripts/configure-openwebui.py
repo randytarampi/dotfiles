@@ -811,6 +811,11 @@ def main():
             return 2
         result = reconcile_via_api(client, desired)
         logger.info(result.summary())
+        if result.status == "collision":
+            # Collision-shaped results carry no actions; the summary above is
+            # the controlled failure output (never an AttributeError crash).
+            logger.error("Open WebUI reconciliation collision; refusing to apply")
+            return 1
         if result.actions.get("failed"):
             failed = ", ".join(result.actions["failed"])
             logger.error("Open WebUI reconciliation failed actions: %s", failed)
