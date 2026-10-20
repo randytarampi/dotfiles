@@ -47,16 +47,22 @@ def _wav_bytes():
 
 
 def _request(url, payload, key_value, timeout, content_type="application/json"):
+    parsed = urllib.parse.urlparse(str(url))
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("probe URLs must be absolute http(s) endpoints")
     headers = {"Content-Type": content_type}
     if key_value:
         headers["Authorization"] = "Bearer " + key_value
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            req, timeout=timeout
+        ) as response:  # nosec B310 - scheme validated above
             return response.status, response.headers, response.read(), None
     except urllib.error.HTTPError as error:
         return error.code, error.headers, error.read(), None
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except (TimeoutError, OSError):
+        # URLError subclasses OSError; one tuple catches both.
         return None, {}, b"", "connection unavailable or timed out"
 
 
@@ -84,7 +90,7 @@ def _status_result(code, model, endpoint):
     return None
 
 
-def _multipart(model, key_value, timeout):
+def _multipart(model, timeout):
     boundary = "route-probe-boundary"
     body = (
         (
@@ -100,7 +106,7 @@ def _multipart(model, key_value, timeout):
 
 def probe_stt(base_url, model, key_reference, key_value=None, timeout=5):
     endpoint = base_url.rstrip("/") + "/audio/transcriptions"
-    request, body, content_type = _multipart(model, key_value, timeout)
+    request, body, content_type = _multipart(model, timeout)
     code, _, data, _ = request(endpoint, body, key_value, timeout, content_type)
     failed = _status_result(code, model, endpoint)
     if failed:
@@ -233,7 +239,8 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5):
             request, timeout=timeout
         ) as response:  # nosec B310 - scheme validated above
             code, data = response.status, response.read()
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except (TimeoutError, OSError):
+        # URLError subclasses OSError; one tuple catches both.
         return None
     if code != 200:
         return None
