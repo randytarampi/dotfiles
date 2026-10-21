@@ -9,7 +9,6 @@ import shutil
 import subprocess  # nosec B404 - runs this repository's own configuration script
 import sys
 import tempfile
-import socket
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
