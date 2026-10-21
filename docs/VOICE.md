@@ -68,6 +68,12 @@ selection. The current transport remains the default, preserving existing
 behaviour; changing tiers does not implicitly change microphone transport. Pi
 continues to use sherpa-onnx.
 
+With `configure-opencode-voice.py`, `--stt-transport local` or
+`--stt-transport openai` saves that choice across tier changes. Omitting the
+flag preserves the saved transport. Explicit `--stt-transport auto` reapplies
+`DOTFILES_USE_LITELLM_PROXY` (`1` selects OpenAI; `0` selects local); if the
+gate is unset, it uses the saved transport or defaults to local.
+
 The `free` tier is explicitly excluded from Ollama Cloud fallback handling; it
 does not require `OLLAMA_API_KEY` or a local Ollama daemon for voice.
 

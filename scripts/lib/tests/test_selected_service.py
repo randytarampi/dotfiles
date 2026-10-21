@@ -265,7 +265,16 @@ def test_resolve_stt_transport_precedence():
         "openai",
         "explicit --stt-transport openai",
     )
-    # Omitted flag and explicit auto both defer to the global gateway gate.
+    # Omitted flag preserves saved transport even with an opposing gateway gate.
+    assert resolve_stt_transport(None, gateway_gate=True, saved="local") == (
+        "local",
+        "saved selection",
+    )
+    assert resolve_stt_transport(None, gateway_gate=False, saved="openai") == (
+        "openai",
+        "saved selection",
+    )
+    # Without a saved choice, omission uses the gate; explicit auto reapplies it.
     assert resolve_stt_transport(None, gateway_gate=True) == (
         "openai",
         "global gateway gate",

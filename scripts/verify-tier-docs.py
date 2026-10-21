@@ -48,7 +48,14 @@ def registry_tiers(registry: dict) -> Set[str]:
 def documented_tiers(document: str) -> Set[str]:
     """Extract tier IDs from the tier definition table."""
     tiers = set()
+    in_table = False
     for line in document.splitlines():
+        if not in_table:
+            if re.match(r"^\|\s*Tier\s*\|\s*Providers\s*\|\s*Best For\s*\|\s*$", line):
+                in_table = True
+            continue
+        if not line.startswith("|"):
+            break
         match = re.match(r"^\|\s*\*\*([^*]+)\*\*\s*\|", line)
         if match:
             tiers.add(match.group(1))

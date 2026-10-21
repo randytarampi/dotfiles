@@ -1427,6 +1427,7 @@ def main():
         if "voice" in skipped:
             pass
         else:
+            # Omit --stt-transport so tier changes preserve the saved microphone policy.
             voice_args = [
                 sys.executable,
                 os.path.join(SCRIPT_DIR, "configure-opencode-voice.py"),

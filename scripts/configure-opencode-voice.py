@@ -373,7 +373,8 @@ def add_voice_transport_arguments(parser):
         "--stt-transport",
         choices=("auto", "local", "openai"),
         default=None,
-        help="STT transport policy (auto preserves tier-based behaviour)",
+        help="STT transport policy (omitted preserves saved choice; auto reapplies "
+        "the global gateway setting, or the saved/local default when unset)",
     )
 
 

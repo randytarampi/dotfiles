@@ -57,3 +57,18 @@ def test_litellm_wrapped_tier_identity_matches_direct_documentation():
         "| orchestrator | `openai/alpha` | high |\n"
     )
     assert MODULE.drift_messages(registry, document) == []
+
+
+def test_documented_tiers_ignores_bold_cells_outside_definition_table():
+    document = (
+        "| Component | Description |\n|---|---|\n| **before** | Not a tier |\n\n"
+        "| Tier | Providers | Best For |\n|---|---|---|\n"
+        "| **local** | Ollama | Offline |\n"
+        "| **plus** | OpenAI | Cloud |\n\n"
+        "| Component | Description |\n|---|---|\n| **after** | Not a tier |\n"
+    )
+    assert MODULE.documented_tiers(document) == {"local", "plus"}
+    assert (
+        MODULE.tier_set_messages({"presets": {"local": {}, "plus": {}}}, document) == []
+    )
+    assert MODULE.documented_tiers("| **unrelated** | Not a tier |\n") == set()

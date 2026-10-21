@@ -375,9 +375,10 @@ def test_voice_parser_rejects_removed_tts_transport(monkeypatch):
 @pytest.mark.parametrize(
     "flag,gate,saved,expected",
     [
-        (None, True, "local", "openai"),
+        (None, True, "local", "local"),
         ("auto", True, "local", "openai"),
-        (None, False, "openai", "local"),
+        (None, False, "openai", "openai"),
+        ("auto", False, "openai", "local"),
         ("auto", None, "openai", "openai"),
         (None, None, None, "local"),
         ("local", True, "openai", "local"),
@@ -390,6 +391,30 @@ def test_voice_transport_precedence(flag, gate, saved, expected):
         selected_service.resolve_stt_transport(flag, gateway_gate=gate, saved=saved)[0]
         == expected
     )
+
+
+@pytest.mark.parametrize("transport,gate", [("local", "1"), ("openai", "0")])
+def test_voice_transport_persists_across_tiers(monkeypatch, tmp_path, transport, gate):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", gate)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(voice, "load_env", lambda *args: True)
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "active_engines", lambda: [])
+    monkeypatch.setattr(voice, "audio_models", lambda _: [])
+    monkeypatch.setattr(voice.tier_registry, "load_registry", lambda: {"presets": {}})
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    for tier, flags in [("anthropic", ["--stt-transport", transport]), ("plus", [])]:
+        monkeypatch.setattr(
+            sys, "argv", ["configure-opencode-voice.py", "--preset", tier, *flags]
+        )
+        voice.main()
+        state = voice._load_voice_state(str(tmp_path))
+        assert state["sttTransport"] == transport
+    assert state["sttTransportReason"] == "saved selection"
 
 
 def test_voice_selector_omits_unqualified_stt_and_cleanup(monkeypatch):

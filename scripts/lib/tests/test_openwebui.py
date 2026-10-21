@@ -3562,16 +3562,18 @@ def test_audio_prewrite_detects_concurrent_change(monkeypatch, tmp_path, caplog)
         "stt": dict(projection["stt"], MODEL="new-asr"),
         "tts": dict(projection["tts"]),
     }
-    client.concurrent = {
+    concurrent = {
         "realtime": current["realtime"],
         "stt": dict(current["stt"], MODEL="admin-edit"),
         "tts": current["tts"],
     }
+    snapshots = iter([current, concurrent])
+    monkeypatch.setattr(client, "get_audio_config", lambda: next(snapshots))
     openwebui.reconcile_via_api(
         client, {"openai": [], "anthropic": [], "ollama": [], "audio": desired}
     )
     assert client.audio_writes == 0
-    assert "owned fields changed" in caplog.text
+    assert "Refusing Open WebUI audio write after concurrent edit" in caplog.text
 
 
 def test_audio_gate_off_clears_only_projection_and_is_stable(monkeypatch, tmp_path):

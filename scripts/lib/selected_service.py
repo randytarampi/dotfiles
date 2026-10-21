@@ -292,10 +292,11 @@ def resolve_stt_transport(
 
     The axis is the USER's locality/provider preference, distinct from the
     gateway-vs-direct routing policy. Precedence: an explicit ``local`` or
-    ``openai`` flag binds; an omitted flag or an explicit ``auto`` defers to
-    the global gateway gate (``True`` -> openai, ``False`` -> local); an
-    unset gate falls to the saved selection; with nothing binding, the local
-    default applies. No store is read or written here; callers persist the
+    ``openai`` flag binds; an omitted flag preserves the saved selection.
+    Otherwise the global gateway gate applies (``True`` -> openai,
+    ``False`` -> local), including for explicit ``auto``. An unset gate falls
+    to the saved selection; with nothing binding, the local default applies.
+    No store is read or written here; callers persist the
     resolved choice in their canonical repo-owned configuration.
     """
     if flag in ("local", "openai"):
@@ -304,6 +305,8 @@ def resolve_stt_transport(
         raise ValueError("stt transport flag must be local, openai, auto, or omitted")
     if saved not in (None, "local", "openai"):
         raise ValueError("saved selection must be local or openai")
+    if flag is None and saved in ("local", "openai"):
+        return saved, "saved selection"
     if gateway_gate is True:
         return "openai", "global gateway gate"
     if gateway_gate is False:
