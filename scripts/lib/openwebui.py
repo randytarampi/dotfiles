@@ -701,6 +701,34 @@ def _qualify_candidates(
     return qualified, reasons
 
 
+def _served_wire_alias(provider, model, endpoint, key_value):
+    """Resolve the exact served gateway alias for one audio candidate (P1.1).
+
+    Cross-engine id collisions leave ONLY the namespaced aliases served;
+    probing or rendering an unserved bare id would fail. The served
+    inventory is the real source: the bare id stays when it is actually
+    served, the canonical ``provider/<id>`` alias is used when only that is
+    served, and an unserved candidate resolves to None so it is dropped with
+    an honest unavailable outcome rather than a doomed probe. The key value
+    is a wire-time read only and is never logged or persisted.
+    """
+    from route_probes import fetch_gateway_models
+
+    inventory = fetch_gateway_models(endpoint, key_value)
+    if inventory is None:
+        # Served-alias UNKNOWN (unreachable/unauthorized/malformed): keeping
+        # the bare candidate is the honest boundary — inventory evidence is
+        # UNKNOWN, not a removal decision. The probe/route layer reports
+        # reality from here.
+        return model
+    if model in inventory:
+        return model
+    namespaced = f"{provider}/{model}"
+    if namespaced in inventory:
+        return namespaced
+    return None
+
+
 def _desired_audio_settings(
     probe_routes=False, allow_auto_probe=False, selection_records=None
 ):
@@ -723,6 +751,30 @@ def _desired_audio_settings(
         _litellm_key_value() if gateway and (probe_routes or allow_auto_probe) else None
     )
     key_reference = LITELLM_OPENWEBUI_KEY_PATH if gateway else endpoint[1]
+    if gateway and gateway_key:
+        # P1.1 canonical-alias resolution: cross-engine id collisions leave
+        # ONLY namespaced aliases served, and probing/rendering an unserved
+        # bare id would fail. Resolve every candidate against the SERVED
+        # inventory; unserved candidates are dropped with an honest note.
+        # Read-only modes (no key) keep the bare render and their honest
+        # not-probed/unresolved notes.
+        stt_candidates = [
+            (provider, resolved, qual)
+            for provider, resolved, qual in (
+                (
+                    candidate[0],
+                    _served_wire_alias(
+                        candidate[0],
+                        candidate[1],
+                        gateway_endpoint,
+                        gateway_key,
+                    ),
+                    candidate[2],
+                )
+                for candidate in stt_candidates
+            )
+            if resolved is not None
+        ]
     from route_probes import probe_stt
 
     stt_candidates, audio_probe_reasons = _qualify_candidates(
@@ -775,6 +827,25 @@ def _desired_audio_settings(
         and item.get("model_type") == "audio_tts"
         and not is_known_unqualified_tts(item.get("name"))
     ]
+    if gateway and gateway_key:
+        # Same P1.1 canonical-alias resolution as the STT family.
+        tts_candidates = [
+            (provider, resolved, qual)
+            for provider, resolved, qual in (
+                (
+                    candidate[0],
+                    _served_wire_alias(
+                        candidate[0],
+                        candidate[1],
+                        gateway_endpoint,
+                        gateway_key,
+                    ),
+                    candidate[2],
+                )
+                for candidate in tts_candidates
+            )
+            if resolved is not None
+        ]
     from route_probes import probe_tts
 
     tts_candidates, tts_reasons = _qualify_candidates(
@@ -1807,7 +1878,6 @@ def _reconcile_audio(client, current, wanted):
                 raise
             _write_audio_projection(expected)
             return {"status": "verified", "applied": True, "verified": True}
-        return {"status": "noop", "applied": False, "verified": False}
         return {"status": "noop", "applied": False, "verified": False}
     elif projection is not None or released_credentials:
         if released_credentials:

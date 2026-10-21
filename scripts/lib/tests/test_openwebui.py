@@ -6284,3 +6284,90 @@ def test_embedding_wanted_native_url_update_is_not_a_noop(monkeypatch, tmp_path)
     assert client.get_embedding_config()["ollama_config"]["url"] == native
     saved = openwebui._read_embedding_state()
     assert saved["projection"]["ollama_config"]["url"] == native
+
+
+def test_gateway_audio_collision_renders_served_namespaced_alias(monkeypatch, tmp_path):
+    """P1.1: a cross-engine collision leaves only namespaced aliases served."""
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(
+        openwebui, "_litellm_endpoint", lambda: "http://127.0.0.1:4000/v1"
+    )
+    key = tmp_path / "openwebui.key"
+    key.write_text("scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "LITELLM_OPENWEBUI_KEY_PATH", str(key))
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "test-build")
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    # Collision inventory: the bare id is NOT served; only namespaced forms.
+    monkeypatch.setattr(
+        route_probes,
+        "fetch_gateway_models",
+        lambda endpoint, key_value=None: ["ollama/asr", "omlx/asr"],
+    )
+    observed = []
+
+    def success(endpoint, model, key_reference, key_value=None, **_kwargs):
+        observed.append((endpoint, model, key_reference, key_value))
+        return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr(route_probes, "probe_stt", success)
+    bundle = openwebui._desired_audio_settings(allow_auto_probe=True)
+    assert observed == [
+        ("http://127.0.0.1:4000/v1", "omlx/asr", str(key), "scoped-wire-secret")
+    ]
+    assert bundle["settings"]["stt"]["MODEL"] == "omlx/asr"
+    assert (
+        bundle["settings"]["stt"]["OPENAI_API_BASE_URL"] == "http://127.0.0.1:4000/v1"
+    )
+    assert bundle["settings"]["stt"]["OPENAI_API_KEY"] == "scoped-wire-secret"
+    assert "scoped-wire-secret" not in repr(bundle["selection"])
+
+
+def test_gateway_audio_alias_resolution_degrades_bare_on_unknown_inventory(
+    monkeypatch, tmp_path
+):
+    """P1.1 boundary: UNKNOWN served inventory keeps the bare candidate."""
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(
+        openwebui,
+        "audio_models",
+        lambda *_: [{"name": "asr", "model_type": "audio_stt"}],
+    )
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(
+        openwebui, "_litellm_endpoint", lambda: "http://127.0.0.1:4000/v1"
+    )
+    key = tmp_path / "openwebui.key"
+    key.write_text("scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "LITELLM_OPENWEBUI_KEY_PATH", str(key))
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "scoped-wire-secret")
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "test-build")
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(
+        route_probes, "fetch_gateway_models", lambda endpoint, key_value=None: None
+    )
+    observed = []
+
+    def success(endpoint, model, key_reference, key_value=None, **_kwargs):
+        observed.append((endpoint, model))
+        return type("Result", (), {"status": "ok", "notes": ("HTTP 200",)})()
+
+    monkeypatch.setattr(route_probes, "probe_stt", success)
+    openwebui._desired_audio_settings(allow_auto_probe=True)
+    assert observed == [("http://127.0.0.1:4000/v1", "asr")]
