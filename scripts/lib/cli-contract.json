@@ -1073,7 +1073,9 @@
         "--home",
         "--direct",
         "--gateway",
-        "--mode"
+        "--mode",
+        "--baseline-config",
+        "--baseline-inventory"
       ],
       "positional_operand": null,
       "child_scripts": ["configure-litellm.py"]
