@@ -136,6 +136,13 @@ def run_smoke(
         home_path = Path(temporary_home.name)
     else:
         home_path = Path(home).expanduser().resolve()
+        # Safe destination in BOTH modes: never the source HOME, never a
+        # pre-populated destination an overwrite could damage (retention
+        # copies baselines into the isolated root just like acceptance).
+        if home_path == Path.home().resolve():
+            raise ValueError("--home must not be the real source HOME")
+        if home_path.exists() and any(home_path.iterdir()):
+            raise ValueError("--home must point at an empty directory")
         if mode == "acceptance" and (
             home_path.exists() or not home_path.parent.is_dir()
         ):
@@ -242,8 +249,18 @@ def run_smoke(
                 "stderr": result.stderr,
             }
         )
+        if mode == "acceptance":
+            # No-op generation guard: a run whose child wrote nothing new is
+            # validating the copied baseline, not a cold start (P0.4).
+            produced_config = (isolated_root / "config.yaml").read_text(
+                encoding="utf-8"
+            )
+            report["generation_produced_new_config"] = produced_config != Path(
+                baseline[0]
+            ).read_text(encoding="utf-8")
         report["passed"] = (
             report["command_exit_zero"]
+            and report.get("generation_produced_new_config", True)
             and report["ledger_retained_exactly"]
             and report["target_present"]
             and report["served_within_inventory"]
@@ -262,9 +279,28 @@ def main(argv=None):
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--home", type=Path)
+    parser.add_argument("--baseline-config", type=Path)
+    parser.add_argument("--baseline-inventory", type=Path)
     args = parser.parse_args(argv)
+    if args.mode == "acceptance" and not (
+        args.baseline_config and args.baseline_inventory
+    ):
+        print(
+            "FAIL: acceptance requires --baseline-config and --baseline-inventory",
+            file=sys.stderr,
+        )
+        return 1
     try:
-        report = run_smoke(args.home, mode=args.mode, dry_run=args.dry_run)
+        report = run_smoke(
+            args.home,
+            mode=args.mode,
+            dry_run=args.dry_run,
+            baseline=(
+                (args.baseline_config, args.baseline_inventory)
+                if args.mode == "acceptance"
+                else None
+            ),
+        )
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

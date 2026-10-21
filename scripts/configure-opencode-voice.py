@@ -545,11 +545,8 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
 
     # ── LLM endpoint ──────────────────────────────────────────────────
     if is_local_tier:
-        # Local Ollama — no API key needed
-        voice_config = {
-            "endpoint": get_ollama_local_base_url(),
-        }
-        # Pick the best local model for voice
+        # Local Ollama — direct mode needs no API key; gateway mode admits
+        # ONLY the served canonical alias + the scoped key (P0.2/P0.3).
         use_local_ollama = os.environ.get(
             "DOTFILES_USE_LOCAL_OLLAMA", "true"
         ).lower() in (
@@ -567,37 +564,108 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     state.get("selections", {}).get(Operation.CLEANUP_LLM.value),
                 )
                 if voice_model:
-                    voice_config = local_voice_provider(voice_model)
                     provider = (
                         voice_model.split("/", 1)[0] if "/" in voice_model else "ollama"
                     )
                     model = voice_model.split("/", 1)[-1]
                     candidates = [(provider, voice_model, Qualification.DISCOVERED)]
-                    locators[Operation.CLEANUP_LLM.value] = _service_locator(
-                        Operation.CLEANUP_LLM,
-                        candidates,
-                        "gateway" if gateway_gate is True else "direct",
-                        selection=CanonicalSelection(
+                    if gateway_gate is True:
+                        served_alias = _gateway_alias(provider, model)
+                        if (
+                            not served_alias
+                            or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+                        ):
+                            logger.warning(
+                                "Gateway voice route requires a served model "
+                                "alias and LITELLM_OPENCODE_KEY for %s",
+                                voice_model,
+                            )
+                            unresolved = True
+                        else:
+                            voice_config = {
+                                "endpoint": (
+                                    f"http://127.0.0.1:"
+                                    f"{_configured_litellm_port() or 4000}/v1"
+                                ),
+                                "model": served_alias,
+                                "apiKeyEnv": "LITELLM_OPENCODE_KEY",
+                            }
+                            locators[Operation.CLEANUP_LLM.value] = _service_locator(
+                                Operation.CLEANUP_LLM,
+                                candidates,
+                                "gateway",
+                                selection=CanonicalSelection(
+                                    Operation.CLEANUP_LLM,
+                                    provider,
+                                    served_alias,
+                                    Qualification.DISCOVERED,
+                                    "installed local model; config-only, runtime unverified",
+                                    config_only=True,
+                                ),
+                                endpoint=voice_config["endpoint"],
+                                wire_model=served_alias,
+                                key_reference="LITELLM_OPENCODE_KEY",
+                                config_only=True,
+                            )
+                    else:
+                        voice_config = local_voice_provider(voice_model)
+                        locators[Operation.CLEANUP_LLM.value] = _service_locator(
                             Operation.CLEANUP_LLM,
-                            provider,
-                            voice_model,
-                            Qualification.DISCOVERED,
-                            "installed local model; config-only, runtime unverified",
+                            candidates,
+                            "direct",
+                            selection=CanonicalSelection(
+                                Operation.CLEANUP_LLM,
+                                provider,
+                                voice_model,
+                                Qualification.DISCOVERED,
+                                "installed local model; config-only, runtime unverified",
+                                config_only=True,
+                            ),
+                            endpoint=voice_config["endpoint"],
+                            wire_model=model,
                             config_only=True,
-                        ),
-                        endpoint=voice_config["endpoint"],
-                        wire_model=model,
-                        config_only=True,
-                    )
+                        )
             except (OSError, ValueError, RuntimeError) as error:
                 logger.warning("Local voice model resolution failed: %s", error)
                 unresolved = True
+        else:
+            unresolved = True
         if "model" not in voice_config:
             unresolved = True
 
     elif is_pro_tier:
-        # Ollama Cloud — route through local daemon if cloud-capable
-        if can_proxy_cloud:
+        # Ollama Cloud — gateway mode admits ONLY a served alias + scoped key;
+        # a direct route is never installed under the strict contract (P0.2/P0.3).
+        if gateway_gate is True:
+            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud")
+            if (
+                not served_alias
+                or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+            ):
+                logger.warning(
+                    "Gateway voice route requires a served model alias and "
+                    "LITELLM_OPENCODE_KEY for gemma4:31b:cloud"
+                )
+                unresolved = True
+            else:
+                voice_config = {
+                    "endpoint": (
+                        f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                    ),
+                    "model": served_alias,
+                    "apiKeyEnv": "LITELLM_OPENCODE_KEY",
+                }
+                locator = _tier_config_only_locator(
+                    Operation.CLEANUP_LLM,
+                    "ollama",
+                    "gemma4:31b:cloud",
+                    voice_config["endpoint"],
+                    "LITELLM_OPENCODE_KEY",
+                    gateway_gate,
+                )
+                if locator:
+                    locators[Operation.CLEANUP_LLM.value] = locator
+        elif can_proxy_cloud:
             voice_config = {
                 "endpoint": get_ollama_local_base_url(),
                 "model": "gemma4:31b:cloud",
@@ -608,16 +676,17 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 "model": "gemma4:31b",
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }
-        locator = _tier_config_only_locator(
-            Operation.CLEANUP_LLM,
-            "ollama-cloud",
-            "gemma4:31b",
-            voice_config["endpoint"],
-            "OLLAMA_API_KEY",
-            gateway_gate,
-        )
-        if locator:
-            locators[Operation.CLEANUP_LLM.value] = locator
+        if gateway_gate is not True:
+            locator = _tier_config_only_locator(
+                Operation.CLEANUP_LLM,
+                "ollama-cloud",
+                "gemma4:31b",
+                voice_config["endpoint"],
+                "OLLAMA_API_KEY",
+                gateway_gate,
+            )
+            if locator:
+                locators[Operation.CLEANUP_LLM.value] = locator
 
     elif tier in ("omo-slim-opencode-zen-free", "free"):
         # These tiers use configured remote providers, never Ollama.
@@ -635,27 +704,6 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             provider["apiKeyEnv"],
             gateway_gate,
         )
-    elif tier == "pro":
-        if can_proxy_cloud:
-            provider, model = "ollama", "gemma4:31b:cloud"
-            endpoint = get_ollama_local_base_url()
-            key_env = None
-        else:
-            provider, model = "ollama-cloud", "gemma4:31b"
-            endpoint = get_provider_base_url("ollama-cloud")
-            key_env = "OLLAMA_API_KEY"
-        locator = _tier_config_only_locator(
-            Operation.CLEANUP_LLM, provider, model, endpoint, key_env, gateway_gate
-        )
-        if locator:
-            rendered = _render_locator(locator)
-            locators[Operation.CLEANUP_LLM.value] = locator
-            voice_config.update(
-                endpoint=rendered["endpoint"], model=rendered["wire_model"]
-            )
-            if locator.route.key_reference:
-                voice_config["apiKeyEnv"] = locator.route.key_reference
-
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
         endpoint = (
@@ -688,8 +736,38 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         )
 
     else:
-        # Fallback: Ollama Cloud
-        if can_proxy_cloud:
+        # Fallback: Ollama Cloud — gateway mode admits ONLY a served alias +
+        # scoped key; a direct route is never installed (P0.2/P0.3).
+        if gateway_gate is True:
+            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud")
+            if (
+                not served_alias
+                or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+            ):
+                logger.warning(
+                    "Gateway voice route requires a served model alias and "
+                    "LITELLM_OPENCODE_KEY for gemma4:31b:cloud"
+                )
+                unresolved = True
+            else:
+                voice_config = {
+                    "endpoint": (
+                        f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+                    ),
+                    "model": served_alias,
+                    "apiKeyEnv": "LITELLM_OPENCODE_KEY",
+                }
+                locator = _tier_config_only_locator(
+                    Operation.CLEANUP_LLM,
+                    "ollama",
+                    "gemma4:31b:cloud",
+                    voice_config["endpoint"],
+                    "LITELLM_OPENCODE_KEY",
+                    gateway_gate,
+                )
+                if locator:
+                    locators[Operation.CLEANUP_LLM.value] = locator
+        elif can_proxy_cloud:
             voice_config = {
                 "endpoint": get_ollama_local_base_url(),
                 "model": "gemma4:31b:cloud",
