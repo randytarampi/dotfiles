@@ -137,3 +137,54 @@ def test_help_exits_zero():
     with pytest.raises(SystemExit) as result:
         smoke.main(["--help"])
     assert result.value.code == 0
+
+
+def test_smoke_destination_rejections(tmp_path, monkeypatch):
+    """P0.4: both modes reject the source HOME and pre-populated destinations."""
+    monkeypatch.setattr(smoke.Path, "home", lambda: tmp_path)
+    populated = tmp_path / "dest"
+    populated.mkdir()
+    sentinel = populated / "keep.txt"
+    sentinel.write_text("sentinel")
+
+    def _never_writes(*_args, **_kwargs):
+        raise AssertionError("no child must run after a destination rejection")
+
+    with pytest.raises(ValueError, match="empty directory"):
+        smoke.run_smoke(home=str(populated), mode="retention", runner=_never_writes)
+    with pytest.raises(ValueError, match="must not be the real source HOME"):
+        smoke.run_smoke(
+            home=str(tmp_path),
+            mode="acceptance",
+            baseline=_inputs(tmp_path),
+            inventory={"existing/model", "ollama-local/llama3.2:3b"},
+            runner=_never_writes,
+        )
+    assert sentinel.read_text() == "sentinel"
+
+
+def test_acceptance_cli_plumbing_main(tmp_path):
+    """P0.4 CLI plumbing: real main() with acceptance inputs and dry-run safety."""
+    baseline = _inputs(tmp_path, refs=("existing/model", "ollama-local/llama3.2:3b"))
+    config, ledger = baseline
+    newdir = tmp_path / "fresh-home"
+    argv = [
+        "--mode",
+        "acceptance",
+        "--home",
+        str(newdir),
+        "--baseline-config",
+        str(config),
+        "--baseline-inventory",
+        str(ledger),
+        "--dry-run",
+    ]
+    assert smoke.main(argv) == 0
+    assert not newdir.exists()  # dry-run created nothing
+    missing = [
+        "--mode",
+        "acceptance",
+        "--home",
+        str(tmp_path / "other"),
+    ]
+    assert smoke.main(missing) == 1  # mandatory inputs fail closed

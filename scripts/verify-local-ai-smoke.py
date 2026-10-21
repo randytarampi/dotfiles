@@ -99,6 +99,14 @@ def run_smoke(
 ):
     if mode not in ("retention", "acceptance"):
         raise ValueError(f"unknown mode: {mode}")
+    # Safe-destination guard at entry (P0.4): fires for BOTH modes before any
+    # early-skip or copy path can touch the destination.
+    if home is not None:
+        _destination = Path(home).expanduser().resolve()
+        if _destination == Path.home().resolve():
+            raise ValueError("--home must not be the real source HOME")
+        if _destination.exists() and any(_destination.iterdir()):
+            raise ValueError("--home must point at an empty directory")
     if mode == "retention":
         root = Path.home() / ".local/share/litellm"
         sources = [root / "config.yaml", root / "config.models.json"]
@@ -297,6 +305,17 @@ def main(argv=None):
             dry_run=args.dry_run,
             baseline=(
                 (args.baseline_config, args.baseline_inventory)
+                if args.mode == "acceptance"
+                else None
+            ),
+            inventory=(
+                {
+                    item.get("model_name")
+                    for item in json.loads(
+                        args.baseline_inventory.read_text(encoding="utf-8")
+                    )
+                    if isinstance(item, dict)
+                }
                 if args.mode == "acceptance"
                 else None
             ),

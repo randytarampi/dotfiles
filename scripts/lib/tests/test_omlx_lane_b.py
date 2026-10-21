@@ -1231,3 +1231,53 @@ def test_acp_main_emits_pool_driven_local_agents(tmp_path, monkeypatch):
     assert "claude--local" in agents
     assert "codex--local" in agents
     assert not any(name.endswith("--omlx") for name in agents)
+
+
+def test_voice_pro_gateway_admission_and_refusal(monkeypatch):
+    """R8 P0.2/P0.3: pro tier installs no direct route in gateway mode."""
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(voice, "is_meridian_configured", lambda: False)
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(
+        voice, "_gateway_alias", lambda provider, model: f"{provider}/{model}"
+    )
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "scoped-key")
+    config = voice.get_voice_config("pro", state={})
+    assert config["model"] == "ollama/gemma4:31b:cloud"
+    assert config["apiKeyEnv"] == "LITELLM_OPENCODE_KEY"
+    assert config["endpoint"].endswith("/v1")
+    assert "ollama.com" not in config["endpoint"]
+    # Missing scoped key → unresolved; nothing direct rendered.
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    config = voice.get_voice_config("pro", state={})
+    assert "model" not in config
+    assert "endpoint" not in config
+
+
+def test_voice_local_gateway_admission_and_refusal(monkeypatch):
+    """R8 P0.2: installed local models admit via the gateway or stay unresolved."""
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        voice,
+        "_resolve_local_voice_model",
+        lambda *args, **kwargs: ("omlx/qwen-a", False, False),
+    )
+    monkeypatch.setattr(
+        voice, "_gateway_alias", lambda provider, model: f"{provider}/{model}"
+    )
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "scoped-key")
+    config = voice.get_voice_config("local", state={})
+    assert config["model"] == "omlx/qwen-a"
+    assert config["apiKeyEnv"] == "LITELLM_OPENCODE_KEY"
+    assert config["endpoint"].endswith("/v1")
+    # Missing scoped key → unresolved; NO direct local endpoint rendered.
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    config = voice.get_voice_config("local", state={})
+    assert "model" not in config
+    assert "endpoint" not in config
