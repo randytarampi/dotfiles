@@ -742,6 +742,36 @@ def main():
                 f"Pi LiteLLM client key permissions are unsafe: {proxy_key_path}"
             )
         cloud_routes = litellm_cloud_aliases(os.environ.get("LITELLM_PORT", "4000"))
+        if "_available" not in cloud_routes:
+            # The gateway catalogue is UNKNOWN (unreachable/malformed). Under
+            # the frozen no-silent-fallback policy no proxy transport can be
+            # resolved and nothing is confirmed this run; hard-failing every
+            # deploy partway is worse than honestly keeping the previous
+            # generation serving what it already served. Never write a
+            # direct-routing fallback for this client.
+            out = (
+                Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
+                if args.mode == "global"
+                else Path(".pi/agent")
+            )
+            prior_files = [
+                out / "settings.json",
+                out / "models.json",
+                out / "auth.json",
+            ]
+            existing = [path for path in prior_files if path.is_file()]
+            if not existing:
+                raise RuntimeError(
+                    "Pi LiteLLM catalogue is UNKNOWN and no prior Pi "
+                    "configuration exists to preserve; run again when the "
+                    "gateway catalogue is reachable"
+                )
+            logger.error(
+                "Pi LiteLLM catalogue unavailable (UNKNOWN); preserved the "
+                "previous Pi configuration: %s",
+                ", ".join(str(path) for path in existing),
+            )
+            return
         # Every advertised gateway identity belongs in Pi's model list —
         # users pick from /model, not just preset role selections.
         for advertised in cloud_routes.get("_available", set()):

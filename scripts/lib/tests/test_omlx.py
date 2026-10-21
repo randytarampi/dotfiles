@@ -2719,3 +2719,48 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
     assert len(routed) == 84
     assert unwrapped == []
     assert output["skills"] == ["frontend/design"]
+
+
+def _pi_preserve_fixtures(monkeypatch, tmp_path):
+    configure_pi = _load_script("configure_pi_preserve", "configure-pi.py")
+    home = tmp_path / "home"
+    agent = home / ".pi/agent"
+    agent.mkdir(parents=True)
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(configure_pi, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setattr(
+        configure_pi,
+        "litellm_cloud_aliases",
+        lambda port="4000": {"google": {}, "openrouter": {}, "opencode": {}},
+    )
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "local"])
+    return configure_pi, agent
+
+
+def test_pi_preserves_prior_config_when_litellm_catalogue_unknown(
+    monkeypatch, tmp_path, caplog
+):
+    configure_pi, agent = _pi_preserve_fixtures(monkeypatch, tmp_path)
+    sentinels = {
+        "settings.json": '{"theme": "sentinel"}\n',
+        "models.json": '{"providers": {}}\n',
+        "auth.json": '{"api_keys": {}}\n',
+    }
+    for name, content in sentinels.items():
+        (agent / name).write_text(content)
+    with caplog.at_level("ERROR"):
+        configure_pi.main()
+    for name, content in sentinels.items():
+        assert (agent / name).read_text() == content
+    assert any(
+        "preserved the previous Pi configuration" in record.message
+        for record in caplog.records
+    )
+
+
+def test_pi_unknown_catalogue_without_prior_config_fails_closed(monkeypatch, tmp_path):
+    configure_pi, _agent = _pi_preserve_fixtures(monkeypatch, tmp_path)
+    with pytest.raises(RuntimeError, match="no prior Pi configuration"):
+        configure_pi.main()
