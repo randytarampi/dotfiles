@@ -27,6 +27,7 @@ from local_engines import (
     active_engines,
     iter_engine_models,
     local_endpoint_for,
+    _ollama_metadata,
 )
 from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
 from litellm_routing import routing_entries_are_safe
@@ -697,7 +698,18 @@ def _modality_endpoint_entries(provider, base_url, key_env, environ):
         if not isinstance(item, dict):
             continue
         name = item.get("name")
-        if name and _modality_include(name, item.get("model_type")):
+        model_type = item.get("model_type")
+        if provider == "ollama" and model_type is None and name:
+            # R8 P0.1 typed publication: production Ollama discovery is
+            # untyped (name/size/provider only). Classify candidates at this
+            # boundary through the bounded, cached /api/show hook so an
+            # installed-but-untyped embedding model can reach the gateway;
+            # failures and non-embedding results stay UNKNOWN honestly.
+            metadata = _ollama_metadata(name)
+            capabilities = metadata.get("capabilities") or []
+            if "embedding" in capabilities:
+                model_type = "embedding"
+        if name and _modality_include(name, model_type):
             entries.extend(
                 [
                     _entry(

@@ -3049,7 +3049,6 @@ def test_backup_recovery_is_explicit_staged_and_regenerated(tmp_path, monkeypatc
 
 
 def test_local_family_shrink_guard_retains_ledger_on_outage(monkeypatch):
-    """A gate-ON local engine's outage is UNKNOWN evidence: retain, never shrink."""
     ledger = [
         {
             "model_name": "omlx/Qwen3.8-27B-4bit",
@@ -3096,3 +3095,61 @@ def test_local_family_shrink_guard_retains_ledger_on_outage(monkeypatch):
         "ledger family retained" in note
         for note in litellm_config.last_generation_notes
     )
+
+
+def test_ollama_typed_publication_reaches_gateway_via_show_metadata(monkeypatch):
+    """R8 P0.1: an untyped installed Ollama embedding model publishes its canonical alias.
+
+    The real discovery payload is untyped (name/size/provider only), so the
+    publication boundary classifies it through the cached /api/show hook;
+    failures and non-embedding results stay UNKNOWN honestly — never guessed
+    qualified — and the chat containment keeps the specialized name excluded.
+    """
+
+    def discovery(provider, include_cloud=False):
+        if provider == "ollama":
+            return [
+                {
+                    "name": "embeddinggemma-2:740m-mxfp8",
+                    "size_gb": 0.5,
+                    "provider": "ollama",
+                },
+                {"name": "chat-model", "provider": "ollama"},
+            ]
+        return []
+
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["ollama"])
+    monkeypatch.setattr(litellm_config, "iter_engine_models", discovery)
+    monkeypatch.setattr(
+        litellm_config,
+        "local_endpoint_for",
+        lambda *args, **kwargs: ("http://127.0.0.1:11434/v1", "OLLAMA_API_KEY"),
+    )
+    monkeypatch.setattr(litellm_config, "list_cloud_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "_ollama_metadata",
+        lambda name: (
+            {"capabilities": ["embedding"], "model_type": None}
+            if "embeddinggemma" in name
+            else {"capabilities": ["completion"], "model_type": "llm"}
+        ),
+    )
+    entries = litellm_config.compute_model_list(environ={}, previous_entries=[])
+    names = [entry["model_name"] for entry in entries]
+    canonical = "ollama/embeddinggemma-2:740m-mxfp8"
+    assert canonical in names
+    assert "embeddinggemma-2:740m-mxfp8" in names  # unique bare modality twin
+    assert names.count(canonical) == 1  # typed publication is not chat-duplicated
+    assert "chat-model" in names  # untyped chat stays published
+    # Non-embedding metadata → absent honestly (no guessed qualification).
+    monkeypatch.setattr(
+        litellm_config,
+        "_ollama_metadata",
+        lambda name: {"capabilities": ["completion"], "model_type": "llm"},
+    )
+    entries = litellm_config.compute_model_list(environ={}, previous_entries=[])
+    names = [entry["model_name"] for entry in entries]
+    assert canonical not in names
+    assert "embeddinggemma-2:740m-mxfp8" not in names
+    assert "chat-model" in names
