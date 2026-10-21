@@ -2040,6 +2040,9 @@ def test_gateway_embedding_desired_render(monkeypatch, tmp_path, caplog):
             f"ollama/{openwebui.EMBEDDING_MODEL}"
         ),
     )
+    monkeypatch.setattr(
+        openwebui, "_litellm_client_key", lambda _name: "sentinel-scoped-key"
+    )
     monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
     import route_probes
 
@@ -2074,13 +2077,20 @@ def test_gateway_embedding_desired_render(monkeypatch, tmp_path, caplog):
     assert record["key_reference"].endswith("openwebui.key")
     assert captured["wire_key"] is True
     assert captured["model"] == f"ollama/{openwebui.EMBEDDING_MODEL}"
-    assert "sentinel-scoped-key" not in openwebui.json.dumps(desired)
+    # The connection payload legitimately carries the delivered key value
+    # server-side; the EMBEDDING subtree and its provenance must not.
+    assert "sentinel-scoped-key" not in json.dumps(
+        {"embedding": desired["embedding"], "selection": desired["embedding_selection"]}
+    )
 
 
 def test_gateway_embedding_readonly_mode_not_resolved(monkeypatch):
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui, "_litellm_client_key", lambda _name: "sentinel-scoped-key"
+    )
     import route_probes
 
     called = []
@@ -2108,6 +2118,9 @@ def test_gateway_embedding_alias_unresolved_is_unavailable(monkeypatch):
     monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(
+        openwebui, "_litellm_client_key", lambda _name: "sentinel-scoped-key"
+    )
     monkeypatch.setattr(
         openwebui,
         "_gateway_embedding_alias",
@@ -5219,6 +5232,34 @@ def test_entrypoint_diagnostic_modes_never_probe(monkeypatch, caplog):
     assert module.main() == 0
     assert captured == {}  # construction never ran: no probes precede the key gate
     assert any("OPENWEBUI_API_KEY is absent" in line for line in caplog.messages)
+
+
+def test_entrypoint_gateway_apply_requires_client_key(monkeypatch, tmp_path, caplog):
+    module = _script()
+    # HOME isolation: the gate's expanduser-resolved key path misses under a
+    # disposable HOME on every host, so the fail-closed gate is testable.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
+    captured = {}
+
+    def recorder(**kwargs):
+        captured.update(kwargs)
+        return {"openai": [], "ollama": []}
+
+    monkeypatch.setattr(module, "compute_desired_state", recorder)
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 1
+    assert "client key file is unavailable" in " ".join(caplog.messages)
+    assert captured == {}  # construction never ran: the key precedes compute
+    monkeypatch.setattr(module.OpenWebUIClient, "get_openai_config", lambda self: [])
+    monkeypatch.setattr(module.OpenWebUIClient, "get_ollama_config", lambda self: [])
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--check"])
+    assert module.main() == 2  # read-only gateway mode is not gated
 
 
 def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):

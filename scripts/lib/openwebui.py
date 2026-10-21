@@ -391,6 +391,11 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False):
             )
         from model_catalogues import _configured_litellm_port
 
+        # Fail-closed: gateway compute requires the materialised client key
+        # (never the LiteLLM master key; RuntimeError on missing/empty —
+        # guard test test_litellm_proxy_requires_openwebui_key_file...).
+        # Test fixtures patch _litellm_client_key for keyless runners.
+        client_key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
         # Gateway-only mode: ONE managed connection covers every proxy model.
         # Per-provider connections would each re-export the entire LiteLLM
         # catalogue under its own prefix (the 540-models listing problem), so
@@ -401,7 +406,7 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False):
                 _connection(
                     "litellm",
                     endpoint,
-                    _litellm_client_key("LITELLM_OPENWEBUI_KEY"),
+                    client_key,
                     "openai",
                     "openai",
                 )
@@ -510,15 +515,17 @@ def _route_engine_build(provider, base_url=None):
         except Exception:
             build = None
     elif provider == "omlx":
-        import subprocess
+        import subprocess  # nosec B404 - oMLX build identity via brew metadata only
 
         try:
-            completed = subprocess.run(
-                ["brew", "list", "--versions", "omlx"],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=3,
+            completed = (
+                subprocess.run(  # nosec B603 B607 - brew metadata query; constant args
+                    ["brew", "list", "--versions", "omlx"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
             )
             fields = completed.stdout.strip().split()
             build = fields[-1] if len(fields) >= 2 else None

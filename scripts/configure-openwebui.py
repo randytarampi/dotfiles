@@ -28,6 +28,7 @@ _mcp_tool_spec.loader.exec_module(_mcp_tool)
 resolve_env_vars = _mcp_tool.resolve_env_vars
 
 import logger  # noqa: E402 (sys.path must be set up first)
+import constants  # noqa: E402
 from cli_helpers import add_common_args  # noqa: E402
 from env import load_env  # noqa: E402
 from openwebui import (  # noqa: E402
@@ -790,6 +791,22 @@ def main():
             return 0
         logger.error("Opted-in Open WebUI reconciliation requires a healthy service")
         return 1
+    if (args.reconcile and not read_only) and constants.get_litellm_proxy_mode():
+        # Apply prerequisite in gateway mode: the managed client connection is
+        # credential-required; an unauthenticated gateway connection is never
+        # applied. Compute degrades honestly on keyless hosts; applies do not.
+        key_path = os.path.expanduser("~/.local/share/litellm/clients/openwebui.key")
+        try:
+            key_present = bool(open(key_path, encoding="utf-8").read().strip())
+        except OSError:
+            key_present = False
+        if not key_present:
+            logger.error(
+                "Open WebUI LiteLLM client key file is unavailable: %s — "
+                "run configure-litellm.py to materialise it before an apply",
+                key_path,
+            )
+            return 1
     if read_only and getattr(args, "probe_routes", False):
         logger.warning("--probe-routes is ignored in check/dry-run modes")
     desired = compute_desired_state(
