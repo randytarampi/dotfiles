@@ -22,6 +22,15 @@ gateway-only: `DOTFILES_RUN_LITELLM_SETUP=1`, each client key file, and every
 exact gateway alias are required. Missing prerequisites are configuration
 errors, never a direct-routing fallback.
 
+In gateway mode, a previously selected local-owner model (`ollama/`, `omlx/`,
+or `llamacpp/`) without a matching served alias is marked UNRESOLVED with the
+exact missing alias and this operator instruction: re-run generation once the
+alias exists. The gateway-policy-breaking direct selection is refused for
+installation and the generation step fails through its critical error path.
+The prior Slim generation file is kept unmodified only as a recovery artifact;
+it is never silently preserved into the newly installed config. A new direct
+local-owner route without a served alias is likewise refused.
+
 Gateway orchestration precedes client generation. In gateway-only mode,
 orchestration requires local gateway readiness and authenticated keys for each
 enabled client before allowing client configuration to proceed.

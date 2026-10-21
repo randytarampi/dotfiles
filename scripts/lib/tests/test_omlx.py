@@ -794,7 +794,7 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
 
 
 def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_unknown(
-    tmp_path, monkeypatch, caplog
+    tmp_path, monkeypatch
 ):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     key = tmp_path / ".local/share/litellm/clients/opencode.key"
@@ -829,7 +829,7 @@ def test_opencode_slim_gate_does_not_return_raw_gateway_selection(
         )
 
 
-def test_opencode_slim_gateway_preserves_only_existing_local_direct_selection(
+def test_opencode_slim_gateway_refuses_existing_local_direct_selection(
     tmp_path, monkeypatch, caplog
 ):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
@@ -841,17 +841,53 @@ def test_opencode_slim_gateway_preserves_only_existing_local_direct_selection(
     key.write_text("test-key")
     selection = "omlx/existing-model"
     config = {"provider": {"litellm": {"models": {}}}}
-    routed = configure_opencode.apply_litellm_slim_gate(
-        {"roles": {"x": {"model": selection}}},
-        config,
-        {"roles": {"x": {"model": selection}}},
-    )
-    assert routed["roles"]["x"]["model"] == selection
-    assert "unchanged (direct, local-owner)" in caplog.text
+    with pytest.raises(
+        RuntimeError,
+        match=r"UNRESOLVED.*omlx/existing-model.*Re-run generation once the alias exists",
+    ):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": selection}}},
+            config,
+            {"roles": {"x": {"model": selection}}},
+        )
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
             {"roles": {"x": {"model": "omlx/new-model"}}}, config
         )
+
+
+def test_opencode_slim_gateway_alias_key_absent_fails_closed(tmp_path, monkeypatch):
+    configure_opencode = _load_script(
+        "configure_opencode_key_absent", "configure-opencode.py"
+    )
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": "omlx/absent"}}},
+            {"provider": {"litellm": {"models": {}}}},
+        )
+
+
+def test_opencode_slim_gateway_installs_existing_local_model_alias(
+    tmp_path, monkeypatch
+):
+    configure_opencode = _load_script(
+        "configure_opencode_alias", "configure-opencode.py"
+    )
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    routed = configure_opencode.apply_litellm_slim_gate(
+        {"roles": {"x": {"model": "omlx/existing-model"}}},
+        {"provider": {"litellm": {"models": {"x": {"id": "omlx/existing-model"}}}}},
+        {"roles": {"x": {"model": "omlx/existing-model"}}},
+    )
+    assert routed["roles"]["x"]["model"] == "litellm/omlx/existing-model"
 
 
 def test_opencode_slim_wrapped_gateway_alias_unwraps_uniquely(tmp_path, monkeypatch):
@@ -1207,10 +1243,11 @@ def test_opencode_tier_staging_is_private_and_staging_dir_is_private(
     assert "staged-secret" in observed["contents"]
 
 
-def test_opencode_tier_staging_retains_previous_local_owner(monkeypatch, tmp_path):
+def test_opencode_tier_staging_refuses_previous_local_owner(monkeypatch, tmp_path):
     script = _load_script("configure_opencode_staging", "configure-opencode.py")
     tier = _load_script("configure_opencode_tier", "configure-opencode-tier.py")
     previous = {"agents": {"observer": {"model": "omlx/offline-model"}}}
+    previous_bytes = b'{"agents": {"observer": {"model": "omlx/offline-model"}}}'
     registry = {
         "_tiers": {"pro": {"council": {"presets": {}}}},
         "presets": {"pro": {"observer": {"model": "omlx/offline-model"}}, "local": {}},
@@ -1224,22 +1261,24 @@ def test_opencode_tier_staging_retains_previous_local_owner(monkeypatch, tmp_pat
     def run_tier(_args, *, check, env):
         stage = Path(env["OPENCODE_DIR"])
         prior_file = stage / "oh-my-opencode-slim.json"
-        assert json.loads(prior_file.read_text()) == previous
+        prior_file.write_bytes(previous_bytes)
+        assert prior_file.read_bytes() == previous_bytes
         assert stat.S_IMODE(prior_file.stat().st_mode) == 0o600
         with patch.dict(os.environ, {"OPENCODE_DIR": str(stage)}):
             tier.orchestrate_tier_switch("pro", True, [])
 
     monkeypatch.setattr(script.subprocess, "run", run_tier)
-    result = json.loads(
+    with pytest.raises(
+        RuntimeError,
+        match=r"UNRESOLVED.*omlx/offline-model.*Re-run generation once the alias exists",
+    ):
         script.prepare_tier_candidate(
             str(tmp_path),
             ["tier-writer"],
             {"provider": {"litellm": {"models": {}}}},
             previous,
         )
-    )
-    assert result["presets"]["pro"]["observer"]["model"] == "omlx/offline-model"
-    assert result["agents"] == previous["agents"]
+    assert previous_bytes == json.dumps(previous).encode()
     assert not (tmp_path / "oh-my-opencode-slim.json").exists()
 
 
@@ -1561,10 +1600,10 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("owner", ["ollama", "omlx", "llamacpp"])
-def test_opencode_slim_keeps_local_engine_selections_direct(
+def test_opencode_slim_refuses_local_engine_selections_without_alias(
     owner, tmp_path, monkeypatch
 ):
-    """Keep local-engine selections direct when the gateway has no alias."""
+    """Refuse local-engine selections when the gateway has no alias."""
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     key = tmp_path / ".local/share/litellm/clients/opencode.key"
     key.parent.mkdir(parents=True)
@@ -1575,11 +1614,8 @@ def test_opencode_slim_keeps_local_engine_selections_direct(
     slim = {"roles": {"observer": {"model": f"{owner}/fixture-model"}}}
     consumer = {"provider": {"litellm": {"models": {}}}}
 
-    routed = configure_opencode.apply_litellm_slim_gate(
-        slim, consumer, previous_slim=slim
-    )
-
-    assert routed["roles"]["observer"]["model"] == f"{owner}/fixture-model"
+    with pytest.raises(RuntimeError, match="UNRESOLVED"):
+        configure_opencode.apply_litellm_slim_gate(slim, consumer, previous_slim=slim)
 
 
 def test_configure_opencode_local_provider_emits_modalities():

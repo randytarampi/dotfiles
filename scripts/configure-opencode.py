@@ -426,10 +426,10 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
                     f"Wrapped LiteLLM selection has no gateway alias: {value}"
                 )
             if value in previous_values:
-                logger.info(
-                    "OpenCode Slim model unchanged (direct, local-owner): %s", value
+                raise RuntimeError(
+                    f"UNRESOLVED OpenCode Slim selection: missing gateway alias "
+                    f"{owner}/{model}. Re-run generation once the alias exists."
                 )
-                return value
             raise RuntimeError(
                 f"OpenCode Slim selection has no LiteLLM gateway alias: {value}"
             )
