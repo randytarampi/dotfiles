@@ -2760,8 +2760,19 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
 def _pi_preserve_fixtures(monkeypatch, tmp_path):
     configure_pi = _load_script("configure_pi_preserve", "configure-pi.py")
     home = tmp_path / "home"
+    # HOME isolation: CI runners have no materialised pi.key, so the fixture
+    # provides one through the HOME env (expanduser consults HOME, not
+    # Path.home) and satisfies the 0700-dir/0600-file permission gates.
+    clients = home / ".local/share/litellm/clients"
+    clients.mkdir(parents=True)
+    (home / ".local/share/litellm").chmod(0o700)
+    clients.chmod(0o700)
+    key_file = clients / "pi.key"
+    key_file.write_text("stub-scoped-key\n")
+    key_file.chmod(0o600)
     agent = home / ".pi/agent"
     agent.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
