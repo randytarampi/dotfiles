@@ -317,6 +317,48 @@ def test_unknown_catalogue_retains_previous_cloud_entries_but_not_new_models(
     assert "ollama-cloud/new-model" not in aliases
 
 
+@pytest.mark.parametrize("catalogue_unavailable", [False, True])
+def test_cohere_retains_previous_alias_when_live_model_is_unknown(
+    monkeypatch, catalogue_unavailable
+):
+    previous = {
+        "model_name": "cohere_chat/command-existing",
+        "litellm_params": {
+            "model": "cohere_chat/command-existing",
+            "api_key": "os.environ/COHERE_API_KEY",
+        },
+    }
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {"cohere/command-existing", "cohere/command-new"},
+    )
+
+    def catalogue(*args):
+        if catalogue_unavailable:
+            raise litellm_config.LiveCatalogueError("offline")
+        return ["command-live"]
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", catalogue)
+    entries = litellm_config.compute_model_list(
+        {"COHERE_API_KEY": "synthetic-key", "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full"},
+        previous_entries=[previous],
+    )
+    cohere = {
+        entry["model_name"]: entry
+        for entry in entries
+        if entry["model_name"].startswith("cohere_chat/")
+    }
+    expected = {"cohere_chat/command-existing"}
+    if not catalogue_unavailable:
+        expected.add("cohere_chat/command-live")
+    assert set(cohere) == expected
+    assert (
+        cohere["cohere_chat/command-existing"]["litellm_params"]
+        == previous["litellm_params"]
+    )
+
+
 def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
     from pathlib import Path
 

@@ -137,7 +137,8 @@ def orchestrate_tier_switch(
         )
     )
 
-    if not os.path.exists(config_path):
+    had_previous_slim = os.path.exists(config_path)
+    if not had_previous_slim:
         # Project mode: config_path may not exist yet. Copy from source.
         if os.path.exists(source_path):
             config_dir_path = os.path.dirname(config_path)
@@ -280,6 +281,9 @@ def orchestrate_tier_switch(
         read_config_path = config_path if os.path.exists(config_path) else source_path
         with open(read_config_path, "r", encoding="utf-8") as f:
             target_config = json.load(f)
+        previous_slim = (
+            json.loads(json.dumps(target_config)) if had_previous_slim else None
+        )
     except Exception as e:
         logger.critical(f"Failed to load target config {config_path}: {e}")
         sys.exit(1)
@@ -365,7 +369,7 @@ def orchestrate_tier_switch(
                 helper = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(helper)
                 target_config = helper.apply_litellm_slim_gate(
-                    target_config, consumer_config
+                    target_config, consumer_config, previous_slim
                 )
             except Exception as exc:
                 raise RuntimeError(

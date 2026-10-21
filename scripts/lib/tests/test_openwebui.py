@@ -3,6 +3,7 @@ import io
 import json
 import os
 import shlex
+import shutil
 from datetime import datetime, timedelta, timezone
 from typing import Any
 import subprocess
@@ -13,6 +14,79 @@ import route_probes
 
 import constants
 import openwebui
+
+
+@pytest.mark.parametrize(
+    "tools,expected",
+    [
+        ({"brew": ["ffprobe", "ffmpeg"]}, "brew"),
+        ({"brew": ["ffprobe"], "standard1": ["ffprobe", "ffmpeg"]}, "standard1"),
+        ({"brew": ["ffmpeg"], "standard2": ["ffprobe", "ffmpeg"]}, "standard2"),
+        ({"standard1": ["ffprobe"], "standard2": ["ffprobe", "ffmpeg"]}, "standard2"),
+        ({"standard1": ["ffmpeg"], "opt1": ["ffprobe", "ffmpeg"]}, "opt1"),
+        ({"opt1": ["ffprobe"], "opt2": ["ffprobe", "ffmpeg"]}, "opt2"),
+        ({"opt1": ["ffmpeg"], "path": ["ffprobe", "ffmpeg"]}, "path"),
+        ({"brew": ["ffprobe"], "path": ["ffprobe"]}, None),
+        ({"path": ["ffmpeg"]}, None),
+    ],
+)
+def test_openwebui_audio_bin_requires_both_executables(tmp_path, tools, expected):
+    source = (
+        Path(__file__).resolve().parents[3]
+        / ".chezmoiscripts/run_onchange_30-openwebui.sh.tmpl"
+    )
+    script = (
+        'BREW_BIN=""'
+        + source.read_text()
+        .split('BREW_BIN=""', 1)[1]
+        .split('mkdir -p "$PLIST_DIR"', 1)[0]
+    )
+    script = script.replace("/opt/homebrew", str(tmp_path / "homebrew")).replace(
+        "/usr/local", str(tmp_path / "local")
+    )
+    directories = {
+        "brew": tmp_path / "brew-prefix/bin",
+        "standard1": tmp_path / "homebrew/bin",
+        "standard2": tmp_path / "local/bin",
+        "opt1": tmp_path / "homebrew/opt/ffmpeg/bin",
+        "opt2": tmp_path / "local/opt/ffmpeg/bin",
+        "path": tmp_path / "path",
+    }
+    directories["path"].mkdir()
+    (directories["path"] / "dirname").symlink_to(shutil.which("dirname"))
+    if "brew" in tools:
+        brew = directories["path"] / "brew"
+        brew.write_text(
+            "#!/bin/sh\nprintf '%s\\n' "
+            + shlex.quote(str(directories["brew"].parent))
+            + "\n"
+        )
+        brew.chmod(0o755)
+    for name, executables in tools.items():
+        directories[name].mkdir(parents=True, exist_ok=True)
+        for executable in executables:
+            path = directories[name] / executable
+            path.write_text("#!/bin/sh\nexit 0\n")
+            path.chmod(0o755)
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            'set -euo pipefail\ndie() { printf "%s\\n" "$*" >&2; exit 1; }\n'
+            + script
+            + '\nprintf "%s\\n" "$BREW_BIN"',
+        ],
+        env={"PATH": str(directories["path"])},
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if expected is None:
+        assert result.returncode == 1
+        assert "ffprobe/ffmpeg not found" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(directories[expected])
 
 
 class _FakeResponse:

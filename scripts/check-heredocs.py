@@ -25,10 +25,12 @@ SCRIPTS_DIR = REPO_ROOT / ".chezmoiscripts"
 PYTHON_INTERPRETERS = {"python3", "python"}
 
 HEREDOC_OPEN = re.compile(r"<<\s*'(?!<)(\w+)'")
-# The flag-consuming group is POSSESSIVE (atomic): without it, nested
+# The lookahead and backreference consume flags atomically: without them, nested
 # quantifiers ((?:-\S+\s+)* followed by -+) backtrack catastrophically on
 # crafted, non-matching lines (CodeQL redos alert #16).
-INTERPRETER_LINE = re.compile(r"(\w[\w./-]*)\s+(?:-\S+\s+)*+-+\s*<<\s*'(\w+)'")
+INTERPRETER_LINE = re.compile(
+    r"(\w[\w./-]*)\s+(?=(?P<flags>(?:-\S+\s+)*))(?P=flags)-+\s*<<\s*'(?P<delimiter>\w+)'"
+)
 TERMINATOR = re.compile(r"^{tag}$".format(tag=r"(\w+)"), re.MULTILINE)
 
 

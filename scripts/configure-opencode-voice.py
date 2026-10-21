@@ -817,7 +817,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             for name, locator in locators.items()
         },
     }
-    if not voice_config["_voice_state"]["selections"]:
+    if not voice_config["_voice_state"]["selections"] and unresolved:
         voice_config["_voice_state"] = None
     if unresolved and no_local_models and not locators:
         return {"_voice_unresolved": True, "_voice_state": None}
@@ -877,31 +877,17 @@ def main():
 
     # Build voice config
     prior_state = _load_voice_state(config_dir_path)
-    voice_config = (
-        get_voice_config(
-            args.preset,
-            _voice_resolution_options(
-                args.local_fallback_preset,
-                args.role_models,
-                args.category_models,
-                args.min_reasoning_embedding,
-                args.stt_transport,
-                args.probe_routes,
-            ),
-            state=prior_state,
-        )
-        if "state" in get_voice_config.__code__.co_varnames
-        else get_voice_config(
-            args.preset,
-            _voice_resolution_options(
-                args.local_fallback_preset,
-                args.role_models,
-                args.category_models,
-                args.min_reasoning_embedding,
-                args.stt_transport,
-                args.probe_routes,
-            ),
-        )
+    voice_config = get_voice_config(
+        args.preset,
+        _voice_resolution_options(
+            args.local_fallback_preset,
+            args.role_models,
+            args.category_models,
+            args.min_reasoning_embedding,
+            args.stt_transport,
+            args.probe_routes,
+        ),
+        state=prior_state,
     )
     voice_state = voice_config.pop("_voice_state", None)
     unresolved = voice_config.pop("_voice_unresolved", False)
@@ -941,9 +927,9 @@ def main():
         None,
     )
     if (
-        voice_state is None
-        or not (voice_config.get("endpoint") and voice_config.get("model"))
-    ) and existing_voice is not None:
+        not (voice_config.get("endpoint") and voice_config.get("model"))
+        and existing_voice is not None
+    ):
         filtered_plugins.append(existing_voice)
     elif unresolved:
         existing_options = (
@@ -958,11 +944,7 @@ def main():
                 if key in existing_options:
                     voice_config[key] = existing_options[key]
             filtered_plugins.append(existing_voice)
-    elif (
-        voice_state is not None
-        and voice_config.get("endpoint")
-        and voice_config.get("model")
-    ):
+    elif voice_config.get("endpoint") and voice_config.get("model"):
         filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
     tui_config["plugin"] = filtered_plugins
 

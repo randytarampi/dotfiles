@@ -51,6 +51,43 @@ class RouteProbeTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "ok")
 
+    def test_tts_engine_dispatch_keeps_key_reference_out_of_voice(self):
+        import local_engines
+
+        with (
+            patch.object(
+                local_engines,
+                "local_endpoint_for",
+                return_value=("http://engine/v1", "TTS_KEY"),
+            ),
+            patch.object(
+                route_probes.urllib.request,
+                "urlopen",
+                return_value=FakeResponse(body=b"audio", content_type="audio/wav"),
+            ) as opened,
+        ):
+            result = local_engines.probe_engine_model(
+                "omlx", "model", "tts", key_value="synthetic-key", timeout=9
+            )
+        self.assertEqual(result.status, "ok")
+        request = opened.call_args.args[0]
+        self.assertEqual(json.loads(request.data)["voice"], "alloy")
+        self.assertEqual(request.get_header("Authorization"), "Bearer synthetic-key")
+        self.assertEqual(opened.call_args.kwargs["timeout"], 9)
+
+    def test_tts_positional_credentials_and_keyword_voice(self):
+        result, request = self.call(
+            FakeResponse(body=b"audio", content_type="audio/wav"),
+            route_probes.probe_tts,
+            "TTS_KEY",
+            "synthetic-key",
+            9,
+            voice="serena",
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(json.loads(request.data)["voice"], "serena")
+        self.assertEqual(request.get_header("Authorization"), "Bearer synthetic-key")
+
     def test_stt_empty_text_is_valid_shape(self):
         result, _ = self.call(
             FakeResponse(body=b'{"text":"","language":"en","segments":[]}'),

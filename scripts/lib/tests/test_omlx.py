@@ -1207,6 +1207,42 @@ def test_opencode_tier_staging_is_private_and_staging_dir_is_private(
     assert "staged-secret" in observed["contents"]
 
 
+def test_opencode_tier_staging_retains_previous_local_owner(monkeypatch, tmp_path):
+    script = _load_script("configure_opencode_staging", "configure-opencode.py")
+    tier = _load_script("configure_opencode_tier", "configure-opencode-tier.py")
+    previous = {"agents": {"observer": {"model": "omlx/offline-model"}}}
+    registry = {
+        "_tiers": {"pro": {"council": {"presets": {}}}},
+        "presets": {"pro": {"observer": {"model": "omlx/offline-model"}}, "local": {}},
+    }
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(tier.tier_registry, "load_registry", lambda *args: registry)
+    monkeypatch.setattr(tier, "list_local_ollama_models", lambda: [])
+
+    def run_tier(_args, *, check, env):
+        stage = Path(env["OPENCODE_DIR"])
+        prior_file = stage / "oh-my-opencode-slim.json"
+        assert json.loads(prior_file.read_text()) == previous
+        assert stat.S_IMODE(prior_file.stat().st_mode) == 0o600
+        with patch.dict(os.environ, {"OPENCODE_DIR": str(stage)}):
+            tier.orchestrate_tier_switch("pro", True, [])
+
+    monkeypatch.setattr(script.subprocess, "run", run_tier)
+    result = json.loads(
+        script.prepare_tier_candidate(
+            str(tmp_path),
+            ["tier-writer"],
+            {"provider": {"litellm": {"models": {}}}},
+            previous,
+        )
+    )
+    assert result["presets"]["pro"]["observer"]["model"] == "omlx/offline-model"
+    assert result["agents"] == previous["agents"]
+    assert not (tmp_path / "oh-my-opencode-slim.json").exists()
+
+
 def test_opencode_staging_and_final_outputs_are_private_atomic(monkeypatch, tmp_path):
     script = _load_script("configure_opencode_atomic_modes", "configure-opencode.py")
     config_path = tmp_path / "opencode.json"
@@ -1263,7 +1299,7 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
         "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer: (
+        "prepare_tier_candidate": lambda config_dir, args, consumer, previous=None: (
             _ for _ in ()
         ).throw(RuntimeError("final tier validation")),
     }.items():
@@ -1295,17 +1331,19 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
     assert slim_path.read_bytes() == b"slim sentinel\n"
 
 
+@pytest.mark.parametrize("recovery_fails", [False, True])
 @pytest.mark.parametrize(
     "prior_slim",
     [
+        None,
         b"slim sentinel\n",
         b"prior-slim\xff\n",  # undecodable bytes must restore byte-exact
         b"prior-slim\r\n",  # CRLF must not be normalised by recovery
     ],
-    ids=["utf8", "undecodable", "crlf"],
+    ids=["absent", "utf8", "undecodable", "crlf"],
 )
 def test_opencode_main_slim_write_failure_restores_prior_pair(
-    monkeypatch, tmp_path, prior_slim
+    monkeypatch, tmp_path, caplog, prior_slim, recovery_fails
 ):
     home = tmp_path / "home"
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
@@ -1315,7 +1353,8 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     opencode_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
     opencode_path.write_bytes(b"opencode sentinel\n")
-    slim_path.write_bytes(prior_slim)
+    if prior_slim is not None:
+        slim_path.write_bytes(prior_slim)
     scripts = tmp_path / "scripts"
     (tmp_path / "configs/opencode").mkdir(parents=True)
     (tmp_path / "configs/opencode/oh-my-opencode-slim.json").write_text("{}")
@@ -1334,7 +1373,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
         "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer: (
+        "prepare_tier_candidate": lambda config_dir, args, consumer, previous=None: (
             '{"model": "stub-slim-target"}'
         ),
     }.items():
@@ -1353,10 +1392,21 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
         if Path(path).name == "opencode.json":
             write_names.append("opencode-FAIL")
             raise OSError("simulated opencode failure")
+        if recovery_fails and write_names:
+            write_names.append("slim-FAIL")
+            raise OSError("simulated recovery failure")
         write_names.append("slim-ok")
         return real_write(path, payload)
 
     monkeypatch.setattr(script, "write_private_atomic", failing_opencode_write)
+    real_remove = script.os.remove
+
+    def failing_slim_remove(path):
+        if recovery_fails and Path(path) == slim_path:
+            raise OSError("simulated recovery failure")
+        return real_remove(path)
+
+    monkeypatch.setattr(script.os, "remove", failing_slim_remove)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -1371,8 +1421,22 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
     script.main = script.main.__wrapped__
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as stopped:
         script.main()
+    assert stopped.value.code == 1
+    critical = [record for record in caplog.records if record.levelname == "CRITICAL"]
+    assert len(critical) == 1
+    assert "simulated opencode failure" in critical[0].message
+    assert opencode_path.read_bytes() == b"opencode sentinel\n"
+    if recovery_fails:
+        assert "simulated recovery failure" in critical[0].message
+        assert slim_path.read_text() == '{"model": "stub-slim-target"}'
+        return
+    assert "restored the prior" in critical[0].message
+    if prior_slim is None:
+        assert write_names == ["slim-ok", "opencode-FAIL"]
+        assert not slim_path.exists()
+        return
     assert write_names == ["slim-ok", "opencode-FAIL", "slim-ok"]
     # The PRIOR slim generation is restored byte-exact with its private mode;
     # the pair is never left mixed, normalised or lost.

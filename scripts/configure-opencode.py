@@ -499,7 +499,7 @@ def prepare_project_candidate(config):
     return config
 
 
-def prepare_tier_candidate(config_dir, tier_args, consumer_config):
+def prepare_tier_candidate(config_dir, tier_args, consumer_config, previous_slim=None):
     """Run the tier writer with a private, owner-only consumer config."""
     with tempfile.TemporaryDirectory(prefix="opencode-tier-") as staging_dir:
         staged_input = Path(staging_dir) / "opencode.json"
@@ -521,12 +521,14 @@ def prepare_tier_candidate(config_dir, tier_args, consumer_config):
                 pass
             raise
         staged_env = {**os.environ, "OPENCODE_DIR": staging_dir}
-        subprocess.run(tier_args, check=True, env=staged_env)
         staged_path = Path(staging_dir) / "oh-my-opencode-slim.json"
+        if previous_slim is not None:
+            write_private_atomic(staged_path, json.dumps(previous_slim))
+        subprocess.run(tier_args, check=True, env=staged_env)
         if not staged_path.is_file():
             raise RuntimeError("tier staging did not produce Slim config")
         staged_slim = json.loads(staged_path.read_text(encoding="utf-8"))
-        routed = apply_litellm_slim_gate(staged_slim, consumer_config)
+        routed = apply_litellm_slim_gate(staged_slim, consumer_config, previous_slim)
         return json.dumps(routed, indent=2) + "\n"
 
 
@@ -1278,7 +1280,9 @@ def main():
                 sys.executable,
                 os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
             ] + tier_args_list
-            tier_candidate = prepare_tier_candidate(config_dir_path, tier_args, config)
+            tier_candidate = prepare_tier_candidate(
+                config_dir_path, tier_args, config, previous_slim
+            )
     except Exception as e:
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
         sys.exit(1)
@@ -1315,10 +1319,17 @@ def main():
             write_private_atomic(output_path, opencode_candidate)
             logger.info("opencode.json written")
         except Exception as e:
-            if prior_pair[slim_output_path] is not None:
-                write_private_atomic(slim_output_path, prior_pair[slim_output_path])
-            elif os.path.exists(slim_output_path):
-                os.remove(slim_output_path)
+            try:
+                if prior_pair[slim_output_path] is not None:
+                    write_private_atomic(slim_output_path, prior_pair[slim_output_path])
+                elif os.path.exists(slim_output_path):
+                    os.remove(slim_output_path)
+            except Exception as recovery_error:
+                logger.critical(
+                    f"Failed to write opencode.json: {e}; failed to recover "
+                    f"oh-my-opencode-slim.json: {recovery_error}"
+                )
+                sys.exit(1)
             logger.critical(
                 f"Failed to write opencode.json: {e}; restored the prior "
                 "oh-my-opencode-slim.json generation"

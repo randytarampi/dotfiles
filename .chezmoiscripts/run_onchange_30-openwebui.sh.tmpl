@@ -206,26 +206,32 @@ PLIST_PATH="$PLIST_DIR/com.openwebui.web.plist"
 BREW_BIN=""
 if command -v brew >/dev/null 2>&1; then
   BREW_PREFIX="$(brew --prefix)" || die "Failed to discover Homebrew prefix"
-  BREW_BIN="${BREW_PREFIX}/bin"
-else
+  if [[ -x "${BREW_PREFIX}/bin/ffprobe" && -x "${BREW_PREFIX}/bin/ffmpeg" ]]; then
+    BREW_BIN="${BREW_PREFIX}/bin"
+  fi
+fi
+if [[ -z "$BREW_BIN" ]]; then
   for candidate in /opt/homebrew /usr/local; do
-    if [[ -x "${candidate}/bin/ffprobe" ]]; then
+    if [[ -x "${candidate}/bin/ffprobe" && -x "${candidate}/bin/ffmpeg" ]]; then
       BREW_BIN="${candidate}/bin"
       break
     fi
   done
   if [[ -z "$BREW_BIN" ]]; then
     for candidate in /opt/homebrew/opt/ffmpeg/bin /usr/local/opt/ffmpeg/bin; do
-      if [[ -x "${candidate}/ffprobe" ]]; then
+      if [[ -x "${candidate}/ffprobe" && -x "${candidate}/ffmpeg" ]]; then
         BREW_BIN="$candidate"
         break
       fi
     done
   fi
   if [[ -z "$BREW_BIN" ]] && command -v ffprobe >/dev/null 2>&1; then
-    BREW_BIN="$(dirname "$(command -v ffprobe)")"
+    candidate="$(dirname "$(command -v ffprobe)")"
+    if [[ -x "${candidate}/ffprobe" && -x "${candidate}/ffmpeg" ]]; then
+      BREW_BIN="$candidate"
+    fi
   fi
-  [[ -n "$BREW_BIN" ]] || die "ffprobe not found: tried brew --prefix, /opt/homebrew/bin, /usr/local/bin, /opt/homebrew/opt/ffmpeg/bin, /usr/local/opt/ffmpeg/bin, and PATH"
+  [[ -n "$BREW_BIN" ]] || die "ffprobe/ffmpeg not found: tried brew --prefix, /opt/homebrew/bin, /usr/local/bin, /opt/homebrew/opt/ffmpeg/bin, /usr/local/opt/ffmpeg/bin, and PATH"
 fi
 mkdir -p "$PLIST_DIR"
 cat >"$PLIST_PATH" <<EOF

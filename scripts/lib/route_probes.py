@@ -144,7 +144,7 @@ def _available_voices(data):
 
 
 def probe_tts(
-    base_url, model, voice=None, key_reference=None, key_value=None, timeout=5
+    base_url, model, key_reference=None, key_value=None, timeout=5, *, voice=None
 ):
     endpoint = base_url.rstrip("/") + "/audio/speech"
     attempts = voice or "alloy"

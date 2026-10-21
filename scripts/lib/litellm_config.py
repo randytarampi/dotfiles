@@ -858,6 +858,10 @@ def _markdown_model_refs(document):
     return refs
 
 
+def _provider_alias_prefix(provider):
+    return "cohere_chat/" if provider == "cohere" else provider + "/"
+
+
 def compute_model_list(environ=None, previous_entries=None):
     """Return LiteLLM model entries without reading secrets or doing writes."""
     environ = environ or os.environ
@@ -1083,7 +1087,9 @@ def compute_model_list(environ=None, previous_entries=None):
                     }
                     for item in previous_entries
                     if isinstance(item, dict)
-                    and str(item.get("model_name", "")).startswith(provider + "/")
+                    and str(item.get("model_name", "")).startswith(
+                        _provider_alias_prefix(provider)
+                    )
                 )
                 continue
         else:
@@ -1139,10 +1145,11 @@ def compute_model_list(environ=None, previous_entries=None):
             continue
         if provider in LIVE_CATALOGUE_PROVIDERS:
             retained = []
+            alias_prefix = _provider_alias_prefix(provider)
             for alias, previous in previous_by_alias.items():
-                if not isinstance(alias, str) or not alias.startswith(provider + "/"):
+                if not isinstance(alias, str) or not alias.startswith(alias_prefix):
                     continue
-                model_id = alias.split("/", 1)[1]
+                model_id = alias[len(alias_prefix) :]
                 if (
                     canonical_allowlist_key(model_id) in canonical_requested
                     and canonical_allowlist_key(model_id) not in confirmed

@@ -66,7 +66,7 @@ Benchmark rows use oMLX Auto except the Ollama endpoint comparisons, which use
 `http://127.0.0.1:11434/v1` (External OpenAI-compatible endpoint); all use Code
 (Mixed), tg128. On 2026-10-17, Ornith-1.5-35B MLX 4-bit at 131072 on M3 Max
 measured TTFT 225.95 s / 26.4 tok/s / 23.59 GB peak; M5 Pro 35B was measured
-to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b` via the Ollama endpoint were
+to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b-mlx` via the Ollama endpoint were
 slower, with architecture-confounded comparisons. The full
 `bench-m3max-m5pro.md` is a local-only session artifact and is not in this
 repository.

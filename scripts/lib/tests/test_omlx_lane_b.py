@@ -3,7 +3,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -243,7 +243,7 @@ def test_voice_main_keeps_unresolved_marker_without_existing_entry(
     monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
     monkeypatch.setattr(sys, "argv", ["voice", "--no-backup"])
     monkeypatch.setattr(
-        voice, "get_voice_config", lambda *args: {"_voice_unresolved": True}
+        voice, "get_voice_config", lambda *args, **kwargs: {"_voice_unresolved": True}
     )
     assert voice.main() is None
     written = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
@@ -271,10 +271,71 @@ def test_voice_dry_run_never_prints_foreign_plugin_values(
     monkeypatch.setattr(
         voice,
         "get_voice_config",
-        lambda *a: {"endpoint": "http://example", "model": "model"},
+        lambda *a, **kwargs: {"endpoint": "http://example", "model": "model"},
     )
     voice.main()
     assert sentinel not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_voice_main_writes_resolved_llm_without_audio_state(
+    monkeypatch, tmp_path, existing
+):
+    voice = load_script("configure-opencode-voice.py")
+    original = ["@renjfk/opencode-voice", {"endpoint": "http://old/v1", "model": "old"}]
+    other = ["foreign", {"enabled": True}]
+    (tmp_path / "tui.json").write_text(
+        json.dumps({"plugin": [other, original] if existing else [other]})
+    )
+    prior_state = {"sttTransport": "openai"}
+    voice._save_voice_state(str(tmp_path), prior_state)
+    resolved = {
+        "endpoint": "http://resolved/v1",
+        "model": "resolved",
+        "_voice_state": None,
+    }
+    resolver = Mock(return_value=resolved)
+    monkeypatch.setattr(voice, "get_voice_config", resolver)
+    monkeypatch.setattr(voice, "load_env", lambda *args: False)
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "pro", "--no-backup"])
+
+    assert voice.main() is None
+
+    assert resolver.call_args.kwargs == {"state": prior_state}
+    assert json.loads((tmp_path / "tui.json").read_text())["plugin"] == [
+        other,
+        [
+            "@renjfk/opencode-voice",
+            {"endpoint": "http://resolved/v1", "model": "resolved"},
+        ],
+    ]
+
+
+def test_voice_main_persists_transport_without_audio_selections(monkeypatch, tmp_path):
+    voice = load_script("configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "false")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("DOTFILES_USE_LITELLM_PROXY", raising=False)
+    monkeypatch.setattr(voice, "load_env", lambda *args: False)
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "active_engines", lambda: [])
+    voice._save_voice_state(str(tmp_path), {"sttTransport": "local"})
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["voice", "--preset", "pro", "--stt-transport", "openai", "--no-backup"],
+    )
+
+    assert voice.main() is None
+
+    state = voice._load_voice_state(str(tmp_path))
+    assert state["sttTransport"] == "openai"
+    assert state["sttTransportReason"] == "explicit --stt-transport openai"
+    assert state["selections"] == {}
+    options = json.loads((tmp_path / "tui.json").read_text())["plugin"][0][1]
+    assert options["model"] == "gemma4:31b"
 
 
 def _voice_test_config(monkeypatch, voice, discovery, key=None):
