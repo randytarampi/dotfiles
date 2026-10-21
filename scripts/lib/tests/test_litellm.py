@@ -65,6 +65,19 @@ CONFIGURE_SPEC = spec_from_file_location(
 )
 CONFIGURE = module_from_spec(CONFIGURE_SPEC)
 CONFIGURE_SPEC.loader.exec_module(CONFIGURE)
+
+
+def test_rates_snapshot_refresh_failure_degrades_without_failing_deploy():
+    """A read timeout in the rates snapshot keeps the deploy alive (deploy evidence)."""
+
+    def refresh_stub(dry_run=False):
+        raise TimeoutError("The read operation timed out")
+
+    with patch.object(CONFIGURE, "_sync_runtime_rates_snapshot", refresh_stub):
+        assert CONFIGURE._refresh_rates_snapshot(dry_run=False) == "unchanged"
+        assert CONFIGURE._refresh_rates_snapshot(dry_run=True) == "unchanged"
+
+
 PI_SPEC = spec_from_file_location(
     "configure_pi", Path(__file__).resolve().parents[2] / "configure-pi.py"
 )

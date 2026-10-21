@@ -108,6 +108,24 @@ def _persist_generation_notes(notes, path=None):
         raise
 
 
+def _refresh_rates_snapshot(dry_run=False):
+    """Refresh the runtime rates snapshot, degrading honestly on failure.
+
+    The rates document is auxiliary pricing metadata: a fetch timeout or any
+    refresh failure keeps the existing snapshot and never fails the deploy
+    (the next successful run refreshes it). Returns the state string for the
+    generation summary.
+    """
+    try:
+        return _sync_runtime_rates_snapshot(dry_run=dry_run)
+    except Exception as rates_error:  # noqa: BLE001 - degrade-by-design
+        logger.warning(
+            "LiteLLM rates snapshot refresh failed (%s); keeping the existing snapshot",
+            rates_error,
+        )
+        return "unchanged"
+
+
 def _sync_runtime_rates_snapshot(dry_run=False, runtime_path=None) -> str:
     """Refresh the runtime rates document from models.dev-derived rates.
 
@@ -649,7 +667,7 @@ def main():
             logger.warning("LiteLLM coverage: %s", note)
         if args.dry_run:
             master_key_set = bool(os.environ.get("LITELLM_MASTER_KEY", "").strip())
-            rates_state = _sync_runtime_rates_snapshot(dry_run=True)
+            rates_state = _refresh_rates_snapshot(dry_run=True)
             logger.info(
                 "LiteLLM dry-run: models=%d master_key_set=%s config=%s rates=%s",
                 len(entries),
@@ -666,7 +684,7 @@ def main():
             "updated" if changed else "unchanged",
             len(entries),
         )
-        rates_state = _sync_runtime_rates_snapshot(args.dry_run)
+        rates_state = _refresh_rates_snapshot(args.dry_run)
         if rates_state == "updated":
             logger.info("LiteLLM rates snapshot refreshed (models.dev)")
         service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
