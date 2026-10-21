@@ -3046,3 +3046,53 @@ def test_backup_recovery_is_explicit_staged_and_regenerated(tmp_path, monkeypatc
         litellm_config.stage_backup_text(
             backup.read_text(encoding="utf-8") + "garbage\n", authorized
         )
+
+
+def test_local_family_shrink_guard_retains_ledger_on_outage(monkeypatch):
+    """A gate-ON local engine's outage is UNKNOWN evidence: retain, never shrink."""
+    ledger = [
+        {
+            "model_name": "omlx/Qwen3.8-27B-4bit",
+            "litellm_params": {"model": "openai/Qwen3.8-27B-4bit"},
+        },
+        {
+            "model_name": "omlx/Qwen3-ASR-1.7B-8bit",
+            "litellm_params": {
+                "model": "openai/Qwen3-ASR-1.7B-8bit",
+                "api_base": "http://127.0.0.1:11427/v1",
+            },
+        },
+    ]
+
+    def outage(*_args, **_kwargs):
+        raise RuntimeError("simulated discovery outage")
+
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(litellm_config, "iter_engine_models", outage)
+    monkeypatch.setattr(
+        litellm_config,
+        "local_endpoint_for",
+        lambda *args, **kwargs: ("http://127.0.0.1:9", "OMLX_API_KEY"),
+    )
+    entries = litellm_config.compute_model_list(
+        environ={"OMLX_API_KEY": "k"}, previous_entries=ledger
+    )
+    names = {entry["model_name"] for entry in entries}
+    assert "omlx/Qwen3.8-27B-4bit" in names
+    assert "omlx/Qwen3-ASR-1.7B-8bit" in names
+    assert any(
+        "ledger family retained (bare twins regenerate on recovery)" in note
+        for note in litellm_config.last_generation_notes
+    )
+    monkeypatch.setattr(
+        litellm_config, "local_endpoint_for", lambda *args, **kwargs: None
+    )
+    entries = litellm_config.compute_model_list(
+        environ={"OMLX_API_KEY": "k"}, previous_entries=ledger
+    )
+    names = {entry["model_name"] for entry in entries}
+    assert "omlx/Qwen3.8-27B-4bit" in names
+    assert any(
+        "ledger family retained" in note
+        for note in litellm_config.last_generation_notes
+    )

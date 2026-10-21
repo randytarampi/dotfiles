@@ -905,6 +905,31 @@ def compute_model_list(environ=None, previous_entries=None):
             name for name in models if name and not is_specialized_model_name(name)
         ]
         models = sorted(models)
+        # Local-family shrink guard (R6 recovery discipline): a gate-ON
+        # engine's discovery outage is UNKNOWN evidence, never a removal
+        # decision — the ledger's served family entries are retained and the
+        # gap is recorded honestly. Bare twins regenerate on the next healthy
+        # pass, so a degraded host keeps its namespaced family only.
+        if not models:
+            retained = [
+                item
+                for item in previous_entries
+                if isinstance(item, dict)
+                and str(item.get("model_name", "")).startswith(provider + "/")
+            ]
+            if retained:
+                last_generation_notes.append(
+                    f"{provider}: UNKNOWN local discovery unavailable; "
+                    "ledger family retained (bare twins regenerate on recovery)"
+                )
+                entries.extend(
+                    {**item, "_alias_kind": item.get("_alias_kind", "qualified")}
+                    for item in retained
+                )
+            if provider != "ollama":
+                # Other engines publish nothing else from local discovery.
+                continue
+            # ollama falls through: daemon cloud stubs publish separately.
         if provider == "ollama":
             local_base = get_ollama_local_base_url().rstrip("/")
             base = local_base[:-3] if local_base.endswith("/v1") else local_base
@@ -941,6 +966,22 @@ def compute_model_list(environ=None, previous_entries=None):
             continue
         endpoint = local_endpoint_for(provider, "openai")
         if endpoint is None:
+            # The engine's protocol endpoint is unresolvable: UNKNOWN
+            # evidence — retain the family rather than silently dropping it.
+            retained = [
+                item
+                for item in previous_entries
+                if isinstance(item, dict)
+                and str(item.get("model_name", "")).startswith(provider + "/")
+            ]
+            if retained:
+                last_generation_notes.append(
+                    f"{provider}: UNKNOWN local endpoint unavailable; ledger family retained"
+                )
+                entries.extend(
+                    {**item, "_alias_kind": item.get("_alias_kind", "qualified")}
+                    for item in retained
+                )
             continue
         base_url, key_env = endpoint
         key_env = key_env if key_env and environ.get(key_env, "").strip() else None
