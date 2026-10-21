@@ -5952,6 +5952,64 @@ def test_enabled_omlx_unknown_discovery_preserves_audio(monkeypatch, tmp_path, c
     assert client.audio_writes == 0
 
 
+def test_compute_desired_audio_stable_when_discovery_is_reversed(monkeypatch, tmp_path):
+    from local_engines import DiscoveryResult
+
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
+    monkeypatch.setattr(
+        openwebui, "_audio_state_path", lambda: str(tmp_path / "audio.json")
+    )
+    monkeypatch.setattr(
+        openwebui, "_embedding_state_path", lambda: str(tmp_path / "embedding.json")
+    )
+    monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
+    monkeypatch.setattr(openwebui, "_disabled", lambda: set())
+    monkeypatch.setattr(
+        openwebui, "local_endpoint_for", lambda *_: ("http://omlx/v1", "OMLX_API_KEY")
+    )
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(openwebui.constants, "is_meridian_configured", lambda: False)
+    monkeypatch.setattr(openwebui, "_route_engine_build", lambda *_: "fixture-build")
+    monkeypatch.setattr(
+        route_probes,
+        "probe_stt",
+        lambda *_a, **_k: type("R", (), {"status": "ok", "notes": ("HTTP 200",)})(),
+    )
+    models = [
+        {"name": "asr-selected", "model_type": "audio_stt"},
+        {"name": "asr-other", "model_type": "audio_stt"},
+    ]
+    selection = {
+        "stt": {
+            "operation": "stt",
+            "provider": "omlx",
+            "model": "asr-selected",
+            "qualification": "protocol_probed",
+            "reason": "persisted",
+        }
+    }
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: selection)
+
+    def compute(ordered):
+        monkeypatch.setattr(
+            openwebui,
+            "iter_engine_discovery",
+            lambda *_a, **_k: DiscoveryResult("ok_models", [], None),
+        )
+        monkeypatch.setattr(openwebui, "audio_models", lambda *_: ordered)
+        return openwebui.compute_desired_state(allow_auto_probe=True)
+
+    forward = compute(models)
+    reverse = compute(list(reversed(models)))
+    assert forward["audio"]["stt"] == reverse["audio"]["stt"]
+    assert forward["audio_selection"] == reverse["audio_selection"]
+    assert "order" not in repr(forward["audio_selection"]).lower()
+
+
 def test_same_dims_model_change_refuses_without_ack_switches_with_ack(
     monkeypatch, tmp_path, caplog
 ):
