@@ -36,7 +36,9 @@ orchestration requires local gateway readiness and authenticated keys for each
 enabled client before allowing client configuration to proceed.
 
 Intentional direct exceptions are `meridian` (the local proxy surface, with
-its own keys and responses API; it is not a LiteLLM upstream) and `copilot`
+its own keys and responses API; it is not a LiteLLM upstream — client-specific:
+Junie separately derives authenticated gateway twins for its routed Meridian
+groups, see docs/JUNIE.md) and `copilot`
 (direct GitHub OAuth in Junie only). Routing either through LiteLLM would add
 a hop without attribution benefit. The doctor excludes these exceptions from
 gateway-only violation checks.
