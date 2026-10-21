@@ -812,6 +812,7 @@ def main():
     desired = compute_desired_state(
         probe_routes=bool(getattr(args, "probe_routes", False)) and not read_only,
         allow_auto_probe=bool(args.reconcile) and not read_only,
+        read_only=read_only,
     )
     try:
         if args.check or args.dry_run:
@@ -820,12 +821,10 @@ def main():
             )
             logger.info(result.summary())
             logger.info("connections checked; audio/embedding not checked")
-            drift = result.status != "clean" or any(
-                item["action"] != "keep" for item in result.plan.entries
-            )
-            if args.dry_run:
-                return 1 if result.status == "collision" else 0
-            return 2
+            # Honest exit semantics: healthy diagnostics exit 0 (drift is a
+            # report, not a failure); collision is a failure (1); usage
+            # errors stay 2 via argparse.
+            return 1 if result.status == "collision" else 0
         result = reconcile_via_api(client, desired)
         logger.info(result.summary())
         if result.status == "collision":
@@ -840,6 +839,22 @@ def main():
         return 0
     except OpenWebUIError as error:
         logger.error("Open WebUI operation failed: %s", error)
+        actions = getattr(error, "actions", None) or {}
+        # P1.3 operator reporting: action NAMES only — never credential
+        # values, response bodies or model payload content.
+        summary = "; ".join(
+            f"{stage}: [{', '.join(sorted(names))}]"
+            for stage, names in sorted(actions.items())
+            if names
+        )
+        if summary:
+            logger.error(
+                "Open WebUI partial-apply report (action names only): %s", summary
+            )
+        logger.error(
+            "Recovery: re-run make deploy — the reconciler converges from the "
+            "recorded ownership state"
+        )
         return 1
 
 

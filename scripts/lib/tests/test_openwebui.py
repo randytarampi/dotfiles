@@ -5195,7 +5195,7 @@ def test_cli_exit_codes(monkeypatch):
     monkeypatch.setattr(module.OpenWebUIClient, "get_ollama_config", lambda self: [])
     assert module.main.__name__ == "main"
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--check"])
-    assert module.main() == 2
+    assert module.main() == 0  # healthy check = successful diagnostic
     monkeypatch.setattr(
         module,
         "compute_desired_state",
@@ -5204,7 +5204,7 @@ def test_cli_exit_codes(monkeypatch):
             "ollama": [],
         },
     )
-    assert module.main() == 2
+    assert module.main() == 0  # drift is reported, not failed
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--dry-run"])
     assert module.main() == 0
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--invalid"])
@@ -5259,7 +5259,9 @@ def test_entrypoint_gateway_apply_requires_client_key(monkeypatch, tmp_path, cap
     monkeypatch.setattr(module.OpenWebUIClient, "get_openai_config", lambda self: [])
     monkeypatch.setattr(module.OpenWebUIClient, "get_ollama_config", lambda self: [])
     monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--check"])
-    assert module.main() == 2  # read-only gateway mode is not gated
+    assert (
+        module.main() == 0
+    )  # read-only gateway mode is not gated; healthy check exits 0
 
 
 def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):
@@ -5282,7 +5284,7 @@ def test_entrypoint_check_suppresses_probe_routes(monkeypatch, caplog):
         "argv",
         ["configure-openwebui.py", "--check", "--probe-routes"],
     )
-    assert module.main() == 2
+    assert module.main() == 0  # healthy check exits 0; probes suppressed
     assert captured["probe_routes"] is False
     assert captured["allow_auto_probe"] is False
     assert any("ignored in check/dry-run" in line for line in caplog.messages)
@@ -6371,3 +6373,72 @@ def test_gateway_audio_alias_resolution_degrades_bare_on_unknown_inventory(
     monkeypatch.setattr(route_probes, "probe_stt", success)
     openwebui._desired_audio_settings(allow_auto_probe=True)
     assert observed == [("http://127.0.0.1:4000/v1", "asr")]
+
+
+def test_readonly_compute_gateway_renders_unresolved_without_raise(
+    monkeypatch, tmp_path, caplog
+):
+    """P1.2: diagnostic compute never resolves credentials (real compute path)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    # HOME env patching (not Path.home): _litellm_client_key resolves through
+    # expanduser, which consults the HOME environment variable.
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(openwebui.constants, "get_litellm_proxy_mode", lambda: True)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: None)
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    with caplog.at_level("WARNING"):
+        desired = openwebui.compute_desired_state(read_only=True)
+    # The LITELLM-managed connection is suppressed (unresolved key); other
+    # providers render from their own credential paths.
+    assert all(
+        entry.get("url") != "http://127.0.0.1:4000/v1"
+        for entry in desired.get("openai", [])
+    )
+    assert any(
+        "proxy client key" in str(message)
+        for message in getattr(caplog, "messages", [])
+        or [
+            getattr(record, "message", str(record.getMessage()))
+            for record in caplog.records
+        ]
+    )
+    with pytest.raises(RuntimeError, match="unavailable"):
+        openwebui.compute_desired_state(read_only=False)  # apply stays fail-closed
+
+
+def test_entrypoint_reports_redacted_partial_apply(monkeypatch, tmp_path, caplog):
+    """P1.3: operators see the redacted action summary + the recovery hint."""
+    module = _script()
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENWEBUI_API_KEY", "key")
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module.OpenWebUIClient, "health_check", lambda self: True)
+    monkeypatch.setattr(
+        module,
+        "compute_desired_state",
+        lambda **kwargs: {"openai": [], "anthropic": [], "ollama": []},
+    )
+    error = module.OpenWebUIError(
+        "write verification failed",
+        actions={
+            "planned": ["audio"],
+            "applied": ["audio"],
+            "verified": [],
+            "failed": ["audio"],
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "reconcile_via_api",
+        lambda *args, **kwargs: (_ for _ in ()).throw(error),
+    )
+    monkeypatch.setattr(module.sys, "argv", ["configure-openwebui.py", "--reconcile"])
+    assert module.main() == 1
+    joined = " ".join(caplog.messages)
+    assert "partial-apply report" in joined
+    assert "applied: [audio]" in joined
+    assert "planned: [audio]" in joined
+    assert "Recovery: re-run make deploy" in joined

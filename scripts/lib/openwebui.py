@@ -313,8 +313,13 @@ def ownership_catalogue(proxy_mode=None):
     return catalogue
 
 
-def compute_desired_state(probe_routes=False, allow_auto_probe=False):
-    """Build desired entries; inactive/keyless providers remain ownership-known."""
+def compute_desired_state(probe_routes=False, allow_auto_probe=False, read_only=False):
+    """Build desired entries; inactive/keyless providers remain ownership-known.
+
+    ``read_only`` marks the diagnostic (--check/--dry-run) context: gateway
+    sections render their honest unresolved projection instead of resolving
+    credentials, and the apply path keeps the fail-closed RuntimeError.
+    """
     desired: dict[str, Any] = {"openai": [], "anthropic": [], "ollama": []}
     discovery = iter_engine_discovery("omlx")
     disabled = _disabled()
@@ -391,29 +396,40 @@ def compute_desired_state(probe_routes=False, allow_auto_probe=False):
             )
         from model_catalogues import _configured_litellm_port
 
-        # Fail-closed: gateway compute requires the materialised client key
-        # (never the LiteLLM master key; RuntimeError on missing/empty —
-        # guard test test_litellm_proxy_requires_openwebui_key_file...).
-        # Test fixtures patch _litellm_client_key for keyless runners.
-        client_key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
-        # Gateway-only mode: ONE managed connection covers every proxy model.
-        # Per-provider connections would each re-export the entire LiteLLM
-        # catalogue under its own prefix (the 540-models listing problem), so
-        # the desired state collapses to a single owned "litellm" identity.
-        endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
-        desired = {
-            "openai": [
-                _connection(
-                    "litellm",
-                    endpoint,
-                    client_key,
-                    "openai",
-                    "openai",
-                )
-            ],
-            "anthropic": [],
-            "ollama": [],
-        }
+        if read_only:
+            # Diagnostic modes never resolve credentials (P1.2): the managed
+            # gateway connection is not rendered rather than guessing a key;
+            # the apply path keeps the fail-closed RuntimeError below.
+            import logger
+
+            logger.warning(
+                "Gateway mode in a read-only diagnostic: the proxy client key "
+                "is unresolved, so the managed connection state is not rendered"
+            )
+        else:
+            # Fail-closed: gateway compute requires the materialised client key
+            # (never the LiteLLM master key; RuntimeError on missing/empty —
+            # guard test test_litellm_proxy_requires_openwebui_key_file...).
+            # Test fixtures patch _litellm_client_key for keyless runners.
+            client_key = _litellm_client_key("LITELLM_OPENWEBUI_KEY")
+            # Gateway-only mode: ONE managed connection covers every proxy model.
+            # Per-provider connections would each re-export the entire LiteLLM
+            # catalogue under its own prefix (the 540-models listing problem), so
+            # the desired state collapses to a single owned "litellm" identity.
+            endpoint = f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+            desired = {
+                "openai": [
+                    _connection(
+                        "litellm",
+                        endpoint,
+                        client_key,
+                        "openai",
+                        "openai",
+                    )
+                ],
+                "anthropic": [],
+                "ollama": [],
+            }
     audio_selection = {}
     audio = _desired_audio_settings(
         probe_routes=probe_routes,
