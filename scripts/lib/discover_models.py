@@ -8,7 +8,7 @@ import sys
 import json
 import argparse
 import os
-import subprocess
+import subprocess  # nosec B404 - local engine discovery only; constant-literal commands
 import shutil
 import re
 
@@ -21,7 +21,7 @@ def find_ollama() -> str:
     if ollama_path:
         return ollama_path
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - brew managed binary; literal ["brew","--prefix"]
             ["brew", "--prefix"], capture_output=True, text=True, timeout=5
         )
         brew_prefix = result.stdout.strip()
@@ -69,7 +69,7 @@ def _list_local_ollama_discovery(include_cloud=False):
         return DiscoveryResult("unknown_error", (), "Ollama binary not found")
     models = []
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - ollama managed binary; literal args
             [ollama_bin, "list"], capture_output=True, text=True, timeout=5
         )
         returncode = getattr(result, "returncode", 0)
@@ -116,7 +116,7 @@ def list_cloud_ollama_models() -> list:
     if not ollama_bin:
         return []
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - ollama managed binary; literal args
             [ollama_bin, "list"], capture_output=True, text=True, timeout=5
         )
         lines = result.stdout.splitlines()

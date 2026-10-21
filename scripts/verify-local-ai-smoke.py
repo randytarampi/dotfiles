@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
+import subprocess  # nosec B404 - the harness drives this repo's own scripts only
 import sys
 import tempfile
 
@@ -105,7 +105,7 @@ def run_smoke(home=None, mode="gateway", dry_run=False):
             "HTTPS_PROXY": "http://127.0.0.1:9",
             "HTTP_PROXY": "http://127.0.0.1:9",
         }
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - repo script under a WAN-blocked, disposable HOME
             command,
             cwd=ROOT,
             env=environment,

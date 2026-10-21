@@ -12,7 +12,7 @@ import json
 import argparse
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 - managed script/gateway orchestration; no shell, env-staged
 import tempfile
 from pathlib import Path
 
@@ -524,7 +524,9 @@ def prepare_tier_candidate(config_dir, tier_args, consumer_config, previous_slim
         staged_path = Path(staging_dir) / "oh-my-opencode-slim.json"
         if previous_slim is not None:
             write_private_atomic(staged_path, json.dumps(previous_slim))
-        subprocess.run(tier_args, check=True, env=staged_env)
+        subprocess.run(  # nosec B603 B607 - repo-root tier script, constant args, staged env
+            tier_args, check=True, env=staged_env
+        )
         if not staged_path.is_file():
             raise RuntimeError("tier staging did not produce Slim config")
         staged_slim = json.loads(staged_path.read_text(encoding="utf-8"))

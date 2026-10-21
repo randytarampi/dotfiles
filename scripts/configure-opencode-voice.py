@@ -64,9 +64,9 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     local_endpoint_for,
     resolve_engine,
 )
-import tier_registry
-from model_catalogues import _configured_litellm_port
-from selected_service import (
+import tier_registry  # noqa: E402
+from model_catalogues import _configured_litellm_port  # noqa: E402
+from selected_service import (  # noqa: E402
     DirectRoute,
     Operation,
     Qualification,

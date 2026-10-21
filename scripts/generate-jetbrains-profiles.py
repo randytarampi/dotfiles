@@ -28,7 +28,7 @@ from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
 from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
     LITELLM_ROUTED_PROVIDERS,
 )
-from ai_models import (
+from ai_models import (  # noqa: E402 -- scripts/lib bootstrap.
     is_specialized_model_name,
     resolve_model,
 )  # noqa: E402 -- scripts/lib bootstrap.
