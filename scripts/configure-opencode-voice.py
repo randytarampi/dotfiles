@@ -70,6 +70,8 @@ from selected_service import (  # noqa: E402
     DirectRoute,
     Operation,
     Qualification,
+    CanonicalSelection,
+    RouteResolution,
     ServiceLocator,
     Transport,
     resolve_stt_transport,
@@ -127,6 +129,15 @@ def _service_locator(
     selection = selection or _select_voice_candidate(
         operation, candidates, previously_selected=previously_selected
     )
+    if route_options.get("config_only"):
+        route = RouteResolution(
+            Transport.GATEWAY if gate == "gateway" else Transport.DIRECT,
+            route_options.get("endpoint"),
+            route_options.get("wire_model", selection.model),
+            route_options.get("key_reference"),
+            "config-only; runtime unverified",
+        )
+        return ServiceLocator(selection, route)
     route = resolve_transport(
         gate,
         selection.qualification,
@@ -147,9 +158,41 @@ def _service_locator(
     return ServiceLocator(selection, route)
 
 
+def _tier_config_only_locator(operation, provider, model, endpoint, key_env, gate):
+    """Construct the operator-curated tier route without claiming runtime evidence."""
+    gateway = gate is True
+    alias = _gateway_alias(provider, model) if gateway else model
+    key_ref = "LITELLM_OPENCODE_KEY" if gateway else key_env
+    if gateway and (not alias or not os.environ.get(key_ref, "").strip()):
+        return None
+    selection = CanonicalSelection(
+        operation,
+        provider,
+        model,
+        Qualification.UNKNOWN,
+        "operator-curated tier default; config-only, runtime unverified",
+        config_only=True,
+    )
+    return _service_locator(
+        operation,
+        [(provider, model, Qualification.UNKNOWN)],
+        "gateway" if gateway else "direct",
+        selection=selection,
+        endpoint=(
+            f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+            if gateway
+            else endpoint
+        ),
+        wire_model=alias,
+        key_reference=key_ref,
+        config_only=True,
+    )
+
+
 def _render_locator(locator):
     if (
-        locator.selection.qualification
+        not locator.selection.config_only
+        and locator.selection.qualification
         in (Qualification.UNAVAILABLE, Qualification.UNKNOWN)
         or locator.route.transport is Transport.UNAVAILABLE
     ):
@@ -165,7 +208,8 @@ def _render_locator(locator):
         "endpoint": locator.route.endpoint,
         "wire_model": locator.route.wire_model,
     }
-    assert_renders_from(locator, rendered)
+    if not locator.selection.config_only:
+        assert_renders_from(locator, rendered)
     return rendered
 
 
@@ -173,18 +217,53 @@ def _configure_tier_remote(
     voice_config, locators, provider, model, endpoint, api_key_env, gateway_gate
 ):
     candidates = [(provider, model, Qualification.UNKNOWN)]
-    selection = select(Operation.CLEANUP_LLM, candidates)
-    direct = endpoint if gateway_gate is not True else None
+    gateway = gateway_gate is True
+    served_model = model
+    if gateway:
+        served_model = _gateway_alias(provider, model)
+        if not served_model or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip():
+            logger.warning(
+                "Gateway voice route requires a served model alias and LITELLM_OPENCODE_KEY"
+            )
+            locators[Operation.CLEANUP_LLM.value] = {
+                "provider": provider,
+                "model": model,
+                "qualification": "unavailable",
+                "reason": "gateway requires a served alias and scoped key",
+                "transport": "unavailable",
+                "endpoint": None,
+                "wire_model": None,
+                "key_reference": "LITELLM_OPENCODE_KEY",
+            }
+            return
+    selection = CanonicalSelection(
+        Operation.CLEANUP_LLM,
+        provider,
+        model,
+        Qualification.UNKNOWN,
+        "operator-curated tier default; config-only, runtime unverified",
+        config_only=True,
+    )
+    route_endpoint = (
+        f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1"
+        if gateway
+        else endpoint
+    )
     locator = _service_locator(
         Operation.CLEANUP_LLM,
         candidates,
         "gateway" if gateway_gate is True else "direct",
         selection=selection,
-        endpoint=direct,
-        wire_model=model,
-        key_reference=api_key_env,
-        credential_present=bool(os.environ.get(api_key_env, "").strip()),
+        endpoint=route_endpoint,
+        wire_model=served_model,
+        key_reference="LITELLM_OPENCODE_KEY" if gateway else api_key_env,
+        credential_present=bool(
+            os.environ.get(
+                "LITELLM_OPENCODE_KEY" if gateway else api_key_env, ""
+            ).strip()
+        ),
         credential_required=True,
+        config_only=True,
     )
     rendered = _render_locator(locator)
     provenance = {
@@ -201,15 +280,40 @@ def _configure_tier_remote(
         "transport": locator.route.transport.value,
         "endpoint": locator.route.endpoint,
         "wire_model": locator.route.wire_model,
-        "key_reference": api_key_env,
+        "key_reference": locator.route.key_reference,
+        "config_only": True,
     }
     locators[Operation.CLEANUP_LLM.value] = provenance
     if rendered:
         voice_config.update(
             endpoint=rendered["endpoint"],
             model=rendered["wire_model"],
-            apiKeyEnv=api_key_env,
+            **(
+                {"apiKeyEnv": locator.route.key_reference}
+                if locator.route.key_reference
+                else {}
+            ),
         )
+
+
+def _gateway_alias(provider, model):
+    """Return an exact configured served alias for a canonical provider/model."""
+    try:
+        from route_probes import fetch_gateway_models
+
+        key = os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+        if not key:
+            return None
+        models = fetch_gateway_models(
+            f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1",
+            key,
+        )
+    except (OSError, ValueError, RuntimeError):
+        return None
+    wanted = f"{provider}/{model}"
+    if wanted in (models or []):
+        return wanted
+    return None
 
 
 def _voice_config_dir():
@@ -360,6 +464,19 @@ def _resolve_local_voice_model(
             )
         ),
         credential_required=False,
+        selection=(
+            CanonicalSelection(
+                Operation.CLEANUP_LLM,
+                candidates[0][0] if candidates else None,
+                candidates[0][1] if candidates else None,
+                Qualification.DISCOVERED if candidates else Qualification.UNAVAILABLE,
+                "installed local model; config-only, runtime unverified",
+                config_only=True,
+            )
+            if candidates
+            else None
+        ),
+        config_only=True,
     )
     rendered = _render_locator(locator)
     if rendered is None:
@@ -451,11 +568,32 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 )
                 if voice_model:
                     voice_config = local_voice_provider(voice_model)
+                    provider = (
+                        voice_model.split("/", 1)[0] if "/" in voice_model else "ollama"
+                    )
+                    model = voice_model.split("/", 1)[-1]
+                    candidates = [(provider, voice_model, Qualification.DISCOVERED)]
+                    locators[Operation.CLEANUP_LLM.value] = _service_locator(
+                        Operation.CLEANUP_LLM,
+                        candidates,
+                        "gateway" if gateway_gate is True else "direct",
+                        selection=CanonicalSelection(
+                            Operation.CLEANUP_LLM,
+                            provider,
+                            voice_model,
+                            Qualification.DISCOVERED,
+                            "installed local model; config-only, runtime unverified",
+                            config_only=True,
+                        ),
+                        endpoint=voice_config["endpoint"],
+                        wire_model=model,
+                        config_only=True,
+                    )
             except (OSError, ValueError, RuntimeError) as error:
                 logger.warning("Local voice model resolution failed: %s", error)
                 unresolved = True
-        if "model" not in voice_config and not unresolved:
-            raise RuntimeError("Could not resolve a verified local voice LLM")
+        if "model" not in voice_config:
+            unresolved = True
 
     elif is_pro_tier:
         # Ollama Cloud — route through local daemon if cloud-capable
@@ -470,6 +608,16 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 "model": "gemma4:31b",
                 "apiKeyEnv": "OLLAMA_API_KEY",
             }
+        locator = _tier_config_only_locator(
+            Operation.CLEANUP_LLM,
+            "ollama-cloud",
+            "gemma4:31b",
+            voice_config["endpoint"],
+            "OLLAMA_API_KEY",
+            gateway_gate,
+        )
+        if locator:
+            locators[Operation.CLEANUP_LLM.value] = locator
 
     elif tier in ("omo-slim-opencode-zen-free", "free"):
         # These tiers use configured remote providers, never Ollama.
@@ -487,6 +635,26 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             provider["apiKeyEnv"],
             gateway_gate,
         )
+    elif tier == "pro":
+        if can_proxy_cloud:
+            provider, model = "ollama", "gemma4:31b:cloud"
+            endpoint = get_ollama_local_base_url()
+            key_env = None
+        else:
+            provider, model = "ollama-cloud", "gemma4:31b"
+            endpoint = get_provider_base_url("ollama-cloud")
+            key_env = "OLLAMA_API_KEY"
+        locator = _tier_config_only_locator(
+            Operation.CLEANUP_LLM, provider, model, endpoint, key_env, gateway_gate
+        )
+        if locator:
+            rendered = _render_locator(locator)
+            locators[Operation.CLEANUP_LLM.value] = locator
+            voice_config.update(
+                endpoint=rendered["endpoint"], model=rendered["wire_model"]
+            )
+            if locator.route.key_reference:
+                voice_config["apiKeyEnv"] = locator.route.key_reference
 
     elif is_anthropic_tier:
         # Anthropic — via Meridian proxy or direct
@@ -536,6 +704,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     if (
         not is_local_tier
         and tier not in ("omo-slim-opencode-zen-free", "free")
+        and tier != "pro"
         and os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "true").lower() in ("true", "1")
     ):
         try:
@@ -817,6 +986,32 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             for name, locator in locators.items()
         },
     }
+    if Operation.CLEANUP_LLM.value in locators:
+        cleanup = locators[Operation.CLEANUP_LLM.value]
+        voice_config["_voice_state"]["selections"][Operation.CLEANUP_LLM.value] = (
+            {
+                "provider": cleanup.selection.provider,
+                "model": cleanup.selection.model,
+                "qualification": cleanup.selection.qualification.value,
+                "reason": cleanup.selection.reason,
+                "transport": cleanup.route.transport.value,
+                "endpoint": cleanup.route.endpoint,
+                "wire_model": cleanup.route.wire_model,
+                **(
+                    {"key_reference": cleanup.route.key_reference}
+                    if cleanup.route.key_reference
+                    else {}
+                ),
+            }
+            if isinstance(cleanup, ServiceLocator)
+            else cleanup
+        )
+    if unresolved and is_local_tier:
+        voice_config["_voice_unresolved"] = True
+        voice_config["_voice_state"]["selections"].pop(
+            Operation.CLEANUP_LLM.value, None
+        )
+        voice_config["_voice_state"]["selections"].pop(Operation.STT.value, None)
     if not voice_config["_voice_state"]["selections"] and unresolved:
         voice_config["_voice_state"] = None
     if unresolved and no_local_models and not locators:

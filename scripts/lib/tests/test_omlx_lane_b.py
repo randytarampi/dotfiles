@@ -333,9 +333,166 @@ def test_voice_main_persists_transport_without_audio_selections(monkeypatch, tmp
     state = voice._load_voice_state(str(tmp_path))
     assert state["sttTransport"] == "openai"
     assert state["sttTransportReason"] == "explicit --stt-transport openai"
-    assert state["selections"] == {}
+    assert "cleanup_llm" in state["selections"]
     options = json.loads((tmp_path / "tui.json").read_text())["plugin"][0][1]
     assert options["model"] == "gemma4:31b"
+
+
+@pytest.mark.parametrize(
+    "tier",
+    ["local", "local-solo", "pro", "plus", "pro-plus", "anthropic", "free"],
+)
+@pytest.mark.parametrize("gateway", [False, True])
+@pytest.mark.parametrize("existing", [False, True])
+def test_voice_config_only_tier_matrix_main_contract(
+    monkeypatch, tmp_path, caplog, tier, gateway, existing
+):
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / f"{tier}-{gateway}-{existing}"
+    config_dir.mkdir()
+    if existing:
+        (config_dir / "tui.json").write_text(
+            json.dumps({"plugin": [["foreign", {}]]}), encoding="utf-8"
+        )
+        voice._save_voice_state(str(config_dir), {"sttTransport": "local"})
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if gateway else "0")
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "scoped-test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "provider-test-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "provider-test-key")
+    monkeypatch.setattr(voice, "load_env", lambda *_: False)
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "active_engines", lambda: [])
+    monkeypatch.setattr(voice, "audio_models", lambda *_: [])
+    monkeypatch.setattr(
+        voice,
+        "list_local_ollama_models",
+        lambda: [{"name": "installed", "provider": "ollama"}],
+    )
+    monkeypatch.setattr(
+        voice, "get_model_details", lambda *_a, **_k: {"capabilities": ["completion"]}
+    )
+    monkeypatch.setattr(
+        voice,
+        "resolve_roles_from_list",
+        lambda *_a, **_k: {"lightweight": "ollama/installed"},
+    )
+    monkeypatch.setattr(
+        voice.tier_registry,
+        "materialize_role_models",
+        lambda *_a, **_k: {"librarian": "ollama/installed"},
+    )
+    monkeypatch.setattr(
+        voice,
+        "local_endpoint_for",
+        lambda *_a, **_k: ("http://localhost:11434/v1", None),
+    )
+    monkeypatch.setattr(voice, "get_available_tiers", lambda: [tier])
+    if tier.startswith("local") and existing:
+        (config_dir / "tui.json").write_text(
+            json.dumps(
+                {
+                    "plugin": [
+                        [
+                            "@renjfk/opencode-voice",
+                            {"endpoint": "http://old", "model": "old-model"},
+                        ]
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(voice, "_gateway_alias", lambda *_: "openai/gpt-6-luna")
+    monkeypatch.setattr(
+        voice.tier_registry,
+        "load_registry",
+        lambda: {"presets": {}, "_tiers": {}},
+    )
+    monkeypatch.setattr(
+        voice.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {
+            "orchestrator": "opencode/muse-spark-1.3-contributor-free"
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", tier, "--no-backup"])
+    assert voice.main() is None
+    tui = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    voice_entries = [p for p in tui["plugin"] if p[0] == "@renjfk/opencode-voice"]
+    if tier.startswith("local"):
+        assert len(voice_entries) == int(existing)
+        if existing:
+            assert voice_entries[0][1]["model"] == "old-model"
+        assert "unresolved" in caplog.text
+        assert (
+            "installed local model; config-only, runtime unverified" not in caplog.text
+        )
+        if existing:
+            state = voice._load_voice_state(str(config_dir))
+            assert state["sttTransport"] == "local"
+        else:
+            assert not (config_dir / "opencode-voice.json").exists()
+        return
+    assert len(voice_entries) == 1
+    options = voice_entries[0][1]
+    if tier not in ("local", "local-solo", "pro"):
+        assert options["endpoint"] == (
+            f"http://127.0.0.1:{voice._configured_litellm_port() or 4000}/v1"
+            if gateway
+            else options["endpoint"]
+        )
+    assert options["model"]
+    state = voice._load_voice_state(str(config_dir))
+    assert state["sttTransport"] == ("local" if existing or not gateway else "openai")
+    assert state["sttTransportReason"] in (
+        "saved selection" if existing else "global gateway gate",
+        "global gateway gate",
+        "no binding input; local default",
+    )
+    if tier in ("plus", "pro-plus", "anthropic", "free"):
+        assert state["selections"]["cleanup_llm"]["transport"] == (
+            "gateway" if gateway else "direct"
+        )
+        assert "runtime unverified" in state["selections"]["cleanup_llm"]["reason"]
+
+
+@pytest.mark.parametrize("failure", ["missing-alias", "missing-key"])
+def test_voice_gateway_tier_fails_closed(failure, monkeypatch, tmp_path):
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / failure
+    config_dir.mkdir()
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv(
+        "LITELLM_OPENCODE_KEY", "" if failure == "missing-key" else "key"
+    )
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
+    monkeypatch.setattr(voice, "load_env", lambda *_: False)
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "active_engines", lambda: [])
+    monkeypatch.setattr(voice, "audio_models", lambda *_: [])
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(voice, "get_available_tiers", lambda: ["plus"])
+    monkeypatch.setattr(voice.tier_registry, "load_registry", lambda: {"presets": {}})
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        voice,
+        "_gateway_alias",
+        lambda *_: None if failure == "missing-alias" else "openai/gpt-6-luna",
+    )
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "plus", "--no-backup"])
+    voice.main()
+    assert json.loads((config_dir / "tui.json").read_text())["plugin"] == []
+    state = voice._load_voice_state(str(config_dir))
+    record = state["selections"]["cleanup_llm"]
+    assert record["transport"] == "unavailable"
+    assert record["qualification"] == "unavailable"
 
 
 def _voice_test_config(monkeypatch, voice, discovery, key=None):

@@ -127,13 +127,19 @@ class TierRegistryTests(unittest.TestCase):
         self.assertIn("omo-slim-thirty-dollars", tiers)
         self.assertIn("omo-slim-opencode-zen-free", tiers)
 
-    def test_voice_mapping_for_remote_presets_omits_unqualified_routes(self):
+    def test_voice_mapping_for_remote_presets_admits_config_only_routes(self):
         with (
             patch.object(
                 configure_voice, "check_ollama_daemon", return_value=(None, False)
             ),
             patch.object(configure_voice, "list_local_ollama_models", return_value=[]),
-            patch.dict("os.environ", {"DOTFILES_USE_LOCAL_OLLAMA": "0"}),
+            patch.dict(
+                "os.environ",
+                {
+                    "DOTFILES_USE_LOCAL_OLLAMA": "0",
+                    "DOTFILES_USE_LITELLM_PROXY": "0",
+                },
+            ),
         ):
             for tier in (
                 "omo-slim-openai",
@@ -141,13 +147,13 @@ class TierRegistryTests(unittest.TestCase):
                 "omo-slim-opencode-zen-free",
             ):
                 config = configure_voice.get_voice_config(tier)
-                self.assertNotIn("model", config)
+                self.assertIn("model", config)
                 sidecar = config.get("_voice_state", {})
                 record = sidecar.get("selections", {}).get("cleanup_llm", {})
-                self.assertEqual(record.get("qualification"), "unavailable")
+                self.assertEqual(record.get("qualification"), "unknown")
                 self.assertEqual(record.get("candidate_qualification"), "unknown")
-                self.assertEqual(record.get("transport"), "unavailable")
-                self.assertIn("unavailable", record.get("reason", ""))
+                self.assertEqual(record.get("transport"), "direct")
+                self.assertIn("runtime unverified", record.get("reason", ""))
                 self.assertNotIn("probed", record.get("qualification", ""))
 
     def test_google_provider_endpoint_uses_v1beta_compat_path(self):

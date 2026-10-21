@@ -51,6 +51,7 @@ class CanonicalSelection:
     model: str | None
     qualification: Qualification
     reason: str
+    config_only: bool = False
 
 
 @dataclass(frozen=True)
