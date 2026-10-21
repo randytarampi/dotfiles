@@ -1067,7 +1067,14 @@
       "path": "scripts/verify-local-ai-smoke.py",
       "capabilities": ["public", "inspect"],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--home", "--direct", "--gateway"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--home",
+        "--direct",
+        "--gateway",
+        "--mode"
+      ],
       "positional_operand": null,
       "child_scripts": ["configure-litellm.py"]
     },

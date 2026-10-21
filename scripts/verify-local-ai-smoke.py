@@ -1,30 +1,40 @@
 #!/usr/bin/env python3
-"""Hermetic offline-retention smoke for the deployed LiteLLM catalogue."""
+"""Hermetic LiteLLM retention diagnostic and fixture-backed acceptance harness."""
 
 import argparse
 import json
 import os
 from pathlib import Path
 import shutil
-import subprocess  # nosec B404 - the harness drives this repo's own scripts only
+import subprocess  # nosec B404 - runs this repository's own configuration script
 import sys
 import tempfile
+import socket
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-TARGET_ALIAS = "ollama-cloud/glm-5.3-flash"
+TARGET_ALIAS = "ollama-local/llama3.2:3b"
+SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT")
+BASELINE_PATHS = (
+    ".local/share/litellm/config.yaml",
+    ".local/share/litellm/config.models.json",
+)
 
 
 def validate_snapshot(
     config_path,
     ledger_path,
     notes_path,
+    *,
     config_text=None,
     ledger_text=None,
     notes_text=None,
     previous_ledger_text=None,
+    inventory_names=None,
+    required_baseline_refs=(),
 ):
-    """Check generated YAML aliases/ledger and generation notes, no network."""
+    """Validate generated aliases against independent baseline inventories."""
     config_text = (
         config_text
         if config_text is not None
@@ -39,104 +49,206 @@ def validate_snapshot(
         notes_text if notes_text is not None else notes_path.read_text(encoding="utf-8")
     )
     ledger_names = {item.get("model_name") for item in ledger if isinstance(item, dict)}
-    previous_ledger = (
+    previous = (
         json.loads(previous_ledger_text) if previous_ledger_text is not None else ledger
     )
     previous_names = {
-        item.get("model_name") for item in previous_ledger if isinstance(item, dict)
+        item.get("model_name") for item in previous if isinstance(item, dict)
     }
-    config_names = set()
+    served = set()
     for line in config_text.splitlines():
         stripped = line.strip()
         if stripped.startswith("- model_name:"):
-            raw = stripped.partition(":")[2].strip()
             try:
-                config_names.add(json.loads(raw))
+                served.add(json.loads(stripped.partition(":")[2].strip()))
             except json.JSONDecodeError:
                 continue
+    inventory_names = set(inventory_names) if inventory_names is not None else None
     return {
-        "ledger_retained_exactly": previous_names <= config_names
-        and ledger_names == config_names,
-        "target_present": TARGET_ALIAS in config_names and TARGET_ALIAS in ledger_names,
+        "ledger_retained_exactly": previous_names <= served and ledger_names == served,
+        "target_present": TARGET_ALIAS in served,
         "unknown_reported": any("UNKNOWN" in str(note) for note in notes),
-        "no_invented_models": config_names <= ledger_names,
+        "served_within_inventory": (
+            True if inventory_names is None else served <= inventory_names
+        ),
+        "required_baseline_refs_served": set(required_baseline_refs) <= served,
+        "served_names": served,
         "ledger_names": ledger_names,
-        "config_names": config_names,
         "notes": notes,
     }
 
 
-def run_smoke(home=None, mode="gateway", dry_run=False):
-    source_home = Path.home()
-    source_root = source_home / ".local/share/litellm"
-    config_source = source_root / "config.yaml"
-    ledger_source = source_root / "config.models.json"
-    if not all(path.is_file() for path in (config_source, ledger_source)):
-        return {
-            "skipped": True,
-            "reason": "deployed LiteLLM config.yaml or config.models.json is missing",
-        }
+def _deny_non_loopback(request, *args, **kwargs):
+    url = request.full_url if hasattr(request, "full_url") else str(request)
+    from urllib.parse import urlparse
 
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ("localhost", "127.0.0.1", "::1"):
+        raise RuntimeError(f"non-loopback network blocked: {host or url}")
+    raise RuntimeError("loopback HTTP is not permitted by the smoke harness")
+
+
+def run_smoke(
+    home=None,
+    mode="retention",
+    dry_run=False,
+    *,
+    baseline=None,
+    inventory=None,
+    runner=None,
+    network_hook=None,
+):
+    if mode not in ("retention", "acceptance"):
+        raise ValueError(f"unknown mode: {mode}")
+    if mode == "retention":
+        root = Path.home() / ".local/share/litellm"
+        sources = [root / "config.yaml", root / "config.models.json"]
+        if not all(path.is_file() for path in sources):
+            return {
+                "skipped": True,
+                "reason": "deployed LiteLLM config.yaml or config.models.json baseline is missing",
+            }
+        inventory = {
+            item["model_name"]
+            for item in json.loads(sources[1].read_text())
+            if isinstance(item, dict)
+        }
+        baseline = sources
+    else:
+        if baseline is None or inventory is None:
+            raise ValueError(
+                "acceptance requires complete baseline and local-model inventory inputs"
+            )
+        baseline = [Path(path) for path in baseline]
+        if len(baseline) != 2 or not all(path.is_file() for path in baseline):
+            raise ValueError(
+                "acceptance requires both baseline config and ledger files"
+            )
+        inventory = set(inventory)
+        if TARGET_ALIAS not in inventory:
+            raise ValueError(f"local model inventory must include {TARGET_ALIAS}")
+        if home is None:
+            raise ValueError(
+                "acceptance requires --home pointing at a new empty directory"
+            )
     temporary_home = None
     if home is None:
         temporary_home = tempfile.TemporaryDirectory(prefix="local-ai-smoke-")
         home_path = Path(temporary_home.name)
     else:
         home_path = Path(home).expanduser().resolve()
+        if mode == "acceptance" and (
+            home_path.exists() or not home_path.parent.is_dir()
+        ):
+            raise ValueError(
+                "acceptance --home must not exist and its parent must exist"
+            )
     try:
+        if dry_run:
+            return {
+                "dry_run": True,
+                "mode": mode,
+                "command": [sys.executable, str(SCRIPTS / "configure-litellm.py")],
+                "home": str(home_path),
+            }
+        command = [sys.executable, str(SCRIPTS / "configure-litellm.py")]
+        if mode == "acceptance":
+            home_path.mkdir()
         isolated_root = home_path / ".local/share/litellm"
         isolated_root.mkdir(parents=True, exist_ok=True)
-        previous_ledger_text = ledger_source.read_text(encoding="utf-8")
-        for source in (config_source, ledger_source):
+        previous_ledger_text = baseline[1].read_text(encoding="utf-8")
+        for source in baseline:
             shutil.copy2(source, isolated_root / source.name)
-        command = [sys.executable, str(SCRIPTS / "configure-litellm.py")]
-        if dry_run:
-            print(
-                f"Plan: {' '.join(command)} (HOME={home_path}, mode={mode}, WAN blocked)"
-            )
-            return {"dry_run": True, "stdout": "", "stderr": ""}
-        environment = {
-            **os.environ,
-            "HOME": str(home_path),
-            "DOTFILES_RUN_LITELLM_SETUP": "1",
-            "DOTFILES_USE_LITELLM_PROXY": "1" if mode == "gateway" else "0",
-            "https_proxy": "http://127.0.0.1:9",
-            "http_proxy": "http://127.0.0.1:9",
-            "HTTPS_PROXY": "http://127.0.0.1:9",
-            "HTTP_PROXY": "http://127.0.0.1:9",
-        }
-        result = subprocess.run(  # nosec B603 - repo script under a WAN-blocked, disposable HOME
-            command,
-            cwd=ROOT,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
+        environment = {key: os.environ[key] for key in SAFE_ENV if key in os.environ}
+        environment.update(
+            {
+                "HOME": str(home_path),
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "DOTFILES_USE_LITELLM_PROXY": "0",
+                "http_proxy": "http://127.0.0.1:9",
+                "https_proxy": "http://127.0.0.1:9",
+                "HTTP_PROXY": "http://127.0.0.1:9",
+                "HTTPS_PROXY": "http://127.0.0.1:9",
+            }
         )
-        notes_path = isolated_root / "last_generation_notes.json"
+        if mode == "acceptance":
+            hook = network_hook or _deny_non_loopback
+            # Ensure the child Python process enforces the same outbound policy.
+            policy_dir = home_path / ".local-ai-smoke-policy"
+            policy_dir.mkdir(parents=True)
+            (policy_dir / "sitecustomize.py").write_text(
+                "import socket, urllib.request\n"
+                "def deny(request, *args, **kwargs):\n"
+                "    url = request.full_url if hasattr(request, 'full_url') else str(request)\n"
+                "    from urllib.parse import urlparse\n"
+                "    host = (urlparse(url).hostname or '').lower()\n"
+                "    if host not in ('localhost', '127.0.0.1', '::1'):\n"
+                "        raise RuntimeError('non-loopback network blocked: ' + (host or url))\n"
+                "    raise RuntimeError('loopback HTTP is not permitted by the smoke harness')\n"
+                "urllib.request.urlopen = deny\n"
+                "_connect = socket.socket.connect\n"
+                "def guarded_connect(sock, address):\n"
+                "    host = address[0] if isinstance(address, tuple) else address\n"
+                "    if host not in ('localhost', '127.0.0.1', '::1'):\n"
+                "        raise RuntimeError('non-loopback network blocked: ' + str(host))\n"
+                "    return _connect(sock, address)\n"
+                "socket.socket.connect = guarded_connect\n",
+                encoding="utf-8",
+            )
+            environment["PYTHONPATH"] = str(policy_dir)
+            # The assertion is executable evidence, not a check of proxy settings.
+            try:
+                hook("https://example.com")
+            except RuntimeError as error:
+                if "blocked" not in str(error):
+                    raise
+            else:
+                raise RuntimeError("network hook did not reject non-loopback request")
+        result = (
+            runner(
+                command,
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if runner
+            else subprocess.run(
+                command,
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        )
         report = validate_snapshot(
             isolated_root / "config.yaml",
             isolated_root / "config.models.json",
-            notes_path,
+            isolated_root / "last_generation_notes.json",
             previous_ledger_text=previous_ledger_text,
+            inventory_names=inventory if mode == "acceptance" else None,
+            required_baseline_refs={
+                item.get("model_name")
+                for item in json.loads(previous_ledger_text)
+                if isinstance(item, dict)
+            },
         )
-        report["command_exit_zero"] = result.returncode == 0
-        report["unknown_or_expired_warning"] = any(
-            "UNKNOWN" in str(note) or "absent/expired" in str(note)
-            for note in report["notes"]
+        report.update(
+            {
+                "mode": mode,
+                "command_exit_zero": result.returncode == 0,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            }
         )
-        report["mode"] = mode
-        report["stderr"] = result.stderr
-        report["stdout"] = result.stdout
-        report["passed"] = all(
-            report[key]
-            for key in (
-                "command_exit_zero",
-                "ledger_retained_exactly",
-                "target_present",
-                "unknown_or_expired_warning",
-                "no_invented_models",
-            )
+        report["passed"] = (
+            report["command_exit_zero"]
+            and report["ledger_retained_exactly"]
+            and report["target_present"]
+            and report["served_within_inventory"]
+            and report["required_baseline_refs_served"]
         )
         return report
     finally:
@@ -146,16 +258,14 @@ def run_smoke(home=None, mode="gateway", dry_run=False):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument(
+        "--mode", choices=("retention", "acceptance"), default="retention"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--home", type=Path)
-    parser.add_argument("--direct", action="store_true")
-    parser.add_argument("--gateway", action="store_true")
     args = parser.parse_args(argv)
-    if args.direct and args.gateway:
-        parser.error("--direct and --gateway are mutually exclusive")
-    mode = "direct" if args.direct else "gateway"
     try:
-        report = run_smoke(args.home, mode=mode, dry_run=args.dry_run)
+        report = run_smoke(args.home, mode=args.mode, dry_run=args.dry_run)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -163,24 +273,14 @@ def main(argv=None):
         print(f"SKIP {report['reason']}")
         return 0
     if report.get("dry_run"):
+        print(f"DRY RUN {args.mode}: no files copied or created")
         return 0
-    labels = (
-        ("command_exit_zero", "configure-litellm exits 0"),
-        ("ledger_retained_exactly", "previous model ledger retained exactly"),
-        ("target_present", "ollama-cloud/glm-5.3-flash present"),
-        ("unknown_or_expired_warning", "UNKNOWN/absent-expired warning present"),
-        ("no_invented_models", "no model absent from ledger was invented"),
-    )
-    for key, label in labels:
-        print(f"{'PASS' if report[key] else 'FAIL'} {label}")
-    print(f"Mode: {mode}")
     print(
-        f"Drift summary: config={len(report['config_names'])} ledger={len(report['ledger_names'])}"
+        json.dumps(
+            {key: value for key, value in report.items() if not isinstance(value, set)},
+            default=list,
+        )
     )
-    if report["stdout"]:
-        print(report["stdout"].rstrip())
-    if report["stderr"]:
-        print(report["stderr"].rstrip(), file=sys.stderr)
     return 0 if report["passed"] else 1
 
 
