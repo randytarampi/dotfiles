@@ -27,7 +27,7 @@ def load_script():
 
 
 @pytest.fixture
-def served_inventory(monkeypatch):
+def served_inventory(monkeypatch, tmp_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps(
@@ -52,6 +52,7 @@ def served_inventory(monkeypatch):
     server = HTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
     yield server.server_port
     server.shutdown()

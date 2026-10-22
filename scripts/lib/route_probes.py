@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import io
 import json
-import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.error
 import wave
 from dataclasses import dataclass
 
@@ -216,7 +216,7 @@ def qualification_from_probe(result):
     return Qualification.UNKNOWN
 
 
-def fetch_gateway_models(base_url, key_value=None, timeout=5):
+def fetch_gateway_models(base_url, key_value=None, timeout=5, status_out=None):
     """Return the gateway's sorted ``/v1/models`` ids (None = unresolvable).
 
     The served inventory is the real alias source for gateway embedding
@@ -226,6 +226,8 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5):
     emit the honest unavailable/preserve record instead of inventing aliases.
     Every response body is discarded after parsing — never echoed.
     """
+    if status_out is None:
+        status_out = []
     if not base_url:
         return None
     parsed = urllib.parse.urlparse(str(base_url))
@@ -239,9 +241,13 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5):
             request, timeout=timeout
         ) as response:  # nosec B310 - scheme validated above
             code, data = response.status, response.read()
+    except urllib.error.HTTPError as error:
+        status_out.append(error.code)
+        return None
     except (TimeoutError, OSError):
         # URLError subclasses OSError; one tuple catches both.
         return None
+    status_out.append(code)
     if code != 200:
         return None
     try:

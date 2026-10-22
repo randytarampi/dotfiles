@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 OpenCode Voice Plugin Configurator.
 
@@ -82,6 +84,7 @@ from selected_service import (  # noqa: E402
     select,
     assert_renders_from,
 )
+from litellm_client_auth import resolve_client_auth
 
 VOICE_PREFERENCES = {
     "default": {Operation.STT.value: [], Operation.CLEANUP_LLM.value: []}
@@ -165,9 +168,25 @@ def _tier_config_only_locator(operation, provider, model, endpoint, key_env, gat
     """Construct the operator-curated tier route without claiming runtime evidence."""
     gateway = gate is True
     model = normalize_provider_model(provider, model)
-    alias = _gateway_alias(provider, model) if gateway else model
+    auth = resolve_client_auth("LITELLM_OPENCODE_KEY") if gateway else None
+    if auth is None:
+        from types import SimpleNamespace
+
+        auth = SimpleNamespace(value=None, authorized=False, detail=None)
+    alias = _gateway_alias(provider, model, auth.value) if gateway else model
     key_ref = "LITELLM_OPENCODE_KEY" if gateway else key_env
-    if gateway and (not alias or not os.environ.get(key_ref, "").strip()):
+    if gateway and (not alias or not auth.authorized):
+        logger.warning(
+            "Omitting voice operation %s model %s: %s",
+            operation.value,
+            model,
+            auth.detail
+            or (
+                "credential absent"
+                if not auth.authorized
+                else "served alias unavailable"
+            ),
+        )
         return None
     selection = CanonicalSelection(
         operation,
@@ -194,6 +213,9 @@ def _tier_config_only_locator(operation, provider, model, endpoint, key_env, gat
 
 
 def _render_locator(locator):
+    if locator is None:
+        logger.warning("Omitting voice operation: no route could be resolved")
+        return None
     if (
         not locator.selection.config_only
         and locator.selection.qualification
@@ -201,7 +223,9 @@ def _render_locator(locator):
         or locator.route.transport is Transport.UNAVAILABLE
     ):
         logger.warning(
-            "Omitting voice operation: %s",
+            "Omitting voice operation %s model %s: %s",
+            locator.selection.operation.value,
+            locator.selection.model,
             locator.route.reason or locator.selection.reason,
         )
         return None
@@ -224,17 +248,26 @@ def _configure_tier_remote(
     candidates = [(provider, model, Qualification.UNKNOWN)]
     gateway = gateway_gate is True
     served_model = model
+    auth = resolve_client_auth("LITELLM_OPENCODE_KEY") if gateway else None
     if gateway:
-        served_model = _gateway_alias(provider, model)
-        if not served_model or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip():
+        served_model = _gateway_alias(provider, model, auth.value)
+        if not served_model or not auth.authorized:
+            detail = auth.detail or (
+                "credential absent"
+                if not auth.authorized
+                else (_gateway_alias.last_error or "served alias unavailable")
+            )
             logger.warning(
-                "Gateway voice route requires a served model alias and LITELLM_OPENCODE_KEY"
+                "Omitting voice operation %s model %s: %s",
+                Operation.CLEANUP_LLM.value,
+                model,
+                detail,
             )
             locators[Operation.CLEANUP_LLM.value] = {
                 "provider": provider,
                 "model": model,
                 "qualification": "unavailable",
-                "reason": "gateway requires a served alias and scoped key",
+                "reason": detail,
                 "transport": "unavailable",
                 "endpoint": None,
                 "wire_model": None,
@@ -262,10 +295,10 @@ def _configure_tier_remote(
         endpoint=route_endpoint,
         wire_model=served_model,
         key_reference="LITELLM_OPENCODE_KEY" if gateway else api_key_env,
-        credential_present=bool(
-            os.environ.get(
-                "LITELLM_OPENCODE_KEY" if gateway else api_key_env, ""
-            ).strip()
+        credential_present=(
+            resolve_client_auth("LITELLM_OPENCODE_KEY").authorized
+            if gateway
+            else bool(os.environ.get(api_key_env, "").strip())
         ),
         credential_required=True,
         config_only=True,
@@ -301,24 +334,36 @@ def _configure_tier_remote(
         )
 
 
-def _gateway_alias(provider, model):
+def _gateway_alias(provider, model, key=None):
     """Return an exact configured served alias for a canonical provider/model."""
     try:
         from route_probes import fetch_gateway_models
 
-        key = os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+        auth = resolve_client_auth("LITELLM_OPENCODE_KEY")
+        key = key if key is not None else auth.value
         if not key:
+            _gateway_alias.last_error = "credential absent"
             return None
+        status = []
         models = fetch_gateway_models(
             f"http://127.0.0.1:{_configured_litellm_port() or 4000}/v1",
             key,
+            status_out=status,
         )
     except (OSError, ValueError, RuntimeError):
+        _gateway_alias.last_error = "gateway unavailable"
         return None
+    if status == [401]:
+        _gateway_alias.last_error = "gateway unauthorized"
+    else:
+        _gateway_alias.last_error = None
     wanted = f"{provider}/{model}"
     if wanted in (models or []):
         return wanted
     return None
+
+
+_gateway_alias.last_error = None
 
 
 def _voice_config_dir():
@@ -575,15 +620,14 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     model = voice_model.split("/", 1)[-1]
                     candidates = [(provider, voice_model, Qualification.DISCOVERED)]
                     if gateway_gate is True:
-                        served_alias = _gateway_alias(provider, model)
-                        if (
-                            not served_alias
-                            or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
-                        ):
+                        auth = resolve_client_auth("LITELLM_OPENCODE_KEY")
+                        served_alias = _gateway_alias(provider, model, auth.value)
+                        if not served_alias or not auth.authorized:
                             logger.warning(
-                                "Gateway voice route requires a served model "
-                                "alias and LITELLM_OPENCODE_KEY for %s",
+                                "Omitting voice operation %s model %s: %s",
+                                Operation.CLEANUP_LLM.value,
                                 voice_model,
+                                auth.detail or "served alias unavailable",
                             )
                             unresolved = True
                         else:
@@ -642,14 +686,12 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         # Ollama Cloud — gateway mode admits ONLY a served alias + scoped key;
         # a direct route is never installed under the strict contract (P0.2/P0.3).
         if gateway_gate is True:
-            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud")
-            if (
-                not served_alias
-                or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
-            ):
+            auth = resolve_client_auth("LITELLM_OPENCODE_KEY")
+            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud", auth.value)
+            if not served_alias or not auth.authorized:
                 logger.warning(
-                    "Gateway voice route requires a served model alias and "
-                    "LITELLM_OPENCODE_KEY for gemma4:31b:cloud"
+                    "Omitting voice operation cleanup_llm model gemma4:31b:cloud: %s",
+                    auth.detail or "served alias unavailable",
                 )
                 unresolved = True
             else:
@@ -744,14 +786,12 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         # Fallback: Ollama Cloud — gateway mode admits ONLY a served alias +
         # scoped key; a direct route is never installed (P0.2/P0.3).
         if gateway_gate is True:
-            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud")
-            if (
-                not served_alias
-                or not os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
-            ):
+            auth = resolve_client_auth("LITELLM_OPENCODE_KEY")
+            served_alias = _gateway_alias("ollama", "gemma4:31b:cloud", auth.value)
+            if not served_alias or not auth.authorized:
                 logger.warning(
-                    "Gateway voice route requires a served model alias and "
-                    "LITELLM_OPENCODE_KEY for gemma4:31b:cloud"
+                    "Omitting voice operation cleanup_llm model gemma4:31b:cloud: %s",
+                    auth.detail or "served alias unavailable",
                 )
                 unresolved = True
             else:
@@ -882,7 +922,11 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                         if gateway_probe_endpoint
                         else endpoint[1]
                     )
-                    key_value = os.environ.get(key_ref, "") if key_ref else None
+                    key_value = (
+                        resolve_client_auth(key_ref).value
+                        if key_ref == "LITELLM_OPENCODE_KEY"
+                        else os.environ.get(key_ref, "") if key_ref else None
+                    )
                     result = probe_stt(
                         gateway_probe_endpoint or endpoint[0],
                         strip_provider_prefix(model_ref),
@@ -925,7 +969,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                     "LITELLM_OPENCODE_KEY" if gateway_gate is True else None
                 ),
                 credential_present=(
-                    bool(os.environ.get("LITELLM_OPENCODE_KEY", "").strip())
+                    resolve_client_auth("LITELLM_OPENCODE_KEY").authorized
                     if gateway_gate is True
                     else bool(endpoint[1] and os.environ.get(endpoint[1], "").strip())
                 ),
@@ -971,10 +1015,10 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
                 "LITELLM_OPENCODE_KEY" if gateway_gate is True else None
             ),
             wire_model="whisper-1",
-            credential_present=bool(
-                os.environ.get("LITELLM_OPENCODE_KEY", "").strip()
+            credential_present=(
+                resolve_client_auth("LITELLM_OPENCODE_KEY").authorized
                 if gateway_gate is True
-                else os.environ.get("OPENAI_API_KEY", "").strip()
+                else bool(os.environ.get("OPENAI_API_KEY", "").strip())
             ),
             credential_required=True,
         )
@@ -1089,6 +1133,25 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             if isinstance(cleanup, ServiceLocator)
             else cleanup
         )
+    has_stt_state = "sttEndpoint" in voice_config
+    has_llm = bool(voice_config.get("endpoint") and voice_config.get("model"))
+    gateway_tested = any(
+        isinstance(item, ServiceLocator)
+        and item.route.transport is Transport.GATEWAY
+        and not item.selection.config_only
+        for item in locators.values()
+    )
+    if unresolved:
+        voice_status = "unresolved"
+    elif has_llm and not has_stt_state:
+        voice_status = "partial"
+    elif not has_llm and not has_stt_state:
+        voice_status = "local-only"
+    elif not gateway_tested:
+        voice_status = "config-only"
+    else:
+        voice_status = "configured"
+    voice_config["_voice_status"] = voice_status
     if unresolved and is_local_tier:
         voice_config["_voice_unresolved"] = True
         voice_config["_voice_state"]["selections"].pop(
@@ -1098,7 +1161,11 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     if not voice_config["_voice_state"]["selections"] and unresolved:
         voice_config["_voice_state"] = None
     if unresolved and no_local_models and not locators:
-        return {"_voice_unresolved": True, "_voice_state": None}
+        return {
+            "_voice_unresolved": True,
+            "_voice_state": None,
+            "_voice_status": "unresolved",
+        }
     return voice_config
 
 
@@ -1287,13 +1354,28 @@ def main():
     piper_voice = os.environ.get("DOTFILES_PIPER_VOICE", "en_US-lessac-high")
     has_stt = "sttEndpoint" in voice_config
 
+    voice_status = voice_config.get("_voice_status") or (
+        "unresolved" if unresolved else "configured"
+    )
     summary_lines = [
-        "OpenCode voice plugin configured!",
+        (
+            "OpenCode voice plugin partially configured!"
+            if voice_status in ("partial", "unresolved")
+            else "OpenCode voice plugin configured!"
+        ),
         "",
         f"Config written to: {output_path}",
     ]
-    if unresolved:
-        summary_lines.append("Voice outcome: unresolved; existing selection preserved")
+    outcome_lines = {
+        "unresolved": "Voice outcome: unresolved; existing selection preserved",
+        "partial": "Voice outcome: partial; LLM/STT cleanup incomplete",
+        "local-only": "Voice outcome: partial; local Whisper STT configuration only",
+        "config-only": (
+            "Voice outcome: config-only; runtime unverified (local Whisper/Piper or curated route)"
+        ),
+    }
+    if voice_status in outcome_lines:
+        summary_lines.append(outcome_lines[voice_status])
     elif voice_config.get("endpoint") and voice_config.get("model"):
         summary_lines.extend(
             [
