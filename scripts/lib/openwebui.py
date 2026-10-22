@@ -1626,6 +1626,8 @@ def _reconcile_audio(client, current, wanted):
         if key != "OPENAI_API_KEY"
     }
     credential_transitions = _read_audio_credential_transitions()
+    persisted_credential_transitions = copy.deepcopy(credential_transitions)
+    credential_transition_changed = False
     recorded_fields = _recorded_fields(projection)
     legacy_credentials = _credential_fields(projection)
     if legacy_credentials:
@@ -1750,6 +1752,10 @@ def _reconcile_audio(client, current, wanted):
         logger.error("Refusing Open WebUI audio write after concurrent edit")
         return {"status": "refused"}
     candidate = _merge_owned_audio(prewrite, wanted)[0]
+    credential_value_changed = any(
+        prewrite.get(section, {}).get(key) != value
+        for (section, key), value in wanted_credentials.items()
+    )
     for (section, key), value in wanted_credentials.items():
         candidate.setdefault(section, {})[key] = value
     for section, key in wanted_credentials:
@@ -1778,14 +1784,17 @@ def _reconcile_audio(client, current, wanted):
                 else {}
             ),
         }
-    if projection is not None:
-        projection.setdefault("credentials", {}).update(credential_transitions)
-    if wanted_credentials:
+    credential_transition_changed = (
+        credential_transitions != persisted_credential_transitions
+    )
+    if credential_transition_changed:
         _write_audio_credential_transitions(credential_transitions)
-    if wanted_credentials:
+    if credential_transition_changed or credential_value_changed:
         logger.warning(
             "Open WebUI audio credential transition recorded without persisting credential values"
         )
+    if projection is not None:
+        projection.setdefault("credentials", {}).update(credential_transitions)
     if (
         released_fields
         and projection is not None
@@ -1873,6 +1882,9 @@ def _reconcile_audio(client, current, wanted):
         }
         if released_credentials:
             _write_audio_credential_transitions(remaining_credentials)
+            logger.warning(
+                "Open WebUI audio credential ownership released after verified restoration"
+            )
         return {
             "status": "verified" if expected_fields else "noop",
             "applied": applied,
@@ -1914,6 +1926,9 @@ def _reconcile_audio(client, current, wanted):
                 raise
             _write_audio_projection(None)
             _write_audio_credential_transitions({})
+            logger.warning(
+                "Open WebUI audio credential ownership released after verified restoration"
+            )
             return {
                 "status": "verified",
                 "applied": True,
@@ -1950,6 +1965,10 @@ def _reconcile_audio(client, current, wanted):
             "verified": True,
             "released": sorted(recorded_fields),
         }
+    if wanted_credentials and not credential_transition_changed:
+        logger.debug(
+            "Open WebUI audio credential transition remains unchanged; credential values are not persisted"
+        )
     return {"status": "noop", "applied": False, "verified": False}
 
 
