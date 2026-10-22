@@ -653,21 +653,37 @@ sequence in WebUI and confirm the resulting vector store before consenting.
 
 After the operator action, edit the acknowledgement in the state file. The
 `projection` (if present) is reconciler-owned; the operator-maintained sibling
-`acknowledgement` is the explicit consent affordance. Match the model identity
-and dimensions exactly and set `acknowledged_at` to an operator-chosen timestamp:
+`acknowledgement` is the explicit consent affordance. The acknowledgement is
+validated against the transition the reconciler will perform, so the
+`previous_*` fields must equal the live identity observed at apply time and
+`new_*` must equal the reconciler's target. The common first-run sequence is:
+migrate the identity through WebUI's own paths (direct Ollama engine with the
+bare model id — the 384→768 data migration), reset/re-embed, then acknowledge
+the gateway adoption with the engine-aware shape. Under proxy mode the
+reconciler's target is the gateway route (`engine: openai`,
+canonical namespaced alias `ollama/<model>`), and a legacy acknowledgement
+without `new_engine` cannot authorize a gateway switch
+(`test_gateway_embedding_switch_requires_acknowledgement`):
 
 ```json
 {
   "acknowledgement": {
-    "previous_model": "sentence-transformers/all-MiniLM-L6-v2",
-    "previous_engine": "",
-    "previous_output_dims": 384,
-    "new_model": "embeddinggemma-2:740m-mxfp8",
+    "previous_engine": "ollama",
+    "previous_model": "embeddinggemma-2:740m-mxfp8",
+    "new_engine": "openai",
+    "new_model": "ollama/embeddinggemma-2:740m-mxfp8",
     "new_output_dims": 768,
-    "acknowledged_at": "2026-10-16T12:00:00Z"
+    "acknowledged_at": "2026-10-22T12:00:00Z"
   }
 }
 ```
+
+`previous_output_dims` must equal the dimensions the reconciler derives: 384
+while the built-in MiniLM default is still live, the recorded projection's
+baseline when a projection exists, or omitted (`null`) once the operator has
+migrated the identity through WebUI's own paths with no projection recorded.
+The pre-switch direct-Ollama transition (engine `ollama`, bare model id)
+accepts the original legacy shape with no `new_engine` field.
 
 The first refusal names the old/new models and dimensions and instructs the
 operator to reset/re-embed using WebUI's mechanisms, then edit this exact state
