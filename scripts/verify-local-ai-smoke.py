@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hermetic LiteLLM retention diagnostic and fixture-backed acceptance harness."""
+"""Check the generated LiteLLM catalogue alias/configuration contract."""
 
 import argparse
 import json
@@ -9,11 +9,13 @@ import shutil
 import subprocess  # nosec B404 - runs this repository's own configuration script
 import sys
 import tempfile
-import urllib.request
+
+from discover_models import list_local_ollama_models
+from litellm_config import compute_model_list
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-TARGET_ALIAS = "ollama-local/llama3.2:3b"
+sys.path.insert(0, str(SCRIPTS / "lib"))
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT")
 BASELINE_PATHS = (
     ".local/share/litellm/config.yaml",
@@ -33,7 +35,7 @@ def validate_snapshot(
     inventory_names=None,
     required_baseline_refs=(),
 ):
-    """Validate generated aliases against independent baseline inventories."""
+    """Validate generated catalogue aliases against baseline inventories."""
     config_text = (
         config_text
         if config_text is not None
@@ -65,7 +67,7 @@ def validate_snapshot(
     inventory_names = set(inventory_names) if inventory_names is not None else None
     return {
         "ledger_retained_exactly": previous_names <= served and ledger_names == served,
-        "target_present": TARGET_ALIAS in served,
+        "target_present": target_alias() in served,
         "unknown_reported": any("UNKNOWN" in str(note) for note in notes),
         "served_within_inventory": (
             True if inventory_names is None else served <= inventory_names
@@ -75,6 +77,31 @@ def validate_snapshot(
         "ledger_names": ledger_names,
         "notes": notes,
     }
+
+
+def target_alias():
+    """Select a canonical Ollama alias emitted for an installed local model."""
+    models = list_local_ollama_models()
+    local_names = {
+        item.get("name")
+        for item in models
+        if isinstance(item, dict) and item.get("name")
+    }
+    generated = compute_model_list(environ={})
+    aliases = {
+        item.get("model_name")
+        for item in generated
+        if isinstance(item, dict)
+        and isinstance(item.get("model_name"), str)
+        and item["model_name"].startswith("ollama/")
+        and item["model_name"].removeprefix("ollama/") in local_names
+    }
+    aliases = {alias for alias in aliases if isinstance(alias, str)}
+    if not aliases:
+        raise RuntimeError(
+            "no local Ollama model has a generator-produced canonical alias"
+        )
+    return sorted(aliases)[0]
 
 
 def _deny_non_loopback(request, *args, **kwargs):
@@ -111,10 +138,9 @@ def run_smoke(
         root = Path.home() / ".local/share/litellm"
         sources = [root / "config.yaml", root / "config.models.json"]
         if not all(path.is_file() for path in sources):
-            return {
-                "skipped": True,
-                "reason": "deployed LiteLLM config.yaml or config.models.json baseline is missing",
-            }
+            raise ValueError(
+                "deployed LiteLLM config.yaml or config.models.json baseline is missing"
+            )
         inventory = {
             item["model_name"]
             for item in json.loads(sources[1].read_text())
@@ -132,8 +158,11 @@ def run_smoke(
                 "acceptance requires both baseline config and ledger files"
             )
         inventory = set(inventory)
-        if TARGET_ALIAS not in inventory:
-            raise ValueError(f"local model inventory must include {TARGET_ALIAS}")
+        alias = target_alias()
+        if alias not in inventory:
+            raise ValueError(
+                f"baseline inventory must include generator-produced alias {alias}"
+            )
         if home is None:
             raise ValueError(
                 "acceptance requires --home pointing at a new empty directory"
@@ -324,10 +353,12 @@ def main(argv=None):
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
     if report.get("skipped"):
-        print(f"SKIP {report['reason']}")
-        return 0
+        print(f"FAIL {report['reason']}", file=sys.stderr)
+        return 1
     if report.get("dry_run"):
-        print(f"DRY RUN {args.mode}: no files copied or created")
+        print(
+            f"DRY RUN {args.mode} catalogue/configuration contract: no files copied or created"
+        )
         return 0
     print(
         json.dumps(
@@ -335,6 +366,8 @@ def main(argv=None):
             default=list,
         )
     )
+    if report["passed"]:
+        print(f"PASS {args.mode} generated catalogue/configuration contract")
     return 0 if report["passed"] else 1
 
 
