@@ -5710,7 +5710,10 @@ def test_catalogue_unavailable_provider_logs_info_without_warning(
             }
 
     assert module._reconcile_catalogue(Client()) == 0
-    assert "Curated models for openai unavailable live; skipping" in caplog.text
+    assert (
+        "Curated models for openai unavailable live (no matching live model IDs); skipping"
+        in caplog.text
+    )
     assert "Dropping" not in caplog.text
 
 
