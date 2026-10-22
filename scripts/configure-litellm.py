@@ -6,6 +6,7 @@ import glob
 import hashlib
 import os
 import json
+import shutil
 import shlex
 import subprocess
 import sys
@@ -24,6 +25,7 @@ from cli_helpers import add_common_args  # noqa: E402
 from env import load_env  # noqa: E402
 from litellm_config import (  # noqa: E402
     APP_KEYS,
+    CLIENT_REGISTRY,
     LiveCatalogueError,
     compute_model_list,
     write_config,
@@ -31,6 +33,55 @@ from litellm_config import (  # noqa: E402
 import litellm_config  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
+
+_CLIENT_ENABLE_GATES = {
+    "opencode": ("DOTFILES_RUN_OPENCODE_SETUP",),
+    "pi": ("DOTFILES_RUN_PI_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "openwebui": ("DOTFILES_RUN_OPENWEBUI_SETUP",),
+    "junie": ("DOTFILES_RUN_JUNIE_CLI_SETUP",),
+}
+_LEGACY_CLIENT_GATES = (
+    "DOTFILES_RUN_OPENCODE_SETUP",
+    "DOTFILES_RUN_PI_SETUP",
+    "DOTFILES_RUN_OPENWEBUI_SETUP",
+    "DOTFILES_RUN_JUNIE_CLI_SETUP",
+    "DOTFILES_USE_LITELLM_PROXY",
+)
+_CLI_INSTALLS = {"opencode": "opencode", "pi": "pi"}
+_LEGACY_PROVISIONING_CALL = False
+_TEST_PROVISIONING_ELIGIBILITY = False
+
+
+def _client_provisioning_state(row):
+    """Return explicit eligibility and an honest reason for a registry row."""
+    if (
+        not row["credential_policy"].startswith("provision")
+        or row["classification"] != "eligible"
+    ):
+        return False, "classification-only/no credential"
+    # Existing direct callers outside the gated orchestrator retain their
+    # historical provisioning behaviour.
+    if _LEGACY_PROVISIONING_CALL and not _TEST_PROVISIONING_ELIGIBILITY:
+        return True, "eligible"
+    if not all(
+        os.environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
+        for gate in row["setup_gates"]
+    ):
+        return False, "setup gate disabled"
+    if not all(
+        os.environ.get(gate, "0") == "1" for gate in _CLIENT_ENABLE_GATES[row["client"]]
+    ):
+        return False, "user enablement gate disabled"
+    binary = _CLI_INSTALLS.get(row["client"])
+    # Fleet-managed clients (openwebui/junie) prove installation through their
+    # own DOTFILES_RUN_* enablement gates — their configure scripts own the
+    # install in the same deploy. CLI detection applies only where a binary
+    # exists; no invented GUI heuristics here.
+    if binary is not None and shutil.which(binary) is None:
+        return False, "not installed"
+    if "OpenAI-compatible" not in row["transports"]:
+        return False, "usable transport UNKNOWN"
+    return True, "eligible"
 
 
 def validate_service_lane_runtime():
@@ -435,6 +486,21 @@ def provision_app_keys(
     master_key, service_env_path=None, api_base=None, dry_run=False, strict=False
 ):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
+    global _LEGACY_PROVISIONING_CALL
+    _LEGACY_PROVISIONING_CALL = (
+        os.environ.get(GATE_ENV, "0") != "1" and not _TEST_PROVISIONING_ELIGIBILITY
+    )
+    try:
+        return _provision_app_keys(
+            master_key, service_env_path, api_base, dry_run, strict
+        )
+    finally:
+        _LEGACY_PROVISIONING_CALL = False
+
+
+def _provision_app_keys(
+    master_key, service_env_path=None, api_base=None, dry_run=False, strict=False
+):
     if not master_key:
         logger.warning("LiteLLM master key unavailable; skipping app-key provisioning")
         return not strict
@@ -466,7 +532,20 @@ def provision_app_keys(
             if isinstance(item, dict) and item.get("key_alias")
         }
         found = {}
-        for alias, env_name in APP_KEYS.items():
+        provisioning_rows = []
+        for row in CLIENT_REGISTRY:
+            eligible, reason = _client_provisioning_state(row)
+            if eligible:
+                provisioning_rows.append(row)
+            elif (
+                row["classification"] == "classification-only"
+                or row["client"] == "junie"
+            ):
+                logger.info("Skipping LiteLLM client %s: %s", row["client"], reason)
+            else:
+                logger.debug("Skipping LiteLLM client %s: %s", row["client"], reason)
+        for row in provisioning_rows:
+            alias, env_name = row["client"], row["env_name"]
             client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
             stranded_record = next(
                 (
@@ -506,6 +585,8 @@ def provision_app_keys(
                     f"{api_base}/key/generate",
                     "POST",
                     master_key,
+                    # key_alias is attribution only; it does not scope
+                    # model access, team membership, or budget.
                     {"key_alias": alias, "duration": None},
                 )
             except OSError as error:
@@ -555,20 +636,18 @@ def provision_app_keys(
         if found:
             _persist_app_keys(service_env_path, found)
             logger.info("Provisioned %d LiteLLM app key(s)", len(found))
-        _write_opencode_key(service_env_path)
-        _write_pi_key(service_env_path)
-        _write_junie_key(service_env_path)
-        _write_openwebui_key(service_env_path)
+        for row in provisioning_rows:
+            writer = {
+                "opencode": _write_opencode_key,
+                "pi": _write_pi_key,
+                "junie": _write_junie_key,
+                "openwebui": _write_openwebui_key,
+            }.get(row["client"])
+            if writer:
+                writer(service_env_path, dry_run=dry_run)
         if strict:
-            for alias, env_name in APP_KEYS.items():
-                gate = {
-                    "opencode": "DOTFILES_RUN_OPENCODE_SETUP",
-                    "pi": "DOTFILES_RUN_PI_SETUP",
-                    "openwebui": "DOTFILES_RUN_OPENWEBUI_SETUP",
-                    "junie": "DOTFILES_RUN_JUNIE_CLI_SETUP",
-                }[alias]
-                if os.environ.get(gate, "0") != "1":
-                    continue
+            for row in provisioning_rows:
+                alias, env_name = row["client"], row["env_name"]
                 key_path = service_env_path.parent / "clients" / f"{alias}.key"
                 key = _materialized_client_key_value(
                     key_path, env_name, service_env_path
