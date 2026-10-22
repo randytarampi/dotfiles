@@ -1,16 +1,18 @@
 # E2 Provider Spike Findings — 2026-10-22
 
-Captured 2026-10-23 CEST for PR E review. Credentials were checked for non-emptiness only; no key material or derived identifiers were recorded. No live probes were made because the credentials were absent or empty.
+Initial snapshot created 2026-10-23 CEST; live probes verified 2026-10-23 CEST. Credentials were checked for non-emptiness; no key material or derived identifiers were recorded. Probes used 15-second timeouts and recorded only selected rate-limit headers and response structure.
 
 ## Cohere
 
-- **2026-10-23 — Key:** `COHERE_API_KEY` was absent or empty in `~/.env`. Finding: no authenticated catalogue or chat request was attempted; entitlement and inference availability are unknown. Spike closed under the absent-credential stop rule.
-- **2026-10-23 — Catalogue:** live catalogue response, HTTP status, latency and headers are unknown; no request was made.
-- **2026-10-23 — Chat and trial status:** no completion was attempted. Response status, latency, rate-limit headers and whether this key would be trial-limited to 1,000 calls/month are unknown.
-- **References:** [Cohere rate limits](https://docs.cohere.com/docs/rate-limits); [Compatibility API](https://docs.cohere.com/docs/compatibility-api). These documentation URLs were not live-probed as part of the authenticated spike.
+- **2026-10-23 — Catalogue (verified):** `GET https://api.cohere.com/v1/models` returned HTTP 200 in 558 ms. Catalogue returned 20 models. Command-family highlights included `command-a-03-2025`, `command-a-plus-05-2026`, `command-a-reasoning-08-2025`, `command-r-08-2024`, `command-r-plus-08-2024` and `command-r7b-12-2024`; these establish catalogue visibility, not suitability or performance.
+- **2026-10-23 — Tiny chat (verified):** one OpenAI-compatible request to `https://api.cohere.com/compatibility/v1/chat/completions`, using listed model `command-a-03-2025`, returned HTTP 200 in 13,748 ms with one choice. Response shape: `choices`, `created`, `id`, `model`, `object`, `usage`; message keys: `content`, `role`.
+- **2026-10-23 — Entitlement/rate signals:** catalogue response headers included `x-endpoint-monthly-call-limit: 1000` and `x-trial-endpoint-call-limit: 100`; chat response headers included `x-endpoint-monthly-call-limit: 1000` and `x-trial-endpoint-call-limit: 20`. The monthly 1,000-call signal is present. Trial call limits are also present, so these observations indicate trial-limited endpoint use; exact account-wide entitlement interpretation remains unconfirmed by these headers alone.
+- **Open item:** tool-calling support was not tested. Native LiteLLM provider tool-calling still requires verification against the installed LiteLLM version in the E2 wire-up PR.
+- **References:** [Cohere rate limits](https://docs.cohere.com/docs/rate-limits); [Compatibility API](https://docs.cohere.com/docs/compatibility-api).
 
 ## Poolside
 
-- **2026-10-23 — Key:** `POOLSIDE_API_KEY` was absent or empty in `~/.env`. Finding: key absent — entitlement unknown. Spike closed under the absent-credential stop rule.
-- **2026-10-23 — Catalogue and completion:** no requests were made; response statuses, latency and response shape are unknown.
-- **2026-10-23 — Unverified claims:** `https://inference.poolside.ai/v1/chat/completions` and model IDs `poolside/laguna-xs-2.1` and `poolside/laguna-s-2.1` remain unverified claims, not established endpoint or model availability.
+- **2026-10-23 — Catalogue (verified):** `GET https://inference.poolside.ai/v1/models` returned HTTP 200 in 676 ms and listed `poolside/laguna-xs-2.1` and `poolside/laguna-s-2.1` (two models returned).
+- **2026-10-23 — Tiny chat (verified):** one OpenAI-compatible completion to `https://inference.poolside.ai/v1/chat/completions` using `poolside/laguna-xs-2.1` returned HTTP 200 in 562 ms with one choice. Response keys were `choices`, `created`, `id`, `model`, `object`, `usage`; message keys were `content`, `reasoning_content`, `role`.
+- **2026-10-23 — API shape/entitlement signals:** the `/v1/models` and `/v1/chat/completions` paths behaved as expected for a generic OpenAI-compatible adapter. Chat headers included `x-ratelimit-limit-requests: 60` and `x-ratelimit-remaining-requests: 30`. No explicit entitlement tier or pricing signal was observed in the selected response headers/body; commercial entitlement and pricing remain unknown.
+- **2026-10-23 — Request identifier handling:** the response also included a provider request identifier header; it is intentionally omitted here to avoid recording a correlable identifier.
