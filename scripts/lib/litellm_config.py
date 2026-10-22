@@ -371,6 +371,7 @@ def _entry(
     *,
     api_base=None,
     key_env=None,
+    key_literal=None,
     alias_kind=None,
     model_info=None,
     service_tier=None,
@@ -380,6 +381,8 @@ def _entry(
         params["api_base"] = api_base
     if key_env:
         params["api_key"] = f"os.environ/{key_env}"
+    elif key_literal:
+        params["api_key"] = key_literal
     if model_info:
         params["model_info"] = model_info
     if service_tier:
@@ -717,6 +720,14 @@ def _modality_endpoint_entries(provider, base_url, key_env, environ):
                         f"openai/{name}",
                         api_base=base_url,
                         key_env=key_env,
+                        # Keyless local engines (api_key_env None) still need a
+                        # non-empty api_key on the openai/ transport: LiteLLM
+                        # refuses wire calls with HTTP 500 missing credentials
+                        # otherwise. `none` is the doctor-legal no-credential
+                        # placeholder (verify-config.py allows none or
+                        # os.environ/<name>; the local upstream — Ollama — is
+                        # unauthenticated by design and ignores it).
+                        key_literal=None if key_env else "none",
                     ),
                 ]
             )
@@ -737,17 +748,20 @@ def _modality_entries(environ):
         if len(qualified) == 1:
             item = qualified[0]
             provider = item["model_name"].split("/", 1)[0]
+            api_key_value = item["litellm_params"].get("api_key", "")
+            key_env = None
+            key_literal = None
+            if api_key_value.startswith("os.environ/"):
+                key_env = api_key_value[len("os.environ/") :] or None
+            elif api_key_value:
+                key_literal = api_key_value
             entries.append(
                 _entry(
                     model_id,
                     item["litellm_params"]["model"],
                     api_base=item["litellm_params"].get("api_base"),
-                    key_env=(
-                        item["litellm_params"]
-                        .get("api_key", "")
-                        .removeprefix("os.environ/")
-                        or None
-                    ),
+                    key_env=key_env,
+                    key_literal=key_literal,
                     alias_kind="bare",
                 )
             )
