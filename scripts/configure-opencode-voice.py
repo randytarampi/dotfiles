@@ -255,7 +255,10 @@ def _configure_tier_remote(
             detail = auth.detail or (
                 "credential absent"
                 if not auth.authorized
-                else (_gateway_alias.last_error or "served alias unavailable")
+                else (
+                    getattr(_gateway_alias, "last_error", None)
+                    or "served alias unavailable"
+                )
             )
             logger.warning(
                 "Omitting voice operation %s model %s: %s",
@@ -1236,6 +1239,7 @@ def main():
     )
     voice_state = voice_config.pop("_voice_state", None)
     unresolved = voice_config.pop("_voice_unresolved", False)
+    voice_status_marker = voice_config.pop("_voice_status", None)
 
     output_path = os.path.join(config_dir_path, "tui.json")
     tui_config = {"plugin": []}
@@ -1354,9 +1358,7 @@ def main():
     piper_voice = os.environ.get("DOTFILES_PIPER_VOICE", "en_US-lessac-high")
     has_stt = "sttEndpoint" in voice_config
 
-    voice_status = voice_config.get("_voice_status") or (
-        "unresolved" if unresolved else "configured"
-    )
+    voice_status = voice_status_marker or ("unresolved" if unresolved else "configured")
     summary_lines = [
         (
             "OpenCode voice plugin partially configured!"
