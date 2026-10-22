@@ -31,6 +31,7 @@ from litellm_config import (  # noqa: E402
     write_config,
 )
 import litellm_config  # noqa: E402
+from litellm_client_auth import resolve_client_auth  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 
@@ -547,6 +548,12 @@ def _provision_app_keys(
         for row in provisioning_rows:
             alias, env_name = row["client"], row["env_name"]
             client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+            auth = resolve_client_auth(env_name, client_key_path)
+            if auth.state == "conflict":
+                logger.error(
+                    "LiteLLM client %s credential conflict: %s", alias, auth.detail
+                )
+                return False if strict else not strict
             stranded_record = next(
                 (
                     item
@@ -555,6 +562,13 @@ def _provision_app_keys(
                 ),
                 None,
             )
+            if auth.state == "absent" and not stranded_record and strict:
+                logger.error(
+                    "LiteLLM client %s is not authorized: %s", alias, auth.detail
+                )
+                return False
+            if auth.state == "accepted" and auth.value and not stranded_record:
+                found[env_name] = auth.value
             if alias in aliases:
                 # The key-list endpoint intentionally does not reveal existing
                 # key material; preserve any locally stored key on disk.
@@ -633,9 +647,17 @@ def _provision_app_keys(
                 aliases.add(alias)
             else:
                 logger.warning("LiteLLM did not return a key for alias %s", alias)
-        if found:
-            _persist_app_keys(service_env_path, found)
-            logger.info("Provisioned %d LiteLLM app key(s)", len(found))
+        generated_keys = {}
+        for name, value in found.items():
+            row = next(row for row in provisioning_rows if row["env_name"] == name)
+            canonical = resolve_client_auth(
+                name, service_env_path.parent / "clients" / f"{row['client']}.key"
+            )
+            if canonical.state == "absent":
+                generated_keys[name] = value
+        if generated_keys:
+            _persist_app_keys(service_env_path, generated_keys)
+            logger.info("Provisioned %d LiteLLM app key(s)", len(generated_keys))
         for row in provisioning_rows:
             writer = {
                 "opencode": _write_opencode_key,
@@ -649,9 +671,13 @@ def _provision_app_keys(
             for row in provisioning_rows:
                 alias, env_name = row["client"], row["env_name"]
                 key_path = service_env_path.parent / "clients" / f"{alias}.key"
-                key = _materialized_client_key_value(
-                    key_path, env_name, service_env_path
-                )
+                auth = resolve_client_auth(env_name, key_path)
+                if auth.state != "accepted":
+                    logger.error(
+                        "LiteLLM client %s is not authorized: %s", alias, auth.detail
+                    )
+                    return False
+                key = auth.value
                 if not key:
                     logger.error("LiteLLM client key is not provisioned: %s", alias)
                     return False
