@@ -22,6 +22,7 @@ class ProbeResult:
     notes: tuple[str, ...] = ()
     dimension: int | None = None
     auth_failure: str | None = None
+    http_status: int | None = None
 
 
 def local_endpoint_for(provider, protocol="openai"):
@@ -66,9 +67,24 @@ def _request(url, payload, key_value, timeout, content_type="application/json"):
         return None, {}, b"", "connection unavailable or timed out"
 
 
-def _result(status, model, endpoint, notes=(), auth_failure=None, dimension=None):
+def _result(
+    status,
+    model,
+    endpoint,
+    notes=(),
+    auth_failure=None,
+    dimension=None,
+    http_status=None,
+):
     return ProbeResult(
-        status, model, model, endpoint, tuple(notes), dimension, auth_failure
+        status,
+        model,
+        model,
+        endpoint,
+        tuple(notes),
+        dimension,
+        auth_failure,
+        http_status,
     )
 
 
@@ -86,7 +102,13 @@ def _status_result(code, model, endpoint):
             "unauthorized" if code == 401 else "forbidden",
         )
     if code != 200:
-        return _result("unavailable", model, endpoint, ("HTTP request rejected",))
+        return _result(
+            "unavailable",
+            model,
+            endpoint,
+            ("HTTP request rejected",),
+            http_status=code,
+        )
     return None
 
 
