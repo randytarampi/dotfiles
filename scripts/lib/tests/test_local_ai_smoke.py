@@ -10,6 +10,13 @@ SPEC = importlib.util.spec_from_file_location("local_ai_smoke", SCRIPT)
 smoke = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(smoke)
 
+TARGET_ALIAS = "ollama/llama3.2:3b"
+
+
+@pytest.fixture(autouse=True)
+def _local_model_alias(monkeypatch):
+    monkeypatch.setattr(smoke, "target_alias", lambda: TARGET_ALIAS)
+
 
 def _inputs(tmp_path, refs=("existing/model",)):
     config = tmp_path / "config.yaml"
@@ -23,7 +30,7 @@ def _inputs(tmp_path, refs=("existing/model",)):
 
 def _runner(command, **kwargs):
     home = Path(kwargs["env"]["HOME"]) / ".local/share/litellm"
-    names = ["ollama-local/llama3.2:3b", "existing/model"]
+    names = [TARGET_ALIAS, "existing/model"]
     (home / "config.yaml").write_text(
         "model_list:\n" + "".join(f'- model_name: "{n}"\n' for n in names)
     )
@@ -48,14 +55,14 @@ def test_retention_run_smoke_passes_with_fixture_baseline(tmp_path, monkeypatch)
 
 def test_retention_missing_baseline_reports_reason(tmp_path, monkeypatch):
     monkeypatch.setattr(smoke.Path, "home", lambda: tmp_path)
-    report = smoke.run_smoke(mode="retention")
-    assert report == {
-        "skipped": True,
-        "reason": "deployed LiteLLM config.yaml or config.models.json baseline is missing",
-    }
+    with pytest.raises(
+        ValueError,
+        match="deployed LiteLLM config.yaml or config.models.json baseline is missing",
+    ):
+        smoke.run_smoke(mode="retention")
 
 
-def test_acceptance_run_smoke_with_inventory_and_hook(tmp_path):
+def test_acceptance_run_smoke_with_inventory_and_hook(tmp_path, monkeypatch):
     baseline = _inputs(tmp_path)
     target = Path(tmp_path) / "new-home"
     calls = []
@@ -64,22 +71,20 @@ def test_acceptance_run_smoke_with_inventory_and_hook(tmp_path):
         calls.append(args)
         raise RuntimeError("non-loopback network blocked: example.com")
 
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(smoke.urllib.request, "urlopen", hook)
+    monkeypatch.setattr(smoke, "_deny_non_loopback", hook)
     report = smoke.run_smoke(
         target,
         mode="acceptance",
         baseline=baseline,
-        inventory={"ollama-local/llama3.2:3b", "existing/model"},
+        inventory={TARGET_ALIAS, "existing/model"},
         runner=_runner,
         network_hook=hook,
     )
     assert report["passed"]
     assert "OPENAI_API_KEY" not in report.get("environment", {})
     with pytest.raises(RuntimeError, match="blocked"):
-        smoke.urllib.request.urlopen("https://example.com")
+        smoke._deny_non_loopback("https://example.com")
     assert calls == [("https://example.com",), ("https://example.com",)]
-    monkeypatch.undo()
 
 
 def test_acceptance_requires_complete_inventory_and_new_home(tmp_path):
@@ -93,7 +98,7 @@ def test_acceptance_requires_complete_inventory_and_new_home(tmp_path):
             existing,
             mode="acceptance",
             baseline=baseline,
-            inventory={smoke.TARGET_ALIAS},
+            inventory={TARGET_ALIAS},
         )
 
 
@@ -107,7 +112,7 @@ def test_acceptance_dry_run_does_not_create_home(tmp_path):
         home,
         mode="acceptance",
         baseline=baseline,
-        inventory={smoke.TARGET_ALIAS},
+        inventory={TARGET_ALIAS},
         dry_run=True,
     )
     assert report["dry_run"]
@@ -123,10 +128,10 @@ def test_served_names_must_be_inventory_and_include_baseline_refs(tmp_path):
         None,
         None,
         None,
-        config_text='- model_name: "ollama-local/llama3.2:3b"\n',
-        ledger_text='[{"model_name":"ollama-local/llama3.2:3b"}]',
+        config_text=f'- model_name: "{TARGET_ALIAS}"\n',
+        ledger_text=json.dumps([{"model_name": TARGET_ALIAS}]),
         notes_text="[]",
-        inventory_names={smoke.TARGET_ALIAS},
+        inventory_names={TARGET_ALIAS},
         required_baseline_refs={"required/model"},
     )
     assert report["served_within_inventory"]
@@ -157,7 +162,7 @@ def test_smoke_destination_rejections(tmp_path, monkeypatch):
             home=str(tmp_path),
             mode="acceptance",
             baseline=_inputs(tmp_path),
-            inventory={"existing/model", "ollama-local/llama3.2:3b"},
+            inventory={"existing/model", TARGET_ALIAS},
             runner=_never_writes,
         )
     assert sentinel.read_text() == "sentinel"
@@ -165,7 +170,7 @@ def test_smoke_destination_rejections(tmp_path, monkeypatch):
 
 def test_acceptance_cli_plumbing_main(tmp_path):
     """P0.4 CLI plumbing: real main() with acceptance inputs and dry-run safety."""
-    baseline = _inputs(tmp_path, refs=("existing/model", "ollama-local/llama3.2:3b"))
+    baseline = _inputs(tmp_path, refs=("existing/model", TARGET_ALIAS))
     config, ledger = baseline
     newdir = tmp_path / "fresh-home"
     argv = [
