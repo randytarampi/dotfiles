@@ -3154,3 +3154,51 @@ def test_ollama_typed_publication_reaches_gateway_via_show_metadata(monkeypatch)
     assert canonical not in names
     assert "embeddinggemma-2:740m-mxfp8" not in names
     assert "chat-model" in names
+
+
+def test_base_url_lanes_without_key_env_carry_a_placeholder_credential(monkeypatch):
+    """Every api_base lane needs a non-empty api_key or LiteLLM 500s per request.
+
+    LiteLLM's OpenAI-compatible driver refuses requests with 'Missing
+    credentials' when litellm_params lacks api_key, even for unauthenticated
+    local endpoints — observed live on the embedding lane (B1 evidence note).
+    The ollama lane inputs are stubbed so this is deterministic under the
+    hermetic environment fixture.
+    """
+    real_iter = litellm_config.iter_engine_models
+
+    def fake_iter_engine_models(provider):
+        if provider == "ollama":
+            return [{"name": "embeddinggemma-2:740m-mxfp8"}]
+        return real_iter(provider)
+
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: ["ollama"])
+    monkeypatch.setattr(litellm_config, "iter_engine_models", fake_iter_engine_models)
+    monkeypatch.setattr(
+        litellm_config,
+        "get_ollama_local_base_url",
+        lambda *args, **kwargs: "http://127.0.0.1:11434/v1",
+    )
+    monkeypatch.setattr(litellm_config, "list_cloud_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "_ollama_metadata",
+        lambda name: (
+            {"capabilities": ["embedding"], "model_type": "embedding"}
+            if "embeddinggemma" in name
+            else {"capabilities": ["completion"], "model_type": "llm"}
+        ),
+    )
+    entries = litellm_config.compute_model_list(environ={}, previous_entries=[])
+    names = [entry["model_name"] for entry in entries]
+    # Non-vacuous anchor: the vulnerable lane must actually be in the population.
+    assert "ollama/embeddinggemma-2:740m-mxfp8" in names
+    assert "embeddinggemma-2:740m-mxfp8" in names
+    credless = sorted(
+        entry["model_name"]
+        for entry in entries
+        if isinstance(entry, dict)
+        and entry["litellm_params"].get("api_base")
+        and not entry["litellm_params"].get("api_key")
+    )
+    assert credless == [], f"api_base lanes without any api_key: {credless}"
