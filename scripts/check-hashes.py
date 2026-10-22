@@ -23,6 +23,9 @@ NON_TRACKED_CONFIGS = {
     "configs/opencode/ci/opencode.json",
     "configs/review/code-review-prompt.md",
     "configs/review/assets-manifest.json",
+    # Point-in-time catalogue snapshots (PR E0) are review documentation, not
+    # deploy inputs; a hash trigger would rerun config on every snapshot.
+    "configs/litellm/model-snapshot-2026-10-22.md",
 }
 # Scripts that are verification/audit tools, not config inputs — no hash trigger needed
 NON_TRACKED_SCRIPTS = {
