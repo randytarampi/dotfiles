@@ -29,9 +29,9 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking for trailing whitespace..."
 	@git grep -I -n '[[:space:]]$$' -- '*.*' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
 	@echo "Checking for large files (> 500KB)..."
-	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './bin/*' -size +500k 2>/dev/null); \
+	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './bin/*' -size +500k 2>/dev/null | while IFS= read -r f; do git check-ignore -q -- "$$f" 2>/dev/null || printf '%s\n' "$$f"; done); \
 	if [ -n "$$large_files" ]; then \
-		echo "Large files found (> 500KB):"; \
+		echo "Large files found (> 500KB, not gitignored):"; \
 		echo "$$large_files"; \
 		exit 1; \
 	fi
