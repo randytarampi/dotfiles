@@ -696,6 +696,9 @@ def _qualify_candidates(
             )
             qualification = qualification_from_probe(result)
             reason = "; ".join(result.notes) or result.status
+            http_status = getattr(result, "http_status", None)
+            if operation == Operation.EMBEDDING and http_status is not None:
+                reason = f"gateway returned HTTP {http_status} (server-side error)"
             reason_record = {"reason": reason}
             if qualification in {
                 Qualification.PROTOCOL_PROBED,
