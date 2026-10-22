@@ -64,6 +64,31 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
     assert len(names) == len(set(names))
 
 
+def test_keyless_local_engine_modality_entries_carry_placeholder_key():
+    # ollama is unauthenticated by design, but LiteLLM's openai/ transport
+    # rejects wire calls without any api_key (HTTP 500 missing credentials),
+    # so keyless-engine modality entries must carry an explicit placeholder.
+    discovered = [{"name": "embeddinggemma-2:740m-mxfp8", "model_type": "embedding"}]
+    with (
+        patch.object(litellm_config, "active_engines", return_value=["ollama"]),
+        patch.object(litellm_config, "iter_engine_models", return_value=discovered),
+        patch.object(
+            litellm_config,
+            "local_endpoint_for",
+            return_value=("http://localhost:11434/v1", None),
+        ),
+    ):
+        generated = litellm_config._modality_entries({})
+    expected = {
+        "model": "openai/embeddinggemma-2:740m-mxfp8",
+        "api_base": "http://localhost:11434/v1",
+        "api_key": "none",  # doctor-legal no-credential placeholder (non-empty for LiteLLM)
+    }
+    by_name = {entry["model_name"]: entry for entry in generated}
+    assert by_name["ollama/embeddinggemma-2:740m-mxfp8"]["litellm_params"] == expected
+    assert by_name["embeddinggemma-2:740m-mxfp8"]["litellm_params"] == expected
+
+
 def test_reranker_type_routes_through_omlx_normalization():
     import omlx
 
