@@ -350,6 +350,8 @@ def test_voice_config_only_tier_matrix_main_contract(
     voice = load_script("configure-opencode-voice.py")
     config_dir = tmp_path / f"{tier}-{gateway}-{existing}"
     config_dir.mkdir()
+    # Isolate HOME so the resolver cannot see the host's real opencode.key.
+    monkeypatch.setenv("HOME", str(tmp_path))
     if existing:
         (config_dir / "tui.json").write_text(
             json.dumps({"plugin": [["foreign", {}]]}), encoding="utf-8"
@@ -465,6 +467,8 @@ def test_voice_gateway_tier_fails_closed(failure, monkeypatch, tmp_path):
     voice = load_script("configure-opencode-voice.py")
     config_dir = tmp_path / failure
     config_dir.mkdir()
+    # Isolate HOME so the resolver cannot see the host's real opencode.key.
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv(
@@ -766,6 +770,7 @@ def test_voice_consumer_config_contains_only_supported_fields():
     config = voice.get_voice_config("local")
     config.pop("_voice_state", None)
     config.pop("_voice_unresolved", None)
+    config.pop("_voice_status", None)
     assert set(config) <= supported
 
 
@@ -805,9 +810,12 @@ def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tm
     ],
 )
 def test_voice_stt_render_uses_resolved_route_credentials(
-    monkeypatch, gate, transport, endpoint, key_name
+    monkeypatch, tmp_path, gate, transport, endpoint, key_name
 ):
     voice = load_script("configure-opencode-voice.py")
+    # Env-only admission: isolate HOME so the host's real opencode.key file
+    # cannot conflict with the env-only credential under test.
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", gate)
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-secret")
     monkeypatch.setenv("OMLX_API_KEY", "backend-secret")
@@ -871,9 +879,12 @@ def test_voice_stt_render_uses_resolved_route_credentials(
     ],
 )
 def test_voice_openai_stt_render_uses_resolved_route_credentials(
-    monkeypatch, gate, endpoint, key_name
+    monkeypatch, tmp_path, gate, endpoint, key_name
 ):
     voice = load_script("configure-opencode-voice.py")
+    # Env-only admission: isolate HOME so the host's real opencode.key file
+    # cannot conflict with (or satisfy) the env-only credential under test.
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", gate)
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-secret")
     monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
@@ -1072,8 +1083,13 @@ def test_voice_probe_opt_in_qualification_and_secret_safety(monkeypatch, caplog)
     assert "voice-probe-secret" not in caplog.text
 
 
-def test_voice_gateway_probe_uses_gateway_route_and_credential_scope(monkeypatch):
+def test_voice_gateway_probe_uses_gateway_route_and_credential_scope(
+    monkeypatch, tmp_path
+):
     voice = load_script("configure-opencode-voice.py")
+    # Isolate HOME so the host's real opencode.key cannot conflict with the
+    # env-only credential this probe test asserts.
+    monkeypatch.setenv("HOME", str(tmp_path))
     calls, _probe = _voice_probe_fixture(monkeypatch, voice)
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "gateway-probe-secret")
@@ -1233,9 +1249,12 @@ def test_acp_main_emits_pool_driven_local_agents(tmp_path, monkeypatch):
     assert not any(name.endswith("--omlx") for name in agents)
 
 
-def test_voice_pro_gateway_admission_and_refusal(monkeypatch):
+def test_voice_pro_gateway_admission_and_refusal(monkeypatch, tmp_path):
     """R8 P0.2/P0.3: pro tier installs no direct route in gateway mode."""
     voice = load_script("configure-opencode-voice.py")
+    # Isolate HOME: admission is env-only, and the refusal phase requires
+    # that no client key file can satisfy the gate once the env key is gone.
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         voice.tier_registry, "uses_local_placeholders", lambda *_: False
     )
@@ -1247,7 +1266,7 @@ def test_voice_pro_gateway_admission_and_refusal(monkeypatch):
     monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
     monkeypatch.setattr(voice, "_configured_litellm_port", lambda: 4000)
     monkeypatch.setattr(
-        voice, "_gateway_alias", lambda provider, model: f"{provider}/{model}"
+        voice, "_gateway_alias", lambda provider, model, _auth: f"{provider}/{model}"
     )
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "scoped-key")
     config = voice.get_voice_config("pro", state={})
@@ -1262,9 +1281,12 @@ def test_voice_pro_gateway_admission_and_refusal(monkeypatch):
     assert "endpoint" not in config
 
 
-def test_voice_local_gateway_admission_and_refusal(monkeypatch):
+def test_voice_local_gateway_admission_and_refusal(monkeypatch, tmp_path):
     """R8 P0.2: installed local models admit via the gateway or stay unresolved."""
     voice = load_script("configure-opencode-voice.py")
+    # Isolate HOME: admission is env-only, and the refusal phase requires
+    # that no client key file can satisfy the gate once the env key is gone.
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         voice.tier_registry, "uses_local_placeholders", lambda *_: False
     )
@@ -1278,7 +1300,7 @@ def test_voice_local_gateway_admission_and_refusal(monkeypatch):
     monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
     monkeypatch.setattr(voice, "_configured_litellm_port", lambda: 4000)
     monkeypatch.setattr(
-        voice, "_gateway_alias", lambda provider, model: f"{provider}/{model}"
+        voice, "_gateway_alias", lambda provider, model, _auth: f"{provider}/{model}"
     )
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "scoped-key")
     config = voice.get_voice_config("local", state={})
