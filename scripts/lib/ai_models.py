@@ -30,6 +30,14 @@ def strip_provider_prefix(model_name):
     return model_name
 
 
+def normalize_provider_model(provider, model_name):
+    """Remove only a matching leading provider segment from a model reference."""
+    prefix = f"{provider}/"
+    if model_name.startswith(prefix) and model_name[len(prefix) :]:
+        return model_name[len(prefix) :]
+    return model_name
+
+
 # Known locally-served specialized model families (decision, STT/TTS/STS,
 # embedding, rerank, conversion). Matched as lowercase name prefixes so the
 # guard works on untyped discovery records: Ollama discovery emits only

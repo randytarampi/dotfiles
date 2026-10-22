@@ -48,7 +48,7 @@ from constants import (
 )
 from file_utils import backup_file, write_text_file
 from env import load_env
-from ai_models import strip_provider_prefix
+from ai_models import normalize_provider_model, strip_provider_prefix
 from opencode_config import get_available_tiers
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from tier_resolve import (
@@ -161,6 +161,7 @@ def _service_locator(
 def _tier_config_only_locator(operation, provider, model, endpoint, key_env, gate):
     """Construct the operator-curated tier route without claiming runtime evidence."""
     gateway = gate is True
+    model = normalize_provider_model(provider, model)
     alias = _gateway_alias(provider, model) if gateway else model
     key_ref = "LITELLM_OPENCODE_KEY" if gateway else key_env
     if gateway and (not alias or not os.environ.get(key_ref, "").strip()):
@@ -216,6 +217,7 @@ def _render_locator(locator):
 def _configure_tier_remote(
     voice_config, locators, provider, model, endpoint, api_key_env, gateway_gate
 ):
+    model = normalize_provider_model(provider, model)
     candidates = [(provider, model, Qualification.UNKNOWN)]
     gateway = gateway_gate is True
     served_model = model
