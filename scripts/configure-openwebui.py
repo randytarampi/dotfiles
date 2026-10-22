@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import sys
+import urllib.error
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -427,6 +428,11 @@ def _curated_cloud_models():
     models = []
     for provider, key_env in providers.items():
         if not os.environ.get(key_env, "").strip():
+            logger.info(
+                "Curated models for %s not configured; credential environment variable %s is unset",
+                provider,
+                key_env,
+            )
             continue
         if provider in PROVIDER_ENDPOINTS:
             ids = provider_models(provider)
@@ -537,12 +543,39 @@ def _reconcile_catalogue(client, dry_run=False):
                 if isinstance(m, dict) and isinstance(m.get("id"), str)
             }
         except OpenWebUIError as error:
+            status = getattr(error, "status", None) or getattr(
+                getattr(error, "response", None), "status_code", None
+            )
+            cause = error.__cause__ or error
+            if status == 401:
+                detail = "unauthorized (HTTP 401)"
+            elif isinstance(status, int) and status >= 500:
+                detail = f"unavailable (HTTP {status})"
+            elif isinstance(cause, urllib.error.HTTPError):
+                status = cause.code
+                detail = (
+                    f"unauthorized (HTTP {status})"
+                    if status == 401
+                    else f"unavailable (HTTP {status})" if status >= 500 else "UNKNOWN"
+                )
+            elif isinstance(cause, urllib.error.URLError):
+                detail = "unavailable (connection error)"
+            else:
+                detail = "UNKNOWN"
+            providers = ", ".join(sorted({model.split("/", 1)[0] for model in curated}))
             logger.warning(
-                "Skipping catalogue reconciliation; live model IDs unavailable: %s",
-                error,
+                "Open WebUI model ID lookup failed for %s; catalogue operation: %s",
+                providers,
+                detail,
             )
             return 0
         if not live_ids:
+            providers = sorted({model.split("/", 1)[0] for model in curated})
+            for provider in providers:
+                logger.info(
+                    "Curated models for %s unavailable live (no live model IDs returned); skipping",
+                    provider,
+                )
             return 0
         live_by_provider = {
             provider: {
@@ -587,7 +620,10 @@ def _reconcile_catalogue(client, dry_run=False):
                 # reported as partial missing below instead.
                 unavailable.add(provider)
         for provider in sorted(unavailable):
-            logger.info("Curated models for %s unavailable live; skipping", provider)
+            logger.info(
+                "Curated models for %s unavailable live (no matching live model IDs); skipping",
+                provider,
+            )
         if missing:
             partial_missing = [
                 model for model in missing if model.split("/", 1)[0] not in unavailable
