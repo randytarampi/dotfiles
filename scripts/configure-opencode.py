@@ -179,6 +179,9 @@ def apply_litellm_client_gate(config: dict) -> None:
     def inventory_owner(provider_name):
         if provider_name == "anthropic" and meridian_serves:
             return "meridian"
+        if provider_name == "cohere":
+            # The gateway serves Cohere as cohere_chat/<id> lanes.
+            return "cohere_chat"
         return provider_name
 
     if not get_litellm_proxy_mode():
@@ -221,6 +224,8 @@ def apply_litellm_client_gate(config: dict) -> None:
         "openai",
         "ollama-cloud",
         "anthropic",
+        "cohere",
+        "poolside",
     ):
         allowlist_path = configs_root / f"{allowlist_provider}-models.json"
         if not allowlist_path.is_file():
@@ -405,7 +410,11 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
         # (same canonical model IDs, meridian/ owner namespace). When
         # Meridian does not serve but the gateway has a direct Anthropic
         # alias, fall back to it — same canonical identity, real coverage.
-        owner_for_lookup = "meridian" if owner == "anthropic" else owner
+        # Cohere selections route through the cohere_chat/ wire namespace.
+        owner_for_lookup = {
+            "anthropic": "meridian",
+            "cohere": "cohere_chat",
+        }.get(owner, owner)
         canonical_model = canonical_allowlist_key(model)
         matches = [
             item
