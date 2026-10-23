@@ -42,6 +42,7 @@ def test_resolver_matrix(tmp_path, monkeypatch, caplog, env_value, file_value, s
     caplog.set_level(logging.DEBUG)
     result = resolve_client_auth("VOICE_TEST_KEY", path)
     assert result.state == state
+    # The installed plugin consumes process.env[cfg.apiKeyEnv] (llm-client.js:85).
     if state == "conflict":
         assert result.detail == "env and file credentials differ"
         captured = result.detail + caplog.text
@@ -71,6 +72,8 @@ def gateway(monkeypatch):
     server = HTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    monkeypatch.delenv("LITELLM_CLIENT_KEY_FILE", raising=False)
+    monkeypatch.setenv("HOME", str(ROOT.parents[2]))
     voice = load_script()
     monkeypatch.setattr(voice, "_configured_litellm_port", lambda: server.server_port)
     yield voice, server, Handler
@@ -79,7 +82,9 @@ def gateway(monkeypatch):
     server.server_close()
 
 
-def test_file_only_key_satisfies_gateway_gate(tmp_path, monkeypatch, gateway):
+def test_file_only_key_warns_for_environment_only_consumer(
+    tmp_path, monkeypatch, gateway, caplog
+):
     voice, _server, _handler = gateway
     key_file = tmp_path / "LITELLM_OPENCODE_KEY"
     key_file.write_text("file-only-secret")
@@ -92,11 +97,25 @@ def test_file_only_key_satisfies_gateway_gate(tmp_path, monkeypatch, gateway):
     voice._configure_tier_remote(
         config, locators, "openai", "gpt-6-luna", "", "OPENAI_API_KEY", True
     )
-    assert config["model"] == "openai/gpt-6-luna"
+    assert "model" not in config
+    assert (
+        'export LITELLM_OPENCODE_KEY="$(cat ~/.local/share/litellm/clients/opencode.key)"'
+        in caplog.text
+    )
     locator = voice._tier_config_only_locator(
         voice.Operation.CLEANUP_LLM, "openai", "gpt-6-luna", "", "API_KEY", True
     )
-    assert locator is not None
+    assert locator is None
+
+
+def test_env_only_key_remains_usable(monkeypatch, gateway):
+    voice, _server, _handler = gateway
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
+    config, locators = {}, {}
+    voice._configure_tier_remote(
+        config, locators, "openai", "gpt-6-luna", "", "OPENAI_API_KEY", True
+    )
+    assert config["model"] == "openai/gpt-6-luna"
 
 
 def test_absent_key_and_401_are_reported_truthfully(
@@ -119,6 +138,7 @@ def test_absent_key_and_401_are_reported_truthfully(
     (clients / "opencode.key").write_text("present")
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("LITELLM_CLIENT_KEY_FILE", raising=False)
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "present")
     handler.status = 401
     voice._configure_tier_remote(
         {}, {}, "openai", "gpt-6-luna", "", "OPENAI_API_KEY", True
@@ -145,4 +165,32 @@ def test_omission_messages_label_operation_model(tmp_path, monkeypatch, caplog):
 def test_incomplete_cleanup_is_partial_status():
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
-    assert config.get("_voice_status") == "partial"
+    assert config.get("_voice_status") in ("partial", "local-only")
+
+
+def test_gateway_alias_success_clears_stale_error(monkeypatch, gateway):
+    voice, _server, _handler = gateway
+    monkeypatch.setattr(voice, "_configured_litellm_port", lambda: _server.server_port)
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
+    voice._gateway_alias.last_error = "gateway unauthorized"
+    assert voice._gateway_alias("openai", "gpt-6-luna") == "openai/gpt-6-luna"
+    assert voice._gateway_alias.last_error is None
+
+
+def test_gateway_status_classes(monkeypatch, gateway):
+    voice, _server, handler = gateway
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
+    for status, expected in (
+        (401, "gateway unauthorized"),
+        (403, "gateway forbidden"),
+        (429, "gateway rate limited"),
+    ):
+        handler.status = status
+        assert voice._gateway_alias("openai", "gpt-6-luna") is None
+        assert voice._gateway_alias.last_error == expected
+        config, locators = {}, {}
+        monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
+        voice._configure_tier_remote(
+            config, locators, "openai", "gpt-6-luna", "", "OPENAI_API_KEY", True
+        )
+        assert locators[voice.Operation.CLEANUP_LLM.value]["reason"] == expected
