@@ -1163,7 +1163,9 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
             if isinstance(cleanup, ServiceLocator)
             else cleanup
         )
-    has_stt_state = "sttEndpoint" in voice_config
+    has_stt_state = bool(
+        voice_config.get("sttEndpoint") and voice_config.get("sttModel")
+    )
     has_llm = bool(voice_config.get("endpoint") and voice_config.get("model"))
     gateway_tested = any(
         isinstance(item, ServiceLocator)
@@ -1383,7 +1385,9 @@ def main():
     # Summary
     whisper_model = os.environ.get("DOTFILES_WHISPER_MODEL", "ggml-large-v3-turbo.bin")
     piper_voice = os.environ.get("DOTFILES_PIPER_VOICE", "en_US-lessac-high")
-    has_stt = "sttEndpoint" in voice_config
+    # Mirror the status predicate: an incomplete STT route (endpoint without
+    # a model) must not present itself as configured detail in the summary.
+    has_stt = bool(voice_config.get("sttEndpoint") and voice_config.get("sttModel"))
 
     voice_status = voice_status_marker or ("unresolved" if unresolved else "configured")
     summary_lines = [
