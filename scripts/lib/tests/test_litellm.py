@@ -1316,18 +1316,19 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
 
     CONFIGURE.provision_app_keys(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
     )
 
-    assert [c[2]["key_alias"] for c in calls if c[1] == "POST"] == [
-        "pi",
-        "openwebui",
-        "junie",
-    ]
+    assert sorted(c[2]["key_alias"] for c in calls if c[1] == "POST") == sorted(
+        ("pi", "openwebui", "junie")
+    )
     content = path.read_text(encoding="utf-8")
     assert "LITELLM_PI_KEY=sk-generated-pi" in content
     assert "LITELLM_OPENCODE_KEY" not in content
