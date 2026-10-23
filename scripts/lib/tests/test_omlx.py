@@ -2752,7 +2752,9 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
             )
         )
     ]
-    assert len(routed) == 84
+    # Snapshot pin: the count tracks every litellm-wrapped selection across
+    # all tiers; 100 reflects the coherer/poolside tier additions (2026-10-23).
+    assert len(routed) == 100
     assert unwrapped == []
     assert output["skills"] == ["frontend/design"]
 
