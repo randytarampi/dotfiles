@@ -584,7 +584,7 @@ def _provision_app_keys(
                 refusal = "credential conflict"
             if auth.state == "accepted" and remote is None:
                 refusal = "invalid state: local key exists without a gateway record"
-            elif not strict and auth.state == "absent":
+            elif auth.state == "absent" and remote is not None and not strict:
                 logger.info(
                     "LiteLLM client %s not authorized: credential absent", alias
                 )
@@ -608,6 +608,8 @@ def _provision_app_keys(
                 if client_key_path.is_symlink():
                     continue
                 if materialized:
+                    if auth.state == "absent":
+                        _write_client_key(service_env_path, alias, env_name, dry_run)
                     _verify_app_key_hash(
                         alias,
                         client_key_path,
