@@ -84,7 +84,9 @@ from selected_service import (  # noqa: E402
     select,
     assert_renders_from,
 )
-from litellm_client_auth import resolve_client_auth
+from litellm_client_auth import (
+    resolve_client_auth,
+)  # noqa: E402 -- lib import after sys.path bootstrap, required by CLI contract probes
 
 VOICE_PREFERENCES = {
     "default": {Operation.STT.value: [], Operation.CLEANUP_LLM.value: []}
