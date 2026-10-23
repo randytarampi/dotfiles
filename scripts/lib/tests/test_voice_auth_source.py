@@ -187,6 +187,36 @@ def test_no_resolved_voice_route_is_unresolved():
     )
 
 
+def test_key_reference_without_resolved_route_is_unresolved(monkeypatch, tmp_path):
+    voice = load_script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
+    # A non-empty credential reference must exist so the generated entry
+    # carries apiKeyEnv while NO route is resolved — pinning that a key
+    # reference alone never substitutes for endpoint+model evidence.
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-key")
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(voice.tier_registry, "load_registry", lambda: {"presets": {}})
+    monkeypatch.setattr(
+        voice.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(voice, "get_provider_base_url", lambda *_: None)
+    monkeypatch.setattr(
+        voice, "resolve_stt_transport", lambda *args, **kwargs: ("openai", None)
+    )
+
+    config = voice.get_voice_config("plus")
+
+    # The plugin reads its credential from the environment at runtime
+    # (llm-client.js:85); an omitted route leaves NO plugin entry keys — a
+    # key reference alone never substitutes for endpoint+model evidence.
+    assert config.get("apiKeyEnv") is None
+    assert config.get("endpoint") is None
+    assert config.get("model") is None
+    assert config["_voice_status"] == "unresolved"
+
+
 def test_main_installs_no_plugin_entry_without_resolved_route(
     monkeypatch, tmp_path, caplog
 ):
