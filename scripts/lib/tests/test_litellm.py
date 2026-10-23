@@ -1315,6 +1315,9 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
 
     CONFIGURE.provision_app_keys(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False

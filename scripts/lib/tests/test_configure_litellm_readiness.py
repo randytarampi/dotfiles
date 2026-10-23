@@ -149,9 +149,11 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
     key_path.parent.mkdir()
     key_path.write_text("secret-key")
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     calls = []
 
     def request(url, method, key, payload=None, timeout=30):
@@ -188,6 +190,8 @@ def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch)
         monkeypatch.setenv(
             f"DOTFILES_RUN_{gate}_SETUP", "1" if gate == "OPENCODE" else "0"
         )
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
 
     def request(url, method, key, payload=None, timeout=30):
         if "/key/list" in url:
