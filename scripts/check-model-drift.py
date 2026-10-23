@@ -64,6 +64,8 @@ ALLOWLISTS = {
         "opencode",
         "google",
         "openrouter",
+        "cohere",
+        "poolside",
     )
 }
 
