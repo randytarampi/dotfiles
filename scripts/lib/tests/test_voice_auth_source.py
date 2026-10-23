@@ -165,13 +165,23 @@ def test_omission_messages_label_operation_model(tmp_path, monkeypatch, caplog):
 def test_incomplete_cleanup_is_partial_status():
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
-    assert config.get("_voice_status") == "unresolved"
+    assert config.get("_voice_status") == "unresolved", (
+        f"voice status {config.get('_voice_status')!r}; "
+        f"llm={config.get('llmEndpoint')!r}/{config.get('llmModel')!r}; "
+        f"keys={config.get('apiKeyEnv')!r}; status detail keys={sorted(config)}; "
+        f"gateway error={getattr(voice._gateway_alias, 'last_error', None)!r}"
+    )
 
 
 def test_no_resolved_voice_route_is_unresolved():
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
-    assert config["_voice_status"] == "unresolved"
+    assert config["_voice_status"] == "unresolved", (
+        f"voice status {config.get('_voice_status')!r}; "
+        f"llm={config.get('llmEndpoint')!r}/{config.get('llmModel')!r}; "
+        f"keys={config.get('apiKeyEnv')!r}; status detail keys={sorted(config)}; "
+        f"gateway error={getattr(voice._gateway_alias, 'last_error', None)!r}"
+    )
     assert not any(
         key in config for key in ("endpoint", "model", "sttEndpoint", "sttModel")
     )
