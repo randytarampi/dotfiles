@@ -1136,6 +1136,8 @@ def _retained_ledger_families(
     the same ``os.environ/<key_env>``-shaped credential and the same
     ``api_base`` (``None`` for native providers). Never fabricates new
     aliases on UNKNOWN; revoked or rebinded credentials are not preserved.
+    Retained aliases are preserved but runtime UNKNOWN (configuration identity
+    only; this does not prove the stored secret is still valid).
     Providers outside RETENTION_NAMESPACES keep the historical
     unconditional prefix retention (``key_env``/``expected_api_base``
     ignored).
@@ -1414,11 +1416,11 @@ def compute_model_list(environ=None, previous_entries=None):
             continue
         if provider == "opencode":
             confirmed = set(provider_models("opencode"))
-        elif provider in LIVE_CATALOGUE_PROVIDERS:
+        elif provider in LIVE_CATALOGUE_PROVIDERS and provider != "poolside":
             live_base = PROVIDER_ENDPOINTS.get(provider, {}).get("baseUrl", base_url)
             try:
                 confirmed = set(_live_catalogue(provider, key, live_base))
-            except LiveCatalogueError as error:
+            except LiveCatalogueError:
                 last_generation_notes.append(
                     f"{provider}: UNKNOWN; ledger family retained"
                 )

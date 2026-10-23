@@ -424,6 +424,9 @@ def test_provider_catalogue_outage_retains_ledger_family_until_recovery(
     )
     recovered = litellm_config.compute_model_list(environ, previous_entries=retained)
     recovered_names = [item["model_name"] for item in recovered]
+    # Stability: still-requested families remain served at recovery under the
+    # single-fetch policy (verified: cohere twins + poolside namespace).
+    assert retained_aliases <= set(recovered_names)
     # Recovery: fresh emission for what the catalogue now lists, and the
     # still-registry-requested old family stays served (the pre-existing
     # LIVE_CATALOGUE_PROVIDERS requested-absent retention policy) — alias
@@ -433,11 +436,59 @@ def test_provider_catalogue_outage_retains_ledger_family_until_recovery(
         item.startswith(f"{provider}/") and new_model.split("/")[-1] in item
         for item in recovered_names
     )
-    assert retained_aliases <= set(recovered_names)
     duplicates = sorted(
         name for name, count in Counter(recovered_names).items() if count > 1
     )
     assert duplicates == [], f"duplicate aliases after recovery: {duplicates}"
+
+
+def test_poolside_catalogue_is_fetched_once_per_generation(monkeypatch):
+    """One fetch owns selection; first-failure/second-success is impossible."""
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
+    calls = []
+    catalogue = ["poolside/laguna-current"]
+
+    def fetch(provider, *_args):
+        calls.append(provider)
+        return catalogue
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", fetch)
+    environ = {
+        "POOLSIDE_API_KEY": "synthetic-key",
+        "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full",
+    }
+    current = litellm_config.compute_model_list(environ)
+    assert calls == ["poolside"]
+    assert "poolside/laguna-current" in {item["model_name"] for item in current}
+
+    previous = [
+        {
+            "model_name": "poolside/laguna-stale",
+            "litellm_params": {
+                "model": "openai/poolside/laguna-stale",
+                "api_base": litellm_config.PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
+                "api_key": "os.environ/POOLSIDE_API_KEY",
+            },
+        }
+    ]
+    calls.clear()
+    catalogue[:] = ["poolside/laguna-current"]
+    selected = litellm_config.compute_model_list(environ, previous_entries=previous)
+    names = {item["model_name"] for item in selected}
+    assert calls == ["poolside"]
+    assert "poolside/laguna-current" in names
+    assert "poolside/laguna-stale" not in names
+
+    def outage(provider, *_args):
+        calls.append(provider)
+        raise litellm_config.LiveCatalogueError("simulated outage")
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", outage)
+    calls.clear()
+    retained = litellm_config.compute_model_list(environ, previous_entries=previous)
+    assert calls == ["poolside"]
+    assert "poolside/laguna-stale" in {item["model_name"] for item in retained}
 
 
 def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
