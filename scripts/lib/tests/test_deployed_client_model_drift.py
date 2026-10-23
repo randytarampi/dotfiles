@@ -563,3 +563,65 @@ def test_malformed_proxy_url_is_sanitized_unknown_and_other_missing_survives(
     assert "UNKNOWN" in [item["outcome"] for item in report["results"]]
     assert violations
     assert url not in json.dumps(report)
+
+
+def test_opencode_provider_with_null_models_is_unknown_not_malformed(
+    tmp_path, monkeypatch
+):
+    """A models-less provider is UNKNOWN inventory, never a fabricated zero.
+
+    The generator emits models-less provider entries when generation-time
+    catalogue enumeration lacked credentials, and the opencode app itself
+    rewrites its own config (app-managed providers such as opencode-go).
+    Absent/null maps must report UNKNOWN without a violation; the repo
+    contract is 'unavailable is unknown, never silent zeros'.
+    """
+    client_home(tmp_path, monkeypatch, "opencode")
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"provider": {"copilot": {"models": None}, "opengo": {}}})
+    )
+    monkeypatch.setattr(
+        drift, "get_catalogue", lambda *_: pytest.fail("must not fetch")
+    )
+    report, violations = drift.audit_client_providers()
+    assert violations == []
+    model_reports = [
+        item for item in report["results"] if item.get("field", "").endswith(".models")
+    ]
+    assert len(model_reports) == 2  # copilot explicit null + opengo absent key
+    assert all(
+        item["outcome"] == "UNKNOWN"
+        and "UNKNOWN" in item["reason"]
+        and "malformed" not in item["reason"]
+        for item in model_reports
+    )
+    assert report["complete"] is False
+
+
+def test_opencode_provider_non_dict_models_still_distinctly_reported(
+    tmp_path, monkeypatch
+):
+    """A non-null invalid shape stays a distinct UNKNOWN report.
+
+    The checker records malformed inventories as UNKNOWN reports with the
+    'malformed model inventory' reason (never a violation and never a
+    fabricated zero), keeping them distinct from the absent/null reason.
+    """
+    client_home(tmp_path, monkeypatch, "opencode")
+    config = tmp_path / ".config/opencode/opencode.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps({"provider": {"broken": {"models": "garbage"}}}))
+    monkeypatch.setattr(
+        drift, "get_catalogue", lambda *_: pytest.fail("must not fetch")
+    )
+    report, violations = drift.audit_client_providers()
+    assert violations == []
+    assert any(
+        item.get("field") == "provider.broken.models"
+        and item["reason"] == "malformed model inventory"
+        and item["outcome"] == "UNKNOWN"
+        for item in report["results"]
+    )
+    assert report["complete"] is False

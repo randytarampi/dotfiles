@@ -740,9 +740,26 @@ def _provider_references(client, path, name, provider, disabled, port, inventory
             "references": [],
             "complete": True,
         }
-    model_pairs, malformed_inventory, valid_shape = _provider_models(
-        client, provider.get("models")
-    )
+    raw_models = provider.get("models")
+    if raw_models is None:
+        # A models-less provider entry is UNKNOWN inventory, never a
+        # fabricated zero: the generator emits these when generation-time
+        # catalogue enumeration lacked credentials, and the opencode app
+        # itself rewrites its config (app-managed providers such as
+        # opencode-go). Repo contract: unavailable is unknown, not an error.
+        return {
+            "results": [
+                _client_report(
+                    client,
+                    path,
+                    f"provider.{name}.models",
+                    "models inventory absent; model availability UNKNOWN",
+                )
+            ],
+            "references": [],
+            "complete": False,
+        }
+    model_pairs, malformed_inventory, valid_shape = _provider_models(client, raw_models)
     if not valid_shape:
         return {
             "results": [
