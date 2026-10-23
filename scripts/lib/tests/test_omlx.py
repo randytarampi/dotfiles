@@ -2645,11 +2645,22 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
         for ref in list(inventory_ids)
         if ref.startswith("anthropic/")
     )
+    # Cohere selections route through the gateway's cohere_chat wire
+    # namespace — same canonical model IDs, like the meridian translation.
+    inventory_ids.update(
+        f"cohere_chat/{ref.split('/', 1)[1]}"
+        for ref in list(inventory_ids)
+        if ref.startswith("cohere/")
+    )
     anthropic_allowlist = json.loads(
         (source.parent / "anthropic-models.json").read_text()
     )["models"]
     inventory_ids.update(f"meridian/{model}" for model in anthropic_allowlist)
-    inventory_ids = {ref for ref in inventory_ids if not ref.startswith("anthropic/")}
+    inventory_ids = {
+        ref
+        for ref in inventory_ids
+        if not (ref.startswith("anthropic/") or ref.startswith("cohere/"))
+    }
     for provider in (
         "openai",
         "ollama-cloud",
