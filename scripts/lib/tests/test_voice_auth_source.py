@@ -197,7 +197,6 @@ def test_main_installs_no_plugin_entry_without_resolved_route(
     )
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "false")
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "false")
-    monkeypatch.setenv("DOTFILES_USE_MERIDIAN", "false")
     monkeypatch.setattr(voice, "is_meridian_configured", lambda: False)
 
     voice.main()
