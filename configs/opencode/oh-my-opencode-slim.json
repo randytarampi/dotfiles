@@ -797,6 +797,111 @@
         "variant": "max"
       }
     },
+    "cohere": {
+      "orchestrator": {
+        "model": "cohere/command-a-03-2025",
+        "fallback": [
+          "openrouter/cohere/command-a-03-2025",
+          "opencode/cohere/command-a-03-2025"
+        ]
+      },
+      "oracle": {
+        "model": "cohere/command-r-plus-08-2024",
+        "fallback": [
+          "openrouter/cohere/command-r-plus-08-2024"
+        ]
+      },
+      "librarian": {
+        "model": "cohere/command-r-08-2024",
+        "fallback": [
+          "openrouter/cohere/command-r-08-2024"
+        ]
+      },
+      "explorer": {
+        "model": "cohere/command-r-08-2024",
+        "fallback": [
+          "openrouter/cohere/command-r-08-2024"
+        ]
+      },
+      "designer": {
+        "model": "cohere/command-a-03-2025",
+        "fallback": [
+          "openrouter/cohere/command-a-03-2025"
+        ]
+      },
+      "fixer": {
+        "model": "cohere/command-a-03-2025",
+        "fallback": [
+          "openrouter/cohere/command-a-03-2025"
+        ]
+      },
+      "observer": {
+        "model": "cohere/command-r-08-2024",
+        "fallback": [
+          "openrouter/cohere/command-r-08-2024"
+        ]
+      },
+      "council": {
+        "model": "cohere/command-r-plus-08-2024",
+        "fallback": [
+          "openrouter/cohere/command-r-plus-08-2024"
+        ]
+      }
+    },
+    "poolside": {
+      "orchestrator": {
+        "model": "poolside/laguna-xs-2.1",
+        "fallback": [
+          "poolside/laguna-s-2.1",
+          "poolside/laguna-xs-2.1",
+          "openrouter/poolside/laguna-xs-2.1:free"
+        ]
+      },
+      "oracle": {
+        "model": "poolside/laguna-s-2.1",
+        "fallback": [
+          "poolside/laguna-xs-2.1",
+          "poolside/laguna-xs-2.1",
+          "openrouter/poolside/laguna-s-2.1:free"
+        ]
+      },
+      "librarian": {
+        "model": "poolside/laguna-xs-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-xs-2.1:free"
+        ]
+      },
+      "explorer": {
+        "model": "poolside/laguna-xs-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-xs-2.1:free"
+        ]
+      },
+      "designer": {
+        "model": "poolside/laguna-xs-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-xs-2.1:free"
+        ]
+      },
+      "fixer": {
+        "model": "poolside/laguna-s-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-s-2.1:free"
+        ]
+      },
+      "observer": {
+        "model": "poolside/laguna-xs-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-xs-2.1:free"
+        ]
+      },
+      "council": {
+        "model": "poolside/laguna-s-2.1",
+        "fallback": [
+          "openrouter/poolside/laguna-s-2.1:free"
+        ]
+      }
+    },
     "free": {
       "orchestrator": {
         "model": "opencode/big-pickle",
