@@ -437,3 +437,63 @@ def test_default_text_output_warns_on_unknown_without_key_material(monkeypatch, 
     assert "env:LITELLM_KEY" in caplog.text
     assert "catalogue request failed" in caplog.text
     assert "secret" not in caplog.text
+
+
+def test_default_unknown_audit_is_explicitly_incomplete_without_becoming_violation(
+    monkeypatch, caplog
+):
+    monkeypatch.setattr(DRIFT, "load_env", lambda: None)
+    monkeypatch.setattr(DRIFT, "check_slim", lambda _: [])
+    monkeypatch.setattr(DRIFT, "check_local_engine_models", lambda: [])
+    monkeypatch.setattr(DRIFT, "is_stale", lambda: (False, 0))
+    unknown_audit = {"complete": False, "results": []}
+    complete_audit = {"complete": True, "results": []}
+    monkeypatch.setattr(DRIFT, "audit_junie_profiles", lambda: (unknown_audit, []))
+    monkeypatch.setattr(DRIFT, "audit_client_providers", lambda: (complete_audit, []))
+    monkeypatch.setattr("sys.argv", [str(SCRIPT)])
+
+    assert DRIFT.main() == 0
+    assert "incomplete" in caplog.text.lower()
+    assert "0 violation(s)" in caplog.text
+
+
+def test_unknown_audit_requires_complete_when_requested(monkeypatch):
+    monkeypatch.setattr(DRIFT, "load_env", lambda: None)
+    monkeypatch.setattr(DRIFT, "check_slim", lambda _: [])
+    monkeypatch.setattr(DRIFT, "check_local_engine_models", lambda: [])
+    monkeypatch.setattr(DRIFT, "is_stale", lambda: (False, 0))
+    monkeypatch.setattr(
+        DRIFT,
+        "audit_junie_profiles",
+        lambda: ({"complete": False, "results": []}, []),
+    )
+    monkeypatch.setattr(
+        DRIFT,
+        "audit_client_providers",
+        lambda: ({"complete": True, "results": []}, []),
+    )
+    monkeypatch.setattr("sys.argv", [str(SCRIPT), "--require-complete"])
+
+    assert DRIFT.main() == 1
+
+
+def test_json_report_has_overall_completeness(monkeypatch, capsys):
+    monkeypatch.setattr(DRIFT, "load_env", lambda: None)
+    monkeypatch.setattr(DRIFT, "check_slim", lambda _: [])
+    monkeypatch.setattr(DRIFT, "check_local_engine_models", lambda: [])
+    monkeypatch.setattr(DRIFT, "is_stale", lambda: (False, 0))
+    monkeypatch.setattr(
+        DRIFT,
+        "audit_junie_profiles",
+        lambda: ({"complete": False, "results": []}, []),
+    )
+    monkeypatch.setattr(
+        DRIFT,
+        "audit_client_providers",
+        lambda: ({"complete": True, "results": []}, []),
+    )
+    monkeypatch.setattr("sys.argv", [str(SCRIPT), "--json"])
+
+    assert DRIFT.main() == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["complete"] is False

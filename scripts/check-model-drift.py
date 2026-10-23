@@ -1174,6 +1174,7 @@ def _display_model_drift_results(args, results, junie_audit, client_audit):
     if args.json:
         results["junie_audit"] = junie_audit
         results["client_audit"] = client_audit
+        results["complete"] = junie_audit["complete"] and client_audit["complete"]
         print(json.dumps(results, indent=2))
     else:
         for violation in results["violations"]:
@@ -1196,7 +1197,12 @@ def _display_model_drift_results(args, results, junie_audit, client_audit):
                     item.get("reason") or CATALOGUE_UNAVAILABLE_REASON,
                 )
         logger.info(
-            "Model drift check complete: %d violation(s); checked %d provider endpoint(s), skipped %d",
+            "Model drift check %s: %d violation(s); checked %d provider endpoint(s), skipped %d",
+            (
+                "complete"
+                if junie_audit["complete"] and client_audit["complete"]
+                else "incomplete"
+            ),
             len(results["violations"]),
             DRIFT_STATS["checked"],
             DRIFT_STATS["skipped"],
