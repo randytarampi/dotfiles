@@ -139,6 +139,9 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
 
 
 def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        CONFIGURE.shutil, "which", lambda name: "/usr/bin/deterministic-" + name
+    )
     service_env = tmp_path / "service.env"
     service_env.write_text(
         "LITELLM_OPENCODE_KEY='secret-key'\n"
@@ -179,6 +182,9 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
 
 
 def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        CONFIGURE.shutil, "which", lambda name: "/usr/bin/deterministic-" + name
+    )
     service_env = tmp_path / "service.env"
     service_env.write_text("LITELLM_OPENCODE_KEY='secret-key'\n")
     key_path = tmp_path / "clients/opencode.key"
