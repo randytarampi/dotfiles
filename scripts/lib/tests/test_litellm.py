@@ -5,6 +5,7 @@ import io
 import shlex
 import subprocess
 import urllib.error
+from collections import Counter
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from unittest.mock import patch
@@ -359,6 +360,86 @@ def test_cohere_retains_previous_alias_when_live_model_is_unknown(
     )
 
 
+@pytest.mark.parametrize(
+    "provider,key,old_model,new_model,retained_aliases",
+    [
+        (
+            "cohere",
+            "COHERE_API_KEY",
+            "command-old",
+            "command-new",
+            {"cohere_chat/command-old", "cohere/command-old"},
+        ),
+        (
+            "poolside",
+            "POOLSIDE_API_KEY",
+            "poolside/laguna-old",
+            "poolside/laguna-new",
+            {"poolside/laguna-old"},
+        ),
+    ],
+)
+def test_provider_catalogue_outage_retains_ledger_family_until_recovery(
+    monkeypatch, provider, key, old_model, new_model, retained_aliases
+):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {
+            f"{provider}/{old_model.removeprefix(provider + '/')}",
+            f"{provider}/{new_model.removeprefix(provider + '/')}",
+        },
+    )
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "full")
+    environ = {key: "synthetic-key", "DOTFILES_LITELLM_CATALOGUE_SCOPE": "full"}
+    catalogue = {"models": [old_model]}
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *_args: catalogue["models"],
+    )
+
+    healthy = litellm_config.compute_model_list(environ)
+    healthy_aliases = {item["model_name"] for item in healthy}
+    assert retained_aliases <= healthy_aliases
+
+    def outage(*_args):
+        raise litellm_config.LiveCatalogueError("simulated outage")
+
+    monkeypatch.setattr(litellm_config, "_live_catalogue", outage)
+    retained = litellm_config.compute_model_list(environ, previous_entries=healthy)
+    retained_names = {item["model_name"] for item in retained}
+    assert retained_aliases <= retained_names
+    assert any(
+        f"{provider}: UNKNOWN; ledger family retained" in note
+        for note in litellm_config.last_generation_notes
+    )
+
+    catalogue["models"] = [new_model]
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *_args: catalogue["models"],
+    )
+    recovered = litellm_config.compute_model_list(environ, previous_entries=retained)
+    recovered_names = [item["model_name"] for item in recovered]
+    # Recovery: fresh emission for what the catalogue now lists, and the
+    # still-registry-requested old family stays served (the pre-existing
+    # LIVE_CATALOGUE_PROVIDERS requested-absent retention policy) — alias
+    # mapping must be stable across the outage/restart, with every alias
+    # emitted exactly once (no duplicate identical entries).
+    assert any(
+        item.startswith(f"{provider}/") and new_model.split("/")[-1] in item
+        for item in recovered_names
+    )
+    assert retained_aliases <= set(recovered_names)
+    duplicates = sorted(
+        name for name, count in Counter(recovered_names).items() if count > 1
+    )
+    assert duplicates == [], f"duplicate aliases after recovery: {duplicates}"
+
+
 def test_meridian_generates_all_allowlisted_model_aliases(monkeypatch):
     from pathlib import Path
 
@@ -449,8 +530,11 @@ def test_live_catalogue_key_providers_generate_only_with_keys(
 
 
 def test_poolside_emits_direct_provider_lane(monkeypatch):
+    # The live Poolside catalogue returns poolside/-prefixed ids (verified
+    # against inference.poolside.ai/v1/models in the #77 spike); the
+    # standalone emission only accepts its own namespace.
     monkeypatch.setattr(
-        litellm_config, "_live_catalogue", lambda *args: ["laguna-xs-2.1"]
+        litellm_config, "_live_catalogue", lambda *args: ["poolside/laguna-xs-2.1"]
     )
     entries = litellm_config.compute_model_list(
         {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "POOLSIDE_API_KEY": "test-key"}

@@ -1113,6 +1113,58 @@ def _provider_alias_prefix(provider):
     return "cohere_chat/" if provider == "cohere" else provider + "/"
 
 
+# Providers whose ledger families are preserved across live-catalogue
+# outages, with the alias namespaces each provider owns. The retention
+# helper enforces binding/credential parity ONLY for these providers;
+# every other live-catalogue provider keeps the historical unconditional
+# prefix retention.
+RETENTION_NAMESPACES = {
+    "cohere": ("cohere_chat/", "cohere/"),
+    "poolside": ("poolside/",),
+}
+
+
+def _retained_ledger_families(
+    provider, previous_entries, *, key_env, expected_api_base
+):
+    """Previously verified entries for a provider's alias namespaces.
+
+    Deterministic prior-alias retention (per the #79 review finding): on an
+    unavailable catalogue, preserve already-served records for both Cohere
+    namespaces and Poolside only while the previous upstream binding and
+    credential policy remain valid — the stored entry must still reference
+    the same ``os.environ/<key_env>``-shaped credential and the same
+    ``api_base`` (``None`` for native providers). Never fabricates new
+    aliases on UNKNOWN; revoked or rebinded credentials are not preserved.
+    Providers outside RETENTION_NAMESPACES keep the historical
+    unconditional prefix retention (``key_env``/``expected_api_base``
+    ignored).
+    """
+    namespaces = RETENTION_NAMESPACES.get(provider, (f"{provider}/",))
+    strict = provider in RETENTION_NAMESPACES
+    retained = []
+    for item in previous_entries or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("model_name", ""))
+        if not name.startswith(namespaces):
+            continue
+        params = item.get("litellm_params", {})
+        if strict:
+            if params.get("api_key") != f"os.environ/{key_env}":
+                continue
+            if params.get("api_base") != expected_api_base:
+                continue
+        retained.append(
+            {
+                **item,
+                "_alias_kind": "qualified",
+                "_upstream_ref": params.get("model", ""),
+            }
+        )
+    return retained
+
+
 def compute_model_list(environ=None, previous_entries=None):
     """Return LiteLLM model entries without reading secrets or doing writes."""
     environ = environ or os.environ
@@ -1367,22 +1419,32 @@ def compute_model_list(environ=None, previous_entries=None):
             try:
                 confirmed = set(_live_catalogue(provider, key, live_base))
             except LiveCatalogueError as error:
-                last_generation_notes.append(f"{provider}: UNKNOWN ({error})")
-                # Unknown live evidence cannot revoke a model already served.
-                entries.extend(
-                    {
-                        **item,
-                        "_alias_kind": "qualified",
-                        "_upstream_ref": item.get("litellm_params", {}).get(
-                            "model", ""
-                        ),
-                    }
-                    for item in previous_entries
-                    if isinstance(item, dict)
-                    and str(item.get("model_name", "")).startswith(
-                        _provider_alias_prefix(provider)
-                    )
+                last_generation_notes.append(
+                    f"{provider}: UNKNOWN; ledger family retained"
                 )
+                # Unknown live evidence cannot revoke a model already served;
+                # previously verified families persist only while their
+                # upstream binding and credential policy remain valid.
+                if provider in RETENTION_NAMESPACES:
+                    expected_base = (
+                        PROVIDER_ENDPOINTS.get(provider, {}).get("baseUrl", base_url)
+                        if provider == "poolside"
+                        else None
+                    )
+                    retained = _retained_ledger_families(
+                        provider,
+                        previous_entries,
+                        key_env=key_env,
+                        expected_api_base=expected_base,
+                    )
+                else:
+                    retained = _retained_ledger_families(
+                        provider,
+                        previous_entries,
+                        key_env=None,
+                        expected_api_base=None,
+                    )
+                entries.extend(retained)
                 continue
         else:
             confirmed = set()
@@ -1432,16 +1494,37 @@ def compute_model_list(environ=None, previous_entries=None):
                 confirmed_models = curated
         else:
             confirmed_models = confirmed
-        if not confirmed_models:
+        if provider == "poolside":
+            # Single-path policy: poolside fresh emission belongs to the
+            # standalone block below (the main loop's poolside branch was
+            # removed so cross-namespace catalogue ids can never leak into
+            # poolside aliases). The loop above still applies outage
+            # retention for poolside, and the LIVE_CATALOGUE_PROVIDERS
+            # requested-absent retention below keeps registry-requested
+            # families stable across catalogue changes.
+            confirmed_models = set()
+        if not confirmed_models and provider != "poolside":
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
         if provider in LIVE_CATALOGUE_PROVIDERS:
             retained = []
-            alias_prefix = _provider_alias_prefix(provider)
+            # Requested-absent retention honours every alias namespace the
+            # provider owns (cohere keeps BOTH the cohere_chat/<id> wire and
+            # the canonically-spelled cohere/<id> twin; other providers keep
+            # their single spelling) so a temporarily delisted selection
+            # cannot strand a saved Slim preset on one spelling only.
+            namespaces = RETENTION_NAMESPACES.get(
+                provider, (_provider_alias_prefix(provider),)
+            )
             for alias, previous in previous_by_alias.items():
-                if not isinstance(alias, str) or not alias.startswith(alias_prefix):
+                if not isinstance(alias, str) or not alias.startswith(namespaces):
                     continue
-                model_id = alias[len(alias_prefix) :]
+                for ns in namespaces:
+                    if alias.startswith(ns):
+                        model_id = alias[len(ns) :]
+                        break
+                else:  # pragma: no cover - startswith(namespaces) guarantees a hit
+                    continue
                 if (
                     canonical_allowlist_key(model_id) in canonical_requested
                     and canonical_allowlist_key(model_id) not in confirmed
@@ -1463,9 +1546,6 @@ def compute_model_list(environ=None, previous_entries=None):
                 alias = wire_model = f"huggingface/{model_id}"
             elif provider == "cerebras":
                 alias = wire_model = f"cerebras/{model_id}"
-            elif provider == "poolside":
-                model_id = model_id.removeprefix("poolside/")
-                alias = wire_model = f"poolside/{model_id}"
             elif provider == "google":
                 alias = f"google/models/{model_id.removeprefix('models/')}"
                 wire_model = f"gemini/{model_id.removeprefix('models/')}"
@@ -1563,14 +1643,49 @@ def compute_model_list(environ=None, previous_entries=None):
                 PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
             )
         except LiveCatalogueError as error:
-            last_generation_notes.append(f"poolside: UNKNOWN ({error})")
+            # Same retention contract as the provider loop's outage handler:
+            # previously verified poolside families persist while their
+            # upstream binding and credential policy remain valid.
+            last_generation_notes.append("poolside: UNKNOWN; ledger family retained")
+            entries.extend(
+                _retained_ledger_families(
+                    "poolside",
+                    previous_entries,
+                    key_env="POOLSIDE_API_KEY",
+                    expected_api_base=PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
+                )
+            )
         else:
             confirmed = {
-                model_id.removeprefix("poolside/") for model_id in poolside_models
+                model_id.removeprefix("poolside/")
+                for model_id in poolside_models
+                if model_id.startswith("poolside/")
             }
             selected = confirmed & poolside_requested
             if scope == "full":
                 selected = confirmed
+            # Requested-absent retention mirrors the provider-loop contract:
+            # a temporarily delisted but still-registry-requested poolside
+            # selection stays served (stable alias mapping across catalogue
+            # changes and restarts).
+            for alias, previous in previous_by_alias.items():
+                if not isinstance(alias, str) or not alias.startswith("poolside/"):
+                    continue
+                model_id = alias[len("poolside/") :]
+                if (
+                    canonical_allowlist_key(model_id)
+                    in {canonical_allowlist_key(ref) for ref in poolside_requested}
+                    and canonical_allowlist_key(model_id) not in confirmed
+                ):
+                    entries.append(
+                        {
+                            **previous,
+                            "_alias_kind": "qualified",
+                            "_upstream_ref": previous.get("litellm_params", {}).get(
+                                "model", ""
+                            ),
+                        }
+                    )
             for model_id in sorted(selected):
                 entries.append(
                     _entry(
