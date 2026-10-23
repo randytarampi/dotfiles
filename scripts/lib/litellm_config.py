@@ -1496,6 +1496,18 @@ def compute_model_list(environ=None, previous_entries=None):
                     model_info=model_info,
                 )
             )
+            if provider == "cohere":
+                # Canonically-spelled companion alias (mirrors the
+                # anthropic/ meridian twin): slim selections and audits
+                # reference cohere/<id> while the wire is cohere_chat/<id>.
+                entries.append(
+                    _entry(
+                        f"cohere/{model_id}",
+                        f"cohere_chat/{model_id}",
+                        key_env=key_env,
+                        model_info=model_info,
+                    )
+                )
             # Only confirmed direct API-key OpenAI routes may publish service
             # lanes; OAuth entries use chatgpt/ and never reach this branch.
             if (

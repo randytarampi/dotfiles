@@ -97,7 +97,10 @@ def _matches_inventory(ref: str, inventory: set[str]) -> bool:
     owner, model = ref.split("/", 1)
     if owner in DIRECT_EXCEPTIONS:
         return True
-    owner_for_lookup = "meridian" if owner == "anthropic" else owner
+    owner_for_lookup = {
+        "anthropic": "meridian",
+        "cohere": "cohere_chat",
+    }.get(owner, owner)
     canonical = canonical_allowlist_key(model)
     matches = [
         item
@@ -110,6 +113,13 @@ def _matches_inventory(ref: str, inventory: set[str]) -> bool:
             item
             for item in inventory
             if item.split("/", 1)[0] == "anthropic"
+            and canonical_allowlist_key(item.split("/", 1)[1]) == canonical
+        ]
+    if not matches and owner == "cohere":
+        matches = [
+            item
+            for item in inventory
+            if item.split("/", 1)[0] == "cohere"
             and canonical_allowlist_key(item.split("/", 1)[1]) == canonical
         ]
     return bool(matches)
