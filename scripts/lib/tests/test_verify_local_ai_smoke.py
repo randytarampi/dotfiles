@@ -1,7 +1,6 @@
 import importlib.util
 from pathlib import Path
 import sys
-import litellm_config
 
 LIB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LIB))
@@ -51,6 +50,14 @@ def test_generator_emits_canonical_ollama_alias(monkeypatch):
     )
 
     assert VERIFY.target_alias() == "ollama/fixture-model"
+
+
+def test_ollama_requirement_policy_distinguishes_not_applicable_from_failure():
+    """An oMLX-only host is not broken unless its contract requires Ollama."""
+    assert (
+        VERIFY.ollama_requirement_outcome(["omlx"], required=False) == "NOT_APPLICABLE"
+    )
+    assert VERIFY.ollama_requirement_outcome(["ollama"], required=True) == "FAILURE"
 
 
 def compute_model_list_for_fixture(monkeypatch):

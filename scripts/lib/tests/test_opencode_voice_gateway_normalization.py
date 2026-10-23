@@ -7,6 +7,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+LIB = ROOT / "lib"
+import sys
+
+sys.path.insert(0, str(LIB))
+from opencode_config import get_available_tiers
+import tier_registry
 
 
 def load_script():
@@ -28,6 +34,8 @@ def served_inventory(monkeypatch):
                     "data": [
                         {"id": "ollama/llama3.2:3b"},
                         {"id": "opencode/deepseek-ai/model-x"},
+                        {"id": "opencode/muse-spark-1.3-contributor-free"},
+                        {"id": "opencode/big-pickle"},
                     ]
                 }
             ).encode()
@@ -88,3 +96,63 @@ def test_both_tier_locators_normalize_once_against_real_gateway(
         True,
     )
     assert locator.route.wire_model == expected
+
+
+def test_free_tier_consumes_real_gateway_alias_and_omits_on_unauthorized(
+    monkeypatch, served_inventory
+):
+    voice = load_script()
+    monkeypatch.setattr(voice, "_configured_litellm_port", lambda: served_inventory)
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "test-key")
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    assert "free" in get_available_tiers()
+    config = voice.get_voice_config("free")
+    expected = "opencode/big-pickle"
+    assert config["model"] == expected
+    assert config["model"].count("opencode/") == 1
+    assert config["model"] != "opencode/opencode/muse-spark-1.3-contributor-free"
+
+    class Unauthorized(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_error(401)
+
+        def log_message(self, format, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Unauthorized)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+        monkeypatch.setattr(
+            voice, "_configured_litellm_port", lambda: server.server_port
+        )
+        # Distinct 401 status reasons arrive with #75 (effd6ba); this branch
+        # asserts fail-closed omission and retains the attempted-route reason.
+        omitted = voice.get_voice_config("free")
+        assert "model" not in omitted
+        assert "endpoint" not in omitted
+        recorded = omitted["_voice_state"]["selections"][
+            voice.Operation.CLEANUP_LLM.value
+        ]
+        assert recorded["transport"] == "unavailable"
+        assert recorded["reason"]
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+def test_free_tier_direct_preserves_interior_slash_and_strict_gateway_has_no_direct_route(
+    monkeypatch, served_inventory
+):
+    voice = load_script()
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    direct = voice.get_voice_config("free")
+    assert direct["model"] == "big-pickle"
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    strict = voice.get_voice_config("free")
+    assert "endpoint" not in strict

@@ -14,8 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 # CLI contract probes run this file directly without PYTHONPATH configured.
 sys.path.insert(0, str(SCRIPTS / "lib"))
-from discover_models import list_local_ollama_models
-from litellm_config import compute_model_list
+from discover_models import (
+    list_local_ollama_models,
+)  # noqa: E402 -- intentional script-bootstrap ordering.
+from litellm_config import (
+    compute_model_list,
+)  # noqa: E402 -- intentional script-bootstrap ordering.
 
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT")
 BASELINE_PATHS = (
@@ -35,6 +39,8 @@ def validate_snapshot(
     previous_ledger_text=None,
     inventory_names=None,
     required_baseline_refs=(),
+    advertised_engines=(),
+    ollama_required=False,
 ):
     """Validate generated catalogue aliases against baseline inventories."""
     config_text = (
@@ -77,6 +83,9 @@ def validate_snapshot(
         "served_names": served,
         "ledger_names": ledger_names,
         "notes": notes,
+        "ollama_requirement": ollama_requirement_outcome(
+            advertised_engines, required=ollama_required
+        ),
     }
 
 
@@ -105,6 +114,16 @@ def target_alias():
     return sorted(aliases)[0]
 
 
+def ollama_requirement_outcome(advertised_engines, *, required):
+    """Classify Ollama-only acceptance on non-Ollama hosts as not applicable."""
+    engines = set(advertised_engines)
+    if "ollama" not in engines and not required:
+        return "NOT_APPLICABLE"
+    if required:
+        return "FAILURE"
+    return "PASS" if "ollama" in engines else "NOT_APPLICABLE"
+
+
 def _deny_non_loopback(request, *args, **kwargs):
     url = request.full_url if hasattr(request, "full_url") else str(request)
     from urllib.parse import urlparse
@@ -124,6 +143,8 @@ def run_smoke(
     inventory=None,
     runner=None,
     network_hook=None,
+    advertised_engines=(),
+    ollama_required=False,
 ):
     if mode not in ("retention", "acceptance"):
         raise ValueError(f"unknown mode: {mode}")
@@ -278,6 +299,8 @@ def run_smoke(
                 for item in json.loads(previous_ledger_text)
                 if isinstance(item, dict)
             },
+            advertised_engines=advertised_engines,
+            ollama_required=ollama_required,
         )
         report.update(
             {

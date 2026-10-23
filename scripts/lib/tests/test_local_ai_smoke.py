@@ -53,6 +53,32 @@ def test_retention_run_smoke_passes_with_fixture_baseline(tmp_path, monkeypatch)
     assert report["mode"] == "retention"
 
 
+def test_acceptance_report_marks_omlx_only_not_applicable_and_required_ollama_failure(
+    tmp_path,
+):
+    baseline = _inputs(tmp_path)
+    report = smoke.run_smoke(
+        tmp_path / "omlx-host",
+        mode="acceptance",
+        baseline=baseline,
+        inventory={TARGET_ALIAS, "existing/model"},
+        advertised_engines=["omlx"],
+        runner=_runner,
+    )
+    assert report["ollama_requirement"] == "NOT_APPLICABLE"
+
+    required = smoke.run_smoke(
+        tmp_path / "ollama-required-host",
+        mode="acceptance",
+        baseline=baseline,
+        inventory={TARGET_ALIAS, "existing/model"},
+        advertised_engines=["ollama"],
+        ollama_required=True,
+        runner=_runner,
+    )
+    assert required["ollama_requirement"] == "FAILURE"
+
+
 def test_retention_missing_baseline_reports_reason(tmp_path, monkeypatch):
     monkeypatch.setattr(smoke.Path, "home", lambda: tmp_path)
     with pytest.raises(
