@@ -29,6 +29,8 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
+| **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
+| **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — trial/unknown entitlement, not a free route |
 | **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
@@ -136,6 +138,32 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 | council | `openai/gpt-6.1-sol` | high (α sol, β astra, γ luna) |
 
 Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-6-luna`. Requires GitHub Copilot auth via `/connect`.
+
+### Cohere Tier (`cohere`)
+
+Direct Cohere-hosted Command family, generated from the live Cohere catalogue and served through the LiteLLM gateway as `cohere_chat/` lanes (`api.cohere.ai/compatibility/v1` is the OpenCode-facing surface). Tier trial keys are limited to 1,000 API calls/month — entries are eligible-for-free with visible cap and fallthrough, not guaranteed zero-cost. Verified against the live catalogue at wire-up (22 Oct 2026); requires `COHERE_API_KEY`:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator | `cohere/command-a-03-2025` | — |
+| designer / fixer | `cohere/command-a-03-2025` | — |
+| oracle | `cohere/command-r-plus-08-2024` | — |
+| council | `cohere/command-r-plus-08-2024` | (α A, β R, γ R+) |
+| librarian / explorer | `cohere/command-r-08-2024` | — |
+| observer | `cohere/command-r-08-2024` | — |
+
+Fallback chains (one sibling cohort model per role, `configs/opencode/oh-my-opencode-slim.json` `_tiers.cohere.fallback`): orchestrator/designer/fixer → `cohere/command-r-plus-08-2024`, oracle → `cohere/command-r-08-2024`, librarian/explorer/observer → `cohere/command-a-03-2025`. OpenRouter-hosted Cohere alternatives did not confirm in the live OpenRouter catalogue at wire-up time, so chains stay direct-hosted; revisit when OpenRouter confirms them.
+
+### Poolside Tier (`poolside`)
+
+Direct Poolside-hosted Laguna 2.1 family (`openai`-compatible wire via LiteLLM, `api_base https://inference.poolside.ai/v1`). Entitlement and terms are **unverified** (live endpoint and catalogue confirmed; pricing not) — this tier is not a free-route candidate. Requires `POOLSIDE_API_KEY`:
+
+| Role | Model | Variant |
+|------|-------|---------|
+| orchestrator / librarian / explorer / designer / observer | `poolside/laguna-xs-2.1` | — |
+| oracle / fixer / council | `poolside/laguna-s-2.1` | (α XS, β S) |
+
+Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside.fallback` — XS roles → `poolside/laguna-s-2.1`, S roles → `poolside/laguna-xs-2.1`). OpenRouter-hosted `:free` twins exist in the live catalogue but carry the same trial/unknown-entitlement caveat and stay excluded from free-tier composition.
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
@@ -377,7 +405,7 @@ Additional classification rules (applied after name heuristics):
 
 **Runtime warnings**: `configure-opencode-tier.py` warns when council councillors resolve to the same model (limited diversity), and reports total distinct models available across categories. These warnings are generated from the shared tier registry via `scripts/lib/tier_registry.py`.
 
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, free, local-quiet, local, local-loud, local-solo)
+Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (pro, pro-plus, pro-plus-anthropic, plus, plus-anthropic, anthropic, omo-slim-openai, omo-slim-thirty-dollars, omo-slim-opencode-zen-free, cohere, poolside, free, local-quiet, local, local-loud, local-solo)
 
 Local Ollama and, when enabled, oMLX models form the multi-provider local pool; oMLX wins engine-equivalent bare-name collisions. oMLX metadata supplies context from `max_model_len`, and unknown model types fail closed rather than entering chat roles. Provider-prefixed assignments use `ollama/<model>` or `omlx/<model>`.
 
