@@ -1174,7 +1174,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     elif has_llm and not has_stt_state:
         voice_status = "partial"
     elif not has_llm and not has_stt_state:
-        voice_status = "local-only"
+        voice_status = "unresolved"
     elif not gateway_tested:
         voice_status = "config-only"
     else:
@@ -1394,7 +1394,7 @@ def main():
         f"Config written to: {output_path}",
     ]
     outcome_lines = {
-        "unresolved": "Voice outcome: unresolved; existing selection preserved",
+        "unresolved": "Voice outcome: unresolved; no plugin route installed",
         "partial": "Voice outcome: partial; LLM/STT cleanup incomplete",
         "local-only": "Voice outcome: partial; local Whisper STT configuration only",
         "config-only": (

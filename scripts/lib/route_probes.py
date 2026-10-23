@@ -100,6 +100,7 @@ def _status_result(code, model, endpoint):
             endpoint,
             ("authentication rejected",),
             "unauthorized" if code == 401 else "forbidden",
+            http_status=code,
         )
     if code != 200:
         return _result(

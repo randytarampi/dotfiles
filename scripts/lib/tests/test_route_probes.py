@@ -170,6 +170,12 @@ class RouteProbeTests(unittest.TestCase):
                 Qualification.PROTOCOL_PROBED,
             )
 
+    def test_status_result_preserves_auth_http_codes(self):
+        for code, auth in ((401, "unauthorized"), (403, "forbidden")):
+            result = route_probes._status_result(code, "model", "http://engine")
+            self.assertEqual(result.auth_failure, auth)
+            self.assertEqual(result.http_status, code)
+
     def test_bad_shape_and_unreachable_mapping(self):
         result, _ = self.call(
             FakeResponse(body=b'{"data":[]}'), route_probes.probe_embeddings, "KEY_REF"

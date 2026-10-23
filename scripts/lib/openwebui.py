@@ -698,7 +698,20 @@ def _qualify_candidates(
             reason = "; ".join(result.notes) or result.status
             http_status = getattr(result, "http_status", None)
             if operation == Operation.EMBEDDING and http_status is not None:
-                reason = f"gateway returned HTTP {http_status} (server-side error)"
+                if http_status in (401, 403):
+                    classification = "authentication rejected"
+                elif http_status == 404:
+                    classification = "model not found"
+                elif http_status == 429:
+                    classification = "rate limited"
+                elif 500 <= http_status <= 599:
+                    classification = "server-side error"
+                else:
+                    classification = "request rejected"
+                reason = (
+                    f"gateway returned HTTP {http_status} ({classification}); "
+                    f"{reason}"
+                )
             reason_record = {"reason": reason}
             if qualification in {
                 Qualification.PROTOCOL_PROBED,
@@ -1765,6 +1778,8 @@ def _reconcile_audio(client, current, wanted):
         if section in credential_transitions:
             continue
         prior = prewrite.get(section, {}).get(key, "")
+        if not credential_value_changed:
+            continue
         referenced_env = next(
             (
                 name
