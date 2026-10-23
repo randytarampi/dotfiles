@@ -79,6 +79,8 @@ MODEL_ALLOWLIST_PATHS = {
     "github-copilot": REPO_ROOT / "configs" / "opencode" / "github-copilot-models.json",
     "google": REPO_ROOT / "configs" / "opencode" / "google-models.json",
     "openrouter": REPO_ROOT / "configs" / "opencode" / "openrouter-models.json",
+    "cohere": REPO_ROOT / "configs" / "opencode" / "cohere-models.json",
+    "poolside": REPO_ROOT / "configs" / "opencode" / "poolside-models.json",
 }
 SUPPORTED_JUNIE_PROVIDERS = frozenset(MODEL_ALLOWLIST_PATHS) | {
     "litellm",
