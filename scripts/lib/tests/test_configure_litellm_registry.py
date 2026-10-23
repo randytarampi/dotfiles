@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import cast
 from types import ModuleType
 import os
+import ast
 
 import pytest
 
@@ -146,6 +147,60 @@ def test_pi_auth_precedence_is_file_first_env_consistent_or_env_only(
     result = configure_litellm.resolve_client_auth("LITELLM_PI_KEY", key_file)
     assert result.state == "accepted"
     assert result.value == "env-only"
+
+
+def test_main_provision_calls_use_registry_enforcement_default():
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    main = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
+    )
+    calls = [
+        node
+        for node in ast.walk(main)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "provision_app_keys"
+    ]
+    assert len(calls) == 2
+    assert all(
+        not any(keyword.arg == "enforce_registry_gates" for keyword in call.keywords)
+        for call in calls
+    )
+
+
+def test_strict_auth_checks_client_identity(monkeypatch, tmp_path):
+    calls = []
+
+    def request(url, method, key, payload=None):
+        calls.append((url, method, key, payload))
+        if url.endswith("/key/list?return_full_object=true"):
+            return {"keys": []}
+        if url.endswith("/key/generate"):
+            return {"key": f"key-for-{payload['key_alias']}"}
+        if url.endswith("/v1/models"):
+            expected = key.rsplit("-", 1)[-1]
+            if expected not in ("pi", "opencode"):
+                raise AssertionError("unexpected client identity")
+            return {"data": [], "authenticated_as": expected}
+        return {}
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    _enabled(
+        monkeypatch,
+        "DOTFILES_RUN_LITELLM_SETUP",
+        "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_USE_LITELLM_PROXY",
+        "DOTFILES_RUN_OPENCODE_SETUP",
+    )
+    service = tmp_path / "service.env"
+    assert configure_litellm.provision_app_keys("master", service, strict=True)
+    model_keys = [
+        key for url, method, key, _payload in calls if url.endswith("/v1/models")
+    ]
+    assert model_keys == ["key-for-opencode", "key-for-pi"]
 
 
 def test_strict_preflight_refuses_second_row_before_any_generation(

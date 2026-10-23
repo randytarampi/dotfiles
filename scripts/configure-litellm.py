@@ -569,26 +569,7 @@ def _provision_app_keys(
             alias, env_name = row["client"], row["env_name"]
             client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
             auth = resolve_client_auth(env_name, client_key_path)
-            if auth.state == "conflict":
-                logger.error(
-                    "LiteLLM client %s credential conflict: %s", alias, auth.detail
-                )
-                refusal = "credential conflict"
-            if auth.state == "absent" and strict:
-                refusal = "not authorized: credential absent"
-            elif not strict and auth.state == "absent":
-                logger.info(
-                    "LiteLLM client %s not authorized: credential absent", alias
-                )
-            preflight.append((row, auth))
-        if refusal:
-            logger.error("LiteLLM provisioning preflight refused: %s", refusal)
-            return False
-
-        for row, auth in preflight:
-            alias, env_name = row["client"], row["env_name"]
-            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
-            stranded_record = next(
+            remote = next(
                 (
                     item
                     for item in records
@@ -596,14 +577,29 @@ def _provision_app_keys(
                 ),
                 None,
             )
-            if auth.state == "absent" and not stranded_record and strict:
+            if auth.state == "conflict":
                 logger.error(
-                    "LiteLLM client %s is not authorized: %s", alias, auth.detail
+                    "LiteLLM client %s credential conflict: %s", alias, auth.detail
                 )
-                return False
-            if auth.state == "accepted" and auth.value and not stranded_record:
+                refusal = "credential conflict"
+            if auth.state == "accepted" and remote is None:
+                refusal = "invalid state: local key exists without a gateway record"
+            elif not strict and auth.state == "absent":
+                logger.info(
+                    "LiteLLM client %s not authorized: credential absent", alias
+                )
+            preflight.append((row, auth, remote))
+        if refusal:
+            logger.error("LiteLLM provisioning preflight refused: %s", refusal)
+            return False
+
+        for row, auth, remote in preflight:
+            alias, env_name = row["client"], row["env_name"]
+            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+            stranded_record = remote
+            if auth.state == "accepted" and auth.value:
                 found[env_name] = auth.value
-            if alias in aliases:
+            if stranded_record is not None:
                 # The key-list endpoint intentionally does not reveal existing
                 # key material; preserve any locally stored key on disk.
                 materialized = _key_file_materialized(
@@ -628,6 +624,10 @@ def _provision_app_keys(
                     if key:
                         found[env_name] = key
                     continue
+            if auth.state == "accepted":
+                # Do not mint a different credential over a locally accepted
+                # key; rotate explicitly, then verify before retrying.
+                continue
             try:
                 generated = _request_json(
                     f"{api_base}/key/generate",
