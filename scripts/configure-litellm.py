@@ -737,7 +737,7 @@ def _provision_app_keys(
                     logger.error("LiteLLM client key model access failed: %s", alias)
                     return False
         return True
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, TypeError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
         return not strict
 

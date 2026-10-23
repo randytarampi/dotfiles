@@ -145,6 +145,10 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
         "LITELLM_PI_KEY='pi-key'\nLITELLM_JUNIE_KEY='junie-key'\n"
         "LITELLM_OPENWEBUI_KEY='webui-key'\n"
     )
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "secret-key")
+    monkeypatch.setenv("LITELLM_PI_KEY", "pi-key")
+    monkeypatch.setenv("LITELLM_JUNIE_KEY", "junie-key")
+    monkeypatch.setenv("LITELLM_OPENWEBUI_KEY", "webui-key")
     key_path = tmp_path / "clients/opencode.key"
     key_path.parent.mkdir()
     key_path.write_text("secret-key")
@@ -172,12 +176,18 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
 
     monkeypatch.setattr(CONFIGURE, "_request_json", request)
     monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
+    monkeypatch.setattr(CONFIGURE, "_write_opencode_key", lambda *args, **kwargs: None)
+    monkeypatch.setattr(CONFIGURE, "_write_pi_key", lambda *args, **kwargs: None)
+    monkeypatch.setattr(CONFIGURE, "_write_junie_key", lambda *args, **kwargs: None)
+    monkeypatch.setattr(CONFIGURE, "_write_openwebui_key", lambda *args, **kwargs: None)
     assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True) is True
-    assert calls[:3] == [
-        ("http://127.0.0.1:4000/health/readiness", "GET"),
-        ("http://127.0.0.1:4000/key/list?return_full_object=true", "GET"),
-        ("http://127.0.0.1:4000/v1/models", "GET"),
-    ]
+    urls = [url for url, _method in calls]
+    assert (
+        urls.index("http://127.0.0.1:4000/health/readiness")
+        < urls.index("http://127.0.0.1:4000/key/list?return_full_object=true")
+        < urls.index("http://127.0.0.1:4000/v1/models")
+    )
+    assert all(method == "GET" for _url, method in calls)
 
 
 def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch):
@@ -196,13 +206,36 @@ def test_strict_provisioning_fails_on_client_auth_failure(tmp_path, monkeypatch)
     def request(url, method, key, payload=None, timeout=30):
         if "/key/list" in url:
             return {"keys": [{"key_alias": "opencode", "token": "hash"}]}
-        if url.endswith("/v1/models"):
+        if url.endswith("/v1/models") and key == "secret-key":
             raise OSError("unauthorized")
         return {"healthy": True}
 
     monkeypatch.setattr(CONFIGURE, "_request_json", request)
     monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
     assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True) is False
+
+
+def test_strict_provisioning_fails_closed_on_readiness_transport_error(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+
+    def request(url, method, key, payload=None, timeout=30):
+        if url.endswith("/health/readiness"):
+            raise TimeoutError("readiness timed out")
+        raise AssertionError(f"unexpected request after readiness failure: {url}")
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", request)
+    assert (
+        CONFIGURE.provision_app_keys(
+            "master-key", tmp_path / "service.env", strict=True
+        )
+        is False
+    )
 
 
 def test_require_ready_flag_is_registered():
