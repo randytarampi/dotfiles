@@ -799,107 +799,54 @@
     },
     "cohere": {
       "orchestrator": {
-        "model": "cohere/command-a-03-2025",
-        "fallback": [
-          "openrouter/cohere/command-a-03-2025",
-          "opencode/cohere/command-a-03-2025"
-        ]
+        "model": "cohere/command-a-03-2025"
       },
       "oracle": {
-        "model": "cohere/command-r-plus-08-2024",
-        "fallback": [
-          "openrouter/cohere/command-r-plus-08-2024"
-        ]
+        "model": "cohere/command-r-plus-08-2024"
       },
       "librarian": {
-        "model": "cohere/command-r-08-2024",
-        "fallback": [
-          "openrouter/cohere/command-r-08-2024"
-        ]
+        "model": "cohere/command-r-08-2024"
       },
       "explorer": {
-        "model": "cohere/command-r-08-2024",
-        "fallback": [
-          "openrouter/cohere/command-r-08-2024"
-        ]
+        "model": "cohere/command-r-08-2024"
       },
       "designer": {
-        "model": "cohere/command-a-03-2025",
-        "fallback": [
-          "openrouter/cohere/command-a-03-2025"
-        ]
+        "model": "cohere/command-a-03-2025"
       },
       "fixer": {
-        "model": "cohere/command-a-03-2025",
-        "fallback": [
-          "openrouter/cohere/command-a-03-2025"
-        ]
+        "model": "cohere/command-a-03-2025"
       },
       "observer": {
-        "model": "cohere/command-r-08-2024",
-        "fallback": [
-          "openrouter/cohere/command-r-08-2024"
-        ]
+        "model": "cohere/command-r-08-2024"
       },
       "council": {
-        "model": "cohere/command-r-plus-08-2024",
-        "fallback": [
-          "openrouter/cohere/command-r-plus-08-2024"
-        ]
+        "model": "cohere/command-r-plus-08-2024"
       }
     },
     "poolside": {
       "orchestrator": {
-        "model": "poolside/laguna-xs-2.1",
-        "fallback": [
-          "poolside/laguna-s-2.1",
-          "poolside/laguna-xs-2.1",
-          "openrouter/poolside/laguna-xs-2.1:free"
-        ]
+        "model": "poolside/laguna-xs-2.1"
       },
       "oracle": {
-        "model": "poolside/laguna-s-2.1",
-        "fallback": [
-          "poolside/laguna-xs-2.1",
-          "poolside/laguna-xs-2.1",
-          "openrouter/poolside/laguna-s-2.1:free"
-        ]
+        "model": "poolside/laguna-s-2.1"
       },
       "librarian": {
-        "model": "poolside/laguna-xs-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-xs-2.1:free"
-        ]
+        "model": "poolside/laguna-xs-2.1"
       },
       "explorer": {
-        "model": "poolside/laguna-xs-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-xs-2.1:free"
-        ]
+        "model": "poolside/laguna-xs-2.1"
       },
       "designer": {
-        "model": "poolside/laguna-xs-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-xs-2.1:free"
-        ]
+        "model": "poolside/laguna-xs-2.1"
       },
       "fixer": {
-        "model": "poolside/laguna-s-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-s-2.1:free"
-        ]
+        "model": "poolside/laguna-s-2.1"
       },
       "observer": {
-        "model": "poolside/laguna-xs-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-xs-2.1:free"
-        ]
+        "model": "poolside/laguna-xs-2.1"
       },
       "council": {
-        "model": "poolside/laguna-s-2.1",
-        "fallback": [
-          "openrouter/poolside/laguna-s-2.1:free"
-        ]
+        "model": "poolside/laguna-s-2.1"
       }
     },
     "free": {
@@ -1639,6 +1586,91 @@
         ],
         "observer": [],
         "council": []
+      }
+    },
+    "cohere": {
+      "council": {
+        "default_preset": "cohere",
+        "presets": {
+          "cohere": {
+            "alpha": {
+              "model": "cohere/command-a-03-2025"
+            },
+            "beta": {
+              "model": "cohere/command-r-08-2024"
+            },
+            "gamma": {
+              "model": "cohere/command-r-plus-08-2024"
+            },
+            "council": {
+              "model": "cohere/command-r-plus-08-2024"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "cohere/command-r-plus-08-2024"
+        ],
+        "oracle": [
+          "cohere/command-r-08-2024"
+        ],
+        "librarian": [
+          "cohere/command-a-03-2025"
+        ],
+        "explorer": [
+          "cohere/command-a-03-2025"
+        ],
+        "designer": [
+          "cohere/command-r-plus-08-2024"
+        ],
+        "fixer": [
+          "cohere/command-r-plus-08-2024"
+        ],
+        "observer": [
+          "cohere/command-a-03-2025"
+        ]
+      }
+    },
+    "poolside": {
+      "council": {
+        "default_preset": "poolside",
+        "presets": {
+          "poolside": {
+            "alpha": {
+              "model": "poolside/laguna-xs-2.1"
+            },
+            "beta": {
+              "model": "poolside/laguna-s-2.1"
+            },
+            "council": {
+              "model": "poolside/laguna-s-2.1"
+            }
+          }
+        }
+      },
+      "fallback": {
+        "orchestrator": [
+          "poolside/laguna-s-2.1"
+        ],
+        "oracle": [
+          "poolside/laguna-xs-2.1"
+        ],
+        "librarian": [
+          "poolside/laguna-s-2.1"
+        ],
+        "explorer": [
+          "poolside/laguna-s-2.1"
+        ],
+        "designer": [
+          "poolside/laguna-s-2.1"
+        ],
+        "fixer": [
+          "poolside/laguna-xs-2.1"
+        ],
+        "observer": [
+          "poolside/laguna-s-2.1"
+        ]
       }
     }
   }
