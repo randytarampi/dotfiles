@@ -1188,6 +1188,40 @@ def test_fake_route_probe_http_surfaces_shapes_auth_and_refusal(monkeypatch):
     assert route_probes.qualification_from_probe(auth).value == "unknown"
 
 
+@pytest.mark.parametrize(
+    "code,expected",
+    [
+        (400, "request rejected"),
+        (401, "authentication rejected"),
+        (403, "authentication rejected"),
+        (404, "model not found"),
+        (429, "rate limited"),
+        (503, "server-side error"),
+        (500, "server-side error"),
+    ],
+)
+def test_embedding_http_diagnostic_classification(monkeypatch, code, expected):
+    result = type(
+        "Result",
+        (),
+        {"status": "unavailable", "notes": ("probe note",), "http_status": code},
+    )()
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_embedding_state", lambda: {})
+    _qualified, reasons = openwebui._qualify_candidates(
+        [("openai", "embedding-model", openwebui.Qualification.DISCOVERED)],
+        openwebui.Operation.EMBEDDING,
+        "http://gateway/v1",
+        None,
+        lambda *_args, **_kwargs: result,
+        full_probe=True,
+    )
+    reason = reasons[("openai", "embedding-model")]["reason"]
+    assert expected in reason
+    assert "HTTP %s" % code in reason
+    assert "probe note" in reason
+
+
 def test_real_adapter_discovered_embedding_is_unavailable_and_preserved(
     monkeypatch, tmp_path
 ):

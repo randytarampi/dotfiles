@@ -212,6 +212,59 @@ def test_rotation_marker_writer_spy_call_counts(monkeypatch, tmp_path):
     assert len(calls) == 3
 
 
+def test_unchanged_unowned_credential_is_not_marked_and_can_release(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    calls = []
+    real_write = openwebui._write_audio_credential_transitions
+    monkeypatch.setattr(
+        openwebui,
+        "_write_audio_credential_transitions",
+        lambda marker: (calls.append(marker), real_write(marker))[1],
+    )
+    client = AudioClient({"stt": {"MODEL": "asr", "OPENAI_API_KEY": "existing"}})
+    desired = {"stt": {"MODEL": "asr", "OPENAI_API_KEY": "existing"}}
+
+    openwebui._reconcile_audio(client, client.audio, desired)
+    assert calls == []
+    openwebui._reconcile_audio(client, client.audio, {})
+    assert calls == []
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "existing"
+
+
+def test_rotating_client_adopts_unchanged_credential_then_rotates_and_releases(
+    monkeypatch, tmp_path
+):
+    state = tmp_path / "managed-audio.json"
+    monkeypatch.setattr(openwebui, "_audio_state_path", lambda: str(state))
+    calls = []
+    real_write = openwebui._write_audio_credential_transitions
+    monkeypatch.setattr(
+        openwebui,
+        "_write_audio_credential_transitions",
+        lambda marker: (calls.append(marker), real_write(marker))[1],
+    )
+    client = AudioClient({"stt": {"MODEL": "", "OPENAI_API_KEY": "stable"}})
+
+    openwebui._reconcile_audio(
+        client, client.audio, {"stt": {"MODEL": "", "OPENAI_API_KEY": "stable"}}
+    )
+    assert calls == []
+    client.audio["stt"]["OPENAI_API_KEY"] = "rotated"
+    monkeypatch.setenv("LITELLM_OPENWEBUI_KEY", "rotated")
+    openwebui._reconcile_audio(
+        client, client.audio, {"stt": {"MODEL": "", "OPENAI_API_KEY": "new"}}
+    )
+    assert len(calls) == 1
+    assert "rotated" not in repr(calls[0]) and "new" not in repr(calls[0])
+    result = openwebui._reconcile_audio(client, client.audio, {})
+    assert result["status"] == "verified"
+    assert calls[1:] == [{}, {}]
+    assert client.audio["stt"]["OPENAI_API_KEY"] == "rotated"
+
+
 def _assert_secrets_absent(records, marker, *secrets):
     messages = "\n".join(record.getMessage() for record in records)
     marker_bytes = marker.read_bytes() if marker.exists() else b""

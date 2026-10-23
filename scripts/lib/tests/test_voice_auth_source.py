@@ -165,7 +165,48 @@ def test_omission_messages_label_operation_model(tmp_path, monkeypatch, caplog):
 def test_incomplete_cleanup_is_partial_status():
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
-    assert config.get("_voice_status") in ("partial", "local-only")
+    assert config.get("_voice_status") == "unresolved"
+
+
+def test_no_resolved_voice_route_is_unresolved():
+    voice = load_script()
+    config = voice.get_voice_config("plus", {"stt_transport": "openai"})
+    assert config["_voice_status"] == "unresolved"
+    assert not any(
+        key in config for key in ("endpoint", "model", "sttEndpoint", "sttModel")
+    )
+
+
+def test_main_installs_no_plugin_entry_without_resolved_route(
+    monkeypatch, tmp_path, caplog
+):
+    voice = load_script()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    monkeypatch.setattr(voice, "load_env", lambda *_args: False)
+    monkeypatch.setattr(
+        voice.sys, "argv", ["configure-opencode-voice.py", "--preset", "local"]
+    )
+    monkeypatch.setattr(voice, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
+    monkeypatch.setattr(voice, "audio_models", lambda *_args: [])
+    monkeypatch.setattr(
+        voice, "_resolve_local_voice_model", lambda *_args: (None, True, False)
+    )
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "false")
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "false")
+    monkeypatch.setenv("DOTFILES_USE_MERIDIAN", "false")
+    monkeypatch.setattr(voice, "is_meridian_configured", lambda: False)
+
+    voice.main()
+
+    tui = json.loads((tmp_path / "tui.json").read_text())
+    assert not [
+        entry for entry in tui["plugin"] if entry[0] == "@renjfk/opencode-voice"
+    ]
+    assert "Voice outcome: unresolved; no plugin route installed" in caplog.text
 
 
 def test_gateway_alias_success_clears_stale_error(monkeypatch, gateway):
