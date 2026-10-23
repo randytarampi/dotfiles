@@ -35,7 +35,6 @@ def _isolate_client_gates(monkeypatch):
         "LITELLM_CLIENT_KEY_FILE",
     ):
         monkeypatch.delenv(gate, raising=False)
-    monkeypatch.setattr(configure_litellm, "_LEGACY_PROVISIONING_CALL", False)
 
 
 def _fake_gateway(monkeypatch):
@@ -73,6 +72,7 @@ def test_pi_requires_both_registry_gates(monkeypatch, tmp_path):
     calls = _fake_gateway(monkeypatch)
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
     _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_PI_SETUP")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
     generated = [
         call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
@@ -121,6 +121,60 @@ def test_canonical_auth_source_states_are_distinct(
     if state == "conflict":
         assert result.detail == "env and file credentials differ"
         assert "env-key" not in result.detail and "file-key" not in result.detail
+
+
+def test_pi_auth_precedence_is_file_first_env_consistent_or_env_only(
+    monkeypatch, tmp_path
+):
+    """Pi follows canonical file-primary auth; env is fallback or must match."""
+    key_file = tmp_path / "pi.key"
+    monkeypatch.setenv("LITELLM_PI_KEY", "same-key")
+    key_file.write_text("same-key", encoding="utf-8")
+    assert (
+        configure_litellm.resolve_client_auth("LITELLM_PI_KEY", key_file).state
+        == "accepted"
+    )
+
+    key_file.write_text("file-key", encoding="utf-8")
+    monkeypatch.setenv("LITELLM_PI_KEY", "env-key")
+    result = configure_litellm.resolve_client_auth("LITELLM_PI_KEY", key_file)
+    assert result.state == "conflict"
+    assert result.detail == "env and file credentials differ"
+
+    key_file.unlink()
+    monkeypatch.setenv("LITELLM_PI_KEY", "env-only")
+    result = configure_litellm.resolve_client_auth("LITELLM_PI_KEY", key_file)
+    assert result.state == "accepted"
+    assert result.value == "env-only"
+
+
+def test_strict_preflight_refuses_second_row_before_any_generation(
+    monkeypatch, tmp_path
+):
+    calls = _fake_gateway(monkeypatch)
+    _enabled(
+        monkeypatch,
+        "DOTFILES_RUN_LITELLM_SETUP",
+        "DOTFILES_RUN_OPENCODE_SETUP",
+        "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_USE_LITELLM_PROXY",
+    )
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "opencode-key")
+    monkeypatch.setenv("LITELLM_PI_KEY", "pi-env")
+    clients = tmp_path / "clients"
+    clients.mkdir(mode=0o700)
+    (clients / "opencode.key").write_text("opencode-key", encoding="utf-8")
+    (clients / "pi.key").write_text("pi-env", encoding="utf-8")
+    pi_path = clients / "pi.key"
+    pi_path.write_text("pi-file", encoding="utf-8")
+    before_opencode = (clients / "opencode.key").read_bytes()
+    result = configure_litellm.provision_app_keys(
+        "master", tmp_path / "service.env", strict=True
+    )
+    assert result is False
+    assert [call for call in calls if call[0].endswith("/key/generate")] == []
+    assert (clients / "opencode.key").read_bytes() == before_opencode
 
 
 def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tmp_path):

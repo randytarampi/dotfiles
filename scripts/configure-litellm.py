@@ -49,27 +49,21 @@ _LEGACY_CLIENT_GATES = (
     "DOTFILES_USE_LITELLM_PROXY",
 )
 _CLI_INSTALLS = {"opencode": "opencode", "pi": "pi"}
-_LEGACY_PROVISIONING_CALL = False
-_TEST_PROVISIONING_ELIGIBILITY = False
 
 
-def _client_provisioning_state(row):
+def _client_provisioning_state(row, enforce_registry_gates=True):
     """Return explicit eligibility and an honest reason for a registry row."""
     if (
         not row["credential_policy"].startswith("provision")
         or row["classification"] != "eligible"
     ):
         return False, "classification-only/no credential"
-    # Existing direct callers outside the gated orchestrator retain their
-    # historical provisioning behaviour.
-    if _LEGACY_PROVISIONING_CALL and not _TEST_PROVISIONING_ELIGIBILITY:
-        return True, "eligible"
-    if not all(
+    if enforce_registry_gates and not all(
         os.environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
         for gate in row["setup_gates"]
     ):
         return False, "setup gate disabled"
-    if not all(
+    if enforce_registry_gates and not all(
         os.environ.get(gate, "0") == "1" for gate in _CLIENT_ENABLE_GATES[row["client"]]
     ):
         return False, "user enablement gate disabled"
@@ -358,21 +352,35 @@ def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
 def _materialized_client_key_value(
     client_key_path: Path, env_name, service_env_path
 ) -> str:
-    """Canonical key value for one client: file material first, then service.env.
+    """Return the resolver's canonical credential for one client.
 
     Both sides are stripped to the credential the clients actually send, so
     a whitespace-padded file hashes the same bare key it will authenticate
     with; a whitespace-only file is unmaterialized (same semantics as
     _key_file_materialized) and the service.env fallback applies.
     """
+    # Canonical client file is primary; env is accepted only when consistent,
+    # and is the fallback only when that file is absent.
     try:
         if client_key_path.is_file() and not client_key_path.is_symlink():
-            value = client_key_path.read_text(encoding="utf-8").strip()
-            if value:
-                return value
+            if client_key_path.read_text(encoding="utf-8").strip():
+                auth = resolve_client_auth(env_name, client_key_path)
+                return auth.value if auth.state == "accepted" and auth.value else ""
     except OSError:
         pass
-    return _service_env_value(env_name, service_env_path)
+    service_value = _service_env_value(env_name, service_env_path)
+    if not service_value:
+        return ""
+    previous = os.environ.get(env_name)
+    os.environ[env_name] = service_value
+    try:
+        auth = resolve_client_auth(env_name, client_key_path)
+    finally:
+        if previous is None:
+            os.environ.pop(env_name, None)
+        else:
+            os.environ[env_name] = previous
+    return auth.value if auth.state == "accepted" and auth.value else ""
 
 
 def _align_client_token_hash(
@@ -484,23 +492,33 @@ def _verify_app_key_hash(
 
 
 def provision_app_keys(
-    master_key, service_env_path=None, api_base=None, dry_run=False, strict=False
+    master_key,
+    service_env_path=None,
+    api_base=None,
+    dry_run=False,
+    strict=False,
+    *,
+    enforce_registry_gates=True,
 ):
     """Idempotently provision per-client virtual keys after LiteLLM is healthy."""
-    global _LEGACY_PROVISIONING_CALL
-    _LEGACY_PROVISIONING_CALL = (
-        os.environ.get(GATE_ENV, "0") != "1" and not _TEST_PROVISIONING_ELIGIBILITY
+    return _provision_app_keys(
+        master_key,
+        service_env_path,
+        api_base,
+        dry_run,
+        strict,
+        enforce_registry_gates=enforce_registry_gates,
     )
-    try:
-        return _provision_app_keys(
-            master_key, service_env_path, api_base, dry_run, strict
-        )
-    finally:
-        _LEGACY_PROVISIONING_CALL = False
 
 
 def _provision_app_keys(
-    master_key, service_env_path=None, api_base=None, dry_run=False, strict=False
+    master_key,
+    service_env_path=None,
+    api_base=None,
+    dry_run=False,
+    strict=False,
+    *,
+    enforce_registry_gates=True,
 ):
     if not master_key:
         logger.warning("LiteLLM master key unavailable; skipping app-key provisioning")
@@ -535,7 +553,7 @@ def _provision_app_keys(
         found = {}
         provisioning_rows = []
         for row in CLIENT_REGISTRY:
-            eligible, reason = _client_provisioning_state(row)
+            eligible, reason = _client_provisioning_state(row, enforce_registry_gates)
             if eligible:
                 provisioning_rows.append(row)
             elif (
@@ -545,6 +563,8 @@ def _provision_app_keys(
                 logger.info("Skipping LiteLLM client %s: %s", row["client"], reason)
             else:
                 logger.debug("Skipping LiteLLM client %s: %s", row["client"], reason)
+        preflight = []
+        refusal = None
         for row in provisioning_rows:
             alias, env_name = row["client"], row["env_name"]
             client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
@@ -553,7 +573,21 @@ def _provision_app_keys(
                 logger.error(
                     "LiteLLM client %s credential conflict: %s", alias, auth.detail
                 )
-                return False if strict else not strict
+                refusal = "credential conflict"
+            if auth.state == "absent" and strict:
+                refusal = "not authorized: credential absent"
+            elif not strict and auth.state == "absent":
+                logger.info(
+                    "LiteLLM client %s not authorized: credential absent", alias
+                )
+            preflight.append((row, auth))
+        if refusal:
+            logger.error("LiteLLM provisioning preflight refused: %s", refusal)
+            return False
+
+        for row, auth in preflight:
+            alias, env_name = row["client"], row["env_name"]
+            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
             stranded_record = next(
                 (
                     item
@@ -643,6 +677,15 @@ def _provision_app_keys(
                 raise
             key = generated.get("key") if isinstance(generated, dict) else None
             if key:
+                materialized = _materialized_client_key_value(
+                    client_key_path, env_name, service_env_path
+                )
+                if materialized and materialized != key:
+                    logger.error(
+                        "LiteLLM client %s invalid state: generated and canonical credentials disagree",
+                        alias,
+                    )
+                    return False
                 found[env_name] = key
                 aliases.add(alias)
             else:

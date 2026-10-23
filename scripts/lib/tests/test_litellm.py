@@ -1316,7 +1316,9 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
 
-    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
+    CONFIGURE.provision_app_keys(
+        "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
+    )
 
     assert [c[2]["key_alias"] for c in calls if c[1] == "POST"] == [
         "pi",
@@ -1454,7 +1456,9 @@ def test_existing_alias_recreates_file_from_service_env_without_generation(
         "LITELLM_JUNIE_KEY='dummy-junie-existing'\n",
         encoding="utf-8",
     )
-    CONFIGURE.provision_app_keys("dummy-master", service, "http://127.0.0.1:4000")
+    CONFIGURE.provision_app_keys(
+        "dummy-master", service, "http://127.0.0.1:4000", enforce_registry_gates=False
+    )
     assert (tmp_path / "clients/opencode.key").read_text(encoding="utf-8") == (
         "dummy-existing"
     )
@@ -1502,7 +1506,9 @@ def test_provision_repairs_drifted_client_key_hash(tmp_path, monkeypatch):
     key_file.write_text("sk-current", encoding="utf-8")
     os.chmod(key_file, 0o600)
 
-    CONFIGURE.provision_app_keys("master", service, "http://127.0.0.1:4000")
+    CONFIGURE.provision_app_keys(
+        "master", service, "http://127.0.0.1:4000", enforce_registry_gates=False
+    )
 
     assert aligns == [
         (
@@ -1590,7 +1596,11 @@ def test_provision_dry_run_reports_drift_without_repair(tmp_path, monkeypatch, c
     os.chmod(key_file, 0o600)
 
     CONFIGURE.provision_app_keys(
-        "master", service, "http://127.0.0.1:4000", dry_run=True
+        "master",
+        service,
+        "http://127.0.0.1:4000",
+        dry_run=True,
+        enforce_registry_gates=False,
     )
 
     assert aligns == []
@@ -1709,7 +1719,9 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
 
-    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
+    CONFIGURE.provision_app_keys(
+        "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
+    )
 
     assert len(generate_attempts) == len(CONFIGURE.APP_KEYS)
     # A 400 is not persisted as a key; the service env keeps its prior state.
@@ -1739,7 +1751,9 @@ def test_app_key_provisioning_recovers_stranded_alias_and_materializes_key(
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     service_env = tmp_path / "service.env"
     service_env.write_text("LITELLM_MASTER_KEY='master'\n")
-    CONFIGURE.provision_app_keys("master", service_env, "http://127.0.0.1:4000")
+    CONFIGURE.provision_app_keys(
+        "master", service_env, "http://127.0.0.1:4000", enforce_registry_gates=False
+    )
     recovery_calls = [
         url.removeprefix("http://127.0.0.1:4000")
         for url, method, payload, _timeout in requests
