@@ -1,6 +1,6 @@
 # Model catalogue snapshot — 2026-10-22
 
-Captured 2026-10-23 00:05 CEST from the checked-out repository. This is a point-in-time capture for PR E review; it does not assert live provider availability.
+**Snapshot captured at:** 2026-10-23 00:05 CEST, from the checked-out repository. This is a point-in-time configuration capture for PR E review; it does not assert live provider availability. **Live provider probes:** see the separate probe dates in [the E2 provider spike findings](../../docs/e2-cohere-poolside-spike-2026-10-22.md); those observations are not part of this snapshot.
 
 ## Oh My OpenCode preset roles
 
