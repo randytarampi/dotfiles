@@ -26,7 +26,14 @@ PROVIDER_ENDPOINTS = {
         "baseUrl": "https://api.cerebras.ai/v1",
         "apiKeyEnv": "CEREBRAS_API_KEY",
     },
-    "cohere": {"baseUrl": "https://api.cohere.ai", "apiKeyEnv": "COHERE_API_KEY"},
+    "cohere": {
+        "baseUrl": "https://api.cohere.ai",
+        "apiKeyEnv": "COHERE_API_KEY",
+    },
+    "poolside": {
+        "baseUrl": "https://inference.poolside.ai/v1",
+        "apiKeyEnv": "POOLSIDE_API_KEY",
+    },
     "huggingface": {
         "baseUrl": "https://router.huggingface.co",
         "apiKeyEnv": "HF_TOKEN",

@@ -54,6 +54,7 @@ LIVE_CATALOGUE_PROVIDERS = (
     "ollama-cloud",
     "cerebras",
     "cohere",
+    "poolside",
     "huggingface",
     "openai",
 )
@@ -1018,6 +1019,8 @@ def _collect_model_refs(source):
         "openrouter/",
         "google/models/",
         "openai/",
+        "cohere/",
+        "poolside/",
     )
 
     def collect_fallback(value):
@@ -1051,6 +1054,8 @@ def _collect_model_refs(source):
                     "openai",
                     "ollama-cloud",
                     "opencode",
+                    "poolside",
+                    "cohere",
                 ):
                     expected_prefix = {
                         "openrouter": "openrouter/",
@@ -1058,6 +1063,8 @@ def _collect_model_refs(source):
                         "openai": "openai/",
                         "ollama-cloud": "ollama-cloud/",
                         "opencode": "opencode/",
+                        "poolside": "poolside/",
+                        "cohere": "cohere/",
                     }[model_provider]
                     if model.startswith(expected_prefix):
                         refs.add(model)
@@ -1456,6 +1463,9 @@ def compute_model_list(environ=None, previous_entries=None):
                 alias = wire_model = f"huggingface/{model_id}"
             elif provider == "cerebras":
                 alias = wire_model = f"cerebras/{model_id}"
+            elif provider == "poolside":
+                model_id = model_id.removeprefix("poolside/")
+                alias = wire_model = f"poolside/{model_id}"
             elif provider == "google":
                 alias = f"google/models/{model_id.removeprefix('models/')}"
                 wire_model = f"gemini/{model_id.removeprefix('models/')}"
@@ -1530,6 +1540,41 @@ def compute_model_list(environ=None, previous_entries=None):
                             service_tier=lane,
                         )
                     )
+    if environ.get("POOLSIDE_API_KEY", "").strip():
+        poolside_requested = {
+            ref.split("/", 1)[1] for ref in refs if ref.startswith("poolside/")
+        }
+        try:
+            poolside_models = _live_catalogue(
+                "poolside",
+                environ["POOLSIDE_API_KEY"].strip(),
+                PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
+            )
+        except LiveCatalogueError as error:
+            last_generation_notes.append(f"poolside: UNKNOWN ({error})")
+        else:
+            confirmed = {
+                model_id.removeprefix("poolside/") for model_id in poolside_models
+            }
+            selected = confirmed & poolside_requested
+            if scope == "full":
+                selected = confirmed
+            for model_id in sorted(selected):
+                entries.append(
+                    _entry(
+                        f"poolside/{model_id}",
+                        # Poolside is not a native LiteLLM provider; the
+                        # generic OpenAI-compatible client (openai/ prefix +
+                        # api_base) is the only wire shape the router keeps.
+                        # Poolside's API expects the model id WITH its
+                        # provider prefix (catalogue ids are poolside/…),
+                        # matching the OpenRouter-hosted free variants.
+                        f"openai/poolside/{model_id}",
+                        api_base=PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
+                        key_env="POOLSIDE_API_KEY",
+                    )
+                )
+
     # Anthropic coverage comes solely from the meridian block above; the
     # clouds loop has no anthropic entry because no ref collector emits
     # anthropic/-prefixed ids (slim anthropic selections translate to

@@ -448,6 +448,73 @@ def test_live_catalogue_key_providers_generate_only_with_keys(
     )
 
 
+def test_poolside_emits_direct_provider_lane(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["laguna-xs-2.1"]
+    )
+    entries = litellm_config.compute_model_list(
+        {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "POOLSIDE_API_KEY": "test-key"}
+    )
+    entry = next(
+        item for item in entries if item["model_name"] == "poolside/laguna-xs-2.1"
+    )
+    assert entry["litellm_params"]["model"] == "openai/poolside/laguna-xs-2.1"
+    assert entry["litellm_params"]["api_base"] == "https://inference.poolside.ai/v1"
+
+
+def test_cohere_emits_live_catalogue_lane(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["command-a-03-2025"]
+    )
+    entries = litellm_config.compute_model_list(
+        {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "COHERE_API_KEY": "test-key"}
+    )
+    entry = next(
+        item
+        for item in entries
+        if item["model_name"] == "cohere_chat/command-a-03-2025"
+    )
+    assert entry["litellm_params"]["model"] == "cohere_chat/command-a-03-2025"
+
+
+def test_cohere_slim_refs_match_live_catalogue(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["command-a-03-2025"]
+    )
+    entries = litellm_config.compute_model_list(
+        {"COHERE_API_KEY": "test-key", "DOTFILES_LITELLM_CATALOGUE_SCOPE": "free"}
+    )
+    assert "cohere_chat/command-a-03-2025" in {item["model_name"] for item in entries}
+
+
+def test_poolside_strips_provider_prefix_and_obeys_free_scope(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["poolside/laguna-xs-2.1", "poolside/laguna-s-2.1"],
+    )
+    entries = litellm_config.compute_model_list(
+        {"POOLSIDE_API_KEY": "test-key", "DOTFILES_LITELLM_CATALOGUE_SCOPE": "free"}
+    )
+    aliases = {item["model_name"] for item in entries}
+    assert "poolside/laguna-xs-2.1" in aliases
+    assert "poolside/laguna-s-2.1" in aliases
+    assert not any(name.startswith("poolside/poolside/") for name in aliases)
+
+
+def test_poolside_is_not_emitted_in_free_scope_without_registry_reference(monkeypatch):
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"openai/gpt-6-luna"}
+    )
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *args: ["poolside/laguna-xs-2.1"]
+    )
+    entries = litellm_config.compute_model_list(
+        {"POOLSIDE_API_KEY": "test-key", "DOTFILES_LITELLM_CATALOGUE_SCOPE": "free"}
+    )
+    assert not any(item["model_name"].startswith("poolside/") for item in entries)
+
+
 def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
     """Verify catalogued registry identities get exact aliases and unknowns don't."""
     root = Path(__file__).resolve().parents[3]
