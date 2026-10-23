@@ -169,23 +169,28 @@ def _tier_config_only_locator(operation, provider, model, endpoint, key_env, gat
     gateway = gate is True
     model = normalize_provider_model(provider, model)
     auth = resolve_client_auth("LITELLM_OPENCODE_KEY") if gateway else None
-    if auth is None:
-        from types import SimpleNamespace
-
-        auth = SimpleNamespace(value=None, authorized=False, detail=None)
     alias = _gateway_alias(provider, model, auth.value) if gateway else model
     key_ref = "LITELLM_OPENCODE_KEY" if gateway else key_env
-    if gateway and (not alias or not auth.authorized):
+    reason = None
+    if gateway and not os.environ.get(key_ref, "").strip():
+        reason = (
+            "voice plugin reads LITELLM_OPENCODE_KEY from the environment "
+            "(opencode-voice llm-client.js:85); export it, e.g. "
+            'export LITELLM_OPENCODE_KEY="$(cat '
+            '~/.local/share/litellm/clients/opencode.key)"'
+        )
+    elif gateway and (not alias or not auth.authorized):
+        reason = (
+            auth.detail
+            or getattr(_gateway_alias, "last_error", None)
+            or "served alias unavailable"
+        )
+    if gateway and reason:
         logger.warning(
             "Omitting voice operation %s model %s: %s",
             operation.value,
             model,
-            auth.detail
-            or (
-                "credential absent"
-                if not auth.authorized
-                else "served alias unavailable"
-            ),
+            reason,
         )
         return None
     selection = CanonicalSelection(
@@ -251,15 +256,29 @@ def _configure_tier_remote(
     auth = resolve_client_auth("LITELLM_OPENCODE_KEY") if gateway else None
     if gateway:
         served_model = _gateway_alias(provider, model, auth.value)
-        if not served_model or not auth.authorized:
-            detail = auth.detail or (
-                "credential absent"
-                if not auth.authorized
-                else (
-                    getattr(_gateway_alias, "last_error", None)
-                    or "served alias unavailable"
-                )
+        if not auth.authorized:
+            detail = (
+                "voice plugin reads LITELLM_OPENCODE_KEY from the environment "
+                "(opencode-voice llm-client.js:85); export it, e.g. "
+                'export LITELLM_OPENCODE_KEY="$(cat '
+                '~/.local/share/litellm/clients/opencode.key)"'
             )
+        elif not os.environ.get("LITELLM_OPENCODE_KEY", "").strip():
+            detail = (
+                "voice plugin reads LITELLM_OPENCODE_KEY from the environment "
+                "(opencode-voice llm-client.js:85); export it, e.g. "
+                'export LITELLM_OPENCODE_KEY="$(cat '
+                '~/.local/share/litellm/clients/opencode.key)"'
+            )
+        elif not served_model:
+            detail = (
+                auth.detail
+                or getattr(_gateway_alias, "last_error", None)
+                or "served alias unavailable"
+            )
+        else:
+            detail = None
+        if detail:
             logger.warning(
                 "Omitting voice operation %s model %s: %s",
                 Operation.CLEANUP_LLM.value,
@@ -356,12 +375,18 @@ def _gateway_alias(provider, model, key=None):
     except (OSError, ValueError, RuntimeError):
         _gateway_alias.last_error = "gateway unavailable"
         return None
-    if status == [401]:
-        _gateway_alias.last_error = "gateway unauthorized"
-    else:
-        _gateway_alias.last_error = None
+    _gateway_alias.last_error = (
+        {
+            401: "gateway unauthorized",
+            403: "gateway forbidden",
+            429: "gateway rate limited",
+        }.get(status[0])
+        if status
+        else None
+    )
     wanted = f"{provider}/{model}"
     if wanted in (models or []):
+        _gateway_alias.last_error = None
         return wanted
     return None
 
