@@ -10,12 +10,13 @@ import subprocess  # nosec B404 - runs this repository's own configuration scrip
 import sys
 import tempfile
 
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+# CLI contract probes run this file directly without PYTHONPATH configured.
+sys.path.insert(0, str(SCRIPTS / "lib"))
 from discover_models import list_local_ollama_models
 from litellm_config import compute_model_list
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS / "lib"))
 SAFE_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "SYSTEMROOT")
 BASELINE_PATHS = (
     ".local/share/litellm/config.yaml",
