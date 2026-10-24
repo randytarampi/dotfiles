@@ -242,7 +242,6 @@ def main():
             content = ""
         original_content = content
 
-        content = re.sub(r"^model_provider\s*=.*$\n?", "", content, flags=re.MULTILINE)
         # Strip old custom provider IDs (transitional: ollama-local was renamed, ollama is now built-in).
         for provider in (
             "meridian",
