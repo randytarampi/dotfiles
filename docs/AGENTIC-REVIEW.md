@@ -284,6 +284,31 @@ jobs:
 Reviewer jobs execute with default tool permissions. A stricter CI permission
 profile is follow-up work; dispatcher gating is the primary control.
 
+## Publication acceptance and known limitations
+
+A selected OpenCode, Junie or Gemini reviewer must return a nonempty review body
+and have a functioning GitHub App publisher (reviewer-specific or a necessary
+fallback). Failure, missing credentials and empty successful output are **not**
+successful publication. Unrequested events perform no publication. Copilot
+requests its native review directly and does not need an App-generated status
+comment. Tokens are minted only for the selected reviewers needing them.
+
+This is a code-level contract, **not yet end-to-end proof**. Before promoting the
+workflow, run a disposable PR with four cases: authorized reviewer publication,
+missing App-token failure, an empty-review result classified incomplete, and an
+unrequested event producing no comment. Capture exact PR head, job IDs,
+outcomes, created/updated comment IDs and whether a re-trigger replaced rather
+than duplicated a comment. GitHub-hosted secret availability and real action
+outputs cannot be proven by static workflow inspection.
+
+The workflow checks out a PR merge ref for OpenCode and Gemini. Junie's current
+checkout does not explicitly select a PR ref, so its reviewed code snapshot
+remains **unqualified** until a separately reviewed near-term fix supplies
+head SHA verification for all lanes. Do not claim that a successful workflow
+review necessarily examined the intended PR head. Advancing the immutable
+`trusted_ref` in dispatchers and re-onboarding downstream consumers is a
+separate rollout step after merge and runtime validation.
+
 ## Predictability
 
 All normal reviewer lanes are read-only: they do not commit, push, or alter the
