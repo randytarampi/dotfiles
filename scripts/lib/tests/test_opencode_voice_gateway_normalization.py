@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from pathlib import Path
@@ -8,11 +9,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 LIB = ROOT / "lib"
-import sys
 
 sys.path.insert(0, str(LIB))
-from opencode_config import get_available_tiers
-import tier_registry
+from opencode_config import (
+    get_available_tiers,
+)  # noqa: E402 -- scripts/lib bootstrap ordering.
 
 
 def load_script():
@@ -45,6 +46,7 @@ def served_inventory(monkeypatch):
             self.wfile.write(body)
 
         def log_message(self, format, *args):
+            # Intentionally silent: the fixture server must not spam stderr with per-request logs.
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
@@ -118,6 +120,7 @@ def test_free_tier_consumes_real_gateway_alias_and_omits_on_unauthorized(
             self.send_error(401)
 
         def log_message(self, format, *args):
+            # Intentionally silent: keep the unauthorized-response test output clean.
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Unauthorized)

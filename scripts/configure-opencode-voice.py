@@ -48,7 +48,10 @@ from constants import (
 )
 from file_utils import backup_file, write_text_file
 from env import load_env
-from ai_models import normalize_provider_model, strip_provider_prefix
+from ai_models import (  # noqa: E402 -- scripts/lib bootstrap ordering.
+    normalize_provider_model,
+    strip_provider_prefix,
+)
 from opencode_config import get_available_tiers
 from cli_helpers import add_model_override_args, add_min_reasoning_embedding_arg
 from tier_resolve import (

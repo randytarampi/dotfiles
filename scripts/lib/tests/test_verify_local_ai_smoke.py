@@ -4,7 +4,7 @@ import sys
 
 LIB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LIB))
-import litellm_config
+import litellm_config  # noqa: E402 -- scripts/lib bootstrap ordering.
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "verify-local-ai-smoke.py"
