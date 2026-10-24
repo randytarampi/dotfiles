@@ -284,12 +284,17 @@ class TierRegistryTests(unittest.TestCase):
                 Path(__file__).resolve().parents[3] / "configs/junie/model-groups.json"
             ).read_text()
         )["groups"]
-        self.assertEqual(groups["meridian-sonnet"]["primaryModel"], "claude-sonnet-5-5")
-        self.assertEqual(groups["openai-gpt-6.1-sol"]["primaryModel"], "gpt-6.1-sol")
-        self.assertEqual(groups["openai-gpt-6-luna"]["primaryModel"], "gpt-6-luna")
+        self.assertEqual(
+            groups["anthropic-sonnet"]["primaryModel"], "claude-sonnet-5-5"
+        )
+        self.assertEqual(groups["openai-sol"]["primaryModel"], "gpt-6.1-sol")
+        self.assertEqual(groups["openai-luna"]["primaryModel"], "gpt-6-luna")
         self.assertNotIn("openai-gpt-6-sol", groups)
         self.assertNotIn("litellm-openai-gpt-6-sol", groups)
-        self.assertEqual(groups["meridian-opus"]["primaryModel"], "claude-opus-5-5")
+        self.assertNotIn("openai-gpt-6-luna", groups)
+        self.assertNotIn("openai-gpt-6.1-sol", groups)
+        self.assertNotIn("meridian-opus", groups)
+        self.assertEqual(groups["anthropic-opus"]["primaryModel"], "claude-opus-5-5")
 
     def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
         data = registry()

@@ -446,7 +446,7 @@ def test_gate_on_with_invalid_litellm_endpoint_omits_gateway_groups(
         "apiType": "OpenAIResponses",
         "apiKeyEnv": "MERIDIAN_API_KEY",
     }
-    config["groups"]["meridian-opus"] = {
+    config["groups"]["anthropic-opus"] = {
         "provider": "meridian",
         "primaryModel": "claude-opus",
     }
@@ -457,7 +457,7 @@ def test_gate_on_with_invalid_litellm_endpoint_omits_gateway_groups(
     assert not (target / "openai-main.json").exists()
     assert not (target / "openai-faster.json").exists()
     assert not any(target.glob("litellm-*.json"))
-    assert not (target / "meridian-opus.json").exists()
+    assert not (target / "anthropic-opus.json").exists()
 
 
 def test_unsafe_key_path_and_endpoint_fail_closed(harness, monkeypatch):

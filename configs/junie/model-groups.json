@@ -75,21 +75,27 @@
     "qwen": 0.6
   },
   "groups": {
-    "meridian-opus": {
+    "anthropic-opus": {
       "provider": "meridian",
       "primaryModel": "claude-opus-5-5"
     },
-    "meridian-sonnet": {
+    "anthropic-sonnet": {
       "provider": "meridian",
       "primaryModel": "claude-sonnet-5-5"
     },
-    "meridian-haiku": {
+    "anthropic-haiku": {
       "provider": "meridian",
       "primaryModel": "claude-haiku-5-5"
     },
-    "meridian-fable": {
+    "anthropic-fable": {
       "provider": "meridian",
       "primaryModel": "claude-fable-5-1"
+    },
+    "anthropic": {
+      "provider": "meridian",
+      "primaryModel": "claude-opus-5-5",
+      "fasterModel": "claude-haiku-5-5",
+      "fasterProvider": "meridian"
     },
     "google-gemini-flash": {
       "provider": "google",
@@ -97,13 +103,23 @@
       "fasterModel": "gemini-3.5-flash-lite",
       "fasterProvider": "google"
     },
-    "openai-gpt-6-luna": {
+    "openai-astra": {
+      "provider": "openai",
+      "primaryModel": "gpt-6-astra"
+    },
+    "openai-luna": {
       "provider": "openai",
       "primaryModel": "gpt-6-luna"
     },
-    "openai-gpt-6.1-sol": {
+    "openai-sol": {
       "provider": "openai",
       "primaryModel": "gpt-6.1-sol"
+    },
+    "openai": {
+      "provider": "openai",
+      "primaryModel": "gpt-6.1-sol",
+      "fasterModel": "gpt-6-luna",
+      "fasterProvider": "openai"
     },
     "ollama-cloud-glm": {
       "provider": "ollama-cloud",
@@ -116,6 +132,28 @@
       "primaryModel": "nemotron-3-ultra",
       "fasterModel": "nemotron-3-super",
       "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-deepseek": {
+      "provider": "ollama-cloud",
+      "primaryModel": "deepseek-v4-pro:0813",
+      "fasterModel": "deepseek-v4.1-flash",
+      "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-minimax": {
+      "provider": "ollama-cloud",
+      "primaryModel": "minimax-m3",
+      "fasterModel": "minimax-m3.1-flash",
+      "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-mistral": {
+      "provider": "ollama-cloud",
+      "primaryModel": "mistral-large-4"
+    },
+    "free": {
+      "provider": "google",
+      "primaryModel": "gemini-3.5-flash-lite",
+      "fasterModel": "gemini-2.5-flash-lite",
+      "fasterProvider": "google"
     }
   }
 }

@@ -623,14 +623,14 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 |-------|-----------------|----------------|-------|
 | `nemotron-3-ultra` | retired | — | Replaced in cloud council seats by `deepseek-v4.1-flash` |
 | `minimax-m3` | standard | `low` | Vision+reasoning; last-resort fallback for observer |
-| `claude-opus-5-5` | `high` | `xhigh` | Opus defaults to high reasoning; council gamma/synthesizer (xhigh), meridian-opus profile |
+| `claude-opus-5-5` | `high` | `xhigh` | Opus defaults to high reasoning; council gamma/synthesizer (xhigh), anthropic-opus profile |
 | `claude-opus-4-8` | `high` | `xhigh` | Legacy model retained as a degraded fallback |
 | `claude-opus-4-6` | standard | — | Legacy model retained in registry only; no active Anthropic preset roles |
 | `claude-sonnet-5-5` | standard | — | Used for orchestrator (no variant), designer (medium), council beta (no variant), plus-anthropic council fallback; no synth role (opus-5-5) |
 | `claude-fable-5-1` | standard | `xhigh` | Used for oracle (xhigh, deep reasoning) and council alpha (no variant) |
 | `claude-haiku-4-5` | standard | `low/high` | Legacy model retained in the catalogue; no active preset roles |
 | `claude-haiku-5-5` | standard | `low/high` | 1M context, 128K max output; librarian/explorer/observer use low, fixer uses high |
-| `claude-sonnet-4-6` | standard | `high` | Legacy model used by meridian-sonnet profile; no active Anthropic preset roles |
+| `claude-sonnet-4-6` | standard | `high` | Legacy model used by anthropic-sonnet profile; no active Anthropic preset roles |
 | `deepseek-v4-pro` | standard | `max` | Installed Cloud stub remains managed, but the bare direct LiteLLM alias is absent; no active tier role uses it. |
 | `gpt-5.6-terra` | retired | — | Absent from OpenAI's live catalog since 2026-10-01; still served by OpenCode Zen |
 | `gpt-6.1-sol` | standard | `high` | Current orchestrator, oracle and council anchor; gpt-5.6-sol remains a retained legacy fallback |

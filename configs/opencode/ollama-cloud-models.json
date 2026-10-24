@@ -36,6 +36,9 @@
     "minimax-m3": {
       "name": "minimax-m3"
     },
+    "minimax-m3.1-flash": {
+      "name": "minimax-m3.1-flash"
+    },
     "mistral-large-3:675b": {
       "name": "mistral-large-3:675b"
     },

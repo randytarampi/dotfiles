@@ -673,13 +673,17 @@ Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tie
 | `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-loud` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
 | `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
-| `meridian-opus` | meridian | `claude-opus-5` | — | 1 |
-| `meridian-sonnet` | meridian | `claude-sonnet-5-5` | — | 1 |
-| `meridian-haiku` | meridian | `claude-haiku-5-5` | — | 1 |
-| `meridian-opus-5-5` | meridian | `claude-opus-5-5` | — | 1 |
-| `openai-gpt-6-luna` | openai | `gpt-6-luna` | — | 1 |
-| `openai-gpt-6.1-sol` | openai | `gpt-6.1-sol` | — | 1 |
-| `meridian-fable` | meridian | `claude-fable-5-1` | — | 1 |
+ | `anthropic-opus` | meridian | `claude-opus-5-5` | — | 1 |
+ | `anthropic-sonnet` | meridian | `claude-sonnet-5-5` | — | 1 |
+ | `anthropic-haiku` | meridian | `claude-haiku-5-5` | — | 1 |
+ | `anthropic-fable` | meridian | `claude-fable-5-1` | — | 1 |
+ | `openai-astra` | openai | `gpt-6-astra` | — | 1 |
+ | `openai-luna` | openai | `gpt-6-luna` | — | 1 |
+ | `openai-sol` | openai | `gpt-6.1-sol` | — | 1 |
+ | `ollama-cloud-deepseek` | ollama-cloud | `deepseek-v4-pro:0813` | `deepseek-v4.1-flash` | 1 |
+ | `ollama-cloud-minimax` | ollama-cloud | `minimax-m3` | `minimax-m3.1-flash` | 1 |
+ | `ollama-cloud-mistral` | ollama-cloud | `mistral-large-4` | — | 1 |
+ | `free` | google | `gemini-3.5-flash-lite` | `gemini-2.5-flash-lite` | 0 |
 
 Local Ollama profiles resolve model IDs dynamically via the shared tier registry. For local tiers, an MoE code-gen model is also reused for lightweight and vision categories when applicable. Cloud profiles use registry-defined IDs. Temperatures follow Junie's recommendations.
 

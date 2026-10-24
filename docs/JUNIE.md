@@ -31,7 +31,7 @@ routed groups that fail to produce a matching twin. Deployment remains direct by
 routed profiles are emitted only under `DOTFILES_USE_LITELLM_PROXY=1`. This is
 fail-closed: missing aliases or keys never trigger a direct substitute, and an
 unavailable catalogue omits gateway groups instead of publishing unverified
-aliases. The four `litellm-meridian-*` twins shipped after a reproduced
+aliases. The four `litellm-anthropic-*` twins shipped after a reproduced
 end-to-end Junie gateway smoke test (2026-10-16). These four twins are derived
 from the plain groups by the same generator contract as other routed providers;
 their exact `meridian/claude-*` aliases remain subject to the authenticated live

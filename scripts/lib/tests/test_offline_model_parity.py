@@ -89,20 +89,26 @@ def test_meridian_twins_are_derived_with_exact_wire_ids_and_direct_mode():
         if group.get("provider") == "meridian"
     }
     assert set(meridian_groups) == {
-        "meridian-opus",
-        "meridian-sonnet",
-        "meridian-haiku",
-        "meridian-fable",
+        "anthropic-opus",
+        "anthropic-sonnet",
+        "anthropic-haiku",
+        "anthropic-fable",
+        "anthropic",
     }
     generator = VERIFY._junie_generator()
     selected = generator.select_model_groups(meridian_groups, True)
-    expected = {
-        f"litellm-{name}": {
+    expected = {}
+    for name, group in meridian_groups.items():
+        twin = {
             "provider": "litellm",
             "primaryModel": generator.litellm_alias(group["primaryModel"], "meridian"),
         }
-        for name, group in meridian_groups.items()
-    }
+        if "fasterModel" in group:
+            twin["fasterModel"] = generator.litellm_alias(
+                group["fasterModel"], group.get("fasterProvider", group["provider"])
+            )
+            twin["fasterProvider"] = "litellm"
+        expected[f"litellm-{name}"] = twin
     assert {name: selected[name] for name in expected} == expected
     assert generator.select_model_groups(meridian_groups, False) == meridian_groups
     allowlists = VERIFY._model_allowlists()
@@ -121,24 +127,25 @@ def test_meridian_twins_are_derived_with_exact_wire_ids_and_direct_mode():
     )
     changed = {
         **meridian_groups,
-        "meridian-sonnet": {
-            **meridian_groups["meridian-sonnet"],
+        "anthropic-sonnet": {
+            **meridian_groups["anthropic-sonnet"],
             "primaryModel": "claude-sonnet-next",
         },
     }
     assert (
-        generator.select_model_groups(changed, True)["litellm-meridian-sonnet"][
+        generator.select_model_groups(changed, True)["litellm-anthropic-sonnet"][
             "primaryModel"
         ]
         == "meridian/claude-sonnet-next"
     )
 
 
-def test_checked_in_meridian_twins_are_absent_and_generator_parity_is_clean():
+def test_checked_in_anthropic_twins_are_absent_and_generator_parity_is_clean():
     groups = json.loads(
         (ROOT / "configs/junie/model-groups.json").read_text(encoding="utf-8")
     )["groups"]
     assert not {name for name in groups if name.startswith("litellm-meridian-")}
+    assert not {name for name in groups if name.startswith("litellm-anthropic-")}
     allowlists = VERIFY._model_allowlists()
     allowlists["ollama-cloud"].update(
         {"glm-5.3", "qwen3-coder-next", "qwen3-coder-plus", "deepseek-v4"}

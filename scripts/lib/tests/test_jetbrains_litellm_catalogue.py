@@ -50,7 +50,7 @@ def test_routed_groups_derive_twins_including_local_and_verify_pairing():
             "fasterProvider": "google",
         },
         "local-quiet": {"provider": "ollama", "primaryModel": "_local:code-gen"},
-        "meridian-sonnet": {
+        "anthropic-sonnet": {
             "provider": "meridian",
             "primaryModel": "claude-sonnet-5-5",
         },
@@ -63,23 +63,23 @@ def test_routed_groups_derive_twins_including_local_and_verify_pairing():
         "fasterProvider": "litellm",
     }
     assert derived["litellm-local-quiet"]["primaryModel"] == "ollama/_local:code-gen"
-    assert derived["litellm-meridian-sonnet"] == {
+    assert derived["litellm-anthropic-sonnet"] == {
         "provider": "litellm",
         "primaryModel": "meridian/claude-sonnet-5-5",
     }
-    assert PROFILES.select_model_groups(groups, True)["litellm-meridian-sonnet"] == (
-        derived["litellm-meridian-sonnet"]
+    assert PROFILES.select_model_groups(groups, True)["litellm-anthropic-sonnet"] == (
+        derived["litellm-anthropic-sonnet"]
     )
     assert PROFILES.select_model_groups(groups, False) == groups
     changed = {
         **groups,
-        "meridian-sonnet": {
-            **groups["meridian-sonnet"],
+        "anthropic-sonnet": {
+            **groups["anthropic-sonnet"],
             "primaryModel": "claude-sonnet-next",
         },
     }
     assert (
-        PROFILES.derive_litellm_groups(changed)["litellm-meridian-sonnet"][
+        PROFILES.derive_litellm_groups(changed)["litellm-anthropic-sonnet"][
             "primaryModel"
         ]
         == "meridian/claude-sonnet-next"
