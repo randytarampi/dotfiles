@@ -45,7 +45,7 @@ def test_manifest_verification_precedes_codegraph_execution():
 
 def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
     workflow = read(".github/workflows/agentic-review.yml")
-    for job in ("opencode", "junie", "gemini"):
+    for job in ("junie", "gemini"):
         section = re.search(rf"(?ms)^  {job}:$(.*?)(?=^  \w)", workflow).group(1)
         assert "permissions:\n      contents: read\n" in section
         assert "contents: write" not in section
@@ -58,10 +58,6 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
     junie = re.search(r"(?ms)^  junie:$(.*?)(?=^  \w)", workflow).group(1)
     assert 'silent_mode: "true"' in junie
     assert "steps.junie.outputs.junie_summary" in junie
-    assert (
-        "outputs:\n      review: ${{ steps.opencode_review.outputs.review }}"
-        in workflow
-    )
     assert (
         "outputs:\n      review: ${{ steps.junie_review.outputs.review }}" in workflow
     )
@@ -79,33 +75,43 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
     assert "FALLBACK_TOKEN: ${{ github.token }}" not in notify
     assert "GH_TOKEN: ${{ github.token }}" not in notify
     assert "JUNIE_APP_TOKEN" in notify
-    assert "OPENCODE_APP_TOKEN" in notify
+    assert "id-token: write" in read(".github/workflows/agent-review.yml")
+    assert "id-token: write" in read("configs/review/dispatcher-stub.yml")
+    assert "OPENCODE_APP_TOKEN" not in notify
     assert "GEMINI_APP_TOKEN" in notify
     assert "github-actions[bot]" not in workflow
     assert "*_BOT_TOKEN" not in workflow
 
 
-def test_review_lane_installs_the_same_pinned_opencode_cli_as_fix():
+def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     workflow = read(".github/workflows/agentic-review.yml")
+    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \\w)", workflow).group(1)
+    assert "id-token: write" in opencode
+    assert "contents: read" in opencode
+    assert "contents: write" not in opencode
+    assert "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a" in opencode
+    assert 'agent: plan' in opencode
+    assert 'share: "false"' in opencode
+    assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
+    assert "core.hooksPath" in opencode
+    assert "OPENCODE_APP_ID" not in workflow
+    assert "OPENCODE_APP_PRIVATE_KEY" not in workflow
+    assert "github.event_name == 'issue_comment'" in opencode
+    assert "pull_request_review_comment" not in opencode.split("    runs-on:", 1)[0]
+    assert 'review-all" then "junie,gemini,copilot"' in workflow
+    assert 'review-opencode" then ""' in workflow
+    assert 'review-all" then "opencode,junie,gemini,copilot"' not in workflow
+    assert 'review-opencode" then "opencode"' not in workflow
     fix = read(".github/workflows/agentic-review-fix.yml")
-    opencode = re.search(r"(?ms)^  opencode:$(.*?)(?=^  \w)", workflow).group(1)
-    assert 'npm install --global "opencode-ai@${OPENCODE_VERSION}"' in opencode
-    assert 'OPENCODE_VERSION: "1.18.34"' in opencode
-    assert "command -v opencode" in opencode
-    assert "opencode --version" in opencode
-    assert "version_pattern=" in opencode
-    assert '[[ "${version_output}" =~ ${version_pattern} ]]' in opencode
-    assert opencode.index(
-        "Install and verify the pinned OpenCode CLI"
-    ) < opencode.index("Run OpenCode review")
     assert 'OPENCODE_VERSION: "1.18.34"' in fix
+    assert 'npm install --global "opencode-ai@' in fix
 
 
 def test_multiline_review_outputs_keep_closers_on_their_own_line():
     workflow = read(".github/workflows/agentic-review.yml")
     # Bodies may lack a trailing newline (printf '%s'); always force a newline
     # before the GITHUB_OUTPUT / GITHUB_ENV closer so Actions can parse it.
-    assert workflow.count("printf '\\n%s\\n'") >= 6
+    assert workflow.count("printf '\\n%s\\n'") >= 4
     assert "printf '%s' \"${JUNIE_REVIEW}\"" in workflow
     assert "printf '%s' \"${GEMINI_SUMMARY}\"" in workflow
 

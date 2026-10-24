@@ -9,6 +9,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
 OWNED_REF = "randytarampi/dotfiles/.github/workflows/agentic-review.yml@main"
+OPENCODE_ACTION = "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a"
 # Major tags intentionally accept ASCII digits only.
 MAJOR_REF = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@v[0-9]+\Z")
 
@@ -44,6 +45,8 @@ def action_refs():
 def is_approved_ref(path, value):
     if value == OWNED_REF:
         return path == ".github/workflows/agent-review.yml"
+    if value == OPENCODE_ACTION:
+        return path == ".github/workflows/agentic-review.yml"
     return bool(MAJOR_REF.fullmatch(value))
 
 
@@ -66,6 +69,7 @@ def test_refs_major_only():
         "coverallsapp/github-action",
         "qltysh/qlty-action",
         "randytarampi/dotfiles",
+        "anomalyco/opencode",
     }
 
 
@@ -88,6 +92,9 @@ def test_refs_reject_nonmajors():
     assert not any(is_approved_ref(".github/workflows/ci.yml", ref) for ref in bad)
     assert is_approved_ref(".github/workflows/agent-review.yml", OWNED_REF)
     assert not is_approved_ref(".github/workflows/ci.yml", OWNED_REF)
+    assert is_approved_ref(".github/workflows/agentic-review.yml", OPENCODE_ACTION)
+    assert not is_approved_ref(".github/workflows/ci.yml", OPENCODE_ACTION)
+    assert not is_approved_ref(".github/workflows/agentic-review.yml", "anomalyco/opencode/github@latest")
 
 
 def test_zizmor_policies_scoped():
@@ -106,6 +113,7 @@ def test_zizmor_policies_scoped():
         "google-github-actions/run-gemini-cli",
         "coverallsapp/github-action",
         "qltysh/qlty-action/coverage",
+        "anomalyco/opencode/github",
     }
     assert {
         repo for repo, policy in policies.items() if policy == "ref-pin"
