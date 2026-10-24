@@ -825,7 +825,7 @@
     },
     "poolside": {
       "orchestrator": {
-        "model": "poolside/laguna-xs-2.1"
+        "model": "poolside/laguna-s-2.1"
       },
       "oracle": {
         "model": "poolside/laguna-s-2.1"
@@ -1651,7 +1651,7 @@
       },
       "fallback": {
         "orchestrator": [
-          "poolside/laguna-s-2.1"
+          "poolside/laguna-xs-2.1"
         ],
         "oracle": [
           "poolside/laguna-xs-2.1"
