@@ -27,7 +27,7 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert "ref: main" not in workflow
     # Native OpenCode requires a read-only checkout auth header for OIDC handoff.
     # Every other normal reviewer lane still disables persisted credentials.
-    assert workflow.count("persist-credentials: true") == 1
+    assert "persist-credentials: true" not in workflow
     assert "contents: write" not in workflow
     assert "Configure git identity" not in workflow
 
@@ -97,7 +97,10 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert 'share: "false"' in opencode
     assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
     assert "core.hooksPath" in opencode
-    assert "persist-credentials: true" in opencode
+    assert "persist-credentials: false" in opencode
+    assert "AUTHORIZATION: bearer opencode-action-placeholder" in opencode
+    assert "Remove native OpenCode authentication placeholder" in opencode
+    assert "git config --local --unset-all http.https://github.com/.extraheader" in opencode
     assert "token: ${{ github.token }}" in opencode
     assert "OPENCODE_APP_ID" not in workflow
     assert "OPENCODE_APP_PRIVATE_KEY" not in workflow

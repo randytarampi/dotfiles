@@ -416,8 +416,12 @@ native action is separate work that requires upstream-supported behavior.
 
 ### Native OpenCode checkout credential compatibility
 
-The upstream action reads and replaces the checkout's HTTP authentication
-header before it authenticates via the installed GitHub App. Only the
-OpenCode checkout persists its **read-only** job `github.token` for that
-handoff, with checkout post-job cleanup removing the credential. The other
-reviewers continue to use non-persistent checkout authentication.
+The upstream action expects an existing Git HTTP authentication header and
+replaces it with its own short-lived App installation token. Persisting the
+checkout's `github.token` caused **duplicate Authorization headers** during
+the native action's PR branch fetch (live run 40100986283, attempt 2).
+The OpenCode checkout now keeps `persist-credentials: false`. A non-secret
+placeholder header is staged immediately before the native action, replaced by
+the action's App token, and removed in an `always()` cleanup step. No
+`github.token` value is stored in the placeholder. The other reviewer lanes
+retain their previous checkout authentication policy.
