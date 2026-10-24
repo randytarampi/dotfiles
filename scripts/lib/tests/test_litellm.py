@@ -1302,9 +1302,6 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
 
 
 def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        CONFIGURE.shutil, "which", lambda name: "/usr/bin/deterministic-" + name
-    )
     calls = []
 
     def fake_request(url, method, master_key, payload=None, timeout=5):
@@ -1444,9 +1441,6 @@ def test_pi_provider_override_rejects_symlinked_key_file(tmp_path, monkeypatch):
 def test_existing_alias_recreates_file_from_service_env_without_generation(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(
-        CONFIGURE.shutil, "which", lambda name: "/usr/bin/deterministic-" + name
-    )
 
     def fake_request(url, method, master_key, payload=None, timeout=5):
         if "/key/list" in url:
@@ -1698,9 +1692,6 @@ def test_app_key_hash_alignment_times_out(tmp_path, monkeypatch):
 def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(
-        CONFIGURE.shutil, "which", lambda name: "/usr/bin/deterministic-" + name
-    )
     """Proxy versions where /key/list hides key_alias: a 400 on generate
     means the alias already exists — provisioning stays idempotent."""
     generate_attempts = []
