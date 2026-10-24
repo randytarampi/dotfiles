@@ -63,7 +63,8 @@ def _run_notify(
     env.update(
         {
             "PATH": str(binary_dir) + os.pathsep + env["PATH"],
-            "GH_TOKEN": token,
+            "JUNIE_APP_TOKEN": token,
+            "JUNIE_APP_SLUG": "junie-test",
             "PR_NUMBER": "102",
             "AGENTS": "junie",
             "TOKENS": "@junie-agent",
@@ -98,7 +99,7 @@ def _run_notify(
         (None, "success", "fake-token", "INCOMPLETE"),
         (" \n\t ", "success", "fake-token", "INCOMPLETE"),
         ("Substantive", "failure", "fake-token", "did not succeed"),
-        ("Substantive", "success", "", "Missing publication token"),
+        ("Substantive", "success", "", "Missing configured"),
     ],
 )
 def test_notify_rejects_incomplete_results_without_publishing(
@@ -118,7 +119,7 @@ def test_notify_posts_then_updates_only_its_own_marker(tmp_path):
     existing = [
         {
             "id": 42,
-            "user": {"login": "github-actions[bot]"},
+            "user": {"login": "junie-test[bot]"},
             "body": "<!-- agent-review:junie -->\nOld review",
         }
     ]
@@ -129,8 +130,9 @@ def test_notify_posts_then_updates_only_its_own_marker(tmp_path):
 
     existing[0]["user"]["login"] = "a-maintainer"
     other, calls = _run_notify(tmp_path / "different-author", comments=existing)
-    assert other.returncode == 0, other.stderr
-    assert any("--method" in call and "POST" in call for call in calls)
+    assert other.returncode != 0
+    assert "manual cutover required" in other.stderr
+    assert not any("--method" in call for call in calls)
 
 
 def test_notify_fails_closed_when_comment_lookup_fails(tmp_path):
