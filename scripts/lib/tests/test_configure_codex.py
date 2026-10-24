@@ -108,3 +108,57 @@ def test_idempotent_rerun_preserves_user_state(tmp_path):
     assert (
         "model_provider = " in stripped or "model_provider =" in stripped
     ), "User model_provider lost during idempotency cycle"
+
+
+def test_litellm_provider_omitted_without_gate():
+    """D1a: litellum provider block is only added when DOTFILES_RUN_CODEX_SETUP=1."""
+    import os
+
+    os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
+    result = configure_codex.build_litellm_provider_config()
+    assert result == ""
+
+
+def test_litellm_provider_added_with_gate(tmp_path):
+    """D1a: litellum provider block is added when gate is active."""
+    import os
+
+    os.environ["DOTFILES_RUN_CODEX_SETUP"] = "1"
+    try:
+        os.environ["LITELLM_PORT"] = "4000"
+        result = configure_codex.build_litellm_provider_config()
+    finally:
+        os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
+        os.environ.pop("LITELLM_PORT", None)
+
+    assert "[model_providers.litellm]" in result
+    assert 'base_url = "http://127.0.0.1:4000/v1"' in result
+    assert 'env_key = "LITELLM_CODEX_KEY"' in result
+    assert 'wire_api = "responses"' in result
+
+
+def test_litellm_provider_uses_custom_port():
+    """D1a: litellum provider respects LITELLM_PORT override."""
+    import os
+
+    os.environ["DOTFILES_RUN_CODEX_SETUP"] = "1"
+    os.environ["LITELLM_PORT"] = "4567"
+    try:
+        result = configure_codex.build_litellm_provider_config()
+    finally:
+        os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
+        os.environ.pop("LITELLM_PORT", None)
+
+    assert 'base_url = "http://127.0.0.1:4567/v1"' in result
+
+
+def test_codex_in_client_registry_with_litellm_provider():
+    """D1a: client registry marks codex eligible for litellum routing."""
+    import litellm_config
+
+    rows = {row["client"]: row for row in litellm_config.CLIENT_REGISTRY}
+    assert "codex" in rows
+    assert rows["codex"]["classification"] == "eligible"
+    assert rows["codex"]["env_name"] == "LITELLM_CODEX_KEY"
+    assert rows["codex"]["setup_gates"] == ["DOTFILES_RUN_CODEX_SETUP=1"]
+    assert "model_providers.litellm" in rows["codex"]["consumer_read_path"]

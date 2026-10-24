@@ -344,6 +344,7 @@ APP_KEYS = {
     "pi": "LITELLM_PI_KEY",
     "openwebui": "LITELLM_OPENWEBUI_KEY",
     "junie": "LITELLM_JUNIE_KEY",
+    "codex": "LITELLM_CODEX_KEY",
 }
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
@@ -447,7 +448,7 @@ CLIENT_REGISTRY = [
         ["DOTFILES_RUN_CODEX_SETUP=1"],
         "file-or-env",
         "~/.codex/config.toml [model_providers.litellm]",
-        "pending-qualification",
+        "eligible",
         "provision-once-verified",
         "D1a",
     ),
