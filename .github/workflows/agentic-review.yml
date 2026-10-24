@@ -539,15 +539,61 @@ jobs:
           fi
 
   notify:
-    if: always()
+    if: ${{ always() && needs.parse.result == 'success' && needs.parse.outputs.agents != '' }}
     needs: [parse, opencode, junie, gemini, copilot]
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
-      issues: write
+      contents: read
     steps:
+      - name: Check publication credentials
+        id: publication_credentials
+        env:
+          JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
+          JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
+          OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
+          OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+          GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
+          GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          AGENTS: ${{ needs.parse.outputs.agents }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra selected_agents <<<"${AGENTS}"
+          for agent in junie opencode gemini; do
+            if [[ ",${AGENTS}," != *",${agent},"* ]]; then
+              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
+              continue
+            fi
+            upper="${agent^^}"
+            id_name="${upper}_APP_ID"
+            key_name="${upper}_APP_PRIVATE_KEY"
+            if [[ -n "${!id_name}" && -n "${!key_name}" ]]; then
+              echo "${agent}=true" >> "${GITHUB_OUTPUT}"
+            else
+              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
+            fi
+          done
+          # The fallback is necessary only when a requested agent lacks its own pair.
+          fallback_needed=false
+          for agent in "${selected_agents[@]}"; do
+            case "${agent}" in
+              junie|opencode|gemini)
+                upper="${agent^^}"
+                id_name="${upper}_APP_ID"
+                key_name="${upper}_APP_PRIVATE_KEY"
+                if [[ -z "${!id_name}" || -z "${!key_name}" ]]; then fallback_needed=true; fi
+                ;;
+              copilot) : ;; # Copilot requests via its own GitHub token.
+            esac
+          done
+          if [[ "${fallback_needed}" == true && -n "${APP_ID}" && -n "${APP_PRIVATE_KEY}" ]]; then
+            echo "fallback=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "fallback=false" >> "${GITHUB_OUTPUT}"
+          fi
       - id: junie_app_token
-        if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.junie == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
@@ -558,7 +604,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: opencode_app_token
-        if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.opencode == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
@@ -569,7 +615,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: gemini_app_token
-        if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.gemini == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
@@ -580,7 +626,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: fallback_app_token
-        if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.fallback == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           APP_ID: ${{ secrets.APP_ID }}
@@ -612,7 +658,30 @@ jobs:
           COPILOT_RESULT: ${{ needs.copilot.result }}
         run: |
           set -euo pipefail
+          if [[ -z "${PR_NUMBER}" || -z "${AGENTS}" ]]; then
+            echo "Requested review publication requires a PR number and selected agents." >&2
+            exit 1
+          fi
           IFS=',' read -ra agents <<<"${AGENTS}"
+          # Fail before publishing anything if requested review results are incomplete.
+          # Copilot is a request-for-review action, not a generated review body.
+          for agent in "${agents[@]}"; do
+            case "${agent}" in
+              opencode) result="${OPCODE_RESULT}" ;;
+              junie) result="${JUNIE_RESULT}" ;;
+              gemini) result="${GEMINI_RESULT}" ;;
+              copilot) result="${COPILOT_RESULT}" ;;
+              *) echo "Unknown reviewer: ${agent}" >&2; exit 1 ;;
+            esac
+            if [[ "${result}" != success ]]; then
+              echo "Requested ${agent} reviewer did not succeed: ${result}." >&2
+              exit 1
+            fi
+            if [[ "${agent}" != copilot && ! -s "reviews/${agent}-review.md" ]]; then
+              echo "INCOMPLETE: requested ${agent} reviewer returned no review body." >&2
+              exit 1
+            fi
+          done
           IFS=',' read -ra tokens <<<"${TOKENS:-}"
           for i in "${!agents[@]}"; do
             agent="${agents[$i]}"
@@ -638,22 +707,20 @@ jobs:
               gemini) poster_token="${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
               *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
             esac
-            if [[ -z "${poster_token}" ]]; then
-              echo "No publication App token is configured for ${agent}; skipping review publication." >&2
+            # The Copilot job has requested the native reviewer. It needs no
+            # application token or routine status comment.
+            if [[ "${agent}" == copilot ]]; then
               continue
+            fi
+            if [[ -z "${poster_token}" ]]; then
+              echo "Requested ${agent} review could not be published: no configured GitHub App token." >&2
+              exit 1
             fi
             if [[ "${result}" == "success" ]]; then
               review_file="reviews/${agent}-review.md"
-              if [[ -s "${review_file}" ]]; then
-                body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
-              else
-                body="$(printf '%s\n\n%s' "${marker}" "${token} review completed without a review body.")"
-              fi
+              body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
             else
               body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
-            fi
-            if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
-              body="$(printf '%s\n\n%s' "${marker}" "Copilot review requested.")"
             fi
             comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
             if [[ -n "${comment_id}" ]]; then
