@@ -1063,8 +1063,8 @@ def _collect_model_refs(source):
                         "openai": "openai/",
                         "ollama-cloud": "ollama-cloud/",
                         "opencode": "opencode/",
-                        "poolside": "poolside/",
-                        "cohere": "cohere/",
+                        "poolside": _POOLSIDE_ALIAS_PREFIX,
+                        "cohere": _COHERE_ALIAS_PREFIX,
                     }[model_provider]
                     if model.startswith(expected_prefix):
                         refs.add(model)
@@ -1118,9 +1118,11 @@ def _provider_alias_prefix(provider):
 # helper enforces binding/credential parity ONLY for these providers;
 # every other live-catalogue provider keeps the historical unconditional
 # prefix retention.
+_COHERE_ALIAS_PREFIX = "cohere/"
+_POOLSIDE_ALIAS_PREFIX = "poolside/"
 RETENTION_NAMESPACES = {
-    "cohere": ("cohere_chat/", "cohere/"),
-    "poolside": ("poolside/",),
+    "cohere": ("cohere_chat/", _COHERE_ALIAS_PREFIX),
+    "poolside": (_POOLSIDE_ALIAS_PREFIX,),
 }
 
 
@@ -1636,7 +1638,9 @@ def compute_model_list(environ=None, previous_entries=None):
                     )
     if environ.get("POOLSIDE_API_KEY", "").strip():
         poolside_requested = {
-            ref.split("/", 1)[1] for ref in refs if ref.startswith("poolside/")
+            ref.split("/", 1)[1]
+            for ref in refs
+            if ref.startswith(_POOLSIDE_ALIAS_PREFIX)
         }
         try:
             poolside_models = _live_catalogue(
@@ -1644,7 +1648,7 @@ def compute_model_list(environ=None, previous_entries=None):
                 environ["POOLSIDE_API_KEY"].strip(),
                 PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
             )
-        except LiveCatalogueError as error:
+        except LiveCatalogueError:
             # Same retention contract as the provider loop's outage handler:
             # previously verified poolside families persist while their
             # upstream binding and credential policy remain valid.
@@ -1659,9 +1663,9 @@ def compute_model_list(environ=None, previous_entries=None):
             )
         else:
             confirmed = {
-                model_id.removeprefix("poolside/")
+                model_id.removeprefix(_POOLSIDE_ALIAS_PREFIX)
                 for model_id in poolside_models
-                if model_id.startswith("poolside/")
+                if model_id.startswith(_POOLSIDE_ALIAS_PREFIX)
             }
             selected = confirmed & poolside_requested
             if scope == "full":
@@ -1671,9 +1675,11 @@ def compute_model_list(environ=None, previous_entries=None):
             # selection stays served (stable alias mapping across catalogue
             # changes and restarts).
             for alias, previous in previous_by_alias.items():
-                if not isinstance(alias, str) or not alias.startswith("poolside/"):
+                if not isinstance(alias, str) or not alias.startswith(
+                    _POOLSIDE_ALIAS_PREFIX
+                ):
                     continue
-                model_id = alias[len("poolside/") :]
+                model_id = alias[len(_POOLSIDE_ALIAS_PREFIX) :]
                 if (
                     canonical_allowlist_key(model_id)
                     in {canonical_allowlist_key(ref) for ref in poolside_requested}
