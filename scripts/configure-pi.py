@@ -1147,8 +1147,20 @@ def main():
                 if name not in managed:
                     settings["subagents"]["agentOverrides"][name] = val
             apply_preserved_preferences(settings, previous)
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        except json.JSONDecodeError:
+            logger.critical(
+                "Malformed settings.json at %s — refusing rewrite to preserve "
+                "user-added agentOverrides. Delete or repair the file, then re-run.",
+                prev_settings,
+            )
+            return 1
+        except KeyError:
+            logger.critical(
+                "Malformed settings.json at %s (missing expected keys) — "
+                "refusing rewrite to preserve user-added agentOverrides.",
+                prev_settings,
+            )
+            return 1
     settings["theme"] = os.environ.get("PI_THEME", "").strip() or previous.get(
         "theme", "light/dark"
     )
