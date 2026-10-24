@@ -33,6 +33,36 @@ These policies apply to work in every repository.
 - All PRs created from agent work — fixes, backlog clean-ups, dependency bumps, generated changes — are opened as draft (`gh pr create --draft`) and stay draft. Never mark your own PR ready for review; a human (you, or a colleague in the downstream pass) turns the draft into a reviewable PR when they're satisfied.
 - Don't auto-close a backlog issue with `Closes #N` when the PR fixes only a subset; track unresolved review threads individually.
 
+### Contribution attribution
+
+Credit substantive work by humans **and** AI agents at the point of delivery.
+Do not erase earlier contributors when handing work to another model or agent.
+
+- **Commits:** retain the actual Git author. For each additional person or agent
+  who materially designed, wrote or revised the committed change, add a
+  `Co-authored-by: Name <email>` trailer when a verified or approved attribution
+  identity is available. For ChatGPT contributions here, use
+  `Co-authored-by: ChatGPT <noreply@openai.com>`. Use the contributor's own
+  supported name/address for other agents; never invent an email or impersonate
+  a human or GitHub user. If no suitable identity is available, acknowledge the
+  agent and contribution in the PR or document instead.
+- **Pull requests:** include a short **Contributors and roles** section naming
+  significant human and agent implementers, drafters and reviewers, with the
+  specific work each did. Co-author trailers do not replace this record. Credit
+  reviewers for reviews; do not automatically call them code co-authors.
+- **Design docs, RFCs and handoffs:** identify the actual author(s),
+  collaborating agents, reviewers, date and their roles in a small attribution
+  note. Preserve existing provenance when revising a document. Do not add
+  boilerplate to every incidental note or generated file; credit substantial
+  contributions in the parent artifact or PR.
+- **Truth and consent:** attribute only work actually contributed, never claim
+  approvals, authorship, tool execution or tests not performed, and respect a
+  contributor's requested identity/privacy preference. If authorship is
+  uncertain, say so rather than guessing.
+- **History:** apply this prospectively. Do not rewrite existing/shared commit
+  history merely to add credit without explicit authorization and coordination;
+  an accurate PR acknowledgment is usually enough.
+
 ### Git worktrees
 
 - Use worktrees for meaningful isolation or parallelism, not every small edit. One writer owns one branch and worktree; never attach a branch twice or dispatch into an owned lane. Parallel lanes require disjoint, recorded ownership.
