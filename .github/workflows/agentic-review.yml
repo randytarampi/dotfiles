@@ -548,8 +548,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
+      # Apps only authenticate the publisher, never the read-only model jobs.
+      # Installation tokens are restricted to PR comments, not code contents.
+      - name: Create Junie publisher token
+        id: junie_app
+        if: ${{ contains(format(',{0},', needs.parse.outputs.agents), ',junie,') && needs.junie.result == 'success' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.JUNIE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.JUNIE_GITHUB_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+      - name: Create Gemini publisher token
+        id: gemini_app
+        if: ${{ contains(format(',{0},', needs.parse.outputs.agents), ',gemini,') && needs.gemini.result == 'success' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.GEMINI_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GEMINI_GITHUB_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
       - name: Download review bodies
         if: always()
         uses: actions/download-artifact@v8
@@ -559,7 +576,10 @@ jobs:
           merge-multiple: true
       - name: Publish review bodies
         env:
-          GH_TOKEN: ${{ github.token }}
+          JUNIE_APP_TOKEN: ${{ steps.junie_app.outputs.token }}
+          JUNIE_APP_SLUG: ${{ steps.junie_app.outputs.app-slug }}
+          GEMINI_APP_TOKEN: ${{ steps.gemini_app.outputs.token }}
+          GEMINI_APP_SLUG: ${{ steps.gemini_app.outputs.app-slug }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           AGENTS: ${{ needs.parse.outputs.agents }}
           TOKENS: ${{ needs.parse.outputs.tokens }}
@@ -617,18 +637,28 @@ jobs:
             if [[ "${agent}" == copilot || "${agent}" == opencode ]]; then
               continue
             fi
-            if [[ -z "${GH_TOKEN:-}" ]]; then echo "Missing publication token" >&2; exit 1; fi
-            if [[ "${result}" == "success" ]]; then
-              review_file="reviews/${agent}-review.md"
-              body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
-            else
-              body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
+            case "${agent}" in
+              junie) poster_token="${JUNIE_APP_TOKEN:-}"; app_slug="${JUNIE_APP_SLUG:-}" ;;
+              gemini) poster_token="${GEMINI_APP_TOKEN:-}"; app_slug="${GEMINI_APP_SLUG:-}" ;;
+            esac
+            if [[ -z "${poster_token}" || -z "${app_slug}" ]]; then
+              echo "Missing configured ${agent} GitHub App installation token or app slug." >&2
+              exit 1
             fi
-            existing="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
-            comment_id="$(jq -rs --arg marker "${marker}" --arg actor "github-actions[bot]" '[.[][] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
+            review_file="reviews/${agent}-review.md"
+            body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
+            # The App can edit only its own comments. A pre-existing foreign
+            # marker must fail rather than silently create a duplicate.
+            existing="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
+            comment_id="$(jq -rs --arg marker "${marker}" --arg actor "${app_slug}[bot]" '[.[][] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
+            foreign="$(jq -rs --arg marker "${marker}" --arg actor "${app_slug}[bot]" '[.[][] | select(.user.login != $actor and (.body | startswith($marker)))] | length' <<<"${existing}")"
+            if [[ "${foreign}" != 0 ]]; then
+              echo "Existing ${agent} marker is owned by another account; manual cutover required." >&2
+              exit 1
+            fi
             if [[ -n "${comment_id}" ]]; then
-              gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" --jq '.html_url'
+              GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" --jq '.html_url'
             else
-              gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
+              GH_TOKEN="${poster_token}" gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
             fi
           done
