@@ -153,15 +153,11 @@ Set per repo (Settings → Secrets and variables → Actions):
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
 - OpenCode publishing uses the installed [OpenCode GitHub App](https://github.com/apps/opencode-agent) through OIDC; **no `OPENCODE_APP_ID` or `OPENCODE_APP_PRIVATE_KEY` secrets are needed**. Callers must grant `id-token: write`.
-- Junie/Gemini publisher Apps: `JUNIE_APP_ID` + `JUNIE_APP_PRIVATE_KEY`, and
-  `GEMINI_APP_ID` + `GEMINI_APP_PRIVATE_KEY`.
-- Fallback GitHub App: `APP_ID` + `APP_PRIVATE_KEY` for Junie/Gemini only.
-- App tokens are minted per notify job with a one-hour expiry. Each App must be
-  installed on the consuming repository with Issues: write and Pull requests:
-  write permissions. If a requested review has no per-agent or fallback
-  App available for Junie/Gemini, `notify` fails rather than silently skipping publication;
-  it never falls back to `github.token` or `github-actions[bot]`.
-  Unrequested events do not start a publication job.
+- Junie/Gemini do not require publisher App credentials. The `notify` job
+  obtains the job-scoped `GITHUB_TOKEN` with `issues: write` and posts as
+  `github-actions[bot]`. Generation jobs retain `contents: read` only.
+  GitHub API failures, missing publication permission, and empty model outputs
+  fail visibly; unrequested events do not start publication.
 - OpenCode uses the **official** `anomalyco/opencode/github` composite action,
   pinned to its upstream `latest` tag's resolved commit. The action invokes
   `opencode github run`, exchanges the runner's OIDC token for the installed
@@ -173,10 +169,9 @@ Set per repo (Settings → Secrets and variables → Actions):
   The native action accepts `/opencode` and `/oc` **PR conversation issue_comment events only**; inline review comments are not qualified and do not start this lane.
   Label events are not valid OpenCode action inputs and never run this lane.
 - Junie's `silent_mode: "true"` exposes its `junie_summary` for the separate
-  `notify` job, which publishes Junie/Gemini bodies and handles their
-  per-agent/fallback App credentials; Copilot uses its native reviewer.
-  A poster account should not manually issue trigger comments: unlike
-  `github-actions[bot]`, a PAT-backed user is not filtered as a bot and could
+  `notify` job, which publishes Junie/Gemini bodies using the GitHub Actions
+  bot identity and marker-based updates. Copilot uses its native reviewer.
+  Avoid PAT-backed user publishers: unlike `github-actions[bot]`, they might
   retrigger the dispatcher.
 
 ## MCP servers in CI
@@ -298,10 +293,11 @@ marker/update-in-place contract. The native action may write PR branches when
 using a mutating agent, hence this workflow's read-only plan configuration and
 push guard. Test real events, permissions and lack of mutations.
 
-Junie and Gemini still require nonempty artifacts and an authenticated
-publisher (per-agent or fallback App); failures and missing credentials must
-not produce misleading success. Copilot requests a native review and gets no
-redundant status comment. Unrequested events do not publish.
+Junie and Gemini require successful model execution, nonempty review artifacts
+and a `notify` token authorized for issue comments. Failed models and missing
+publication permissions must not produce misleading success. Copilot requests a
+native review and gets no redundant status comment. Unrequested events do not
+publish.
 
 Before promotion, test a same-repository, maintainer-controlled PR with the
 exact action ref: OIDC exchange, substantive review, publication, no code push,
@@ -309,11 +305,10 @@ and the supported comment triggers; verify label events skip OpenCode. Separatel
 missing/ineligible App installation and unrequested events. The new action
 controls its own comment lifecycle; do not claim old idempotency guarantees.
 
-The workflow checks out a PR merge ref for OpenCode and Gemini. Junie's current
-checkout does not explicitly select a PR ref, so its reviewed code snapshot
-remains **unqualified** until a separately reviewed near-term fix supplies
-head SHA verification for all lanes. Do not claim that a successful workflow
-review necessarily examined the intended PR head. Advancing the immutable
+OpenCode checks out a PR merge ref. Junie and Gemini check out the PR head ref
+and compare the checked-out SHA with the live PR head before model execution.
+This guards against an incorrect starting snapshot; verify the head has not
+changed before accepting the published review. Advancing the immutable
 `trusted_ref` in dispatchers and re-onboarding downstream consumers is a
 separate rollout step after merge and runtime validation.
 
@@ -430,9 +425,9 @@ retain their previous checkout authentication policy.
 
 Separate review-request comments no longer cancel each other merely because
 both target one PR. Workflow concurrency uses the triggering comment's unique
-ID (or run identity for non-comment triggers). Junie checks out the requested
-PR merge ref just like Gemini rather than the default-branch commit. A reviewer
-run succeeds only with actual reviewer output and an authenticated publisher;
+ID (or run identity for non-comment triggers). Junie and Gemini check out and
+verify the requested PR head, rather than the default branch or PR merge ref.
+A reviewer run succeeds only with actual output and an authenticated publisher;
 no-op dispatcher runs are not evidence of review publication.
 
 
@@ -442,4 +437,4 @@ no-op dispatcher runs are not evidence of review publication.
 - [Gemini smoke 40104850565](https://github.com/randytarampi/dotfiles/actions/runs/40104850565) failed with repeated 503 errors and exhausted its 20-request free daily quota for `gemini-3.8-flash`; its summary was empty. A completed output-artifact upload is not evidence of review generation.
 - The notification job uses `issues: write` on its own `GITHUB_TOKEN`, publishing as `github-actions[bot]`. Junie/Gemini only receive `contents: read`. Native Junie publishing remains disabled: disabling `silent_mode` would enable upstream commit/push pathways.
 - Both reviewers check out the requested PR **head** ref and verify the exact HEAD SHA through the GitHub API before model execution. Publisher updates only its own per-reviewer marker comments. API lookup errors, failed models, whitespace-only bodies and missing tokens fail visibly; `notify` publishes no partial results when a requested reviewer fails. Check that the PR head does not move afterward.
-- Disposable [PR #98](https://github.com/randytarampi/dotfiles/pull/98) holds independent smoke requests. End-to-end publication, repeat-update behaviour, and exact-head CI/CodeQL must be verified with actual run and comment URLs before merge; do not claim vendor-native identity without proof.
+- Disposable [PR #98](https://github.com/randytarampi/dotfiles/pull/98) is closed. Fresh [PR #102](https://github.com/randytarampi/dotfiles/pull/102) tests the candidate publisher via a temporary, now-restored dispatcher pin; [run 40115982101](https://github.com/randytarampi/dotfiles/actions/runs/40115982101) is the first Junie request. End-to-end publication, repeat-update behaviour, and exact-head CI/CodeQL must be verified with actual run and comment URLs before merge; do not claim native vendor identity without proof.
