@@ -172,6 +172,10 @@ def test_config_only_direct_llm_without_stt_reports_config_only(monkeypatch, tmp
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    # The config-only contract requires its referenced runtime credential to
+    # resolve non-empty (credential probes check non-emptiness, not
+    # presence) — with an empty key the truthful state is unresolved.
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-key")
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
     assert config.get("_voice_status") == "config-only", (
@@ -205,14 +209,29 @@ def test_no_resolved_voice_route_is_unresolved(monkeypatch, tmp_path):
     )
 
 
-def test_key_reference_without_resolved_route_is_unresolved(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "openai_key,expected_status,expect_reference",
+    [
+        # A non-empty key yields a config-only DIRECT selection: the entry
+        # truthfully carries its key reference (a configuration contract)
+        # while runtime evidence stays UNKNOWN — the key reference never
+        # substitutes for endpoint+model delivery evidence (plugin reads
+        # env at runtime per llm-client.js:85).
+        ("synthetic-key", "config-only", True),
+        # An empty key counts as ABSENT (non-emptiness rule): no selection,
+        # no entry keys, fully unresolved.
+        ("", "unresolved", False),
+    ],
+)
+def test_key_reference_route_states_are_truthful(
+    monkeypatch, tmp_path, openai_key, expected_status, expect_reference
+):
     voice = load_script()
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
-    # A non-empty credential reference must exist so the generated entry
-    # carries apiKeyEnv while NO route is resolved — pinning that a key
-    # reference alone never substitutes for endpoint+model evidence.
-    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("OPENAI_API_KEY", openai_key)
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
     monkeypatch.setattr(voice, "check_ollama_daemon", lambda: (False, False))
     monkeypatch.setattr(voice, "list_local_ollama_models", lambda: [])
     monkeypatch.setattr(voice.tier_registry, "load_registry", lambda: {"presets": {}})
@@ -226,19 +245,24 @@ def test_key_reference_without_resolved_route_is_unresolved(monkeypatch, tmp_pat
 
     config = voice.get_voice_config("plus")
 
-    # The plugin reads its credential from the environment at runtime
-    # (llm-client.js:85); an omitted route leaves NO plugin entry keys — a
-    # key reference alone never substitutes for endpoint+model evidence.
     # The payload prints the FULL resolved state: ubuntu CI resolved a
-    # config-only direct route where macOS omitted it (b0acd1b evidence),
-    # and the selection source must be visible before the next fix.
-    assert config.get("apiKeyEnv") is None, (
+    # config-only direct route where macOS omitted it (ambient-gate leak
+    # class) — with DOTFILES_USE_LITELLM_PROXY pinned this is deterministic
+    # on both platforms, and the assert payload stays for future drift.
+    assert config["_voice_status"] == expected_status, (
         f"voice status {config.get('_voice_status')!r}; "
         f"endpoint={config.get('endpoint')!r}; model={config.get('model')!r}; "
         f"apiKeyEnv={config.get('apiKeyEnv')!r}; keys={sorted(config)}; "
         f"selections={config.get('_voice_state', {}).get('selections')!r}; "
         f"last_error={getattr(voice._gateway_alias, 'last_error', None)!r}"
     )
+    if expect_reference:
+        assert config.get("apiKeyEnv") == "OPENAI_API_KEY"
+        assert config.get("_voice_status") == "config-only"
+    else:
+        assert config.get("apiKeyEnv") is None
+        assert config.get("endpoint") is None
+        assert config.get("model") is None
 
 
 def test_main_installs_no_plugin_entry_without_resolved_route(
