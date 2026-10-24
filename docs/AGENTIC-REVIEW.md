@@ -154,7 +154,7 @@ Set per repo (Settings → Secrets and variables → Actions):
 
 - OpenCode publishing uses the installed [OpenCode GitHub App](https://github.com/apps/opencode-agent) through OIDC; **no `OPENCODE_APP_ID` or `OPENCODE_APP_PRIVATE_KEY` secrets are needed**. Callers must grant `id-token: write`.
 - Junie/Gemini do not require publisher App credentials. The `notify` job
-  obtains the job-scoped `GITHUB_TOKEN` with `issues: write` and posts as
+  obtains the job-scoped `GITHUB_TOKEN` with `pull-requests: write` and posts as
   `github-actions[bot]`. Generation jobs retain `contents: read` only.
   GitHub API failures, missing publication permission, and empty model outputs
   fail visibly; unrequested events do not start publication.
@@ -435,6 +435,11 @@ no-op dispatcher runs are not evidence of review publication.
 
 - [Junie smoke 40104437396](https://github.com/randytarampi/dotfiles/actions/runs/40104437396) produced a substantive review but publishing failed closed because no GitHub App publication credentials were configured.
 - [Gemini smoke 40104850565](https://github.com/randytarampi/dotfiles/actions/runs/40104850565) failed with repeated 503 errors and exhausted its 20-request free daily quota for `gemini-3.8-flash`; its summary was empty. A completed output-artifact upload is not evidence of review generation.
-- The notification job uses `issues: write` on its own `GITHUB_TOKEN`, publishing as `github-actions[bot]`. Junie/Gemini only receive `contents: read`. Native Junie publishing remains disabled: disabling `silent_mode` would enable upstream commit/push pathways.
+- The notification job uses `pull-requests: write` on its own `GITHUB_TOKEN`, publishing as `github-actions[bot]`. Junie/Gemini only receive `contents: read`. Native Junie publishing remains disabled: disabling `silent_mode` would enable upstream commit/push pathways.
 - Both reviewers check out the requested PR **head** ref and verify the exact HEAD SHA through the GitHub API before model execution. Publisher updates only its own per-reviewer marker comments. API lookup errors, failed models, whitespace-only bodies and missing tokens fail visibly; `notify` publishes no partial results when a requested reviewer fails. Check that the PR head does not move afterward.
 - Disposable [PR #98](https://github.com/randytarampi/dotfiles/pull/98) is closed. Fresh [PR #102](https://github.com/randytarampi/dotfiles/pull/102) tests the candidate publisher via a temporary, now-restored dispatcher pin; [run 40115982101](https://github.com/randytarampi/dotfiles/actions/runs/40115982101) is the first Junie request. End-to-end publication, repeat-update behaviour, and exact-head CI/CodeQL must be verified with actual run and comment URLs before merge; do not claim native vendor identity without proof.
+
+
+### Live permission failure and follow-up
+
+The first Junie candidate run [40115982101](https://github.com/randytarampi/dotfiles/actions/runs/40115982101) produced a nonempty, head-specific substantive artifact for [disposable PR #102](https://github.com/randytarampi/dotfiles/pull/102). However `notify` received HTTP 403 `Resource not accessible by integration` while creating the issue comment, despite its runner explicitly reporting `Issues: write`. No publication occurred. The second candidate scopes only the publication job to `pull-requests: write` instead; the documented issue-comment endpoint accepts either privilege. Generation jobs remain `contents: read`. Treat this as an unverified permission experiment until its live publication/comment URL is recorded; do not merge based solely on a configuration change.
