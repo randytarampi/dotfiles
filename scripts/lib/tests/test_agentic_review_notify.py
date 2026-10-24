@@ -32,7 +32,9 @@ else:
 def _publish_script():
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["notify"]["steps"]
-    return next(step["run"] for step in steps if step.get("name") == "Publish review bodies")
+    return next(
+        step["run"] for step in steps if step.get("name") == "Publish review bodies"
+    )
 
 
 def _run_notify(
