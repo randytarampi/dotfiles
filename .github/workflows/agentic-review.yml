@@ -70,7 +70,9 @@ on:
         required: false
 
 concurrency:
-  group: agentic-review-${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  # Distinct maintainer review requests must not cancel each other. GitHub
+  # comment IDs are unique per request; label events use their run identity.
+  group: agentic-review-${{ github.event.comment.id || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -311,6 +313,7 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
           fetch-depth: 1
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
