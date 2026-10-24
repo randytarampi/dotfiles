@@ -193,30 +193,21 @@ jobs:
   # Junie/Gemini. The plan agent plus a push hook protects review-only work.
   opencode:
     needs: parse
-    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
+    # Upstream opencode github run accepts only comment events. A label event
+    # cannot be adapted by passing a prompt to the composite action.
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,') && (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Check event supported by official OpenCode action
+      - name: Verify slash command and PR context
         env:
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
         run: |
           set -euo pipefail
-          case "${GITHUB_EVENT_NAME}" in
-            issue_comment|pull_request_review_comment)
-              jq -e '.comment.body | test("(^|[[:space:]])/(opencode|oc)([[:space:]]|$)")' "${GITHUB_EVENT_PATH}" >/dev/null
-              ;;
-            pull_request)
-              # Label-triggered requests are PR events with an explicit prompt.
-              [[ -n "${PR_NUMBER}" ]]
-              ;;
-            *)
-              echo "Unsupported OpenCode event: ${GITHUB_EVENT_NAME}. Use /opencode in a PR comment." >&2
-              exit 1
-              ;;
-          esac
+          [[ -n "${PR_NUMBER}" && "${PR_NUMBER}" != null ]]
+          jq -e '.comment.body | test("(^|[[:space:]])/(opencode|oc)([[:space:]]|$)")' "${GITHUB_EVENT_PATH}" >/dev/null
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
