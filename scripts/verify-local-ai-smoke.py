@@ -14,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 # CLI contract probes run this file directly without PYTHONPATH configured.
 sys.path.insert(0, str(SCRIPTS / "lib"))
-from discover_models import (
+from discover_models import (  # noqa: E402 -- intentional script-bootstrap ordering.
     list_local_ollama_models,
 )  # noqa: E402 -- intentional script-bootstrap ordering.
-from litellm_config import (
+from litellm_config import (  # noqa: E402 -- intentional script-bootstrap ordering.
     compute_model_list,
 )  # noqa: E402 -- intentional script-bootstrap ordering.
 
