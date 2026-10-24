@@ -304,7 +304,7 @@ jobs:
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',junie,')
     runs-on: ubuntu-latest
     # The review agent receives a read-only GitHub token. Publication is handled
-    # by the separate notify job with an explicitly minted App token.
+    # by the separate notify job using a job-scoped GitHub token.
     permissions:
       contents: read
     steps:
@@ -313,7 +313,17 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
           fetch-depth: 1
-          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/head', needs.parse.outputs.pr_number)) || '' }}
+      - name: Verify exact requested PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]
+          expected="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          actual="$(git rev-parse HEAD)"
+          [[ "${expected}" =~ ^[0-9a-f]{40}$ && "${actual}" == "${expected}" ]] || { echo "Stale PR head" >&2; exit 1; }
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -399,7 +409,7 @@ jobs:
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')
     runs-on: ubuntu-latest
     # The review agent receives a read-only GitHub token. Publication is handled
-    # by the separate notify job with an explicitly minted App token.
+    # by the separate notify job using a job-scoped GitHub token.
     permissions:
       contents: read
     steps:
@@ -408,7 +418,17 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
           fetch-depth: 1
-          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
+          ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/head', needs.parse.outputs.pr_number)) || '' }}
+      - name: Verify exact requested PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]
+          expected="$(gh api "/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          actual="$(git rev-parse HEAD)"
+          [[ "${expected}" =~ ^[0-9a-f]{40}$ && "${actual}" == "${expected}" ]] || { echo "Stale PR head" >&2; exit 1; }
       - name: Stage and verify trusted review assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -528,85 +548,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
     steps:
-      - name: Check publication credentials
-        id: publication_credentials
-        env:
-          JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
-          JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
-          GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
-          GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-          AGENTS: ${{ needs.parse.outputs.agents }}
-        run: |
-          set -euo pipefail
-          IFS=',' read -ra selected_agents <<<"${AGENTS}"
-          for agent in junie gemini; do
-            if [[ ",${AGENTS}," != *",${agent},"* ]]; then
-              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
-              continue
-            fi
-            upper="${agent^^}"
-            id_name="${upper}_APP_ID"
-            key_name="${upper}_APP_PRIVATE_KEY"
-            if [[ -n "${!id_name}" && -n "${!key_name}" ]]; then
-              echo "${agent}=true" >> "${GITHUB_OUTPUT}"
-            else
-              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
-            fi
-          done
-          # The fallback is necessary only when a requested agent lacks its own pair.
-          fallback_needed=false
-          for agent in "${selected_agents[@]}"; do
-            case "${agent}" in
-              junie|gemini)
-                upper="${agent^^}"
-                id_name="${upper}_APP_ID"
-                key_name="${upper}_APP_PRIVATE_KEY"
-                if [[ -z "${!id_name}" || -z "${!key_name}" ]]; then fallback_needed=true; fi
-                ;;
-              copilot) : ;; # Copilot requests via its own GitHub token.
-            esac
-          done
-          if [[ "${fallback_needed}" == true && -n "${APP_ID}" && -n "${APP_PRIVATE_KEY}" ]]; then
-            echo "fallback=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "fallback=false" >> "${GITHUB_OUTPUT}"
-          fi
-      - id: junie_app_token
-        if: ${{ steps.publication_credentials.outputs.junie == 'true' }}
-        uses: actions/create-github-app-token@v3
-        env:
-          JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
-          JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
-        with:
-          app-id: ${{ secrets.JUNIE_APP_ID }}
-          private-key: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-pull-requests: write
-      - id: gemini_app_token
-        if: ${{ steps.publication_credentials.outputs.gemini == 'true' }}
-        uses: actions/create-github-app-token@v3
-        env:
-          GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
-          GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
-        with:
-          app-id: ${{ secrets.GEMINI_APP_ID }}
-          private-key: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-pull-requests: write
-      - id: fallback_app_token
-        if: ${{ steps.publication_credentials.outputs.fallback == 'true' }}
-        uses: actions/create-github-app-token@v3
-        env:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-pull-requests: write
       - name: Download review bodies
         if: always()
         uses: actions/download-artifact@v8
@@ -616,9 +559,7 @@ jobs:
           merge-multiple: true
       - name: Publish review bodies
         env:
-          JUNIE_APP_TOKEN: ${{ steps.junie_app_token.outputs.token }}
-          GEMINI_APP_TOKEN: ${{ steps.gemini_app_token.outputs.token }}
-          FALLBACK_APP_TOKEN: ${{ steps.fallback_app_token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
           AGENTS: ${{ needs.parse.outputs.agents }}
           TOKENS: ${{ needs.parse.outputs.tokens }}
@@ -647,7 +588,7 @@ jobs:
               echo "Requested ${agent} reviewer did not succeed: ${result}." >&2
               exit 1
             fi
-            if [[ "${agent}" != copilot && "${agent}" != opencode && ! -s "reviews/${agent}-review.md" ]]; then
+            if [[ "${agent}" != copilot && "${agent}" != opencode ]] && { [[ ! -s "reviews/${agent}-review.md" ]] || ! grep -q '[^[:space:]]' "reviews/${agent}-review.md"; }; then
               echo "INCOMPLETE: requested ${agent} reviewer returned no review body." >&2
               exit 1
             fi
@@ -671,30 +612,23 @@ jobs:
               *) continue ;;
             esac
             marker="<!-- agent-review:${agent} -->"
-            case "${agent}" in
-              junie) poster_token="${JUNIE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
-              gemini) poster_token="${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
-              *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
-            esac
             # Copilot's native reviewer and OpenCode's official App publish
             # directly; do not create duplicate review comments.
             if [[ "${agent}" == copilot || "${agent}" == opencode ]]; then
               continue
             fi
-            if [[ -z "${poster_token}" ]]; then
-              echo "Requested ${agent} review could not be published: no configured GitHub App token." >&2
-              exit 1
-            fi
+            if [[ -z "${GH_TOKEN:-}" ]]; then echo "Missing publication token" >&2; exit 1; fi
             if [[ "${result}" == "success" ]]; then
               review_file="reviews/${agent}-review.md"
               body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
             else
               body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
             fi
-            comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
+            existing="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
+            comment_id="$(jq -r --arg marker "${marker}" --arg actor "github-actions[bot]" '[.[] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
             if [[ -n "${comment_id}" ]]; then
-              GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
+              gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" --jq '.html_url'
             else
-              GH_TOKEN="${poster_token}" gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+              gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" --jq '.html_url'
             fi
           done
