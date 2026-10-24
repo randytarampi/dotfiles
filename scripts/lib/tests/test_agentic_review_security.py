@@ -94,6 +94,8 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert 'share: "false"' in opencode
     assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
     assert "core.hooksPath" in opencode
+    assert "persist-credentials: true" in opencode
+    assert "token: ${{ github.token }}" in opencode
     assert "OPENCODE_APP_ID" not in workflow
     assert "OPENCODE_APP_PRIVATE_KEY" not in workflow
     assert "github.event_name == 'issue_comment'" in opencode

@@ -413,3 +413,11 @@ review rubric**. The repo's `AGENTS.md` remains available during review, and
 maintainers can include review-specific instructions in an authorized
 `/opencode` comment. Restoring strict canonical-rubric injection into the
 native action is separate work that requires upstream-supported behavior.
+
+### Native OpenCode checkout credential compatibility
+
+The upstream action reads and replaces the checkout's HTTP authentication
+header before it authenticates via the installed GitHub App. Only the
+OpenCode checkout persists its **read-only** job `github.token` for that
+handoff, with checkout post-job cleanup removing the credential. The other
+reviewers continue to use non-persistent checkout authentication.
