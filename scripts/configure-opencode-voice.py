@@ -346,7 +346,15 @@ def _configure_tier_remote(
         "config_only": True,
     }
     locators[Operation.CLEANUP_LLM.value] = provenance
-    if rendered:
+    if rendered and (
+        not locator.route.key_reference
+        or os.environ.get(locator.route.key_reference, "").strip()
+    ):
+        # A config-only entry is only attached when its referenced runtime
+        # credential actually resolves to a non-empty value (the plugin
+        # reads the env var at runtime per llm-client.js:85); with the
+        # value absent the route stays unresolved and no entry keys are
+        # emitted (credential probes check non-emptiness, not presence).
         voice_config.update(
             endpoint=rendered["endpoint"],
             model=rendered["wire_model"],
@@ -1167,18 +1175,34 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         voice_config.get("sttEndpoint") and voice_config.get("sttModel")
     )
     has_llm = bool(voice_config.get("endpoint") and voice_config.get("model"))
+    has_config_only_llm = any(
+        bool(selection.get("config_only"))
+        and selection.get("provider")
+        and selection.get("model")
+        # Credential probes check non-emptiness, not mere presence: a
+        # config-only selection whose referenced env value is empty counts
+        # as absent (the key reference is the env-var NAME, not a value).
+        and os.environ.get(str(selection.get("key_reference", "")), "").strip()
+        for selection in voice_config.get("_voice_state", {})
+        .get("selections", {})
+        .values()
+        if isinstance(selection, dict)
+    )
     gateway_tested = any(
         isinstance(item, ServiceLocator)
         and item.route.transport is Transport.GATEWAY
         and not item.selection.config_only
         for item in locators.values()
     )
-    if unresolved:
+    if unresolved and not has_llm and not has_config_only_llm:
         voice_status = "unresolved"
-    elif has_llm and not gateway_tested:
+    elif (has_llm or has_config_only_llm) and not gateway_tested:
         # A config-only route is a configuration contract, not a tested
         # gateway operation (B3 contract) — it must not be labelled as a
-        # runtime 'partial' delivery just because endpoint/model keys exist.
+        # runtime 'partial' delivery just because endpoint/model keys exist,
+        # and a config-only selection is not fully 'unresolved' either: its
+        # key reference is a truthful configuration fact while the runtime
+        # evidence stays UNKNOWN.
         voice_status = "config-only"
     elif has_llm and not has_stt_state:
         voice_status = "partial"
