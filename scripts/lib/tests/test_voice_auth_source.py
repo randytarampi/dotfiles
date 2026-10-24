@@ -67,6 +67,7 @@ def gateway(monkeypatch):
                 )
 
         def log_message(self, *_args):
+            # Intentionally silent: the fixture server must not spam stderr.
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Handler)

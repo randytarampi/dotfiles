@@ -553,11 +553,12 @@ def _reconcile_catalogue(client, dry_run=False):
                 detail = f"unavailable (HTTP {status})"
             elif isinstance(cause, urllib.error.HTTPError):
                 status = cause.code
-                detail = (
-                    f"unauthorized (HTTP {status})"
-                    if status == 401
-                    else f"unavailable (HTTP {status})" if status >= 500 else "UNKNOWN"
-                )
+                if status == 401:
+                    detail = f"unauthorized (HTTP {status})"
+                elif status >= 500:
+                    detail = f"unavailable (HTTP {status})"
+                else:
+                    detail = "UNKNOWN"
             elif isinstance(cause, urllib.error.URLError):
                 detail = "unavailable (connection error)"
             else:
