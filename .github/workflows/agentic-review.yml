@@ -211,9 +211,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
-          # Official OpenCode action reads/replaces the checkout auth header
-          # and restores it on cleanup. The original job token is read-only.
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 1
           ref: ${{ (needs.parse.outputs.pr_number != '' && format('refs/pull/{0}/merge', needs.parse.outputs.pr_number)) || '' }}
       - name: Stage and verify trusted review assets
@@ -273,6 +271,14 @@ jobs:
           printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
           chmod +x "${RUNNER_TEMP}/review-no-push/pre-push"
           git config --local core.hooksPath "${RUNNER_TEMP}/review-no-push"
+      - name: Prepare native OpenCode Git authentication handoff
+        # Upstream expects an existing local extraheader, then replaces it
+        # with its OIDC-exchanged App token. Checkout's persisted credential
+        # uses includeIf and would send a duplicate Authorization header.
+        # Do not put a real token in this placeholder.
+        run: |
+          set -euo pipefail
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: bearer opencode-action-placeholder"
       - name: Review with official OpenCode GitHub App
         # SHA underlying the upstream 'latest' action tag on 2026-10-24.
         # The action installs its own CLI, which can move independently.
@@ -285,6 +291,9 @@ jobs:
           model: opencode/big-pickle
           agent: plan
           share: "false"
+      - name: Remove native OpenCode authentication placeholder
+        if: always()
+        run: git config --local --unset-all http.https://github.com/.extraheader || true
 
   junie:
     outputs:
