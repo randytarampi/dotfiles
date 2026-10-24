@@ -539,15 +539,42 @@ jobs:
           fi
 
   notify:
-    if: always()
+    if: ${{ always() && needs.parse.result == 'success' && needs.parse.outputs.agents != '' }}
     needs: [parse, opencode, junie, gemini, copilot]
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
-      issues: write
+      contents: read
     steps:
+      - name: Check publication credentials
+        id: publication_credentials
+        env:
+          JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
+          JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
+          OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
+          OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+          GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
+          GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for agent in junie opencode gemini; do
+            upper="${agent^^}"
+            id_name="${upper}_APP_ID"
+            key_name="${upper}_APP_PRIVATE_KEY"
+            if [[ -n "${!id_name}" && -n "${!key_name}" ]]; then
+              echo "${agent}=true" >> "${GITHUB_OUTPUT}"
+            else
+              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
+            fi
+          done
+          if [[ -n "${APP_ID}" && -n "${APP_PRIVATE_KEY}" ]]; then
+            echo "fallback=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "fallback=false" >> "${GITHUB_OUTPUT}"
+          fi
       - id: junie_app_token
-        if: ${{ env.JUNIE_APP_ID != '' && env.JUNIE_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.junie == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
@@ -558,7 +585,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: opencode_app_token
-        if: ${{ env.OPENCODE_APP_ID != '' && env.OPENCODE_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.opencode == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
@@ -569,7 +596,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: gemini_app_token
-        if: ${{ env.GEMINI_APP_ID != '' && env.GEMINI_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.gemini == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
@@ -580,7 +607,7 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
       - id: fallback_app_token
-        if: ${{ env.APP_ID != '' && env.APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.publication_credentials.outputs.fallback == 'true' }}
         uses: actions/create-github-app-token@v3
         env:
           APP_ID: ${{ secrets.APP_ID }}
@@ -612,6 +639,10 @@ jobs:
           COPILOT_RESULT: ${{ needs.copilot.result }}
         run: |
           set -euo pipefail
+          if [[ -z "${PR_NUMBER}" || -z "${AGENTS}" ]]; then
+            echo "Requested review publication requires a PR number and selected agents." >&2
+            exit 1
+          fi
           IFS=',' read -ra agents <<<"${AGENTS}"
           IFS=',' read -ra tokens <<<"${TOKENS:-}"
           for i in "${!agents[@]}"; do
@@ -639,8 +670,8 @@ jobs:
               *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
             esac
             if [[ -z "${poster_token}" ]]; then
-              echo "No publication App token is configured for ${agent}; skipping review publication." >&2
-              continue
+              echo "Requested ${agent} review could not be published: no configured GitHub App token." >&2
+              exit 1
             fi
             if [[ "${result}" == "success" ]]; then
               review_file="reviews/${agent}-review.md"
