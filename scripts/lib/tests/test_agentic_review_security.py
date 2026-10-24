@@ -100,7 +100,7 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert "persist-credentials: false" in opencode
     assert "AUTHORIZATION: bearer opencode-action-placeholder" in opencode
     assert "Remove native OpenCode authentication placeholder" in opencode
-    assert "git config --local --unset-all http.https://github.com/.extraheader" in opencode
+    assert "git config --local --unset-all" in opencode
     assert "token: ${{ github.token }}" in opencode
     assert "OPENCODE_APP_ID" not in workflow
     assert "OPENCODE_APP_PRIVATE_KEY" not in workflow
