@@ -465,5 +465,64 @@ def test_pi_main_rejects_missing_or_insecure_client_key_before_output(
         assert not (output / "auth.json").exists()
 
 
+def test_pi_malformed_settings_json_refuses_write_and_preserves_user_overrides(
+    tmp_path, monkeypatch
+):
+    """Malformed settings.json must not cause silent loss of agentOverrides.
+
+    Previously the broad ``except Exception: pass`` at configure-pi.py:1150
+    silently swallowed ``json.JSONDecodeError``, leaving ``previous`` as ``{}``
+    and discarding every user-added agent override on the next regeneration.
+    The function must now detect malformed JSON, refuse the write, and leave
+    the existing settings.json untouched so the user's overrides survive.
+    """
+    agent_dir = tmp_path / "pi-agent"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    settings = agent_dir / "settings.json"
+    # Deliberately malformed: truncated JSON, trailing garbage.
+    settings.write_text(
+        '{"subagents": {"agentOverrides": {"custom-agent": {"model": "ollama/foo"}},'
+        ' "theme": "light",}\n',
+        encoding="utf-8",
+    )
+
+    key_file = tmp_path / ".local/share/litellm/clients/pi.key"
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    key_file.parent.chmod(0o700)
+    key_file.write_text("fixture-secret", encoding="utf-8")
+    key_file.chmod(0o600)
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setattr(
+        configure_pi,
+        "get_catalogue",
+        lambda *_args: {
+            "data": [
+                {"id": "google/models/gemini-3.8-flash"},
+                {"id": "google/models/gemini-3.5-flash-lite"},
+                {"id": "opencode/nemotron-3.5-lightning-free"},
+            ]
+        },
+    )
+    monkeypatch.setattr(configure_pi, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(configure_pi, "_ensure_packages", lambda *_a, **_k: None)
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "free"])
+    configure_pi.main()
+
+    # The malformed file must be left untouched — no overwrite with a
+    # clean (override-stripped) version.
+    assert settings.read_text(encoding="utf-8").startswith(
+        '{"subagents": {"agentOverrides": {"custom-agent": {"model": "ollama/foo"}}'
+    )
+    # And the custom override must still be readable (proving it was not lost).
+    raw = settings.read_text(encoding="utf-8")
+    assert '"custom-agent"' in raw
+    assert '"ollama/foo"' in raw
+
+
 if __name__ == "__main__":
     unittest.main()
