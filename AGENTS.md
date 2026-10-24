@@ -11,9 +11,11 @@ Do not erase earlier contributors when handing work to another model or agent.
 
 - **Commits:** retain the actual Git author. For each additional person or agent
   who materially designed, wrote or revised the committed change, add a
-  `Co-authored-by: Name (model) <email>` trailer when a verified or approved attribution
-  identity is available. For ChatGPT contributions here, use
-  `Co-authored-by: ChatGPT (gpt-4) <noreply@openai.com>`. OpenCode agents use a base
+  `Co-authored-by: Name <email>` trailer when a verified or approved attribution
+  identity is available; optionally include `(model)` after the name only
+  when the session reliably identifies its actual model. For ChatGPT use
+  `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified
+  session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base
   identity of `Co-authored-by: opencode <noreply@opencode.ai>` with the model
   derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <noreply@opencode.ai>`).
   Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
