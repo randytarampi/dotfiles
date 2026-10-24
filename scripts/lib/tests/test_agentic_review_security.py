@@ -21,7 +21,8 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert 'required: false\n        default: ""' not in workflow
     assert "inputs.trusted_ref || github.sha" not in workflow
     assert 'trusted_sha="b144' not in workflow
-    assert workflow.count("rev-parse HEAD") == 5  # Trusted asset checks and exact head guards
+    # Three trusted asset checks plus two exact PR-head checks.
+    assert workflow.count("rev-parse HEAD") == 5
     assert workflow.count("verify-ci-assets.py") == 3
     assert "repository: randytarampi/dotfiles" not in workflow
     assert "ref: main" not in workflow
