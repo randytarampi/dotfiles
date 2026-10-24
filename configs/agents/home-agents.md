@@ -72,7 +72,7 @@ For GitHub rulesets API details, see `configs/agents/repo-agents-shared.md` in t
 
 ### Planning scope
 
-When a feature or change touches the AI tooling fleet, assess every tool configured in the repo upfront, not just the obvious ones. The configured fleet is documented in `docs/CAPABILITY_MATRIX.md`.
+When changing AI tooling, map the affected interfaces and their actual consumers using `docs/CAPABILITY_MATRIX.md`. Check every consumer of the changed contract; do not audit unrelated tools unless they share the affected interface.
 
 > Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/ORCHESTRATION.md`.
 

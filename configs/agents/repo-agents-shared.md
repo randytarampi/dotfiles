@@ -52,8 +52,8 @@ These policies apply to work in every repository.
 
 - Honour the home lifecycle: agree outcome, acceptance checks, delivery state and permission boundaries up front; freeze scope at finalisation except for correctness and required CI.
 - For unknown scope, delegate bounded discovery first; read expected edit targets directly.
-- When changing AI tooling, assess every configured tool up front and enumerate the full tool fleet.
-- Keep repository-specific facts and implementation details in the repository's own guidance and documentation.
+- When changing AI tooling, identify the changed interface and inspect its actual consumers, including generated configurations. Broad fleet audits are warranted only for shared contracts, not unrelated tool integrations.
+- Keep repository-specific facts and implementation details in the repository's own guidance and documentation. Prefer narrow, independently reviewable PRs; record unrelated findings as follow-ups instead of widening an in-flight changeset.
 - Never dispatch onto a repository another lane may own. Before re-dispatch or takeover, verify its actual tip, dirty state and process/tool evidence; ambiguous status does not prove a session ended.
 - Respect the repository's pinned runtime. Scope capability assumptions (including image support or specialist skill access) to the specific tool/version verified.
 
@@ -63,7 +63,7 @@ These policies apply to work in every repository.
 
 ### Communication
 
-- Distinguish required CI, fresh current-head review, review comments and owner-accepted trade-offs. Record findings as fixed, declined by owner, or deferred. Resolve stale requested changes or absent bot reviews at one bounded owner decision point, not endless loops. Agent PRs remain draft by default; never fake approval, bypass rulesets, or push/mark ready/merge without explicit user authority. An explicit override is recorded, not represented as bot approval.
+- Distinguish required CI, fresh current-head review, review comments and owner-accepted trade-offs. Record material findings as fixed (with evidence), declined by owner, deferred with scope, or open. Resolve stale requested changes or absent bot reviews at one bounded owner decision point, not endless loops. Agent PRs remain draft by default; never fake approval, bypass rulesets, or push/mark ready/merge without explicit user authority. An explicit override is recorded, not represented as bot approval.
 - Image/screenshot support depends on the specific agent and version; verify the capability before relying on it. Ask for a text description or probe an artifact when the lane cannot read it.
 
 ### Artifacts
