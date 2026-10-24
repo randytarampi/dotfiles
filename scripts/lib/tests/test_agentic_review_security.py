@@ -21,7 +21,7 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert 'required: false\n        default: ""' not in workflow
     assert "inputs.trusted_ref || github.sha" not in workflow
     assert 'trusted_sha="b144' not in workflow
-    assert workflow.count("rev-parse HEAD") == 3
+    assert workflow.count("rev-parse HEAD") == 5  # Trusted asset checks and exact head guards
     assert workflow.count("verify-ci-assets.py") == 3
     assert "repository: randytarampi/dotfiles" not in workflow
     assert "ref: main" not in workflow
@@ -42,14 +42,11 @@ def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
 
 def test_manifest_verification_precedes_codegraph_execution():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.index("verify-ci-assets.py") < workflow.index("ci-codegraph.sh")
-
-
-def test_read_only_generation_and_scoped_publication():
+    assert workflow.index("verify-ci-assedef test_read_only_generation_and_scoped_publication():
     workflow = read(".github/workflows/agentic-review.yml")
     for agent in ("junie", "gemini"):
-        section = re.search(rf"(?ms)^  {agent}:$(.*?)(?=^  \\w)", workflow).group(1)
-        assert "permissions:\\n      contents: read\\n" in section
+        section = re.search(rf"(?ms)^  {agent}:$(.*?)(?=^  \w)", workflow).group(1)
+        assert "permissions:\n      contents: read\n" in section
         assert "issues: write" not in section
         assert "contents: write" not in section
         assert "persist-credentials: false" in section
@@ -60,18 +57,21 @@ def test_read_only_generation_and_scoped_publication():
     assert 'silent_mode: "true"' in workflow
     assert "steps.junie.outputs.junie_summary" in workflow
     assert "steps.gemini.outputs.summary" in workflow
-    notify = workflow.split("  notify:\\n", 1)[1]
-    assert "permissions:\\n      contents: read\\n      issues: write" in notify
-    assert "GH_TOKEN: ${{ github.token }}" in notify
+    notify = workflow.split("  notify:\n", 1)[1]
+    assert "permissions:\n      contents: read\n      issues: write" in notify
+    assert "GH_TOKEN: \${{ github.token }}" in notify
     assert "actions/download-artifact@v8" in notify
     assert "grep -q '[^[:space:]]'" in notify
     assert "gh api --paginate" in notify
+    assert 'jq -rs --arg marker' in notify
     assert "github-actions[bot]" in notify
     assert "gh api --method PATCH" in notify
     assert "gh api --method POST" in notify
     assert "permission-issues: write" not in notify
     assert "FALLBACK_APP_TOKEN" not in notify
     assert "github.event.comment.id || github.run_id" in workflow
+
+ent.comment.id || github.run_id" in workflow
 
 
 def test_native_opencode_uses_oidc_and_hardened_plan_agent():
