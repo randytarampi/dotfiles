@@ -62,7 +62,7 @@ def test_read_only_generation_and_scoped_publication():
     assert "steps.junie.outputs.junie_summary" in workflow
     assert "steps.gemini.outputs.summary" in workflow
     notify = workflow.split("  notify:\n", 1)[1]
-    assert "permissions:\n      contents: read\n      issues: write" in notify
+    assert "permissions:\n      contents: read\n      pull-requests: write" in notify
     assert "GH_TOKEN: ${{ github.token }}" in notify
     assert "actions/download-artifact@v8" in notify
     assert "grep -q '[^[:space:]]'" in notify
