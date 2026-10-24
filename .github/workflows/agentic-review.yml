@@ -52,6 +52,10 @@ on:
         required: false
       JUNIE_API_KEY:
         required: false
+      JUNIE_GITHUB_APP_PRIVATE_KEY:
+        required: false
+      GEMINI_GITHUB_APP_PRIVATE_KEY:
+        required: false
       GEMINI_API_KEY:
         required: false
       OPENROUTER_API_KEY:
