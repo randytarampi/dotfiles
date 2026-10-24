@@ -160,10 +160,11 @@ Direct Poolside-hosted Laguna 2.1 family (`openai`-compatible wire via LiteLLM, 
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator / librarian / explorer / designer / observer | `poolside/laguna-xs-2.1` | — |
+| orchestrator | `poolside/laguna-s-2.1` | — |
+| librarian / explorer / designer / observer | `poolside/laguna-xs-2.1` | — |
 | oracle / fixer / council | `poolside/laguna-s-2.1` | (α XS, β S) |
 
-Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside.fallback` — XS roles → `poolside/laguna-s-2.1`, S roles → `poolside/laguna-xs-2.1`). OpenRouter-hosted `:free` twins exist in the live catalogue but carry the same trial/unknown-entitlement caveat and stay excluded from free-tier composition.
+Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside.fallback` — XS roles → `poolside/laguna-s-2.1`, S roles, including orchestrator → `poolside/laguna-xs-2.1`). OpenRouter-hosted `:free` twins exist in the live catalogue but carry the same trial/unknown-entitlement caveat and stay excluded from free-tier composition.
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
