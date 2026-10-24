@@ -42,7 +42,10 @@ def test_scheduled_runs_derive_a_nonempty_trusted_ref_from_the_commit_sha():
 
 def test_manifest_verification_precedes_codegraph_execution():
     workflow = read(".github/workflows/agentic-review.yml")
-    assert workflow.index("verify-ci-assedef test_read_only_generation_and_scoped_publication():
+    assert workflow.index("verify-ci-assets.py") < workflow.index("ci-codegraph.sh")
+
+
+def test_read_only_generation_and_scoped_publication():
     workflow = read(".github/workflows/agentic-review.yml")
     for agent in ("junie", "gemini"):
         section = re.search(rf"(?ms)^  {agent}:$(.*?)(?=^  \w)", workflow).group(1)
@@ -70,8 +73,6 @@ def test_manifest_verification_precedes_codegraph_execution():
     assert "permission-issues: write" not in notify
     assert "FALLBACK_APP_TOKEN" not in notify
     assert "github.event.comment.id || github.run_id" in workflow
-
-ent.comment.id || github.run_id" in workflow
 
 
 def test_native_opencode_uses_oidc_and_hardened_plan_agent():
