@@ -9,7 +9,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
 OWNED_REF = "randytarampi/dotfiles/.github/workflows/agentic-review.yml@main"
-OPENCODE_ACTION = "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a"
+OPENCODE_ACTION = (
+    "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a"
+)
 # Major tags intentionally accept ASCII digits only.
 MAJOR_REF = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?@v[0-9]+\Z")
 
@@ -94,7 +96,9 @@ def test_refs_reject_nonmajors():
     assert not is_approved_ref(".github/workflows/ci.yml", OWNED_REF)
     assert is_approved_ref(".github/workflows/agentic-review.yml", OPENCODE_ACTION)
     assert not is_approved_ref(".github/workflows/ci.yml", OPENCODE_ACTION)
-    assert not is_approved_ref(".github/workflows/agentic-review.yml", "anomalyco/opencode/github@latest")
+    assert not is_approved_ref(
+        ".github/workflows/agentic-review.yml", "anomalyco/opencode/github@latest"
+    )
 
 
 def test_zizmor_policies_scoped():
