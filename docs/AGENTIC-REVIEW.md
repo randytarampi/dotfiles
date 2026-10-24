@@ -425,3 +425,12 @@ placeholder header is staged immediately before the native action, replaced by
 the action's App token, and removed in an `always()` cleanup step. No
 `github.token` value is stored in the placeholder. The other reviewer lanes
 retain their previous checkout authentication policy.
+
+### Independent reviewer requests and Junie checkout
+
+Separate review-request comments no longer cancel each other merely because
+both target one PR. Workflow concurrency uses the triggering comment's unique
+ID (or run identity for non-comment triggers). Junie checks out the requested
+PR merge ref just like Gemini rather than the default-branch commit. A reviewer
+run succeeds only with actual reviewer output and an authenticated publisher;
+no-op dispatcher runs are not evidence of review publication.

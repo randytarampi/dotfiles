@@ -77,6 +77,11 @@ def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
     assert "FALLBACK_TOKEN: ${{ github.token }}" not in notify
     assert "GH_TOKEN: ${{ github.token }}" not in notify
     assert "JUNIE_APP_TOKEN" in notify
+    # Junie must inspect the same PR merge ref as Gemini/OpenCode.
+    junie_checkout = workflow.split("  junie:\n", 1)[1].split("  gemini:\n", 1)[0]
+    assert "refs/pull/{0}/merge" in junie_checkout
+    assert "persist-credentials: false" in junie_checkout
+    assert "github.event.comment.id || github.run_id" in workflow
     assert "id-token: write" in read(".github/workflows/agent-review.yml")
     assert "id-token: write" in read("configs/review/dispatcher-stub.yml")
     assert "OPENCODE_APP_TOKEN" not in notify
