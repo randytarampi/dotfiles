@@ -10,8 +10,8 @@
 # review-all request the corresponding reviewer(s). Mention triggers are parsed
 # by caller dispatch workflows; dispatcher-mode parsing is centralized here.
 # trigger_tokens is comma-separated and aligned with agents for standardized messaging.
-# Review lanes only generate review content. The notify job is the sole publisher
-# and uses a GitHub App token when one is configured.
+# OpenCode's official GitHub App publishes using OIDC. Junie and Gemini
+# remain read-only reviewers, with the notify job publishing their results.
 
 name: Agentic review
 
@@ -59,10 +59,6 @@ on:
       JUNIE_APP_ID:
         required: false
       JUNIE_APP_PRIVATE_KEY:
-        required: false
-      OPENCODE_APP_ID:
-        required: false
-      OPENCODE_APP_PRIVATE_KEY:
         required: false
       GEMINI_APP_ID:
         required: false
@@ -192,20 +188,35 @@ jobs:
             printf 'prompt<<%s\n%s\n%s\n' "${delim}" "${prompt}" "${delim}"
           } >> "${GITHUB_OUTPUT}"
 
-  # Review job runs untrusted PR content. The dispatcher gates triggers to
-  # trusted repo actors; keep provider keys minimal and never add write
-  # permissions beyond pull-requests/issues here.
+  # Native OpenCode GitHub integration: OIDC mints the installed App token.
+  # Its action publishes directly; the separate notify job only handles
+  # Junie/Gemini. The plan agent plus a push hook protects review-only work.
   opencode:
-    outputs:
-      review: ${{ steps.opencode_review.outputs.review }}
     needs: parse
     if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,')
     runs-on: ubuntu-latest
-    # The review agent receives a read-only GitHub token. Publication is handled
-    # by the separate notify job with an explicitly minted App token.
     permissions:
       contents: read
+      id-token: write
     steps:
+      - name: Check event supported by official OpenCode action
+        env:
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          case "${GITHUB_EVENT_NAME}" in
+            issue_comment|pull_request_review_comment)
+              jq -e '.comment.body | test("(^|[[:space:]])/(opencode|oc)([[:space:]]|$)")' "${GITHUB_EVENT_PATH}" >/dev/null
+              ;;
+            pull_request)
+              # Label-triggered requests are PR events with an explicit prompt.
+              [[ -n "${PR_NUMBER}" ]]
+              ;;
+            *)
+              echo "Unsupported OpenCode event: ${GITHUB_EVENT_NAME}. Use /opencode in a PR comment." >&2
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
@@ -247,18 +258,8 @@ jobs:
             codegraph-${{ runner.os }}-${{ github.repository }}-
       - name: Install codegraph + build index
         run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
-      - name: Install code-review skill
-        run: mkdir -p .opencode/skills/code-review && cp "${TRUSTED_DOTFILES}/.github/skills/code-review/SKILL.md" .opencode/skills/code-review/SKILL.md
-      - name: Install and verify the pinned OpenCode CLI
-        env:
-          OPENCODE_VERSION: "1.18.34"
-        run: |
-          set -euo pipefail
-          npm install --global "opencode-ai@${OPENCODE_VERSION}"
-          command -v opencode
-          version_output="$(opencode --version)"
-          version_pattern="(^|[^0-9])${OPENCODE_VERSION//./\\.}([^0-9]|$)"
-          [[ "${version_output}" =~ ${version_pattern} ]]
+      - name: Install codegraph + build index
+        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
       - name: Load review prompt
         run: |
           prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
@@ -280,39 +281,41 @@ jobs:
             # Keep the closer on its own line even if the prompt lacks a trailing newline.
             printf '\n%s\n' "$delim"
           } >> "$GITHUB_ENV"
-      - name: Run OpenCode review
-        id: opencode_review
+      - name: Configure read-only OpenCode plan agent
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          source = Path(os.environ["TRUSTED_DOTFILES"]) / "configs/opencode/ci/opencode.json"
+          config = json.loads(source.read_text())
+          config.setdefault("agent", {})["plan"] = {
+              "mode": "primary",
+              "permission": {"edit": "deny", "bash": "deny", "task": "deny"},
+          }
+          dest = Path(os.environ["RUNNER_TEMP"]) / "opencode-review-config.json"
+          dest.write_text(json.dumps(config) + "\n")
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              print(f"OPENCODE_CONFIG={dest}", file=output)
+          PY
+          mkdir -p "${RUNNER_TEMP}/review-no-push"
+          printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
+          chmod +x "${RUNNER_TEMP}/review-no-push/pre-push"
+          git config --local core.hooksPath "${RUNNER_TEMP}/review-no-push"
+      - name: Review with official OpenCode GitHub App
+        # SHA underlying the upstream 'latest' action tag on 2026-10-24.
+        # The action installs its own CLI, which can move independently.
+        uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
-          OPENCODE_CONFIG: ${{ env.TRUSTED_DOTFILES }}/configs/opencode/ci/opencode.json
-          REVIEW_FILE: ${{ runner.temp }}/opencode-review.md
-          # Env indirection keeps event-derived prompt interpolation out of the
-          # run script (zizmor template-injection). \n escapes keep the env
-          # value a single line; format() renders the literal newline.
-          EFFECTIVE_PROMPT: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
-        run: |
-          set -euo pipefail
-          opencode run --print-logs --format default \
-            --model opencode/big-pickle \
-            "$EFFECTIVE_PROMPT" \
-            >"${REVIEW_FILE}" 2>&1
-          delim="OPENCODE_REVIEW_$(openssl rand -hex 8)"
-          {
-            printf 'review<<%s\n' "${delim}"
-            cat "${REVIEW_FILE}"
-            # Keep the closer on its own line even if the review body lacks a trailing newline.
-            printf '\n%s\n' "${delim}"
-          } >>"${GITHUB_OUTPUT}"
-      - name: Upload OpenCode review
-        if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: opencode-review-${{ github.run_id }}
-          path: ${{ runner.temp }}/opencode-review.md
-          if-no-files-found: ignore
+          model: opencode/big-pickle
+          agent: plan
+          share: "false"
+          prompt: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}\n\nReview only. Do not modify files, commit, push, open branches or create PRs.', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || format('{0}\n\nReview only. Do not modify files, commit, push, open branches or create PRs.', env.CODE_REVIEW_PROMPT) }}
 
   junie:
     outputs:
@@ -539,7 +542,7 @@ jobs:
           fi
 
   notify:
-    if: ${{ always() && needs.parse.result == 'success' && needs.parse.outputs.agents != '' }}
+    if: ${{ always() && needs.parse.result == 'success' && (contains(format(',{0},', needs.parse.outputs.agents), ',junie,') || contains(format(',{0},', needs.parse.outputs.agents), ',gemini,')) }}
     needs: [parse, opencode, junie, gemini, copilot]
     runs-on: ubuntu-latest
     permissions:
@@ -550,8 +553,6 @@ jobs:
         env:
           JUNIE_APP_ID: ${{ secrets.JUNIE_APP_ID }}
           JUNIE_APP_PRIVATE_KEY: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
-          OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
-          OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
           GEMINI_APP_ID: ${{ secrets.GEMINI_APP_ID }}
           GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
           APP_ID: ${{ secrets.APP_ID }}
@@ -560,7 +561,7 @@ jobs:
         run: |
           set -euo pipefail
           IFS=',' read -ra selected_agents <<<"${AGENTS}"
-          for agent in junie opencode gemini; do
+          for agent in junie gemini; do
             if [[ ",${AGENTS}," != *",${agent},"* ]]; then
               echo "${agent}=false" >> "${GITHUB_OUTPUT}"
               continue
@@ -578,7 +579,7 @@ jobs:
           fallback_needed=false
           for agent in "${selected_agents[@]}"; do
             case "${agent}" in
-              junie|opencode|gemini)
+              junie|gemini)
                 upper="${agent^^}"
                 id_name="${upper}_APP_ID"
                 key_name="${upper}_APP_PRIVATE_KEY"
@@ -601,17 +602,6 @@ jobs:
         with:
           app-id: ${{ secrets.JUNIE_APP_ID }}
           private-key: ${{ secrets.JUNIE_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-pull-requests: write
-      - id: opencode_app_token
-        if: ${{ steps.publication_credentials.outputs.opencode == 'true' }}
-        uses: actions/create-github-app-token@v3
-        env:
-          OPENCODE_APP_ID: ${{ secrets.OPENCODE_APP_ID }}
-          OPENCODE_APP_PRIVATE_KEY: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
-        with:
-          app-id: ${{ secrets.OPENCODE_APP_ID }}
-          private-key: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
           permission-issues: write
           permission-pull-requests: write
       - id: gemini_app_token
@@ -646,7 +636,6 @@ jobs:
       - name: Publish review bodies
         env:
           JUNIE_APP_TOKEN: ${{ steps.junie_app_token.outputs.token }}
-          OPENCODE_APP_TOKEN: ${{ steps.opencode_app_token.outputs.token }}
           GEMINI_APP_TOKEN: ${{ steps.gemini_app_token.outputs.token }}
           FALLBACK_APP_TOKEN: ${{ steps.fallback_app_token.outputs.token }}
           PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
@@ -677,7 +666,7 @@ jobs:
               echo "Requested ${agent} reviewer did not succeed: ${result}." >&2
               exit 1
             fi
-            if [[ "${agent}" != copilot && ! -s "reviews/${agent}-review.md" ]]; then
+            if [[ "${agent}" != copilot && "${agent}" != opencode && ! -s "reviews/${agent}-review.md" ]]; then
               echo "INCOMPLETE: requested ${agent} reviewer returned no review body." >&2
               exit 1
             fi
@@ -703,13 +692,12 @@ jobs:
             marker="<!-- agent-review:${agent} -->"
             case "${agent}" in
               junie) poster_token="${JUNIE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
-              opencode) poster_token="${OPENCODE_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
               gemini) poster_token="${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
               *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
             esac
-            # The Copilot job has requested the native reviewer. It needs no
-            # application token or routine status comment.
-            if [[ "${agent}" == copilot ]]; then
+            # Copilot's native reviewer and OpenCode's official App publish
+            # directly; do not create duplicate review comments.
+            if [[ "${agent}" == copilot || "${agent}" == opencode ]]; then
               continue
             fi
             if [[ -z "${poster_token}" ]]; then

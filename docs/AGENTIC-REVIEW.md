@@ -19,8 +19,8 @@ used by both the GitHub Actions and local review lanes.
 | Copilot auto-request | REST job in the reusable workflow | `review-copilot` label | none | requests `copilot-pull-request-reviewer[bot]` |
 
 `review-all` fans out to opencode, junie, gemini, and copilot. Mentions work
-regardless of labels; labels gate unprompted reviews. OpenCode is label-gated
-like the others.
+regardless of labels; labels gate unprompted reviews. OpenCode accepts trusted comment commands and labelled PR review requests,
+with official action support qualified by live tests.
 
 ## Labels
 
@@ -85,15 +85,16 @@ repository instructions.
   Copilot setup uses a baked-in immutable 40-character dotfiles SHA for automatic
   runs and accepts an optional manual-dispatch override; PR content never
   participates in prompt-file loading.
-- Security posture: minimal `permissions` per job, read-only `github.token` in
-  every agent lane, `sender.type != 'Bot'`
-  filter, per-PR `concurrency` cancel-in-progress, and verified floating-major
-  refs for third-party actions,
-  read-only MCP tool allowlists, no `pull_request_target`. Normal OpenCode,
-  Junie, and Gemini lanes have only `contents: read`, do not persist checkout
-  credentials, and cannot publish. Each lane hands its review body to `notify`
-  as a job output and review artifact; `notify` is the only job that publishes
-  PR comments, using only a narrowly scoped GitHub App token. The separate manual fix lane is
+- Security posture: minimal per-job permissions, bot-sender filtering, and
+  trusted review assets from an immutable SHA. OpenCode needs `contents: read`
+  and `id-token: write` to exchange GitHub OIDC for the installed OpenCode App
+  token. Its official action posts comments itself and the plan agent is
+  configured to deny edits, bash and subagent delegation; a local pre-push hook
+  blocks ordinary pushes. The App token can technically write according to
+  its installation permissions, so this is not a cryptographic read-only
+  sandbox. Only maintainer-authorized triggers may launch it. Junie and Gemini
+  use read-only `github.token` and pass their results to the separate `notify`
+  publisher. The manual fix lane remains separate, explicitly gated and
   owner-authenticated, generation-read-only, gated by the `agentic-review-fix`
   environment, validates paths and gitlinks, then publishes only the
   exact-path allowlist on a unique `agentic-review-bot/<run-id>` branch and
@@ -153,26 +154,29 @@ Set per repo (Settings → Secrets and variables → Actions):
 - `OPENROUTER_API_KEY` — OpenRouter (consumed by OpenCode's `free`
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
-- Per-agent GitHub Apps: `JUNIE_APP_ID` + `JUNIE_APP_PRIVATE_KEY`,
-  `OPENCODE_APP_ID` + `OPENCODE_APP_PRIVATE_KEY`, and `GEMINI_APP_ID` +
-  `GEMINI_APP_PRIVATE_KEY`. These mirror the manual App setup described by
-  `anthropics/claude-code-action` Option 2 and post as `<app-slug>[bot]`.
-- Fallback GitHub App: `APP_ID` + `APP_PRIVATE_KEY`. When a per-agent pair is
-  absent, this App is used for that lane.
+- OpenCode publishing uses the installed [OpenCode GitHub App](https://github.com/apps/opencode-agent) through OIDC; **no `OPENCODE_APP_ID` or `OPENCODE_APP_PRIVATE_KEY` secrets are needed**. Callers must grant `id-token: write`.
+- Junie/Gemini publisher Apps: `JUNIE_APP_ID` + `JUNIE_APP_PRIVATE_KEY`, and
+  `GEMINI_APP_ID` + `GEMINI_APP_PRIVATE_KEY`.
+- Fallback GitHub App: `APP_ID` + `APP_PRIVATE_KEY` for Junie/Gemini only.
 - App tokens are minted per notify job with a one-hour expiry. Each App must be
   installed on the consuming repository with Issues: write and Pull requests:
   write permissions. If a requested review has no per-agent or fallback
-  App available, `notify` fails rather than silently skipping publication;
+  App available for Junie/Gemini, `notify` fails rather than silently skipping publication;
   it never falls back to `github.token` or `github-actions[bot]`.
   Unrequested events do not start a publication job.
-- OpenCode runs the version-pinned CLI directly with
-  `opencode run --print-logs --format default` and uploads its captured review.
-  The pinned GitHub action was not used because its `opencode github run`
-  integration has no output channel and can publish internally. The pinned
-  Junie action exposes the documented `silent_mode: "true"` input and
-  `junie_summary` output; that mode is enabled so Junie emits its summary
-  without attempting its normal feedback comments. Both summaries are
-  consumed by `notify`, which publishes the actual bodies.
+- OpenCode uses the **official** `anomalyco/opencode/github` composite action,
+  pinned to its upstream `latest` tag's resolved commit. The action invokes
+  `opencode github run`, exchanges the runner's OIDC token for the installed
+  App's token, and manages its own PR comments. The action installs its CLI
+  dynamically; the action SHA does not freeze that binary. The `plan` agent,
+  `share: false`, denied mutating tools and pre-push hook are review safety
+  controls. Native publication does **not** produce the old
+  `<!-- agent-review:opencode -->` marker or guarantee comment deduplication.
+  Explicit `/opencode` and `/oc` comment triggers and labelled PR requests
+  run through the same native action, subject to GitHub event support.
+- Junie's `silent_mode: "true"` exposes its `junie_summary` for the separate
+  `notify` job, which publishes Junie/Gemini bodies and handles their
+  per-agent/fallback App credentials; Copilot uses its native reviewer.
   A poster account should not manually issue trigger comments: unlike
   `github-actions[bot]`, a PAT-backed user is not filtered as a bot and could
   retrigger the dispatcher.
@@ -287,20 +291,25 @@ profile is follow-up work; dispatcher gating is the primary control.
 
 ## Publication acceptance and known limitations
 
-A selected OpenCode, Junie or Gemini reviewer must return a nonempty review body
-and have a functioning GitHub App publisher (reviewer-specific or a necessary
-fallback). Failure, missing credentials and empty successful output are **not**
-successful publication. Unrequested events perform no publication. Copilot
-requests its native review directly and does not need an App-generated status
-comment. Tokens are minted only for the selected reviewers needing them.
+OpenCode's official action publishes its review through the installed App and
+requires `id-token: write` on the caller. A successful native run is not the
+same as an independent check of substantive review content: inspect the App's
+comment and the exact reviewed PR head. It may create a separate comment on
+repeat requests; unlike the former custom publisher it has no stable comment
+marker/update-in-place contract. The native action may write PR branches when
+using a mutating agent, hence this workflow's read-only plan configuration and
+push guard. Test real events, permissions and lack of mutations.
 
-This is a code-level contract, **not yet end-to-end proof**. Before promoting the
-workflow, run a disposable PR with four cases: authorized reviewer publication,
-missing App-token failure, an empty-review result classified incomplete, and an
-unrequested event producing no comment. Capture exact PR head, job IDs,
-outcomes, created/updated comment IDs and whether a re-trigger replaced rather
-than duplicated a comment. GitHub-hosted secret availability and real action
-outputs cannot be proven by static workflow inspection.
+Junie and Gemini still require nonempty artifacts and an authenticated
+publisher (per-agent or fallback App); failures and missing credentials must
+not produce misleading success. Copilot requests a native review and gets no
+redundant status comment. Unrequested events do not publish.
+
+Before promotion, test a same-repository, maintainer-controlled PR with the
+exact action ref: OIDC exchange, substantive review, publication, no code push,
+and the supported label/comment triggers. Separately check failed model calls,
+missing/ineligible App installation and unrequested events. The new action
+controls its own comment lifecycle; do not claim old idempotency guarantees.
 
 The workflow checks out a PR merge ref for OpenCode and Gemini. Junie's current
 checkout does not explicitly select a PR ref, so its reviewed code snapshot
@@ -312,7 +321,7 @@ separate rollout step after merge and runtime validation.
 
 ## Predictability
 
-All normal reviewer lanes are read-only: they do not commit, push, or alter the
+Junie and Gemini normal review lanes are read-only: they do not commit, push, or alter the
 checkout. Any write-capable automation is isolated behind an explicit workflow,
 protected environment, exact path checks, and a GitHub App installation token.
 
@@ -393,5 +402,5 @@ manual dispatch accepts an optional override.
   labels if wanted.
 - Distribution to the other repos — copy `agent-review.yml` there and point
   `uses:` at this repo; secrets must be set per repo.
-- GitHub App installation for the OpenCode action (OIDC mode) — the token
-  approach (`github.token`) is used; switch if App-based auth is ever needed.
+- OpenCode App installation is required for the OIDC action; downstream repos
+  must install the app and grant their dispatcher `id-token: write`.
