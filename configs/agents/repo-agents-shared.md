@@ -45,9 +45,13 @@ Do not erase earlier contributors when handing work to another model or agent.
   `Co-authored-by: ChatGPT (gpt-4) <noreply@openai.com>`. OpenCode agents use a base
   identity of `Co-authored-by: opencode <noreply@opencode.ai>` with the model
   derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <noreply@opencode.ai>`).
-  Use the contributor's own supported name/model/email for other agents; never invent an
-  email or impersonate a human or GitHub user. If no suitable identity is available,
-  acknowledge the agent and contribution in the PR or document instead.
+  Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
+  runtime model in parentheses only when the session actually reports it
+  (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`). Do not guess
+  a family or version. Use the contributor's own supported name/model/email for
+  other agents; never invent an email or impersonate a human or GitHub user. If
+  no suitable identity is available, acknowledge the agent and contribution in
+  the PR or document instead.
 - **Reviewed-by trailers:** when a PR or code review is attributed to an agent,
   use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents
   derive their model at time of review; if unavailable, use the base identity
