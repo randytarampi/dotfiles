@@ -1,4 +1,6 @@
+import io
 import json
+import math
 import sys
 import unittest
 from email.message import Message
@@ -249,6 +251,209 @@ class RouteProbeTests(unittest.TestCase):
                 route_probes.fetch_gateway_models("http://gateway:4000/v1", "k")
             )
         self.assertIsNone(route_probes.fetch_gateway_models("ftp://gateway/v1", "k"))
+
+
+class H0EmbeddingCandidateTests(unittest.TestCase):
+    """Read-only tests for the H0 embedding candidate resolver (issue #85)."""
+
+    def test_validate_embedding_vector_finite_nonzero(self):
+        vec = [0.1, -0.3, 0.5, 0.2]
+        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        self.assertTrue(finite)
+        self.assertTrue(nonzero)
+        self.assertAlmostEqual(
+            norm, math.sqrt(0.1**2 + 0.3**2 + 0.5**2 + 0.2**2), delta=1e-6
+        )
+
+    def test_validate_embedding_vector_nan(self):
+        vec = [0.1, float("nan"), 0.5]
+        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        self.assertFalse(finite)
+        self.assertIsNone(norm)
+
+    def test_validate_embedding_vector_inf(self):
+        vec = [0.1, float("inf"), 0.5]
+        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        self.assertFalse(finite)
+        self.assertIsNone(norm)
+
+    def test_validate_embedding_vector_all_zeros(self):
+        vec = [0.0, 0.0, 0.0]
+        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        self.assertTrue(finite)
+        self.assertFalse(nonzero)
+        self.assertAlmostEqual(norm, 0.0)
+
+    def test_probe_embedding_vector_success(self):
+        body = json.dumps(
+            {"data": [{"embedding": [0.1, 0.2, 0.3]}], "model": "test-model"}
+        ).encode()
+        ok = FakeResponse(status=200, body=body)
+        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+            obs = route_probes.probe_embedding_vector(
+                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+            )
+        self.assertEqual(obs.outcome, "qualified")
+        self.assertEqual(obs.qualification, Qualification.PROTOCOL_PROBED.value)
+        self.assertEqual(obs.dimension, 3)
+        self.assertTrue(obs.vector_finite)
+        self.assertTrue(obs.vector_nonzero)
+        self.assertIsNotNone(obs.vector_norm)
+        self.assertEqual(obs.digest, "test-model")
+
+    def test_probe_embedding_vector_unavailable_http(self):
+        err = route_probes.urllib.error.HTTPError(
+            "http://x/v1/embeddings", 503, "unavail", {}, io.BytesIO(b"")
+        )
+        with patch.object(route_probes.urllib.request, "urlopen", side_effect=err):
+            obs = route_probes.probe_embedding_vector(
+                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+            )
+        self.assertEqual(obs.outcome, "unavailable")
+        self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
+        self.assertIsNone(obs.dimension)
+
+    def test_probe_embedding_vector_connection_failure(self):
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=TimeoutError("timed out"),
+        ):
+            obs = route_probes.probe_embedding_vector(
+                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+            )
+        self.assertEqual(obs.outcome, "unavailable")
+        self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
+
+    def test_probe_embedding_vector_shape_error(self):
+        body = json.dumps({"data": [{"embedding": "not-a-list"}]}).encode()
+        ok = FakeResponse(status=200, body=body)
+        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+            obs = route_probes.probe_embedding_vector(
+                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+            )
+        self.assertEqual(obs.outcome, "unknown")
+        self.assertEqual(obs.qualification, Qualification.UNKNOWN.value)
+
+    def test_fetch_ollama_tags_returns_names(self):
+        body = json.dumps(
+            {"models": [{"name": "b-model"}, {"name": "a-model"}]}
+        ).encode()
+        ok = FakeResponse(status=200, body=body)
+        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+            tags = route_probes._fetch_ollama_tags(
+                "http://localhost:11434/api", None, timeout=5
+            )
+        self.assertEqual(tags, ["a-model", "b-model"])
+
+    def test_fetch_ollama_tags_url_failure_returns_none(self):
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=TimeoutError("no route"),
+        ):
+            self.assertIsNone(
+                route_probes._fetch_ollama_tags(
+                    "http://localhost:11434/api", None, timeout=5
+                )
+            )
+
+    def test_fetch_ollama_show_returns_details(self):
+        body = json.dumps(
+            {
+                "modelinfo": {
+                    "embedding": True,
+                    "name": "embeddinggemma-2:740m-mxfp8",
+                }
+            }
+        ).encode()
+        ok = FakeResponse(status=200, body=body)
+        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+            details = route_probes._fetch_ollama_show(
+                "http://localhost:11434/api", "embeddinggemma", None, timeout=5
+            )
+        self.assertIsNotNone(details)
+        assert details is not None  # for LSP narrowing
+        self.assertTrue(details["modelinfo"]["embedding"])
+
+    def test_discover_embedding_candidates_ollama(self):
+        """Ollama discovery: non-embedding models are unavailable, embedding models are probed."""
+        tags_body = json.dumps(
+            {"models": [{"name": "text-embed"}, {"name": "chat-model"}]}
+        ).encode()
+        # _fetch_ollama_tags returns sorted names, so "chat-model" is processed first
+        show_chat = json.dumps(
+            {"modelinfo": {"embedding": False, "name": "chat-model"}}
+        ).encode()
+        show_embed = json.dumps(
+            {"modelinfo": {"embedding": True, "name": "text-embed"}}
+        ).encode()
+        embed_probe_body = json.dumps(
+            {"data": [{"embedding": [0.1, 0.2, 0.3]}], "model": "text-embed"}
+        ).encode()
+
+        responses = iter(
+            [
+                FakeResponse(200, tags_body),  # /api/tags
+                FakeResponse(200, show_chat),  # /api/show chat-model (first after sort)
+                FakeResponse(200, show_embed),  # /api/show text-embed
+                FakeResponse(200, embed_probe_body),  # /embeddings text-embed
+            ]
+        )
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=lambda *a, **k: next(responses),
+        ):
+            obs = route_probes.discover_embedding_candidates(
+                ollama_url="http://localhost:11434/v1"
+            )
+
+        self.assertEqual(len(obs), 2)
+        by_alias = {o.wire_alias: o for o in obs}
+        self.assertIn("text-embed", by_alias)
+        self.assertEqual(by_alias["text-embed"].outcome, "qualified")
+        self.assertEqual(by_alias["text-embed"].provider, "ollama")
+        self.assertEqual(by_alias["text-embed"].dimension, 3)
+        self.assertIn("chat-model", by_alias)
+        self.assertEqual(by_alias["chat-model"].outcome, "unavailable")
+
+    def test_discover_embedding_candidates_no_urls_returns_empty(self):
+        self.assertEqual(
+            route_probes.discover_embedding_candidates(),
+            [],
+        )
+
+    def test_discover_embedding_candidates_gateway(self):
+        """Gateway discovery: gateway models are probed for embedding support."""
+        models_body = json.dumps(
+            {"data": [{"id": "ollama/embeddinggemma"}, {"id": "chat-model"}]}
+        ).encode()
+        probe_body = json.dumps(
+            {"data": [{"embedding": [0.5, 0.1, 0.2]}], "model": "ollama/embeddinggemma"}
+        ).encode()
+
+        responses = iter(
+            [
+                FakeResponse(200, models_body),  # /v1/models
+                FakeResponse(200, probe_body),  # /embeddings for ollama/embeddinggemma
+            ]
+        )
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            side_effect=lambda *a, **k: next(responses),
+        ):
+            obs = route_probes.discover_embedding_candidates(
+                gateway_url="http://127.0.0.1:4000/v1"
+            )
+
+        # Only ollama/* and gemma* aliases are probed per discover_embedding_candidates
+        self.assertEqual(len(obs), 1)
+        self.assertEqual(obs[0].wire_alias, "ollama/embeddinggemma")
+        self.assertEqual(obs[0].outcome, "qualified")
+        self.assertEqual(obs[0].provider, "gateway")
+        self.assertEqual(obs[0].dimension, 3)
 
 
 if __name__ == "__main__":
