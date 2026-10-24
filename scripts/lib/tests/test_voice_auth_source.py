@@ -162,18 +162,36 @@ def test_omission_messages_label_operation_model(tmp_path, monkeypatch, caplog):
     assert "omitting" in text.lower()
 
 
-def test_incomplete_cleanup_is_partial_status():
+def test_config_only_direct_llm_without_stt_reports_config_only(monkeypatch, tmp_path):
+    """A gateway-untested direct LLM route is a configuration contract.
+
+    The designed taxonomy labels this state 'config-only' — never 'partial',
+    which is reserved for tested gateway LLM delivery without STT. Gates are
+    pinned so host exports cannot flip the resolution path.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
-    assert config.get("_voice_status") == "unresolved", (
+    assert config.get("_voice_status") == "config-only", (
         f"voice status {config.get('_voice_status')!r}; "
         f"endpoint={config.get('endpoint')!r}; model={config.get('model')!r}; "
         f"apiKeyEnv={config.get('apiKeyEnv')!r}; keys={sorted(config)}; "
         f"selections={config.get('_voice_state', {}).get('selections')!r}"
     )
+    assert config.get("endpoint") == "https://api.openai.com/v1"
+    assert config.get("model")
+    assert config.get("apiKeyEnv") == "OPENAI_API_KEY"
 
 
-def test_no_resolved_voice_route_is_unresolved():
+def test_no_resolved_voice_route_is_unresolved(monkeypatch, tmp_path):
+    """Gateway mode with no runtime credential omits the route entirely."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    (tmp_path / ".local/share/litellm/clients").mkdir(parents=True)
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
     voice = load_script()
     config = voice.get_voice_config("plus", {"stt_transport": "openai"})
     assert config["_voice_status"] == "unresolved", (
