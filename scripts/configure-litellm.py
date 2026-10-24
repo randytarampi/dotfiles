@@ -34,6 +34,7 @@ import litellm_config  # noqa: E402
 from litellm_client_auth import resolve_client_auth  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
+SERVICE_ENV_DEFAULT = "~/.local/share/litellm/service.env"
 
 _CLIENT_ENABLE_GATES = {
     "opencode": ("DOTFILES_RUN_OPENCODE_SETUP",),
@@ -511,6 +512,233 @@ def provision_app_keys(
     )
 
 
+def _provisioning_preflight(records, service_env_path, enforce_registry_gates, strict):
+    provisioning_rows = []
+    for row in CLIENT_REGISTRY:
+        eligible, reason = _client_provisioning_state(row, enforce_registry_gates)
+        if eligible:
+            provisioning_rows.append(row)
+        elif row["classification"] == "classification-only" or row["client"] == "junie":
+            logger.info("Skipping LiteLLM client %s: %s", row["client"], reason)
+        else:
+            logger.debug("Skipping LiteLLM client %s: %s", row["client"], reason)
+    preflight, refusal = [], None
+    for row in provisioning_rows:
+        alias, env_name = row["client"], row["env_name"]
+        client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+        auth = resolve_client_auth(env_name, client_key_path)
+        remote = next(
+            (
+                item
+                for item in records
+                if isinstance(item, dict) and item.get("key_alias") == alias
+            ),
+            None,
+        )
+        if auth.state == "conflict":
+            logger.error(
+                "LiteLLM client %s credential conflict: %s", alias, auth.detail
+            )
+            refusal = "credential conflict"
+        refusal = _preflight_refusal(auth, remote, refusal)
+        if auth.state == "absent" and remote is not None and not strict:
+            logger.info("LiteLLM client %s not authorized: credential absent", alias)
+        preflight.append((row, auth, remote))
+    if refusal:
+        logger.error("LiteLLM provisioning preflight refused: %s", refusal)
+        return None, None
+    return provisioning_rows, preflight
+
+
+def _preflight_refusal(auth, remote, refusal):
+    if auth.state == "accepted" and remote is None:
+        return "invalid state: local key exists without a gateway record"
+    return refusal
+
+
+def _handle_duplicate_alias(
+    alias, env_name, client_key_path, service_env_path, api_base, master_key, found
+):
+    listing = _request_json(
+        f"{api_base}/key/list?return_full_object=true", "GET", master_key
+    )
+    retry_records = listing.get("keys", []) if isinstance(listing, dict) else []
+    record = next(
+        (
+            item
+            for item in retry_records
+            if isinstance(item, dict) and item.get("key_alias") == alias
+        ),
+        None,
+    )
+    materialized = _key_file_materialized(client_key_path, env_name, service_env_path)
+    if record and not materialized and not client_key_path.is_symlink():
+        key = _recover_stranded_app_key(api_base, master_key, alias, record)
+        if key:
+            found[env_name] = key
+        return
+    logger.info(
+        "LiteLLM key alias %s already exists; preserving local key state", alias
+    )
+
+
+def _generate_app_key(
+    alias, env_name, client_key_path, service_env_path, api_base, master_key, found
+):
+    try:
+        generated = _request_json(
+            f"{api_base}/key/generate",
+            "POST",
+            master_key,
+            {"key_alias": alias, "duration": None},
+        )
+    except OSError as error:
+        if getattr(error, "code", None) != 400:
+            raise
+        _handle_duplicate_alias(
+            alias,
+            env_name,
+            client_key_path,
+            service_env_path,
+            api_base,
+            master_key,
+            found,
+        )
+        return False
+    key = generated.get("key") if isinstance(generated, dict) else None
+    if not key:
+        logger.warning("LiteLLM did not return a key for alias %s", alias)
+        return False
+    materialized = _materialized_client_key_value(
+        client_key_path, env_name, service_env_path
+    )
+    if materialized and materialized != key:
+        logger.error(
+            "LiteLLM client %s invalid state: generated and canonical credentials disagree",
+            alias,
+        )
+        return True
+    found[env_name] = key
+    return False
+
+
+def _prepare_app_key(
+    row, auth, remote, service_env_path, api_base, master_key, dry_run
+):
+    alias, env_name = row["client"], row["env_name"]
+    client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+    found = {}
+    if auth.state == "accepted" and auth.value:
+        found[env_name] = auth.value
+    if remote is not None:
+        _prepare_existing_remote_key(
+            row,
+            auth,
+            remote,
+            client_key_path,
+            service_env_path,
+            api_base,
+            master_key,
+            dry_run,
+            found,
+        )
+        return found, False
+    if auth.state == "accepted":
+        return found, False
+    return found, _generate_app_key(
+        alias, env_name, client_key_path, service_env_path, api_base, master_key, found
+    )
+
+
+def _prepare_existing_remote_key(
+    row,
+    auth,
+    remote,
+    client_key_path,
+    service_env_path,
+    api_base,
+    master_key,
+    dry_run,
+    found,
+):
+    alias, env_name = row["client"], row["env_name"]
+    if client_key_path.is_symlink():
+        return
+    if _key_file_materialized(client_key_path, env_name, service_env_path):
+        if auth.state == "absent":
+            _write_client_key(service_env_path, alias, env_name, dry_run)
+        _verify_app_key_hash(
+            alias,
+            client_key_path,
+            env_name,
+            service_env_path,
+            remote.get("token") if remote else None,
+            dry_run=dry_run,
+        )
+        return
+    key = _recover_stranded_app_key(api_base, master_key, alias, remote)
+    if key:
+        found[env_name] = key
+
+
+def _verify_provisioned_keys(rows, api_base, service_env_path):
+    for row in rows:
+        alias, env_name = row["client"], row["env_name"]
+        key_path = service_env_path.parent / "clients" / f"{alias}.key"
+        auth = resolve_client_auth(env_name, key_path)
+        if not _verify_one_app_key(row, auth, api_base):
+            return False
+    return True
+
+
+def _verify_one_app_key(row, auth, api_base):
+    alias = row["client"]
+    if auth.state != "accepted":
+        logger.error("LiteLLM client %s is not authorized: %s", alias, auth.detail)
+        return False
+    key = auth.value
+    if not key:
+        logger.error("LiteLLM client key is not provisioned: %s", alias)
+        return False
+    try:
+        response = _request_json(f"{api_base}/v1/models", "GET", key)
+    except (OSError, ValueError, TypeError):
+        logger.error("LiteLLM client key authentication failed: %s", alias)
+        return False
+    if not isinstance(response, dict) or not isinstance(response.get("data"), list):
+        logger.error("LiteLLM client key model access failed: %s", alias)
+        return False
+    return True
+
+
+def _persist_generated_app_keys(found, rows, service_env_path):
+    generated_keys = {}
+    rows_by_env = {row["env_name"]: row for row in rows}
+    for name, value in found.items():
+        row = rows_by_env[name]
+        canonical = resolve_client_auth(
+            name, service_env_path.parent / "clients" / f"{row['client']}.key"
+        )
+        if canonical.state == "absent":
+            generated_keys[name] = value
+    if generated_keys:
+        _persist_app_keys(service_env_path, generated_keys)
+        logger.info("Provisioned %d LiteLLM app key(s)", len(generated_keys))
+
+
+def _write_provisioned_client_keys(rows, service_env_path, dry_run):
+    writers = {
+        "opencode": _write_opencode_key,
+        "pi": _write_pi_key,
+        "junie": _write_junie_key,
+        "openwebui": _write_openwebui_key,
+    }
+    for row in rows:
+        writer = writers.get(row["client"])
+        if writer:
+            writer(service_env_path, dry_run=dry_run)
+
+
 def _provision_app_keys(
     master_key,
     service_env_path=None,
@@ -526,9 +754,7 @@ def _provision_app_keys(
     api_base = (
         api_base or f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}"
     ).rstrip("/")
-    service_env_path = Path(
-        service_env_path or "~/.local/share/litellm/service.env"
-    ).expanduser()
+    service_env_path = Path(service_env_path or SERVICE_ENV_DEFAULT).expanduser()
     try:
         _request_json(
             (
@@ -545,197 +771,25 @@ def _provision_app_keys(
             f"{api_base}/key/list?return_full_object=true", "GET", master_key
         )
         records = listing.get("keys", []) if isinstance(listing, dict) else []
-        aliases = {
-            item.get("key_alias")
-            for item in records
-            if isinstance(item, dict) and item.get("key_alias")
-        }
-        found = {}
-        provisioning_rows = []
-        for row in CLIENT_REGISTRY:
-            eligible, reason = _client_provisioning_state(row, enforce_registry_gates)
-            if eligible:
-                provisioning_rows.append(row)
-            elif (
-                row["classification"] == "classification-only"
-                or row["client"] == "junie"
-            ):
-                logger.info("Skipping LiteLLM client %s: %s", row["client"], reason)
-            else:
-                logger.debug("Skipping LiteLLM client %s: %s", row["client"], reason)
-        preflight = []
-        refusal = None
-        for row in provisioning_rows:
-            alias, env_name = row["client"], row["env_name"]
-            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
-            auth = resolve_client_auth(env_name, client_key_path)
-            remote = next(
-                (
-                    item
-                    for item in records
-                    if isinstance(item, dict) and item.get("key_alias") == alias
-                ),
-                None,
-            )
-            if auth.state == "conflict":
-                logger.error(
-                    "LiteLLM client %s credential conflict: %s", alias, auth.detail
-                )
-                refusal = "credential conflict"
-            if auth.state == "accepted" and remote is None:
-                refusal = "invalid state: local key exists without a gateway record"
-            elif auth.state == "absent" and remote is not None and not strict:
-                logger.info(
-                    "LiteLLM client %s not authorized: credential absent", alias
-                )
-            preflight.append((row, auth, remote))
-        if refusal:
-            logger.error("LiteLLM provisioning preflight refused: %s", refusal)
+        provisioning_rows, preflight = _provisioning_preflight(
+            records, service_env_path, enforce_registry_gates, strict
+        )
+        if provisioning_rows is None:
             return False
-
+        found = {}
         for row, auth, remote in preflight:
-            alias, env_name = row["client"], row["env_name"]
-            client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
-            stranded_record = remote
-            if auth.state == "accepted" and auth.value:
-                found[env_name] = auth.value
-            if stranded_record is not None:
-                # The key-list endpoint intentionally does not reveal existing
-                # key material; preserve any locally stored key on disk.
-                materialized = _key_file_materialized(
-                    client_key_path, env_name, service_env_path
-                )
-                if client_key_path.is_symlink():
-                    continue
-                if materialized:
-                    if auth.state == "absent":
-                        _write_client_key(service_env_path, alias, env_name, dry_run)
-                    _verify_app_key_hash(
-                        alias,
-                        client_key_path,
-                        env_name,
-                        service_env_path,
-                        stranded_record.get("token") if stranded_record else None,
-                        dry_run=dry_run,
-                    )
-                    continue
-                if stranded_record:
-                    key = _recover_stranded_app_key(
-                        api_base, master_key, alias, stranded_record
-                    )
-                    if key:
-                        found[env_name] = key
-                    continue
-            if auth.state == "accepted":
-                # Do not mint a different credential over a locally accepted
-                # key; rotate explicitly, then verify before retrying.
-                continue
-            try:
-                generated = _request_json(
-                    f"{api_base}/key/generate",
-                    "POST",
-                    master_key,
-                    # key_alias is attribution only; it does not scope
-                    # model access, team membership, or budget.
-                    {"key_alias": alias, "duration": None},
-                )
-            except OSError as error:
-                # Some proxy versions reject duplicate aliases with 400 even
-                # when the list response hides key_alias — treat those as
-                # already-provisioned and keep the loop idempotent.
-                status = getattr(error, "code", None)
-                if status == 400:
-                    listing = _request_json(
-                        f"{api_base}/key/list?return_full_object=true",
-                        "GET",
-                        master_key,
-                    )
-                    retry_records = (
-                        listing.get("keys", []) if isinstance(listing, dict) else []
-                    )
-                    record = next(
-                        (
-                            item
-                            for item in retry_records
-                            if isinstance(item, dict) and item.get("key_alias") == alias
-                        ),
-                        None,
-                    )
-                    materialized = _key_file_materialized(
-                        client_key_path, env_name, service_env_path
-                    )
-                    if record and not materialized and not client_key_path.is_symlink():
-                        key = _recover_stranded_app_key(
-                            api_base, master_key, alias, record
-                        )
-                        if key:
-                            found[env_name] = key
-                        continue
-                    logger.info(
-                        "LiteLLM key alias %s already exists; preserving local key state",
-                        alias,
-                    )
-                    continue
-                raise
-            key = generated.get("key") if isinstance(generated, dict) else None
-            if key:
-                materialized = _materialized_client_key_value(
-                    client_key_path, env_name, service_env_path
-                )
-                if materialized and materialized != key:
-                    logger.error(
-                        "LiteLLM client %s invalid state: generated and canonical credentials disagree",
-                        alias,
-                    )
-                    return False
-                found[env_name] = key
-                aliases.add(alias)
-            else:
-                logger.warning("LiteLLM did not return a key for alias %s", alias)
-        generated_keys = {}
-        for name, value in found.items():
-            row = next(row for row in provisioning_rows if row["env_name"] == name)
-            canonical = resolve_client_auth(
-                name, service_env_path.parent / "clients" / f"{row['client']}.key"
+            prepared, mismatch = _prepare_app_key(
+                row, auth, remote, service_env_path, api_base, master_key, dry_run
             )
-            if canonical.state == "absent":
-                generated_keys[name] = value
-        if generated_keys:
-            _persist_app_keys(service_env_path, generated_keys)
-            logger.info("Provisioned %d LiteLLM app key(s)", len(generated_keys))
-        for row in provisioning_rows:
-            writer = {
-                "opencode": _write_opencode_key,
-                "pi": _write_pi_key,
-                "junie": _write_junie_key,
-                "openwebui": _write_openwebui_key,
-            }.get(row["client"])
-            if writer:
-                writer(service_env_path, dry_run=dry_run)
-        if strict:
-            for row in provisioning_rows:
-                alias, env_name = row["client"], row["env_name"]
-                key_path = service_env_path.parent / "clients" / f"{alias}.key"
-                auth = resolve_client_auth(env_name, key_path)
-                if auth.state != "accepted":
-                    logger.error(
-                        "LiteLLM client %s is not authorized: %s", alias, auth.detail
-                    )
-                    return False
-                key = auth.value
-                if not key:
-                    logger.error("LiteLLM client key is not provisioned: %s", alias)
-                    return False
-                try:
-                    response = _request_json(f"{api_base}/v1/models", "GET", key)
-                except (OSError, ValueError, TypeError):
-                    logger.error("LiteLLM client key authentication failed: %s", alias)
-                    return False
-                if not isinstance(response, dict) or not isinstance(
-                    response.get("data"), list
-                ):
-                    logger.error("LiteLLM client key model access failed: %s", alias)
-                    return False
+            if mismatch:
+                return False
+            found.update(prepared)
+        _persist_generated_app_keys(found, provisioning_rows, service_env_path)
+        _write_provisioned_client_keys(provisioning_rows, service_env_path, dry_run)
+        if strict and not _verify_provisioned_keys(
+            provisioning_rows, api_base, service_env_path
+        ):
+            return False
         return True
     except (OSError, ValueError, TypeError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
@@ -785,7 +839,7 @@ def main():
     if args.require_ready and args.dry_run:
         parser.error("--require-ready cannot be combined with --dry-run")
     if args.require_ready:
-        service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
+        service_env_path = Path(SERVICE_ENV_DEFAULT).expanduser()
         master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
         if not master_key:
             master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)
@@ -837,7 +891,7 @@ def main():
         rates_state = _refresh_rates_snapshot(args.dry_run)
         if rates_state == "updated":
             logger.info("LiteLLM rates snapshot refreshed (models.dev)")
-        service_env_path = Path("~/.local/share/litellm/service.env").expanduser()
+        service_env_path = Path(SERVICE_ENV_DEFAULT).expanduser()
         master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
         if not master_key:
             master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)

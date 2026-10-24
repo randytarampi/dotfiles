@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import litellm_config
 
 FIELDS = {
