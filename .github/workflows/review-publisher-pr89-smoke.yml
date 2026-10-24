@@ -6,6 +6,9 @@ on:
     types: [opened, synchronize, reopened]
 permissions:
   contents: read
+  # The reusable workflow declares this on its Copilot job, even if we select only OpenCode.
+  # GitHub validates the full nested permissions graph before dispatching jobs.
+  pull-requests: write
 jobs:
   smoke:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'test/review-publisher-exact-sha'
