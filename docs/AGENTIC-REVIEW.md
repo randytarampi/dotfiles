@@ -402,3 +402,14 @@ manual dispatch accepts an optional override.
   `uses:` at this repo; secrets must be set per repo.
 - OpenCode App installation is required for the OIDC action; downstream repos
   must install the app and grant their dispatcher `id-token: write`.
+
+### Official OpenCode action prompt compatibility
+
+At the inspected upstream action commit, `opencode github run` reads the
+original GitHub comment body; the composite action advertises a `prompt`
+input but its CLI implementation does not consume that value. Therefore the
+native OpenCode lane **does not claim automatic enforcement of the trusted
+review rubric**. The repo's `AGENTS.md` remains available during review, and
+maintainers can include review-specific instructions in an authorized
+`/opencode` comment. Restoring strict canonical-rubric injection into the
+native action is separate work that requires upstream-supported behavior.
