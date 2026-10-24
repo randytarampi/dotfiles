@@ -170,7 +170,7 @@ Set per repo (Settings → Secrets and variables → Actions):
   `share: false`, denied mutating tools and pre-push hook are review safety
   controls. Native publication does **not** produce the old
   `<!-- agent-review:opencode -->` marker or guarantee comment deduplication.
-  The native action accepts `/opencode` and `/oc` **comment events only**.
+  The native action accepts `/opencode` and `/oc` **PR conversation issue_comment events only**; inline review comments are not qualified and do not start this lane.
   Label events are not valid OpenCode action inputs and never run this lane.
 - Junie's `silent_mode: "true"` exposes its `junie_summary` for the separate
   `notify` job, which publishes Junie/Gemini bodies and handles their

@@ -15,6 +15,7 @@ rules:
         google-github-actions/run-gemini-cli: ref-pin
         coverallsapp/github-action: ref-pin
         qltysh/qlty-action/coverage: ref-pin
+        anomalyco/opencode/github: ref-pin
         # This is the sole owned reusable-workflow exception: its path follows
         # main, while the separate trusted_ref pins verified review assets.
         randytarampi/dotfiles/.github/workflows/agentic-review.yml: any

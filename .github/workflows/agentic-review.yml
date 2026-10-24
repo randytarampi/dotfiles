@@ -96,13 +96,13 @@ jobs:
           if [[ -n "${EVENT_JSON}" ]]; then
             if jq -e '.label != null' >/dev/null <<<"${EVENT_JSON}"; then
               agents="$(jq -r '
-                if (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-all" then "opencode,junie,gemini,copilot"
-                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-opencode" then "opencode"
+                if (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-all" then "junie,gemini,copilot"
+                elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-opencode" then ""
                 elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-junie" then "junie"
                 elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-gemini" then "gemini"
                 elif (.pull_request.author_association | IN("OWNER", "MEMBER", "COLLABORATOR")) and .label.name == "review-copilot" then "copilot"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-all" then "opencode,junie,gemini,copilot"
-                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-opencode" then "opencode"
+                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-all" then "junie,gemini,copilot"
+                elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-opencode" then ""
                 elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-junie" then "junie"
                 elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-gemini" then "gemini"
                 elif .pull_request.author_association == null and (.sender.type != "Bot") and .label.name == "review-copilot" then "copilot"
@@ -195,7 +195,7 @@ jobs:
     needs: parse
     # Upstream opencode github run accepts only comment events. A label event
     # cannot be adapted by passing a prompt to the composite action.
-    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,') && (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+    if: needs.parse.outputs.agents != '' && contains(format(',{0},', needs.parse.outputs.agents), ',opencode,') && github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
     permissions:
       contents: read
