@@ -210,22 +210,22 @@ def test_no_resolved_voice_route_is_unresolved(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "openai_key,expected_status,expect_reference",
+    "openai_key",
     [
-        # A non-empty key yields a config-only DIRECT selection: the entry
-        # truthfully carries its key reference (a configuration contract)
-        # while runtime evidence stays UNKNOWN — the key reference never
-        # substitutes for endpoint+model delivery evidence (plugin reads
-        # env at runtime per llm-client.js:85).
-        ("synthetic-key", "config-only", True),
-        # An empty key counts as ABSENT (non-emptiness rule): no selection,
-        # no entry keys, fully unresolved.
-        ("", "unresolved", False),
+        # A non-empty key: config-only DIRECT selection — the entry carries
+        # its key reference (a configuration contract) while runtime
+        # evidence stays UNKNOWN — the key reference never substitutes for
+        # endpoint+model delivery evidence (plugin reads env at runtime per
+        # llm-client.js:85).
+        "synthetic-key",
+        # An empty key counts as ABSENT at runtime (non-emptiness rule):
+        # the direct configuration fact still surfaces truthfully with its
+        # key reference and the status stays config-only — never runtime-
+        # partial — while the environment value remains empty.
+        "",
     ],
 )
-def test_key_reference_route_states_are_truthful(
-    monkeypatch, tmp_path, openai_key, expected_status, expect_reference
-):
+def test_key_reference_route_states_are_truthful(monkeypatch, tmp_path, openai_key):
     voice = load_script()
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "0")
@@ -249,20 +249,20 @@ def test_key_reference_route_states_are_truthful(
     # config-only direct route where macOS omitted it (ambient-gate leak
     # class) — with DOTFILES_USE_LITELLM_PROXY pinned this is deterministic
     # on both platforms, and the assert payload stays for future drift.
-    assert config["_voice_status"] == expected_status, (
-        f"voice status {config.get('_voice_status')!r}; "
+    assert config["_voice_status"] == "config-only", (
+        f"voice status={config.get('_voice_status')!r}; "
         f"endpoint={config.get('endpoint')!r}; model={config.get('model')!r}; "
         f"apiKeyEnv={config.get('apiKeyEnv')!r}; keys={sorted(config)}; "
         f"selections={config.get('_voice_state', {}).get('selections')!r}; "
         f"last_error={getattr(voice._gateway_alias, 'last_error', None)!r}"
     )
-    if expect_reference:
-        assert config.get("apiKeyEnv") == "OPENAI_API_KEY"
-        assert config.get("_voice_status") == "config-only"
-    else:
-        assert config.get("apiKeyEnv") is None
-        assert config.get("endpoint") is None
-        assert config.get("model") is None
+    # The direct configuration fact carries its key reference truthfully;
+    # config-only never claims runtime delivery.
+    assert config.get("apiKeyEnv") == "OPENAI_API_KEY"
+    # Runtime credential absent for the empty-env case (non-emptiness
+    # rule) — the configuration contract still surfaces, never as a
+    # runtime-partial claim; the shared asserts above pin the config-only
+    # state for both credential values.
 
 
 def test_main_installs_no_plugin_entry_without_resolved_route(

@@ -347,14 +347,17 @@ def _configure_tier_remote(
     }
     locators[Operation.CLEANUP_LLM.value] = provenance
     if rendered and (
-        not locator.route.key_reference
+        locator.route.transport is not Transport.GATEWAY
+        or not locator.route.key_reference
         or os.environ.get(locator.route.key_reference, "").strip()
     ):
-        # A config-only entry is only attached when its referenced runtime
-        # credential actually resolves to a non-empty value (the plugin
-        # reads the env var at runtime per llm-client.js:85); with the
-        # value absent the route stays unresolved and no entry keys are
-        # emitted (credential probes check non-emptiness, not presence).
+        # Gateway routes are attached only when their referenced runtime
+        # credential resolves to a non-empty value (the plugin reads the
+        # env var at runtime per llm-client.js:85; credential probes check
+        # non-emptiness, not presence). Direct config-only routes are
+        # emitted truthfully with their key reference regardless: the
+        # selection already carries config_only=True and the runtime
+        # evidence stays UNKNOWN until the consumer attempts the route.
         voice_config.update(
             endpoint=rendered["endpoint"],
             model=rendered["wire_model"],
@@ -1179,10 +1182,10 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
         bool(selection.get("config_only"))
         and selection.get("provider")
         and selection.get("model")
-        # Credential probes check non-emptiness, not mere presence: a
-        # config-only selection whose referenced env value is empty counts
-        # as absent (the key reference is the env-var NAME, not a value).
-        and os.environ.get(str(selection.get("key_reference", "")), "").strip()
+        # A selection-level configuration fact: the key reference surfaces
+        # truthfully in the config-only state while the runtime credential
+        # evidence stays UNKNOWN (entry attach applies the gateway-only
+        # credential gate above).
         for selection in voice_config.get("_voice_state", {})
         .get("selections", {})
         .values()
