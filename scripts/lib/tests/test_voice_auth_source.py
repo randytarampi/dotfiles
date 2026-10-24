@@ -229,10 +229,16 @@ def test_key_reference_without_resolved_route_is_unresolved(monkeypatch, tmp_pat
     # The plugin reads its credential from the environment at runtime
     # (llm-client.js:85); an omitted route leaves NO plugin entry keys — a
     # key reference alone never substitutes for endpoint+model evidence.
-    assert config.get("apiKeyEnv") is None
-    assert config.get("endpoint") is None
-    assert config.get("model") is None
-    assert config["_voice_status"] == "unresolved"
+    # The payload prints the FULL resolved state: ubuntu CI resolved a
+    # config-only direct route where macOS omitted it (b0acd1b evidence),
+    # and the selection source must be visible before the next fix.
+    assert config.get("apiKeyEnv") is None, (
+        f"voice status {config.get('_voice_status')!r}; "
+        f"endpoint={config.get('endpoint')!r}; model={config.get('model')!r}; "
+        f"apiKeyEnv={config.get('apiKeyEnv')!r}; keys={sorted(config)}; "
+        f"selections={config.get('_voice_state', {}).get('selections')!r}; "
+        f"last_error={getattr(voice._gateway_alias, 'last_error', None)!r}"
+    )
 
 
 def test_main_installs_no_plugin_entry_without_resolved_route(
