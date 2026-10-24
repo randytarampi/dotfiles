@@ -1175,12 +1175,15 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     )
     if unresolved:
         voice_status = "unresolved"
+    elif has_llm and not gateway_tested:
+        # A config-only route is a configuration contract, not a tested
+        # gateway operation (B3 contract) — it must not be labelled as a
+        # runtime 'partial' delivery just because endpoint/model keys exist.
+        voice_status = "config-only"
     elif has_llm and not has_stt_state:
         voice_status = "partial"
     elif not has_llm and not has_stt_state:
         voice_status = "unresolved"
-    elif not gateway_tested:
-        voice_status = "config-only"
     else:
         voice_status = "configured"
     voice_config["_voice_status"] = voice_status
