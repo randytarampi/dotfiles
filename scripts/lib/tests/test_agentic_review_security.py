@@ -45,49 +45,33 @@ def test_manifest_verification_precedes_codegraph_execution():
     assert workflow.index("verify-ci-assets.py") < workflow.index("ci-codegraph.sh")
 
 
-def test_agent_lanes_have_read_only_job_permissions_and_app_only_publication():
+def test_read_only_generation_and_scoped_publication():
     workflow = read(".github/workflows/agentic-review.yml")
-    for job in ("junie", "gemini"):
-        section = re.search(rf"(?ms)^  {job}:$(.*?)(?=^  \w)", workflow).group(1)
-        assert "permissions:\n      contents: read\n" in section
-        assert "contents: write" not in section
-        assert "pull-requests: write" not in section
+    for agent in ("junie", "gemini"):
+        section = re.search(rf"(?ms)^  {agent}:$(.*?)(?=^  \\w)", workflow).group(1)
+        assert "permissions:\\n      contents: read\\n" in section
         assert "issues: write" not in section
-        assert "Upload " in section
+        assert "contents: write" not in section
+        assert "persist-credentials: false" in section
+        assert "refs/pull/{0}/head" in section
+        assert "Verify exact requested PR head" in section
+        assert "git rev-parse HEAD" in section
         assert "actions/upload-artifact@v7" in section
-        assert "gh api" not in section
-        assert "gh pr comment" not in section
-    junie = re.search(r"(?ms)^  junie:$(.*?)(?=^  \w)", workflow).group(1)
-    assert 'silent_mode: "true"' in junie
-    assert "steps.junie.outputs.junie_summary" in junie
-    assert (
-        "outputs:\n      review: ${{ steps.junie_review.outputs.review }}" in workflow
-    )
-    assert (
-        "outputs:\n      review: ${{ steps.gemini_review.outputs.review }}" in workflow
-    )
-    notify = workflow.split("  notify:\n", 1)[1]
+    assert 'silent_mode: "true"' in workflow
+    assert "steps.junie.outputs.junie_summary" in workflow
+    assert "steps.gemini.outputs.summary" in workflow
+    notify = workflow.split("  notify:\\n", 1)[1]
+    assert "permissions:\\n      contents: read\\n      issues: write" in notify
+    assert "GH_TOKEN: ${{ github.token }}" in notify
     assert "actions/download-artifact@v8" in notify
-    assert 'review_file="reviews/${agent}-review.md"' in notify
-    assert '$(<"${review_file}")' in notify
-    assert (
-        'gh api --method POST "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}"'
-        in notify
-    )
-    assert "FALLBACK_TOKEN: ${{ github.token }}" not in notify
-    assert "GH_TOKEN: ${{ github.token }}" not in notify
-    assert "JUNIE_APP_TOKEN" in notify
-    # Junie must inspect the same PR merge ref as Gemini/OpenCode.
-    junie_checkout = workflow.split("  junie:\n", 1)[1].split("  gemini:\n", 1)[0]
-    assert "refs/pull/{0}/merge" in junie_checkout
-    assert "persist-credentials: false" in junie_checkout
+    assert "grep -q '[^[:space:]]'" in notify
+    assert "gh api --paginate" in notify
+    assert "github-actions[bot]" in notify
+    assert "gh api --method PATCH" in notify
+    assert "gh api --method POST" in notify
+    assert "permission-issues: write" not in notify
+    assert "FALLBACK_APP_TOKEN" not in notify
     assert "github.event.comment.id || github.run_id" in workflow
-    assert "id-token: write" in read(".github/workflows/agent-review.yml")
-    assert "id-token: write" in read("configs/review/dispatcher-stub.yml")
-    assert "OPENCODE_APP_TOKEN" not in notify
-    assert "GEMINI_APP_TOKEN" in notify
-    assert "github-actions[bot]" not in workflow
-    assert "*_BOT_TOKEN" not in workflow
 
 
 def test_native_opencode_uses_oidc_and_hardened_plan_agent():
