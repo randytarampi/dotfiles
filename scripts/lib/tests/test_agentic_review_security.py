@@ -62,16 +62,21 @@ def test_read_only_generation_and_scoped_publication():
     assert "steps.junie.outputs.junie_summary" in workflow
     assert "steps.gemini.outputs.summary" in workflow
     notify = workflow.split("  notify:\n", 1)[1]
-    assert "permissions:\n      contents: read\n      pull-requests: write" in notify
-    assert "GH_TOKEN: ${{ github.token }}" in notify
+    assert "permissions:\n      contents: read" in notify
+    assert "steps.junie_app.outputs.token" in notify
+    assert "steps.gemini_app.outputs.token" in notify
+    assert "vars.JUNIE_GITHUB_APP_ID" in notify
+    assert "vars.GEMINI_GITHUB_APP_ID" in notify
+    assert "secrets.JUNIE_GITHUB_APP_PRIVATE_KEY" in notify
+    assert "secrets.GEMINI_GITHUB_APP_PRIVATE_KEY" in notify
+    assert notify.count("permission-pull-requests: write") == 2
     assert "actions/download-artifact@v8" in notify
     assert "grep -q '[^[:space:]]'" in notify
     assert "gh api --paginate" in notify
     assert "jq -rs --arg marker" in notify
-    assert "github-actions[bot]" in notify
+    assert "app_slug" in notify
     assert "gh api --method PATCH" in notify
     assert "gh api --method POST" in notify
-    assert "permission-issues: write" not in notify
     assert "FALLBACK_APP_TOKEN" not in notify
     assert "github.event.comment.id || github.run_id" in workflow
 
