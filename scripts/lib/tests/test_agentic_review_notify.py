@@ -102,9 +102,7 @@ def _run_notify(
 def test_notify_rejects_incomplete_results_without_publishing(
     tmp_path, review, result, token, expected
 ):
-    process, calls = _run_notify(
-        tmp_path, review=review, result=result, token=token
-    )
+    process, calls = _run_notify(tmp_path, review=review, result=result, token=token)
     assert process.returncode != 0
     assert expected in process.stderr
     assert calls == []
