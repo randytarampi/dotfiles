@@ -47,8 +47,11 @@ Do not erase earlier contributors when handing work to another model or agent.
   derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <noreply@opencode.ai>`).
   Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
   runtime model in parentheses only when the session actually reports it
-  (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`). Do not guess
-  a family or version. Use the contributor's own supported name/model/email for
+  (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`).
+  For Pi sessions here, use `Co-authored-by: Pi <noreply@pi.dev>`; include the
+  runtime model in parentheses only when the session reports it
+  (e.g. `Co-authored-by: Pi (omlx/Ornith-1.5-35B-A3B-MLX-4bit) <noreply@pi.dev>`).
+  Do not guess a family or version. Use the contributor's own supported name/model/email for
   other agents; never invent an email or impersonate a human or GitHub user. If
   no suitable identity is available, acknowledge the agent and contribution in
   the PR or document instead.
