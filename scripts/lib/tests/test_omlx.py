@@ -1282,6 +1282,47 @@ def test_opencode_tier_staging_refuses_previous_local_owner(monkeypatch, tmp_pat
     assert not (tmp_path / "oh-my-opencode-slim.json").exists()
 
 
+def test_prepare_tier_candidate_seeds_staging_with_base_slim(monkeypatch, tmp_path):
+    """Regression: staging dir must be seeded from fresh source (base_slim),
+    not the stale deployed file (previous_slim).
+
+    When the deployed slim lacks a newly-added registry preset (e.g. 'cohere')
+    but the source registry has it, the tier writer must see the fresh preset
+    so it propagates to the output.  Previously the stale previous_slim was
+    written to the staging dir, causing the tier writer to believe the file
+    already existed and to skip the source copy — leaving dormant presets stale.
+    """
+    script = _load_script("configure_opencode_staging_seed", "configure-opencode.py")
+    base_slim = {"preset": "pro", "_tiers": {"pro": {}, "cohere": {}}, "presets": {}}
+    previous_slim = {"preset": "pro", "_tiers": {"pro": {}}, "presets": {}}
+
+    observed = {}
+
+    def fake_run(_args, *, check, env):
+        staged_slim = Path(env["OPENCODE_DIR"]) / "oh-my-opencode-slim.json"
+        observed["staged_content"] = json.loads(staged_slim.read_text(encoding="utf-8"))
+        # Simulate tier writer producing its output from the staged input.
+        staged_slim.write_text(json.dumps(observed["staged_content"]), encoding="utf-8")
+
+    monkeypatch.setattr(script.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        script,
+        "apply_litellm_slim_gate",
+        lambda slim, config, previous_slim=None: slim,
+    )
+    result = script.prepare_tier_candidate(
+        str(tmp_path),
+        ["tier-writer"],
+        {"provider": {"litellm": {"models": {}}}},
+        base_slim=base_slim,
+        previous_slim=previous_slim,
+    )
+    # The tier writer must have seen base_slim (fresh source), not previous_slim.
+    assert observed["staged_content"] == base_slim
+    assert "cohere" in observed["staged_content"]["_tiers"]
+    assert result == json.dumps(base_slim, indent=2) + "\n"
+
+
 def test_opencode_staging_and_final_outputs_are_private_atomic(monkeypatch, tmp_path):
     script = _load_script("configure_opencode_atomic_modes", "configure-opencode.py")
     config_path = tmp_path / "opencode.json"
@@ -1338,9 +1379,11 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
         "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer, previous=None: (
+        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None: (
             _ for _ in ()
-        ).throw(RuntimeError("final tier validation")),
+        ).throw(
+            RuntimeError("final tier validation")
+        ),
     }.items():
         monkeypatch.setattr(script, name, value)
     monkeypatch.setattr(
@@ -1412,7 +1455,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
         "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer, previous=None: (
+        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None: (
             '{"model": "stub-slim-target"}'
         ),
     }.items():
