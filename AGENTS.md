@@ -11,12 +11,21 @@ Do not erase earlier contributors when handing work to another model or agent.
 
 - **Commits:** retain the actual Git author. For each additional person or agent
   who materially designed, wrote or revised the committed change, add a
-  `Co-authored-by: Name <email>` trailer when a verified or approved attribution
+  `Co-authored-by: Name (model) <email>` trailer when a verified or approved attribution
   identity is available. For ChatGPT contributions here, use
-  `Co-authored-by: ChatGPT <noreply@openai.com>`. Use the contributor's own
-  supported name/address for other agents; never invent an email or impersonate
-  a human or GitHub user. If no suitable identity is available, acknowledge the
-  agent and contribution in the PR or document instead.
+  `Co-authored-by: ChatGPT (gpt-4) <noreply@openai.com>`. OpenCode agents use a base
+  identity of `Co-authored-by: opencode <noreply@opencode.ai>` with the model
+  derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <noreply@opencode.ai>`).
+  Use the contributor's own supported name/model/email for other agents; never invent an
+  email or impersonate a human or GitHub user. If no suitable identity is available,
+  acknowledge the agent and contribution in the PR or document instead.
+- **Reviewed-by trailers:** when a PR or code review is attributed to an agent,
+  use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents
+  derive their model at time of review; if unavailable, use the base identity
+  `Reviewed-by: opencode <noreply@opencode.ai>`. For example,
+  `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`.
+  When an agent session hands off to another agent, both should be acknowledged
+  if they each contributed material review input.
 - **Pull requests:** include a short **Contributors and roles** section naming
   significant human and agent implementers, drafters and reviewers, with the
   specific work each did. Co-author trailers do not replace this record. Credit
