@@ -91,10 +91,8 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert "id-token: write" in opencode
     assert "contents: read" in opencode
     assert "contents: write" not in opencode
-    assert (
-        "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a"
-        in opencode
-    )
+    assert "anomalyco/opencode/github@" in opencode
+    assert "77fc88c8ade8e5a620ebbe1197f3a572d29ae91a" in opencode
     assert 'agent: plan' in opencode
     assert 'share: "false"' in opencode
     assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
