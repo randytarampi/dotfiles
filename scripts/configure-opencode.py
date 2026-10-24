@@ -508,8 +508,16 @@ def prepare_project_candidate(config):
     return config
 
 
-def prepare_tier_candidate(config_dir, tier_args, consumer_config, previous_slim=None):
-    """Run the tier writer with a private, owner-only consumer config."""
+def prepare_tier_candidate(
+    config_dir, tier_args, consumer_config, base_slim=None, previous_slim=None
+):
+    """Run the tier writer with a private, owner-only consumer config.
+
+    ``base_slim`` seeds the staging directory so the tier writer sees the
+    fresh registry presets (not the stale deployed file), allowing dormant
+    presets to propagate.  ``previous_slim`` is retained solely for
+    ``apply_litellm_slim_gate`` regression tracking.
+    """
     with tempfile.TemporaryDirectory(prefix="opencode-tier-") as staging_dir:
         staged_input = Path(staging_dir) / "opencode.json"
         fd, temporary = tempfile.mkstemp(prefix=".opencode.", dir=staging_dir)
@@ -531,8 +539,8 @@ def prepare_tier_candidate(config_dir, tier_args, consumer_config, previous_slim
             raise
         staged_env = {**os.environ, "OPENCODE_DIR": staging_dir}
         staged_path = Path(staging_dir) / "oh-my-opencode-slim.json"
-        if previous_slim is not None:
-            write_private_atomic(staged_path, json.dumps(previous_slim))
+        if base_slim is not None:
+            write_private_atomic(staged_path, json.dumps(base_slim))
         subprocess.run(  # nosec B603 B607 - repo-root tier script, constant args, staged env
             tier_args, check=True, env=staged_env
         )
@@ -1292,7 +1300,11 @@ def main():
                 os.path.join(SCRIPT_DIR, "configure-opencode-tier.py"),
             ] + tier_args_list
             tier_candidate = prepare_tier_candidate(
-                config_dir_path, tier_args, config, previous_slim
+                config_dir_path,
+                tier_args,
+                config,
+                base_slim=slim_data,
+                previous_slim=previous_slim,
             )
     except Exception as e:
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
