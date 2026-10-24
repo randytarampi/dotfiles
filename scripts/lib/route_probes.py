@@ -325,21 +325,26 @@ def _fetch_ollama_tags(base_url, key_value=None, timeout=5):
     """Return model names from Ollama ``/api/tags`` (None if unresolvable)."""
     if not base_url:
         return None
+    parsed = urllib.parse.urlparse(str(base_url))
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
     endpoint = str(base_url).rstrip("/") + "/api/tags"
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
     request = urllib.request.Request(endpoint, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            request, timeout=timeout
+        ) as response:  # nosec B310 - scheme validated above
             code, data = response.status, response.read()
-    except urllib.error.HTTPError as error:
+    except urllib.error.HTTPError:
         return None
-    except (TimeoutError, OSError):
+    except OSError:
         return None
     if code != 200:
         return None
     try:
         payload = json.loads(data.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return None
     models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(models, list):
@@ -355,6 +360,9 @@ def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
     """Return the ``/api/show`` payload for *model* (None if unresolvable)."""
     if not base_url:
         return None
+    parsed = urllib.parse.urlparse(str(base_url))
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
     endpoint = str(base_url).rstrip("/") + "/api/show"
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
     payload = json.dumps({"name": model}).encode("utf-8")
@@ -363,17 +371,19 @@ def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
     )
     request.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            request, timeout=timeout
+        ) as response:  # nosec B310 - scheme validated above
             code, data = response.status, response.read()
-    except urllib.error.HTTPError as error:
+    except urllib.error.HTTPError:
         return None
-    except (TimeoutError, OSError):
+    except OSError:
         return None
     if code != 200:
         return None
     try:
         return json.loads(data.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return None
 
 
@@ -385,9 +395,7 @@ def _validate_embedding_vector(vector):
     return finite, nonzero, norm
 
 
-def probe_embedding_vector(
-    base_url, model, key_reference=None, key_value=None, timeout=5
-):
+def probe_embedding_vector(base_url, model, key_value=None, timeout=5):
     """Probe an embedding endpoint and capture vector quality metrics.
 
     Extends ``probe_embeddings`` with finiteness, nonzero and norm checks
@@ -397,7 +405,7 @@ def probe_embedding_vector(
     """
     endpoint = str(base_url).rstrip("/") + "/embeddings"
     payload = {"model": model, "input": "route probe deterministic seed"}
-    code, headers, data, conn_err = _request(
+    code, _headers, data, conn_err = _request(
         endpoint, json.dumps(payload).encode(), key_value, timeout
     )
     if conn_err:
@@ -423,7 +431,13 @@ def probe_embedding_vector(
     try:
         body = json.loads(data.decode("utf-8"))
         vector = body["data"][0]["embedding"]
-    except (ValueError, UnicodeDecodeError, KeyError, IndexError, TypeError):
+    except (
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        KeyError,
+        IndexError,
+        TypeError,
+    ):
         return EmbeddingObservation(
             provider="unknown",
             wire_alias=model,
@@ -514,36 +528,44 @@ def discover_embedding_candidates(
 
     # --- Gateway alias discovery ---
     if gateway_url:
-        gw_models = fetch_gateway_models(gateway_url, gateway_key, timeout)
-        if gw_models:
-            for alias in gw_models:
-                if alias.startswith("ollama/") or alias.startswith("gemma"):
-                    obs = probe_embedding_vector(
-                        gateway_url, alias, None, gateway_key, timeout
-                    )
-                    observations.append(
-                        EmbeddingObservation(
-                            provider="gateway",
-                            wire_alias=obs.wire_alias,
-                            backend_endpoint=obs.backend_endpoint,
-                            outcome=obs.outcome,
-                            qualification=obs.qualification,
-                            dimension=obs.dimension,
-                            digest=obs.digest,
-                            revision=obs.revision,
-                            vector_finite=obs.vector_finite,
-                            vector_nonzero=obs.vector_nonzero,
-                            vector_norm=obs.vector_norm,
-                            http_status=obs.http_status,
-                            notes=obs.notes,
-                        )
-                    )
+        observations.extend(
+            _discover_gateway_embeddings(gateway_url, gateway_key, timeout)
+        )
     return observations
+
+
+def _discover_gateway_embeddings(gateway_url, gateway_key, timeout):
+    """Probe gateway aliases that look like embedding-capable models."""
+    results = []
+    gw_models = fetch_gateway_models(gateway_url, gateway_key, timeout)
+    if not gw_models:
+        return results
+    for alias in gw_models:
+        if alias.startswith("ollama/") or alias.startswith("gemma"):
+            obs = probe_embedding_vector(gateway_url, alias, gateway_key, timeout)
+            results.append(
+                EmbeddingObservation(
+                    provider="gateway",
+                    wire_alias=obs.wire_alias,
+                    backend_endpoint=obs.backend_endpoint,
+                    outcome=obs.outcome,
+                    qualification=obs.qualification,
+                    dimension=obs.dimension,
+                    digest=obs.digest,
+                    revision=obs.revision,
+                    vector_finite=obs.vector_finite,
+                    vector_nonzero=obs.vector_nonzero,
+                    vector_norm=obs.vector_norm,
+                    http_status=obs.http_status,
+                    notes=obs.notes,
+                )
+            )
+    return results
 
 
 def _probe_ollama_embedding(base_url, model, key_value, timeout, details):
     """Probe a local-Ollama embedding model using its /api/show details."""
-    probe = probe_embedding_vector(base_url, model, None, key_value, timeout)
+    probe = probe_embedding_vector(base_url, model, key_value, timeout)
     modelinfo = details.get("modelinfo", {}) if isinstance(details, dict) else {}
     return EmbeddingObservation(
         provider="ollama",

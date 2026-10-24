@@ -267,13 +267,13 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
 
     def test_validate_embedding_vector_nan(self):
         vec = [0.1, float("nan"), 0.5]
-        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        finite, _, norm = route_probes._validate_embedding_vector(vec)
         self.assertFalse(finite)
         self.assertIsNone(norm)
 
     def test_validate_embedding_vector_inf(self):
         vec = [0.1, float("inf"), 0.5]
-        finite, nonzero, norm = route_probes._validate_embedding_vector(vec)
+        finite, _, norm = route_probes._validate_embedding_vector(vec)
         self.assertFalse(finite)
         self.assertIsNone(norm)
 
@@ -291,7 +291,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         ok = FakeResponse(status=200, body=body)
         with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
             obs = route_probes.probe_embedding_vector(
-                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+                "http://ollama:11434/v1", "test-model", None, timeout=5
             )
         self.assertEqual(obs.outcome, "qualified")
         self.assertEqual(obs.qualification, Qualification.PROTOCOL_PROBED.value)
@@ -307,7 +307,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         )
         with patch.object(route_probes.urllib.request, "urlopen", side_effect=err):
             obs = route_probes.probe_embedding_vector(
-                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+                "http://ollama:11434/v1", "test-model", None, timeout=5
             )
         self.assertEqual(obs.outcome, "unavailable")
         self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
@@ -320,7 +320,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             side_effect=TimeoutError("timed out"),
         ):
             obs = route_probes.probe_embedding_vector(
-                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+                "http://ollama:11434/v1", "test-model", None, timeout=5
             )
         self.assertEqual(obs.outcome, "unavailable")
         self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
@@ -330,7 +330,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         ok = FakeResponse(status=200, body=body)
         with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
             obs = route_probes.probe_embedding_vector(
-                "http://ollama:11434/v1", "test-model", None, None, timeout=5
+                "http://ollama:11434/v1", "test-model", None, timeout=5
             )
         self.assertEqual(obs.outcome, "unknown")
         self.assertEqual(obs.qualification, Qualification.UNKNOWN.value)
