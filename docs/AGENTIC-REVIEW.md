@@ -13,18 +13,16 @@ used by both the GitHub Actions and local review lanes.
 | Reviewer | Action | Trigger | Secret | Job |
 |---|---|---|---|---|
 | GitHub Copilot | native reviewer | add as reviewer, or `review-copilot` label | none | broad correctness; reads `AGENTS.md` and repo MCP/skills |
-| OpenCode | `anomalyco/opencode/github` | `/oc <prompt>` or `/opencode <prompt>` mention, or `review-opencode` label | `OPENCODE_API_KEY` | local preset roles via explicit model + provider blocks, MCP mirror, skills, codegraph |
+| OpenCode | `anomalyco/opencode/github` | `/oc <prompt>` or `/opencode <prompt>` PR comment | `OPENCODE_API_KEY` | local preset roles via explicit model + provider blocks, MCP mirror, skills, codegraph |
 | Junie | `JetBrains/junie-github-action@v1` | `@junie-agent <prompt>` mention, or `review-junie` label | `JUNIE_API_KEY` | shared review method (custom-prompt mode with GitHub context attached) |
 | Gemini | `google-github-actions/run-gemini-cli@v0` | `@gemini-cli /review` mention, or `review-gemini` label | `GEMINI_API_KEY` | behavior regressions, missing tests, operational risk |
 | Copilot auto-request | REST job in the reusable workflow | `review-copilot` label | none | requests `copilot-pull-request-reviewer[bot]` |
 
-`review-all` fans out to opencode, junie, gemini, and copilot. Mentions work
-regardless of labels; labels gate unprompted reviews. OpenCode accepts trusted comment commands and labelled PR review requests,
-with official action support qualified by live tests.
+`review-all` requests Junie, Gemini and Copilot on a label event. OpenCode's official action cannot handle that event and is skipped; request OpenCode with an authorized `/opencode` or `/oc` PR comment. Other reviewers retain their current opt-in label/mention support.
 
 ## Labels
 
-- `review-opencode` — OpenCode agentic review
+- `review-opencode` — legacy label; official OpenCode action does not run on label events. Use an authorized `/opencode` PR comment.
 - `review-junie` — Junie code review
 - `review-gemini` — Gemini review
 - `review-copilot` — request Copilot as reviewer
@@ -172,8 +170,8 @@ Set per repo (Settings → Secrets and variables → Actions):
   `share: false`, denied mutating tools and pre-push hook are review safety
   controls. Native publication does **not** produce the old
   `<!-- agent-review:opencode -->` marker or guarantee comment deduplication.
-  Explicit `/opencode` and `/oc` comment triggers and labelled PR requests
-  run through the same native action, subject to GitHub event support.
+  The native action accepts `/opencode` and `/oc` **comment events only**.
+  Label events are not valid OpenCode action inputs and never run this lane.
 - Junie's `silent_mode: "true"` exposes its `junie_summary` for the separate
   `notify` job, which publishes Junie/Gemini bodies and handles their
   per-agent/fallback App credentials; Copilot uses its native reviewer.
@@ -307,7 +305,7 @@ redundant status comment. Unrequested events do not publish.
 
 Before promotion, test a same-repository, maintainer-controlled PR with the
 exact action ref: OIDC exchange, substantive review, publication, no code push,
-and the supported label/comment triggers. Separately check failed model calls,
+and the supported comment triggers; verify label events skip OpenCode. Separately check failed model calls,
 missing/ineligible App installation and unrequested events. The new action
 controls its own comment lifecycle; do not claim old idempotency guarantees.
 
