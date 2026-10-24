@@ -126,6 +126,22 @@ wire_api = "responses"
 """
 
 
+LITELLM_PROVIDER_TEMPLATE = """[model_providers.litellm]
+name = "LiteLLM Proxy"
+base_url = "{base_url}"
+env_key = "LITELLM_CODEX_KEY"
+wire_api = "responses"
+"""
+
+
+def build_litellm_provider_config():
+    """Build the litellm provider block when setup gate and proxy are active."""
+    if os.environ.get("DOTFILES_RUN_CODEX_SETUP", "0") != "1":
+        return ""
+    port = os.environ.get("LITELLM_PORT", "4000")
+    return LITELLM_PROVIDER_TEMPLATE.format(base_url=f"http://127.0.0.1:{port}/v1")
+
+
 def build_provider_config(local_model=""):
     config = BASE_PROVIDER_CONFIG
     providers = set(active_engine_pools())
@@ -146,6 +162,9 @@ def build_provider_config(local_model=""):
             config += f'env_key = "{api_key_env}"\n'
     if os.environ.get("GITHUB_TOKEN", "").strip():
         config += "\n" + COPILOT_PROVIDER_CONFIG
+    litellm_config = build_litellm_provider_config()
+    if litellm_config:
+        config += "\n" + litellm_config
     return config
 
 

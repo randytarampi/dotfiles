@@ -1939,7 +1939,16 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
     )
 
-    assert len(generate_attempts) == len(CONFIGURE.APP_KEYS)
+    # codex is in APP_KEYS but skipped during provisioning because its
+    # transport is "Responses API" not "OpenAI-compatible" — it is eligible
+    # but not auto-provisioned via the generic key-generation path.
+    registry = {row["client"]: row for row in CONFIGURE.CLIENT_REGISTRY}
+    expected_clients = [
+        c
+        for c in CONFIGURE.APP_KEYS
+        if "OpenAI-compatible" in registry[c]["transports"]
+    ]
+    assert len(generate_attempts) == len(expected_clients)
     # A 400 is not persisted as a key; the service env keeps its prior state.
     assert not any(
         name in path.read_text(encoding="utf-8") for name in CONFIGURE.APP_KEYS.values()
