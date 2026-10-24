@@ -428,10 +428,12 @@ def _curated_cloud_models():
     models = []
     for provider, key_env in providers.items():
         if not os.environ.get(key_env, "").strip():
+            # Rationale for not naming the variable here: CodeQL treats a
+            # credential-variable *name* as password-shaped data at the
+            # logging sink; the operational mapping lives in .env.example.
             logger.info(
-                "Curated models for %s not configured; credential environment variable %s is unset",
+                "Curated models for %s not configured; no credential environment variable is set",
                 provider,
-                key_env,
             )
             continue
         if provider in PROVIDER_ENDPOINTS:
