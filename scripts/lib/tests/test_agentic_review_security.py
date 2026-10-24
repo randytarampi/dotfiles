@@ -25,7 +25,9 @@ def test_normal_lanes_pin_and_verify_trusted_assets_without_workspace_checkout()
     assert workflow.count("verify-ci-assets.py") == 3
     assert "repository: randytarampi/dotfiles" not in workflow
     assert "ref: main" not in workflow
-    assert "persist-credentials: true" not in workflow
+    # Native OpenCode requires a read-only checkout auth header for OIDC handoff.
+    # Every other normal reviewer lane still disables persisted credentials.
+    assert workflow.count("persist-credentials: true") == 1
     assert "contents: write" not in workflow
     assert "Configure git identity" not in workflow
 
@@ -89,7 +91,10 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert "id-token: write" in opencode
     assert "contents: read" in opencode
     assert "contents: write" not in opencode
-    assert "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a" in opencode
+    assert (
+        "anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a"
+        in opencode
+    )
     assert 'agent: plan' in opencode
     assert 'share: "false"' in opencode
     assert '"edit": "deny", "bash": "deny", "task": "deny"' in opencode
