@@ -434,3 +434,12 @@ ID (or run identity for non-comment triggers). Junie checks out the requested
 PR merge ref just like Gemini rather than the default-branch commit. A reviewer
 run succeeds only with actual reviewer output and an authenticated publisher;
 no-op dispatcher runs are not evidence of review publication.
+
+
+## October 24, 2026: Junie/Gemini publication verification
+
+- [Junie smoke 40104437396](https://github.com/randytarampi/dotfiles/actions/runs/40104437396) produced a substantive review but publishing failed closed because no GitHub App publication credentials were configured.
+- [Gemini smoke 40104850565](https://github.com/randytarampi/dotfiles/actions/runs/40104850565) failed with repeated 503 errors and exhausted its 20-request free daily quota for `gemini-3.8-flash`; its summary was empty. A completed output-artifact upload is not evidence of review generation.
+- The notification job uses `issues: write` on its own `GITHUB_TOKEN`, publishing as `github-actions[bot]`. Junie/Gemini only receive `contents: read`. Native Junie publishing remains disabled: disabling `silent_mode` would enable upstream commit/push pathways.
+- Both reviewers check out the requested PR **head** ref and verify the exact HEAD SHA through the GitHub API before model execution. Publisher updates only its own per-reviewer marker comments. API lookup errors, failed models, whitespace-only bodies and missing tokens fail visibly; `notify` publishes no partial results when a requested reviewer fails. Check that the PR head does not move afterward.
+- Disposable [PR #98](https://github.com/randytarampi/dotfiles/pull/98) holds independent smoke requests. End-to-end publication, repeat-update behaviour, and exact-head CI/CodeQL must be verified with actual run and comment URLs before merge; do not claim vendor-native identity without proof.
