@@ -556,9 +556,15 @@ jobs:
           GEMINI_APP_PRIVATE_KEY: ${{ secrets.GEMINI_APP_PRIVATE_KEY }}
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          AGENTS: ${{ needs.parse.outputs.agents }}
         run: |
           set -euo pipefail
+          IFS=',' read -ra selected_agents <<<"${AGENTS}"
           for agent in junie opencode gemini; do
+            if [[ ",${AGENTS}," != *",${agent},"* ]]; then
+              echo "${agent}=false" >> "${GITHUB_OUTPUT}"
+              continue
+            fi
             upper="${agent^^}"
             id_name="${upper}_APP_ID"
             key_name="${upper}_APP_PRIVATE_KEY"
@@ -568,7 +574,20 @@ jobs:
               echo "${agent}=false" >> "${GITHUB_OUTPUT}"
             fi
           done
-          if [[ -n "${APP_ID}" && -n "${APP_PRIVATE_KEY}" ]]; then
+          # The fallback is necessary only when a requested agent lacks its own pair.
+          fallback_needed=false
+          for agent in "${selected_agents[@]}"; do
+            case "${agent}" in
+              junie|opencode|gemini)
+                upper="${agent^^}"
+                id_name="${upper}_APP_ID"
+                key_name="${upper}_APP_PRIVATE_KEY"
+                if [[ -z "${!id_name}" || -z "${!key_name}" ]]; then fallback_needed=true; fi
+                ;;
+              copilot) : ;; # Copilot requests via its own GitHub token.
+            esac
+          done
+          if [[ "${fallback_needed}" == true && -n "${APP_ID}" && -n "${APP_PRIVATE_KEY}" ]]; then
             echo "fallback=true" >> "${GITHUB_OUTPUT}"
           else
             echo "fallback=false" >> "${GITHUB_OUTPUT}"
@@ -644,6 +663,25 @@ jobs:
             exit 1
           fi
           IFS=',' read -ra agents <<<"${AGENTS}"
+          # Fail before publishing anything if requested review results are incomplete.
+          # Copilot is a request-for-review action, not a generated review body.
+          for agent in "${agents[@]}"; do
+            case "${agent}" in
+              opencode) result="${OPCODE_RESULT}" ;;
+              junie) result="${JUNIE_RESULT}" ;;
+              gemini) result="${GEMINI_RESULT}" ;;
+              copilot) result="${COPILOT_RESULT}" ;;
+              *) echo "Unknown reviewer: ${agent}" >&2; exit 1 ;;
+            esac
+            if [[ "${result}" != success ]]; then
+              echo "Requested ${agent} reviewer did not succeed: ${result}." >&2
+              exit 1
+            fi
+            if [[ "${agent}" != copilot && ! -s "reviews/${agent}-review.md" ]]; then
+              echo "INCOMPLETE: requested ${agent} reviewer returned no review body." >&2
+              exit 1
+            fi
+          done
           IFS=',' read -ra tokens <<<"${TOKENS:-}"
           for i in "${!agents[@]}"; do
             agent="${agents[$i]}"
@@ -669,24 +707,22 @@ jobs:
               gemini) poster_token="${GEMINI_APP_TOKEN:-${FALLBACK_APP_TOKEN:-}}" ;;
               *) poster_token="${FALLBACK_APP_TOKEN:-}" ;;
             esac
+            # The Copilot job has requested the native reviewer. It needs no
+            # application token or routine status comment.
+            if [[ "${agent}" == copilot ]]; then
+              continue
+            fi
             if [[ -z "${poster_token}" ]]; then
               echo "Requested ${agent} review could not be published: no configured GitHub App token." >&2
               exit 1
             fi
             if [[ "${result}" == "success" ]]; then
               review_file="reviews/${agent}-review.md"
-              if [[ -s "${review_file}" ]]; then
-                body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
-              else
-                body="$(printf '%s\n\n%s' "${marker}" "${token} review completed without a review body.")"
-              fi
+              body="$(printf '%s\n\n%s' "${marker}" "$(<"${review_file}")")"
             else
               body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
             fi
-            if [[ "${agent}" == "copilot" && "${result}" == "success" ]]; then
-              body="$(printf '%s\n\n%s' "${marker}" "Copilot review requested.")"
-            fi
-            comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
+             comment_id="$(GH_TOKEN="${poster_token}" gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1 || true)"
             if [[ -n "${comment_id}" ]]; then
               GH_TOKEN="${poster_token}" gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" >/dev/null
             else
