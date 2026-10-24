@@ -67,7 +67,7 @@ def test_read_only_generation_and_scoped_publication():
     assert "actions/download-artifact@v8" in notify
     assert "grep -q '[^[:space:]]'" in notify
     assert "gh api --paginate" in notify
-    assert 'jq -rs --arg marker' in notify
+    assert "jq -rs --arg marker" in notify
     assert "github-actions[bot]" in notify
     assert "gh api --method PATCH" in notify
     assert "gh api --method POST" in notify
