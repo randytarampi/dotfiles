@@ -252,6 +252,17 @@ test-shell: ## Run the hermetic Bash test suite (reported separately from Python
 test-tier-registry: ## Run tier registry unit tests
 	@PYTHONPATH=scripts/lib poetry run python -m pytest scripts/lib/tests/test_tier_registry.py -q --cov-fail-under=0
 
+qlty-check: ## Run Qlty's changed-file analysis locally (requires initialized CLI)
+	@command -v qlty >/dev/null 2>&1 || { echo "qlty not installed; see https://docs.qlty.sh/cli/quickstart"; exit 1; }
+	@qlty check
+
+qlty-smells: ## Report Qlty smells on the whole repository (advisory baseline)
+	@command -v qlty >/dev/null 2>&1 || { echo "qlty not installed; see https://docs.qlty.sh/cli/quickstart"; exit 1; }
+	@qlty smells --all
+
+# Qlty is opt-in while CLI plugins, local/hosted parity and Windows installation
+# are qualified. Do not add these to make verify or mandatory pre-commit yet.
+
 check-actionlint: ## Lint all GitHub Actions workflows
 	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint not installed (brew install actionlint)"; exit 1; }
 	@actionlint .github/workflows/*.yml

@@ -53,6 +53,14 @@ indent_size = 2
 indent_style = space
 indent_size = 2
 
+# Python-specific rules must follow the broader scripts/** rule: EditorConfig's
+# last matching section wins. This avoids false indent_size findings in scripts/.
+[scripts/**/*.py]
+indent_size = 4
+
+[scripts/*.py]
+indent_size = 4
+
 [**/node_modules/**]
 end_of_line = unset
 insert_final_newline = unset
