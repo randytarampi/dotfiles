@@ -161,9 +161,10 @@ Set per repo (Settings → Secrets and variables → Actions):
   absent, this App is used for that lane.
 - App tokens are minted per notify job with a one-hour expiry. Each App must be
   installed on the consuming repository with Issues: write and Pull requests:
-  write permissions. If no per-agent or fallback App is configured, `notify`
-  skips publication; it never falls back to `github.token` or
-  `github-actions[bot]`.
+  write permissions. If a requested review has no per-agent or fallback
+  App available, `notify` fails rather than silently skipping publication;
+  it never falls back to `github.token` or `github-actions[bot]`.
+  Unrequested events do not start a publication job.
 - OpenCode runs the version-pinned CLI directly with
   `opencode run --print-logs --format default` and uploads its captured review.
   The pinned GitHub action was not used because its `opencode github run`
