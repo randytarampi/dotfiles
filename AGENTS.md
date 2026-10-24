@@ -1,6 +1,6 @@
 # AI Agent Guidance
 
-> **This is the authoritative agent guidance document for this dotfiles repo.**
+> **This is the authoritative repository policy.** Prefer the smallest independently verifiable change that satisfies the agreed contract. Address related defects necessary for correctness; defer unrelated improvements. See `configs/review/code-review-prompt.md` for blocking/advisory findings and dispositions.
 > For human-facing quick start, commands, and package management, see `README.md`.
 > For deep reference material, see the `docs/` directory.
 
@@ -183,10 +183,10 @@ To ensure clean, prefix-continuous, and readable logs:
 
 ### Style Rules
 
-- **Indent:** 2-space (not tabs), enforced by `.editorconfig` + `shfmt`
-- **Lint:** `shellcheck`, `shfmt`, `pre-commit` (local/offline `make lint`), `black`, JSON/YAML/Large files validation via `Makefile`
+- **Indent:** Follow the final matching `.editorconfig` section; Python uses 4 spaces, shell generally uses 2, and Makefile recipes use tabs.
+- **Lint:** Use fast changed-file checks while iterating; run the applicable integrated `make verify` once on the intended final code state. Formatting is not a substitute for behavioural validation.
 - **Homebrew-agnostic paths:** Always use `$(brew --prefix)` — never hardcode `/usr/local` or `/opt/homebrew`
-- **Network resilience:** Never `set -e` on network calls; use `|| warn` pattern
+- **Network failure policy:** Optional discovery may degrade to an explicit UNKNOWN state; required provisioning, authentication, validation and state-changing operations must fail closed or report partial failure truthfully. Never replace missing evidence with success.
 - **Idempotency:** All `run_once_*` scripts must be safe to re-run
 - **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*` for script gates
 - **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`

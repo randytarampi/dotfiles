@@ -1,17 +1,19 @@
-## Description
+## Outcome and scope
 
-<!-- Brief description of what this PR changes and why -->
+<!-- What changes, why, and which contracts/consumers are affected? Keep one reviewable outcome per PR. -->
 
-## Testing
+## Evidence
 
-<!-- How did you verify these changes? -->
-- [ ] `make verify` passes (lint + drift + doctor + check-hashes + dry-run)
-- [ ] `make deploy` succeeds on a clean run
-- [ ] Configs are valid JSON/YAML
+<!-- List exact commands, results and revision. Distinguish targeted tests, full make verify, CI and live-host checks. -->
 
-## Checklist
+- Integrated `make verify`: <!-- PASS / FAIL / NOT RUN + reason -->
+- Required CI: <!-- current-head status, if available -->
+- Host/deploy validation: <!-- observed / owner-reported / not applicable / deferred -->
 
-- [ ] I've read `AGENTS.md` for repo conventions
-- [ ] Hash triggers updated for any new config inputs (`make check-hashes`)
-- [ ] Scripts are idempotent (safe to re-run via `make deploy`)
-- [ ] New scripts wired into both `run_onchange_*` AND `configure-all.sh`
+## Review disposition
+
+<!-- Blocking findings: fixed with evidence, declined by owner, deferred with follow-up, or still open. Note accepted complexity debt rather than widening the PR. -->
+
+## Risk and handoff
+
+<!-- Rollback/recovery, known UNKNOWN or unqualified states, and independently scoped follow-ups. -->

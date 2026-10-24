@@ -1,60 +1,26 @@
 # Pull request review
 
-<!-- CANONICAL review method.
-     Kept in lockstep with .github/skills/code-review/SKILL.md and
-     configs/skills/randy-review/SKILL.md (inlined copies for portability).
-     If you change the method here, change it in both skills in the same commit,
-     then run `make update-ci-assets`. -->
+<!-- Canonical rubric. Portable fallback copies are kept in lockstep in the two review skills. Update configs/review/assets-manifest.json when this changes. -->
 
-Review the changeset for correctness, security vulnerabilities, regressions,
-maintainability, and adherence to the repository's conventions.
+Review this changeset against its stated outcome, affected contracts and the repository's own conventions. Prefer correctness, safety and evidence over stylistic preferences.
 
 ## Method
 
-1. **Direction first.** Before line-level findings, state whether the changeset
-   is pulling in the right direction — architecturally and for the product —
-   and whether the chosen approach is the right one given the codebase. A
-   correct implementation of the wrong approach is a blocking finding;
-   re-steer early instead of polishing a doomed direction.
-2. **Root cause, not symptoms.** For each defect, identify the underlying
-   cause, not just the visible symptom. When a bug pattern appears, sweep the
-   codebase for similar instances — including non-obvious surfaces (shared
-   configs, provider/framework defaults, generated code, sibling services)
-   that a single-syntax grep would miss. The review is not done until the
-   sweep is.
-3. **Check conventions before judging.** Read the repository's documented
-   guidance (CONTRIBUTING, AGENTS.md, CLAUDE.md, review docs) and measure the
-   changeset against it. Do not relitigate established conventions; cite them
-   when an author or another reviewer drifts from them. Convention is the
-   arbiter of review disputes.
-4. **Extract themes.** Name the recurring patterns in the changeset: what
-   should be adjusted, and what should be celebrated. Call out good decisions
-   explicitly — review quality is also about reinforcing what worked.
+1. **Scope and direction.** Identify the intended outcome, affected consumers and proof required. Challenge a direction only when it creates a concrete material risk. A different architectural preference is not by itself a blocker.
+2. **Prove the defect.** Inspect the changed code and actual producer/consumer boundaries. Cite the file, diff line, failure mechanism and reproducible evidence or a precise testable scenario. Do not infer correctness from green CI or failure from a bot's confidence score.
+3. **Bound root-cause checks.** Check directly affected siblings, shared interfaces, generated consumers and security boundaries. Fix related defects required by this PR's contract. Record independent findings as separate follow-ups rather than extending the PR indefinitely.
+4. **Respect local policy, question it with evidence.** Read the invoked repository's guidance. It is the default, not an excuse to perpetuate a broken contract. State an evidence-backed exception or propose a small policy change.
+5. **Check the final state.** Verify on the actual head, with targeted regression evidence and the repository's applicable checks. Mark machine-specific checks as owner-reported, unverified or not applicable; never invent a test result.
 
-## Findings
+## Findings and disposition
 
-- Run the repository's standard verification command before attributing a
-  failure to CI or tests.
-- Evidence only: every finding cites the relevant file and line from the diff.
-- Distinguish blocking issues from suggestions. For each, explain the impact
-  and a practical correction. No speculative style preferences or ungrounded
-  concerns.
-- Prioritize behavior that can break production use, weaken security, regress
-  existing functionality, violate an explicit contract, or make future changes
-  unsafe.
-- Calibrate trust. Flag suspicious review signals and say what to chase down:
-  a "fix" commit doing most of the real engineering, review-driven commits
-  hiding substantive changes, copied-but-not-understood code, tests that pass
-  without exercising the claimed behavior.
+- **Block:** demonstrated correctness, data-integrity, security, compatibility or contract failures; misleading pass/fail signals; untested destructive behaviour; and a maintainability defect only when its concrete risk makes the change unsafe to accept.
+- **Advise:** speculative risks, optional abstractions, complexity/duplication metrics without a demonstrated defect, broader cleanup and unrelated pre-existing debt. Automated linter failures are deterministic local checks, not open-ended review debates.
+- For each finding provide: severity, file/line, observable impact, minimal correction, and what would prove resolution. Avoid duplicate comments when another reviewer already gave the same actionable finding.
+- Track each material finding as **fixed** (with evidence), **declined** (reason/owner acceptance), **deferred** (explicit follow-up and scope), or **open**. Re-review only new changes and unresolved material risks; do not restart the whole review on every fix commit.
+- Distinguish **PASS**, **FAIL**, **UNKNOWN** and **SKIPPED**. An unavailable catalogue, missing credential, skipped test or empty review body is never evidence of success. For mutators, validate before writing, preserve unmanaged state and fail closed on unsafe partial application.
+- A review is complete when the agreed acceptance contract is met, required checks succeed, and every material finding has an explicit disposition—not when all possible improvements have been implemented.
 
-## Communication
+## Report
 
-- Keep comments economical. If the code can say it, don't comment it; if a
-  cognitive jump is unavoidable, prefer refactoring the code to explaining it.
-- Be precise about what is reused versus reimplemented, and about scope:
-  which paths, services, and configs a change actually affects.
-- In English prose, use Canadian English spelling and Canadian Press style for
-  these reports (casual exchanges keep the conversation's own register).
-- End with owner-assigned, forward-looking actions: what the author must
-  address before merge, what reviewers should verify before approving, and
-  what future changesets building on this one should watch for.
+Start with a short direction and merge-readiness verdict. State blocking findings before suggestions. End with the smallest owner-assigned next actions, unresolved risks and exact checks observed. Keep comments concise. Use Canadian English in formal reports when the invoked repository requests it.
