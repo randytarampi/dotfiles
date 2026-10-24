@@ -249,29 +249,6 @@ jobs:
             codegraph-${{ runner.os }}-${{ github.repository }}-
       - name: Install codegraph + build index
         run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
-      - name: Install codegraph + build index
-        run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
-      - name: Load review prompt
-        run: |
-          prompt_file="${TRUSTED_DOTFILES}/configs/review/code-review-prompt.md"
-          delim=""
-          for _ in {1..5}; do
-            delim="REVIEW_PROMPT_$(openssl rand -hex 8)"
-            if ! grep -Fq -- "$delim" "$prompt_file"; then
-              break
-            fi
-            delim=""
-          done
-          if [[ -z "$delim" ]]; then
-            echo "Unable to select a safe review prompt delimiter." >&2
-            exit 1
-          fi
-          {
-            printf 'CODE_REVIEW_PROMPT<<%s\n' "$delim"
-            cat "$prompt_file"
-            # Keep the closer on its own line even if the prompt lacks a trailing newline.
-            printf '\n%s\n' "$delim"
-          } >> "$GITHUB_ENV"
       - name: Configure read-only OpenCode plan agent
         run: |
           set -euo pipefail
@@ -306,7 +283,6 @@ jobs:
           model: opencode/big-pickle
           agent: plan
           share: "false"
-          prompt: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}\n\nReview only. Do not modify files, commit, push, open branches or create PRs.', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || format('{0}\n\nReview only. Do not modify files, commit, push, open branches or create PRs.', env.CODE_REVIEW_PROMPT) }}
 
   junie:
     outputs:
