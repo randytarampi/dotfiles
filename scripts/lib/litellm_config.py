@@ -42,6 +42,7 @@ _MODELS_DEV_FETCH = models_dev.fetch_models_dev
 logger = logging.getLogger(__name__)
 
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
+LITELLM_SETUP_GATE = "DOTFILES_RUN_LITELLM_SETUP=1"
 OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
@@ -394,7 +395,7 @@ CLIENT_REGISTRY = [
         ["opencode CLI installed"],
         ["OpenAI-compatible"],
         "scripts/configure-opencode.py",
-        ["DOTFILES_RUN_LITELLM_SETUP=1"],
+        [LITELLM_SETUP_GATE],
         "file-or-env",
         "scripts/lib/litellm_client_auth.py",
         "eligible",
@@ -406,7 +407,7 @@ CLIENT_REGISTRY = [
         ["pi CLI installed"],
         ["OpenAI-compatible"],
         "scripts/configure-pi.py",
-        ["DOTFILES_USE_LITELLM_PROXY=1", "DOTFILES_RUN_LITELLM_SETUP=1"],
+        ["DOTFILES_USE_LITELLM_PROXY=1", LITELLM_SETUP_GATE],
         "file-or-env",
         "scripts/configure-pi.py provider config",
         "eligible",
@@ -418,7 +419,7 @@ CLIENT_REGISTRY = [
         ["Open WebUI installed"],
         ["OpenAI-compatible"],
         "scripts/configure-openwebui.py",
-        ["DOTFILES_RUN_LITELLM_SETUP=1"],
+        [LITELLM_SETUP_GATE],
         "file-or-env",
         "Open WebUI connection settings",
         "eligible",
@@ -430,7 +431,7 @@ CLIENT_REGISTRY = [
         ["JetBrains IDE with Junie"],
         ["OpenAI-compatible"],
         "scripts/generate-jetbrains-profiles.py",
-        ["DOTFILES_RUN_LITELLM_SETUP=1"],
+        [LITELLM_SETUP_GATE],
         "file",
         "~/.local/share/litellm/clients/junie.key",
         "eligible",
