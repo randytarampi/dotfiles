@@ -52,7 +52,9 @@ _LEGACY_CLIENT_GATES = (
 _CLI_INSTALLS = {"opencode": "opencode", "pi": "pi"}
 
 
-def _client_provisioning_state(row, enforce_registry_gates=True):
+def _client_provisioning_state(
+    row, enforce_registry_gates=True, strict_provisioning=False
+):
     """Return explicit eligibility and an honest reason for a registry row."""
     if (
         not row["credential_policy"].startswith("provision")
@@ -73,7 +75,12 @@ def _client_provisioning_state(row, enforce_registry_gates=True):
     # own DOTFILES_RUN_* enablement gates — their configure scripts own the
     # install in the same deploy. CLI detection applies only where a binary
     # exists; no invented GUI heuristics here.
-    if binary is not None and shutil.which(binary) is None:
+    if (
+        binary is not None
+        and shutil.which(binary) is None
+        and enforce_registry_gates
+        and not strict_provisioning
+    ):
         return False, "not installed"
     if "OpenAI-compatible" not in row["transports"]:
         return False, "usable transport UNKNOWN"
@@ -515,7 +522,9 @@ def provision_app_keys(
 def _provisioning_preflight(records, service_env_path, enforce_registry_gates, strict):
     provisioning_rows = []
     for row in CLIENT_REGISTRY:
-        eligible, reason = _client_provisioning_state(row, enforce_registry_gates)
+        eligible, reason = _client_provisioning_state(
+            row, enforce_registry_gates, strict
+        )
         if eligible:
             provisioning_rows.append(row)
         elif row["classification"] == "classification-only" or row["client"] == "junie":
@@ -667,6 +676,9 @@ def _prepare_existing_remote_key(
     if _key_file_materialized(client_key_path, env_name, service_env_path):
         if auth.state == "absent":
             _write_client_key(service_env_path, alias, env_name, dry_run)
+            key = _service_env_value(env_name, service_env_path)
+            if key:
+                found[env_name] = key
         _verify_app_key_hash(
             alias,
             client_key_path,
