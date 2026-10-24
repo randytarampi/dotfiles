@@ -219,9 +219,11 @@ def test_strict_provisioning_fails_closed_on_readiness_transport_error(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
 
     def request(url, method, key, payload=None, timeout=30):
@@ -313,6 +315,8 @@ def test_provisioning_second_pass_is_byte_stable(tmp_path, monkeypatch):
             else {"data": []}
         ),
     )
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
     before = {
         path.name: path.read_bytes() for path in [service_env, *client_dir.iterdir()]
