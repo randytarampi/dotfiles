@@ -625,7 +625,7 @@ jobs:
               body="$(printf '%s\n\n%s' "${marker}" "${token} review FAILED.")"
             fi
             existing="$(gh api --paginate "/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments")"
-            comment_id="$(jq -r --arg marker "${marker}" --arg actor "github-actions[bot]" '[.[] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
+            comment_id="$(jq -rs --arg marker "${marker}" --arg actor "github-actions[bot]" '[.[][] | select(.user.login == $actor and (.body | startswith($marker))) | .id] | first // empty' <<<"${existing}")"
             if [[ -n "${comment_id}" ]]; then
               gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}" --jq '.html_url'
             else
