@@ -259,7 +259,7 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5, status_out=None):
     parsed = urllib.parse.urlparse(str(base_url))
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
-    endpoint = str(base_url).rstrip("/") + "/models"
+    endpoint = _openai_root(base_url) + "/models"
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
     request = urllib.request.Request(endpoint, headers=headers, method="GET")
     try:
@@ -283,6 +283,13 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5, status_out=None):
     items = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(items, list):
         return None
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("id"), str)
+        or not item["id"]
+        for item in items
+    ):
+        return None
     ids = sorted(
         {
             str(item.get("id"))
@@ -290,7 +297,23 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5, status_out=None):
             if isinstance(item, dict) and item.get("id")
         }
     )
-    return ids or None
+    return ids
+
+
+def _openai_root(base_url):
+    parsed = urllib.parse.urlparse(str(base_url).rstrip("/"))
+    path = parsed.path.rstrip("/")
+    if path in ("/v1", "/api"):
+        path = "/v1"
+    elif path.endswith("/v1"):
+        pass
+    elif path.endswith("/api"):
+        path = path[:-4] + "/v1"
+    else:
+        path = path + "/v1"
+    return urllib.parse.urlunparse(
+        parsed._replace(path=path, params="", query="", fragment="")
+    ).rstrip("/")
 
 
 @dataclass(frozen=True)
@@ -321,14 +344,14 @@ class EmbeddingObservation:
     http_status: Optional[int] = None
 
 
-def _fetch_ollama_tags(base_url, key_value=None, timeout=5):
+def _fetch_ollama_tag_records(base_url, key_value=None, timeout=5):
     """Return model names from Ollama ``/api/tags`` (None if unresolvable)."""
     if not base_url:
         return None
     parsed = urllib.parse.urlparse(str(base_url))
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
-    endpoint = str(base_url).rstrip("/") + "/api/tags"
+    endpoint = _ollama_root(base_url) + "/api/tags"
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
     request = urllib.request.Request(endpoint, headers=headers, method="GET")
     try:
@@ -349,11 +372,23 @@ def _fetch_ollama_tags(base_url, key_value=None, timeout=5):
     models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(models, list):
         return None
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("name"), str)
+        or not item["name"]
+        for item in models
+    ):
+        return None
     return sorted(
-        str(item["name"])
+        (str(item["name"]), item.get("digest"))
         for item in models
         if isinstance(item, dict) and item.get("name")
     )
+
+
+def _fetch_ollama_tags(base_url, key_value=None, timeout=5):
+    records = _fetch_ollama_tag_records(base_url, key_value, timeout)
+    return None if records is None else [name for name, _digest in records]
 
 
 def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
@@ -363,9 +398,9 @@ def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
     parsed = urllib.parse.urlparse(str(base_url))
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
-    endpoint = str(base_url).rstrip("/") + "/api/show"
+    endpoint = _ollama_root(base_url) + "/api/show"
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
-    payload = json.dumps({"name": model}).encode("utf-8")
+    payload = json.dumps({"model": model}).encode("utf-8")
     request = urllib.request.Request(
         endpoint, data=payload, headers=headers, method="POST"
     )
@@ -389,13 +424,40 @@ def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
 
 def _validate_embedding_vector(vector):
     """Return (finite, nonzero, norm) for a probe response vector."""
-    finite = all(math.isfinite(v) for v in vector)
+    if (
+        not isinstance(vector, list)
+        or not vector
+        or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in vector)
+    ):
+        return False, False, None
+    try:
+        vector = [float(value) for value in vector]
+        finite = all(math.isfinite(v) for v in vector)
+        if not finite:
+            return False, any(v != 0 for v in vector), None
+        norm = math.hypot(*vector)
+        if not math.isfinite(norm):
+            return False, any(v != 0 for v in vector), None
+    except (OverflowError, TypeError, ValueError):
+        return False, False, None
     nonzero = any(v != 0 for v in vector)
-    norm = math.sqrt(sum(v * v for v in vector)) if finite else None
     return finite, nonzero, norm
 
 
-def probe_embedding_vector(base_url, model, key_value=None, timeout=5):
+def _ollama_root(base_url):
+    """Normalize an Ollama URL to its native server root."""
+    parsed = urllib.parse.urlparse(str(base_url).rstrip("/"))
+    path = parsed.path.rstrip("/")
+    if path in ("/v1", "/api"):
+        path = ""
+    return urllib.parse.urlunparse(
+        parsed._replace(path=path, params="", query="", fragment="")
+    ).rstrip("/")
+
+
+def probe_embedding_vector(
+    base_url, model, key_value=None, timeout=5, *, native_ollama=False
+):
     """Probe an embedding endpoint and capture vector quality metrics.
 
     Extends ``probe_embeddings`` with finiteness, nonzero and norm checks
@@ -403,7 +465,8 @@ def probe_embedding_vector(base_url, model, key_value=None, timeout=5):
     Returns an :class:`EmbeddingObservation` so callers receive a complete
     side-effect-free record.
     """
-    endpoint = str(base_url).rstrip("/") + "/embeddings"
+    root = _ollama_root(base_url) if native_ollama else _openai_root(base_url)
+    endpoint = root + ("/api/embed" if native_ollama else "/embeddings")
     payload = {"model": model, "input": "route probe deterministic seed"}
     code, _headers, data, conn_err = _request(
         endpoint, json.dumps(payload).encode(), key_value, timeout
@@ -430,7 +493,9 @@ def probe_embedding_vector(base_url, model, key_value=None, timeout=5):
         )
     try:
         body = json.loads(data.decode("utf-8"))
-        vector = body["data"][0]["embedding"]
+        vector = (
+            body["embeddings"][0] if native_ollama else body["data"][0]["embedding"]
+        )
     except (
         json.JSONDecodeError,
         UnicodeDecodeError,
@@ -458,10 +523,8 @@ def probe_embedding_vector(base_url, model, key_value=None, timeout=5):
             http_status=code,
         )
     finite, nonzero, norm = _validate_embedding_vector(vector)
-    digest = body.get("model") if isinstance(body, dict) else None
+    digest = None
     revision = None
-    if isinstance(body, dict):
-        revision = body.get("object") or body.get("version")
     qualified = finite and nonzero and norm is not None and norm > 0
     return EmbeddingObservation(
         provider="unknown",
@@ -490,6 +553,9 @@ def discover_embedding_candidates(
     ollama_key=None,
     gateway_key=None,
     timeout=5,
+    *,
+    allow_gateway_inference=False,
+    gateway_embedding_aliases=None,
 ):
     """Side-effect-free discovery of typed embedding model candidates.
 
@@ -505,15 +571,41 @@ def discover_embedding_candidates(
 
     # --- Local Ollama discovery ---
     if ollama_url:
-        tags = _fetch_ollama_tags(ollama_url, ollama_key, timeout) or []
+        tag_records = _fetch_ollama_tag_records(ollama_url, ollama_key, timeout)
+        if tag_records is None:
+            observations.append(
+                EmbeddingObservation(
+                    provider="ollama",
+                    wire_alias="*",
+                    backend_endpoint=_ollama_root(ollama_url),
+                    outcome="unknown",
+                    qualification=Qualification.UNKNOWN.value,
+                    notes=("Ollama model inventory unavailable",),
+                )
+            )
+            tag_records = []
+        tag_digests = dict(tag_records)
+        tags = [name for name, _digest in tag_records]
         for name in tags:
             details = _fetch_ollama_show(ollama_url, name, ollama_key, timeout)
-            if details and details.get("modelinfo", {}).get("embedding"):
+            capabilities = (
+                details.get("capabilities") if isinstance(details, dict) else None
+            )
+            if (
+                details
+                and isinstance(capabilities, list)
+                and "embedding" in capabilities
+            ):
                 obs = _probe_ollama_embedding(
-                    ollama_url, name, ollama_key, timeout, details
+                    ollama_url,
+                    name,
+                    ollama_key,
+                    timeout,
+                    details,
+                    tag_digests.get(name),
                 )
                 observations.append(obs)
-            elif details:
+            elif isinstance(details, dict) and isinstance(capabilities, list):
                 observations.append(
                     EmbeddingObservation(
                         provider="ollama",
@@ -521,28 +613,88 @@ def discover_embedding_candidates(
                         backend_endpoint=ollama_url,
                         outcome="unavailable",
                         qualification=Qualification.UNAVAILABLE.value,
-                        digest=details.get("modelinfo", {}).get("name"),
+                        digest=tag_digests.get(name),
                         notes=("model does not advertise embedding support",),
+                    )
+                )
+            else:
+                observations.append(
+                    EmbeddingObservation(
+                        provider="ollama",
+                        wire_alias=name,
+                        backend_endpoint=_ollama_root(ollama_url),
+                        outcome="unknown",
+                        qualification=Qualification.UNKNOWN.value,
+                        digest=tag_digests.get(name),
+                        notes=("model details unavailable",),
                     )
                 )
 
     # --- Gateway alias discovery ---
     if gateway_url:
         observations.extend(
-            _discover_gateway_embeddings(gateway_url, gateway_key, timeout)
+            _discover_gateway_embeddings(
+                gateway_url,
+                gateway_key,
+                timeout,
+                allow_gateway_inference,
+                gateway_embedding_aliases,
+            )
         )
     return observations
 
 
-def _discover_gateway_embeddings(gateway_url, gateway_key, timeout):
+def _discover_gateway_embeddings(
+    gateway_url, gateway_key, timeout, allow_inference=False, candidate_aliases=None
+):
     """Probe gateway aliases that look like embedding-capable models."""
     results = []
     gw_models = fetch_gateway_models(gateway_url, gateway_key, timeout)
+    if gw_models is None:
+        results.append(
+            EmbeddingObservation(
+                provider="gateway",
+                wire_alias="*",
+                backend_endpoint=_openai_root(gateway_url),
+                outcome="unknown",
+                qualification=Qualification.UNKNOWN.value,
+                notes=("gateway model inventory unavailable",),
+            )
+        )
+        return results
     if not gw_models:
         return results
-    for alias in gw_models:
-        if alias.startswith("ollama/") or alias.startswith("gemma"):
-            obs = probe_embedding_vector(gateway_url, alias, gateway_key, timeout)
+    if not allow_inference or candidate_aliases is None:
+        results.extend(
+            EmbeddingObservation(
+                provider="gateway",
+                wire_alias=alias,
+                backend_endpoint=str(gateway_url).rstrip("/") + "/embeddings",
+                outcome="unknown",
+                qualification=Qualification.UNKNOWN.value,
+                notes=(
+                    "gateway inference permission or exact embedding candidate selection missing",
+                ),
+            )
+            for alias in gw_models
+        )
+        return results
+    for alias in sorted(set(candidate_aliases)):
+        if alias not in gw_models:
+            results.append(
+                EmbeddingObservation(
+                    provider="gateway",
+                    wire_alias=alias,
+                    backend_endpoint=_openai_root(gateway_url),
+                    outcome="unknown",
+                    qualification=Qualification.UNKNOWN.value,
+                    notes=("selected alias absent from gateway inventory",),
+                )
+            )
+        else:
+            obs = probe_embedding_vector(
+                gateway_url, alias, gateway_key, timeout, native_ollama=False
+            )
             results.append(
                 EmbeddingObservation(
                     provider="gateway",
@@ -563,10 +715,11 @@ def _discover_gateway_embeddings(gateway_url, gateway_key, timeout):
     return results
 
 
-def _probe_ollama_embedding(base_url, model, key_value, timeout, details):
+def _probe_ollama_embedding(base_url, model, key_value, timeout, details, digest=None):
     """Probe a local-Ollama embedding model using its /api/show details."""
-    probe = probe_embedding_vector(base_url, model, key_value, timeout)
-    modelinfo = details.get("modelinfo", {}) if isinstance(details, dict) else {}
+    probe = probe_embedding_vector(
+        base_url, model, key_value, timeout, native_ollama=True
+    )
     return EmbeddingObservation(
         provider="ollama",
         wire_alias=probe.wire_alias,
@@ -574,8 +727,8 @@ def _probe_ollama_embedding(base_url, model, key_value, timeout, details):
         outcome=probe.outcome,
         qualification=probe.qualification,
         dimension=probe.dimension,
-        digest=modelinfo.get("name") or modelinfo.get("digest"),
-        revision=modelinfo.get("parameter", {}).get("version"),
+        digest=digest,
+        revision=None,
         vector_finite=probe.vector_finite,
         vector_nonzero=probe.vector_nonzero,
         vector_norm=probe.vector_norm,
