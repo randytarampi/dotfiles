@@ -253,6 +253,105 @@ def test_manifest_digests_cover_generated_outputs(harness, monkeypatch):
     )
 
 
+def test_dotted_profile_name_cleanup_removes_only_digest_owned_file(
+    harness, monkeypatch
+):
+    home, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text())
+    config["groups"] = {
+        "custom.json": {"provider": "openai", "primaryModel": "gpt-custom"}
+    }
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            }
+        },
+    )
+
+    PROFILES.main()
+    generated = target / "custom.json.json"
+    assert generated.is_file()
+    user_collision = target / "custom.json"
+    user_collision.write_text('{"manual":true}', encoding="utf-8")
+
+    config["groups"] = {}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    PROFILES.main()
+
+    assert not generated.exists()
+    assert user_collision.read_text(encoding="utf-8") == '{"manual":true}'
+    ledger = json.loads(
+        (home / ".local/share/dotfiles/jetbrains-profiles-manifest.json").read_text()
+    )
+    assert "custom.json" not in ledger["profiles"]
+
+
+def test_crash_after_profile_overwrite_preserves_manual_files_and_refuses_retry(
+    harness, monkeypatch
+):
+    home, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {"openai/gpt-main", "openai/gpt-main-new"},
+    )
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            },
+            "litellm": {
+                "baseUrl": "http://127.0.0.1:4000/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "dummy-junie-key-one",
+            },
+        },
+    )
+    PROFILES.main()
+    profile = target / "litellm-openai-main.json"
+    manual = target / "manual.json"
+    old_profile_bytes = profile.read_bytes()
+    manual.write_text('{"manual":true}', encoding="utf-8")
+    old_ledger = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    old_ledger_bytes = old_ledger.read_bytes()
+
+    original_write = PROFILES.atomic_write_manifest
+
+    def fail_manifest(*_args):
+        raise OSError("injected manifest publication failure")
+
+    monkeypatch.setattr(PROFILES, "atomic_write_manifest", fail_manifest)
+    # A changed generated profile reaches the deliberate interruption window.
+    config_path = Path(sys.argv[sys.argv.index("--groups-json") + 1])
+    config = json.loads(config_path.read_text())
+    config["groups"]["openai-main"]["primaryModel"] = "gpt-main-new"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(OSError, match="injected manifest publication failure"):
+        PROFILES.main()
+    assert manual.read_text(encoding="utf-8") == '{"manual":true}'
+    assert old_ledger.read_bytes() == old_ledger_bytes
+    assert profile.read_bytes() != old_profile_bytes
+    interrupted_profile_bytes = profile.read_bytes()
+
+    monkeypatch.setattr(PROFILES, "atomic_write_manifest", original_write)
+    with pytest.raises(SystemExit):
+        PROFILES.main()
+    assert manual.read_text(encoding="utf-8") == '{"manual":true}'
+    assert profile.read_bytes() == interrupted_profile_bytes
+    assert old_ledger.read_bytes() == old_ledger_bytes
+
+
 def test_unknown_catalogue_preserves_owned_profile_and_ledger(harness, monkeypatch):
     home, target, _, _ = harness
     monkeypatch.setattr(
