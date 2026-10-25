@@ -518,7 +518,7 @@ version = "2.4.1"
 description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
-groups = ["test", "tooling"]
+groups = ["main", "test", "tooling"]
 markers = "python_version == \"3.10\""
 files = [
     {file = "tomli-2.4.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:f8f0fc26ec2cc2b965b7a3b87cd19c5c6b8c5e5f436b984e85f486d652285c30"},
@@ -586,4 +586,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10"
-content-hash = "29e3fd746af330e7b27213275dfb05fa118eef44ec3c60cee637333ff8dbe008"
+content-hash = "3a96a98aa372a35d82c813027c4585e784190f6976c2b6f826d8c80996a1036f"

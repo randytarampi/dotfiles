@@ -1,8 +1,15 @@
 """Tests for Codex configuration reconciliation."""
 
 import importlib.util
+import os
+import shutil
+import subprocess
 import sys
-import tomllib
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +18,7 @@ import pytest
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "configure-codex.py"
+CONFIGURE_ALL = REPO_ROOT / "scripts" / "configure-all.sh"
 SPEC = importlib.util.spec_from_file_location("configure_codex", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 configure_codex = importlib.util.module_from_spec(SPEC)
@@ -194,3 +202,172 @@ def test_codex_registry_is_configuration_only_and_gates_match(monkeypatch):
         "DOTFILES_USE_LITELLM_PROXY=1",
     ]
     assert "model_providers.litellm" in row["consumer_read_path"]
+
+
+def test_configure_all_routes_codex_through_poetry(tmp_path):
+    wrapper = CONFIGURE_ALL.read_text(encoding="utf-8")
+    assert (
+        'run_step "Codex configuration" poetry --directory "$DOTFILES_DIR" run python "$SCRIPT_DIR/configure-codex.py"'
+        in wrapper
+    )
+    assert (
+        'run_step "Codex configuration" python3 "$SCRIPT_DIR/configure-codex.py"'
+        not in wrapper
+    )
+
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    record = tmp_path / "poetry-args"
+    run_step_source = wrapper[
+        wrapper.index("run_step() {") : wrapper.index(
+            "\n}\n", wrapper.index("run_step() {")
+        )
+        + 3
+    ]
+    helper = tmp_path / "run-step.sh"
+    helper.write_text(run_step_source + "\n", encoding="utf-8")
+    poetry_stub = stub_bin / "poetry"
+    poetry_stub.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" > "$POETRY_ARGS_FILE"\nexit 37\n',
+        encoding="utf-8",
+    )
+    poetry_stub.chmod(0o755)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; source "$2"; run_step "Codex configuration" poetry --directory /fixture/root run python /fixture/configure-codex.py',
+            "test",
+            str(REPO_ROOT / "scripts" / "lib" / "common.sh"),
+            str(helper),
+        ],
+        env={
+            "PATH": f"{stub_bin}:/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "POETRY_ARGS_FILE": str(record),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "Codex configuration failed" in result.stderr
+    assert record.read_text(encoding="utf-8").strip() == (
+        "--directory /fixture/root run python /fixture/configure-codex.py"
+    )
+
+
+def test_locked_poetry_runtime_imports_codex_parser_and_dry_runs(tmp_path):
+    poetry = shutil.which("poetry")
+    if not poetry:
+        pytest.skip("Poetry is required for the runtime probe")
+    runtime = subprocess.run(
+        [
+            poetry,
+            "run",
+            "python",
+            "-c",
+            "import sys; print(sys.executable); print(sys.version_info[:2])",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert runtime.returncode == 0, runtime.stderr
+    version = tuple(map(int, runtime.stdout.splitlines()[1].strip("()").split(", ")))
+    parser_module = "tomli" if version < (3, 11) else "tomllib"
+    assert (
+        subprocess.run(
+            [poetry, "run", "python", "-c", f"import {parser_module}"],
+            cwd=REPO_ROOT,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text("", encoding="utf-8")
+    env = {
+        "HOME": str(home),
+        "PATH": os.environ["PATH"],
+        "DOTFILES_RUN_CODEX_SETUP": "0",
+        "DOTFILES_USE_LITELLM_PROXY": "0",
+        "DOTFILES_OPENCODE_TIER": "local",
+        "PYTHONPATH": str(REPO_ROOT / "scripts" / "lib"),
+    }
+    help_result = subprocess.run(
+        [poetry, "run", "python", str(SCRIPT), "--help"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stderr
+    dry_run = subprocess.run(
+        [poetry, "run", "python", str(SCRIPT), "--dry-run", "--no-backup"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert dry_run.returncode == 0, dry_run.stderr
+    assert "Would configure providers" in dry_run.stdout + dry_run.stderr
+    assert not (home / ".codex" / "config.toml").exists()
+
+
+def test_python310_locked_runtime_when_explicitly_requested(tmp_path):
+    if os.environ.get("DOTFILES_TEST_CODEX_PY310") != "1":
+        pytest.skip(
+            "Set DOTFILES_TEST_CODEX_PY310=1 with the isolated Python 3.10 Poetry env"
+        )
+    poetry = shutil.which("poetry")
+    assert poetry
+    runtime = subprocess.run(
+        [
+            poetry,
+            "run",
+            "python",
+            "-c",
+            "import sys,tomli; print(sys.version_info[:2]); print(tomli.__version__); print(sys.executable)",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert runtime.returncode == 0, runtime.stderr
+    assert runtime.stdout.splitlines()[0] == "(3, 10)"
+    assert runtime.stdout.splitlines()[1] == "2.4.1"
+
+    home = tmp_path / "py310-home"
+    home.mkdir()
+    env = {
+        "HOME": str(home),
+        "PATH": os.environ["PATH"],
+        "DOTFILES_RUN_CODEX_SETUP": "0",
+        "DOTFILES_USE_LITELLM_PROXY": "0",
+        "DOTFILES_OPENCODE_TIER": "local",
+        "PYTHONPATH": str(REPO_ROOT / "scripts" / "lib"),
+    }
+    for name in ("POETRY_VIRTUALENVS_IN_PROJECT", "POETRY_VIRTUALENVS_PATH"):
+        if name in os.environ:
+            env[name] = os.environ[name]
+    for args, phrase in (
+        (["--help"], "usage:"),
+        (["--dry-run", "--no-backup"], "Would configure providers"),
+    ):
+        result = subprocess.run(
+            [poetry, "run", "python", str(SCRIPT), *args],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert phrase in result.stdout + result.stderr
+    assert not (home / ".codex" / "config.toml").exists()
