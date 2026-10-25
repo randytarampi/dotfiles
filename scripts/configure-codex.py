@@ -14,6 +14,11 @@ import os
 import re
 import sys
 
+try:
+    import tomllib
+except ImportError:  # Python 3.10 compatibility
+    import tomli as tomllib
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
 if LIB_DIR not in sys.path:
@@ -126,17 +131,24 @@ wire_api = "responses"
 """
 
 
-LITELLM_PROVIDER_TEMPLATE = """[model_providers.litellm]
+LITELLM_PROVIDER_START = "# BEGIN DOTFILES MANAGED PROVIDER litellm"
+LITELLM_PROVIDER_END = "# END DOTFILES MANAGED PROVIDER litellm"
+LITELLM_PROVIDER_TEMPLATE = """# BEGIN DOTFILES MANAGED PROVIDER litellm
+[model_providers.litellm]
 name = "LiteLLM Proxy"
 base_url = "{base_url}"
 env_key = "LITELLM_CODEX_KEY"
 wire_api = "responses"
+# END DOTFILES MANAGED PROVIDER litellm
 """
 
 
 def build_litellm_provider_config():
     """Build the litellm provider block when setup gate and proxy are active."""
-    if os.environ.get("DOTFILES_RUN_CODEX_SETUP", "0") != "1":
+    if (
+        os.environ.get("DOTFILES_RUN_CODEX_SETUP", "0") != "1"
+        or os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") != "1"
+    ):
         return ""
     port = os.environ.get("LITELLM_PORT", "4000")
     return LITELLM_PROVIDER_TEMPLATE.format(base_url=f"http://127.0.0.1:{port}/v1")
@@ -169,39 +181,51 @@ def build_provider_config(local_model=""):
 
 
 def strip_managed_profiles(content):
-    # Strip properly marked blocks (BEGIN...END)
-    content = re.sub(
-        r"\n*" + re.escape(PROFILES_START) + r".*?" + re.escape(PROFILES_END) + r"\n*",
-        "\n",
-        content,
-        flags=re.DOTALL,
-    )
-    # Strip orphaned profile sections from older runs that wrote profiles
-    # without the BEGIN marker, preventing duplicate-key accumulation.
-    # Transitional dual-strip: remove old profile names for one release cycle.
-    for profile in (
-        "meridian",
-        "ollama-cloud",
-        "ollama-local",
-        "ollama",
-        "local-solo",
-        "local",
-        "copilot",
-        "omlx",
-    ):
-        content = re.sub(
-            r"\n*\[profiles\.%s\].*?(?=\n\[|\Z)" % re.escape(profile),
-            "",
-            content,
-            flags=re.DOTALL,
-        )
-    # Strip any remaining orphaned END markers
-    content = re.sub(
-        r"\n*# END DOTFILES MANAGED PROFILES\n*",
-        "\n",
-        content,
-    )
-    return content
+    return strip_owned_block(content, PROFILES_START, PROFILES_END, "profiles")
+
+
+def strip_owned_block(content, start, end, table):
+    lines = content.splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.strip() == start]
+    ends = [i for i, line in enumerate(lines) if line.strip() == end]
+    if not starts and not ends:
+        return content
+    if len(starts) != 1 or len(ends) != 1 or starts[0] >= ends[0]:
+        raise ValueError(f"ambiguous managed {table} markers")
+    owned = tomllib.loads("".join(lines[starts[0] + 1 : ends[0]]))
+    if set(owned) != {table}:
+        raise ValueError(f"managed {table} markers enclose unrelated settings")
+    return "".join(lines[: starts[0]] + lines[ends[0] + 1 :])
+
+
+def reconcile_litellm_provider(content, enabled):
+    """Reconcile the marked provider without modifying unowned TOML."""
+    start_marker, end_marker = LITELLM_PROVIDER_START, LITELLM_PROVIDER_END
+    lines = content.splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.strip() == start_marker]
+    ends = [i for i, line in enumerate(lines) if line.strip() == end_marker]
+    if starts or ends:
+        if len(starts) != 1 or len(ends) != 1 or starts[0] >= ends[0]:
+            raise ValueError("ambiguous managed LiteLLM provider markers")
+        try:
+            marked = tomllib.loads("".join(lines[starts[0] + 1 : ends[0]]))
+        except tomllib.TOMLDecodeError as exc:
+            raise ValueError("invalid managed LiteLLM provider block") from exc
+        if set(marked) != {"model_providers"} or set(marked["model_providers"]) != {
+            "litellm"
+        }:
+            raise ValueError("managed markers do not enclose only the LiteLLM provider")
+        content = "".join(lines[: starts[0]] + lines[ends[0] + 1 :])
+    try:
+        parsed = tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"refusing invalid existing Codex TOML: {exc}") from exc
+    if "litellm" in parsed.get("model_providers", {}):
+        raise ValueError("refusing to overwrite unmanaged model_providers.litellm")
+    if not enabled:
+        return content
+    block = build_litellm_provider_config().rstrip()
+    return content.rstrip() + ("\n\n" if content.strip() else "") + block + "\n"
 
 
 def build_summary_lines(config, config_path, ollama_cloud_model, note, local_model):
@@ -261,30 +285,40 @@ def main():
             content = ""
         original_content = content
 
-        # Strip old custom provider IDs (transitional: ollama-local was renamed, ollama is now built-in).
-        for provider in (
-            "meridian",
-            "ollama-cloud",
-            "ollama-local",
-            "omlx-local",
-            "ollama",
-            "github-copilot",
-            "omlx",
-        ):
-            content = re.sub(
-                r"\n*\[model_providers\.%s\].*?(?=\n\[|\Z)" % re.escape(provider),
-                "",
-                content,
-                flags=re.DOTALL,
-            )
+        # Remove only the marked block before legacy provider cleanup.
+        content = reconcile_litellm_provider(content, False)
+        provider_start = "# BEGIN DOTFILES MANAGED PROVIDERS"
+        provider_end = "# END DOTFILES MANAGED PROVIDERS"
+        content = strip_owned_block(
+            content, provider_start, provider_end, "model_providers"
+        )
         content = strip_managed_profiles(content)
         new_content = content.rstrip()
         if new_content:
             new_content += "\n\n"
-        new_content += build_provider_config(local_model).rstrip()
-        new_content += (
-            "\n\n" + build_profiles_config(ollama_cloud_model, local_model).rstrip()
-        )
+        base_providers = build_provider_config(local_model)
+        litellm_config = build_litellm_provider_config()
+        if litellm_config:
+            content = reconcile_litellm_provider(content, True)
+            base_providers = base_providers.replace(litellm_config, "")
+            new_content = content.rstrip()
+            if new_content:
+                new_content += "\n\n"
+        generated_profiles = build_profiles_config(ollama_cloud_model, local_model)
+        existing = tomllib.loads(content)
+        for table, generated in (
+            ("model_providers", base_providers),
+            ("profiles", generated_profiles),
+        ):
+            collisions = set(existing.get(table, {})) & set(
+                tomllib.loads(generated).get(table, {})
+            )
+            if collisions:
+                raise ValueError(f"unmanaged {table} collision: {sorted(collisions)}")
+        new_content += f"{provider_start}\n{base_providers.rstrip()}\n{provider_end}"
+        # Provider composition appends LiteLLM once, after legacy cleanup.
+        new_content += "\n\n" + generated_profiles.rstrip()
+        tomllib.loads(new_content)
 
         if new_content == original_content:
             logger.info(f"Providers already configured in {config_path}")
@@ -298,7 +332,7 @@ def main():
                     logger.info(f"Backed up existing config.toml to {backup_path}")
             write_text_file(config_path, new_content, backup=False)
             logger.info(f"Codex configuration written to {config_path}")
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         logger.critical(f"Failed to update Codex configuration: {exc}")
         sys.exit(1)
 

@@ -1,164 +1,147 @@
-"""Tests for scripts/configure-codex.py — Codex CLI provider configuration."""
+"""Tests for Codex configuration reconciliation."""
 
 import importlib.util
 import sys
+import tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "configure-codex.py"
-
 SPEC = importlib.util.spec_from_file_location("configure_codex", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 configure_codex = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure_codex)
 
 
-def test_user_top_level_model_provider_is_preserved(tmp_path):
-    """Fixture test: user's top-level model_provider survives main().
+@pytest.mark.parametrize("proxy_gate", ["0", "1"])
+def test_litellm_provider_requires_both_gates(monkeypatch, proxy_gate):
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", proxy_gate)
+    assert bool(configure_codex.build_litellm_provider_config()) == (proxy_gate == "1")
 
-    Previously, line 245 used `^model_provider\\s*=.*$\\n?` to strip ALL
-    top-level model_provider keys, destroying the user's default provider
-    and contradicting the docstring promise to not change Codex's default.
 
-    After the fix, the script no longer strips top-level model_provider.
-    """
-    config_path = tmp_path / "config.toml"
-    user_config = (
-        "# User's personal Codex config\n"
-        'model_provider = "anthropic"\n\n'
-        "[profiles.my-profile]\n"
-        'model = "claude-sonnet-5-5"\n'
+def test_litellm_provider_requires_setup_gate(monkeypatch):
+    monkeypatch.delenv("DOTFILES_RUN_CODEX_SETUP", raising=False)
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert configure_codex.build_litellm_provider_config() == ""
+
+
+def test_reconcile_managed_block_repeatably_and_gate_off_preserves_user_toml(
+    monkeypatch,
+):
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("LITELLM_PORT", "4567")
+    original = (
+        '# User config\nmodel_provider = "openai"\n[profiles.mine]\nmodel = "x"\n'
     )
-    config_path.write_text(user_config, encoding="utf-8")
+    enabled = configure_codex.reconcile_litellm_provider(original, True)
+    assert configure_codex.reconcile_litellm_provider(enabled, True) == enabled
+    parsed = tomllib.loads(enabled)
+    assert parsed["model_provider"] == "openai"
+    assert (
+        parsed["model_providers"]["litellm"]["base_url"] == "http://127.0.0.1:4567/v1"
+    )
+    disabled = configure_codex.reconcile_litellm_provider(enabled, False)
+    assert tomllib.loads(disabled)["profiles"]["mine"]["model"] == "x"
+    assert "model_providers" not in tomllib.loads(disabled)
 
-    mock_logger = MagicMock()
-    with (
-        patch.object(configure_codex.os.path, "expanduser", return_value=str(tmp_path)),
-        patch.object(configure_codex.os.path, "exists", return_value=True),
-        patch.object(configure_codex.os, "makedirs"),
-        patch.object(configure_codex, "write_text_file") as mock_write,
-        patch.object(configure_codex, "backup_file", return_value=None),
-        patch.object(configure_codex, "logger", mock_logger),
-        patch.object(
-            configure_codex,
-            "resolve_ollama_cloud_model",
-            return_value=("gemma4:12b", "note"),
-        ),
-        patch.object(
-            configure_codex, "resolve_local_model", return_value="mellum-small"
-        ),
-        patch.object(configure_codex, "load_env"),
-    ):
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '[model_providers.litellm]\nname = "User provider"\n',
+        "# BEGIN DOTFILES MANAGED PROVIDER litellm\n[model_providers.litellm]\n",
+        "# BEGIN DOTFILES MANAGED PROVIDER litellm\n[model_providers.other]\n# END DOTFILES MANAGED PROVIDER litellm\n",
+    ],
+)
+def test_reconcile_refuses_unmanaged_or_ambiguous_content_unchanged(content):
+    before = content.encode()
+    with pytest.raises(ValueError):
+        configure_codex.reconcile_litellm_provider(content, True)
+    assert content.encode() == before
+
+
+def test_main_writes_valid_toml_twice_and_gate_off_removes_owned_block(
+    tmp_path, monkeypatch
+):
+    config_path = tmp_path / ".codex" / "config.toml"
+    config_path.parent.mkdir()
+    original = (
+        '# User setting\nmodel_provider = "openai"\n[profiles.mine]\nmodel = "keep"\n'
+    )
+    config_path.write_text(original, encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setattr(
+        configure_codex, "resolve_ollama_cloud_model", lambda: ("m", "note")
+    )
+    monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
+    monkeypatch.setattr(configure_codex, "load_env", lambda: None)
+    monkeypatch.setattr(configure_codex, "logger", MagicMock())
+    snapshots = []
+    for _ in range(2):
         with patch.object(sys, "argv", ["configure-codex.py"]):
             configure_codex.main()
-
-    written = mock_write.call_args[0][1]
-    assert (
-        'model_provider = "anthropic"' in written
-    ), "User's top-level model_provider was stripped — the fix is not applied."
-
-
-def test_dry_run_does_not_write_to_config(tmp_path, monkeypatch):
-    """D1: --dry-run logs what would be written but does not touch the file."""
-    config_path = tmp_path / "config.toml"
-    config_path.write_text("# existing\n", encoding="utf-8")
-
-    mock_logger = MagicMock()
-    with (
-        patch.object(configure_codex.os.path, "expanduser", return_value=str(tmp_path)),
-        patch.object(configure_codex.os.path, "exists", return_value=True),
-        patch.object(configure_codex, "write_text_file") as mock_write,
-        patch.object(configure_codex, "logger", mock_logger),
-        patch.object(
-            configure_codex,
-            "resolve_ollama_cloud_model",
-            return_value=("gemma4:12b", "note"),
-        ),
-        patch.object(
-            configure_codex, "resolve_local_model", return_value="mellum-small"
-        ),
-        patch.object(configure_codex, "load_env"),
-    ):
-        with patch.object(
-            sys, "argv", ["configure-codex.py", "--dry-run", "--no-backup"]
-        ):
-            configure_codex.main()
-
-    # In dry-run mode, write_text_file should not be called
-    mock_write.assert_not_called()
-    mock_logger.info.assert_called()
-    info_calls = [str(c) for c in mock_logger.info.call_args_list]
-    assert any("Would configure" in call for call in info_calls)
+        persisted = config_path.read_text(encoding="utf-8")
+        tomllib.loads(persisted)
+        snapshots.append(persisted)
+    assert snapshots[0] == snapshots[1]
+    assert persisted
+    assert persisted.count("BEGIN DOTFILES MANAGED PROVIDER litellm") == 1
+    stat = config_path.stat()
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    with patch.object(sys, "argv", ["configure-codex.py"]):
+        configure_codex.main()
+    assert "model_providers.litellm" not in config_path.read_text(encoding="utf-8")
+    assert stat.st_ino == config_path.stat().st_ino
 
 
-def test_idempotent_rerun_preserves_user_state(tmp_path):
-    """D2: Running configure-codex twice should be idempotent — user's
-    provider/model settings must survive both runs.
-    """
-    content = configure_codex.build_provider_config("mellum-small")
-    profiles = configure_codex.build_profiles_config("gemma4:12b", "mellum-small")
-    full_config = (
-        f'# User comment\nmodel_provider = "openai"\n\n{content}\n\n{profiles}\n'
+@pytest.mark.parametrize(
+    "original",
+    [
+        '[model_providers.litellm]\nname = "user"\n',
+        '[model_providers.meridian]\nname = "user"\n',
+        '[profiles.local]\nmodel = "user"\n',
+    ],
+)
+def test_main_collision_does_not_change_bytes_or_stat(tmp_path, monkeypatch, original):
+    config_path = tmp_path / ".codex" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_text(original, encoding="utf-8")
+    before = config_path.stat()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setattr(
+        configure_codex, "resolve_ollama_cloud_model", lambda: ("m", "note")
     )
-
-    stripped = configure_codex.strip_managed_profiles(full_config)
-    # Re-run the same pipeline — user model_provider should still be present
-    assert (
-        "model_provider = " in stripped or "model_provider =" in stripped
-    ), "User model_provider lost during idempotency cycle"
-
-
-def test_litellm_provider_omitted_without_gate():
-    """D1a: litellum provider block is only added when DOTFILES_RUN_CODEX_SETUP=1."""
-    import os
-
-    os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
-    result = configure_codex.build_litellm_provider_config()
-    assert result == ""
+    monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
+    monkeypatch.setattr(configure_codex, "load_env", lambda: None)
+    monkeypatch.setattr(configure_codex, "logger", MagicMock())
+    with patch.object(sys, "argv", ["configure-codex.py"]):
+        with pytest.raises(SystemExit, match="1"):
+            configure_codex.main()
+    assert config_path.read_text(encoding="utf-8") == original
+    assert config_path.stat().st_mtime_ns == before.st_mtime_ns
+    assert config_path.stat().st_ino == before.st_ino
 
 
-def test_litellm_provider_added_with_gate(tmp_path):
-    """D1a: litellum provider block is added when gate is active."""
-    import os
-
-    os.environ["DOTFILES_RUN_CODEX_SETUP"] = "1"
-    try:
-        os.environ["LITELLM_PORT"] = "4000"
-        result = configure_codex.build_litellm_provider_config()
-    finally:
-        os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
-        os.environ.pop("LITELLM_PORT", None)
-
-    assert "[model_providers.litellm]" in result
-    assert 'base_url = "http://127.0.0.1:4000/v1"' in result
-    assert 'env_key = "LITELLM_CODEX_KEY"' in result
-    assert 'wire_api = "responses"' in result
-
-
-def test_litellm_provider_uses_custom_port():
-    """D1a: litellum provider respects LITELLM_PORT override."""
-    import os
-
-    os.environ["DOTFILES_RUN_CODEX_SETUP"] = "1"
-    os.environ["LITELLM_PORT"] = "4567"
-    try:
-        result = configure_codex.build_litellm_provider_config()
-    finally:
-        os.environ.pop("DOTFILES_RUN_CODEX_SETUP", None)
-        os.environ.pop("LITELLM_PORT", None)
-
-    assert 'base_url = "http://127.0.0.1:4567/v1"' in result
-
-
-def test_codex_in_client_registry_with_litellm_provider():
-    """D1a: client registry marks codex eligible for litellum routing."""
+def test_codex_registry_is_configuration_only_and_gates_match(monkeypatch):
     import litellm_config
 
-    rows = {row["client"]: row for row in litellm_config.CLIENT_REGISTRY}
-    assert "codex" in rows
-    assert rows["codex"]["classification"] == "eligible"
-    assert rows["codex"]["env_name"] == "LITELLM_CODEX_KEY"
-    assert rows["codex"]["setup_gates"] == ["DOTFILES_RUN_CODEX_SETUP=1"]
-    assert "model_providers.litellm" in rows["codex"]["consumer_read_path"]
+    row = next(
+        row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "codex"
+    )
+    assert row["classification"] == "config-only"
+    assert row["credential_policy"] == "defer"
+    assert row["setup_gates"] == [
+        "DOTFILES_RUN_CODEX_SETUP=1",
+        "DOTFILES_USE_LITELLM_PROXY=1",
+    ]
+    assert "model_providers.litellm" in row["consumer_read_path"]
