@@ -15,14 +15,15 @@ exist.
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
-The LiteLLM-routed `poolside/` OpenCode entries are conservatively advertised
-with a 262,112-token context and 32,768-token output limit. This is a routed
-policy based on observed gateway behaviour, not a claim about Poolside's full
-native context window. At 67%, DCP's strong-compression nudge is about 175,615
-tokens; with the output allowance, that remains below the observed 262,112-token
-gateway boundary. DCP nudges rely on the model choosing the compress tool, so
-they do not guarantee automatic compression before the limit. Direct Poolside
-entries retain their existing metadata.
+The LiteLLM-routed `poolside/laguna-s-2.1` OpenCode entry is conservatively
+advertised with ceiling limits of 262,112 tokens of context and 32,768 tokens of
+output, preserving any smaller positive limits already configured. This is a
+routed policy based on observed gateway behaviour, not a claim about Poolside's
+full native context window. At 67%, DCP's strong-compression nudge is about
+175,615 tokens; with the output allowance, that remains below the observed
+262,112-token gateway boundary. DCP nudges rely on the model choosing the compress
+tool, so they do not guarantee automatic compression before the limit. Direct
+Poolside entries retain their existing metadata.
 
 ## Compaction ownership
 

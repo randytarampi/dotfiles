@@ -11,10 +11,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 import litellm_config
 import model_catalogues
 from constants import OMLX_DEFAULT_PORT
+from provider_endpoints import POOLSIDE_ROUTED_MODEL_INFO
 
 
 @pytest.mark.parametrize("engine_order", [("omlx", "ollama"), ("ollama", "omlx")])
@@ -597,16 +599,12 @@ def test_poolside_emits_direct_provider_lane(monkeypatch):
     )
     assert entry["litellm_params"]["model"] == "openai/poolside/laguna-s-2.1"
     assert entry["litellm_params"]["api_base"] == "https://inference.poolside.ai/v1"
-    assert entry["litellm_params"]["model_info"] == {
-        "max_input_tokens": 229344,
-        "max_output_tokens": 32768,
-    }
+    assert entry["litellm_params"]["model_info"] == POOLSIDE_ROUTED_MODEL_INFO
     rendered = litellm_config.render_config(entries=[entry])
-    assert (
-        '    model_info: {"max_input_tokens": 229344, "max_output_tokens": 32768}'
-        in rendered
-    )
-    assert '      "model_info":' not in rendered
+    parsed = yaml.safe_load(rendered)
+    item = parsed["model_list"][0]
+    assert "model_info" not in item["litellm_params"]
+    assert item["model_info"] == POOLSIDE_ROUTED_MODEL_INFO
 
 
 def test_cohere_emits_live_catalogue_lane(monkeypatch):
@@ -3286,7 +3284,7 @@ def test_routed_poolside_backup_metadata_round_trips_without_trusting_backup():
         "model_name": "poolside/laguna-s-2.1",
         "litellm_params": {
             "model": "openai/poolside/laguna-s-2.1",
-            "model_info": {"max_input_tokens": 229344, "max_output_tokens": 32768},
+            "model_info": POOLSIDE_ROUTED_MODEL_INFO,
         },
     }
     text = litellm_config.render_config(entries=[entry])
@@ -3295,11 +3293,9 @@ def test_routed_poolside_backup_metadata_round_trips_without_trusting_backup():
     assert entries == [entry]
     with pytest.raises(ValueError, match="no currently authorized"):
         litellm_config.stage_backup_text(text, [])
+    model_info_line = f"    model_info: {json.dumps(POOLSIDE_ROUTED_MODEL_INFO)}"
     for invalid in ("[]", "null", "not-json"):
-        malformed = text.replace(
-            '    model_info: {"max_input_tokens": 229344, "max_output_tokens": 32768}',
-            f"    model_info: {invalid}",
-        )
+        malformed = text.replace(model_info_line, f"    model_info: {invalid}")
         with pytest.raises(ValueError):
             litellm_config.stage_backup_text(malformed, [entry])
 

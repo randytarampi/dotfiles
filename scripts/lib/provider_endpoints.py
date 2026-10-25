@@ -7,7 +7,7 @@ POOLSIDE_ROUTED_MODEL_ID = "poolside/laguna-s-2.1"
 POOLSIDE_ROUTED_CONTEXT = 262112
 POOLSIDE_ROUTED_OUTPUT = 32768
 POOLSIDE_ROUTED_MODEL_INFO = {
-    "max_input_tokens": 229344,
+    "max_input_tokens": 262144,
     "max_output_tokens": POOLSIDE_ROUTED_OUTPUT,
 }
 
