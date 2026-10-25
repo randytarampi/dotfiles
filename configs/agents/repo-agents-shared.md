@@ -80,6 +80,11 @@ Do not erase earlier contributors when handing work to another model or agent.
 - **History:** apply this prospectively. Do not rewrite existing/shared commit
   history merely to add credit without explicit authorization and coordination;
   an accurate PR acknowledgment is usually enough.
+- Put all `Co-authored-by` and `Reviewed-by` trailers in one contiguous block at
+  the end of the commit message, after one blank line from the body, with no
+  blank lines between trailers. Remove exact duplicate trailer entries while
+  preserving distinct contributors, models and roles; never claim unapproved
+  approval. Keep the actual Git author unchanged.
 
 ### Git worktrees
 
