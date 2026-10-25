@@ -217,7 +217,7 @@ def test_litellm_faster_model_stays_on_proxy_and_direct_group_stays_direct(
 def test_manual_profile_collision_is_preserved(harness):
     _, target, _, _ = harness
     target.mkdir(parents=True)
-    manual = target / "openai-main.json"
+    manual = target / "litellm-openai-main.json"
     manual.write_text('{"manual":true}', encoding="utf-8")
     PROFILES.main()
     assert manual.read_text(encoding="utf-8") == '{"manual":true}'
@@ -231,7 +231,7 @@ def test_modified_managed_profile_refuses_overwrite(harness, monkeypatch):
     PROFILES.main()
     profile = target / "litellm-openai-main.json"
     profile.write_text('{"edited":true}', encoding="utf-8")
-    with pytest.raises(OSError, match="modified managed.*litellm-openai-main"):
+    with pytest.raises(SystemExit):
         PROFILES.main()
     assert profile.read_text(encoding="utf-8") == '{"edited":true}'
 
@@ -287,7 +287,7 @@ def test_modified_owned_profile_refuses_before_other_profile_writes(
         path.name: (path.read_bytes(), path.stat().st_mtime_ns)
         for path in target.iterdir()
     }
-    with pytest.raises(OSError, match="modified managed.*litellm-openai-faster"):
+    with pytest.raises(SystemExit):
         PROFILES.main()
     assert {
         path.name: (path.read_bytes(), path.stat().st_mtime_ns)
@@ -337,10 +337,6 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     _, target, _, groups_path = harness
     target.mkdir(parents=True)
     (target / "plus.json").write_text('{"id":"stale-direct"}', encoding="utf-8")
-    (target / PROFILES.PROFILE_MANIFEST).write_text(
-        json.dumps(["plus"]), encoding="utf-8"
-    )
-    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
     config = json.loads(groups_path.read_text())
     config["groups"] = {
         "openai-custom": {"provider": "openai", "primaryModel": "custom/alias"},
@@ -483,6 +479,51 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     assert direct_cloud["baseUrl"] == "https://direct.example/ollama-cloud/v1"
 
 
+@pytest.mark.parametrize("legacy_data", [["openai-main"], ["manual"]])
+def test_legacy_manifest_refuses_without_modifying_anything(harness, legacy_data):
+    _, target, _, _ = harness
+    target.mkdir(parents=True)
+    legacy = target / PROFILES.PROFILE_MANIFEST
+    legacy.write_text(json.dumps(legacy_data), encoding="utf-8")
+    legacy.chmod(0o600)
+    manual = target / "litellm-openai-main.json"
+    manual.write_text('{"manual":true}', encoding="utf-8")
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_mode)
+        for path in target.iterdir()
+    }
+
+    with pytest.raises(SystemExit):
+        PROFILES.main()
+
+    assert {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_mode)
+        for path in target.iterdir()
+    } == before
+
+
+def test_legacy_manifest_dry_run_reports_refusal_without_writes(harness, caplog):
+    _, target, _, _ = harness
+    target.mkdir(parents=True)
+    legacy = target / PROFILES.PROFILE_MANIFEST
+    legacy.write_text('["openai-main"]', encoding="utf-8")
+    legacy.chmod(0o600)
+    before = (legacy.read_bytes(), legacy.stat().st_mtime_ns, legacy.stat().st_mode)
+    sys.argv.append("--dry-run")
+    try:
+        with pytest.raises(SystemExit):
+            PROFILES.main()
+    finally:
+        sys.argv.pop()
+    assert str(legacy) in caplog.text
+    assert "back it up privately" in caplog.text
+    assert (
+        legacy.read_bytes(),
+        legacy.stat().st_mtime_ns,
+        legacy.stat().st_mode,
+    ) == before
+
+
 def test_unknown_catalogue_omits_tiers_but_preserves_named_and_user_profiles(
     harness, monkeypatch
 ):
@@ -544,15 +585,19 @@ def test_missing_key_preserves_legacy_name_only_profiles_and_user_json(
     target.chmod(0o700)
     (target / "litellm-openai-main.json").write_text("stale", encoding="utf-8")
     (target / "openai-main.json").write_text("stale direct", encoding="utf-8")
-    (target / PROFILES.PROFILE_MANIFEST).write_text(
+    legacy = target / PROFILES.PROFILE_MANIFEST
+    legacy.write_text(
         json.dumps(["litellm-openai-main", "openai-main"]), encoding="utf-8"
     )
-    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
+    legacy.chmod(0o600)
     (target / "manual.json").write_text('{"user": true}', encoding="utf-8")
     key_file.unlink()
 
-    PROFILES.main()
+    before = legacy.read_bytes()
+    with pytest.raises(SystemExit):
+        PROFILES.main()
 
+    assert legacy.read_bytes() == before
     assert (target / "litellm-openai-main.json").read_text() == "stale"
     assert (target / "openai-main.json").read_text() == "stale direct"
     assert (target / "manual.json").read_text(encoding="utf-8") == '{"user": true}'
@@ -604,10 +649,72 @@ def test_unsafe_key_path_and_endpoint_fail_closed(harness, monkeypatch):
 def test_dry_run_never_logs_or_writes_key(harness, monkeypatch, caplog):
     _, target, _, _ = harness
     sys.argv.append("--dry-run")
-    PROFILES.main()
+    try:
+        PROFILES.main()
+    finally:
+        sys.argv.pop()
     assert "dummy-junie-key-one" not in caplog.text
     assert "dummy-junie-key-one" not in sys.argv
     assert not target.exists()
+
+
+def test_dry_run_preserves_existing_collision_and_directory_metadata(
+    harness, monkeypatch, caplog
+):
+    _, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {"openai/gpt-main", "openai/gpt-faster", "openai/junie-fast"},
+    )
+    target.mkdir(parents=True)
+    target.chmod(0o700)
+    manual = target / "litellm-openai-main.json"
+    manual.write_text('{"manual":true}', encoding="utf-8")
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    }
+    directory_before = (target.stat().st_mode, target.stat().st_mtime_ns)
+    sys.argv.append("--dry-run")
+    try:
+        PROFILES.main()
+    finally:
+        sys.argv.pop()
+    assert (
+        "Preserving unmanaged Junie profile collision: litellm-openai-main.json"
+        in caplog.text
+    )
+    assert {
+        path.name: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    } == before
+    assert (target.stat().st_mode, target.stat().st_mtime_ns) == directory_before
+
+
+def test_dry_run_refuses_modified_owned_profile_without_changes(harness, monkeypatch):
+    home, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES, "litellm_catalogue_models", lambda *_: {"openai/gpt-main"}
+    )
+    PROFILES.main()
+    managed = target / "litellm-openai-main.json"
+    assert managed.exists()
+    managed.write_text('{"edited":true}', encoding="utf-8")
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    }
+    sys.argv.append("--dry-run")
+    try:
+        with pytest.raises(SystemExit):
+            PROFILES.main()
+    finally:
+        sys.argv.pop()
+    assert {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    } == before
 
 
 def test_gate_off_preserves_unowned_legacy_profiles(harness, monkeypatch):
@@ -616,10 +723,6 @@ def test_gate_off_preserves_unowned_legacy_profiles(harness, monkeypatch):
     target.chmod(0o700)
     (target / "litellm-openai-main.json").write_text("stale", encoding="utf-8")
     (target / "unrelated.json").write_text('{"user": true}', encoding="utf-8")
-    (target / PROFILES.PROFILE_MANIFEST).write_text(
-        json.dumps(["litellm-openai-main"]), encoding="utf-8"
-    )
-    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
 
     PROFILES.main()
@@ -635,11 +738,8 @@ def test_profile_symlink_is_rejected(harness):
     outside = target.parent / "outside.json"
     outside.write_text("do-not-touch", encoding="utf-8")
     (target / "litellm-openai-main.json").symlink_to(outside)
-    (target / PROFILES.PROFILE_MANIFEST).write_text(
-        json.dumps(["litellm-openai-main"]), encoding="utf-8"
-    )
-    (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
-    PROFILES.main()
+    with pytest.raises(OSError, match="unsafe stale Junie profile path"):
+        PROFILES.cleanup_profiles(target, {"litellm-openai-main"}, set(), set(), False)
     assert (target / "litellm-openai-main.json").is_symlink()
     assert outside.read_text(encoding="utf-8") == "do-not-touch"
 
@@ -649,7 +749,7 @@ def test_models_directory_symlink_is_rejected(harness):
     outside = target.parent / "external-models"
     outside.mkdir()
     target.symlink_to(outside, target_is_directory=True)
-    with pytest.raises(OSError, match="symlink"):
+    with pytest.raises(SystemExit):
         PROFILES.main()
     assert not list(outside.iterdir())
 
@@ -674,15 +774,15 @@ def test_wrapper_propagates_profile_generation_failure_without_success_message(
     assert "JetBrains AI configured!" not in caplog.text
 
 
-def test_manifest_relocates_from_models_dir(harness):
+def test_manifest_refuses_legacy_file_in_models_dir(harness):
     home, target, _, _ = harness
     target.mkdir(parents=True, exist_ok=True)
     legacy = target / PROFILES.PROFILE_MANIFEST
     legacy.write_text(json.dumps(["older-profile"]), encoding="utf-8")
     legacy.chmod(0o600)
     new_path = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
-    migrated = PROFILES.read_profile_manifest(target)
-    assert migrated == {}
+    with pytest.raises(OSError, match="legacy Junie profile manifest"):
+        PROFILES.read_profile_manifest(target)
     assert legacy.exists()
     digests = {"fresh-profile": hashlib.sha256(b"profile").hexdigest()}
     PROFILES.atomic_write_manifest(target, digests)
