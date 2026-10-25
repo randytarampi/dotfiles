@@ -476,18 +476,24 @@ def probe_embedding_vector(
             provider="unknown",
             wire_alias=model,
             backend_endpoint=endpoint,
-            outcome="unavailable",
-            qualification=Qualification.UNAVAILABLE.value,
+            outcome="unknown",
+            qualification=Qualification.UNKNOWN.value,
             notes=(conn_err,),
         )
     failed = _status_result(code, model, endpoint)
     if failed:
+        # Rate limits and server failures do not establish model incapability.
+        unknown = failed.status == "unknown" or code == 429 or (code or 0) >= 500
         return EmbeddingObservation(
             provider="unknown",
             wire_alias=model,
             backend_endpoint=endpoint,
-            outcome="unavailable",
-            qualification=Qualification.UNAVAILABLE.value,
+            outcome="unknown" if unknown else "unavailable",
+            qualification=(
+                Qualification.UNKNOWN.value
+                if unknown
+                else Qualification.UNAVAILABLE.value
+            ),
             http_status=code,
             notes=failed.notes,
         )
@@ -577,7 +583,7 @@ def discover_embedding_candidates(
                 EmbeddingObservation(
                     provider="ollama",
                     wire_alias="*",
-                    backend_endpoint=_ollama_root(ollama_url),
+                    backend_endpoint=_ollama_root(ollama_url) + "/api/embed",
                     outcome="unknown",
                     qualification=Qualification.UNKNOWN.value,
                     notes=("Ollama model inventory unavailable",),
@@ -610,7 +616,7 @@ def discover_embedding_candidates(
                     EmbeddingObservation(
                         provider="ollama",
                         wire_alias=name,
-                        backend_endpoint=ollama_url,
+                        backend_endpoint=_ollama_root(ollama_url) + "/api/embed",
                         outcome="unavailable",
                         qualification=Qualification.UNAVAILABLE.value,
                         digest=tag_digests.get(name),
@@ -622,7 +628,7 @@ def discover_embedding_candidates(
                     EmbeddingObservation(
                         provider="ollama",
                         wire_alias=name,
-                        backend_endpoint=_ollama_root(ollama_url),
+                        backend_endpoint=_ollama_root(ollama_url) + "/api/embed",
                         outcome="unknown",
                         qualification=Qualification.UNKNOWN.value,
                         digest=tag_digests.get(name),
@@ -655,7 +661,7 @@ def _discover_gateway_embeddings(
             EmbeddingObservation(
                 provider="gateway",
                 wire_alias="*",
-                backend_endpoint=_openai_root(gateway_url),
+                backend_endpoint=_openai_root(gateway_url) + "/embeddings",
                 outcome="unknown",
                 qualification=Qualification.UNKNOWN.value,
                 notes=("gateway model inventory unavailable",),
@@ -669,7 +675,7 @@ def _discover_gateway_embeddings(
             EmbeddingObservation(
                 provider="gateway",
                 wire_alias=alias,
-                backend_endpoint=str(gateway_url).rstrip("/") + "/embeddings",
+                backend_endpoint=_openai_root(gateway_url) + "/embeddings",
                 outcome="unknown",
                 qualification=Qualification.UNKNOWN.value,
                 notes=(
@@ -685,7 +691,7 @@ def _discover_gateway_embeddings(
                 EmbeddingObservation(
                     provider="gateway",
                     wire_alias=alias,
-                    backend_endpoint=_openai_root(gateway_url),
+                    backend_endpoint=_openai_root(gateway_url) + "/embeddings",
                     outcome="unknown",
                     qualification=Qualification.UNKNOWN.value,
                     notes=("selected alias absent from gateway inventory",),

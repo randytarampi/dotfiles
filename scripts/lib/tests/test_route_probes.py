@@ -195,6 +195,39 @@ class RouteProbeTests(unittest.TestCase):
             route_probes.qualification_from_probe(result), Qualification.UNKNOWN
         )
 
+    def test_embedding_probe_failure_classification(self):
+        for code in (401, 403, 429, 404, 503):
+            with (
+                self.subTest(code=code),
+                patch.object(
+                    route_probes.urllib.request,
+                    "urlopen",
+                    return_value=FakeResponse(status=code),
+                ),
+            ):
+                result = route_probes.probe_embeddings(
+                    "http://engine/v1", "model", "KEY_REF"
+                )
+                expected = "unknown" if code in (401, 403) else "unavailable"
+                self.assertEqual(result.status, expected)
+                self.assertEqual(result.http_status, code)
+        with patch.object(
+            route_probes.urllib.request, "urlopen", side_effect=TimeoutError
+        ):
+            result = route_probes.probe_embeddings(
+                "http://engine/v1", "model", "KEY_REF"
+            )
+        self.assertEqual(result.status, "unknown")
+        with patch.object(
+            route_probes.urllib.request,
+            "urlopen",
+            return_value=FakeResponse(body=b'{"error":"unsupported"}'),
+        ):
+            result = route_probes.probe_embeddings(
+                "http://engine/v1", "model", "KEY_REF"
+            )
+        self.assertEqual(result.status, "response_shape_error")
+
     def test_no_key_leak_and_resolution_helpers(self):
         sentinel = "SENTINEL_SECRET"
         result, request = self.call(
@@ -456,7 +489,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         self.assertIsNotNone(obs.vector_norm)
         self.assertIsNone(obs.digest)
 
-    def test_probe_embedding_vector_unavailable_http(self):
+    def test_probe_embedding_vector_transient_http_is_unknown(self):
         err = route_probes.urllib.error.HTTPError(
             "http://x/v1/embeddings", 503, "unavail", {}, io.BytesIO(b"")
         )
@@ -464,8 +497,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             obs = route_probes.probe_embedding_vector(
                 "http://ollama:11434/v1", "test-model", None, timeout=5
             )
-        self.assertEqual(obs.outcome, "unavailable")
-        self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
+        self.assertEqual(obs.outcome, "unknown")
+        self.assertEqual(obs.qualification, Qualification.UNKNOWN.value)
         self.assertIsNone(obs.dimension)
 
     def test_probe_embedding_vector_connection_failure(self):
@@ -477,8 +510,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             obs = route_probes.probe_embedding_vector(
                 "http://ollama:11434/v1", "test-model", None, timeout=5
             )
-        self.assertEqual(obs.outcome, "unavailable")
-        self.assertEqual(obs.qualification, Qualification.UNAVAILABLE.value)
+        self.assertEqual(obs.outcome, "unknown")
+        self.assertEqual(obs.qualification, Qualification.UNKNOWN.value)
 
     def test_probe_embedding_vector_shape_error(self):
         body = json.dumps({"data": [{"embedding": "not-a-list"}]}).encode()
@@ -489,6 +522,73 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             )
         self.assertEqual(obs.outcome, "unknown")
         self.assertEqual(obs.qualification, Qualification.UNKNOWN.value)
+
+    def test_probe_embedding_vector_status_failures_remain_unknown_or_unavailable(self):
+        for code in (401, 403, 429, 404, 503):
+            error = route_probes.urllib.error.HTTPError(
+                "http://ollama:11434/v1/embeddings",
+                code,
+                "failure",
+                {},
+                io.BytesIO(b""),
+            )
+            with (
+                self.subTest(code=code),
+                patch.object(route_probes.urllib.request, "urlopen", side_effect=error),
+            ):
+                obs = route_probes.probe_embedding_vector(
+                    "http://ollama:11434/v1", "test-model"
+                )
+            expected = "unknown" if code in (401, 403, 429, 503) else "unavailable"
+            qualification = (
+                Qualification.UNKNOWN
+                if expected == "unknown"
+                else Qualification.UNAVAILABLE
+            )
+            self.assertEqual(obs.outcome, expected)
+            self.assertEqual(obs.qualification, qualification.value)
+
+    def test_unprobed_candidates_record_canonical_inference_endpoint(self):
+        for suffix in ("", "/v1", "/api"):
+            with (
+                patch.object(
+                    route_probes,
+                    "_fetch_ollama_tag_records",
+                    return_value=[("chat", "digest")],
+                ),
+                patch.object(
+                    route_probes,
+                    "_fetch_ollama_show",
+                    return_value={"capabilities": ["completion"]},
+                ),
+            ):
+                observations = route_probes.discover_embedding_candidates(
+                    ollama_url="http://ollama:11434" + suffix
+                )
+            self.assertEqual(len(observations), 1)
+            self.assertEqual(
+                observations[0].backend_endpoint, "http://ollama:11434/api/embed"
+            )
+            self.assertEqual(observations[0].digest, "digest")
+        for suffix in ("", "/v1", "/v1/"):
+            with (
+                patch.object(
+                    route_probes, "fetch_gateway_models", return_value=["candidate"]
+                ),
+                patch.object(
+                    route_probes,
+                    "probe_embedding_vector",
+                    side_effect=AssertionError("no inference permission"),
+                ),
+            ):
+                observations = route_probes.discover_embedding_candidates(
+                    gateway_url="http://gateway:4000" + suffix
+                )
+            self.assertEqual(len(observations), 1)
+            self.assertEqual(
+                observations[0].backend_endpoint, "http://gateway:4000/v1/embeddings"
+            )
+            self.assertIsNone(observations[0].digest)
 
     def test_fetch_ollama_tags_returns_names(self):
         body = json.dumps(
