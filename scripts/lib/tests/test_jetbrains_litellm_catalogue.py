@@ -361,7 +361,10 @@ def test_cleanup_removes_only_owned_stale_profile_and_rejects_symlink(tmp_path):
     stale.write_text("owned", encoding="utf-8")
     user = target / "manual.json"
     user.write_text("user", encoding="utf-8")
-    PROFILES.cleanup_profiles(target, {"litellm-missing"}, set(), set(), False)
+    import hashlib
+
+    owned = {"litellm-missing": hashlib.sha256(b"owned").hexdigest()}
+    PROFILES.cleanup_profiles(target, owned, set(), set(), False)
     assert not stale.exists()
     assert user.read_text(encoding="utf-8") == "user"
 
@@ -369,5 +372,5 @@ def test_cleanup_removes_only_owned_stale_profile_and_rejects_symlink(tmp_path):
     outside.write_text("keep", encoding="utf-8")
     stale.symlink_to(outside)
     with pytest.raises(OSError, match="unsafe stale"):
-        PROFILES.cleanup_profiles(target, {"litellm-missing"}, set(), set(), False)
+        PROFILES.cleanup_profiles(target, owned, set(), set(), False)
     assert outside.read_text(encoding="utf-8") == "keep"
