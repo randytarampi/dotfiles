@@ -96,6 +96,30 @@ def harness(tmp_path, monkeypatch):
     return home, target, key_file, groups_path
 
 
+def test_frozen_free_group_overrides_same_named_registry_tier(harness, monkeypatch):
+    _, target, _, groups_path = harness
+    cfg = json.loads(groups_path.read_text())
+    cfg["groups"] = {"free": {"provider": "openai", "primaryModel": "frozen-model"}}
+    groups_path.write_text(json.dumps(cfg))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {
+            "presets": {
+                "free": {
+                    "orchestrator": {"model": "openai/registry-model"},
+                    "librarian": {"model": "openai/registry-faster"},
+                }
+            }
+        },
+    )
+    PROFILES.main()
+    generated = json.loads((target / "free.json").read_text())
+    assert generated["primaryModel"]["id"] == "frozen-model"
+    assert "fasterModel" not in generated
+
+
 def test_generated_litellm_profiles_are_private_and_share_cli_ide_directory(
     harness, caplog, monkeypatch
 ):

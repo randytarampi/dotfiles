@@ -12,6 +12,35 @@ PROFILES = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PROFILES)
 
 
+def test_shared_free_and_compatibility_resolve_before_gateway_twins():
+    cfg = json.loads(
+        (SCRIPT.parent.parent / "configs/junie/model-groups.json").read_text()
+    )
+    registry = PROFILES.tier_registry.load_registry()
+    groups = PROFILES.resolve_model_groups(cfg, registry)
+    roles = PROFILES.tier_registry.materialize_role_models(registry, "free", {})
+    assert (
+        groups["free"]["provider"] + "/" + groups["free"]["primaryModel"]
+        == roles["orchestrator"]
+    )
+    assert (
+        groups["free"]["fasterProvider"] + "/" + groups["free"]["fasterModel"]
+        == roles["librarian"]
+    )
+    for alias, canonical in cfg["compatibility"].items():
+        assert groups[alias] == groups[canonical]
+    twins = PROFILES.derive_litellm_groups(groups)
+    assert twins["litellm-meridian-opus"] == twins["litellm-anthropic-opus"]
+    assert groups["ollama-cloud-deepseek"]["primaryModel"] == "deepseek-v4-pro:0813"
+
+
+def test_frozen_group_input_does_not_implicitly_derive_free():
+    cfg = {"groups": {"free": {"provider": "custom", "primaryModel": "frozen"}}}
+    assert PROFILES.resolve_model_groups(cfg, {}) == cfg["groups"]
+    with pytest.raises(ValueError, match="Invalid compatibility"):
+        PROFILES.resolve_model_groups({**cfg, "compatibility": {"free": "free"}}, {})
+
+
 def test_catalogue_uses_private_key_and_exact_known_ids(monkeypatch):
     captured = {}
 
