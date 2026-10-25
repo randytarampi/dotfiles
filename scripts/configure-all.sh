@@ -7,6 +7,7 @@ set -euo pipefail
 
 _SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/common.sh"
@@ -451,7 +452,7 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Codex configuration (dry-run mode)"
 elif ! step_skipped codex; then
   info "Configuring Codex CLI provider..."
-  run_step "Codex configuration" python3 "$SCRIPT_DIR/configure-codex.py"
+  run_step "Codex configuration" poetry --directory "$DOTFILES_DIR" run python "$SCRIPT_DIR/configure-codex.py"
 else
   info "Skipping Codex configuration"
 fi

@@ -87,9 +87,6 @@ in a supervised terminal.
 
 ## Client virtual keys
 
-Each client receives its own virtual key, stored in `service.env` and materialized
-under `~/.local/share/litellm/clients/`:
-
 Codex is config-only and credential provisioning is deferred. Its existing
 `~/.codex/config.toml` may contain sections written by an older generator without
 ownership markers. Back up the file privately, review the specifically reported
@@ -97,6 +94,14 @@ colliding sections, and manually remove or rename only sections you approve as
 legacy before rerunning configuration. Preserve ambiguous sections and ask the
 owner to resolve them; the generator refuses to overwrite them. Do not delete
 all matching section names or migrate them automatically.
+
+The standalone `scripts/configure-codex.py` entrypoint requires the locked
+project runtime. `scripts/configure-all.sh` invokes it as
+`poetry run python scripts/configure-codex.py`, so Python 3.10 receives the
+locked `tomli` dependency while Python 3.11 and later use their standard-library
+`tomllib`. Do not run the script with a bare Python 3.10 interpreter; if the
+Poetry environment is missing dependencies, install the repository's locked
+runtime with `poetry install` rather than using global `pip`.
 Before removing or renaming a section, review top-level `model_provider`,
 provider references inside profiles and the selected profile so they do not
 refer to a removed section; the generator does not repair these references.

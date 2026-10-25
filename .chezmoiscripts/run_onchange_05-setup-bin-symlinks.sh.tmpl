@@ -15,6 +15,8 @@ set -euo pipefail
 # scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
 # scripts/configure-meridian.py: {{ include "scripts/configure-meridian.py" | sha256sum }}
 # scripts/configure-codex.py: {{ include "scripts/configure-codex.py" | sha256sum }}
+# pyproject.toml: {{ include "pyproject.toml" | sha256sum }}
+# poetry.lock: {{ include "poetry.lock" | sha256sum }}
 # scripts/configure-mozart-router.py: {{ include "scripts/configure-mozart-router.py" | sha256sum }}
 # scripts/configure-project.py: {{ include "scripts/configure-project.py" | sha256sum }}
 # scripts/configure-opencode-tier.py: {{ include "scripts/configure-opencode-tier.py" | sha256sum }}
