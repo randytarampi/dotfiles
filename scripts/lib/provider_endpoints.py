@@ -3,6 +3,26 @@
 import json
 from pathlib import Path
 
+POOLSIDE_ROUTED_MODEL_ID = "poolside/laguna-s-2.1"
+POOLSIDE_ROUTED_CONTEXT = 262112
+POOLSIDE_ROUTED_OUTPUT = 32768
+POOLSIDE_ROUTED_MODEL_INFO = {
+    "max_input_tokens": 229344,
+    "max_output_tokens": POOLSIDE_ROUTED_OUTPUT,
+}
+
+
+def conservative_limit(existing, ceiling):
+    """Cap a positive numeric configured limit without widening it."""
+    if (
+        isinstance(existing, (int, float))
+        and not isinstance(existing, bool)
+        and existing > 0
+    ):
+        return min(existing, ceiling)
+    return ceiling
+
+
 PROVIDER_ENDPOINTS = {
     "google": {
         "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",

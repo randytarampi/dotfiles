@@ -585,16 +585,28 @@ def test_poolside_emits_direct_provider_lane(monkeypatch):
     # against inference.poolside.ai/v1/models in the #77 spike); the
     # standalone emission only accepts its own namespace.
     monkeypatch.setattr(
-        litellm_config, "_live_catalogue", lambda *args: ["poolside/laguna-xs-2.1"]
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["poolside/laguna-s-2.1"],
     )
     entries = litellm_config.compute_model_list(
         {"DOTFILES_LITELLM_CATALOGUE_SCOPE": "full", "POOLSIDE_API_KEY": "test-key"}
     )
     entry = next(
-        item for item in entries if item["model_name"] == "poolside/laguna-xs-2.1"
+        item for item in entries if item["model_name"] == "poolside/laguna-s-2.1"
     )
-    assert entry["litellm_params"]["model"] == "openai/poolside/laguna-xs-2.1"
+    assert entry["litellm_params"]["model"] == "openai/poolside/laguna-s-2.1"
     assert entry["litellm_params"]["api_base"] == "https://inference.poolside.ai/v1"
+    assert entry["litellm_params"]["model_info"] == {
+        "max_input_tokens": 229344,
+        "max_output_tokens": 32768,
+    }
+    rendered = litellm_config.render_config(entries=[entry])
+    assert (
+        '    model_info: {"max_input_tokens": 229344, "max_output_tokens": 32768}'
+        in rendered
+    )
+    assert '      "model_info":' not in rendered
 
 
 def test_cohere_emits_live_catalogue_lane(monkeypatch):
@@ -3267,6 +3279,29 @@ def test_backup_recovery_is_explicit_staged_and_regenerated(tmp_path, monkeypatc
         litellm_config.stage_backup_text(
             backup.read_text(encoding="utf-8") + "garbage\n", authorized
         )
+
+
+def test_routed_poolside_backup_metadata_round_trips_without_trusting_backup():
+    entry = {
+        "model_name": "poolside/laguna-s-2.1",
+        "litellm_params": {
+            "model": "openai/poolside/laguna-s-2.1",
+            "model_info": {"max_input_tokens": 229344, "max_output_tokens": 32768},
+        },
+    }
+    text = litellm_config.render_config(entries=[entry])
+    rendered, entries = litellm_config.stage_backup_text(text, [entry])
+    assert rendered == text
+    assert entries == [entry]
+    with pytest.raises(ValueError, match="no currently authorized"):
+        litellm_config.stage_backup_text(text, [])
+    for invalid in ("[]", "null", "not-json"):
+        malformed = text.replace(
+            '    model_info: {"max_input_tokens": 229344, "max_output_tokens": 32768}',
+            f"    model_info: {invalid}",
+        )
+        with pytest.raises(ValueError):
+            litellm_config.stage_backup_text(malformed, [entry])
 
 
 def test_local_family_shrink_guard_retains_ledger_on_outage(monkeypatch):
