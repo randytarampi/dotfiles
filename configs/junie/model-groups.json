@@ -149,11 +149,17 @@
       "provider": "ollama-cloud",
       "primaryModel": "mistral-large-4"
     },
-    "free": {
-      "provider": "google",
-      "primaryModel": "gemini-3.5-flash-lite",
-      "fasterModel": "gemini-2.5-flash-lite",
-      "fasterProvider": "google"
-    }
+    "free": {}
+  },
+  "sharedPresets": {
+    "free": "free"
+  },
+  "compatibility": {
+    "openai-gpt-6-luna": "openai-luna",
+    "openai-gpt-6.1-sol": "openai-sol",
+    "meridian-opus": "anthropic-opus",
+    "meridian-sonnet": "anthropic-sonnet",
+    "meridian-haiku": "anthropic-haiku",
+    "meridian-fable": "anthropic-fable"
   }
 }

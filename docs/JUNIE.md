@@ -4,6 +4,18 @@
 
 The shared tier registry in `scripts/lib/tier_registry.py` is the single source of truth for tier → role → model mapping. OpenCode, Junie, and Pi consume the presets in `configs/opencode/oh-my-opencode-slim.json` through this registry. `configs/junie/model-groups.json` supplies Junie-specific profile metadata, provider endpoints (including Google, OpenRouter, and OpenCode Zen), and temperature overrides.
 
+The tracked group's `sharedPresets` entry derives `free` from the shared
+orchestrator and librarian assignments before generating direct or gateway
+profiles. An explicit `--groups-json` snapshot without that metadata retains
+its own frozen assignments. This is assignment parity, not request-time
+zero-cost qualification; see [the acceptance ledger](POST72-ACCEPTANCE.md).
+Compatibility names `openai-gpt-6-luna`, `openai-gpt-6.1-sol` and the four
+`meridian-*` names generate selectable profiles equivalent to their renamed
+`openai-*` and `anthropic-*` groups, including derived gateway twins. Retain
+these names until downstream usage is checked and a sunset is agreed.
+Ollama Cloud's authenticated catalogue offers `deepseek-v4-pro:0813`, not
+`deepseek-v4-pro`; the owner approved retaining the verified versioned ID.
+
 Set `DOTFILES_USE_LITELLM_PROXY=1` to route Junie through the LiteLLM gateway.
 This gateway-only switch requires `DOTFILES_RUN_LITELLM_SETUP=1`, Junie's client
 key file and exact gateway aliases; missing prerequisites are errors, with no
@@ -21,8 +33,8 @@ runtime artifact: keep the profile directory private, do not copy/share those
 profiles, and rotate via LiteLLM provisioning plus `make deploy`. With the
 gateway enabled, tier and generated local-pool profiles for supported providers
 are routed only through exact aliases present in Junie's authenticated LiteLLM
-catalogue. Missing aliases or an unavailable catalogue omit the owned generated
-profile (and remove a stale manifest-owned profile); missing faster aliases omit
+catalogue. Missing aliases omit the generated profile; an unavailable catalogue
+preserves existing owned files and provenance without claiming readiness. Missing faster aliases omit
 only `fasterModel`. No eligible profile silently falls back to a direct endpoint.
 The generator derives a `litellm-<plain>` twin for every plain group routed
 through `LITELLM_ROUTED_PROVIDERS`, including future `local-*` groups, using the

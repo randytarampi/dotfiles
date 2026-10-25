@@ -675,6 +675,31 @@ def atomic_write_manifest(target_dir: Path, names: dict[str, str]) -> None:
     )
 
 
+def resolve_model_groups(cfg, registry):
+    """Resolve only explicitly requested shared presets and compatibility names."""
+    groups = {name: dict(group) for name, group in cfg.get("groups", {}).items()}
+    for name, preset in cfg.get("sharedPresets", {}).items():
+        if name != preset:
+            raise ValueError("Shared group must retain its canonical preset name")
+        roles = tier_registry.materialize_role_models(registry, preset, {})
+        primary, faster = roles["orchestrator"], roles["librarian"]
+        if not all(isinstance(ref, str) and "/" in ref for ref in (primary, faster)):
+            raise ValueError("Shared group has unresolved model assignments")
+        provider, model = primary.split("/", 1)
+        faster_provider, faster_model = faster.split("/", 1)
+        groups[name] = {
+            "provider": provider,
+            "primaryModel": model,
+            "fasterProvider": faster_provider,
+            "fasterModel": faster_model,
+        }
+    for alias, canonical in cfg.get("compatibility", {}).items():
+        if alias in groups or canonical not in groups:
+            raise ValueError(f"Invalid compatibility group: {alias}")
+        groups[alias] = dict(groups[canonical])
+    return groups
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate JetBrains AI model profiles."
@@ -707,6 +732,7 @@ def main():
         with open(groups_path, encoding="utf-8") as file:
             cfg = json.load(file)
         registry = tier_registry.load_registry()
+        cfg["groups"] = resolve_model_groups(cfg, registry)
     except Exception as exc:
         logger.critical(f"Failed to read model configuration: {exc}")
         raise SystemExit(1)
@@ -803,7 +829,10 @@ def main():
         for name, group in cfg.get("groups", {}).items()
         if group.get("provider") in LITELLM_ROUTED_PROVIDERS
     }
-    specs = tier_specs + [
+    # Explicit groups own their names even when routing filters omit them;
+    # never substitute a same-named registry tier for a frozen assignment.
+    group_names = set(cfg.get("groups", {}))
+    specs = [spec for spec in tier_specs if spec[0] not in group_names] + [
         (
             name,
             group.get("primaryModel", ""),
@@ -817,6 +846,9 @@ def main():
     # N-engine contract) so every local model is selectable in JetBrains AI.
     specs_before_pool = {name for name, *_ in specs}
     append_pool_profile_specs(specs)
+    names = [spec[0] for spec in specs]
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate Junie output names; refusing generation")
     pool_profile_names = {name for name, *_ in specs} - specs_before_pool
     tier_names = set(registry.get("presets", {}))
     ollama_model_names = [
