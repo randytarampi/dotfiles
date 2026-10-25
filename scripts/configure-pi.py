@@ -545,8 +545,14 @@ def apply_preserved_preferences(settings, prev):
 def _load_previous_settings(path):
     """Load and validate existing Pi settings before any configuration side effects."""
     try:
-        previous = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+
+        def reject_constant(value):
+            raise ValueError(f"non-standard JSON constant {value}")
+
+        previous = json.loads(
+            path.read_text(encoding="utf-8"), parse_constant=reject_constant
+        )
+    except (OSError, ValueError) as error:
         raise ValueError(
             f"Malformed settings.json at {path} — refusing rewrite; back up and repair the file, then re-run."
         ) from error
@@ -565,6 +571,22 @@ def _load_previous_settings(path):
             f"Malformed settings.json at {path}: subagents.agentOverrides must be an object — refusing rewrite; back up and repair the file, then re-run."
         )
     return previous
+
+
+def _settings_snapshot(path):
+    """Capture file identity and bytes for a bounded prewrite change check."""
+    try:
+        metadata = path.stat()
+        content = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        content,
+    )
 
 
 def main():
@@ -597,10 +619,13 @@ def main():
     )
     prev_settings = out / "settings.json"
     try:
+        settings_snapshot = _settings_snapshot(prev_settings)
         previous = (
-            _load_previous_settings(prev_settings) if prev_settings.exists() else {}
+            _load_previous_settings(prev_settings)
+            if settings_snapshot is not None
+            else {}
         )
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         logger.critical("%s", error)
         return 1
 
@@ -1183,6 +1208,19 @@ def main():
         out / "models.json": {"providers": providers},
         out / "auth.json": auth,
     }
+    try:
+        current_snapshot = _settings_snapshot(prev_settings)
+    except OSError:
+        logger.critical(
+            "Cannot verify Pi settings before writing; refusing generated writes"
+        )
+        return 1
+    if current_snapshot != settings_snapshot:
+        logger.critical(
+            "Pi settings changed during configuration; refusing generated writes: %s",
+            prev_settings,
+        )
+        return 1
     for path, content in files.items():
         text = (
             content
