@@ -615,8 +615,27 @@ def main():
     args = p.parse_args()
 
     if args.profiles_only:
-        if args.mode != "global" or args.role_models or args.category_models:
-            p.error("--profiles-only requires global mode without model overrides")
+        unsupported = []
+        if args.mode != "global":
+            unsupported.append("--mode")
+        if args.role_models:
+            unsupported.append("--role-model/--local-fallback-role")
+        if args.category_models:
+            unsupported.append("--category-model/--local-fallback-placeholder")
+        if args.local_fallback_preset is not None:
+            unsupported.append("--local-fallback-preset")
+        if args.min_reasoning_embedding is not None:
+            unsupported.append("--min-reasoning-embedding")
+        if args.skip is not None:
+            unsupported.append("--skip")
+        if args.no_local_fallbacks:
+            unsupported.append("--no-local-fallbacks")
+        if args.ollama_base_url is not None:
+            unsupported.append("--ollama-base-url")
+        if args.no_backup:
+            unsupported.append("--no-backup")
+        if unsupported:
+            p.error("--profiles-only does not support: " + ", ".join(unsupported))
         registry = tier_registry.load_registry(SLIM)
         try:
             profile = pi_profiles.build_profile(

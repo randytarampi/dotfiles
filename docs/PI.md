@@ -160,6 +160,11 @@ the shared registry and writes only an unselected profile and its private
 provenance record. It does not inspect or change active settings, models, auth
 or packages. `--dry-run` writes nothing. Local presets with unresolved model
 placeholders are refused rather than emitted as incomplete assignments.
+Only preset selection, global mode and `--dry-run` apply in this mode.
+Explicit discovery, fallback, skip and model-override flags are usage errors
+(exit 2), as is `--no-backup`: exclusive creation never replaces a profile or
+creates a backup. Dry-run validates existing private leaf directories without
+creating directories or changing permissions.
 
 The profile file is created before its provenance manifest. If manifest
 creation fails, the command reports a refused/partial creation and leaves the

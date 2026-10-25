@@ -62,6 +62,16 @@ def plan_profile(agent_dir, name, profile, source_digest, mode="global"):
         for path in (target, *target.parents, manifest, *manifest.parents)
     ):
         return {"disposition": "REFUSED_OWNERSHIP", "reason": "symlink path"}
+    try:
+        _validate_existing_private_directory(target.parent)
+        _validate_existing_private_directory(manifest.parent)
+    except OSError as error:
+        return {
+            "disposition": "REFUSED_OWNERSHIP",
+            "reason": str(error),
+            "target": target,
+            "manifest": manifest,
+        }
     encoded = (json.dumps(profile, sort_keys=True, indent=2) + "\n").encode()
     if not target.exists():
         if manifest.exists():
@@ -157,6 +167,13 @@ def _ensure_private_directory(directory):
     for leaf in reversed(missing):
         leaf.mkdir(mode=0o700)
 
+    _validate_existing_private_directory(directory)
+
+
+def _validate_existing_private_directory(directory):
+    """Read-only validation shared by planning and execution."""
+    if not directory.exists():
+        return
     metadata = directory.stat()
     owner = getattr(os, "getuid", lambda: None)()
     if (
