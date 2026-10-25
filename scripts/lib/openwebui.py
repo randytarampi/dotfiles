@@ -2032,7 +2032,6 @@ def _embedding_ledger_read():
     acknowledgement_valid = isinstance(acknowledgement, dict) and {
         "previous_model",
         "previous_engine",
-        "previous_output_dims",
         "new_model",
         "new_output_dims",
         "acknowledged_at",
