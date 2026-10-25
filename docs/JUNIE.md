@@ -170,8 +170,15 @@ python3 scripts/configure-jetbrains-ai.py
 This generates profiles in `~/.junie/models/` and cleans up stale files.
 Generated files are atomically written with mode 600 and the shared models
 directory is kept at mode 700. Cleanup is limited to profiles recorded as
-generator-owned (plus known legacy `litellm-*` groups); unrelated user JSON
-profiles are preserved.
+generator-owned; unrelated user JSON profiles are preserved. If the legacy
+`.dotfiles-generated-profiles.json` file remains inside the models directory,
+generation refuses before changing profiles and reports its exact path. Back it
+up privately outside the models directory, review its contents, and relocate it
+manually to the canonical manifest location only if that location is absent;
+otherwise stop and reconcile the two privately before retrying. The
+generator never deletes, moves or adopts the legacy file or any names it lists.
+Dry-run performs the same ownership and collision checks and reports this
+refusal without writing.
 
 `configure-jetbrains-ai.py` accepts `--local-fallback-preset`, repeated
 `--role-model`, repeated `--category-model`, and

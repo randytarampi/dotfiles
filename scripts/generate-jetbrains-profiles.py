@@ -513,7 +513,9 @@ def valid_profile_name(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) and ".." not in name)
 
 
-def prepare_profile_dir(target_dir: str, private_profiles: bool) -> Path:
+def prepare_profile_dir(
+    target_dir: str, private_profiles: bool, dry_run: bool = False
+) -> Path:
     target = Path(target_dir).expanduser()
     if target.is_symlink():
         raise OSError("unsafe symlink at Junie models directory")
@@ -540,12 +542,16 @@ def prepare_profile_dir(target_dir: str, private_profiles: bool) -> Path:
             )
         if junie_dir.is_symlink() and junie_dir.resolve() != ai_dir.resolve():
             raise OSError("unsafe ~/.junie symlink target")
-    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if dry_run and not target.exists():
+        return target
+    if not dry_run:
+        target.mkdir(parents=True, exist_ok=True, mode=0o700)
     target_stat = target.stat()
     owner = getattr(os, "getuid", lambda: target_stat.st_uid)()
     if not stat.S_ISDIR(target_stat.st_mode) or target_stat.st_uid != owner:
         raise OSError("unsafe owner or type for Junie models directory")
-    os.chmod(target, 0o700)
+    if not dry_run:
+        os.chmod(target, 0o700)
     return target
 
 
@@ -577,20 +583,17 @@ def read_profile_manifest(target_dir: Path) -> dict[str, str]:
     legacy = target_dir / PROFILE_MANIFEST
     if manifest.is_symlink() or legacy.is_symlink():
         raise OSError("unsafe Junie profile manifest symlink")
-    # One-time migration: an index left inside the models dir is both a
-    # broken pseudo-profile for Junie and the previous seeding source.
     try:
-        legacy_meta = legacy.stat()
+        legacy.lstat()
     except FileNotFoundError:
-        legacy = None
+        pass
     else:
-        owner = getattr(os, "getuid", lambda: None)()
-        if not (
-            stat.S_IMODE(legacy_meta.st_mode) == 0o600
-            and (owner is None or legacy_meta.st_uid == owner)
-            and stat.S_ISREG(legacy_meta.st_mode)
-        ):
-            raise OSError("unsafe legacy Junie profile manifest owner or permissions")
+        raise OSError(
+            f"legacy Junie profile manifest blocks generation: {legacy}; "
+            "back it up privately, review its contents, then relocate it manually "
+            f"outside the models directory before retrying; do not overwrite {manifest}; "
+            "if a canonical ledger exists, stop and reconcile both privately"
+        )
     try:
         metadata = manifest.stat()
         owner = getattr(os, "getuid", lambda: None)()
@@ -602,12 +605,7 @@ def read_profile_manifest(target_dir: Path) -> dict[str, str]:
             raise OSError("unsafe Junie profile manifest owner or permissions")
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        if legacy is None:
-            return {}
-        try:
-            data = json.loads(legacy.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return {}
+        return {}
     # Legacy name-only manifests are deliberately not trusted for mutation.
     if isinstance(data, list):
         return {}
@@ -860,12 +858,14 @@ def main():
     generated = set()
     generated_digests = {}
     generated_names = set()
-    if args.dry_run:
-        output_dir = Path(target_dir)
-        previous_generated = {}
-    else:
-        output_dir = prepare_profile_dir(target_dir, use_litellm)
+    output_dir = Path(target_dir).expanduser()
+    try:
         previous_generated = read_profile_manifest(output_dir)
+        output_dir = prepare_profile_dir(target_dir, use_litellm, args.dry_run)
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
+    try:
         for name, expected_digest in previous_generated.items():
             path = output_dir / f"{name}.json"
             if path.is_symlink():
@@ -877,6 +877,9 @@ def main():
                 raise OSError(
                     f"modified managed Junie profile; refusing overwrite: {path.name}"
                 )
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
     logger.info("Generating JetBrains AI model profiles...")
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
@@ -987,11 +990,11 @@ def main():
             raise SystemExit(1)
         filename = f"{name}.json"
         path = output_dir / filename
-        if not args.dry_run and path.exists():
+        if path.exists():
             existing = path.read_bytes()
             owned_digest = previous_generated.get(name)
             if owned_digest is None:
-                logger.warning(
+                logger.info(
                     "Preserving unmanaged Junie profile collision: %s", filename
                 )
                 continue
@@ -999,6 +1002,8 @@ def main():
                 raise OSError(
                     f"modified managed Junie profile; refusing overwrite: {filename}"
                 )
+        elif args.dry_run and name in previous_generated:
+            logger.info("Would create generated Junie profile: %s", filename)
         generated.add(name)
         generated_names.add(name)
         if args.dry_run:
@@ -1023,6 +1028,7 @@ def main():
                 os.chmod(path, 0o600)
                 logger.info(f"Unchanged: {name} ({primary})")
                 continue
+        if not args.dry_run:
             atomic_private_write(path, output)
             generated_digests[name] = hashlib.sha256(output.encode()).hexdigest()
             logger.info(
