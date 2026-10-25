@@ -161,6 +161,22 @@ provenance record. It does not inspect or change active settings, models, auth
 or packages. `--dry-run` writes nothing. Local presets with unresolved model
 placeholders are refused rather than emitted as incomplete assignments.
 
+The profile file is created before its provenance manifest. If manifest
+creation fails, the command reports a refused/partial creation and leaves the
+profile in place at mode `0600`; later plans refuse that unowned artifact and
+never adopt or delete it automatically. Do not rerun expecting automatic
+recovery. Inspect the orphan and any related manifest paths, then make a
+separate owner-controlled backup and audit the contents. Recovery is manual:
+manually relocate only verified orphaned artifacts and their related provenance
+to the private backup location, then rerun the same preset. The CLI accepts
+registry presets, not arbitrary output names. If ownership is uncertain, stop
+and preserve the files. Do not chmod or migrate existing directories
+automatically: new directories request `0700`, so a permissive umask cannot
+broaden their permissions; a more restrictive umask may cause safe refusal.
+Pre-existing profile/provenance leaf directories with unsafe ownership or
+permissions are refused unchanged. Ancestor traversal still assumes trusted,
+owner-controlled parents; this is not concurrent-path protection.
+
 Manual collisions and changed generated profiles are preserved; updates require
 a future coordinated write boundary. Select a reviewed profile explicitly with
 `/subagents-load-profile <name>` and inspect `/subagents-models`. The installed

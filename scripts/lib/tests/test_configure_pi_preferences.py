@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import local_engines
+import pi_profiles
 import pytest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -807,6 +808,57 @@ def test_pi_main_rejects_missing_or_insecure_client_key_before_output(
         assert not (output / "models.json").exists()
         assert not (output / "settings.json").exists()
         assert not (output / "auth.json").exists()
+
+
+def test_pi_manifest_creation_failure_preserves_private_orphan_and_refuses_adoption(
+    tmp_path, monkeypatch
+):
+    agent_dir = tmp_path / "agent"
+    plan = pi_profiles.plan_profile(agent_dir, "free", {"subagents": {}}, "source")
+    original_mkdir = Path.mkdir
+
+    def fail_manifest_directory(path, *args, **kwargs):
+        if path == plan["manifest"].parent:
+            raise OSError("deterministic manifest directory failure")
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_manifest_directory)
+    assert pi_profiles.create_profile(plan) == "REFUSED_CONCURRENCY_UNPROVEN"
+    orphan = plan["target"]
+    assert orphan.read_bytes() == plan["content"]
+    assert orphan.stat().st_mode & 0o777 == 0o600
+    manifest_dir = plan["manifest"].parent
+    monkeypatch.setattr(Path, "mkdir", original_mkdir)
+    manifest_dir.mkdir(parents=True)
+    manifest_dir.chmod(0o700)
+    assert pi_profiles.plan_profile(agent_dir, "free", {"subagents": {}}, "source") == {
+        "disposition": "REFUSED_OWNERSHIP",
+        "reason": "unowned artifact",
+    }
+
+
+@pytest.mark.parametrize("umask", [0o000, 0o077])
+def test_pi_profile_directory_created_private_independent_of_umask(
+    tmp_path, monkeypatch, umask
+):
+    agent_dir = tmp_path / "new-agent"
+    plan = pi_profiles.plan_profile(agent_dir, "free", {"subagents": {}}, "source")
+    previous = os.umask(umask)
+    try:
+        assert pi_profiles.create_profile(plan) == "GENERATE_ONLY"
+    finally:
+        os.umask(previous)
+    assert (agent_dir / "profiles" / "pi-subagents").stat().st_mode & 0o777 == 0o700
+
+
+def test_pi_profile_refuses_preexisting_unsafe_directory_permissions(tmp_path):
+    agent_dir = tmp_path / "agent"
+    profile_dir = agent_dir / "profiles" / "pi-subagents"
+    profile_dir.mkdir(parents=True)
+    profile_dir.chmod(0o755)
+    plan = pi_profiles.plan_profile(agent_dir, "free", {"subagents": {}}, "source")
+    assert pi_profiles.create_profile(plan) == "REFUSED_OWNERSHIP"
+    assert not plan["target"].exists()
 
 
 def test_pi_malformed_settings_json_refuses_write_and_preserves_user_overrides(
