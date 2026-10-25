@@ -132,6 +132,55 @@ def test_main_collision_does_not_change_bytes_or_stat(tmp_path, monkeypatch, ori
     assert config_path.stat().st_ino == before.st_ino
 
 
+def test_pinned_pre_owned_meridian_fixture_requires_manual_review_without_writes(
+    tmp_path, monkeypatch
+):
+    # Provider excerpt from ac37ec0e; an unmarked profile is also deliberately
+    # included as ambiguous user state, not claimed as historical output.
+    original = (
+        '[model_providers.meridian]\nname = "Meridian"\n'
+        'base_url = "http://127.0.0.1:3456/v1"\nwire_api = "responses"\n'
+        'requires_openai_auth = true\nenv_key = "MERIDIAN_API_KEY"\n'
+        '\n[profiles.meridian]\nmodel = "claude-sonnet-5-5"\n'
+        'model_provider = "meridian"\nmodel_reasoning_effort = "high"\n'
+    )
+    config_path = tmp_path / ".codex" / "config.toml"
+    config_path.parent.mkdir()
+    config_path.write_bytes(original.encode())
+    before = config_path.stat()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        configure_codex, "resolve_ollama_cloud_model", lambda: ("m", "note")
+    )
+    monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
+    monkeypatch.setattr(configure_codex, "load_env", lambda: None)
+    logger = MagicMock()
+    monkeypatch.setattr(configure_codex, "logger", logger)
+    with patch.object(sys, "argv", ["configure-codex.py"]):
+        with pytest.raises(SystemExit, match="1"):
+            configure_codex.main()
+    assert config_path.read_bytes() == original.encode()
+    after = config_path.stat()
+    assert (after.st_ino, after.st_mtime_ns, after.st_mode) == (
+        before.st_ino,
+        before.st_mtime_ns,
+        before.st_mode,
+    )
+    assert "[model_providers.meridian]" in str(logger.critical.call_args)
+    assert "manually remove or rename" in str(logger.critical.call_args)
+
+    # Simulate the owner's reviewed removal of just the conflicting sections.
+    retained = 'model_provider = "openai"\n\n[profiles.custom]\nmodel = "kept"\n'
+    config_path.write_text(retained)
+    with patch.object(sys, "argv", ["configure-codex.py"]):
+        configure_codex.main()
+        first = config_path.read_bytes()
+        configure_codex.main()
+    assert config_path.read_bytes() == first
+    assert 'model_provider = "openai"' in first.decode()
+    assert '[profiles.custom]\nmodel = "kept"' in first.decode()
+
+
 def test_codex_registry_is_configuration_only_and_gates_match(monkeypatch):
     import litellm_config
 

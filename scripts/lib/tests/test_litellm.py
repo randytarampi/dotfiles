@@ -1939,9 +1939,9 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
     )
 
-    # codex is in APP_KEYS but skipped during provisioning because its
-    # transport is "Responses API" not "OpenAI-compatible" — it is eligible
-    # but not auto-provisioned via the generic key-generation path.
+    # Codex is config-only; credential provisioning is deferred.
+    # Responses transport and credential qualification remain separate work;
+    # the generic key-generation path must not provision this client.
     registry = {row["client"]: row for row in CONFIGURE.CLIENT_REGISTRY}
     expected_clients = [
         c
