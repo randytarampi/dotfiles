@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -189,6 +190,104 @@ def test_litellm_faster_model_stays_on_proxy_and_direct_group_stays_direct(
     assert direct["baseUrl"].startswith("https://generativelanguage.googleapis.com/")
 
 
+def test_manual_profile_collision_is_preserved(harness):
+    _, target, _, _ = harness
+    target.mkdir(parents=True)
+    manual = target / "openai-main.json"
+    manual.write_text('{"manual":true}', encoding="utf-8")
+    PROFILES.main()
+    assert manual.read_text(encoding="utf-8") == '{"manual":true}'
+
+
+def test_modified_managed_profile_refuses_overwrite(harness, monkeypatch):
+    _, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES, "litellm_catalogue_models", lambda *_: {"openai/gpt-main"}
+    )
+    PROFILES.main()
+    profile = target / "litellm-openai-main.json"
+    profile.write_text('{"edited":true}', encoding="utf-8")
+    with pytest.raises(OSError, match="modified managed.*litellm-openai-main"):
+        PROFILES.main()
+    assert profile.read_text(encoding="utf-8") == '{"edited":true}'
+
+
+def test_manifest_digests_cover_generated_outputs(harness, monkeypatch):
+    home, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES, "litellm_catalogue_models", lambda *_: {"openai/gpt-main"}
+    )
+    PROFILES.main()
+    data = json.loads(
+        (home / ".local/share/dotfiles/jetbrains-profiles-manifest.json").read_text()
+    )
+    assert (
+        data["profiles"]["litellm-openai-main"]
+        == hashlib.sha256(
+            (target / "litellm-openai-main.json").read_bytes()
+        ).hexdigest()
+    )
+
+
+def test_unknown_catalogue_preserves_owned_profile_and_ledger(harness, monkeypatch):
+    home, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES, "litellm_catalogue_models", lambda *_: {"openai/gpt-main"}
+    )
+    PROFILES.main()
+    profile = target / "litellm-openai-main.json"
+    ledger = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    before = (profile.read_bytes(), profile.stat().st_mtime_ns, ledger.read_bytes())
+    monkeypatch.setattr(PROFILES, "litellm_catalogue_models", lambda *_: None)
+    PROFILES.main()
+    assert (
+        profile.read_bytes(),
+        profile.stat().st_mtime_ns,
+        ledger.read_bytes(),
+    ) == before
+
+
+def test_modified_owned_profile_refuses_before_other_profile_writes(
+    harness, monkeypatch
+):
+    _, target, _, _ = harness
+    monkeypatch.setattr(
+        PROFILES,
+        "litellm_catalogue_models",
+        lambda *_: {"openai/gpt-main", "openai/gpt-faster", "openai/junie-fast"},
+    )
+    PROFILES.main()
+    edited = target / "litellm-openai-faster.json"
+    edited.write_bytes(b"user edit")
+    before = {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    }
+    with pytest.raises(OSError, match="modified managed.*litellm-openai-faster"):
+        PROFILES.main()
+    assert {
+        path.name: (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in target.iterdir()
+    } == before
+
+
+def test_manifest_cannot_transfer_ownership_to_another_directory(harness, tmp_path):
+    _, target, _, _ = harness
+    target.mkdir(parents=True)
+    original = target / "same.json"
+    original.write_bytes(b"identical")
+    PROFILES.atomic_write_manifest(
+        target, {"same": hashlib.sha256(b"identical").hexdigest()}
+    )
+    other = tmp_path / "manual-models"
+    other.mkdir()
+    manual = other / "same.json"
+    manual.write_bytes(b"identical")
+    with pytest.raises(ValueError, match="target directory mismatch"):
+        PROFILES.read_profile_manifest(other)
+    assert manual.read_bytes() == b"identical"
+
+
 def test_handwritten_litellm_static_divergence_is_flagged_and_fail_closed(
     harness, caplog
 ):
@@ -340,7 +439,7 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     missing_fast = json.loads((target / "local-omlx-missing-fast.json").read_text())
     assert missing_fast["id"] == "omlx/pool/model"
     assert "fasterModel" not in missing_fast
-    assert not (target / "plus.json").exists()
+    assert (target / "plus.json").read_text() == '{"id":"stale-direct"}'
     free = json.loads((target / "free.json").read_text())
     assert free["id"] == "opencode/free-present"
     assert "fasterModel" not in free
@@ -413,7 +512,7 @@ def test_unknown_catalogue_omits_tiers_but_preserves_named_and_user_profiles(
     assert json.loads(user_profile.read_text())["id"] == "user"
 
 
-def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
+def test_missing_key_preserves_legacy_name_only_profiles_and_user_json(
     harness, monkeypatch
 ):
     _, target, key_file, _ = harness
@@ -430,8 +529,8 @@ def test_missing_key_removes_only_generated_litellm_profile_and_keeps_user_json(
 
     PROFILES.main()
 
-    assert not (target / "litellm-openai-main.json").exists()
-    assert not (target / "openai-main.json").exists()
+    assert (target / "litellm-openai-main.json").read_text() == "stale"
+    assert (target / "openai-main.json").read_text() == "stale direct"
     assert (target / "manual.json").read_text(encoding="utf-8") == '{"user": true}'
 
 
@@ -487,9 +586,7 @@ def test_dry_run_never_logs_or_writes_key(harness, monkeypatch, caplog):
     assert not target.exists()
 
 
-def test_gate_off_cleans_stale_litellm_but_preserves_unrelated_profile(
-    harness, monkeypatch
-):
+def test_gate_off_preserves_unowned_legacy_profiles(harness, monkeypatch):
     _, target, _, _ = harness
     target.mkdir(parents=True)
     target.chmod(0o700)
@@ -503,7 +600,7 @@ def test_gate_off_cleans_stale_litellm_but_preserves_unrelated_profile(
 
     PROFILES.main()
 
-    assert not (target / "litellm-openai-main.json").exists()
+    assert (target / "litellm-openai-main.json").read_text() == "stale"
     assert (target / "unrelated.json").read_text(encoding="utf-8") == '{"user": true}'
 
 
@@ -518,8 +615,8 @@ def test_profile_symlink_is_rejected(harness):
         json.dumps(["litellm-openai-main"]), encoding="utf-8"
     )
     (target / PROFILES.PROFILE_MANIFEST).chmod(0o600)
-    with pytest.raises(OSError, match="unsafe stale"):
-        PROFILES.main()
+    PROFILES.main()
+    assert (target / "litellm-openai-main.json").is_symlink()
     assert outside.read_text(encoding="utf-8") == "do-not-touch"
 
 
@@ -561,8 +658,9 @@ def test_manifest_relocates_from_models_dir(harness):
     legacy.chmod(0o600)
     new_path = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
     migrated = PROFILES.read_profile_manifest(target)
-    assert migrated == {"older-profile"}
-    assert not legacy.exists()
-    PROFILES.atomic_write_manifest(target, {"fresh-profile"})
-    assert json.loads(new_path.read_text(encoding="utf-8")) == ["fresh-profile"]
-    assert not (target / PROFILES.PROFILE_MANIFEST).exists()
+    assert migrated == {}
+    assert legacy.exists()
+    digests = {"fresh-profile": hashlib.sha256(b"profile").hexdigest()}
+    PROFILES.atomic_write_manifest(target, digests)
+    assert json.loads(new_path.read_text(encoding="utf-8"))["profiles"] == digests
+    assert legacy.exists()

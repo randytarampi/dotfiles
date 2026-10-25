@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -571,7 +572,7 @@ def manifest_path() -> Path:
     return Path.home() / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
 
 
-def read_profile_manifest(target_dir: Path) -> set[str]:
+def read_profile_manifest(target_dir: Path) -> dict[str, str]:
     manifest = manifest_path()
     legacy = target_dir / PROFILE_MANIFEST
     if manifest.is_symlink() or legacy.is_symlink():
@@ -602,32 +603,38 @@ def read_profile_manifest(target_dir: Path) -> set[str]:
         data = json.loads(manifest.read_text(encoding="utf-8"))
     except FileNotFoundError:
         if legacy is None:
-            return set()
+            return {}
         try:
             data = json.loads(legacy.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            return set()
-    if not isinstance(data, list) or any(
+            return {}
+    # Legacy name-only manifests are deliberately not trusted for mutation.
+    if isinstance(data, list):
+        return {}
+    if not isinstance(data, dict) or data.get("schema") != 2:
+        return {}
+    if data.get("target") != str(target_dir.resolve()):
+        raise ValueError("Junie profile manifest target directory mismatch")
+    data = data.get("profiles")
+    if not isinstance(data, dict) or any(
         not isinstance(name, str)
-        or name.endswith(".json")
         or not valid_profile_name(name)
-        for name in data
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        for name, digest in data.items()
     ):
         raise ValueError("invalid Junie generated-profile manifest")
-    if legacy is not None:
-        legacy.unlink()
-        logger.info("Relocated legacy profile manifest out of the models directory")
-    return set(data)
+    return data
 
 
 def cleanup_profiles(
     target_dir: Path,
-    previous: set[str],
+    previous: dict[str, str],
     generated: set[str],
     legacy_litellm: set[str],
     dry_run: bool,
 ) -> None:
-    stale = (previous | legacy_litellm) - generated
+    stale = set(previous) - generated
     for name in sorted(stale):
         filename = name if name.endswith(".json") else f"{name}.json"
         if not valid_profile_name(filename[:-5]):
@@ -637,6 +644,16 @@ def cleanup_profiles(
             continue
         if path.is_symlink() or not path.is_file():
             raise OSError(f"unsafe stale Junie profile path: {filename}")
+        expected = previous.get(name)
+        if (
+            expected is None
+            or hashlib.sha256(path.read_bytes()).hexdigest() != expected
+        ):
+            logger.warning(
+                "Preserving stale profile without matching ownership digest: %s",
+                filename,
+            )
+            continue
         if dry_run:
             logger.info(f"Would remove stale generated profile: {filename}")
         else:
@@ -644,12 +661,17 @@ def cleanup_profiles(
             logger.info(f"Removed stale generated profile: {filename}")
 
 
-def atomic_write_manifest(target_dir: Path, names: set[str]) -> None:
+def atomic_write_manifest(target_dir: Path, names: dict[str, str]) -> None:
     target = manifest_path()
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     atomic_private_write(
         target,
-        json.dumps(sorted(names), indent=2) + "\n",
+        json.dumps(
+            {"schema": 2, "target": str(target_dir.resolve()), "profiles": names},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
     )
 
 
@@ -804,13 +826,25 @@ def main():
     ]
     temperatures = cfg.get("modelTemperatures", {})
     generated = set()
+    generated_digests = {}
     generated_names = set()
     if args.dry_run:
         output_dir = Path(target_dir)
-        previous_generated = set()
+        previous_generated = {}
     else:
         output_dir = prepare_profile_dir(target_dir, use_litellm)
         previous_generated = read_profile_manifest(output_dir)
+        for name, expected_digest in previous_generated.items():
+            path = output_dir / f"{name}.json"
+            if path.is_symlink():
+                raise OSError(f"unsafe stale Junie profile path: {path.name}")
+            if path.exists() and (
+                not path.is_file()
+                or hashlib.sha256(path.read_bytes()).hexdigest() != expected_digest
+            ):
+                raise OSError(
+                    f"modified managed Junie profile; refusing overwrite: {path.name}"
+                )
     logger.info("Generating JetBrains AI model profiles...")
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
@@ -921,7 +955,19 @@ def main():
             raise SystemExit(1)
         filename = f"{name}.json"
         path = output_dir / filename
-        generated.add(filename)
+        if not args.dry_run and path.exists():
+            existing = path.read_bytes()
+            owned_digest = previous_generated.get(name)
+            if owned_digest is None:
+                logger.warning(
+                    "Preserving unmanaged Junie profile collision: %s", filename
+                )
+                continue
+            if hashlib.sha256(existing).hexdigest() != owned_digest:
+                raise OSError(
+                    f"modified managed Junie profile; refusing overwrite: {filename}"
+                )
+        generated.add(name)
         generated_names.add(name)
         if args.dry_run:
             logger.info(
@@ -941,29 +987,31 @@ def main():
             else:
                 existing_output = None
             if existing_output == output:
+                generated_digests[name] = hashlib.sha256(output.encode()).hexdigest()
                 os.chmod(path, 0o600)
                 logger.info(f"Unchanged: {name} ({primary})")
                 continue
             atomic_private_write(path, output)
+            generated_digests[name] = hashlib.sha256(output.encode()).hexdigest()
             logger.info(
                 f"Configured: {name} → primary={primary} faster={faster or 'none'}"
             )
 
-    legacy_litellm = {
-        name
-        for name, group in cfg.get("groups", {}).items()
-        if group.get("provider") == "litellm"
-    }
+    legacy_litellm = set()
     if output_dir.is_dir():
-        cleanup_profiles(
-            output_dir,
-            previous_generated,
-            generated_names,
-            legacy_litellm,
-            args.dry_run,
-        )
+        if not litellm_gate or (use_litellm and catalogue is not None):
+            cleanup_profiles(
+                output_dir,
+                previous_generated,
+                generated_names,
+                legacy_litellm,
+                args.dry_run,
+            )
+        else:
+            # Unavailable credentials/catalogues cannot prove a profile stale.
+            generated_digests = {**previous_generated, **generated_digests}
         if not args.dry_run:
-            atomic_write_manifest(output_dir, generated_names)
+            atomic_write_manifest(output_dir, generated_digests)
     logger.info(f"JetBrains AI models configured at {target_dir}")
     if not args.dry_run:
         try:
