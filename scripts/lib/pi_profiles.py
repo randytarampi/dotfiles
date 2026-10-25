@@ -110,7 +110,7 @@ def create_profile(plan):
         return plan.get("disposition")
     target, manifest = plan["target"], plan["manifest"]
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_private_directory(target.parent)
         with target.open("xb") as stream:
             os.fchmod(stream.fileno(), 0o600)
             stream.write(plan["content"])
@@ -131,7 +131,7 @@ def create_profile(plan):
             "source_digest": plan["source_digest"],
             "artifact_digest": plan["artifact_digest"],
         }
-        manifest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _ensure_private_directory(manifest.parent)
         with manifest.open("x", encoding="utf-8") as stream:
             os.fchmod(stream.fileno(), 0o600)
             json.dump(document, stream, indent=2, sort_keys=True)
@@ -141,3 +141,27 @@ def create_profile(plan):
         # unlinking would race another writer and could remove its content.
         return "REFUSED_CONCURRENCY_UNPROVEN"
     return "GENERATE_ONLY"
+
+
+def _ensure_private_directory(directory):
+    """Create private leaves; refuse existing directories with unsafe ownership or mode."""
+    missing = []
+    current = directory
+    while not current.exists():
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            raise OSError(f"no existing parent for private directory: {directory}")
+        current = parent
+
+    for leaf in reversed(missing):
+        leaf.mkdir(mode=0o700)
+
+    metadata = directory.stat()
+    owner = getattr(os, "getuid", lambda: None)()
+    if (
+        not directory.is_dir()
+        or (owner is not None and metadata.st_uid != owner)
+        or metadata.st_mode & 0o777 != 0o700
+    ):
+        raise OSError(f"unsafe profile directory ownership or permissions: {directory}")
