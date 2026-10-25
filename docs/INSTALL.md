@@ -37,6 +37,15 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
 
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
+
+The Codex configuration step in `make deploy` requires Poetry and this
+repository's locked production Python dependencies. Install Poetry using your
+platform's package manager or Poetry's official installer, then run
+`poetry install --only main --no-root` from the dotfiles checkout. Deployment
+does not install Poetry or Python packages automatically. If Poetry or the
+locked TOML parser is unavailable, Codex configuration stops with an
+installation instruction rather than falling back to bare Python.
+
 - **macOS / Linux:**
   ```bash
   command -v chezmoi >/dev/null 2>&1 || brew install chezmoi

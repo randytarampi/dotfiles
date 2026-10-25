@@ -96,12 +96,16 @@ owner to resolve them; the generator refuses to overwrite them. Do not delete
 all matching section names or migrate them automatically.
 
 The standalone `scripts/configure-codex.py` entrypoint requires the locked
-project runtime. `scripts/configure-all.sh` invokes it as
-`poetry run python scripts/configure-codex.py`, so Python 3.10 receives the
+project runtime. `scripts/configure-all.sh` invokes it through Poetry rooted at
+the dotfiles checkout, so it works when called from another directory. Python 3.10 receives the
 locked `tomli` dependency while Python 3.11 and later use their standard-library
-`tomllib`. Do not run the script with a bare Python 3.10 interpreter; if the
-Poetry environment is missing dependencies, install the repository's locked
-runtime with `poetry install` rather than using global `pip`.
+`tomllib`. Do not run the script with a bare Python 3.10 interpreter. If
+Poetry is missing, install Poetry first. If the Poetry environment is missing
+dependencies, install the locked production runtime with
+`poetry install --only main --no-root` rather than using global `pip`. Configure
+does not install dependencies automatically; Codex runtime preflight is skipped
+for `--dry-run` and `--skip codex`.
+
 Before removing or renaming a section, review top-level `model_provider`,
 provider references inside profiles and the selected profile so they do not
 refer to a removed section; the generator does not repair these references.

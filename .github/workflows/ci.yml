@@ -105,8 +105,18 @@ jobs:
     # Windows lane promoted to required after three consecutive green runs
     # (5e48340, 389ab47, f237cb6) following the chezmoi 2.72.2 +
     # interpreters + cygpath fixes; the portability probe period is over.
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: "true"
     steps:
       - uses: actions/checkout@v7
+      - name: Install Poetry (before setup-python)
+        shell: bash
+        run: |
+          if command -v pipx >/dev/null 2>&1; then
+            pipx install poetry==2.4.3
+          else
+            python -m pip install poetry==2.4.3
+          fi
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -156,6 +166,9 @@ jobs:
           EOF
           cz_config="$(cygpath -m "$RUNNER_TEMP")/chezmoi-interpreters.toml"
           echo "CHEZMOI=chezmoi --config $cz_config" >> "$GITHUB_ENV"
+      - name: Install locked production Python dependencies
+        shell: bash
+        run: poetry install --only main --no-root
       - name: Prepare fresh home and empty environment
         shell: bash
         run: |

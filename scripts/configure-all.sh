@@ -157,6 +157,18 @@ run_step() {
   return 0
 }
 
+require_codex_runtime() {
+  local dotfiles_dir="$1"
+  if ! command -v poetry >/dev/null 2>&1; then
+    die "Codex configuration requires Poetry; install Poetry and the locked production dependencies with 'poetry install --only main --no-root' in $dotfiles_dir."
+  fi
+  if ! poetry --directory "$dotfiles_dir" run python -c 'import tomllib' >/dev/null 2>&1; then
+    if ! poetry --directory "$dotfiles_dir" run python -c 'import tomli' >/dev/null 2>&1; then
+      die "Codex configuration requires the locked project TOML parser; run 'poetry install --only main --no-root' in $dotfiles_dir."
+    fi
+  fi
+}
+
 # Load environment for API keys and gate vars
 load_env || warn "\$HOME/.env not found, skipping env load"
 
@@ -452,6 +464,7 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Codex configuration (dry-run mode)"
 elif ! step_skipped codex; then
   info "Configuring Codex CLI provider..."
+  require_codex_runtime "$DOTFILES_DIR"
   run_step "Codex configuration" poetry --directory "$DOTFILES_DIR" run python "$SCRIPT_DIR/configure-codex.py"
 else
   info "Skipping Codex configuration"

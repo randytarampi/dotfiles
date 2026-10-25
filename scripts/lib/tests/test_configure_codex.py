@@ -257,6 +257,59 @@ def test_configure_all_routes_codex_through_poetry(tmp_path):
     )
 
 
+def test_codex_runtime_preflight_reports_missing_poetry_and_parser():
+    script = """
+set -euo pipefail
+source "$1"
+require_codex_runtime /fixture/root
+"""
+    common = REPO_ROOT / "scripts/lib/common.sh"
+    configure = REPO_ROOT / "scripts/configure-all.sh"
+    preflight = configure.read_text(encoding="utf-8")
+    helper = preflight[preflight.index("require_codex_runtime() {") :]
+    helper = helper[: helper.index("\n}") + 2]
+
+    def run_with_path(path):
+        wrapper = path / "configure-preflight.sh"
+        wrapper.write_text(helper + "\n" + script, encoding="utf-8")
+        result = subprocess.run(
+            ["/bin/bash", str(wrapper), str(common)],
+            env={"PATH": f"{path}:/usr/bin:/bin", "HOME": str(path)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result
+
+    # Use a private temporary directory, not repo files.
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory)
+        missing_poetry = run_with_path(path)
+        assert missing_poetry.returncode == 1
+        assert "requires Poetry" in missing_poetry.stderr
+
+        poetry = path / "poetry"
+        poetry.write_text(
+            '#!/bin/sh\ncase "$*" in *tomllib*|*tomli*) exit 1;; esac\nexit 0\n',
+            encoding="utf-8",
+        )
+        poetry.chmod(0o755)
+        missing_parser = run_with_path(path)
+        assert missing_parser.returncode == 1
+        assert "requires the locked project TOML parser" in missing_parser.stderr
+
+
+def test_configure_all_resolves_poetry_project_from_outside_checkout(tmp_path):
+    configure_all = (REPO_ROOT / "scripts/configure-all.sh").read_text(encoding="utf-8")
+    assert 'DOTFILES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"' in configure_all
+    assert 'poetry --directory "$DOTFILES_DIR"' in configure_all
+    outside_checkout = tmp_path / "caller"
+    outside_checkout.mkdir()
+    assert outside_checkout.resolve() != REPO_ROOT
+
+
 def test_locked_poetry_runtime_imports_codex_parser_and_dry_runs(tmp_path):
     poetry = shutil.which("poetry")
     if not poetry:
