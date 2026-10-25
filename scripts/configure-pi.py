@@ -542,6 +542,31 @@ def apply_preserved_preferences(settings, prev):
         settings.pop("lastChangelogVersion", None)
 
 
+def _load_previous_settings(path):
+    """Load and validate existing Pi settings before any configuration side effects."""
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(
+            f"Malformed settings.json at {path} — refusing rewrite; back up and repair the file, then re-run."
+        ) from error
+    if not isinstance(previous, dict):
+        raise ValueError(
+            f"Malformed settings.json at {path}: expected a JSON object — refusing rewrite; back up and repair the file, then re-run."
+        )
+    subagents = previous.get("subagents", {})
+    if not isinstance(subagents, dict):
+        raise ValueError(
+            f"Malformed settings.json at {path}: subagents must be an object — refusing rewrite; back up and repair the file, then re-run."
+        )
+    overrides = subagents.get("agentOverrides", {})
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            f"Malformed settings.json at {path}: subagents.agentOverrides must be an object — refusing rewrite; back up and repair the file, then re-run."
+        )
+    return previous
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Configure Pi from the shared AI tier registry", allow_abbrev=False
@@ -564,6 +589,20 @@ def main():
     # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
     # inside make deploy the parent environment already carries them.
     load_env()
+
+    out = (
+        Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
+        if args.mode == "global"
+        else Path(".pi/agent")
+    )
+    prev_settings = out / "settings.json"
+    try:
+        previous = (
+            _load_previous_settings(prev_settings) if prev_settings.exists() else {}
+        )
+    except ValueError as error:
+        logger.critical("%s", error)
+        return 1
 
     # Env bridge mirroring configure-opencode-tier.py: DOTFILES_ROLE_MODELS
     # feeds --role-model so role overrides work without flags.
@@ -1120,11 +1159,6 @@ def main():
     if default_model:
         prefixes.add(default_model)
     settings["enabledModels"] = sorted(prefixes)
-    out = (
-        Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
-        if args.mode == "global"
-        else Path(".pi/agent")
-    )
     # Preserve any user-added agentOverrides we do not manage (e.g. a custom
     # agent the user added by hand). The six built-in names are (re)set
     # from the preset above; everything else is carried over so it survives
@@ -1134,33 +1168,12 @@ def main():
     # system-owned (pinned via builtins or falling through to
     # subagents.defaultModel), so carrying them over would pin roles to
     # models that may no longer exist locally.
-    prev_settings = out / "settings.json"
-    previous = {}
     managed = set(ROLE_TO_BUILTIN.values()) | set(role_models)
-    if prev_settings.exists():
-        try:
-            previous = json.loads(prev_settings.read_text(encoding="utf-8"))
-            old_overrides = (
-                previous.get("subagents", {}).get("agentOverrides", {}) or {}
-            )
-            for name, val in old_overrides.items():
-                if name not in managed:
-                    settings["subagents"]["agentOverrides"][name] = val
-            apply_preserved_preferences(settings, previous)
-        except json.JSONDecodeError:
-            logger.critical(
-                "Malformed settings.json at %s — refusing rewrite to preserve "
-                "user-added agentOverrides. Delete or repair the file, then re-run.",
-                prev_settings,
-            )
-            return 1
-        except KeyError:
-            logger.critical(
-                "Malformed settings.json at %s (missing expected keys) — "
-                "refusing rewrite to preserve user-added agentOverrides.",
-                prev_settings,
-            )
-            return 1
+    old_overrides = previous.get("subagents", {}).get("agentOverrides", {})
+    for name, val in old_overrides.items():
+        if name not in managed:
+            settings["subagents"]["agentOverrides"][name] = val
+    apply_preserved_preferences(settings, previous)
     settings["theme"] = os.environ.get("PI_THEME", "").strip() or previous.get(
         "theme", "light/dark"
     )
@@ -1195,4 +1208,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
