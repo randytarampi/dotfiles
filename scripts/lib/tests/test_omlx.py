@@ -10,6 +10,7 @@ import pytest
 
 from constants import OMLX_DEFAULT_PORT
 from litellm_aliases import canonical_allowlist_key
+from provider_endpoints import POOLSIDE_ROUTED_CONTEXT, POOLSIDE_ROUTED_OUTPUT
 
 import discover_models
 import local_engines
@@ -1013,13 +1014,15 @@ def test_opencode_poolside_routed_entries_get_conservative_limits(
             "model": f"litellm/{alias}",
         },
     )
+    # Oversized limits are capped (without widening) to the ceiling values;
+    # custom fields are preserved through the gate transform.
     config = {
         "provider": {
             "poolside": {
                 "models": {
                     "laguna-s-2.1": {
                         "name": "S",
-                        "limit": {"context": 131072, "output": 4096},
+                        "limit": {"context": 999999, "output": 999999},
                         "custom": "preserved",
                     }
                 }
@@ -1030,12 +1033,63 @@ def test_opencode_poolside_routed_entries_get_conservative_limits(
     script.apply_litellm_client_gate(config)
     routed = config["provider"]["litellm"]["models"]
     assert routed["poolside/laguna-s-2.1"]["limit"] == {
-        "context": 131072,
-        "output": 4096,
+        "context": POOLSIDE_ROUTED_CONTEXT,
+        "output": POOLSIDE_ROUTED_OUTPUT,
     }
     assert routed["poolside/laguna-s-2.1"]["custom"] == "preserved"
     assert routed["openai/ordinary"]["name"] == "Ordinary"
-    assert 175615 + 32768 < 262112
+
+
+def test_opencode_poolside_allowlist_only_entry_gets_capped_limits(
+    tmp_path, monkeypatch
+):
+    # An entry seeded only from the allowlist (absent from the provider config)
+    # arrives with no limit key at all; _apply_routed_model_limits must still
+    # apply the ceiling bounds during the allowlist pass.
+    script = _load_script(
+        "configure_opencode_allowlist_limits", "configure-opencode.py"
+    )
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    (tmp_path / "configs/opencode").mkdir(parents=True)
+    (tmp_path / "configs/opencode/poolside-models.json").write_text(
+        json.dumps({"models": {"laguna-xs-2.1": {}, "laguna-s-2.1": {}}})
+    )
+    script.__file__ = str(tmp_path / "scripts/configure-opencode.py")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / ".cache/dotfiles").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".cache/dotfiles/generation.lock").write_text(
+        f"source_root={script.SCRIPT_DIR}\n"
+    )
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        script,
+        "get_models",
+        lambda *args: {"poolside/laguna-s-2.1", "openai/ordinary"},
+    )
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {
+            "base_url": "http://gateway/v1",
+            "api_key": "key",
+            "model": f"litellm/{alias}",
+        },
+    )
+    config = {
+        "provider": {
+            "openai": {"models": {"ordinary": {"name": "Ordinary"}}},
+        }
+    }
+    script.apply_litellm_client_gate(config)
+    routed = config["provider"]["litellm"]["models"]
+    assert routed["poolside/laguna-s-2.1"]["limit"] == {
+        "context": POOLSIDE_ROUTED_CONTEXT,
+        "output": POOLSIDE_ROUTED_OUTPUT,
+    }
 
 
 def test_opencode_main_missing_model_preserves_installed_managed_files(
