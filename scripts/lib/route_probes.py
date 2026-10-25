@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import http.client
 import json
 import math
 import urllib.parse
@@ -358,7 +359,11 @@ def _fetch_ollama_tag_records(base_url, key_value=None, timeout=5):
         with urllib.request.urlopen(
             request, timeout=timeout
         ) as response:  # nosec B310 - scheme validated above
-            code, data = response.status, response.read()
+            code = response.status
+            try:
+                data = response.read()
+            except http.client.IncompleteRead:
+                return None
     except urllib.error.HTTPError:
         return None
     except OSError:
@@ -409,7 +414,11 @@ def _fetch_ollama_show(base_url, model, key_value=None, timeout=5):
         with urllib.request.urlopen(
             request, timeout=timeout
         ) as response:  # nosec B310 - scheme validated above
-            code, data = response.status, response.read()
+            code = response.status
+            try:
+                data = response.read()
+            except http.client.IncompleteRead:
+                return None
     except urllib.error.HTTPError:
         return None
     except OSError:
