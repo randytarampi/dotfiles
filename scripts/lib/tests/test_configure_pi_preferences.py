@@ -49,10 +49,11 @@ def test_invalid_previous_settings_refuse_before_side_effects(
     )
 
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "pro-plus"])
     inventory = sorted(tmp_path.rglob("*"))
     with contextlib.ExitStack() as stack:
-        stack.enter_context(patch.object(configure_pi, "load_env"))
+        stack.enter_context(patch.object(configure_pi, "load_env", lambda: None))
         probes = [
             stack.enter_context(
                 patch.object(configure_pi, name, side_effect=AssertionError(name))
@@ -78,10 +79,159 @@ def test_invalid_previous_settings_refuse_before_side_effects(
     ) == before
 
 
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_invalid_json_constants_refuse_main_before_side_effects(
+    tmp_path, constant, nested, monkeypatch
+):
+    document = f'{{"nested": {constant}}}' if nested else constant
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(document, encoding="utf-8")
+    settings_path.chmod(0o640)
+    before = (
+        settings_path.read_bytes(),
+        settings_path.stat().st_mtime_ns,
+        settings_path.stat().st_mode,
+    )
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "pro-plus"])
+    inventory = sorted(tmp_path.rglob("*"))
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(configure_pi, "load_env", lambda: None))
+        probes = [
+            stack.enter_context(
+                patch.object(configure_pi, name, side_effect=AssertionError(name))
+            )
+            for name in (
+                "list_local_ollama_models",
+                "_ensure_packages",
+                "_cleanup_generated_agents",
+                "write_text_file",
+                "backup_file",
+                "seed_plugin_configs",
+            )
+        ]
+        assert configure_pi.main() == 1
+    for probe in probes:
+        probe.assert_not_called()
+    assert sorted(tmp_path.rglob("*")) == inventory
+    assert (
+        settings_path.read_bytes(),
+        settings_path.stat().st_mtime_ns,
+        settings_path.stat().st_mode,
+    ) == before
+
+
 def test_previous_settings_accepts_legacy_missing_nested_fields(tmp_path):
     settings_path = tmp_path / "settings.json"
     settings_path.write_text("{}", encoding="utf-8")
     assert configure_pi._load_previous_settings(settings_path) == {}
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_previous_settings_rejects_nonstandard_json_constants(
+    tmp_path, constant, nested
+):
+    value = f'{{"nested": {constant}}}' if nested else constant
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(value, encoding="utf-8")
+    with pytest.raises(ValueError, match="Malformed settings.json"):
+        configure_pi._load_previous_settings(settings_path)
+
+
+@pytest.mark.parametrize(
+    "change", ["replace", "delete", "create", "initial-error", "prewrite-error"]
+)
+def test_pi_main_refuses_settings_changed_during_discovery_before_any_writes(
+    tmp_path, monkeypatch, change
+):
+    agent_dir = tmp_path / "pi-agent"
+    agent_dir.mkdir()
+    settings_path = agent_dir / "settings.json"
+    initial = '{"tuiMode": "split"}'
+    latest = '{"tuiMode": "user-saved"}'
+    if change != "create":
+        settings_path.write_text(initial, encoding="utf-8")
+    initial_state = (
+        (
+            settings_path.read_bytes(),
+            settings_path.stat().st_mtime_ns,
+            settings_path.stat().st_mode,
+        )
+        if settings_path.exists()
+        else None
+    )
+    if change in ("initial-error", "prewrite-error"):
+        original_snapshot = configure_pi._settings_snapshot
+        calls = []
+
+        def snapshot_with_error(path):
+            calls.append(path)
+            if change == "initial-error" or len(calls) == 2:
+                raise PermissionError("fixture read failure")
+            return original_snapshot(path)
+
+        monkeypatch.setattr(configure_pi, "_settings_snapshot", snapshot_with_error)
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "free"])
+
+    intervening_state = []
+
+    def save_during_discovery():
+        if change == "delete":
+            settings_path.unlink()
+        elif change == "replace":
+            replacement = agent_dir / "replacement.json"
+            replacement.write_text(latest, encoding="utf-8")
+            replacement.replace(settings_path)
+        elif change == "prewrite-error":
+            pass
+        else:
+            settings_path.write_text(latest, encoding="utf-8")
+        intervening_state.append(
+            (
+                (
+                    settings_path.read_bytes(),
+                    settings_path.stat().st_mtime_ns,
+                    settings_path.stat().st_mode,
+                )
+                if settings_path.exists()
+                else None
+            )
+        )
+        return []
+
+    monkeypatch.setattr(configure_pi, "list_local_ollama_models", save_during_discovery)
+    monkeypatch.setattr(configure_pi, "load_env", lambda: None)
+    side_effects = [
+        patch.object(configure_pi, name, side_effect=AssertionError(name))
+        for name in (
+            "write_text_file",
+            "backup_file",
+            "_cleanup_generated_agents",
+            "seed_plugin_configs",
+            "_ensure_packages",
+        )
+    ]
+    with contextlib.ExitStack() as stack:
+        probes = [stack.enter_context(effect) for effect in side_effects]
+        assert configure_pi.main() == 1
+    for probe in probes:
+        probe.assert_not_called()
+    assert settings_path.exists() == (change != "delete")
+    if settings_path.exists():
+        assert (
+            settings_path.read_bytes(),
+            settings_path.stat().st_mtime_ns,
+            settings_path.stat().st_mode,
+        ) == (intervening_state[0] if intervening_state else initial_state)
+    assert sorted(path.name for path in agent_dir.iterdir()) == (
+        [] if change == "delete" else ["settings.json"]
+    )
 
 
 def test_previous_settings_subprocess_exits_nonzero_for_non_object(tmp_path):
