@@ -2000,6 +2000,97 @@ def test_gateway_embedding_switch_requires_acknowledgement(monkeypatch, tmp_path
     assert state["embedding_fingerprint"]["parity"] == "inconclusive"
 
 
+def test_documented_gateway_acknowledgement_without_previous_dimensions(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    acknowledgement = {
+        "previous_engine": "ollama",
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "new_engine": "openai",
+        "new_model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "new_output_dims": 768,
+        "acknowledged_at": "2026-10-22T12:00:00Z",
+    }
+    state = openwebui._read_embedding_state()
+    assert state == {}
+    state["acknowledgement"] = acknowledgement
+    openwebui._write_embedding_state(state)
+
+    client = _gateway_test_client()
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+
+    assert client.writes == 1
+    assert report["applied"] == ["embedding"]
+    assert report["verified"] == ["embedding"]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"previous_engine": "openai"},
+        {"previous_model": "other-model"},
+        {"previous_output_dims": 999},
+        {"new_engine": "ollama"},
+        {"new_model": "other-model"},
+        {"new_output_dims": 999},
+        {"acknowledged_at": ""},
+    ],
+)
+def test_documented_gateway_acknowledgement_rejects_mismatches(
+    monkeypatch, tmp_path, change
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    acknowledgement = {
+        "previous_engine": "ollama",
+        "previous_model": openwebui.EMBEDDING_MODEL,
+        "new_engine": "openai",
+        "new_model": f"ollama/{openwebui.EMBEDDING_MODEL}",
+        "new_output_dims": 768,
+        "acknowledged_at": "2026-10-22T12:00:00Z",
+    }
+    acknowledgement.update(change)
+    state = openwebui._read_embedding_state()
+    assert state == {}
+    state["acknowledgement"] = acknowledgement
+    openwebui._write_embedding_state(state)
+
+    client = _gateway_test_client()
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+
+    assert client.writes == 0
+    assert report["applied"] == []
+    assert report["failed"] == ["embedding"]
+
+
+def test_gateway_embedding_switch_without_acknowledgement_refuses(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        openwebui,
+        "_embedding_state_path",
+        lambda: str(tmp_path / "managed-embedding.json"),
+    )
+    monkeypatch.setattr(openwebui, "_litellm_key_value", lambda: "sentinel-scoped-key")
+    client = _gateway_test_client()
+
+    report = openwebui.reconcile_via_api(client, _gateway_desired()).actions
+
+    assert client.writes == 0
+    assert report["applied"] == []
+    assert report["failed"] == ["embedding"]
+
+
 def test_gateway_embedding_key_readback_mismatch_reports_applied_failed(
     monkeypatch, tmp_path
 ):
