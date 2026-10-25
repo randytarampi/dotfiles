@@ -1,4 +1,5 @@
 import io
+import http.client
 import json
 import math
 import sys
@@ -613,6 +614,18 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
                 )
             )
 
+    def test_fetch_ollama_tags_incomplete_read_returns_none(self):
+        response = FakeResponse()
+        response.read = lambda: (_ for _ in ()).throw(
+            http.client.IncompleteRead(b'{"models":')
+        )
+        with patch.object(
+            route_probes.urllib.request, "urlopen", return_value=response
+        ):
+            self.assertIsNone(
+                route_probes._fetch_ollama_tag_records("http://localhost:11434/api")
+            )
+
     def test_fetch_ollama_show_returns_details(self):
         body = json.dumps(
             {
@@ -630,6 +643,48 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         self.assertIsNotNone(details)
         assert details is not None  # for LSP narrowing
         self.assertTrue(details["modelinfo"]["embedding"])
+
+    def test_fetch_ollama_show_incomplete_read_returns_none(self):
+        response = FakeResponse()
+        response.read = lambda: (_ for _ in ()).throw(
+            http.client.IncompleteRead(b'{"modelinfo":')
+        )
+        with patch.object(
+            route_probes.urllib.request, "urlopen", return_value=response
+        ):
+            self.assertIsNone(
+                route_probes._fetch_ollama_show(
+                    "http://localhost:11434/api", "embeddinggemma"
+                )
+            )
+
+    def test_incomplete_ollama_discovery_keeps_gateway_candidates(self):
+        response = FakeResponse()
+        response.read = lambda: (_ for _ in ()).throw(
+            http.client.IncompleteRead(b'{"models":')
+        )
+        with (
+            patch.object(
+                route_probes.urllib.request,
+                "urlopen",
+                return_value=response,
+            ),
+            patch.object(
+                route_probes, "fetch_gateway_models", return_value=["gateway-model"]
+            ),
+            patch.object(
+                route_probes,
+                "probe_embedding_vector",
+                side_effect=AssertionError("discovery must not run inference"),
+            ),
+        ):
+            observations = route_probes.discover_embedding_candidates(
+                ollama_url="http://ollama:11434", gateway_url="http://gateway:4000/v1"
+            )
+        self.assertEqual(
+            [(item.provider, item.wire_alias) for item in observations],
+            [("ollama", "*"), ("gateway", "gateway-model")],
+        )
 
     def test_discover_embedding_candidates_ollama(self):
         """Ollama discovery: non-embedding models are unavailable, embedding models are probed."""
