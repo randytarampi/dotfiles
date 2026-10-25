@@ -47,6 +47,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
 )
 from litellm_aliases import resolve_alias  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
+import pi_profiles  # noqa: E402
 from model_catalogues import (  # noqa: E402 -- local import follows bootstrap.
     get_catalogue,
 )
@@ -606,7 +607,37 @@ def main():
     )
     p.add_argument("--no-local-fallbacks", action="store_true")
     p.add_argument("--ollama-base-url")
+    p.add_argument(
+        "--profiles-only",
+        action="store_true",
+        help="Create an unselected global saved profile without changing active Pi state",
+    )
     args = p.parse_args()
+
+    if args.profiles_only:
+        if args.mode != "global" or args.role_models or args.category_models:
+            p.error("--profiles-only requires global mode without model overrides")
+        registry = tier_registry.load_registry(SLIM)
+        try:
+            profile = pi_profiles.build_profile(
+                registry, args.preset, {}, ROLE_TO_BUILTIN
+            )
+            agent_dir = Path(
+                os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")
+            ).expanduser()
+            plan = pi_profiles.plan_profile(
+                agent_dir, args.preset, profile, pi_profiles.digest(SLIM.read_bytes())
+            )
+            status = (
+                plan["disposition"]
+                if args.dry_run
+                else pi_profiles.create_profile(plan)
+            )
+        except (OSError, ValueError) as error:
+            logger.error("Pi saved profile refused: %s", error)
+            return 1
+        logger.info("Pi saved profile: %s; not activated", status)
+        return 1 if status.startswith("REFUSED_") else 0
 
     # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
     # inside make deploy the parent environment already carries them.

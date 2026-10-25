@@ -234,6 +234,92 @@ def test_pi_main_refuses_settings_changed_during_discovery_before_any_writes(
     )
 
 
+@pytest.mark.parametrize("active", [None, b"[]", b'{"custom": true}'])
+def test_profiles_only_never_touches_active_state(tmp_path, monkeypatch, active):
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    settings = agent / "settings.json"
+    if active is not None:
+        settings.write_bytes(active)
+        settings.chmod(0o640)
+    before = (settings.read_bytes(), settings.stat()) if settings.exists() else None
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("active pipeline reached")
+
+    for name in (
+        "load_env",
+        "list_local_ollama_models",
+        "_ensure_packages",
+        "seed_plugin_configs",
+        "write_text_file",
+        "backup_file",
+    ):
+        monkeypatch.setattr(configure_pi, name, forbidden)
+    monkeypatch.setattr(
+        sys, "argv", ["configure-pi.py", "--preset", "anthropic", "--profiles-only"]
+    )
+    assert configure_pi.main() == 0
+    target = agent / "profiles/pi-subagents/anthropic.json"
+    first = (target.read_bytes(), target.stat().st_mtime_ns)
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert configure_pi.main() == 0
+    assert (target.read_bytes(), target.stat().st_mtime_ns) == first
+    after = (settings.read_bytes(), settings.stat()) if settings.exists() else None
+    assert after == before
+    assert not (agent / "models.json").exists()
+    assert not (agent / "auth.json").exists()
+
+
+def test_profiles_only_dry_run_and_manual_collision(tmp_path, monkeypatch):
+    agent = tmp_path / "agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
+    argv = ["configure-pi.py", "--preset", "anthropic", "--profiles-only"]
+    monkeypatch.setattr(sys, "argv", argv + ["--dry-run"])
+    assert configure_pi.main() == 0
+    assert not agent.exists()
+    target = agent / "profiles/pi-subagents/anthropic.json"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"manual")
+    monkeypatch.setattr(sys, "argv", argv)
+    assert configure_pi.main() == 1
+    assert target.read_bytes() == b"manual"
+
+
+def test_profile_provenance_and_competing_creation(tmp_path):
+    from pi_profiles import create_profile, plan_profile
+
+    profile = {"subagents": {"agentOverrides": {"worker": {"model": "x/y"}}}}
+    for name in ("first", "second"):
+        plan = plan_profile(tmp_path, name, profile, "source")
+        assert create_profile(plan) == "GENERATE_ONLY"
+        assert (
+            plan_profile(tmp_path, name, profile, "source")["disposition"]
+            == "UNCHANGED"
+        )
+        assert plan["manifest"].stat().st_mode & 0o777 == 0o600
+    plan["target"].write_bytes(b"manual edit")
+    assert (
+        plan_profile(tmp_path, "second", profile, "source")["disposition"]
+        == "REFUSED_OWNERSHIP"
+    )
+    raced = plan_profile(tmp_path, "third", profile, "source")
+    raced["target"].write_bytes(b"competing writer")
+    assert create_profile(raced) == "REFUSED_CONCURRENCY_UNPROVEN"
+    assert raced["target"].read_bytes() == b"competing writer"
+    assert not raced["manifest"].exists()
+
+
+def test_profiles_only_refuses_unresolved_local_models(tmp_path, monkeypatch):
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path / "agent"))
+    monkeypatch.setattr(
+        sys, "argv", ["configure-pi.py", "--preset", "local", "--profiles-only"]
+    )
+    assert configure_pi.main() == 1
+    assert not (tmp_path / "agent").exists()
+
+
 def test_previous_settings_subprocess_exits_nonzero_for_non_object(tmp_path):
     settings_path = tmp_path / "settings.json"
     settings_path.write_text("[]", encoding="utf-8")
