@@ -288,6 +288,63 @@ def test_profiles_only_dry_run_and_manual_collision(tmp_path, monkeypatch):
     assert target.read_bytes() == b"manual"
 
 
+@pytest.mark.parametrize(
+    ("flag", "value"),
+    [
+        ("--skip", "mcps"),
+        ("--ollama-base-url", "http://localhost:11434"),
+        ("--min-reasoning-embedding", "1"),
+        ("--no-local-fallbacks", None),
+        ("--local-fallback-preset", "free"),
+        ("--local-fallback-role", "worker=x/y"),
+        ("--local-fallback-placeholder", "worker=x/y"),
+        ("--no-backup", None),
+    ],
+)
+def test_profiles_only_rejects_unused_flags_before_registry_or_file_access(
+    tmp_path, monkeypatch, flag, value
+):
+    agent = tmp_path / "agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["configure-pi.py", "--preset", "anthropic", "--profiles-only", flag]
+        + ([value] if value is not None else []),
+    )
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "load_registry",
+        lambda *_: pytest.fail("registry read"),
+    )
+    with pytest.raises(SystemExit) as result:
+        configure_pi.main()
+    assert result.value.code == 2
+    assert not agent.exists()
+
+
+@pytest.mark.parametrize("mode", [0o755, 0o700])
+def test_profile_planning_matches_execution_directory_validation(tmp_path, mode):
+    agent = tmp_path / "agent"
+    target_leaf = agent / "profiles/pi-subagents"
+    target_leaf.mkdir(parents=True)
+    target_leaf.chmod(mode)
+    profile = {"subagents": {"agentOverrides": {"worker": {"model": "x/y"}}}}
+    plan = pi_profiles.plan_profile(agent, "test", profile, "source")
+    expected = "GENERATE_ONLY" if mode == 0o700 else "REFUSED_OWNERSHIP"
+    assert plan["disposition"] == expected
+    if mode == 0o700:
+        assert pi_profiles.create_profile(plan) == expected
+
+
+def test_absent_profile_directories_are_feasible_in_read_only_planning(tmp_path):
+    agent = tmp_path / "agent"
+    profile = {"subagents": {"agentOverrides": {"worker": {"model": "x/y"}}}}
+    plan = pi_profiles.plan_profile(agent, "test", profile, "source")
+    assert plan["disposition"] == "GENERATE_ONLY"
+    assert not agent.exists()
+
+
 def test_profile_provenance_and_competing_creation(tmp_path):
     from pi_profiles import create_profile, plan_profile
 
