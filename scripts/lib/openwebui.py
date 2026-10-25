@@ -14,6 +14,7 @@ import copy
 import hashlib
 import json
 import os
+import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -2003,8 +2004,55 @@ def _read_embedding_state():
         return {}
 
 
+def _embedding_ledger_read():
+    """Distinguish absent, usable legacy, and unusable ownership evidence."""
+    from pathlib import Path
+
+    path = Path(_embedding_state_path())
+    if any(part.is_symlink() for part in (path, *path.parents)):
+        return "invalid", None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            state = json.load(handle)
+    except FileNotFoundError:
+        return "absent", None
+    except OSError:
+        return "unavailable", None
+    except ValueError:
+        return "invalid", None
+    if not isinstance(state, dict):
+        return "invalid", None
+    projection = state.get("projection")
+    owned = projection.get("owned") if isinstance(projection, dict) else None
+    projection_valid = isinstance(owned, dict) and {
+        "RAG_EMBEDDING_ENGINE",
+        "RAG_EMBEDDING_MODEL",
+    }.issubset(owned)
+    acknowledgement = state.get("acknowledgement")
+    acknowledgement_valid = isinstance(acknowledgement, dict) and {
+        "previous_model",
+        "previous_engine",
+        "previous_output_dims",
+        "new_model",
+        "new_output_dims",
+        "acknowledged_at",
+    }.issubset(acknowledgement)
+    # An explicit pending acknowledgement is a supported legacy ledger even
+    # before its first managed projection has been recorded.
+    if ("projection" in state and not projection_valid) or (
+        not projection_valid and not acknowledgement_valid
+    ):
+        return "invalid", None
+    return "valid-legacy", state
+
+
 def _write_embedding_state(state):
     path = _embedding_state_path()
+    from pathlib import Path
+
+    target = Path(path)
+    if any(part.is_symlink() for part in (target, *target.parents)):
+        raise OpenWebUIError("Refusing unsafe Open WebUI embedding ledger path")
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
     if state is None:
         try:
@@ -2018,12 +2066,21 @@ def _write_embedding_state(state):
         if previous is not None:
             state["selection"] = previous
     _guarantee_no_secrets(state, allow_key_reference=True)
-    temp = f"{path}.{os.getpid()}.tmp"
-    with open(temp, "w", encoding="utf-8") as handle:
-        json.dump(state, handle, indent=2)
-        handle.write("\n")
-    os.chmod(temp, 0o600)
-    os.replace(temp, path)
+    descriptor, temp = tempfile.mkstemp(
+        prefix=".managed-embedding.", dir=os.path.dirname(path)
+    )
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2)
+            handle.write("\n")
+        os.replace(temp, path)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _embedding_identity(config):
@@ -2824,7 +2881,14 @@ def _reconcile_embedding(client, current, wanted):
         and not isinstance(current.get("openai_config"), dict)
     ):
         raise OpenWebUIError("Open WebUI embedding configuration has an invalid shape")
-    state = _read_embedding_state()
+    ledger_status, ledger_state = _embedding_ledger_read()
+    if ledger_status != "valid-legacy":
+        logger.error(
+            "Refusing Open WebUI embedding reconciliation; ownership ledger is %s",
+            ledger_status,
+        )
+        return {"status": "refused", "applied": False, "verified": False}
+    state = ledger_state
     projection = state.get("projection")
     fingerprint = state.get("embedding_fingerprint", {})
     if wanted and wanted.get("RAG_EMBEDDING_ENGINE") == "openai":

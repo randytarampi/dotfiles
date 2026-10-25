@@ -635,10 +635,19 @@ The reconciler owns only `RAG_EMBEDDING_ENGINE` and
 `RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama
 target. It never reads credentials into the ownership projection and never
 changes `ollama_config.key`, `openai_config`, or `azure_openai_config`.
-First adoption is limited to the built-in empty-engine
-`sentence-transformers/all-MiniLM-L6-v2` default; a customized model/engine is
-refused with its observed identity. The separate mode-600 state is
+First adoption without a ledger is refused: an absent file is not evidence of
+an empty vector store. Existing explicitly acknowledged transitions retain
+their legacy validation; this is not a representation-aware migration executor.
+The separate mode-600 state is
 `~/.local/share/openwebui/data/managed-embedding.json`.
+
+Embedding reconciliation fails closed when this ledger is absent or unreadable:
+it does not infer an empty vector store or adopt the first-run default. Existing
+valid legacy projections and pending acknowledgement records remain readable.
+Acknowledgements still undergo the transition-specific checks documented below;
+merely having a ledger does not authorize a change. Gateway, native and gate-off
+paths share this safety check. No automated inventory, reset or reindex is
+performed, and dynamic representation identity remains unimplemented.
 
 Changing from the built-in MiniLM model (384 dimensions) to
 `embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the
