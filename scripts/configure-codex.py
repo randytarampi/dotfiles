@@ -314,7 +314,13 @@ def main():
                 tomllib.loads(generated).get(table, {})
             )
             if collisions:
-                raise ValueError(f"unmanaged {table} collision: {sorted(collisions)}")
+                sections = ", ".join(f"[{table}.{name}]" for name in sorted(collisions))
+                raise ValueError(
+                    f"unmanaged {table} collision: {sections}. Back up config.toml, "
+                    "review only these sections, then manually remove or rename "
+                    "approved legacy sections and rerun. Preserve ambiguous sections; "
+                    "no automatic migration was performed."
+                )
         new_content += f"{provider_start}\n{base_providers.rstrip()}\n{provider_end}"
         # Provider composition appends LiteLLM once, after legacy cleanup.
         new_content += "\n\n" + generated_profiles.rstrip()
