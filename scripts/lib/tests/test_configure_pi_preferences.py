@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import shlex
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,6 +23,90 @@ PI_SPEC = importlib.util.spec_from_file_location(
 assert PI_SPEC is not None and PI_SPEC.loader is not None
 configure_pi = importlib.util.module_from_spec(PI_SPEC)
 PI_SPEC.loader.exec_module(configure_pi)
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        "[]",
+        "null",
+        '{"subagents": []}',
+        '{"subagents": null}',
+        '{"subagents": {"agentOverrides": []}}',
+        '{"subagents": {"agentOverrides": null}}',
+    ],
+)
+def test_invalid_previous_settings_refuse_before_side_effects(
+    tmp_path, document, monkeypatch
+):
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(document, encoding="utf-8")
+    settings_path.chmod(0o640)
+    before = (
+        settings_path.read_bytes(),
+        settings_path.stat().st_mtime_ns,
+        settings_path.stat().st_mode,
+    )
+
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "pro-plus"])
+    inventory = sorted(tmp_path.rglob("*"))
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(configure_pi, "load_env"))
+        probes = [
+            stack.enter_context(
+                patch.object(configure_pi, name, side_effect=AssertionError(name))
+            )
+            for name in (
+                "list_local_ollama_models",
+                "_ensure_packages",
+                "_cleanup_generated_agents",
+                "write_text_file",
+                "backup_file",
+                "seed_plugin_configs",
+            )
+        ]
+        assert configure_pi.main() == 1
+
+    for probe in probes:
+        probe.assert_not_called()
+    assert sorted(tmp_path.rglob("*")) == inventory
+    assert (
+        settings_path.read_bytes(),
+        settings_path.stat().st_mtime_ns,
+        settings_path.stat().st_mode,
+    ) == before
+
+
+def test_previous_settings_accepts_legacy_missing_nested_fields(tmp_path):
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text("{}", encoding="utf-8")
+    assert configure_pi._load_previous_settings(settings_path) == {}
+
+
+def test_previous_settings_subprocess_exits_nonzero_for_non_object(tmp_path):
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text("[]", encoding="utf-8")
+    home = tmp_path / "home"
+    pi_dir = home / ".pi" / "agent"
+    pi_dir.mkdir(parents=True)
+    (pi_dir / "settings.json").write_text("[]", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            os.path.join(REPO_ROOT, "scripts", "configure-pi.py"),
+            "--preset",
+            "pro-plus",
+            "--no-local-fallbacks",
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "HOME": str(home), "PI_CODING_AGENT_DIR": str(pi_dir)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "Malformed settings.json" in result.stderr
+    assert (pi_dir / "settings.json").read_text(encoding="utf-8") == "[]"
 
 
 @pytest.mark.parametrize("suffix", [":cloud", "-cloud"])
@@ -365,6 +450,29 @@ def test_pi_main_lists_every_advertised_gateway_identity(tmp_path, monkeypatch):
         ]["models"]
     }
     assert unselected in entries
+
+
+def test_pi_valid_partial_settings_preserve_custom_overrides_twice(
+    tmp_path, monkeypatch
+):
+    agent_dir = tmp_path / "pi-agent"
+    agent_dir.mkdir()
+    custom = {"model": "custom/model"}
+    (agent_dir / "settings.json").write_text(
+        json.dumps({"subagents": {"agentOverrides": {"my-agent": custom}}})
+    )
+    catalogue = {"data": [{"id": "google/models/gemini-3.8-flash"}]}
+    _run_pi_main(tmp_path, catalogue, monkeypatch)
+    first = {
+        name: (agent_dir / name).read_bytes()
+        for name in ("settings.json", "auth.json", "models.json")
+    }
+    _run_pi_main(tmp_path, catalogue, monkeypatch)
+    assert {name: (agent_dir / name).read_bytes() for name in first} == first
+    assert (
+        json.loads(first["settings.json"])["subagents"]["agentOverrides"]["my-agent"]
+        == custom
+    )
 
 
 def test_pi_main_partial_catalogue_and_gate_off_are_fail_closed_or_direct(
