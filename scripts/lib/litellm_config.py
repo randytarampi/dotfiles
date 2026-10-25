@@ -29,7 +29,13 @@ from local_engines import (
     local_endpoint_for,
     _ollama_metadata,
 )
-from provider_endpoints import PROVIDER_ENDPOINTS, provider_models
+from provider_endpoints import (
+    POOLSIDE_ROUTED_MODEL_ID,
+    POOLSIDE_ROUTED_MODEL_INFO,
+    PROVIDER_ENDPOINTS,
+    conservative_limit,
+    provider_models,
+)
 from litellm_routing import routing_entries_are_safe
 from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
 from model_catalogues import open_same_origin
@@ -1707,6 +1713,35 @@ def compute_model_list(environ=None, previous_entries=None):
                         f"openai/poolside/{model_id}",
                         api_base=PROVIDER_ENDPOINTS["poolside"]["baseUrl"],
                         key_env="POOLSIDE_API_KEY",
+                        model_info=(
+                            {
+                                **POOLSIDE_ROUTED_MODEL_INFO,
+                                "max_input_tokens": conservative_limit(
+                                    (
+                                        previous_by_alias.get(
+                                            f"poolside/{model_id}", {}
+                                        )
+                                        .get("litellm_params", {})
+                                        .get("model_info")
+                                        or {}
+                                    ).get("max_input_tokens"),
+                                    POOLSIDE_ROUTED_MODEL_INFO["max_input_tokens"],
+                                ),
+                                "max_output_tokens": conservative_limit(
+                                    (
+                                        previous_by_alias.get(
+                                            f"poolside/{model_id}", {}
+                                        )
+                                        .get("litellm_params", {})
+                                        .get("model_info")
+                                        or {}
+                                    ).get("max_output_tokens"),
+                                    POOLSIDE_ROUTED_MODEL_INFO["max_output_tokens"],
+                                ),
+                            }
+                            if f"poolside/{model_id}" == POOLSIDE_ROUTED_MODEL_ID
+                            else None
+                        ),
                     )
                 )
 
@@ -1808,6 +1843,11 @@ def render_config(environ=None, entries=None):
     lines = ["model_list:" if entries else "model_list: []"]
     for entry in entries:
         params = entry["litellm_params"]
+        routed_poolside_info = (
+            params.get("model_info")
+            if entry.get("model_name") == POOLSIDE_ROUTED_MODEL_ID
+            else None
+        )
         lines.extend(
             [
                 f'  - model_name: {json.dumps(entry["model_name"])}',
@@ -1815,10 +1855,14 @@ def render_config(environ=None, entries=None):
             ]
         )
         for key, value in params.items():
+            if key == "model_info" and routed_poolside_info is not None:
+                continue
             if key == "api_key":
                 lines.append(f"      {key}: {value}")
             else:
                 lines.append(f"      {key}: {json.dumps(value)}")
+        if routed_poolside_info is not None:
+            lines.append(f"    model_info: {json.dumps(routed_poolside_info)}")
     lines.extend(
         [
             "litellm_settings:",
@@ -1892,6 +1936,12 @@ def stage_backup_text(text, authorized_entries, environ=None):
             raise ValueError("truncated LiteLLM recovery entry")
         index += 1
         while index < len(lines) and lines[index].startswith("      "):
+            index += 1
+        if index < len(lines) and lines[index].startswith("    model_info: "):
+            metadata = json.loads(lines[index].removeprefix("    model_info: "))
+            if not isinstance(metadata, dict):
+                raise ValueError("unsupported LiteLLM recovery model metadata")
+            # Backup metadata never grants routes or overrides current authorization.
             index += 1
     if index >= len(lines) or lines[index] != "litellm_settings:":
         raise ValueError("truncated or malformed LiteLLM recovery model list")

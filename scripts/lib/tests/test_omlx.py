@@ -976,6 +976,68 @@ def test_opencode_client_gate_only_rewrites_model_fields(tmp_path, monkeypatch):
         script.apply_litellm_client_gate(config)
 
 
+def test_opencode_poolside_routed_entries_get_conservative_limits(
+    tmp_path, monkeypatch
+):
+    script = _load_script("configure_opencode_poolside_limits", "configure-opencode.py")
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    (tmp_path / "configs/opencode").mkdir(parents=True)
+    (tmp_path / "configs/opencode/poolside-models.json").write_text(
+        json.dumps({"models": {"laguna-xs-2.1": {}, "laguna-s-2.1": {}}})
+    )
+    script.__file__ = str(tmp_path / "scripts/configure-opencode.py")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / ".cache/dotfiles").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".cache/dotfiles/generation.lock").write_text(
+        f"source_root={script.SCRIPT_DIR}\n"
+    )
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        script,
+        "get_models",
+        lambda *args: {
+            "poolside/laguna-s-2.1",
+            "openai/ordinary",
+        },
+    )
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {
+            "base_url": "http://gateway/v1",
+            "api_key": "key",
+            "model": f"litellm/{alias}",
+        },
+    )
+    config = {
+        "provider": {
+            "poolside": {
+                "models": {
+                    "laguna-s-2.1": {
+                        "name": "S",
+                        "limit": {"context": 131072, "output": 4096},
+                        "custom": "preserved",
+                    }
+                }
+            },
+            "openai": {"models": {"ordinary": {"name": "Ordinary"}}},
+        }
+    }
+    script.apply_litellm_client_gate(config)
+    routed = config["provider"]["litellm"]["models"]
+    assert routed["poolside/laguna-s-2.1"]["limit"] == {
+        "context": 131072,
+        "output": 4096,
+    }
+    assert routed["poolside/laguna-s-2.1"]["custom"] == "preserved"
+    assert routed["openai/ordinary"]["name"] == "Ordinary"
+    assert 175615 + 32768 < 262112
+
+
 def test_opencode_main_missing_model_preserves_installed_managed_files(
     monkeypatch, tmp_path
 ):

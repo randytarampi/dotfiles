@@ -74,6 +74,10 @@ from generation_lock import (  # noqa: E402 -- local import follows bootstrap.
     with_generation_lock,
 )
 from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
+    POOLSIDE_ROUTED_CONTEXT,
+    POOLSIDE_ROUTED_MODEL_ID,
+    POOLSIDE_ROUTED_OUTPUT,
+    conservative_limit,
     PROVIDER_ENDPOINTS,
 )
 
@@ -167,6 +171,23 @@ def register_local_provider(config: dict, provider: str, block: dict | None) -> 
         config["provider"][provider] = block
 
 
+def _apply_routed_model_limits(model_identity, model):
+    if model_identity == POOLSIDE_ROUTED_MODEL_ID and isinstance(model, dict):
+        current = model.get("limit")
+        model["limit"] = {
+            **(current if isinstance(current, dict) else {}),
+            "context": conservative_limit(
+                current.get("context") if isinstance(current, dict) else None,
+                POOLSIDE_ROUTED_CONTEXT,
+            ),
+            "output": conservative_limit(
+                current.get("output") if isinstance(current, dict) else None,
+                POOLSIDE_ROUTED_OUTPUT,
+            ),
+        }
+    return model
+
+
 def apply_litellm_client_gate(config: dict) -> None:
     """Map canonical model references to gateway-only or direct transports."""
     # The gateway keys Anthropic allowlist models under the meridian owner
@@ -210,6 +231,7 @@ def apply_litellm_client_gate(config: dict) -> None:
                 "id": identity,
                 "name": model.get("name", identity),
             }
+            _apply_routed_model_limits(identity, models[identity])
     # Registry-wide inventory coverage: the deployed Slim file also selects
     # dormant-preset models whose provider blocks this tier does not build
     # (Google, Open Router, OpenCode Zen, GitHub Copilot). The gateway serves
@@ -256,6 +278,7 @@ def apply_litellm_client_gate(config: dict) -> None:
                     ),
                 },
             )
+            _apply_routed_model_limits(identity, models[identity])
     # Catalogue honesty: only advertise models the gateway actually serves.
     # The allowlist seeds cover dormant presets; anything the live gateway
     # does not list would otherwise fail at request time, so filter it here
