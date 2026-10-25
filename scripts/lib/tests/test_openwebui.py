@@ -2303,8 +2303,7 @@ def test_embedding_adoption_migration_guard_and_acknowledged_switch(
     client = _EmbeddingClient(_embedding_config())
     _embedding_reconcile(client)
     assert client.writes == 0
-    assert "384-dim" in caplog.text and "768-dim" in caplog.text
-    assert "Reset/re-embed" in caplog.text
+    assert "ownership ledger is absent" in caplog.text
 
     ack = {
         "previous_model": "sentence-transformers/all-MiniLM-L6-v2",
@@ -2812,7 +2811,7 @@ def test_embedding_customized_model_refusal(monkeypatch, tmp_path, caplog):
     client = _EmbeddingClient(_embedding_config(model="operator-model"))
     _embedding_reconcile(client)
     assert client.writes == 0
-    assert "customized Open WebUI embedding identity" in caplog.text
+    assert "ownership ledger is absent" in caplog.text
 
 
 def test_embedding_readback_abort_and_gate_off_restore(monkeypatch, tmp_path):
@@ -6323,6 +6322,70 @@ def test_embedding_wanted_native_url_update_is_not_a_noop(monkeypatch, tmp_path)
     assert client.get_embedding_config()["ollama_config"]["url"] == native
     saved = openwebui._read_embedding_state()
     assert saved["projection"]["ollama_config"]["url"] == native
+
+
+@pytest.mark.parametrize("engine", ["ollama", "openai", None])
+def test_embedding_missing_ledger_refuses_before_update(monkeypatch, tmp_path, engine):
+    path = tmp_path / "embedding.json"
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(path))
+    client = _EmbeddingClient(
+        _embedding_config("", "sentence-transformers/all-MiniLM-L6-v2")
+    )
+    wanted = {
+        "RAG_EMBEDDING_ENGINE": engine,
+        "RAG_EMBEDDING_MODEL": openwebui.EMBEDDING_MODEL,
+        "output_dims": openwebui.EMBEDDING_OUTPUT_DIMS,
+    }
+    result = openwebui._reconcile_embedding(
+        client, client.get_embedding_config(), wanted if engine else {}
+    )
+    assert result["status"] == "refused"
+    assert client.writes == 0
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("content", ["{broken", "{}", "[]", "null"])
+@pytest.mark.parametrize("engine", ["ollama", "openai", None])
+def test_embedding_invalid_ledger_refuses_without_rewrite(
+    monkeypatch, tmp_path, content, engine
+):
+    path = tmp_path / "embedding.json"
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o600)
+    original = path.read_bytes()
+    original_stat = path.stat()
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(path))
+    client = _EmbeddingClient(
+        _embedding_config("", "sentence-transformers/all-MiniLM-L6-v2")
+    )
+    wanted = {"RAG_EMBEDDING_ENGINE": engine, "RAG_EMBEDDING_MODEL": "target"}
+    result = openwebui._reconcile_embedding(
+        client, client.get_embedding_config(), wanted if engine else {}
+    )
+    assert result["status"] == "refused"
+    assert client.writes == 0
+    assert path.read_bytes() == original
+    assert path.stat().st_mtime_ns == original_stat.st_mtime_ns
+    assert path.stat().st_mode == original_stat.st_mode
+
+
+def test_embedding_ledger_symlink_is_not_followed(monkeypatch, tmp_path):
+    target = tmp_path / "private.json"
+    target.write_text('{"projection": {}}')
+    path = tmp_path / "embedding.json"
+    path.symlink_to(target)
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(path))
+    assert openwebui._embedding_ledger_read() == ("invalid", None)
+    with pytest.raises(openwebui.OpenWebUIError, match="unsafe"):
+        openwebui._write_embedding_state({"projection": {}})
+    assert target.read_text() == '{"projection": {}}'
+
+
+def test_embedding_ledger_unavailable_is_not_absent(monkeypatch, tmp_path):
+    path = tmp_path / "embedding.json"
+    path.mkdir()
+    monkeypatch.setattr(openwebui, "_embedding_state_path", lambda: str(path))
+    assert openwebui._embedding_ledger_read() == ("unavailable", None)
 
 
 def test_gateway_audio_collision_renders_served_namespaced_alias(monkeypatch, tmp_path):
