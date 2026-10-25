@@ -928,7 +928,8 @@
         "--category-model",
         "--role-model",
         "--min-reasoning-embedding",
-        "--ollama-base-url"
+        "--ollama-base-url",
+        "--profiles-only"
       ],
       "positional_operand": null,
       "child_scripts": []

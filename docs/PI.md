@@ -154,6 +154,20 @@ Tier switching also passes the selected local profile family through to Pi.
 
 ## Managed preference defaults
 
+Generate a detached global saved profile with
+`configure-pi.py --preset anthropic --profiles-only`. This offline mode reads
+the shared registry and writes only an unselected profile and its private
+provenance record. It does not inspect or change active settings, models, auth
+or packages. `--dry-run` writes nothing. Local presets with unresolved model
+placeholders are refused rather than emitted as incomplete assignments.
+
+Manual collisions and changed generated profiles are preserved; updates require
+a future coordinated write boundary. Select a reviewed profile explicitly with
+`/subagents-load-profile <name>` and inspect `/subagents-models`. The installed
+loader replaces agent overrides, so preserve custom assignments before manual
+selection. Project settings may shadow the global selection. This mode does
+not provide automatic loading or qualify strict-free execution.
+
 `configure-pi.py` codifies defaults for these `~/.pi/agent/settings.json` keys:
 
 | Key | Codified default |
