@@ -180,6 +180,21 @@ generator never deletes, moves or adopts the legacy file or any names it lists.
 Dry-run performs the same ownership and collision checks and reports this
 refusal without writing.
 
+The canonical digest manifest is
+`~/.local/share/dotfiles/jetbrains-profiles-manifest.json`; the legacy manifest
+location is `~/.junie/models/.dotfiles-generated-profiles.json`. If generation
+is interrupted after replacing a profile but before publishing the updated
+canonical manifest, the next run refuses that profile because its bytes no
+longer match the recorded ownership digest. This is intentional manual recovery,
+not automatic adoption or a journalled transaction. Privately back up the
+affected profile and both manifest locations before investigating. Compare the
+profile's SHA-256 with the exact expected digest in the canonical manifest and
+audit its contents and provenance; stop if either manifest, the expected hash
+or the ownership history is uncertain. Only the owner should repair the audited
+generated artifact/ledger, or test regeneration in a disposable directory before
+deliberately repairing the ledger. Never adopt a profile automatically, and
+never delete or rewrite unrelated manual profiles during recovery.
+
 `configure-jetbrains-ai.py` accepts `--local-fallback-preset`, repeated
 `--role-model`, repeated `--category-model`, and
 `--min-reasoning-embedding`. Use `--skip models` or `--skip dirs` to omit an

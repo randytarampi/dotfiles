@@ -634,7 +634,7 @@ def cleanup_profiles(
 ) -> None:
     stale = set(previous) - generated
     for name in sorted(stale):
-        filename = name if name.endswith(".json") else f"{name}.json"
+        filename = f"{name}.json"
         if not valid_profile_name(filename[:-5]):
             continue
         path = target_dir / filename
