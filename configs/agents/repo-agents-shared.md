@@ -45,8 +45,8 @@ Do not erase earlier contributors when handing work to another model or agent.
   when the session reliably identifies its actual model. For ChatGPT use
   `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified
   session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base
-  identity of `Co-authored-by: opencode <noreply@opencode.ai>` with the model
-  derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <noreply@opencode.ai>`).
+  identity of `Co-authored-by: opencode <opencode-agent[bot]@users.noreply.github.com>` with the model
+  derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <opencode-agent[bot]@users.noreply.github.com>`).
   Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
   runtime model in parentheses only when the session actually reports it
   (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`).
@@ -60,7 +60,7 @@ Do not erase earlier contributors when handing work to another model or agent.
 - **Reviewed-by trailers:** when a PR or code review is attributed to an agent,
   use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents
   derive their model at time of review; if unavailable, use the base identity
-  `Reviewed-by: opencode <noreply@opencode.ai>`. For example,
+  `Reviewed-by: opencode <opencode-agent[bot]@users.noreply.github.com>`. For example,
   `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`.
   When an agent session hands off to another agent, both should be acknowledged
   if they each contributed material review input.
