@@ -447,11 +447,50 @@ def merge_configs_to_file(fmt, mcp_path, output):
         with open(mcp_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        content = re.sub(
-            r"\n*\[mcp_servers\.[^\]]+\].*?(?=\n\[|$)", "", content, flags=re.DOTALL
-        )
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+
+        # This line-oriented replacement deliberately rejects multiline TOML
+        # strings: their contents can resemble table headers.
+        if any(
+            '"""' in line or "'''" in line
+            for line in content.splitlines()
+            if not line.lstrip().startswith("#")
+        ):
+            raise ValueError(
+                "refusing TOML MCP merge with unsupported multiline strings"
+            )
+        existing_data = tomllib.loads(content)
+        generated_data = tomllib.loads(output)
+        if set(generated_data) != {"mcp_servers"}:
+            raise ValueError("generated TOML must contain only MCP servers")
+
+        # Remove only MCP table headers and their payloads. Comments between
+        # tables belong to the surrounding document and must remain untouched.
+        lines = content.splitlines(keepends=True)
+        retained = []
+        removing_mcp = False
+        for line in lines:
+            header = re.match(r"^\s*\[([^]]+)\]\s*(?:#.*)?(?:\r?\n)?$", line)
+            if header:
+                table = header.group(1).strip()
+                if '"' in table or "'" in table:
+                    if table.startswith("mcp_servers."):
+                        raise ValueError("refusing quoted MCP table names")
+                removing_mcp = table.startswith("mcp_servers.")
+            if not removing_mcp or line.lstrip().startswith("#"):
+                retained.append(line)
+        content = "".join(retained)
+        updated = content.rstrip() + "\n\n" + output.strip() + "\n"
+        updated_data = tomllib.loads(updated)
+        expected = dict(existing_data)
+        expected["mcp_servers"] = generated_data["mcp_servers"]
+        if updated_data != expected:
+            raise ValueError("refusing TOML MCP merge that changes unrelated settings")
         with open(mcp_path, "w", encoding="utf-8") as f:
-            f.write(content.rstrip() + "\n\n" + output.strip() + "\n")
+            f.write(updated)
         logger.info(f"Updated TOML mcp servers in: {mcp_path}")
     else:
         with open(mcp_path, "w", encoding="utf-8") as f:

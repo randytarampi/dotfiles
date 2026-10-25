@@ -1,7 +1,14 @@
 import importlib.util
 import json
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).parents[2]
 
@@ -191,3 +198,134 @@ def test_registry_uses_adapter_global_and_native_project_paths():
     pi = registry["tools"]["pi"]
     assert pi["mcp_path"] == "~/.pi/agent/mcp-adapter.json"
     assert pi["project_mcp_path"] == ".pi/mcp.json"
+
+
+def test_toml_mcp_merge_preserves_unowned_comments_and_tables(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "# before MCP\n"
+        "[mcp_servers.old]\ncommand = 'old'\n"
+        "# BEGIN DOTFILES MANAGED PROVIDERS\n"
+        "[model_providers.meridian]\nname = 'Meridian'\n"
+        "# END DOTFILES MANAGED PROVIDERS\n",
+        encoding="utf-8",
+    )
+    generated = """[mcp_servers.alpha]
+command = "alpha"
+
+[mcp_servers.alpha.env]
+TOKEN = "test"
+
+[mcp_servers.beta]
+command = "beta"
+"""
+
+    module.merge_configs_to_file("toml-mcpServers", path, generated)
+    once = path.read_text(encoding="utf-8")
+    module.merge_configs_to_file("toml-mcpServers", path, generated)
+    twice = path.read_text(encoding="utf-8")
+
+    assert twice == once
+    assert "# before MCP" in twice
+    assert (
+        "# BEGIN DOTFILES MANAGED PROVIDERS\n[model_providers.meridian]\nname = 'Meridian'\n# END DOTFILES MANAGED PROVIDERS"
+        in twice
+    )
+    parsed = tomllib.loads(twice)
+    assert parsed["model_providers"]["meridian"]["name"] == "Meridian"
+    assert parsed["mcp_servers"] == {
+        "alpha": {"command": "alpha", "env": {"TOKEN": "test"}},
+        "beta": {"command": "beta"},
+    }
+
+
+def test_toml_mcp_merge_handles_indented_headers_and_rejects_multiline_strings(
+    tmp_path,
+):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '  [mcp_servers.old]\ncommand = "old"\n'
+        '[model_providers.user]\nname = "keep"\n',
+        encoding="utf-8",
+    )
+    module.merge_configs_to_file(
+        "toml-mcpServers", path, '[mcp_servers.new]\ncommand = "new"\n'
+    )
+    assert tomllib.loads(path.read_text())["mcp_servers"] == {"new": {"command": "new"}}
+    assert tomllib.loads(path.read_text())["model_providers"]["user"]["name"] == "keep"
+
+    original = '[model_providers.user]\nname = """\n[mcp_servers.fake]\n"""\n'
+    path.write_text(original, encoding="utf-8")
+    with pytest.raises(ValueError, match="multiline strings"):
+        module.merge_configs_to_file(
+            "toml-mcpServers", path, '[mcp_servers.new]\ncommand = "new"\n'
+        )
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_toml_mcp_merge_then_codex_owned_block_reconcile_is_idempotent(
+    tmp_path, monkeypatch
+):
+    module = load_script()
+    codex_spec = importlib.util.spec_from_file_location(
+        "configure_codex_mcp_test", ROOT / "configure-codex.py"
+    )
+    assert codex_spec and codex_spec.loader
+    codex = importlib.util.module_from_spec(codex_spec)
+    codex_spec.loader.exec_module(codex)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("DOTFILES_RUN_CODEX_SETUP", raising=False)
+    monkeypatch.delenv("DOTFILES_USE_LITELLM_PROXY", raising=False)
+    path = tmp_path / "config.toml"
+    original = (
+        "# BEGIN DOTFILES MANAGED PROVIDERS\n"
+        "[model_providers.meridian]\nname = 'Meridian'\n"
+        "# END DOTFILES MANAGED PROVIDERS\n"
+        "\n[model_providers.user]\nname = 'User'\n"
+    )
+    path.write_text(original, encoding="utf-8")
+    module.merge_configs_to_file(
+        "toml-mcpServers", path, '[mcp_servers.alpha]\ncommand = "alpha"\n'
+    )
+    merged = path.read_text(encoding="utf-8")
+    stripped = codex.strip_owned_block(
+        merged,
+        "# BEGIN DOTFILES MANAGED PROVIDERS",
+        "# END DOTFILES MANAGED PROVIDERS",
+        "model_providers",
+    )
+    assert (
+        codex.strip_owned_block(
+            stripped,
+            "# BEGIN DOTFILES MANAGED PROVIDERS",
+            "# END DOTFILES MANAGED PROVIDERS",
+            "model_providers",
+        )
+        == stripped
+    )
+    parsed = tomllib.loads(stripped)
+    assert parsed["model_providers"]["user"]["name"] == "User"
+    assert parsed["mcp_servers"]["alpha"]["command"] == "alpha"
+    assert "# BEGIN DOTFILES MANAGED PROVIDERS" not in stripped
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        '[mcp_servers.old]\ncommand = "old"\n[[user.items]]\nname = "keep"\n',
+        '[mcp_servers."quoted-name"]\ncommand = "old"\n',
+    ],
+)
+def test_unsupported_toml_merge_layout_refuses_without_writing(tmp_path, original):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    path.write_text(original, encoding="utf-8")
+    before = path.stat()
+    with pytest.raises(ValueError):
+        module.merge_configs_to_file(
+            "toml-mcpServers", path, '[mcp_servers.new]\ncommand = "new"\n'
+        )
+    assert path.read_text(encoding="utf-8") == original
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
