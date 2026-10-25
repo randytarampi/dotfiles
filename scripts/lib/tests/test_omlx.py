@@ -1797,6 +1797,8 @@ def test_jetbrains_omlx_provider_uses_openai_completion_endpoint():
 
 
 def test_jetbrains_wrapper_preserves_mixed_provider_metadata(monkeypatch, tmp_path):
+    home = tmp_path / "lock-home"
+    monkeypatch.setenv("HOME", str(home))
     wrapper = _load_script("configure_jetbrains_ai", "configure-jetbrains-ai.py")
     generator = _load_script(
         "generate_jetbrains_profiles", "generate-jetbrains-profiles.py"
@@ -1804,8 +1806,6 @@ def test_jetbrains_wrapper_preserves_mixed_provider_metadata(monkeypatch, tmp_pa
     # Generation-lock acceptance is checkout-dependent: seed a temp HOME lock
     # whose source_root matches THIS checkout, mirroring the established
     # isolated-generation-lock pattern used by the configure-opencode tests.
-    home = tmp_path / "lock-home"
-    monkeypatch.setenv("HOME", str(home))
     lock = home / ".cache/dotfiles/generation.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
     lock.write_text(f"source_root={Path(wrapper.SCRIPT_DIR).resolve().parent}\n")
