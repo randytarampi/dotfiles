@@ -280,10 +280,15 @@ At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass f
 ## Catalogue scope
 
 By default the generator enumerates live catalogues in a **free scope**:
-only curated selections (allowlists, tier refs) plus OpenRouter ids that are
-genuinely free (`:free`) are emitted. Set `DOTFILES_LITELLM_CATALOGUE_SCOPE=full`
-in `~/.env` to enumerate whole live catalogues again. Any other value is a
-**hard configuration error** at generation time.
+curated selections plus routes classified free by a model name containing
+`free`, or Cohere/Poolside when served by that provider itself (directly or
+through this gateway). Third-party hosted Cohere/Poolside routes do not qualify.
+OpenRouter `:free` twins are included by default; set
+`DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS=0` to disable them.
+`DOTFILES_LITELLM_CATALOGUE_SCOPE=full` enumerates whole live catalogues. Any
+other scope value is a **hard configuration error** at generation time. Free
+classification is metadata and does not guarantee request-time no-charge
+admission or prevent paid fallbacks.
 
 ## OpenAI service lanes (Flex/Fast)
 

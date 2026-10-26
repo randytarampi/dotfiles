@@ -30,7 +30,7 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
 | **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
-| **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — trial/unknown entitlement, not a free route |
+| **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
 | **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
@@ -156,7 +156,7 @@ Fallback chains (one sibling cohort model per role, `configs/opencode/oh-my-open
 
 ### Poolside Tier (`poolside`)
 
-Direct Poolside-hosted Laguna 2.1 family (`openai`-compatible wire via LiteLLM, `api_base https://inference.poolside.ai/v1`). Entitlement and terms are **unverified** (live endpoint and catalogue confirmed; pricing not) — this tier is not a free-route candidate. Requires `POOLSIDE_API_KEY`:
+Direct Poolside-hosted Laguna 2.1 family (`openai`-compatible wire via LiteLLM, `api_base https://inference.poolside.ai/v1`). Poolside-served models classify as free per the server-of-record rule; that classification is not a request-time cost guarantee. Requires `POOLSIDE_API_KEY`:
 
 | Role | Model | Variant |
 |------|-------|---------|
@@ -164,7 +164,7 @@ Direct Poolside-hosted Laguna 2.1 family (`openai`-compatible wire via LiteLLM, 
 | librarian / explorer / designer / observer | `poolside/laguna-xs-2.1` | — |
 | oracle / fixer / council | `poolside/laguna-s-2.1` | (α XS, β S) |
 
-Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside.fallback` — XS roles → `poolside/laguna-s-2.1`, S roles, including orchestrator → `poolside/laguna-xs-2.1`). OpenRouter-hosted `:free` twins exist in the live catalogue but carry the same trial/unknown-entitlement caveat and stay excluded from free-tier composition.
+Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside.fallback` — XS roles → `poolside/laguna-s-2.1`, S roles, including orchestrator → `poolside/laguna-xs-2.1`). OpenRouter-hosted `:free` twins are included in free-tier catalogue composition by default; set `DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS=0` to exclude them. They are OpenRouter routes, not Poolside-server-of-record routes.
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 

@@ -7,8 +7,10 @@ The shared tier registry in `scripts/lib/tier_registry.py` is the single source 
 The tracked group's `sharedPresets` entry derives `free` from the shared
 orchestrator and librarian assignments before generating direct or gateway
 profiles. An explicit `--groups-json` snapshot without that metadata retains
-its own frozen assignments. This is assignment parity, not request-time
-zero-cost qualification; see [the acceptance ledger](POST72-ACCEPTANCE.md).
+its own frozen assignments. Free classification follows model-name markers or
+Cohere/Poolside when served directly or through this gateway; it is assignment
+metadata, not request-time zero-cost qualification. Third-party hosting does
+not inherit provider free status; see [the acceptance ledger](POST72-ACCEPTANCE.md).
 Compatibility names `openai-gpt-6-luna`, `openai-gpt-6.1-sol` and the four
 `meridian-*` names generate selectable profiles equivalent to their renamed
 `openai-*` and `anthropic-*` groups, including derived gateway twins. Retain
