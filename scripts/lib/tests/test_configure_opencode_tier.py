@@ -94,6 +94,10 @@ def test_null_council_diversity_entry_is_ignored(tmp_path):
 
 
 def test_jetbrains_dry_run_materializes_profile_tiers(tmp_path, monkeypatch, caplog):
+    # Isolate HOME: the canonical jetbrains-profiles manifest lives under
+    # Path.home(); a real machine ledger records the real target directory,
+    # refusing this test's tmp target ("target directory mismatch").
+    monkeypatch.setenv("HOME", str(tmp_path))
     groups = tmp_path / "groups.json"
     groups.write_text(
         json.dumps(
