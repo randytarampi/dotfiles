@@ -157,6 +157,7 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "0")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     calls = []
 

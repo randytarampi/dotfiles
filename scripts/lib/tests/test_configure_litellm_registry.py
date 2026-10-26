@@ -32,6 +32,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_PI_SETUP",
         "DOTFILES_RUN_OPENWEBUI_SETUP",
         "DOTFILES_RUN_JUNIE_CLI_SETUP",
+        "DOTFILES_RUN_CODEX_SETUP",
         "DOTFILES_USE_LITELLM_PROXY",
         "LITELLM_CLIENT_KEY_FILE",
     ):
