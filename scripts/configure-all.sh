@@ -501,7 +501,26 @@ if ! step_skipped codegraph && [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]
       info "Skipping CodeGraph configuration (dry-run mode)"
     else
       info "Configuring CodeGraph MCP..."
-      run_step "CodeGraph configuration" codegraph install -y --target auto --location global
+      # CodeGraph 1.6.2 rewrites Codex's config.toml and removes adjacent
+      # ownership comments. Codex MCP and guidance are managed separately here.
+      _codex_home="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-codegraph-codex.XXXXXX")"
+      trap 'rm -rf -- "$_codex_home"' EXIT
+      _real_codex_home="${CODEX_HOME:-$HOME/.codex}"
+      if [[ -f "$_real_codex_home/AGENTS.md" ]]; then
+        cp "$_real_codex_home/AGENTS.md" "$_codex_home/AGENTS.md"
+      fi
+      if CODEX_HOME="$_codex_home" codegraph install -y --target auto --location global; then
+        ok "CodeGraph configuration"
+        if [[ -f "$_codex_home/AGENTS.md" ]]; then
+          mkdir -p "$_real_codex_home"
+          cp "$_codex_home/AGENTS.md" "$_real_codex_home/AGENTS.md"
+        fi
+      else
+        warn "CodeGraph configuration failed"
+        FAILURES=$((FAILURES + 1))
+      fi
+      rm -rf -- "$_codex_home"
+      trap - EXIT
       # Normalize the nested 'mcp.servers' wrapper codegraph CLI 1.6.2 writes
       # (opencode v1 expects flat top-level 'mcp'; scripts/lib/normalize_mcp_json.py)
       python3 "$SCRIPT_DIR/lib/normalize_mcp_json.py" ||
