@@ -89,7 +89,10 @@ CONFIGURE_MCPS="${SOURCE_DIR}/scripts/configure-mcps.py"
 MCP_REGISTRY="${SOURCE_DIR}/configs/mcp/global-mcps.json"
 if [[ -x "$CONFIGURE_MCPS" && -f "$MCP_REGISTRY" ]]; then
   info "Running configure-mcps for all AI tools..."
-  "$CONFIGURE_MCPS" --mode global --no-backup || warn "configure-mcps exited with errors"
+  if ! "$CONFIGURE_MCPS" --mode global --no-backup; then
+    die "configure-mcps failed; MCP configuration is incomplete"
+    exit 1
+  fi
 else
   warn "configure-mcps.py or global-mcps.json not found, skipping AI tool MCP setup"
 fi
