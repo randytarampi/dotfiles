@@ -53,7 +53,12 @@ def test_resolver_matrix(tmp_path, monkeypatch, caplog, env_value, file_value, s
 
 
 @pytest.fixture
-def gateway(monkeypatch):
+def gateway(monkeypatch, tmp_path):
+    # HOME must be a deterministic per-test scratch home, NOT a repo-relative
+    # ancestor: with the repo checked out directly under the user home (e.g.
+    # ~/Development/dotfiles), ROOT.parents[2] IS the real home, the real
+    # canonical client key exists, and env-only test keys conflict — the
+    # fixture silently depended on nested-worktree checkout depth.
     class Handler(BaseHTTPRequestHandler):
         status = 200
 
@@ -74,7 +79,7 @@ def gateway(monkeypatch):
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     monkeypatch.delenv("LITELLM_CLIENT_KEY_FILE", raising=False)
-    monkeypatch.setenv("HOME", str(ROOT.parents[2]))
+    monkeypatch.setenv("HOME", str(tmp_path))
     voice = load_script()
     monkeypatch.setattr(voice, "_configured_litellm_port", lambda: server.server_port)
     yield voice, server, Handler
