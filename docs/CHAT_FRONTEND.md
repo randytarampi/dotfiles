@@ -629,7 +629,7 @@ tests). As elsewhere, persistent database settings are authoritative and are
 reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately
 modelled in this reconciler.
 
-### Open WebUI retrieval embeddings (0.12.0; data migration)
+### Open WebUI retrieval embeddings (H1a identity and safety)
 
 The reconciler owns only `RAG_EMBEDDING_ENGINE` and
 `RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama
@@ -641,13 +641,25 @@ their legacy validation; this is not a representation-aware migration executor.
 The separate mode-600 state is
 `~/.local/share/openwebui/data/managed-embedding.json`.
 
+The configured route identity is represented by engine, model ID and output
+dimensions. Read-only route probes can report observed vector width and compare
+it with the configured width; unavailable, unauthenticated or mismatched
+observations remain UNKNOWN and do not select an alternate route. This does not
+establish model revision, pooling, template/task prefix, normalization or
+provenance unless separately observed; those identity fields remain UNKNOWN.
+Any readback against the owner-approved host is owner-gated. No live host
+readback, embedding/index inspection or retrieval run is implied by repository
+tests or this documentation.
+
 Embedding reconciliation fails closed when this ledger is absent or unreadable:
 it does not infer an empty vector store or adopt the first-run default. Existing
 valid legacy projections and pending acknowledgement records remain readable.
 Acknowledgements still undergo the transition-specific checks documented below;
 merely having a ledger does not authorize a change. Gateway, native and gate-off
 paths share this safety check. No automated inventory, reset or reindex is
-performed, and dynamic representation identity remains unimplemented.
+performed. Positive index inventory, full representation identity and
+representation/migration work (H1b/H2) are deferred by owner decision; no
+dimension or route match alone establishes representation parity.
 
 Changing from the built-in MiniLM model (384 dimensions) to
 `embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the

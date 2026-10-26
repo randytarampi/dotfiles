@@ -158,6 +158,17 @@ class RouteProbeTests(unittest.TestCase):
         self.assertEqual(result.dimension, 2)
         self.assertIn(b"deterministic seed", request.data)
 
+    def test_embedding_expected_dimension_mismatch_is_unknown(self):
+        result, request = self.call(
+            FakeResponse(body=b'{"data":[{"embedding":[0.1,0.2]}]}'),
+            route_probes.probe_embedding_vector,
+            "KEY_REF",
+            expected_dimension=3,
+        )
+        self.assertEqual(result.outcome, "unknown")
+        self.assertEqual(result.dimension, 2)
+        self.assertIn(b"deterministic seed", request.data)
+
     def test_auth_errors_unknown_and_not_shape_failure(self):
         for code, auth in ((401, "unauthorized"), (403, "forbidden")):
             result, _ = self.call(
