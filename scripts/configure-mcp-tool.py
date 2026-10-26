@@ -11,7 +11,7 @@ import os
 import re
 import fnmatch
 import tempfile
-import subprocess
+import subprocess  # nosec B404 - fixed argv; no shell or generated configuration commands.
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
@@ -38,7 +38,8 @@ def _ensure_toml_runtime():
 
     root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     try:
-        runtime = subprocess.run(
+        # Poetry is supplied by the operator's trusted PATH; all lookup args are fixed.
+        runtime = subprocess.run(  # nosec B603,B607
             ["poetry", "--directory", root, "env", "info", "--executable"],
             cwd=root,
             capture_output=True,
@@ -55,7 +56,8 @@ def _ensure_toml_runtime():
             "TOML MCP configuration requires an available locked Poetry runtime."
         )
     try:
-        subprocess.run(
+        # Execute only the interpreter returned by the local Poetry project, with fixed code.
+        subprocess.run(  # nosec B603
             [
                 runtime,
                 "-c",
@@ -73,7 +75,10 @@ def _ensure_toml_runtime():
         raise RuntimeError(
             "Selected Poetry interpreter has no usable TOML parser; reinstall locked dependencies."
         )
-    os.execv(runtime, [runtime, os.path.realpath(__file__), *sys.argv[1:]])
+    # Forward CLI arguments as argv to this same script, never through a shell.
+    os.execv(
+        runtime, [runtime, os.path.realpath(__file__), *sys.argv[1:]]
+    )  # nosec B606
 
 
 def _resolved_headers(d):
