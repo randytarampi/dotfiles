@@ -298,7 +298,7 @@ OpenAI + Anthropic preset with no Ollama Cloud providers:
 | observer | `anthropic/claude-haiku-5-5` | low |
 | council | `anthropic/claude-opus-5-5` | xhigh |
 
-Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.5`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
+Council agent is defined inside each preset's agent list; alpha `claude-fable-5-1`, beta `gpt-6.1-sol`, gamma `gpt-5.6-sol`. Council synthesizer uses `claude-opus-5-5` with xhigh variant. Fallback chains mix OpenAI + Anthropic models per role — local Ollama models are appended automatically unless `--no-local-fallbacks` is passed.
 
 ### Plus Tier (`plus`)
 
@@ -312,7 +312,7 @@ OpenAI-only preset with gpt-6.1-sol as orchestrator, oracle and council anchor:
 | designer | `openai/gpt-6-luna` | medium |
 | fixer | `openai/gpt-6-luna` | medium |
 | observer | `openai/gpt-6-luna` | low |
-| council | `openai/gpt-6.1-sol` | high (α sol, β gpt-5.5, γ luna) |
+| council | `openai/gpt-6.1-sol` | high (α sol, β gpt-5.6-sol, γ luna) |
 
 The orchestrator and oracle fall back to `openai/gpt-6-astra`; the remaining fallback chains are defined per role in `oh-my-opencode-slim.json`.
 
@@ -536,7 +536,7 @@ The gpt-6 generation is the current OpenAI model line. This repo uses `gpt-6.1-s
 | `gpt-5.6-luna` | Legacy lightweight | Retained only where explicitly configured as a degraded fallback; current librarian, explorer, and fixer primaries use `gpt-6-luna`. |
 | `gpt-5.6-terra` | Retired from OpenAI | Absent from OpenAI's live catalog (2026-10-01); Zen still serves it. OpenAI references have migrated to gpt-6.1-sol or gpt-6-luna by role. |
 
-**Fallback chain**: `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; `pro-plus` orchestrator falls back to `gpt-6.1-sol`, while `pro-plus-anthropic` uses `gpt-6.1-sol` before its retained Ollama Cloud fallback. The `omo-slim-openai` and `omo-slim-thirty-dollars` orchestrators fall back to verified Zen `big-pickle`; `omo-slim-opencode-zen-free` uses OpenAI `gpt-6.1-sol`. Legacy gpt-5.5, gpt-5.6-sol/luna references remain where explicitly configured. The remaining omo-slim-* observer and fixer fallbacks were retargeted off gpt-5.4-mini/gpt-5.3-codex on 2026-10-08 (gateway-unserved ids).
+**Fallback chain**: `plus` orchestrator/oracle fall back to `gpt-6-astra` (flagship) first; `pro-plus` orchestrator falls back to `gpt-6.1-sol`, while `pro-plus-anthropic` uses `gpt-6.1-sol` before its retained Ollama Cloud fallback. The `omo-slim-openai` and `omo-slim-thirty-dollars` orchestrators fall back to verified Zen `big-pickle`; `omo-slim-opencode-zen-free` uses OpenAI `gpt-6.1-sol`. Legacy gpt-5.5 references were curated out on 2026-10-26 (ChatGPT OAuth verification returns DEFERRED-entitlement; consumer retirement announced 2026-10-14); gpt-5.6-sol/luna references remain where explicitly configured. The remaining omo-slim-* observer and fixer fallbacks were retargeted off gpt-5.4-mini/gpt-5.3-codex on 2026-10-08 (gateway-unserved ids).
 
 gpt-5.4 and gpt-5.4-mini were retired from Codex with ChatGPT sign-in on 2026-08-31 (OpenAI-directed replacement: gpt-5.4→gpt-5.6-terra, gpt-5.4-mini→gpt-5.6-luna). OpenAI API-key authentication is unaffected. As of 2026-10-01, gpt-5.6-terra is absent from OpenAI's live catalog and has been retired there; OpenCode Zen continues to serve it. Its OpenAI-side assignments have moved to gpt-6.1-sol/luna. The gpt-5.6-sol and gpt-5.6-luna entries remain legacy references.
 
@@ -644,7 +644,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
 | `kimi-k2.7-code` | standard | none | Active pro-tier fixer and fallback in the other cloud presets; mandatory thinking (cannot disable) |
-| `gpt-5.5` | standard | `high` | Legacy flagship; now a degraded fallback when gpt-5.6-sol is unavailable |
+| `gpt-5.5` | retired | — | Flagship retired from the consumer API 2026-10-14; ChatGPT OAuth verification returns DEFERRED (entitlement). Preset β/γ and plus fixer/designer references retargeted to `gpt-5.6-sol` on 2026-10-26 |
 | `gpt-6-astra` | standard | — | Flagship degraded-fallback head for plus orchestrator/oracle chains; not a primary anchor; no model-specific variant policy (inherits each role's configured variant) |
 | `deepseek-v4.1-flash` | standard | — | Active Ollama Cloud council/fallback model |
 | `glm-5.1` | retired | — | Historical catalogue entry; removed from active registry |
