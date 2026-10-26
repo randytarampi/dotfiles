@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
 LITELLM_SETUP_GATE = "DOTFILES_RUN_LITELLM_SETUP=1"
 OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
+OPENROUTER_FREE_TWINS_ENV = "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
 
 # Cloud providers whose live /v1/models catalogue the generator enumerates
 # into the model list. Non-enumerable providers (openai keyless, opencode
@@ -601,6 +602,16 @@ CLIENT_REGISTRY = [
         ],
     ),
 ]
+
+# Free classification is route metadata, not consumer qualification. A named
+# model containing "free" is free at any host; Cohere and Poolside are free
+# only through their own server of record (directly or this LiteLLM gateway).
+for _row in CLIENT_REGISTRY:
+    _row["free_route_policy"] = {
+        "model_name_contains_free": True,
+        "provider_server_of_record_only": ["cohere", "poolside"],
+        "third_party_hosting_excluded": True,
+    }
 
 
 class LiveCatalogueError(Exception):
@@ -1227,8 +1238,8 @@ def compute_model_list(environ=None, previous_entries=None):
     modality_names = {
         item["model_name"] for item in modality_entries if item["_alias_kind"] == "bare"
     }
-    # Catalogue scope gate: free (default) emits only curated selections plus
-    # OpenRouter's genuinely-free tier; full restores the whole enumerated
+    # Catalogue scope gate: free (default) emits only routes classified free
+    # by provider and server of record, plus curated selections; full restores the whole enumerated
     # catalogue. Unknown values are a hard configuration error.
     scope = str(environ.get("DOTFILES_LITELLM_CATALOGUE_SCOPE", "free")).strip().lower()
     if scope not in {"free", "full"}:
@@ -1528,7 +1539,9 @@ def compute_model_list(environ=None, previous_entries=None):
                     if held is None or len(item) > len(held):
                         raw_upstream_by_key[key] = item
                 curated = {raw_upstream_by_key.get(item, item) for item in curated}
-                if provider == "openrouter":
+                if provider == "openrouter" and str(
+                    environ.get(OPENROUTER_FREE_TWINS_ENV, "1")
+                ).strip().lower() in {"1", "true", "yes", "on"}:
                     curated |= {
                         item for item in raw_confirmed if item.endswith(":free")
                     }
@@ -1537,15 +1550,9 @@ def compute_model_list(environ=None, previous_entries=None):
                 confirmed_models = curated
         else:
             confirmed_models = confirmed
-        if provider == "poolside":
-            # Single-path policy: poolside fresh emission belongs to the
-            # standalone block below (the main loop's poolside branch was
-            # removed so cross-namespace catalogue ids can never leak into
-            # poolside aliases). The loop above still applies outage
-            # retention for poolside, and the LIVE_CATALOGUE_PROVIDERS
-            # requested-absent retention below keeps registry-requested
-            # families stable across catalogue changes.
-            confirmed_models = set()
+        if provider == "poolside" and scope == "free":
+            # Poolside's own server of record classifies these routes as free.
+            confirmed_models = confirmed
         if not confirmed_models and provider != "poolside":
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
@@ -1706,7 +1713,7 @@ def compute_model_list(environ=None, previous_entries=None):
                 for model_id in poolside_models
                 if model_id.startswith(_POOLSIDE_ALIAS_PREFIX)
             }
-            selected = confirmed & poolside_requested
+            selected = confirmed & poolside_requested if scope == "free" else set()
             if scope == "full":
                 selected = confirmed
             # Requested-absent retention mirrors the provider-loop contract:

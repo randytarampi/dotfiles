@@ -924,6 +924,42 @@ def test_free_scope_prefers_free_spelling_for_curated_openrouter(monkeypatch):
     assert aliases == {"openrouter/dupe-model:free"}
 
 
+def test_free_scope_poolside_direct_model_has_no_paid_fallback_entries(monkeypatch):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "_registry_model_refs",
+        lambda: {"poolside/laguna-s-2.1", "poolside/laguna-xs-2.1"},
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *args: ["poolside/laguna-s-2.1", "poolside/laguna-xs-2.1"],
+    )
+    entries = litellm_config.compute_model_list({"POOLSIDE_API_KEY": "test-key"})
+    names = {item["model_name"] for item in entries}
+    assert names == {"poolside/laguna-s-2.1", "poolside/laguna-xs-2.1"}
+
+
+def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
+    monkeypatch.setattr(litellm_config, "provider_models", lambda _provider: [])
+    monkeypatch.setattr(
+        litellm_config, "_live_catalogue", lambda *_args: ["vendor/twin:free"]
+    )
+    for toggle, expected in (("1", True), ("0", False)):
+        entries = litellm_config.compute_model_list(
+            {
+                "OPENROUTER_API_KEY": "test-key",
+                "DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS": toggle,
+            }
+        )
+        assert (
+            "openrouter/vendor/twin:free" in {e["model_name"] for e in entries}
+        ) is expected
+
+
 def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["paid-model"])
     entries = litellm_config.compute_model_list({"HF_TOKEN": "test-" + "key"})

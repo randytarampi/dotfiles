@@ -15,6 +15,7 @@ FIELDS = {
     "eligibility",
     "classification_status",
     "evidence",
+    "free_route_policy",
 }
 
 
@@ -29,6 +30,11 @@ def test_registry_rows_are_complete():
             "installed",
             "user_enabled",
             "verified_usable_transport",
+        }
+        assert row["free_route_policy"] == {
+            "model_name_contains_free": True,
+            "provider_server_of_record_only": ["cohere", "poolside"],
+            "third_party_hosting_excluded": True,
         }
 
 
