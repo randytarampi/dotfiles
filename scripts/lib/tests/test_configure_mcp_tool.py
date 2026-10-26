@@ -1,5 +1,9 @@
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
+import sys
 
 try:
     import tomllib
@@ -21,6 +25,146 @@ def load_script():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_toml_runtime_check_is_scoped_to_toml_mcp_tool(monkeypatch):
+    module = load_script()
+    monkeypatch.setattr(
+        module.sys, "argv", ["configure-mcp-tool.py", "--dry-run", "opencode"]
+    )
+    monkeypatch.setattr(module, "resolve_env_files", lambda *_: [])
+    monkeypatch.setattr(module, "resolve_defs_list", lambda *_: [])
+    monkeypatch.setattr(
+        module,
+        "_ensure_toml_runtime",
+        lambda: pytest.fail("JSON must not select runtime"),
+    )
+    module.main()
+
+
+def test_toml_merge_subcommand_requires_locked_runtime_without_tomli(monkeypatch):
+    module = load_script()
+    monkeypatch.setattr(
+        module.sys,
+        "argv",
+        ["configure-mcp-tool.py", "merge-configs", "--format", "toml-mcpServers"],
+    )
+    monkeypatch.setitem(module.sys.modules, "tomllib", None)
+    monkeypatch.setitem(module.sys.modules, "tomli", None)
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError("poetry")),
+    )
+    with pytest.raises(RuntimeError, match="Poetry and its locked runtime"):
+        module._ensure_toml_runtime()
+
+
+def test_python310_without_global_parser_hands_off_before_toml_writes(tmp_path):
+    python310 = shutil.which("python3.10")
+    if not python310:
+        pytest.skip("Python 3.10 required for isolated no-parser regression")
+    bare = tmp_path / "bare"
+    subprocess.run([python310, "-m", "venv", "--without-pip", str(bare)], check=True)
+    interpreter = bare / "bin/python"
+    missing = subprocess.run(
+        [str(interpreter), "-c", "import tomllib, tomli"], capture_output=True
+    )
+    assert missing.returncode != 0
+    assert (
+        subprocess.run(
+            [str(interpreter), "-c", "import tomli"], capture_output=True
+        ).returncode
+        != 0
+    )
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    poetry = tools / "poetry"
+    # Resolve only the environment lookup; the actual merger runs in the
+    # locked interpreter executing this test, not in a fake parser.
+    poetry.write_text('#!/bin/sh\nprintf "%s\\n" "$LOCKED_PYTHON"\n')
+    poetry.chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {
+        "HOME": str(home),
+        "PATH": f"{tools}:/usr/bin:/bin",
+        "LOCKED_PYTHON": sys.executable,
+    }
+    target = tmp_path / "config.toml"
+    original = (
+        "# BEGIN DOTFILES MANAGED PROVIDERS\n"
+        '[model_providers.fixture]\nname = "keep"\n'
+        "# END DOTFILES MANAGED PROVIDERS\n"
+    )
+    target.write_text(original)
+    command = [
+        str(interpreter),
+        str(ROOT / "configure-mcp-tool.py"),
+        "merge-configs",
+        "--format",
+        "toml-mcpServers",
+        "--mcp-path",
+        str(target),
+        "--output-content",
+        '[mcp_servers.fixture]\ncommand = "dummy"\n',
+    ]
+    snapshots = []
+    for _ in range(2):
+        result = subprocess.run(
+            command, env=env, cwd=tmp_path, capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stderr
+        snapshots.append(target.read_bytes())
+    assert snapshots[0] == snapshots[1]
+    assert original.strip() in target.read_text()
+
+    project = tmp_path / "project"
+    project.mkdir()
+    for launcher in ("configure-mcp-tool.py", "configure-mcps.py"):
+        args = [
+            str(interpreter),
+            str(ROOT / launcher),
+            "--mode",
+            "project",
+            "--project-dir",
+            str(project),
+            "--project-mcps",
+            "context7",
+        ]
+        args += ["--tools", "codex"] if launcher == "configure-mcps.py" else ["codex"]
+        for _ in range(2):
+            result = subprocess.run(
+                args, env=env, cwd=tmp_path, capture_output=True, text=True
+            )
+            assert result.returncode == 0, result.stderr
+        assert (project / ".codex/config.toml").is_file()
+
+
+def test_chezmoi_mcp_failure_never_reports_success(tmp_path):
+    template = (
+        ROOT.parent / ".chezmoiscripts/run_onchange_15-configure-mcp.sh.tmpl"
+    ).read_text()
+    start = template.index('if [[ -x "$CONFIGURE_MCPS"')
+    segment = template[start:]
+    fake = tmp_path / "configure-mcps.py"
+    fake.write_text("#!/bin/sh\nexit 37\n")
+    fake.chmod(0o755)
+    registry = tmp_path / "registry.json"
+    registry.write_text("{}")
+    script = (
+        "set -eu\ninfo() { :; }; warn() { :; }; "
+        'die() { exit 1; }; ok() { printf "SUCCESS\\n"; };\n'
+        'CONFIGURE_MCPS="$1"; MCP_REGISTRY="$2";\n' + segment
+    )
+    result = subprocess.run(
+        ["/bin/bash", "-c", script, "fixture", str(fake), str(registry)],
+        env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "SUCCESS" not in result.stdout
 
 
 def write_config(path, servers, **extra):

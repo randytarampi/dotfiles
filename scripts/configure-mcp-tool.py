@@ -11,6 +11,7 @@ import os
 import re
 import fnmatch
 import tempfile
+import subprocess
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR, "lib")
@@ -19,6 +20,60 @@ if LIB_DIR not in sys.path:
 
 import logger
 from env import load_env
+
+
+def _ensure_toml_runtime():
+    """Re-exec TOML work under the repository's locked Poetry interpreter."""
+    try:
+        import tomllib  # noqa: F401
+
+        return
+    except ImportError:
+        try:
+            import tomli  # noqa: F401
+
+            return
+        except ImportError:
+            pass
+
+    root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    try:
+        runtime = subprocess.run(
+            ["poetry", "--directory", root, "env", "info", "--executable"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(
+            "TOML MCP configuration requires Poetry and its locked runtime; run poetry install --only main --no-root in the dotfiles checkout."
+        ) from exc
+    if not runtime or not os.path.isfile(runtime):
+        raise RuntimeError(
+            "TOML MCP configuration requires an available locked Poetry runtime."
+        )
+    try:
+        subprocess.run(
+            [
+                runtime,
+                "-c",
+                "try:\n import tomllib\nexcept ImportError:\n import tomli",
+            ],
+            check=True,
+            timeout=10,
+            capture_output=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(
+            "Locked Poetry runtime is missing tomli; run poetry install."
+        ) from exc
+    if os.path.abspath(runtime) == os.path.abspath(sys.executable):
+        raise RuntimeError(
+            "Selected Poetry interpreter has no usable TOML parser; reinstall locked dependencies."
+        )
+    os.execv(runtime, [runtime, os.path.realpath(__file__), *sys.argv[1:]])
 
 
 def _resolved_headers(d):
@@ -677,6 +732,9 @@ def orchestrate_mcp_config(args):
 
     format_type = tool_config.get("format", "")
 
+    if format_type == "toml-mcpServers" and not args.dry_run:
+        _ensure_toml_runtime()
+
     if args.mode == "project":
         with open(registry_file, "r", encoding="utf-8") as f:
             reg = json.load(f)
@@ -806,6 +864,8 @@ def main():
         elif args.command == "format-configs":
             cmd_format_configs(args)
         elif args.command == "merge-configs":
+            if args.format == "toml-mcpServers":
+                _ensure_toml_runtime()
             cmd_merge_configs(args)
     else:
         parser = argparse.ArgumentParser(
@@ -861,4 +921,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as exc:
+        logger.critical("%s", exc)
+        sys.exit(1)
