@@ -293,6 +293,29 @@ def test_dotted_profile_name_cleanup_removes_only_digest_owned_file(
     assert "custom.json" not in ledger["profiles"]
 
 
+def test_compatibility_names_remain_selectable_after_generation(harness, monkeypatch):
+    _, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text(encoding="utf-8"))
+    config["compatibility"] = {"legacy-main": "openai-main"}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            }
+        },
+    )
+
+    PROFILES.main()
+
+    assert (target / "legacy-main.json").is_file()
+
+
 def test_crash_after_profile_overwrite_preserves_manual_files_and_refuses_retry(
     harness, monkeypatch
 ):
