@@ -45,7 +45,7 @@ def _ensure_toml_runtime():
             capture_output=True,
             text=True,
             check=True,
-            timeout=10,
+            timeout=10,  # nosec B603 - fixed Poetry argv, trusted operator PATH; no shell.
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(
