@@ -38,7 +38,10 @@ Adding future migrations:
 import argparse
 import os
 import re
+import shutil
+import stat
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
@@ -174,6 +177,19 @@ CADDY_V1_REMOVALS_DELETE = {
 
 # Assignment parser: matches KEY='VALUE' or # KEY='VALUE'
 ASSIGNMENT_RE = re.compile(r"^(\s*)(#?\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+UNSAFE_VALUE_RE = re.compile(r"\$\(|`|\$\{|<<|\(|\[|\]|\)")
+
+
+def unsafe_value_keys(lines):
+    """Return active assignment keys whose values are not literal-only."""
+    refused = []
+    for line in lines:
+        parsed = parse_env_line(line)
+        if parsed and not parsed[1].strip().startswith("#"):
+            key, value = parsed[2], parsed[3]
+            if UNSAFE_VALUE_RE.search(split_inline_comment(value)[0]):
+                refused.append(key)
+    return refused
 
 
 def parse_env_line(line):
@@ -505,6 +521,9 @@ def main():
     parser.add_argument(
         "--no-backup", action="store_true", help="Skip backup before writing"
     )
+    parser.add_argument(
+        "--apply", action="store_true", help="Apply the planned migration"
+    )
     args = parser.parse_args()
 
     env_path = Path(args.env).expanduser()
@@ -514,6 +533,11 @@ def main():
         return 2
 
     lines = read_env_lines(env_path)
+    refused = unsafe_value_keys(lines)
+    if refused:
+        for key in refused:
+            print(f"Refused: {key} has non-literal value syntax")
+        return 1
     new_lines, changes = migrate_env(lines, dry_run=True)
 
     if not changes:
@@ -525,17 +549,32 @@ def main():
     for change in changes:
         print(f"  • {change}")
 
-    if args.dry_run:
+    if not args.apply:
         print("\n(dry-run — no changes written)")
         return 0
 
     if not args.no_backup:
         backup_path = env_path.with_suffix(env_path.suffix + ".bak")
-        backup_path.write_text(env_path.read_text(encoding="utf-8"), encoding="utf-8")
+        shutil.copy2(env_path, backup_path)
+        backup_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
         print(f"Backup: {backup_path}")
 
-    with env_path.open("w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=env_path.parent,
+            prefix=f".{env_path.name}.",
+            delete=False,
+        ) as temporary:
+            temporary.writelines(new_lines)
+            temporary_path = Path(temporary.name)
+        temporary_path.chmod(stat.S_IMODE(env_path.stat().st_mode))
+        temporary_path.replace(env_path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     print(f"Written: {env_path}")
     print("\nNext steps:")
     print("  make reset && make deploy")

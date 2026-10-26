@@ -1,6 +1,9 @@
 import importlib.util
 import os
+import subprocess
 import sys
+import tempfile
+from pathlib import Path
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -24,6 +27,42 @@ project_spec.loader.exec_module(configure_project)
 
 
 class PresetMigrationTests(unittest.TestCase):
+    def test_substituted_value_is_refused_untouched_in_home_fixture(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI=$(printf secret-marker)\n"
+            env_path.write_bytes(original)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Refused: DOTFILES_RUN_PI", result.stdout)
+            self.assertNotIn("secret-marker", result.stdout + result.stderr)
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertFalse(env_path.with_suffix(".env.bak").exists())
+
+    def test_dry_run_redacts_values(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("DOTFILES_RUN_PI=secret-marker\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--dry-run"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertNotIn("secret-marker", result.stdout + result.stderr)
+            self.assertIn("DOTFILES_RUN_PI", result.stdout)
+            self.assertEqual(
+                env_path.read_text(encoding="utf-8"), "DOTFILES_RUN_PI=secret-marker\n"
+            )
+
     def test_normalizer_covers_aliases_and_current_values(self):
         expected = {
             "openai": "omo-slim-openai",
