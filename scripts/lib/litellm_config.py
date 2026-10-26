@@ -350,6 +350,7 @@ APP_KEYS = {
     "pi": "LITELLM_PI_KEY",
     "openwebui": "LITELLM_OPENWEBUI_KEY",
     "junie": "LITELLM_JUNIE_KEY",
+    "codex": "LITELLM_CODEX_KEY",
 }
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
@@ -446,16 +447,16 @@ CLIENT_REGISTRY = [
     ),
     _client_row(
         "codex",
-        "LITELLM_CODEX_KEY",
+        APP_KEYS["codex"],
         ["Codex CLI installed"],
-        ["Responses API"],
+        ["Responses API", "OpenAI-compatible"],
         "scripts/configure-codex.py managed block",
         ["DOTFILES_RUN_CODEX_SETUP=1", "DOTFILES_USE_LITELLM_PROXY=1"],
         "file-or-env",
         "~/.codex/config.toml [model_providers.litellm]",
-        "config-only",
-        "defer",
-        "D1a configuration only; defer credential provisioning and transport qualification",
+        "eligible",
+        "provision",
+        "eligible; not live-verified (dedicated key + routed task + deploy markers owner-gated)",
     ),
     _client_row(
         "claude",

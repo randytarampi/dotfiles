@@ -189,19 +189,24 @@ def test_pinned_pre_owned_meridian_fixture_requires_manual_review_without_writes
     assert '[profiles.custom]\nmodel = "kept"' in first.decode()
 
 
-def test_codex_registry_is_configuration_only_and_gates_match(monkeypatch):
+def test_codex_registry_is_provisionable_but_not_live_verified(monkeypatch):
     import litellm_config
 
     row = next(
         row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "codex"
     )
-    assert row["classification"] == "config-only"
-    assert row["credential_policy"] == "defer"
+    assert row["classification"] == "eligible"
+    assert row["classification_status"] == (
+        "eligible; not live-verified"
+        " (dedicated key + routed task + deploy markers owner-gated)"
+    )
+    assert row["credential_policy"] == "provision"
     assert row["setup_gates"] == [
         "DOTFILES_RUN_CODEX_SETUP=1",
         "DOTFILES_USE_LITELLM_PROXY=1",
     ]
     assert "model_providers.litellm" in row["consumer_read_path"]
+    assert row["transports"] == ["Responses API", "OpenAI-compatible"]
 
 
 def test_configure_all_routes_codex_through_poetry(tmp_path):

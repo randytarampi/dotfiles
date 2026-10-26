@@ -243,6 +243,14 @@ def build_summary_lines(config, config_path, ollama_cloud_model, note, local_mod
         )
     profiles = re.findall(r"\[profiles\.([^\]]+)\]", config)
     lines.append(f"  • profiles: {', '.join(profiles)}")
+    if re.search(r"\[model_providers\.litellm\]", config) and not re.search(
+        r'^model_provider\s*=\s*"litellm"', config, re.MULTILINE
+    ):
+        lines.append(
+            "  • note: model_providers.litellm is managed but not active; set "
+            'model_provider = "litellm" manually to route the default through '
+            "the gateway (owner-controlled switch)"
+        )
     provider, model = _model_parts(local_model) if local_model else ("ollama", "none")
     lines.append(f"  • local profile: {model} via {provider}")
     lines.extend(

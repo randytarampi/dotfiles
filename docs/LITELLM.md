@@ -133,7 +133,24 @@ in a supervised terminal.
 
 ## Client virtual keys
 
-Codex is config-only and credential provisioning is deferred. Its existing
+When both `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1` are
+enabled, the generator materializes the managed `model_providers.litellm`
+block, reading `LITELLM_CODEX_KEY` with key file
+`~/.local/share/litellm/clients/codex.key`; provisioning uses the same explicit
+client-key authorization and gateway setup contract as other clients. Pointing
+Codex's default at LiteLLM — `model_provider = "litellm"` in
+`~/.codex/config.toml` — is deliberately left to the operator: switching the
+active default changes request routing and is treated as an owner-controlled,
+destructive-category action, not written automatically.
+
+The repo-side route is classified `eligible` — provisioned like the other
+gateway clients — but `classification_status` records it as **not
+live-verified**: reaching `verified` requires an owner-provided dedicated key,
+a real routed task, and two full-deploy runs with marker-integrity checks.
+Those qualifications are not performed by repository tests or configuration
+generation.
+
+Its existing
 `~/.codex/config.toml` may contain sections written by an older generator without
 ownership markers. Back up the file privately, review the specifically reported
 colliding sections, and manually remove or rename only sections you approve as
@@ -162,6 +179,7 @@ refer to a removed section; the generator does not repair these references.
 | Pi | `LITELLM_PI_KEY` | `pi.key` |
 | Open WebUI | `LITELLM_OPENWEBUI_KEY` | `openwebui.key` |
 | Junie | `LITELLM_JUNIE_KEY` | `junie.key` |
+| Codex | `LITELLM_CODEX_KEY` | `codex.key` |
 
 ## UI exposure
 

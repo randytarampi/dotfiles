@@ -1539,7 +1539,7 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     )
 
     assert sorted(c[2]["key_alias"] for c in calls if c[1] == "POST") == sorted(
-        ("pi", "openwebui", "junie")
+        ("pi", "openwebui", "junie", "codex")
     )
     content = path.read_text(encoding="utf-8")
     assert "LITELLM_PI_KEY=sk-generated-pi" in content
@@ -1615,6 +1615,35 @@ def test_pi_key_file_is_private_idempotent_and_rotatable(tmp_path):
     CONFIGURE._write_pi_key(service)
     assert target.read_text(encoding="utf-8") == "dummy-two"
     assert target.stat().st_ino != inode
+
+
+def test_codex_key_file_is_private_idempotent_and_rotatable(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_CODEX_KEY='dummy-one'\n", encoding="utf-8")
+    CONFIGURE._write_codex_key(service)
+    target = tmp_path / "clients" / "codex.key"
+    assert target.read_text(encoding="utf-8") == "dummy-one"
+    assert target.parent.stat().st_mode & 0o777 == 0o700
+    assert target.stat().st_mode & 0o777 == 0o600
+    inode = target.stat().st_ino
+    CONFIGURE._write_codex_key(service)
+    assert target.stat().st_ino == inode
+    service.write_text("LITELLM_CODEX_KEY='dummy-two'\n", encoding="utf-8")
+    CONFIGURE._write_codex_key(service)
+    assert target.read_text(encoding="utf-8") == "dummy-two"
+
+
+def test_provisioned_client_key_writers_cover_every_registered_app_key():
+    import litellm_config
+
+    assert set(CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS) == set(litellm_config.APP_KEYS)
+    assert set(CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS) == {
+        "opencode",
+        "pi",
+        "junie",
+        "openwebui",
+        "codex",
+    }
 
 
 def test_pi_provider_override_requires_private_file_and_uses_command_key(

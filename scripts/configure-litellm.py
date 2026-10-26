@@ -41,6 +41,7 @@ _CLIENT_ENABLE_GATES = {
     "pi": ("DOTFILES_RUN_PI_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "openwebui": ("DOTFILES_RUN_OPENWEBUI_SETUP",),
     "junie": ("DOTFILES_RUN_JUNIE_CLI_SETUP",),
+    "codex": ("DOTFILES_RUN_CODEX_SETUP",),
 }
 _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_OPENCODE_SETUP",
@@ -49,7 +50,7 @@ _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_JUNIE_CLI_SETUP",
     "DOTFILES_USE_LITELLM_PROXY",
 )
-_CLI_INSTALLS = {"opencode": "opencode", "pi": "pi"}
+_CLI_INSTALLS = {"opencode": "opencode", "pi": "pi", "codex": "codex"}
 
 
 def _client_provisioning_state(
@@ -355,6 +356,11 @@ def _write_junie_key(service_env_path: Path, dry_run=False) -> None:
 def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the Open WebUI app key without sourcing service.env."""
     _write_client_key(service_env_path, "openwebui", "LITELLM_OPENWEBUI_KEY", dry_run)
+
+
+def _write_codex_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the Codex app key without sourcing service.env."""
+    _write_client_key(service_env_path, "codex", "LITELLM_CODEX_KEY", dry_run)
 
 
 def _materialized_client_key_value(
@@ -738,15 +744,18 @@ def _persist_generated_app_keys(found, rows, service_env_path):
         logger.info("Provisioned %d LiteLLM app key(s)", len(generated_keys))
 
 
+PROVISIONED_CLIENT_KEY_WRITERS = {
+    "opencode": _write_opencode_key,
+    "pi": _write_pi_key,
+    "junie": _write_junie_key,
+    "openwebui": _write_openwebui_key,
+    "codex": _write_codex_key,
+}
+
+
 def _write_provisioned_client_keys(rows, service_env_path, dry_run):
-    writers = {
-        "opencode": _write_opencode_key,
-        "pi": _write_pi_key,
-        "junie": _write_junie_key,
-        "openwebui": _write_openwebui_key,
-    }
     for row in rows:
-        writer = writers.get(row["client"])
+        writer = PROVISIONED_CLIENT_KEY_WRITERS.get(row["client"])
         if writer:
             writer(service_env_path, dry_run=dry_run)
 
