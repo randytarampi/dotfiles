@@ -465,7 +465,13 @@ def _ollama_root(base_url):
 
 
 def probe_embedding_vector(
-    base_url, model, key_value=None, timeout=5, *, native_ollama=False
+    base_url,
+    model,
+    key_value=None,
+    timeout=5,
+    *,
+    native_ollama=False,
+    expected_dimension=None,
 ):
     """Probe an embedding endpoint and capture vector quality metrics.
 
@@ -541,11 +547,12 @@ def probe_embedding_vector(
     digest = None
     revision = None
     qualified = finite and nonzero and norm is not None and norm > 0
+    dimension_matches = expected_dimension is None or len(vector) == expected_dimension
     return EmbeddingObservation(
         provider="unknown",
         wire_alias=model,
         backend_endpoint=endpoint,
-        outcome="qualified" if qualified else "unknown",
+        outcome="qualified" if qualified and dimension_matches else "unknown",
         dimension=len(vector),
         digest=digest,
         revision=revision,
@@ -554,11 +561,17 @@ def probe_embedding_vector(
         vector_norm=norm,
         qualification=(
             Qualification.PROTOCOL_PROBED.value
-            if qualified
+            if qualified and dimension_matches
             else Qualification.UNKNOWN.value
         ),
         http_status=code,
-        notes=("HTTP 200 numeric embedding vector",),
+        notes=(
+            ("HTTP 200 numeric embedding vector",)
+            if dimension_matches
+            else (
+                f"observed dimension {len(vector)} does not match expected {expected_dimension}",
+            )
+        ),
     )
 
 
