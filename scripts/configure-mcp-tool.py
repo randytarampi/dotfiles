@@ -39,14 +39,15 @@ def _ensure_toml_runtime():
     root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     try:
         # Poetry is supplied by the operator's trusted PATH; all lookup args are fixed.
-        runtime = subprocess.run(  # nosec B603,B607
+        lookup = subprocess.run(  # nosec B603,B607
             ["poetry", "--directory", root, "env", "info", "--executable"],
             cwd=root,
             capture_output=True,
             text=True,
             check=True,
-            timeout=10,  # nosec B603 - fixed Poetry argv, trusted operator PATH; no shell.
-        ).stdout.strip()
+            timeout=10,
+        )  # nosec B603,B607 - fixed Poetry argv, trusted operator PATH; no shell.
+        runtime = lookup.stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(
             "TOML MCP configuration requires Poetry and its locked runtime; run poetry install --only main --no-root in the dotfiles checkout."
