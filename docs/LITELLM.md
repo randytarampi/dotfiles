@@ -139,7 +139,10 @@ block, reading `LITELLM_CODEX_KEY` with key file
 `~/.local/share/litellm/clients/codex.key`; provisioning uses the same explicit
 client-key authorization and gateway setup contract as other clients. The
 managed shell configuration conditionally exports that file's contents as
-`LITELLM_CODEX_KEY` when proxy mode is enabled and the file exists; Codex's
+`LITELLM_CODEX_KEY` when proxy mode is enabled and the file exists, but only
+for Codex processes launched from a shell that has sourced that managed
+configuration. This does not establish credential delivery for GUI, ACP or
+other-shell launches and has not been live-verified. Codex's
 provider `env_key` reads it from the process environment. The generated named `litellm` profile is
 explicit opt-in and does not change the active default. Pointing Codex's
 default at LiteLLM — `model_provider = "litellm"` in
