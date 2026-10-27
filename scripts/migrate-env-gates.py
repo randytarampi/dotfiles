@@ -177,18 +177,47 @@ CADDY_V1_REMOVALS_DELETE = {
 
 # Assignment parser: matches KEY='VALUE' or # KEY='VALUE'
 ASSIGNMENT_RE = re.compile(r"^(\s*)(#?\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
-UNSAFE_VALUE_RE = re.compile(r"\$\(|`|\$\{|<<|\(|\[|\]|\)")
+LITERAL_ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$"
+)
+SHELL_METACHAR_RE = re.compile(r"[$`;|&()<>]")
 
 
 def unsafe_value_keys(lines):
-    """Return active assignment keys whose values are not literal-only."""
+    """Return key names for active lines outside the literal .env grammar."""
     refused = []
+    seen = {}
     for line in lines:
-        parsed = parse_env_line(line)
-        if parsed and not parsed[1].strip().startswith("#"):
-            key, value = parsed[2], parsed[3]
-            if UNSAFE_VALUE_RE.search(split_inline_comment(value)[0]):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = LITERAL_ASSIGNMENT_RE.match(line.rstrip("\r\n"))
+        if not match:
+            candidate = re.match(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)", line)
+            print(
+                f"Refused: {candidate.group(1) if candidate else '<unparsed line>'} has non-literal syntax"
+            )
+            refused.append(candidate.group(1) if candidate else "<unparsed line>")
+            continue
+        key = match.group(1)
+        value = match.group(2).strip()
+        if value.startswith("'") and value.endswith("'") and value.count("'") == 2:
+            # POSIX single-quoted literal: content is never expanded, so any
+            # characters (including shell metacharacters) are provably literal.
+            token = value[1:-1]
+        else:
+            token = value.split("#", 1)[0].strip()
+            if not token or any(char.isspace() for char in token):
+                print(f"Refused: {key} has non-literal syntax")
                 refused.append(key)
+                continue
+            if SHELL_METACHAR_RE.search(token):
+                print(f"Refused: {key} has non-literal syntax")
+                refused.append(key)
+                continue
+        if key in seen and seen[key] != token:
+            refused.append(key)
+        seen[key] = token
     return refused
 
 
@@ -516,27 +545,46 @@ def main():
         "--env", default=os.path.expanduser("~/.env"), help="Path to env file"
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="Preview changes without writing"
-    )
-    parser.add_argument(
         "--no-backup", action="store_true", help="Skip backup before writing"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--apply", action="store_true", help="Apply the planned migration"
+    )
+    mode.add_argument(
+        "--dry-run", action="store_true", help="Preview changes without writing"
     )
     args = parser.parse_args()
 
-    env_path = Path(args.env).expanduser()
+    env_path = Path(args.env).expanduser().absolute()
 
+    if env_path.is_symlink() or env_path.parent.is_symlink():
+        # Proportionate safe-path check: refuse a symlinked file or a symlinked
+        # directory the file's name lives in, then rely on the pre-replace
+        # stale-read check (ino/mtime/size) for swap detection. Walking every
+        # deeper ancestor for symlinks would refuse fixtures under standard
+        # tmpdir indirection (/var -> /private/var on macOS) while adding no
+        # practical protection over the stale-read check.
+        print("Refused: env path or its parent directory is a symlink", file=sys.stderr)
+        return 1
     if not env_path.exists():
         print(f"ERROR: env file not found: {env_path}", file=sys.stderr)
         return 2
+    if not env_path.is_file():
+        print("Refused: env path is not a regular file", file=sys.stderr)
+        return 1
 
+    backup_path = env_path.with_suffix(env_path.suffix + ".bak")
+    if backup_path.is_symlink() or (backup_path.exists() and not backup_path.is_file()):
+        print("Refused: backup path has unexpected type", file=sys.stderr)
+        return 1
+
+    original_stat = env_path.stat()
     lines = read_env_lines(env_path)
     refused = unsafe_value_keys(lines)
     if refused:
         for key in refused:
-            print(f"Refused: {key} has non-literal value syntax")
+            print(f"Refused: {key} has non-literal or conflicting declaration")
         return 1
     new_lines, changes = migrate_env(lines, dry_run=True)
 
@@ -549,12 +597,13 @@ def main():
     for change in changes:
         print(f"  • {change}")
 
-    if not args.apply:
+    if args.dry_run or not args.apply:
         print("\n(dry-run — no changes written)")
         return 0
 
+    if not args.apply:
+        return 0
     if not args.no_backup:
-        backup_path = env_path.with_suffix(env_path.suffix + ".bak")
         shutil.copy2(env_path, backup_path)
         backup_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
         print(f"Backup: {backup_path}")
@@ -570,12 +619,27 @@ def main():
         ) as temporary:
             temporary.writelines(new_lines)
             temporary_path = Path(temporary.name)
-        temporary_path.chmod(stat.S_IMODE(env_path.stat().st_mode))
+        current_stat = env_path.stat()
+        if (current_stat.st_ino, current_stat.st_mtime_ns, current_stat.st_size) != (
+            original_stat.st_ino,
+            original_stat.st_mtime_ns,
+            original_stat.st_size,
+        ):
+            raise RuntimeError("env file changed during migration; backup retained")
+        original_mode = stat.S_IMODE(original_stat.st_mode)
+        replacement_mode = original_mode & 0o600
+        if replacement_mode != original_mode:
+            print(
+                f"Permissions narrowed: {original_mode:04o} -> {replacement_mode:04o}"
+            )
+        temporary_path.chmod(replacement_mode)
         temporary_path.replace(env_path)
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
     print(f"Written: {env_path}")
+    if args.no_backup:
+        print("Backup skipped (--no-backup)")
     print("\nNext steps:")
     print("  make reset && make deploy")
     print("  make verify")

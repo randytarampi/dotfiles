@@ -5,6 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import preset_migration
@@ -43,7 +44,7 @@ class PresetMigrationTests(unittest.TestCase):
             self.assertIn("Refused: DOTFILES_RUN_PI", result.stdout)
             self.assertNotIn("secret-marker", result.stdout + result.stderr)
             self.assertEqual(env_path.read_bytes(), original)
-            self.assertFalse(env_path.with_suffix(".env.bak").exists())
+            self.assertFalse(env_path.with_suffix(".bak").exists())
 
     def test_dry_run_redacts_values(self):
         with tempfile.TemporaryDirectory() as temp_home:
@@ -61,6 +62,139 @@ class PresetMigrationTests(unittest.TestCase):
             self.assertIn("DOTFILES_RUN_PI", result.stdout)
             self.assertEqual(
                 env_path.read_text(encoding="utf-8"), "DOTFILES_RUN_PI=secret-marker\n"
+            )
+
+    def test_apply_and_dry_run_are_rejected_without_touching_file(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("DOTFILES_RUN_PI='1'\n", encoding="utf-8")
+            env_path.chmod(0o640)
+            before = (
+                env_path.read_bytes(),
+                env_path.stat().st_mode,
+                env_path.stat().st_mtime_ns,
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    MIGRATE_PATH,
+                    "--env",
+                    str(env_path),
+                    "--dry-run",
+                    "--apply",
+                ],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(
+                (
+                    env_path.read_bytes(),
+                    env_path.stat().st_mode,
+                    env_path.stat().st_mtime_ns,
+                ),
+                before,
+            )
+            self.assertFalse(env_path.with_suffix(".bak").exists())
+
+    def test_nonliteral_lines_refuse_whole_file_and_literals_migrate(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = (
+                "DOTFILES_RUN_PI='1'\nA=$VAR\nB='ok'; command\n"
+                "export C=plain\nD=$(secret-marker)\n"
+            )
+            env_path.write_text(original, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(env_path.read_text(encoding="utf-8"), original)
+            self.assertNotIn("secret-marker", result.stdout + result.stderr)
+            env_path.write_text("DOTFILES_RUN_PI='1'\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+
+    def test_conflicting_duplicate_refuses_and_symlink_refuses(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = "DOTFILES_RUN_PI='1'\nDOTFILES_RUN_PI='0'\n"
+            env_path.write_text(original, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(env_path.read_text(encoding="utf-8"), original)
+            link = Path(temp_home) / "link.env"
+            link.symlink_to(env_path)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(link), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+
+    def test_changed_during_migration_refuses_and_keeps_original(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            spec = importlib.util.spec_from_file_location(
+                "migrate_env_gates_under_write", MIGRATE_PATH
+            )
+            assert spec is not None and spec.loader is not None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            real_migrate = module.migrate_env
+
+            def mutating(lines, dry_run):
+                env_path.touch()  # change mtime mid-migration, as a race would
+                return real_migrate(lines, dry_run)
+
+            module.migrate_env = mutating
+            argv = [
+                "migrate-env-gates.py",
+                "--env",
+                str(env_path),
+                "--apply",
+            ]
+            with patch.object(sys, "argv", argv):
+                with self.assertRaises(RuntimeError):
+                    module.main()
+            self.assertEqual(env_path.read_bytes(), original)
+            backup = env_path.with_suffix(".bak")
+            self.assertTrue(backup.is_file())
+            self.assertEqual(backup.read_bytes(), original)
+
+    def test_second_run_is_byte_stable(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("DOTFILES_RUN_PI='1'\n", encoding="utf-8")
+            command = [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"]
+            for _ in range(2):
+                result = subprocess.run(
+                    command,
+                    env={**os.environ, "HOME": temp_home},
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0)
+            self.assertEqual(
+                env_path.read_bytes(),
+                b"DOTFILES_RUN_PI_SETUP='1'\nCADDY_ACCESS='localhost'\n",
             )
 
     def test_normalizer_covers_aliases_and_current_values(self):
