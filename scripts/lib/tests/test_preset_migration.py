@@ -28,6 +28,233 @@ project_spec.loader.exec_module(configure_project)
 
 
 class PresetMigrationTests(unittest.TestCase):
+    def test_cli_refuses_unsupported_shell_forms_without_touching_file(self):
+        cases = (
+            "A=foo\\bar\n",
+            "A=foo'bar\n",
+            "A=~root\n",
+            "A=foo*\n",
+            'A="foo"\n',
+            "A =foo\n",
+            "A= foo\n",
+            "export A=plain\n",
+            "export A=plain\nA=plain\n",
+        )
+        with tempfile.TemporaryDirectory() as temp_home:
+            for source in cases:
+                with self.subTest(source=source):
+                    env_path = Path(temp_home) / ".env"
+                    original = (source + "DOTFILES_RUN_PI='1'\n").encode()
+                    env_path.write_bytes(original)
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            MIGRATE_PATH,
+                            "--env",
+                            str(env_path),
+                            "--apply",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        env={
+                            "HOME": str(Path(temp_home).resolve()),
+                            "PATH": "/usr/bin:/bin",
+                        },
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(env_path.read_bytes(), original)
+                    self.assertFalse(env_path.with_suffix(".bak").exists())
+
+    def test_cli_accepts_literal_semantics_and_refuses_conflicts(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = (
+                b"DOTFILES_OPENCODE_TIER='thirtydollars'  # note\r\nA=alpha#tag\r\n"
+            )
+            env_path.write_bytes(original)
+            safe_env = {"HOME": str(Path(temp_home).resolve()), "PATH": "/usr/bin:/bin"}
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    MIGRATE_PATH,
+                    "--env",
+                    str(env_path),
+                    "--apply",
+                    "--no-backup",
+                ],
+                capture_output=True,
+                text=True,
+                env=safe_env,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertIn(
+                b"DOTFILES_OPENCODE_TIER='omo-slim-thirty-dollars'  # note\n",
+                env_path.read_bytes(),
+            )
+            self.assertIn(b"A=alpha#tag\r\n", env_path.read_bytes())
+            conflict = b"A=plain\nA='other'\nDOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(conflict)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+                text=True,
+                env=safe_env,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(env_path.read_bytes(), conflict)
+
+    def test_literal_values_match_shell_semantics_in_isolated_environment(self):
+        values = ["bare=value@42", "'quoted value#literal'", "", "alpha#tag"]
+        with tempfile.TemporaryDirectory() as temp_home:
+            isolated = {"HOME": str(Path(temp_home).resolve()), "PATH": "/usr/bin:/bin"}
+            for value in values:
+                env_path = Path(temp_home) / ".env"
+                env_path.write_text(f"VALUE={value}\n", encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        "/bin/sh",
+                        "-c",
+                        'set -a; . "$1"; printf %s "$VALUE"',
+                        "sh",
+                        str(env_path),
+                    ],
+                    capture_output=True,
+                    env=isolated,
+                    check=False,
+                )
+                parsed = migrate_env_gates.parse_literal_value(value)
+                self.assertIsNotNone(parsed)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.decode(), parsed[0])
+
+    def test_existing_backup_is_preserved_on_refusal(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            backup_path = env_path.with_suffix(".bak")
+            env_path.write_bytes(b"DOTFILES_RUN_PI='1'\n")
+            backup_path.write_bytes(b"existing secret backup\n")
+            backup_path.chmod(0o644)
+            before = (
+                backup_path.read_bytes(),
+                backup_path.stat().st_mode,
+                backup_path.stat().st_mtime_ns,
+            )
+            target_before = env_path.read_bytes()
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                (
+                    backup_path.read_bytes(),
+                    backup_path.stat().st_mode,
+                    backup_path.stat().st_mtime_ns,
+                ),
+                before,
+            )
+            self.assertEqual(env_path.read_bytes(), target_before)
+
+    def test_symlink_backup_and_hardlinked_target_refuse_without_changes(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_bytes(b"DOTFILES_RUN_PI='1'\n")
+            other = Path(temp_home) / "other"
+            other.write_bytes(b"keep\n")
+            backup = env_path.with_suffix(".bak")
+            backup.symlink_to(other)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(env_path.read_bytes(), b"DOTFILES_RUN_PI='1'\n")
+            self.assertEqual(other.read_bytes(), b"keep\n")
+            backup.unlink()
+            link = Path(temp_home) / "hardlink"
+            os.link(env_path, link)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(env_path.read_bytes(), b"DOTFILES_RUN_PI='1'\n")
+            self.assertFalse(backup.exists())
+
+    def test_private_backup_mode_and_no_backup_preserves_existing_backup(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            env_path.chmod(0o644)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            backup = env_path.with_suffix(".bak")
+            self.assertEqual(backup.read_bytes(), original)
+            self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+            backup.write_bytes(b"sentinel")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    MIGRATE_PATH,
+                    "--env",
+                    str(env_path),
+                    "--apply",
+                    "--no-backup",
+                ],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(backup.read_bytes(), b"sentinel")
+
+    def test_exclusive_backup_collision_does_not_overwrite(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("DOTFILES_RUN_PI='1'\n", encoding="utf-8")
+            backup = env_path.with_suffix(".bak")
+            module = migrate_env_gates
+            real_open = os.open
+
+            def collide(path, flags, mode=0o777):
+                if Path(path) == backup.resolve():
+                    backup.write_bytes(b"collision")
+                return real_open(path, flags, mode)
+
+            with patch.object(module.os, "open", side_effect=collide):
+                with patch.object(
+                    sys, "argv", [MIGRATE_PATH, "--env", str(env_path), "--apply"]
+                ):
+                    self.assertEqual(module.main(), 1)
+            self.assertEqual(backup.read_bytes(), b"collision")
+            self.assertEqual(
+                env_path.read_text(encoding="utf-8"), "DOTFILES_RUN_PI='1'\n"
+            )
+
+    def test_exported_assignment_is_refused_consistently_before_backup(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"export DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                env={**os.environ, "HOME": temp_home},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn("secret-marker", result.stdout + result.stderr)
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertFalse(env_path.with_suffix(".bak").exists())
+
     def test_substituted_value_is_refused_untouched_in_home_fixture(self):
         with tempfile.TemporaryDirectory() as temp_home:
             env_path = Path(temp_home) / ".env"
@@ -179,11 +406,39 @@ class PresetMigrationTests(unittest.TestCase):
             self.assertTrue(backup.is_file())
             self.assertEqual(backup.read_bytes(), original)
 
+    def test_replace_failure_preserves_original_and_complete_backup(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            env_path.chmod(0o640)
+            with patch.object(
+                Path, "replace", side_effect=OSError("injected replace failure")
+            ):
+                with patch.object(
+                    sys, "argv", [MIGRATE_PATH, "--env", str(env_path), "--apply"]
+                ):
+                    with self.assertRaises(OSError):
+                        migrate_env_gates.main()
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(env_path.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(env_path.with_suffix(".bak").read_bytes(), original)
+            self.assertEqual(
+                list(Path(temp_home).glob(".env.*")), [env_path.with_suffix(".bak")]
+            )
+
     def test_second_run_is_byte_stable(self):
         with tempfile.TemporaryDirectory() as temp_home:
             env_path = Path(temp_home) / ".env"
             env_path.write_text("DOTFILES_RUN_PI='1'\n", encoding="utf-8")
-            command = [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"]
+            command = [
+                sys.executable,
+                MIGRATE_PATH,
+                "--env",
+                str(env_path),
+                "--apply",
+                "--no-backup",
+            ]
             for _ in range(2):
                 result = subprocess.run(
                     command,
