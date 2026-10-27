@@ -137,8 +137,12 @@ When both `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1` are
 enabled, the generator materializes the managed `model_providers.litellm`
 block, reading `LITELLM_CODEX_KEY` with key file
 `~/.local/share/litellm/clients/codex.key`; provisioning uses the same explicit
-client-key authorization and gateway setup contract as other clients. Pointing
-Codex's default at LiteLLM — `model_provider = "litellm"` in
+client-key authorization and gateway setup contract as other clients. The
+managed shell configuration conditionally exports that file's contents as
+`LITELLM_CODEX_KEY` when proxy mode is enabled and the file exists; Codex's
+provider `env_key` reads it from the process environment. The generated named `litellm` profile is
+explicit opt-in and does not change the active default. Pointing Codex's
+default at LiteLLM — `model_provider = "litellm"` in
 `~/.codex/config.toml` — is deliberately left to the operator: switching the
 active default changes request routing and is treated as an owner-controlled,
 destructive-category action, not written automatically.
@@ -146,9 +150,16 @@ destructive-category action, not written automatically.
 The repo-side route is classified `eligible` — provisioned like the other
 gateway clients — but `classification_status` records it as **not
 live-verified**: reaching `verified` requires an owner-provided dedicated key,
-a real routed task, and two full-deploy runs with marker-integrity checks.
+a real routed task, and two full-deploy runs with marker-integrity checks. These
+remain owner-gated; fresh-subprocess authentication proof is NOT RUN/UNKNOWN
+here. A gateway `key_alias` is attribution-only, not a model-restricted
+privilege unless separately enforced.
 Those qualifications are not performed by repository tests or configuration
 generation.
+
+Codex running inside ChatGPT Desktop and ordinary ChatGPT conversations are
+different consumers. This route configures the Codex process only; ordinary
+ChatGPT conversations are not wired through it.
 
 Its existing
 `~/.codex/config.toml` may contain sections written by an older generator without

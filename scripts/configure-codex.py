@@ -75,6 +75,12 @@ def build_profiles_config(ollama_model, local_model=""):
         f'\n[profiles.local]\nmodel = "{model}"\n'
         f'model_provider = "{profile_provider}"\n'
     )
+    litellm_profile = (
+        '\n[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
+        'model_provider = "litellm"\n'
+        if build_litellm_provider_config()
+        else ""
+    )
     return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
 model = "claude-sonnet-5-5"
@@ -84,6 +90,7 @@ model_reasoning_effort = "high"
 [profiles.ollama-cloud]
 model = "ollama-cloud/{ollama_model}"
 model_provider = "ollama-cloud"
+{litellm_profile}
 
 [profiles.copilot]
 model = "copilot-model-id"
