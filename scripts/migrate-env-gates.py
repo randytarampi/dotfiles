@@ -6,9 +6,10 @@ current counterparts, preserving existing values and optionally inheriting
 values for newly-split gates. It is idempotent: running it twice is a no-op.
 
 Usage:
-    scripts/migrate-env-gates.py              # Migrate ~/.env
+    scripts/migrate-env-gates.py              # Preview ~/.env migration
     scripts/migrate-env-gates.py --dry-run     # Preview changes without writing
-    scripts/migrate-env-gates.py --env /path    # Use a different env file
+    scripts/migrate-env-gates.py --apply       # Write the migration
+    scripts/migrate-env-gates.py --env /path   # Use a different env file
 
 Design:
     - Conservative parser: extracts KEY='VALUE' assignments without evaluating
@@ -38,7 +39,6 @@ Adding future migrations:
 import argparse
 import os
 import re
-import shutil
 import stat
 import sys
 import tempfile
@@ -177,10 +177,28 @@ CADDY_V1_REMOVALS_DELETE = {
 
 # Assignment parser: matches KEY='VALUE' or # KEY='VALUE'
 ASSIGNMENT_RE = re.compile(r"^(\s*)(#?\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
-LITERAL_ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$"
-)
-SHELL_METACHAR_RE = re.compile(r"[$`;|&()<>]")
+LITERAL_ASSIGNMENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+BARE_LITERAL_RE = re.compile(r"^[A-Za-z0-9_./:,+=@%#-]*$")
+
+
+def parse_literal_value(source):
+    value = source.rstrip("\r\n")
+    if value.startswith("'"):
+        close = value.find("'", 1)
+        if close < 0:
+            return None
+        token, rest = value[1:close], value[close + 1 :]
+        if rest and not re.match(r"^\s+#", rest):
+            return None
+        return token, value[: close + 1], rest
+    if value.startswith('"') and value.endswith('"') and value.count('"') == 2:
+        return value[1:-1], value, ""
+    comment = re.search(r"\s+#", value)
+    literal = value[: comment.start()] if comment else value
+    rest = value[comment.start() :] if comment else ""
+    if literal != literal.strip() or not BARE_LITERAL_RE.fullmatch(literal):
+        return None
+    return literal, literal, rest
 
 
 def unsafe_value_keys(lines):
@@ -191,6 +209,10 @@ def unsafe_value_keys(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
+        if re.match(r"^\s*export\b", line):
+            candidate = re.match(r"^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+            refused.append(candidate.group(1) if candidate else "<unparsed line>")
+            continue
         match = LITERAL_ASSIGNMENT_RE.match(line.rstrip("\r\n"))
         if not match:
             candidate = re.match(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)", line)
@@ -200,21 +222,14 @@ def unsafe_value_keys(lines):
             refused.append(candidate.group(1) if candidate else "<unparsed line>")
             continue
         key = match.group(1)
-        value = match.group(2).strip()
-        if value.startswith("'") and value.endswith("'") and value.count("'") == 2:
-            # POSIX single-quoted literal: content is never expanded, so any
-            # characters (including shell metacharacters) are provably literal.
-            token = value[1:-1]
-        else:
-            token = value.split("#", 1)[0].strip()
-            if not token or any(char.isspace() for char in token):
-                print(f"Refused: {key} has non-literal syntax")
-                refused.append(key)
-                continue
-            if SHELL_METACHAR_RE.search(token):
-                print(f"Refused: {key} has non-literal syntax")
-                refused.append(key)
-                continue
+        if match.group(2).startswith('"'):
+            refused.append(key)
+            continue
+        parsed_value = parse_literal_value(match.group(2))
+        if parsed_value is None:
+            refused.append(key)
+            continue
+        token = parsed_value[0]
         if key in seen and seen[key] != token:
             refused.append(key)
         seen[key] = token
@@ -223,7 +238,7 @@ def unsafe_value_keys(lines):
 
 def parse_env_line(line):
     """Parse an env line into (indent, comment_prefix, key, value, trailing)."""
-    match = ASSIGNMENT_RE.match(line.rstrip("\n"))
+    match = ASSIGNMENT_RE.match(line.rstrip("\r\n"))
     if not match:
         return None
     indent, comment_prefix, key, value = match.groups()
@@ -239,24 +254,15 @@ def read_env_lines(path):
 
 
 def normalize_env_value(value):
-    """Return an env scalar without surrounding single/double quotes."""
-    stripped = value.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
-        return stripped[1:-1]
-    return stripped
+    """Decode supported literal values, retaining legacy helper fallback."""
+    parsed = parse_literal_value(value)
+    return parsed[0] if parsed is not None else value.strip()
 
 
 def split_inline_comment(value):
     """Return an assignment value token and its preserved inline comment."""
-    stripped = value.strip()
-    if stripped.startswith(("'", '"')):
-        quote_end = stripped.find(stripped[0], 1)
-        if quote_end != -1:
-            return stripped[: quote_end + 1], stripped[quote_end + 1 :]
-    comment = re.search(r"\s+#", stripped)
-    if comment:
-        return stripped[: comment.start()], stripped[comment.start() :]
-    return stripped, ""
+    parsed = parse_literal_value(value)
+    return (parsed[1], parsed[2]) if parsed is not None else (value.strip(), "")
 
 
 def get_active_value(lines, key):
@@ -539,7 +545,8 @@ def migrate_env(lines, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Migrate ~/.env gate names to current DOTFILES_RUN_*_SETUP scheme"
+        description="Migrate ~/.env gate names to current DOTFILES_RUN_*_SETUP scheme",
+        epilog="By default, preview changes; pass --apply to write them.",
     )
     parser.add_argument(
         "--env", default=os.path.expanduser("~/.env"), help="Path to env file"
@@ -558,29 +565,31 @@ def main():
 
     env_path = Path(args.env).expanduser().absolute()
 
-    if env_path.is_symlink() or env_path.parent.is_symlink():
-        # Proportionate safe-path check: refuse a symlinked file or a symlinked
-        # directory the file's name lives in, then rely on the pre-replace
-        # stale-read check (ino/mtime/size) for swap detection. Walking every
-        # deeper ancestor for symlinks would refuse fixtures under standard
-        # tmpdir indirection (/var -> /private/var on macOS) while adding no
-        # practical protection over the stale-read check.
+    # Normalize only macOS's system alias, not user-controlled symlinks below it.
+    if sys.platform == "darwin" and str(env_path).startswith("/var/"):
+        env_path = Path("/private/var") / env_path.relative_to("/var")
+    if any(parent.is_symlink() for parent in (env_path, *env_path.parents)):
         print("Refused: env path or its parent directory is a symlink", file=sys.stderr)
         return 1
-    if not env_path.exists():
+    try:
+        target_stat = env_path.lstat()
+    except FileNotFoundError:
         print(f"ERROR: env file not found: {env_path}", file=sys.stderr)
         return 2
-    if not env_path.is_file():
-        print("Refused: env path is not a regular file", file=sys.stderr)
+    if (
+        not stat.S_ISREG(target_stat.st_mode)
+        or target_stat.st_nlink != 1
+        or target_stat.st_uid != os.getuid()
+    ):
+        print(
+            "Refused: env path must be an owned, unlinked regular file", file=sys.stderr
+        )
         return 1
 
-    backup_path = env_path.with_suffix(env_path.suffix + ".bak")
-    if backup_path.is_symlink() or (backup_path.exists() and not backup_path.is_file()):
-        print("Refused: backup path has unexpected type", file=sys.stderr)
-        return 1
-
-    original_stat = env_path.stat()
-    lines = read_env_lines(env_path)
+    backup_path = env_path.with_suffix(".bak")
+    original_bytes = env_path.read_bytes()
+    original_stat = target_stat
+    lines = original_bytes.decode("utf-8").splitlines(keepends=True)
     refused = unsafe_value_keys(lines)
     if refused:
         for key in refused:
@@ -601,11 +610,25 @@ def main():
         print("\n(dry-run — no changes written)")
         return 0
 
-    if not args.apply:
-        return 0
+    if not args.no_backup and (backup_path.is_symlink() or backup_path.exists()):
+        print("Refused: backup path already exists", file=sys.stderr)
+        return 1
     if not args.no_backup:
-        shutil.copy2(env_path, backup_path)
-        backup_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            backup_fd = os.open(backup_path, flags, 0o600)
+        except FileExistsError:
+            print("Refused: backup path already exists", file=sys.stderr)
+            return 1
+        try:
+            with os.fdopen(backup_fd, "wb") as backup:
+                backup.write(original_bytes)
+                backup.flush()
+                os.fsync(backup.fileno())
+        except Exception:
+            # Never remove a path here: another writer may have replaced it.
+            raise
         print(f"Backup: {backup_path}")
 
     temporary_path = None
