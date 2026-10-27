@@ -185,10 +185,19 @@ owner-controlled parents; this is not concurrent-path protection.
 Manual collisions and changed generated profiles are preserved; updates require
 a future coordinated write boundary. Select a reviewed profile explicitly with
 `/subagents-load-profile <name>` and inspect `/subagents-models`. The installed
-loader replaces agent overrides, making this a destructive-category action,
-like OpenCode's `/preset` switch. The existing #103/#108 guards cover it. Project
-settings may shadow the global selection. This mode does not provide automatic
-loading or qualify strict-free execution.
+loader replaces agent overrides wholesale, so a manual selection is a
+destructive-category action, like OpenCode's `/preset` switch. The #103/#108
+guards cover generation, detached-file ownership and collision protection of
+the generated profiles only — they do not wrap or intercept the installed
+extension's manual loader. Before selecting manually, preserve custom
+assignments: privately snapshot/backup the relevant project and global subagent
+settings, then read the loaded state back with `/subagents-models` (or
+`/subagents-check-profile`) and compare. Project settings may shadow the
+global selection; the operator owns that backup-and-readback discipline. The
+owner has accepted this manual workflow in place of an automated coordinated
+loader (ruling dated 2026-10-26), so preservation of custom settings is an
+accepted manual discipline here, not a proven automatic guarantee. This mode
+does not provide automatic loading or qualify strict-free execution.
 
 `configure-pi.py` codifies defaults for these `~/.pi/agent/settings.json` keys:
 
