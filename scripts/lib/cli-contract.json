@@ -1058,6 +1058,14 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/configure-hermes.py",
+      "capabilities": ["public", "mutates", "backups"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--no-backup", "--model", "--endpoint"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-litellm.py",
       "capabilities": [
         "public",

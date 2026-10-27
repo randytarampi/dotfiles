@@ -8,6 +8,7 @@ bridge or compatibility layer is used.
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (14) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
 | codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
+| hermes | Inspected custom-provider schema; opt-in LiteLLM scaffold only | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not qualified | not assessed | not assessed |
 | junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
 | pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin |
 | cortex | Snowflake Cortex only | native Cortex MCP (`cortex mcp add`) | native `cortex acp serve` | yes, `~/.snowflake/cortex/skills` | no | yes, `~/.snowflake/cortex/AGENTS.md` | no | N/A | no local opt-out | none | env-vars |
@@ -71,3 +72,10 @@ tracked separately; this is not the Claude CLI environment-variable route.
 - Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through
   its generated `models.json`; tools marked “no” have no direct Meridian wiring.
   Mozart routes provider traffic and is not an additional per-tool ACP target.
+- `scripts/configure-hermes.py` adds `providers.dotfiles-litellm` to
+  `$HERMES_HOME/config.yaml` only when `DOTFILES_RUN_HERMES_SETUP=1` and
+  `DOTFILES_USE_LITELLM_PROXY=1`; choose it explicitly with
+  `hermes --provider dotfiles-litellm --model <served-alias>`. It does not
+  change Hermes' default provider. On the inspected Hermes 0.22.4 installation,
+  custom-provider `key_env` may be superseded by saved provider-pool credentials;
+  credential delivery and live transport are not qualified.
