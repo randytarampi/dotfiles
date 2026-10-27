@@ -7,6 +7,12 @@
 # Load secrets from ~/.env (replaces ~/.credentials.sh)
 [ -f "$HOME/.env" ] && set -a && source "$HOME/.env" && set +a
 
+# Codex reads its LiteLLM credential from its process environment.
+if [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ] && [ -f "$HOME/.local/share/litellm/clients/codex.key" ]; then
+  LITELLM_CODEX_KEY="$(<"$HOME/.local/share/litellm/clients/codex.key")"
+  export LITELLM_CODEX_KEY
+fi
+
 # History configuration (defaults can be overridden from ~/.env)
 export HISTCONTROL="${HISTCONTROL:-ignoreboth}"
 export HISTSIZE="${HISTSIZE:-1000}"

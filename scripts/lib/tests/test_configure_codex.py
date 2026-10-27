@@ -38,6 +38,32 @@ def test_litellm_provider_requires_setup_gate(monkeypatch):
     assert configure_codex.build_litellm_provider_config() == ""
 
 
+def test_litellm_profile_is_opt_in_and_selects_gateway_model(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    profiles = tomllib.loads(configure_codex.build_profiles_config("model"))["profiles"]
+    assert profiles["litellm"] == {
+        "model": "openai/gpt-6-luna",
+        "model_provider": "litellm",
+    }
+
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    profiles = tomllib.loads(configure_codex.build_profiles_config("model"))["profiles"]
+    assert "litellm" not in profiles
+
+
+def test_managed_shell_exports_codex_key_only_when_proxy_enabled_and_file_exists():
+    template = (REPO_ROOT / "dot_dotfiles/shell/variables.sh").read_text()
+    assert 'if [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ]' in template
+    assert '[ -f "$HOME/.local/share/litellm/clients/codex.key" ]' in template
+    assert (
+        'LITELLM_CODEX_KEY="$(<"$HOME/.local/share/litellm/clients/codex.key")"'
+        in template
+    )
+    assert "export LITELLM_CODEX_KEY" in template
+    assert "echo" not in template
+
+
 def test_reconcile_managed_block_repeatably_and_gate_off_preserves_user_toml(
     monkeypatch,
 ):
