@@ -28,7 +28,7 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-opencode-zen-free** | OpenCode Zen (fallbacks: OpenAI) | Free OpenCode-hosted workflow — churn-prone, see [Catalog Churn Management](#catalog-churn-management) |
+| **omo-slim-opencode-zen-free** | OpenCode Zen only | Strict free-classified route set; no classified-free fallback is available for roles, see [Catalog Churn Management](#catalog-churn-management) |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
 | **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
 | **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
@@ -168,7 +168,7 @@ Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
-Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator and observer use image-tested `muse-spark-1.3-contributor-free` after older free IDs left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`):
+Strict free-classified preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator and observer use image-tested `muse-spark-1.3-contributor-free` after older free IDs left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`). Free-classified is catalogue policy metadata, not a request-time zero-charge guarantee; strict-free runtime billing enforcement remains deferred and issue #87 stays open on that point. `opencode/big-pickle` is a dated owner-authorized always-free exception (2026-10-27), not a name-based rule:
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -179,7 +179,7 @@ Zero-cost preset on OpenCode Zen's free catalog — adopted from [upstream oh-my
 | observer | `muse-spark-1.3-contributor-free` | low, temp 0.2 |
 | council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free) |
 
-Fallbacks point at OpenAI paid models (gpt-6.1-sol/luna) — free-tier failures degrade to paid capacity. Muse 1.3 serves both orchestrator and observer because a harmless image request succeeded; this reduces role diversity. MiMo 2.6 answered text requests but its image path failed or timed out, so it serves only text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta may train on prompts, screenshots and completions sent through it. The user explicitly accepted that risk for the Zen-free observer; avoid this preset for confidential work (see [docs/OPENCODE.md](OPENCODE.md)).
+No classified-free fallback is available for these roles; the fallback chains are intentionally empty rather than inventing routes. MiMo 2.6 answered text requests but its image path failed or timed out, so it serves only text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta may train on prompts, screenshots and completions sent through it. The user explicitly accepted that risk for the Zen-free observer; avoid this preset for confidential work (see [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -187,6 +187,14 @@ The `free` preset combines OpenCode Zen and Google Gemini. Nemotron 3.5
 Lightning Free serves exploration and council gamma, with provider-deduplicated
 cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
+
+Free-classified routes are catalogue policy metadata, not a request-time
+zero-charge guarantee. Strict-free runtime billing enforcement remains deferred;
+issue #87 stays open. `google/gemini-3.5-flash-lite` and
+`google/gemini-3.8-flash` (including the free preset's council beta route) are
+known-unqualified under the current classifier and intentionally remain in
+place pending the owner's next route decision. The validator reports them; it
+does not silently exempt or replace them.
 
 Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image
 fallback was removed after live image probes failed; local vision alternatives

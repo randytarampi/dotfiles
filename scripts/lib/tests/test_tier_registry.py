@@ -263,9 +263,12 @@ class TierRegistryTests(unittest.TestCase):
                 data["_tiers"][tier]["council"]["presets"][tier]["beta"]["model"],
                 "openai/gpt-6-astra",
             )
+        # Owner ruling 2026-10-27: zen-free is strict too — its paid fallback
+        # chains were removed, so the orchestrator no longer falls back to
+        # openai/gpt-6.1-sol.
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["orchestrator"],
-            ["openai/gpt-6.1-sol"],
+            [],
         )
         self.assertNotIn("gpt-5.6-terra", json.dumps(data))
 
@@ -313,9 +316,11 @@ class TierRegistryTests(unittest.TestCase):
             ]["gamma"]["model"],
             "opencode/mimo-v2.6-flash-free",
         )
+        # Owner ruling 2026-10-27: zen-free is strict too — the observer's paid
+        # fallback to openai/gpt-5.6-luna was removed.
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["observer"],
-            ["openai/gpt-5.6-luna"],
+            [],
         )
 
     def test_catalogue_audit_keeps_free_observer_images_off_contributor_models(self):
