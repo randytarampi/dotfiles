@@ -290,6 +290,21 @@ other scope value is a **hard configuration error** at generation time. Free
 classification is metadata and does not guarantee request-time no-charge
 admission or prevent paid fallbacks.
 
+Run `PYTHONPATH=scripts/lib poetry run python -m free_classifier` for the
+offline tracked-selection gate (exit 1 on violations). It resolves shared
+Junie free groups and their gateway twins with the production group helpers;
+this is not a claim that profiles were deployed or selected in the IDE.
+The Python audit API can accept explicit provider endpoint configurations and
+LiteLLM model-list records. It checks every backend of an alias and keeps
+Junie's primary and faster providers distinct. Missing endpoint provenance
+is unknown, not an OpenCode/Cohere/Poolside exemption. Name-based `free`
+classification remains the owner's separate rule, independent of host.
+The default gate has no deployed route records and remains blocked by
+unresolved provenance and the retained Google assignments. It is not wired
+into `make verify`; a passing unit suite does not mean this gate passes or
+that #87's request-time admission, entitlement, privacy or paid-route-spy
+requirements are satisfied.
+
 ## OpenAI service lanes (Flex/Fast)
 
 `DOTFILES_USE_OPENAI_SERVICE_LANES` defaults to `0`. When enabled, the generator
