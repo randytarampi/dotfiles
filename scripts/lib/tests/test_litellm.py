@@ -16,6 +16,7 @@ import yaml
 
 import litellm_config
 import model_catalogues
+import free_classifier
 from constants import OMLX_DEFAULT_PORT
 from provider_endpoints import POOLSIDE_ROUTED_MODEL_INFO
 
@@ -948,7 +949,7 @@ def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
     monkeypatch.setattr(
         litellm_config, "_live_catalogue", lambda *_args: ["vendor/twin:free"]
     )
-    for toggle, expected in (("1", True), ("0", False)):
+    for toggle, expected in (("true", True), ("false", False)):
         entries = litellm_config.compute_model_list(
             {
                 "OPENROUTER_API_KEY": "test-key",
@@ -958,6 +959,54 @@ def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
         assert (
             "openrouter/vendor/twin:free" in {e["model_name"] for e in entries}
         ) is expected
+
+
+def test_openrouter_free_twin_toggle_rejects_invalid_value():
+    with pytest.raises(
+        RuntimeError, match="DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"
+    ):
+        litellm_config.compute_model_list(
+            {"DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS": "sometimes"}
+        )
+
+
+@pytest.mark.parametrize(
+    "model,host,expected",
+    [
+        ("vendor/model:free", "openrouter", "free-classified"),
+        ("cohere/command-r", "cohere", "free-classified"),
+        ("cohere/command-r", "openrouter", "known-unqualified"),
+        ("poolside/laguna-s-2.1", "poolside", "free-classified"),
+        ("poolside/laguna-s-2.1", "openrouter", "known-unqualified"),
+        ("opencode/big-pickle", "opencode", "free-classified"),
+        ("opencode/big-pickle", "openrouter", "free-classified"),
+    ],
+)
+def test_free_classifier_server_of_record_precedence(model, host, expected):
+    result = litellm_config.classify_free_route(model, host, "test", "role")
+    assert result["classification"] == expected
+    assert set(result) == {
+        "model_id",
+        "upstream_host",
+        "route_source",
+        "effective_role",
+        "classification",
+        "classification_reason",
+    }
+
+
+def test_free_preset_validator_pins_known_unqualified_routes():
+    report = free_classifier.validate_presets()
+    pinned = {
+        (row["model_id"], row["route_source"], row["effective_role"]) for row in report
+    }
+    assert {
+        ("google/gemini-3.5-flash-lite", "free", "librarian"),
+        ("google/gemini-3.8-flash", "free", "designer"),
+        ("google/gemini-3.8-flash", "free", "observer"),
+        ("google/gemini-3.8-flash", "free.council", "beta"),
+    } <= pinned
+    assert not any(row["model_id"] == "opencode/big-pickle" for row in report)
 
 
 def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):

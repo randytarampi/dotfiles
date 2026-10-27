@@ -47,6 +47,46 @@ _MODELS_DEV_FETCH = models_dev.fetch_models_dev
 
 logger = logging.getLogger(__name__)
 
+FREE_ROUTE_OWNER_EXCEPTIONS = {
+    "opencode/big-pickle": {
+        "approved": "2026-10-27",
+        "reason": "Owner-authorized always-free exception",
+    }
+}
+
+
+def classify_free_route(model_id, host, route_source, role):
+    """Pure route-level classifier; catalogue metadata is not billing enforcement."""
+    model_id = str(model_id)
+    host = str(host or "unknown").lower()
+    exception_id = (
+        model_id.split("/", 1)[-1] if model_id.startswith("opencode/") else model_id
+    )
+    if exception_id == "big-pickle":
+        reason = "owner exception (2026-10-27)"
+        classification = "free-classified"
+    elif "free" in model_id.lower():
+        reason = "model ID contains 'free'"
+        classification = "free-classified"
+    elif host == "cohere" and model_id.lower().startswith(("cohere/", "cohere_chat/")):
+        reason = "Cohere server of record"
+        classification = "free-classified"
+    elif host == "poolside" and model_id.lower().startswith("poolside/"):
+        reason = "Poolside server of record"
+        classification = "free-classified"
+    else:
+        reason = "route does not meet the free-classification policy"
+        classification = "known-unqualified"
+    return {
+        "model_id": model_id,
+        "upstream_host": host,
+        "route_source": str(route_source or "unknown"),
+        "effective_role": str(role or "unknown"),
+        "classification": classification,
+        "classification_reason": reason,
+    }
+
+
 OPENAI_SERVICE_LANES_ENV = "DOTFILES_USE_OPENAI_SERVICE_LANES"
 LITELLM_SETUP_GATE = "DOTFILES_RUN_LITELLM_SETUP=1"
 OPENAI_SERVICE_LANE_MODELS = {"gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"}
@@ -603,14 +643,14 @@ CLIENT_REGISTRY = [
     ),
 ]
 
-# Free classification is route metadata, not consumer qualification. A named
-# model containing "free" is free at any host; Cohere and Poolside are free
-# only through their own server of record (directly or this LiteLLM gateway).
+# Free classification is catalogue policy only, never a billing guarantee.
+# Runtime zero-charge enforcement is separate and remains deferred.
 for _row in CLIENT_REGISTRY:
     _row["free_route_policy"] = {
         "model_name_contains_free": True,
         "provider_server_of_record_only": ["cohere", "poolside"],
         "third_party_hosting_excluded": True,
+        "classifier": "scripts/lib/free_classifier.py:evaluate",
     }
 
 
@@ -628,6 +668,15 @@ def validate_routing_entries(entries, *, port=4000):
     # field-selection implementations that could drift apart (Oracle L2).
     if not routing_entries_are_safe(entries, port=port):
         raise RoutingInvariantError("refusing LiteLLM routing loop")
+
+
+def _include_openrouter_free_twins(environ):
+    value = str(environ.get(OPENROUTER_FREE_TWINS_ENV, "1")).strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"unsupported {OPENROUTER_FREE_TWINS_ENV} value {value!r}")
 
 
 def _model_name(item):
@@ -1246,6 +1295,7 @@ def compute_model_list(environ=None, previous_entries=None):
         raise RuntimeError(
             f"unsupported DOTFILES_LITELLM_CATALOGUE_SCOPE {scope!r}: expected 'free' or 'full'"
         )
+    _include_openrouter_free_twins(environ)
     for provider in active_engines():
         models = [
             _model_name(model)
@@ -1539,11 +1589,17 @@ def compute_model_list(environ=None, previous_entries=None):
                     if held is None or len(item) > len(held):
                         raw_upstream_by_key[key] = item
                 curated = {raw_upstream_by_key.get(item, item) for item in curated}
-                if provider == "openrouter" and str(
-                    environ.get(OPENROUTER_FREE_TWINS_ENV, "1")
-                ).strip().lower() in {"1", "true", "yes", "on"}:
+                if provider == "openrouter" and _include_openrouter_free_twins(environ):
                     curated |= {
-                        item for item in raw_confirmed if item.endswith(":free")
+                        item
+                        for item in raw_confirmed
+                        if classify_free_route(
+                            f"openrouter/{item}",
+                            "openrouter",
+                            "live-catalogue",
+                            "catalogue",
+                        )["classification"]
+                        == "free-classified"
                     }
                 confirmed_models = curated
             else:

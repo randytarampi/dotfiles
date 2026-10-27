@@ -35,6 +35,7 @@ def test_registry_rows_are_complete():
             "model_name_contains_free": True,
             "provider_server_of_record_only": ["cohere", "poolside"],
             "third_party_hosting_excluded": True,
+            "classifier": "scripts/lib/free_classifier.py:evaluate",
         }
 
 

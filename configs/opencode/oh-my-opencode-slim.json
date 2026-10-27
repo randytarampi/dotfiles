@@ -1520,27 +1520,13 @@
         }
       },
       "fallback": {
-        "orchestrator": [
-          "openai/gpt-6.1-sol"
-        ],
-        "oracle": [
-          "openai/gpt-5.6-luna"
-        ],
-        "librarian": [
-          "openai/gpt-5.6-luna"
-        ],
-        "explorer": [
-          "openai/gpt-5.6-luna"
-        ],
-        "designer": [
-          "openai/gpt-5.6-luna"
-        ],
-        "fixer": [
-          "openai/gpt-5.6-luna"
-        ],
-        "observer": [
-          "openai/gpt-5.6-luna"
-        ],
+        "orchestrator": [],
+        "oracle": [],
+        "librarian": [],
+        "explorer": [],
+        "designer": [],
+        "fixer": [],
+        "observer": [],
         "council": []
       }
     },
