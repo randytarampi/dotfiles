@@ -113,6 +113,23 @@ groups, see docs/JUNIE.md) and `copilot`
 a hop without attribution benefit. The doctor excludes these exceptions from
 gateway-only violation checks.
 
+GitHub Copilot CLI has a separate, opt-in launcher at `scripts/copilot-litellm`;
+it is distinct from the Copilot extension identity. Both
+`DOTFILES_RUN_COPILOT_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1` are required.
+Set `DOTFILES_COPILOT_LITELLM_MODEL` to an exact served alias; no model is
+assumed. The launcher uses the Copilot CLI's installed OpenAI `completions`
+BYOK contract and the dedicated
+`~/.local/share/litellm/clients/copilot-cli.key`. Bearer tokens, key commands,
+custom headers and inherited model selectors are cleared. The default endpoint
+is loopback LiteLLM `/v1`; an explicit
+`DOTFILES_COPILOT_LITELLM_BASE_URL` override is available. Installed CLI help
+confirms this configuration surface, but a live request is not qualified and
+remains UNKNOWN; this does not imply ACP or IDE support.
+The wrapper forwards a bounded set of session options, including prompt,
+resume, output, reasoning and tool-approval options; unsupported flags fail
+with a usage error rather than being guessed from help text. All three setup,
+proxy and LiteLLM gates must be enabled. Endpoint overrides remain loopback-only.
+
 Client adapters map canonical identities at their boundary through
 `scripts/lib/litellm_aliases.py`; tier registries remain transport-neutral.
 The old Open WebUI, OpenCode, Pi and Junie canaries migrate by OR: any active
