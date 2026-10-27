@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+_SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "${_SELF%/*}" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
+COMMON_USAGE="$0 [--dry-run] [Claude CLI arguments]"
+COMMON_HELP_TEXT="Standalone Claude CLI session through LiteLLM.
+
+Options:
+  --help       Print usage and exit
+  --dry-run    Print a redacted launch preview without executing Claude"
+export COMMON_USAGE COMMON_HELP_TEXT
+COMMON_DRY_RUN=0
+COMMON_ARGS_REMAINING=()
+for arg in "$@"; do
+  case "$arg" in
+  --help)
+    _print_help
+    exit 0
+    ;;
+  --dry-run) COMMON_DRY_RUN=1 ;;
+  --no-backup)
+    printf 'Unknown option: %s\n' "$arg" >&2
+    exit 2
+    ;;
+  *) COMMON_ARGS_REMAINING+=("$arg") ;;
+  esac
+done
+set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
+
+if [[ "${DOTFILES_RUN_CLAUDE_SETUP:-0}" != "1" || "${DOTFILES_USE_LITELLM_PROXY:-0}" != "1" ]]; then
+  case "${1:-}" in
+  -*)
+    printf 'Unknown option: %s\n' "$1" >&2
+    exit 2
+    ;;
+  esac
+  printf '%s\n' 'Claude LiteLLM launcher requires DOTFILES_RUN_CLAUDE_SETUP=1 and DOTFILES_USE_LITELLM_PROXY=1.' >&2
+  exit 1
+fi
+
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  printf '%s\n' 'Dry run: would launch bare Claude CLI via configured LiteLLM endpoint/model using the private claude key; credential value not read or displayed.'
+  exit 0
+fi
+
+for arg in "$@"; do
+  case "$arg" in
+  --model | -m | --model=* | -m=* | --settings | --settings=* | --setting-sources | --setting-sources=* | --bare | --api-key-helper | --api-key-helper=* | --api-key | --fallback-model | --fallback-model=*)
+    printf 'Refusing caller override that could change gateway policy: %s\n' "$arg" >&2
+    exit 2
+    ;;
+  esac
+done
+
+cli="${DOTFILES_CLAUDE_BIN:-claude}"
+if [[ "$cli" == */* ]]; then
+  [[ -x "$cli" ]] || {
+    printf 'Claude CLI not executable: %s\n' "$cli" >&2
+    exit 1
+  }
+else
+  cli_path="$(command -v "$cli" 2>/dev/null || true)"
+  [[ -n "$cli_path" ]] || {
+    printf 'Claude CLI not found: %s\n' "$cli" >&2
+    exit 1
+  }
+  cli="$cli_path"
+fi
+
+key_file="${DOTFILES_LITELLM_CLAUDE_KEY_FILE:-${HOME:?HOME must be set}/.local/share/litellm/clients/claude.key}"
+[[ -f "$key_file" && ! -L "$key_file" && -r "$key_file" ]] || {
+  printf 'Claude LiteLLM key file unavailable: %s\n' "$key_file" >&2
+  exit 1
+}
+[[ "$(stat -f '%Lp' "$key_file" 2>/dev/null || stat -c '%a' "$key_file" 2>/dev/null)" == 600 ]] || {
+  printf 'Claude LiteLLM key file must have mode 0600: %s\n' "$key_file" >&2
+  exit 1
+}
+[[ "$(stat -f '%u' "$key_file" 2>/dev/null || stat -c '%u' "$key_file" 2>/dev/null)" == "$(id -u)" ]] || {
+  printf 'Claude LiteLLM key file must be owned by the current user: %s\n' "$key_file" >&2
+  exit 1
+}
+key="$(<"$key_file")"
+key="${key#"${key%%[![:space:]]*}"}"
+key="${key%"${key##*[![:space:]]}"}"
+[[ -n "$key" ]] || {
+  printf '%s\n' 'Claude LiteLLM key file is empty.' >&2
+  exit 1
+}
+[[ "$key" != *[[:space:]]* ]] || {
+  printf '%s\n' 'Claude LiteLLM key contains internal whitespace.' >&2
+  exit 1
+}
+if [[ -n "${LITELLM_CLAUDE_KEY:-}" && "$LITELLM_CLAUDE_KEY" != "$key" ]]; then
+  printf '%s\n' 'Claude LiteLLM environment key conflicts with the canonical key file.' >&2
+  exit 1
+fi
+
+port="${LITELLM_PORT:-4000}"
+if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ! ((10#$port > 0 && 10#$port < 65536)); then
+  printf '%s\n' 'LITELLM_PORT must be a valid TCP port.' >&2
+  exit 1
+fi
+model="${DOTFILES_CLAUDE_LITELLM_MODEL:-}"
+[[ -n "$model" ]] || {
+  printf '%s\n' 'DOTFILES_CLAUDE_LITELLM_MODEL must name an explicitly qualified, served alias.' >&2
+  exit 1
+}
+[[ "$model" =~ ^[A-Za-z0-9._:/-]+$ ]] || {
+  printf '%s\n' 'Unsafe Claude LiteLLM model identifier.' >&2
+  exit 1
+}
+endpoint="${DOTFILES_CLAUDE_LITELLM_BASE_URL:-http://127.0.0.1:${port}}"
+[[ "$endpoint" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]] || {
+  printf '%s\n' 'Unsafe Claude LiteLLM endpoint.' >&2
+  exit 1
+}
+
+unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BEDROCK_BASE_URL AWS_BEARER_TOKEN_BEDROCK
+unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+unset ANTHROPIC_CUSTOM_HEADERS ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL
+unset ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL
+unset ANTHROPIC_SMALL_FAST_MODEL ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
+export ANTHROPIC_BASE_URL="$endpoint"
+export ANTHROPIC_API_KEY="$key"
+unset key
+exec "$cli" --bare --setting-sources '' --settings "{\"model\":\"$model\",\"env\":{\"ANTHROPIC_BASE_URL\":\"$endpoint\"}}" "$@"
