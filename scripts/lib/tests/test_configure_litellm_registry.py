@@ -30,6 +30,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_LITELLM_SETUP",
         "DOTFILES_RUN_OPENCODE_SETUP",
         "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_RUN_CLAUDE_SETUP",
         "DOTFILES_RUN_OPENWEBUI_SETUP",
         "DOTFILES_RUN_JUNIE_CLI_SETUP",
         "DOTFILES_RUN_CODEX_SETUP",
@@ -76,6 +77,7 @@ def _fake_gateway(monkeypatch):
 def test_classification_only_rows_never_generate_keys(monkeypatch, tmp_path):
     calls = _fake_gateway(monkeypatch)
     _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: None)
     assert configure_litellm.provision_app_keys(
         "master", tmp_path / "service.env", strict=True
@@ -89,6 +91,7 @@ def test_pi_requires_both_registry_gates(monkeypatch, tmp_path):
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
     _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_PI_SETUP")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
     generated = [
         call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
@@ -122,6 +125,9 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
         rows[name]["credential_policy"] == "no-credential"
         for name in ("cursor", "copilot", "vscode")
     )
+    assert rows["claude"]["classification"] == "eligible"
+    assert rows["claude"]["credential_policy"] == "provision"
+    assert rows["claude"]["setup_gates"] == ["DOTFILES_RUN_CLAUDE_SETUP=1"]
 
 
 def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):
@@ -131,6 +137,77 @@ def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):
         ]
         == "~/.local/share/litellm/clients/junie.key"
     )
+
+
+def test_claude_provisions_only_with_gateway_and_client_gates(monkeypatch, tmp_path):
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/claude")
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert not any(
+        call[0].endswith("/key/generate") and call[2]["key_alias"] == "claude"
+        for call in calls
+    )
+
+    calls.clear()
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_CLAUDE_SETUP")
+    service = tmp_path / "service.env"
+    assert configure_litellm.provision_app_keys("master", service)
+    assert any(
+        call[0].endswith("/key/generate") and call[2]["key_alias"] == "claude"
+        for call in calls
+    )
+    key_file = service.parent / "clients/claude.key"
+    assert key_file.is_file() and key_file.stat().st_mode & 0o777 == 0o600
+    assert key_file.read_text().strip()
+
+
+def test_claude_strict_key_check_uses_attribution_and_labels_unqualified_messages(
+    monkeypatch, tmp_path, caplog
+):
+    calls = []
+
+    def request(url, method, key, payload=None):
+        calls.append((url, method, key))
+        return {"data": []}
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    row = next(
+        row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "claude"
+    )
+    key_path = tmp_path / "clients/claude.key"
+    key_path.parent.mkdir()
+    key_path.write_text("dummy-key")
+    key_path.chmod(0o600)
+    assert configure_litellm._verify_provisioned_keys(
+        [row], "http://gateway", tmp_path / "service.env"
+    )
+    assert calls == [("http://gateway/v1/models", "GET", "dummy-key")]
+    assert "Messages transport remains unqualified" in caplog.text
+
+
+def test_claude_strict_authentication_failure_fails_readiness(monkeypatch, tmp_path):
+    calls = []
+
+    def request(url, method, key, payload=None):
+        calls.append(url)
+        if key == "bad-key":
+            raise OSError("401")
+        return {"data": []}
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    row = next(
+        row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "claude"
+    )
+    key_path = tmp_path / "clients/claude.key"
+    key_path.parent.mkdir()
+    key_path.write_text("bad-key")
+    monkeypatch.setenv("LITELLM_CLAUDE_KEY", "bad-key")
+    assert not configure_litellm._verify_provisioned_keys(
+        [row], "http://gateway", tmp_path / "service.env"
+    )
+    assert calls == ["http://gateway/v1/models"]
 
 
 @pytest.mark.parametrize(
@@ -212,6 +289,8 @@ def test_strict_auth_checks_client_identity(monkeypatch, tmp_path):
             return {"key": f"key-for-{payload['key_alias']}"}
         if url.endswith("/v1/models"):
             expected = key.rsplit("-", 1)[-1]
+            if expected == "claude":
+                return {"data": []}
             if expected not in ("pi", "opencode"):
                 raise AssertionError("unexpected client identity")
             return {"data": [], "authenticated_as": expected}
@@ -219,6 +298,7 @@ def test_strict_auth_checks_client_identity(monkeypatch, tmp_path):
 
     monkeypatch.setattr(configure_litellm, "_request_json", request)
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     _enabled(
         monkeypatch,
         "DOTFILES_RUN_LITELLM_SETUP",
@@ -268,6 +348,7 @@ def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tm
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
     _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_OPENCODE_SETUP")
     _enabled(monkeypatch, "DOTFILES_RUN_PI_SETUP", "DOTFILES_USE_LITELLM_PROXY")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     monkeypatch.setenv("LITELLM_OPENCODE_KEY", "existing-key")
     client_path = tmp_path / "clients" / "opencode.key"
     client_path.parent.mkdir(mode=0o700)

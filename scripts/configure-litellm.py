@@ -42,6 +42,7 @@ _CLIENT_ENABLE_GATES = {
     "openwebui": ("DOTFILES_RUN_OPENWEBUI_SETUP",),
     "junie": ("DOTFILES_RUN_JUNIE_CLI_SETUP",),
     "codex": ("DOTFILES_RUN_CODEX_SETUP",),
+    "claude": ("DOTFILES_RUN_CLAUDE_SETUP",),
 }
 _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_OPENCODE_SETUP",
@@ -71,6 +72,13 @@ def _client_provisioning_state(
         os.environ.get(gate, "0") == "1" for gate in _CLIENT_ENABLE_GATES[row["client"]]
     ):
         return False, "user enablement gate disabled"
+    if (
+        row["client"] == "claude"
+        and enforce_registry_gates
+        and not strict_provisioning
+        and shutil.which("claude") is None
+    ):
+        return False, "not installed"
     binary = _CLI_INSTALLS.get(row["client"])
     # Fleet-managed clients (openwebui/junie) prove installation through their
     # own DOTFILES_RUN_* enablement gates — their configure scripts own the
@@ -83,7 +91,7 @@ def _client_provisioning_state(
         and not strict_provisioning
     ):
         return False, "not installed"
-    if "OpenAI-compatible" not in row["transports"]:
+    if "OpenAI-compatible" not in row["transports"] and row["client"] != "claude":
         return False, "usable transport UNKNOWN"
     return True, "eligible"
 
@@ -361,6 +369,10 @@ def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
 def _write_codex_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the Codex app key without sourcing service.env."""
     _write_client_key(service_env_path, "codex", "LITELLM_CODEX_KEY", dry_run)
+
+def _write_claude_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the standalone Claude CLI key without sourcing service.env."""
+    _write_client_key(service_env_path, "claude", "LITELLM_CLAUDE_KEY", dry_run)
 
 
 def _materialized_client_key_value(
@@ -723,6 +735,11 @@ def _verify_one_app_key(row, auth, api_base):
     except (OSError, ValueError, TypeError):
         logger.error("LiteLLM client key authentication failed: %s", alias)
         return False
+    if row["client"] == "claude":
+        logger.info(
+            "Claude key authenticated through LiteLLM model listing; "
+            "Anthropic Messages transport remains unqualified"
+        )
     if not isinstance(response, dict) or not isinstance(response.get("data"), list):
         logger.error("LiteLLM client key model access failed: %s", alias)
         return False
@@ -754,6 +771,13 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
 
 
 def _write_provisioned_client_keys(rows, service_env_path, dry_run):
+    writers = {
+        "opencode": _write_opencode_key,
+        "pi": _write_pi_key,
+        "junie": _write_junie_key,
+        "openwebui": _write_openwebui_key,
+        "claude": _write_claude_key,
+    }
     for row in rows:
         writer = PROVISIONED_CLIENT_KEY_WRITERS.get(row["client"])
         if writer:

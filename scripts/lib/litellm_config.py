@@ -351,6 +351,7 @@ APP_KEYS = {
     "openwebui": "LITELLM_OPENWEBUI_KEY",
     "junie": "LITELLM_JUNIE_KEY",
     "codex": "LITELLM_CODEX_KEY",
+    "claude": "LITELLM_CLAUDE_KEY",
 }
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
@@ -464,16 +465,25 @@ CLIENT_REGISTRY = [
     ),
     _client_row(
         "claude",
-        "LITELLM_CLAUDE_KEY",
+        APP_KEYS["claude"],
         ["Claude CLI installed"],
-        ["Anthropic Messages at gateway root"],
-        "pending",
+        [
+            "Anthropic Messages at gateway root",
+            "standalone CLI wrapper; live qualification pending",
+        ],
+        "scripts/claude-litellm",
         ["DOTFILES_RUN_CLAUDE_SETUP=1"],
         "file-or-env",
         "Claude gateway configuration",
-        "pending-qualification",
-        "pending",
-        "D1c",
+        "eligible",
+        "provision",
+        "D1c; standalone Claude CLI launcher is implemented, provision only after transport qualification",
+        eligibility={
+            "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
+            "installed": "Claude CLI installation detected when provisioning is enabled",
+            "user_enabled": "DOTFILES_RUN_CLAUDE_SETUP=1",
+            "verified_usable_transport": "Messages transport code is implemented; live qualification remains outstanding",
+        },
     ),
     _client_row(
         "jetbrains",

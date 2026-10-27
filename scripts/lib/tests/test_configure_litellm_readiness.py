@@ -221,6 +221,7 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
     monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     calls = []
 
@@ -372,6 +373,7 @@ def test_provisioning_second_pass_is_byte_stable(tmp_path, monkeypatch):
         (client_dir / f"{alias}.key").write_text(f"{alias}-key")
     for gate in ("OPENCODE", "PI", "JUNIE_CLI", "OPENWEBUI"):
         monkeypatch.setenv(f"DOTFILES_RUN_{gate}_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     monkeypatch.setattr(
         CONFIGURE,
         "_request_json",

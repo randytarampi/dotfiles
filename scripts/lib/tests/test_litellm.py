@@ -1539,7 +1539,7 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     )
 
     assert sorted(c[2]["key_alias"] for c in calls if c[1] == "POST") == sorted(
-        ("pi", "openwebui", "junie", "codex")
+        ("pi", "openwebui", "junie", "codex", "claude")
     )
     content = path.read_text(encoding="utf-8")
     assert "LITELLM_PI_KEY=sk-generated-pi" in content
@@ -1975,7 +1975,7 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     expected_clients = [
         c
         for c in CONFIGURE.APP_KEYS
-        if "OpenAI-compatible" in registry[c]["transports"]
+        if "OpenAI-compatible" in registry[c]["transports"] or c == "claude"
     ]
     assert len(generate_attempts) == len(expected_clients)
     # A 400 is not persisted as a key; the service env keeps its prior state.
