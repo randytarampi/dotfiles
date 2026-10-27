@@ -25,6 +25,40 @@ configure_codex = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure_codex)
 
 
+@pytest.mark.parametrize(
+    "root_setting",
+    ["", 'model_provider = "openai"\n'],
+)
+def test_summary_does_not_treat_profile_provider_as_root_default(root_setting):
+    config = (
+        f'{root_setting}\n[model_providers.litellm]\nname = "Gateway"\n'
+        '\n[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
+        'model_provider = "litellm"\n'
+    )
+    summary = "\n".join(
+        configure_codex.build_summary_lines(config, "config.toml", "m", "note", "")
+    )
+    assert "opt-in profile: litellm" in summary
+    assert "not the root default" in summary
+    assert "runtime profile selection: unknown" in summary
+    assert "root provider: litellm" not in summary
+
+
+def test_summary_reports_litellm_root_default_without_inactive_warning():
+    config = 'model_provider = "litellm"\n[model_providers.litellm]\nname = "Gateway"\n'
+    summary = "\n".join(
+        configure_codex.build_summary_lines(config, "config.toml", "m", "note", "")
+    )
+    assert "not the root default" not in summary
+    assert "root provider: litellm" in summary
+
+
+def test_summary_rejects_invalid_toml():
+    config = "[broken\n"
+    with pytest.raises(configure_codex.tomllib.TOMLDecodeError):
+        configure_codex.build_summary_lines(config, "config.toml", "m", "note", "")
+
+
 @pytest.mark.parametrize("proxy_gate", ["0", "1"])
 def test_litellm_provider_requires_both_gates(monkeypatch, proxy_gate):
     monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")

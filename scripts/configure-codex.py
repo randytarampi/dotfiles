@@ -250,12 +250,19 @@ def build_summary_lines(config, config_path, ollama_cloud_model, note, local_mod
         )
     profiles = re.findall(r"\[profiles\.([^\]]+)\]", config)
     lines.append(f"  • profiles: {', '.join(profiles)}")
-    if re.search(r"\[model_providers\.litellm\]", config) and not re.search(
-        r'^model_provider\s*=\s*"litellm"', config, re.MULTILINE
-    ):
+    parsed = tomllib.loads(config)
+    root_provider = parsed.get("model_provider")
+    lines.append(f"  • root provider: {root_provider or 'unset (Codex default)'}")
+    profiles = parsed.get("profiles", {})
+    if "litellm" in profiles:
+        lines.append("  • opt-in profile: litellm")
         lines.append(
-            "  • note: model_providers.litellm is managed but not active; set "
-            'model_provider = "litellm" manually to route the default through '
+            "  • runtime profile selection: unknown (not read from configuration)"
+        )
+    if "litellm" in parsed.get("model_providers", {}) and root_provider != "litellm":
+        lines.append(
+            "  • note: model_providers.litellm is managed but not the root default; "
+            'set model_provider = "litellm" manually to route the default through '
             "the gateway (owner-controlled switch)"
         )
     provider, model = _model_parts(local_model) if local_model else ("ollama", "none")
