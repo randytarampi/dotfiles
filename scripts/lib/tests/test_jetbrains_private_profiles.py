@@ -49,7 +49,10 @@ def harness(tmp_path, monkeypatch):
                     },
                 },
                 "groups": {
-                    "openai-main": {"provider": "openai", "primaryModel": "gpt-main"},
+                    "openai-main": {
+                        "provider": "openai",
+                        "primaryModel": "gpt-main",
+                    },
                     "openai-faster": {
                         "provider": "openai",
                         "primaryModel": "gpt-faster",
@@ -299,21 +302,38 @@ def test_compatibility_names_remain_selectable_after_generation(harness, monkeyp
     config["compatibility"] = {"legacy-main": "openai-main"}
     groups_path.write_text(json.dumps(config), encoding="utf-8")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-openai-key")
+    config["groups"]["openai-main"].update(
+        {"fasterModel": "gpt-fast", "fasterProvider": "openai"}
+    )
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+
+    PROFILES.main()
+
+    canonical = json.loads((target / "openai-main.json").read_text(encoding="utf-8"))
+    compatibility = json.loads(
+        (target / "legacy-main.json").read_text(encoding="utf-8")
+    )
+    for field in ("primaryModel", "fasterModel", "baseUrl", "apiType", "apiKey"):
+        assert compatibility[field] == canonical[field]
+
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setattr(
         PROFILES,
-        "build_provider_configs",
-        lambda *_: {
-            "openai": {
-                "baseUrl": "https://direct.example/v1",
-                "apiType": "OpenAICompletion",
-                "apiKey": "${OPENAI_API_KEY}",
-            }
-        },
+        "litellm_catalogue_models",
+        lambda *_: {"openai/gpt-main", "openai/gpt-fast"},
     )
 
     PROFILES.main()
 
-    assert (target / "legacy-main.json").is_file()
+    canonical_twin_path = target / "litellm-openai-main.json"
+    alias_twin_path = target / "litellm-legacy-main.json"
+    assert canonical_twin_path.is_file()
+    assert alias_twin_path.is_file()
+    canonical_twin = json.loads(canonical_twin_path.read_text(encoding="utf-8"))
+    alias_twin = json.loads(alias_twin_path.read_text(encoding="utf-8"))
+    for field in ("primaryModel", "fasterModel", "baseUrl", "apiType", "apiKey"):
+        assert alias_twin[field] == canonical_twin[field]
 
 
 def test_crash_after_profile_overwrite_preserves_manual_files_and_refuses_retry(
