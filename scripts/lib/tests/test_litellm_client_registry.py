@@ -73,6 +73,20 @@ def test_mozart_is_existing_consumer_with_evidence():
     assert all(":" in pointer for pointer in row["evidence"])
 
 
+def test_hermes_is_config_only_with_pool_delivery_deferred():
+    row = next(
+        row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "hermes"
+    )
+    assert row["classification"] == "config-only"
+    assert row["credential_policy"] == "defer"
+    assert row["config_owner"] == "scripts/configure-hermes.py"
+    assert row["setup_gates"] == [
+        "DOTFILES_RUN_HERMES_SETUP=1",
+        "DOTFILES_USE_LITELLM_PROXY=1",
+    ]
+    assert "pool" in row["classification_status"]
+
+
 def test_each_row_encodes_four_condition_eligibility():
     for row in litellm_config.CLIENT_REGISTRY:
         assert set(row["eligibility"]) == {

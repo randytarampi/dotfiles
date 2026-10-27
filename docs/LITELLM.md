@@ -343,3 +343,30 @@ the generated `config.yaml` against the Admin API's model-table rows
 `--dry-run` (lists planned deletions and performs no network deletes);
 targets the local loopback gateway only. Useful for clearing
 stale Admin UI `Models` tab rows left behind by earlier configuration states.
+
+### Hermes configuration scaffold
+
+`scripts/configure-hermes.py --model <served-alias>` adds the namespaced
+`providers.dotfiles-litellm` entry to `$HERMES_HOME/config.yaml` when both
+`DOTFILES_RUN_HERMES_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`. The endpoint
+defaults to `http://127.0.0.1:${LITELLM_PORT:-4000}/v1`; `--endpoint` accepts
+only that loopback `/v1` form. Hermes' default provider is not changed; select
+the scaffold explicitly with `hermes --provider dotfiles-litellm --model
+<served-alias>`.
+
+The schema was inspected in Hermes 0.22.4 (`hermes_cli/config_providers.py`):
+`name`, `api`, `transport: chat_completions`, `key_env` and `default_model`.
+The generator stores only the `LITELLM_HERMES_KEY` environment-variable name,
+never its value. Hermes' runtime provider resolver gives saved credential-pool
+credentials precedence when no explicit key is supplied; the installed CLI
+does not expose a verified explicit-key selector. Therefore the scaffold is
+configuration-only: credential delivery and live LiteLLM transport remain
+unqualified, with provisioning deferred.
+
+Without `HERMES_HOME`, the generator targets `~/.hermes/config.yaml`.
+`--dry-run` previews without writing; `--no-backup` explicitly skips the
+otherwise exclusive mode-0600 `config.yaml.bak`. An existing backup is never
+overwritten. Existing matching provider entries are a no-op; differing entries,
+duplicate keys, aliases, flow collections and empty/null provider mappings are
+refused rather than rewritten. Back up and resolve those forms manually before
+retrying. Unmanaged text and global selections are preserved.
