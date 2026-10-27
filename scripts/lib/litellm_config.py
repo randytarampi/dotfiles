@@ -51,6 +51,7 @@ FREE_ROUTE_OWNER_EXCEPTIONS = {
     "opencode/big-pickle": {
         "approved": "2026-10-27",
         "reason": "Owner-authorized always-free exception",
+        "host": "opencode",
     }
 }
 
@@ -59,10 +60,8 @@ def classify_free_route(model_id, host, route_source, role):
     """Pure route-level classifier; catalogue metadata is not billing enforcement."""
     model_id = str(model_id)
     host = str(host or "unknown").lower()
-    exception_id = (
-        model_id.split("/", 1)[-1] if model_id.startswith("opencode/") else model_id
-    )
-    if exception_id == "big-pickle":
+    exception = FREE_ROUTE_OWNER_EXCEPTIONS.get(model_id)
+    if exception and host == exception["host"]:
         reason = "owner exception (2026-10-27)"
         classification = "free-classified"
     elif "free" in model_id.lower():
@@ -650,7 +649,7 @@ for _row in CLIENT_REGISTRY:
         "model_name_contains_free": True,
         "provider_server_of_record_only": ["cohere", "poolside"],
         "third_party_hosting_excluded": True,
-        "classifier": "scripts/lib/free_classifier.py:evaluate",
+        "classifier": "litellm_config:classify_free_route",
     }
 
 

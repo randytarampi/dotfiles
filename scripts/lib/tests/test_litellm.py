@@ -979,11 +979,11 @@ def test_openrouter_free_twin_toggle_rejects_invalid_value():
         ("poolside/laguna-s-2.1", "poolside", "free-classified"),
         ("poolside/laguna-s-2.1", "openrouter", "known-unqualified"),
         ("opencode/big-pickle", "opencode", "free-classified"),
-        ("opencode/big-pickle", "openrouter", "free-classified"),
+        ("opencode/big-pickle", "openrouter", "known-unqualified"),
     ],
 )
 def test_free_classifier_server_of_record_precedence(model, host, expected):
-    result = litellm_config.classify_free_route(model, host, "test", "role")
+    result = litellm_config.classify_free_route(model, host, "audit-label", "role")
     assert result["classification"] == expected
     assert set(result) == {
         "model_id",
@@ -1006,7 +1006,118 @@ def test_free_preset_validator_pins_known_unqualified_routes():
         ("google/gemini-3.8-flash", "free", "observer"),
         ("google/gemini-3.8-flash", "free.council", "beta"),
     } <= pinned
-    assert not any(row["model_id"] == "opencode/big-pickle" for row in report)
+    assert any(row["model_id"] == "opencode/big-pickle" for row in report)
+
+
+def test_free_classifier_materialized_fixture_passes_and_injected_unknown_fails():
+    slim = {"presets": {"free": {"worker": {"model": "vendor/model:free"}}}}
+    assert free_classifier.audit_materialized(slim) == []
+    bad = {"presets": {"free": {"worker": {"model": "vendor/paid-model"}}}}
+    report = free_classifier.audit_materialized(bad)
+    assert len(report) == 1
+    assert report[0]["classification"] == "known-unqualified"
+    assert report[0]["upstream_host"] == "unknown"
+
+
+def test_free_classifier_callable_contract_and_exception_provenance():
+    reference = litellm_config.CLIENT_REGISTRY[0]["free_route_policy"]["classifier"]
+    assert (
+        free_classifier.load_classifier(reference) is litellm_config.classify_free_route
+    )
+    assert (
+        litellm_config.classify_free_route(
+            "opencode/big-pickle", "opencode", "arbitrary-audit-label", "role"
+        )["classification"]
+        == "free-classified"
+    )
+    assert (
+        litellm_config.classify_free_route(
+            "opencode/big-pickle", "openrouter", "arbitrary-audit-label", "role"
+        )["classification"]
+        == "known-unqualified"
+    )
+
+
+def test_free_audit_shared_junie_selections_and_twins_are_nonempty():
+    from pathlib import Path
+    import json
+
+    root = Path(__file__).resolve().parents[3]
+    slim = json.loads((root / "configs/opencode/oh-my-opencode-slim.json").read_text())
+    profiles = free_classifier._free_junie_profiles(root, slim)
+    groups = profiles[0]["groups"]
+    assert {"free", "litellm-free"} <= groups.keys()
+    assert "openai" not in groups
+    records = free_classifier.collect_routes({}, profiles)
+    assert len(records) == 2 * len(groups)
+    for name in groups:
+        assert {row[2] for row in records if row[3] == f"junie.{name}"} == {
+            "primaryModel",
+            "fasterModel",
+        }
+    direct = {row[2]: row for row in records if row[3] == "junie.free"}
+    assert direct["primaryModel"][0] == "opencode/big-pickle"
+    assert direct["primaryModel"][1] == "opencode"
+    assert direct["fasterModel"][0] == "google/gemini-3.5-flash-lite"
+    assert direct["fasterModel"][1] == "google"
+
+
+def test_free_audit_resolved_gateway_backends_and_nested_selections():
+    endpoint = free_classifier.PROVIDER_ENDPOINTS["opencode"]["baseUrl"]
+    alias = {
+        "model_name": "opencode/big-pickle",
+        "litellm_params": {"model": "openai/big-pickle", "api_base": endpoint},
+    }
+    slim = {
+        "presets": {
+            "free": {
+                "worker": {
+                    "model": "opencode/big-pickle",
+                    "children": [{"model": "opencode/big-pickle"}],
+                    "fallback": ["opencode/big-pickle"],
+                }
+            }
+        },
+        "_tiers": {
+            "free": {
+                "council": {"alpha": "opencode/big-pickle"},
+                "fallback": ["opencode/big-pickle"],
+            }
+        },
+    }
+    profiles = [
+        {
+            "groups": {
+                "litellm-free": {
+                    "provider": "litellm",
+                    "primaryModel": "opencode/big-pickle",
+                    "fasterModel": "opencode/big-pickle",
+                }
+            }
+        }
+    ]
+    rows = free_classifier.collect_routes(slim, profiles, [alias])
+    assert len(rows) == 7
+    assert {row[1] for row in rows} == {"opencode"}
+    assert free_classifier.audit_materialized(slim, profiles, [alias]) == []
+    paid_backend = {
+        **alias,
+        "litellm_params": {
+            "model": "openai/big-pickle",
+            "api_base": "https://third-party.invalid/v1",
+        },
+    }
+    violations = free_classifier.audit_materialized(
+        slim, profiles, [alias, paid_backend]
+    )
+    assert len(violations) == 7
+    assert {row["upstream_host"] for row in violations} == {"unknown"}
+    assert len(free_classifier.audit_materialized(slim, profiles)) == 7
+
+
+def test_free_audit_gate_returns_failure_for_tracked_violations(capsys):
+    assert free_classifier.main([]) == 1
+    assert "google/gemini-3.8-flash" in capsys.readouterr().out
 
 
 def test_free_scope_unreferenced_providers_emit_nothing(monkeypatch):
