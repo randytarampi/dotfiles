@@ -5,7 +5,7 @@ from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "731d336ab1f892eb5a6cac7ded94c6eeba8ccb2a82f270d63eaf8cf8cf5961b4"
+    "261aa6a70e30c97fa8c354701b62948744b4c4c4b0ff5cb738d82c4dcee80cc5"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
@@ -62,7 +62,10 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
             by_line[b"LITELLM_MASTER_KEY"], by_line[b"LITELLM_OPENCODE_KEY"]
         )
         self.assertLess(
-            by_line[b"LITELLM_OPENCODE_KEY"], by_line[b"DOTFILES_RUN_CODEX_SETUP"]
+            by_line[b"LITELLM_OPENCODE_KEY"], by_line[b"LITELLM_COPILOT_CLI_KEY"]
+        )
+        self.assertLess(
+            by_line[b"LITELLM_COPILOT_CLI_KEY"], by_line[b"DOTFILES_RUN_CODEX_SETUP"]
         )
 
 

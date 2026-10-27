@@ -4,6 +4,7 @@ import json
 import io
 import shlex
 import subprocess
+import stat
 import urllib.error
 from collections import Counter
 from importlib.util import module_from_spec, spec_from_file_location
@@ -1533,10 +1534,10 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_COPILOT_SETUP", "0")
+    monkeypatch.setattr(CONFIGURE.shutil, "which", lambda _name: "/bin/client")
 
-    CONFIGURE.provision_app_keys(
-        "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
-    )
+    CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
 
     assert sorted(c[2]["key_alias"] for c in calls if c[1] == "POST") == sorted(
         ("pi", "openwebui", "junie", "codex", "claude")
@@ -2042,6 +2043,195 @@ def test_app_key_provisioning_never_deletes_alias_with_local_key(tmp_path, monke
     (client_dir / "openwebui.key").write_text("working-key")
     CONFIGURE.provision_app_keys("master", service_env, "http://127.0.0.1:4000")
     assert not any(url.endswith("/key/delete") for url, _, _ in requests)
+
+
+def test_copilot_cli_registry_is_separate_and_opt_in():
+    row = next(
+        row for row in CONFIGURE.CLIENT_REGISTRY if row["client"] == "copilot-cli"
+    )
+    assert row["env_name"] == "LITELLM_COPILOT_CLI_KEY"
+    assert row["key_file"].endswith("/copilot-cli.key")
+    assert row["classification"] == "eligible"
+    assert "live request remains UNKNOWN" in row["classification_status"]
+    assert "DOTFILES_RUN_COPILOT_SETUP=1" in row["setup_gates"]
+    assert "DOTFILES_USE_LITELLM_PROXY=1" in row["setup_gates"]
+    assert row["config_owner"] == "scripts/copilot-litellm"
+    assert row["credential_policy"] == "provision"
+    assert "OpenAI-compatible" in row["transports"]
+
+
+def test_copilot_litellm_launcher_isolated_environment_and_policy(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    bin_dir = tmp_path / "bin"
+    clients = home / ".local/share/litellm/clients"
+    clients.mkdir(parents=True)
+    bin_dir.mkdir()
+    recorder = bin_dir / "copilot"
+    recorder.write_text(
+        '#!/bin/sh\nif [ "$1" = "--help" ]; then printf "%s\\n" "--model" "--resume"; exit 0; fi\n'
+        'printf "%s\\n" "$@" > "$RECORD_ARGS"\n'
+        'env | sort > "$RECORD_ENV"\n'
+    )
+    recorder.chmod(0o755)
+    key = clients / "copilot-cli.key"
+    key.write_text("test-private-key")
+    key.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "HOME": str(home),
+        "RECORD_ARGS": str(tmp_path / "args"),
+        "RECORD_ENV": str(tmp_path / "env"),
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "openai/model-alias",
+        "COPILOT_PROVIDER_BEARER_TOKEN": "inherited-bearer",
+        "COPILOT_PROVIDER_API_KEY_COMMAND": "secret-command",
+        "COPILOT_PROVIDER_HEADERS": "Authorization: inherited",
+        "COPILOT_PROVIDER_MODEL_ID": "wrong-id",
+        "COPILOT_PROVIDER_WIRE_MODEL": "wrong-wire",
+        "COPILOT_PROVIDER_WIRE_API": "responses",
+        "COPILOT_PROVIDER_TRANSPORT": "websockets",
+        "COPILOT_PROVIDER_TYPE": "anthropic",
+        "COPILOT_MODEL": "wrong-model",
+    }
+    result = subprocess.run(
+        [str(launcher), "--resume", "session-id", "--prompt", "- explain this"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "args").read_text().splitlines() == [
+        "--resume",
+        "session-id",
+        "--prompt",
+        "- explain this",
+    ]
+    child_env = dict(
+        line.split("=", 1)
+        for line in (tmp_path / "env").read_text().splitlines()
+        if "=" in line
+    )
+    assert child_env["COPILOT_PROVIDER_API_KEY"] == "test-private-key"
+    assert child_env["COPILOT_PROVIDER_BASE_URL"] == "http://127.0.0.1:4000/v1"
+    assert child_env["COPILOT_PROVIDER_TYPE"] == "openai"
+    assert child_env["COPILOT_PROVIDER_WIRE_API"] == "completions"
+    assert child_env["COPILOT_PROVIDER_TRANSPORT"] == "http"
+    assert child_env["COPILOT_MODEL"] == "openai/model-alias"
+    for name in (
+        "COPILOT_PROVIDER_BEARER_TOKEN",
+        "COPILOT_PROVIDER_API_KEY_COMMAND",
+        "COPILOT_PROVIDER_HEADERS",
+        "COPILOT_PROVIDER_MODEL_ID",
+        "COPILOT_PROVIDER_WIRE_MODEL",
+    ):
+        assert name not in child_env
+
+
+@pytest.mark.parametrize(
+    "key_text,mode,symlink",
+    [("", 0o600, False), ("key", 0o644, False), ("key", 0o600, True)],
+)
+def test_copilot_litellm_rejects_unsafe_keys(tmp_path, key_text, mode, symlink):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    clients = home / ".local/share/litellm/clients"
+    clients.mkdir(parents=True)
+    key = clients / "copilot-cli.key"
+    key.write_text(key_text)
+    key.chmod(mode)
+    if symlink:
+        target = clients / "target"
+        key.rename(target)
+        key.symlink_to(target)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "copilot"
+    fake.write_text("#!/bin/sh\nexit 99\n")
+    fake.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "HOME": str(home),
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+    }
+    result = subprocess.run([str(launcher)], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "dedicated key file" in result.stderr
+
+
+def test_copilot_litellm_rejects_env_key_conflict(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    clients = home / ".local/share/litellm/clients"
+    clients.mkdir(parents=True)
+    key = clients / "copilot-cli.key"
+    key.write_text("file-key")
+    key.chmod(0o600)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "copilot"
+    fake.write_text(
+        '#!/bin/sh\nif [ "$1" = "--help" ]; then printf "%s\\n" "--model"; exit 0; fi\n'
+    )
+    fake.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "HOME": str(home),
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+        "LITELLM_COPILOT_CLI_KEY": "different",
+    }
+    result = subprocess.run([str(launcher)], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "conflicts" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "gate",
+    [
+        "DOTFILES_RUN_COPILOT_SETUP",
+        "DOTFILES_USE_LITELLM_PROXY",
+        "DOTFILES_RUN_LITELLM_SETUP",
+    ],
+)
+def test_copilot_litellm_requires_both_gates(gate, tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "copilot"
+    fake.write_text('#!/bin/sh\n[ "$1" = "--help" ] && exit 0\n')
+    fake.chmod(0o755)
+    result = subprocess.run(
+        [str(launcher)],
+        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), gate: "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "gate" in result.stderr
+
+
+def test_copilot_litellm_dry_run_needs_no_key_and_rejects_model_override(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+    result = subprocess.run(
+        [str(launcher), "--dry-run"], env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert "no key read or child execution" in result.stdout
+    assert "values redacted" in result.stdout
+    assert not (tmp_path / ".local/share/litellm/clients").exists()
+    result = subprocess.run(
+        [str(launcher), "--model=other"], env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 2
 
 
 def test_model_catalogue_fetch_uses_45_second_deadline_and_timeout_is_unknown(

@@ -34,6 +34,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_OPENWEBUI_SETUP",
         "DOTFILES_RUN_JUNIE_CLI_SETUP",
         "DOTFILES_RUN_CODEX_SETUP",
+        "DOTFILES_RUN_COPILOT_SETUP",
         "DOTFILES_USE_LITELLM_PROXY",
         "LITELLM_CLIENT_KEY_FILE",
         "DOTFILES_RUN_CODEX_SETUP",
@@ -131,6 +132,56 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
         "DOTFILES_RUN_CLAUDE_SETUP=1",
         "DOTFILES_RUN_LITELLM_SETUP=1",
     ]
+    assert rows["copilot-cli"]["credential_policy"] == "provision"
+    assert rows["copilot-cli"]["transports"][:1] == ["OpenAI-compatible"]
+
+
+@pytest.mark.parametrize(
+    "setup,proxy,litellm,installed,expected",
+    [
+        (0, 1, 1, 1, False),
+        (1, 0, 1, 1, False),
+        (1, 1, 0, 1, False),
+        (1, 1, 1, 0, False),
+        (1, 1, 1, 1, True),
+    ],
+)
+def test_copilot_cli_provisioning_requires_all_gates_and_install(
+    monkeypatch, tmp_path, setup, proxy, litellm, installed, expected
+):
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_COPILOT_SETUP", "1" if setup else "0")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1" if proxy else "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1" if litellm else "0")
+    monkeypatch.setattr(
+        configure_litellm.shutil,
+        "which",
+        lambda name: "/bin/copilot" if name == "copilot" and installed else None,
+    )
+    result = configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    aliases = [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ]
+    assert ("copilot-cli" in aliases) is expected
+
+
+def test_copilot_cli_writer_materializes_private_key(tmp_path):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_COPILOT_CLI_KEY='copilot-secret'\n")
+    configure_litellm._write_provisioned_client_keys(
+        [
+            next(
+                row
+                for row in litellm_config.CLIENT_REGISTRY
+                if row["client"] == "copilot-cli"
+            )
+        ],
+        service,
+        dry_run=False,
+    )
+    key = tmp_path / "clients/copilot-cli.key"
+    assert key.read_text() == "copilot-secret"
+    assert key.stat().st_mode & 0o777 == 0o600
 
 
 def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):
@@ -305,6 +356,7 @@ def test_strict_auth_checks_client_identity(monkeypatch, tmp_path):
         if url.endswith("/key/list?return_full_object=true"):
             return {"keys": []}
         if url.endswith("/key/generate"):
+            assert payload is not None
             return {"key": f"key-for-{payload['key_alias']}"}
         if url.endswith("/v1/models"):
             expected = key.rsplit("-", 1)[-1]

@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+_SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/common_args.sh"
+
+COMMON_USAGE="$0 [--help] [--dry-run] [Copilot CLI arguments...]"
+COMMON_HELP_TEXT='Launch Copilot CLI using an explicitly configured LiteLLM model alias.
+Requires DOTFILES_RUN_COPILOT_SETUP=1 and DOTFILES_USE_LITELLM_PROXY=1.
+Available flags:
+  --dry-run  Preview redacted adapter settings without reading a key or launching Copilot'
+export COMMON_USAGE COMMON_HELP_TEXT
+COMMON_DRY_RUN=0
+
+args=()
+needs_value=0
+for arg in "$@"; do
+  if [[ "$needs_value" == 1 ]]; then
+    args+=("$arg")
+    needs_value=0
+    continue
+  fi
+  case "$arg" in
+  --help | -h)
+    _print_help
+    exit 0
+    ;;
+  --dry-run) COMMON_DRY_RUN=1 ;;
+  --no-backup)
+    printf '%s\n' '--no-backup is not applicable.' >&2
+    exit 2
+    ;;
+  --model | --model=* | -m | -m?*)
+    printf '%s\n' 'copilot-litellm: model is policy-controlled; use DOTFILES_COPILOT_LITELLM_MODEL' >&2
+    exit 2
+    ;;
+  --prompt | -p | --interactive | -i | --name | -n | --session-id | --reasoning-effort | --output-format | --stream | -C)
+    args+=("$arg")
+    needs_value=1
+    ;;
+  --prompt=* | --interactive=* | --name=* | --session-id=* | --reasoning-effort=* | --output-format=* | --stream=* | --resume=* | --resume | -r | --continue | --silent | -s | --allow-all-tools | --no-auto-update | --disable-client-telemetry | --no-custom-instructions | --no-color)
+    args+=("$arg")
+    ;;
+  -*)
+    printf 'copilot-litellm: unsupported adapter option: %s\n' "$arg" >&2
+    exit 2
+    ;;
+  *) args+=("$arg") ;;
+  esac
+done
+if [[ "$needs_value" == 1 ]]; then
+  printf '%s\n' 'copilot-litellm: option requires a value.' >&2
+  exit 2
+fi
+arg_count=${#args[@]}
+if [[ "$COMMON_DRY_RUN" == 0 ]]; then
+  copilot_bin=$(command -v copilot || true)
+  if [[ -z "$copilot_bin" ]]; then
+    printf '%s\n' 'copilot-litellm: copilot CLI not found.' >&2
+    exit 1
+  fi
+fi
+
+if [[ "$COMMON_DRY_RUN" == 1 ]]; then
+  printf '%s\n' 'Copilot LiteLLM adapter preview: endpoint and model are configured (values redacted); no key read or child execution.' \
+    "Arguments: ${arg_count} (redacted)"
+  exit 0
+fi
+
+[[ "${DOTFILES_RUN_COPILOT_SETUP:-0}" == 1 && "${DOTFILES_USE_LITELLM_PROXY:-0}" == 1 ]] || {
+  printf '%s\n' 'copilot-litellm: both Copilot setup and LiteLLM proxy gates must equal 1.' >&2
+  exit 1
+}
+[[ "${DOTFILES_RUN_LITELLM_SETUP:-0}" == 1 ]] || {
+  printf '%s\n' 'copilot-litellm: LiteLLM setup gate must equal 1.' >&2
+  exit 1
+}
+model=${DOTFILES_COPILOT_LITELLM_MODEL:-}
+[[ -n "$model" && "$model" != *[[:space:]]* && "$model" != -* && "$model" != */*/* ]] || {
+  printf '%s\n' 'copilot-litellm: DOTFILES_COPILOT_LITELLM_MODEL must be an explicit alias without whitespace.' >&2
+  exit 1
+}
+key_file="${HOME}/.local/share/litellm/clients/copilot-cli.key"
+[[ -f "$key_file" && ! -L "$key_file" ]] || {
+  printf '%s\n' 'copilot-litellm: dedicated key file is unavailable or unsafe.' >&2
+  exit 1
+}
+mode=$(stat -f '%Lp' "$key_file" 2>/dev/null || stat -c '%a' "$key_file" 2>/dev/null || true)
+[[ -O "$key_file" && "$mode" == 600 ]] || {
+  printf '%s\n' 'copilot-litellm: dedicated key file must be owned by this user with mode 0600.' >&2
+  exit 1
+}
+key=$(<"$key_file")
+[[ -n "$key" && "$key" != *[[:space:]]* ]] || {
+  printf '%s\n' 'copilot-litellm: dedicated key file is empty or contains whitespace.' >&2
+  exit 1
+}
+if [[ -n "${LITELLM_COPILOT_CLI_KEY:-}" && "$LITELLM_COPILOT_CLI_KEY" != "$key" ]]; then
+  printf '%s\n' 'copilot-litellm: environment credential conflicts with dedicated key file.' >&2
+  exit 1
+fi
+endpoint=${DOTFILES_COPILOT_LITELLM_BASE_URL:-http://127.0.0.1:${LITELLM_PORT:-4000}/v1}
+if [[ ! "$endpoint" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)/v1$ ]]; then
+  printf '%s\n' 'copilot-litellm: endpoint must be loopback HTTP with /v1 path.' >&2
+  exit 1
+fi
+port=${BASH_REMATCH[2]}
+if [[ ${#port} -gt 5 || "$port" == 0* || "$port" -lt 1 || "$port" -gt 65535 ]]; then
+  printf '%s\n' 'copilot-litellm: endpoint port must be decimal 1-65535 without leading zeroes.' >&2
+  exit 1
+fi
+unset COPILOT_PROVIDER_BEARER_TOKEN COPILOT_PROVIDER_API_KEY_COMMAND COPILOT_PROVIDER_HEADERS
+unset COPILOT_MODEL COPILOT_PROVIDER_MODEL_ID COPILOT_PROVIDER_WIRE_MODEL
+unset COPILOT_PROVIDER_TYPE COPILOT_PROVIDER_WIRE_API COPILOT_PROVIDER_TRANSPORT
+export COPILOT_PROVIDER_BASE_URL="$endpoint"
+export COPILOT_PROVIDER_TYPE=openai COPILOT_PROVIDER_WIRE_API=completions COPILOT_PROVIDER_TRANSPORT=http
+export COPILOT_PROVIDER_API_KEY="$key" COPILOT_MODEL="$model"
+exec "$copilot_bin" ${args[@]+"${args[@]}"}

@@ -43,6 +43,7 @@ _CLIENT_ENABLE_GATES = {
     "junie": ("DOTFILES_RUN_JUNIE_CLI_SETUP",),
     "codex": ("DOTFILES_RUN_CODEX_SETUP",),
     "claude": ("DOTFILES_RUN_CLAUDE_SETUP",),
+    "copilot-cli": ("DOTFILES_RUN_COPILOT_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
 }
 _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_OPENCODE_SETUP",
@@ -51,7 +52,12 @@ _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_JUNIE_CLI_SETUP",
     "DOTFILES_USE_LITELLM_PROXY",
 )
-_CLI_INSTALLS = {"opencode": "opencode", "pi": "pi", "codex": "codex"}
+_CLI_INSTALLS = {
+    "opencode": "opencode",
+    "pi": "pi",
+    "codex": "codex",
+    "copilot-cli": "copilot",
+}
 
 
 def _client_provisioning_state(
@@ -359,6 +365,12 @@ def _write_pi_key(service_env_path: Path, dry_run=False) -> None:
 def _write_junie_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the Junie app key without sourcing service.env."""
     _write_client_key(service_env_path, "junie", "LITELLM_JUNIE_KEY", dry_run)
+
+
+def _write_copilot_cli_key(service_env_path: Path, dry_run=False) -> None:
+    _write_client_key(
+        service_env_path, "copilot-cli", "LITELLM_COPILOT_CLI_KEY", dry_run
+    )
 
 
 def _write_openwebui_key(service_env_path: Path, dry_run=False) -> None:
@@ -773,6 +785,13 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
 
 
 def _write_provisioned_client_keys(rows, service_env_path, dry_run):
+    writers = {
+        "opencode": _write_opencode_key,
+        "pi": _write_pi_key,
+        "junie": _write_junie_key,
+        "copilot-cli": _write_copilot_cli_key,
+        "openwebui": _write_openwebui_key,
+    }
     for row in rows:
         writer = PROVISIONED_CLIENT_KEY_WRITERS.get(row["client"])
         if writer:

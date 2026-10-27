@@ -352,6 +352,7 @@ APP_KEYS = {
     "junie": "LITELLM_JUNIE_KEY",
     "codex": "LITELLM_CODEX_KEY",
     "claude": "LITELLM_CLAUDE_KEY",
+    "copilot-cli": "LITELLM_COPILOT_CLI_KEY",
 }
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
@@ -445,6 +446,23 @@ CLIENT_REGISTRY = [
         "~/.local/share/litellm/clients/junie.key",
         "eligible",
         "provision; derived twins use --groups-json",
+    ),
+    _client_row(
+        "copilot-cli",
+        APP_KEYS["copilot-cli"],
+        ["GitHub Copilot CLI installed"],
+        ["OpenAI-compatible", "completions wire API"],
+        "scripts/copilot-litellm",
+        [
+            "DOTFILES_RUN_COPILOT_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "scripts/copilot-litellm environment",
+        "eligible",
+        "provision",
+        "installed adapter; live request remains UNKNOWN",
     ),
     _client_row(
         "codex",

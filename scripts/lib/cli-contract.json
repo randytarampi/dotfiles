@@ -1066,6 +1066,15 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/copilot-litellm",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run"],
+      "notes": "Adapter dry-run previews redacted settings without key reads; ordinary Copilot arguments are forwarded.",
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-litellm.py",
       "capabilities": [
         "public",
