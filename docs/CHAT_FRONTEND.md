@@ -642,11 +642,13 @@ The separate mode-600 state is
 `~/.local/share/openwebui/data/managed-embedding.json`.
 
 The configured route identity is represented by engine, model ID and output
-dimensions. Read-only route probes can report observed vector width and compare
-it with the configured width; unavailable, unauthenticated or mismatched
-observations remain UNKNOWN and do not select an alternate route. This does not
+dimensions. Read-only route probes can report observed vector width and, when
+a caller supplies an authoritative expected width, compare it; a mismatch
+remains UNKNOWN and does not select an alternate route. No production call
+site supplies an expected width yet — the comparison is an optional probe
+precondition, not an enforced configured-content check. Probes do not
 establish model revision, pooling, template/task prefix, normalization or
-provenance unless separately observed; those identity fields remain UNKNOWN.
+provenance; those identity fields remain UNKNOWN.
 Any readback against the owner-approved host is owner-gated. No live host
 readback, embedding/index inspection or retrieval run is implied by repository
 tests or this documentation.
