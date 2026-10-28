@@ -44,6 +44,8 @@ class PresetMigrationTests(unittest.TestCase):
                     env_path = Path(temp_home) / ".env"
                     original = (source + "DOTFILES_RUN_PI='1'\n").encode()
                     env_path.write_bytes(original)
+                    env_path.chmod(0o640)
+                    original_stat = env_path.stat()
                     result = subprocess.run(
                         [
                             sys.executable,
@@ -62,7 +64,79 @@ class PresetMigrationTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 1)
                     self.assertEqual(env_path.read_bytes(), original)
+                    current_stat = env_path.stat()
+                    self.assertEqual(current_stat.st_mode, original_stat.st_mode)
+                    self.assertEqual(
+                        current_stat.st_mtime_ns, original_stat.st_mtime_ns
+                    )
                     self.assertFalse(env_path.with_suffix(".bak").exists())
+
+    def test_cli_refuses_same_size_concurrent_content_change(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            concurrent = b"DOTFILES_RUN_PI='2'\n"
+            env_path.write_bytes(original)
+            original_mtime = env_path.stat().st_mtime_ns
+            module = migrate_env_gates
+            real_migrate = module.migrate_env
+
+            def mutate(lines, dry_run=False):
+                env_path.write_bytes(concurrent)
+                os.utime(env_path, ns=(original_mtime, original_mtime))
+                return real_migrate(lines, dry_run)
+
+            with patch.object(module, "migrate_env", side_effect=mutate):
+                with patch.object(
+                    sys, "argv", [MIGRATE_PATH, "--env", str(env_path), "--apply"]
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "changed during migration"
+                    ):
+                        module.main()
+            self.assertEqual(env_path.read_bytes(), concurrent)
+            self.assertEqual(env_path.with_suffix(".bak").read_bytes(), original)
+
+    def test_temp_write_failure_cleans_up_and_keeps_original_and_backup(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            real_named_temporary_file = tempfile.NamedTemporaryFile
+            created = []
+
+            class FailingWriter:
+                def __init__(self, wrapped):
+                    self.wrapped = wrapped
+                    self.name = wrapped.name
+
+                def __enter__(self):
+                    created.append(Path(self.name))
+                    self.wrapped.__enter__()
+                    return self
+
+                def __exit__(self, *args):
+                    return self.wrapped.__exit__(*args)
+
+                def writelines(self, lines):
+                    raise OSError("injected temp write failure")
+
+            with patch.object(
+                tempfile,
+                "NamedTemporaryFile",
+                side_effect=lambda **kwargs: FailingWriter(
+                    real_named_temporary_file(**kwargs)
+                ),
+            ):
+                with patch.object(
+                    sys, "argv", [MIGRATE_PATH, "--env", str(env_path), "--apply"]
+                ):
+                    with self.assertRaisesRegex(OSError, "temp write failure"):
+                        migrate_env_gates.main()
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(env_path.with_suffix(".bak").read_bytes(), original)
+            self.assertEqual(len(created), 1)
+            self.assertFalse(created[0].exists())
 
     def test_cli_accepts_literal_semantics_and_refuses_conflicts(self):
         with tempfile.TemporaryDirectory() as temp_home:
@@ -141,6 +215,7 @@ class PresetMigrationTests(unittest.TestCase):
                 backup_path.stat().st_mtime_ns,
             )
             target_before = env_path.read_bytes()
+            target_stat = env_path.stat()
             result = subprocess.run(
                 [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
                 capture_output=True,
@@ -157,6 +232,9 @@ class PresetMigrationTests(unittest.TestCase):
                 before,
             )
             self.assertEqual(env_path.read_bytes(), target_before)
+            target_after = env_path.stat()
+            self.assertEqual(target_after.st_mode, target_stat.st_mode)
+            self.assertEqual(target_after.st_mtime_ns, target_stat.st_mtime_ns)
 
     def test_symlink_backup_and_hardlinked_target_refuse_without_changes(self):
         with tempfile.TemporaryDirectory() as temp_home:
@@ -276,7 +354,6 @@ class PresetMigrationTests(unittest.TestCase):
             migrate_env_gates.parse_env_line("export A='one' # note\r\n"),
             ("", "export ", "A", "'one' # note"),
         )
-        lines = ["export DOTFILES_RUN_PI='1'\n", "export DOTFILES_RUN_PI_SETUP='0'\n"]
         self.assertEqual(
             migrate_env_gates.unsafe_value_keys(
                 ["export DOTFILES_RUN_PI='1'\n", "DOTFILES_RUN_PI_SETUP='0'\n"]
@@ -287,25 +364,33 @@ class PresetMigrationTests(unittest.TestCase):
     def test_exported_shell_value_and_export_parity(self):
         with tempfile.TemporaryDirectory() as temp_home:
             env_path = Path(temp_home) / ".env"
-            env_path.write_text("export VALUE='dummy value'\n", encoding="utf-8")
-            result = subprocess.run(
-                [
-                    "/bin/sh",
-                    "-c",
-                    '. "$1"; printf "%s:%s" "$VALUE" "$(export -p | grep -c VALUE)"',
-                    "sh",
-                    str(env_path),
-                ],
+            original = "export VALUE=plain-token # keep note\n"
+            env_path.write_text(original, encoding="utf-8")
+            shell = '. "$1"; printf "%s:%s" "$VALUE" "$(export -p | grep -c VALUE)"'
+            before = subprocess.run(
+                ["/bin/sh", "-c", shell, "sh", str(env_path)],
                 capture_output=True,
                 env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
                 check=False,
             )
-            self.assertEqual(result.returncode, 0)
-            parsed = migrate_env_gates.parse_env_line(env_path.read_text().strip())
-            self.assertEqual(
-                migrate_env_gates.parse_literal_value(parsed[3])[0], "dummy value"
+            self.assertEqual(before.returncode, 0)
+            self.assertEqual(before.stdout, b"plain-token:1")
+            result = subprocess.run(
+                [sys.executable, MIGRATE_PATH, "--env", str(env_path), "--apply"],
+                capture_output=True,
+                env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
+                check=False,
             )
-            self.assertEqual(result.stdout.decode(), "dummy value:1")
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertIn("export VALUE=plain-token # keep note", env_path.read_text())
+            after = subprocess.run(
+                ["/bin/sh", "-c", shell, "sh", str(env_path)],
+                capture_output=True,
+                env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
+                check=False,
+            )
+            self.assertEqual(after.returncode, 0)
+            self.assertEqual(after.stdout, before.stdout)
 
     def test_generated_lines_keep_crlf_and_missing_final_terminator(self):
         source = [
@@ -508,7 +593,7 @@ class PresetMigrationTests(unittest.TestCase):
             real_migrate = module.migrate_env
 
             def mutating(lines, dry_run):
-                env_path.touch()  # change mtime mid-migration, as a race would
+                env_path.write_bytes(b"DOTFILES_RUN_PI='2'\n")
                 return real_migrate(lines, dry_run)
 
             module.migrate_env = mutating
@@ -521,10 +606,40 @@ class PresetMigrationTests(unittest.TestCase):
             with patch.object(sys, "argv", argv):
                 with self.assertRaises(RuntimeError):
                     module.main()
-            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(env_path.read_bytes(), b"DOTFILES_RUN_PI='2'\n")
             backup = env_path.with_suffix(".bak")
             self.assertTrue(backup.is_file())
             self.assertEqual(backup.read_bytes(), original)
+
+    def test_mtime_only_change_during_migration_refuses(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            original = b"DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            original_mtime = env_path.stat().st_mtime_ns
+            spec = importlib.util.spec_from_file_location(
+                "migrate_env_mtime", MIGRATE_PATH
+            )
+            assert spec is not None and spec.loader is not None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            real_migrate = module.migrate_env
+
+            def mutate_mtime(lines, dry_run):
+                os.utime(
+                    env_path,
+                    ns=(original_mtime + 1_000_000, original_mtime + 1_000_000),
+                )
+                return real_migrate(lines, dry_run)
+
+            module.migrate_env = mutate_mtime
+            with patch.object(
+                sys, "argv", [MIGRATE_PATH, "--env", str(env_path), "--apply"]
+            ):
+                with self.assertRaisesRegex(RuntimeError, "changed during migration"):
+                    module.main()
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(env_path.with_suffix(".bak").read_bytes(), original)
 
     def test_replace_failure_preserves_original_and_complete_backup(self):
         with tempfile.TemporaryDirectory() as temp_home:
