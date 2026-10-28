@@ -4,6 +4,52 @@
 
 ## Gateway
 
+### Claude Desktop third-party gateway (export scaffold only)
+
+`scripts/export-claude-desktop-gateway.py` is an explicit, standalone exporter;
+it is not part of deployment or automatic client configuration. Supply the
+loopback endpoint, every exact served model ID, and an absolute helper path:
+
+```sh
+scripts/export-claude-desktop-gateway.py \
+  --endpoint http://127.0.0.1:4000 \
+  --model '<exact-served-model-id>' \
+  --helper '/absolute/path/to/credential-helper'
+```
+
+It writes a macOS configuration profile (mobileconfig plist) to stdout only.
+Review it and separately install/apply it only after owner consent. The profile
+contains endpoint/model identifiers and the helper path as a reference; it
+contains no API key and does not verify that the helper exists, runs, or
+delivers a gateway credential. Export does not inspect or modify Claude's
+private settings, configuration library, managed preferences, or credentials;
+it does not launch Claude or a helper, provision keys, change defaults, or make
+network/inference requests. Endpoint input is restricted to a root
+`http://127.0.0.1:<port>` URL; `/v1` is not appended.
+The top-level `Configuration` profile contains one `PayloadContent` preference
+payload of type `com.anthropic.claudefordesktop`. Within that payload, gateway
+preferences are flat keys: `inferenceGatewayBaseUrl`,
+`inferenceModels` (a JSON array string of `{ "name": "<exact-id>" }` objects),
+`inferenceCredentialKind=helper-script`, `inferenceCredentialHelper` (the path
+string), `inferenceGatewayAuthScheme=bearer`, and
+`inferenceProvider=gateway`.
+
+The official gateway contract requires streaming and Messages/tools
+compatibility; arbitrary LiteLLM backends are not asserted compatible. Models
+must be explicitly named; no defaults or capability claims are inferred.
+Third-party configuration covers Desktop Chat, Cowork, and Code, but
+acceptance for each remains UNKNOWN. Local history changes and hosted-mode
+behaviour are separate considerations. Managed settings take precedence over
+local settings; the documented return path is the Anthropic sign-in option on
+the sign-in screen, subject to deployment policy. This is a separate deployment
+mode with local conversation history, not a migration of hosted chat history.
+This export does not establish credential delivery or equate Desktop with the
+Claude CLI's environment-variable configuration.
+
+References: [Desktop gateway contract](https://claude.com/docs/third-party/claude-desktop/gateway),
+[configuration encoding](https://claude.com/docs/third-party/claude-desktop/configuration-format),
+and [single-machine setup](https://claude.com/docs/third-party/claude-desktop/installation#single-machine-setup).
+
 The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `127.0.0.1:4000` (`LITELLM_PORT`). Enable setup with
 `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads

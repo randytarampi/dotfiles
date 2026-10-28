@@ -47,6 +47,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/litellm-oauth.py",  # Interactive one-time OAuth bootstrap; mutates ~/.config/litellm caches, not deployed config
     "scripts/litellm-db-prune.py",  # Manual maintenance CLI; targets the live gateway DB tables, not deployed config
     "scripts/litellm-spend-backfill.py",  # Manual maintenance CLI; reprices live spend rows, not deployed config
+    "scripts/export-claude-desktop-gateway.py",  # Manual stdout-only profile exporter; never deployed or run automatically
     "scripts/check-heredocs.py",  # Makefile-only lint tool (heredoc validation)
     "scripts/anchor-review-ref.py",  # Makefile-only workflow maintenance tool
     "scripts/ci-codegraph.sh",  # CI-only asset verified by check-ci-assets
