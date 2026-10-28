@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,8 @@ import preset_migration
 MIGRATE_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "migrate-env-gates.py"
 )
+ROOT = Path(__file__).resolve().parents[3]
+MAKE = shutil.which("make") or "/usr/bin/make"
 spec = importlib.util.spec_from_file_location("migrate_env_gates", MIGRATE_PATH)
 assert spec is not None and spec.loader is not None
 migrate_env_gates = importlib.util.module_from_spec(spec)
@@ -28,6 +31,203 @@ project_spec.loader.exec_module(configure_project)
 
 
 class PresetMigrationTests(unittest.TestCase):
+    def _make_env(self, home):
+        return {
+            "HOME": str(home),
+            "PATH": f"{Path(sys.executable).resolve().parent}{os.pathsep}/usr/bin:/bin",
+            "MAKEFLAGS": "",
+            "MFLAGS": "",
+        }
+
+    def _run_make(self, command, home):
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=self._make_env(home),
+        )
+
+    def test_make_migrate_preview_is_read_only_and_apply_syncs_only_on_success(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            home = Path(temp_home)
+            env_path = home / ".env"
+            example_path = home / ".env.example"
+            original = b"export DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            example_path.write_text("# Extra documented key\nEXTRA_KEY='value'\n")
+            env_path.chmod(0o600)
+            before_stat = env_path.stat()
+            before_snapshot = (
+                env_path.read_bytes(),
+                before_stat.st_mode,
+                before_stat.st_mtime_ns,
+            )
+            command = [
+                MAKE,
+                "-C",
+                str(ROOT),
+                "migrate-preview",
+                f"ENV_FILE={env_path}",
+                f"ENV_EXAMPLE={example_path}",
+            ]
+            result = self._run_make(command, home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("DOTFILES_RUN_PI_SETUP", result.stdout)
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(env_path.stat().st_mtime_ns, before_stat.st_mtime_ns)
+            self.assertEqual(
+                (
+                    env_path.read_bytes(),
+                    env_path.stat().st_mode,
+                    env_path.stat().st_mtime_ns,
+                ),
+                before_snapshot,
+            )
+            self.assertFalse(env_path.with_suffix(".bak").exists())
+
+            command[command.index("migrate-preview")] = "migrate"
+            result = self._run_make(command, home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            migrated = env_path.read_bytes()
+            self.assertIn(b"export DOTFILES_RUN_PI_SETUP='1'", migrated)
+            self.assertIn(b"EXTRA_KEY", migrated)
+            backup = env_path.with_suffix(".bak")
+            self.assertEqual(backup.read_bytes(), original)
+            self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(env_path.stat().st_mode & 0o777, 0o600)
+
+            migrated_stat = env_path.stat()
+            result = self._run_make(command, home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(env_path.read_bytes(), migrated)
+            self.assertEqual(env_path.stat().st_mtime_ns, migrated_stat.st_mtime_ns)
+            self.assertEqual(backup.read_bytes(), original)
+
+    def test_make_migrate_refusal_does_not_sync_example_keys(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            home = Path(temp_home)
+            env_path = home / ".env"
+            example_path = home / ".env.example"
+            original = b"DOTFILES_RUN_PI=$(printf unsafe)\n"
+            env_path.write_bytes(original)
+            example_path.write_text("NEW_KEY='value'\n")
+            result = self._run_make(
+                [
+                    MAKE,
+                    "-C",
+                    str(ROOT),
+                    "migrate",
+                    f"ENV_FILE={env_path}",
+                    f"ENV_EXAMPLE={example_path}",
+                ],
+                home,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertFalse(env_path.with_suffix(".bak").exists())
+            self.assertNotIn(b"NEW_KEY", env_path.read_bytes())
+
+    def test_make_migrate_refusals_preserve_fixture_files(self):
+        cases = ("conflict", "symlink", "backup")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temp_home:
+                home = Path(temp_home)
+                env_path = home / ".env"
+                example_path = home / ".env.example"
+                backup_path = env_path.with_suffix(".bak")
+                original = b"DOTFILES_RUN_PI='1'\n"
+                env_path.write_bytes(original)
+                example_path.write_text("NEW_KEY='value'\n")
+                if case == "conflict":
+                    env_path.write_bytes(
+                        b"DOTFILES_RUN_PI='1'\nDOTFILES_RUN_PI_SETUP='0'\n"
+                    )
+                    env_path.chmod(0o640)
+                elif case == "symlink":
+                    target = home / "target.env"
+                    target.write_bytes(original)
+                    env_path.unlink()
+                    env_path.symlink_to(target)
+                    target.chmod(0o640)
+                else:
+                    backup_path.write_bytes(b"keep existing backup")
+                    backup_path.chmod(0o640)
+                    env_path.chmod(0o640)
+
+                def snapshot(path):
+                    if path.is_symlink():
+                        return (
+                            "symlink",
+                            os.readlink(path),
+                            path.lstat().st_mode,
+                            path.lstat().st_mtime_ns,
+                        )
+                    if path.exists():
+                        info = path.stat()
+                        return (path.read_bytes(), info.st_mode, info.st_mtime_ns)
+                    return None
+
+                snapshots = {
+                    path: snapshot(path)
+                    for path in (env_path, example_path, backup_path)
+                }
+                result = self._run_make(
+                    [
+                        MAKE,
+                        "-C",
+                        str(ROOT),
+                        "migrate",
+                        f"ENV_FILE={env_path}",
+                        f"ENV_EXAMPLE={example_path}",
+                    ],
+                    home,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(
+                    {path: snapshot(path) for path in snapshots}, snapshots
+                )
+                self.assertNotIn(
+                    b"NEW_KEY",
+                    env_path.read_bytes() if not env_path.is_symlink() else b"",
+                )
+
+    def test_make_old_entrypoint_previews_then_syncs_without_migrating(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            home = Path(temp_home)
+            old_makefile = home / "Makefile.old"
+            current_makefile = (ROOT / "Makefile").read_text()
+            apply_recipe = 'scripts/migrate-env-gates.py --env "$(ENV_FILE)" --apply'
+            self.assertEqual(current_makefile.count(apply_recipe), 1)
+            old_makefile.write_text(
+                current_makefile.replace(
+                    apply_recipe, apply_recipe.removesuffix(" --apply")
+                )
+            )
+            env_path = home / ".env"
+            example_path = home / ".env.example"
+            original = b"export DOTFILES_RUN_PI='1'\n"
+            env_path.write_bytes(original)
+            example_path.write_text("NEW_KEY='value'\n")
+            result = self._run_make(
+                [
+                    MAKE,
+                    "-C",
+                    str(ROOT),
+                    "-f",
+                    str(old_makefile),
+                    "migrate",
+                    f"ENV_FILE={env_path}",
+                    f"ENV_EXAMPLE={example_path}",
+                ],
+                home,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("dry-run — no changes written", result.stdout)
+            old_result = env_path.read_bytes()
+            self.assertNotIn(b"DOTFILES_RUN_PI_SETUP", old_result)
+            self.assertIn(b"NEW_KEY", old_result)
+            self.assertNotEqual(old_result, original)
+
     def test_cli_refuses_unsupported_shell_forms_without_touching_file(self):
         cases = (
             "A=foo\\bar\n",

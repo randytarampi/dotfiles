@@ -168,7 +168,7 @@ Environment variables follow an ownership-based taxonomy (see [docs/CONVENTIONS.
 - Upstream-native — keep as-is (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_*`)
 - `DOTFILES_<TOOL>_*` — adapter layer for tools that need repo-managed config
 
-One canonical name per concept. Deprecated aliases migrated one-way via `migrate-env-gates.py`. Run `make migrate` after pulling updated dotfiles to migrate `~/.env`.
+One canonical name per concept. Deprecated aliases migrate one-way via `migrate-env-gates.py`. Run `make migrate-preview` to inspect changes without writing; run `make migrate` to explicitly apply them and sync documented keys in `~/.env`.
 
 ### Convention Enforcement
 
@@ -289,7 +289,7 @@ catalogue presence alone does not prove inference access.
 
 `~/.env` is the single source of truth for all secrets. Format: `KEY='VALUE'`. Templates use `{{ env "VAR" }}` syntax.
 
-Prefer Makefile targets (`make diff`, `make dry-run`, `make deploy`) because they load `~/.env` in the same shell process as chezmoi. Use `make drift` to report drift and `make migrate` to append newly documented keys.
+Prefer Makefile targets (`make diff`, `make dry-run`, `make deploy`) because they load `~/.env` in the same shell process as chezmoi. Use `make drift` to report drift, `make migrate-preview` to preview migration, and `make migrate` to explicitly apply it and append newly documented keys.
 
 No age/GPG encryption is used because this is a local-only repository. Never commit secrets.
 
