@@ -743,13 +743,15 @@ def main():
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
-    if args.local_fallback_preset in DISABLED_PRESETS:
-        parser.error(f"Preset '{args.local_fallback_preset}' is unavailable")
-
     # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
     # inside make deploy / configure-jetbrains-ai.py the parent already
     # carries them.
     load_env()
+    args.local_fallback_preset = args.local_fallback_preset or os.environ.get(
+        "DOTFILES_LOCAL_FALLBACK_PRESET"
+    )
+    if args.local_fallback_preset in DISABLED_PRESETS:
+        parser.error(f"Preset '{args.local_fallback_preset}' is unavailable")
 
     groups_path = os.path.abspath(os.path.expanduser(args.groups_json))
     target_dir = os.path.abspath(os.path.expanduser(args.target_dir))

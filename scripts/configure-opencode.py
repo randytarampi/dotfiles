@@ -73,11 +73,11 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 from generation_lock import (  # noqa: E402 -- local import follows bootstrap.
     with_generation_lock,
 )
-from unavailable_presets import (
+from unavailable_presets import (  # noqa: E402
     DISABLED_PRESETS,
     reject_disabled_preset,
     without_disabled_presets,
-)  # noqa: E402
+)
 from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
     POOLSIDE_ROUTED_CONTEXT,
     POOLSIDE_ROUTED_MODEL_ID,
@@ -670,12 +670,7 @@ def main():
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
-    args.preset = args.preset or os.environ.get("DOTFILES_OPENCODE_TIER") or "pro-plus"
-    try:
-        reject_disabled_preset(args.preset)
-        reject_disabled_preset(os.environ.get("DOTFILES_LOCAL_FALLBACK_PRESET", ""))
-    except ValueError as error:
-        parser.error(str(error))
+    explicit_preset = args.preset
     source_root = Path(SCRIPT_DIR).resolve().parent
     logger.info("config source: %s/configs", source_root)
     chezmoi_source = os.environ.get("CHEZMOI_SOURCE_DIR")
@@ -698,14 +693,7 @@ def main():
     else:
         config_dir_path = os.path.join(os.path.expanduser("~"), ".config", "opencode")
 
-    if args.dry_run:
-        logger.info(
-            f"[dry-run] Would ensure config directory exists: {config_dir_path}"
-        )
-    else:
-        os.makedirs(config_dir_path, exist_ok=True)
-
-    # Load .env
+    # Load .env before validating selections so file-provided values cannot bypass the guard.
     env_path = os.path.join(config_dir_path, ".env")
     env_loaded = load_env(env_path)
     if env_loaded:
@@ -718,6 +706,22 @@ def main():
             logger.warning(
                 f"{env_path} not found — run configure-secrets.py first for MCP server configs"
             )
+
+    args.preset = (
+        explicit_preset or os.environ.get("DOTFILES_OPENCODE_TIER") or "pro-plus"
+    )
+    try:
+        reject_disabled_preset(args.preset)
+        reject_disabled_preset(os.environ.get("DOTFILES_LOCAL_FALLBACK_PRESET", ""))
+    except ValueError as error:
+        parser.error(str(error))
+
+    if args.dry_run:
+        logger.info(
+            f"[dry-run] Would ensure config directory exists: {config_dir_path}"
+        )
+    else:
+        os.makedirs(config_dir_path, exist_ok=True)
 
     use_local_env = os.environ.get("DOTFILES_USE_LOCAL_OLLAMA", "true").lower()
     with_local_ollama = use_local_env in ["true", "1"]

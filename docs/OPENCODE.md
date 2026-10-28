@@ -13,9 +13,27 @@ is not established. Generation rejects them as active presets and omits their
 choices and compatibility aliases; it does not silently select a paid fallback.
 This repository guard applies when configuration is regenerated. It does not
 change already-installed client files until deployment/regeneration runs, so
-runtime enforcement remains open (tracking issue #119); provenance for any
+runtime enforcement remains open (issue #87; classification work is PR #119); provenance for any
 existing installed selection remains unverified until that regeneration.
 No route or entitlement is inferred from catalogue presence alone.
+
+### Temporary Disablement and Recovery
+
+The owner reconfirmed this temporary release behaviour on 2026-10-28. A
+previously selected disabled agent or council default must cause refusal before
+replacement files are installed, not an automatic switch to a paid preset.
+Keep a private backup of the current configuration before any separately
+authorized regeneration. Existing installed profiles and Pi's shared inventory
+are not retroactively repaired by this guard.
+
+To migrate, explicitly choose an available, owner-approved preset and resolve
+any disabled defaults in the input configuration before regeneration. Do not
+remove the guard or restore an unqualified archived preset as a workaround.
+Rollback requires an owner-approved known-good configuration and its own
+validation; it must not silently restore a paid fallback. Re-enabling either
+disabled choice requires authoritative backend provenance, a passing offline
+route audit and separate owner approval. None of these steps replaces issue
+#87's request-time admission, entitlement, privacy and fallback evidence.
 
 Three upstream presets are available in the shared registry. Definitions are
 adopted from the upstream oh-my-opencode-slim docs —
@@ -28,7 +46,7 @@ with local deviations noted in [docs/TIERS.md](TIERS.md):
 |--------|-----------|----------|------------------|
 | `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | Explicit (`openai/gpt-6-luna`) | OpenCode Zen (`big-pickle` orchestrator, `nemotron-3.5-lightning-free` other roles) |
 | `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Explicit (`openai/gpt-6-luna`) | OpenCode Zen; Copilot designer falls back to Zen Gemini |
-| `omo-slim-opencode-zen-free` | OpenCode Zen, with OpenAI fallbacks | Explicit (`opencode/muse-spark-1.3-contributor-free`) | OpenAI GPT-6.1 Sol / GPT-5.6 Luna |
+| `omo-slim-opencode-zen-free` (disabled) | Archived OpenCode Zen definitions; not selectable | Archived (`opencode/muse-spark-1.3-contributor-free`) | Empty fallback chains; availability unqualified |
 
 All presets define an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer; the hook strips them from the main conversation
@@ -39,7 +57,7 @@ alternative is `/connect`, which stores authentication in OpenCode's
 `auth.json`; a key is not required for the generated provider block. GitHub
 Copilot authentication uses the `/connect` GitHub device flow.
 
-The Zen free preset uses the currently listed `muse-spark-1.3-contributor-free`
+The archived, disabled Zen free preset names `muse-spark-1.3-contributor-free`
 for both orchestrator and image-tested observer, `mimo-v2.6-flash-free` for
 text-oriented designer work, and `nemotron-3.5-lightning-free` for fixer.
 MiMo's image path failed or timed out in a live probe, despite catalogue
