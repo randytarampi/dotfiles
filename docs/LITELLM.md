@@ -129,6 +129,21 @@ The wrapper forwards a bounded set of session options, including prompt,
 resume, output, reasoning and tool-approval options; unsupported flags fail
 with a usage error rather than being guessed from help text. All three setup,
 proxy and LiteLLM gates must be enabled. Endpoint overrides remain loopback-only.
+The launcher fails closed whenever `COPILOT_PROVIDERS_CONFIG` is set (even to
+an empty value) or `~/.copilot/providers.json` exists in any form. It checks
+only the file's presence and never reads, edits or deletes it: the installed
+CLI gives provider declarations precedence over the legacy environment surface,
+so their effective routing cannot be safely assumed. Review/manage that
+configuration separately using supported Copilot CLI routing before using this
+adapter; no temporary configuration or precedence override is created. Any set
+`COPILOT_HOME` is also refused, including an empty value, because its config
+location is not established. If the default `.copilot` directory cannot be
+searched to establish that `providers.json` is absent, the adapter refuses to
+continue. Dry-run
+validates gates, model, endpoint, arguments, CLI presence and this file safety
+gate, but reports credential availability as UNKNOWN without reading the key
+or launching the CLI. A successful preview is not a credential or routing
+readiness claim.
 
 Client adapters map canonical identities at their boundary through
 `scripts/lib/litellm_aliases.py`; tier registries remain transport-neutral.
