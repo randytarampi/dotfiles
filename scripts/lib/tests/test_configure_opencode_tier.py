@@ -183,6 +183,68 @@ def test_disabled_tier_rejected_before_discovery_or_filesystem_writes(tmp_path):
     assert not target.exists()
 
 
+def test_disabled_fallback_loaded_from_home_env_rejected_before_writes(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text(
+        "DOTFILES_LOCAL_FALLBACK_PRESET=free\n", encoding="utf-8"
+    )
+    target = home / ".config/opencode/oh-my-opencode-slim.json"
+    with (
+        patch.dict(os.environ, {"HOME": str(home)}, clear=True),
+        patch.object(configure_tier, "list_local_ollama_models") as discovery,
+        patch.object(configure_tier.shutil, "copy2") as copy,
+        patch.object(configure_tier.sys, "argv", [str(SCRIPT), "--preset", "local"]),
+    ):
+        try:
+            configure_tier.main()
+        except SystemExit as error:
+            assert error.code == 1
+        else:
+            raise AssertionError("disabled loaded fallback was accepted")
+    discovery.assert_not_called()
+    copy.assert_not_called()
+    assert not target.exists()
+
+
+def test_jetbrains_disabled_fallback_loaded_from_home_env_refused(
+    tmp_path, monkeypatch
+):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text(
+        "DOTFILES_LOCAL_FALLBACK_PRESET=omo-slim-opencode-zen-free\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_PRESET", raising=False)
+    groups = tmp_path / "groups.json"
+    groups.write_text("{}", encoding="utf-8")
+    output = tmp_path / "profiles"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(output),
+        ],
+    )
+    with (
+        patch.dict(os.environ),
+        patch.object(jetbrains_profiles, "list_local_ollama_models") as discovery,
+    ):
+        try:
+            jetbrains_profiles.main()
+        except SystemExit as error:
+            assert error.code == 2
+        else:
+            raise AssertionError("disabled loaded fallback was accepted")
+    discovery.assert_not_called()
+    assert not output.exists()
+
+
 def test_disabled_slim_export_drops_presets_tiers_and_councils():
     from unavailable_presets import without_disabled_presets
 

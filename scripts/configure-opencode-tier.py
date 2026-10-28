@@ -34,11 +34,12 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 )
 from constants import get_litellm_proxy_mode  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
-from unavailable_presets import (
+from unavailable_presets import (  # noqa: E402 -- scripts/lib bootstrap above.
     DISABLED_PRESETS,
     reject_disabled_preset,
     without_disabled_presets,
-)  # noqa: E402
+)
+from env import load_env  # noqa: E402
 
 OPENCODE_CONFIG_FILENAME = "opencode.json"
 
@@ -434,6 +435,10 @@ def main():
         help="Preferred interface: active OpenCode tier to set",
     )
     args = parser.parse_args()
+    load_env()
+    args.local_fallback_preset = args.local_fallback_preset or os.environ.get(
+        "DOTFILES_LOCAL_FALLBACK_PRESET"
+    )
     # Accept the deprecated tier names everywhere (choices include them via
     # get_available_tiers); resolve to canonical presets before use so
     # forwarded children never receive an alias.

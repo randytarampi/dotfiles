@@ -1242,6 +1242,61 @@ def _run_opencode_main(
     return config_path, slim_path
 
 
+@pytest.mark.parametrize("disabled", ["free", "omo-slim-opencode-zen-free"])
+@pytest.mark.parametrize("env_location", ["local", "home"])
+@pytest.mark.parametrize("selection", ["active", "fallback", "explicit"])
+@pytest.mark.parametrize("mode", ["global", "project"])
+def test_opencode_main_refuses_disabled_env_selection_before_side_effects(
+    monkeypatch, tmp_path, disabled, env_location, selection, mode
+):
+    script = _load_script("configure_opencode_disabled", "configure-opencode.py")
+    home = tmp_path / "home"
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    local_env = config_dir / ".env"
+    home_env = home / ".env"
+    active = selection == "active"
+    fallback = selection != "active"
+    env_path = local_env if env_location == "local" else home_env
+    lines = []
+    if active:
+        lines.append(f"DOTFILES_OPENCODE_TIER={disabled}")
+    if fallback:
+        lines.append(f"DOTFILES_LOCAL_FALLBACK_PRESET={disabled}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.delenv("DOTFILES_OPENCODE_TIER", raising=False)
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_PRESET", raising=False)
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(tmp_path / "scripts"))
+    lock = home / ".cache/dotfiles/generation.lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(f"source_root={tmp_path.resolve()}\n")
+    monkeypatch.setattr(
+        script, "list_local_ollama_models", lambda: pytest.fail("discovery")
+    )
+    monkeypatch.setattr(script.subprocess, "run", lambda *a, **k: pytest.fail("child"))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-opencode.py",
+            "--mode",
+            mode,
+            "--skip",
+            "mcps,acp-agents,tier,voice,dcp",
+        ]
+        + (["--preset", "pro-plus"] if selection == "explicit" else []),
+    )
+    before_env = dict(os.environ)
+    with patch.dict(os.environ), pytest.raises(SystemExit) as error:
+        script.main.__wrapped__()
+    assert dict(os.environ) == before_env
+    assert error.value.code == 2
+    assert not (config_dir / "opencode.json").exists()
+    assert not (config_dir / "oh-my-opencode-slim.json").exists()
+
+
 def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
     monkeypatch, tmp_path
 ):
