@@ -1,11 +1,18 @@
+import importlib.util
+import io
 import plistlib
 import subprocess
 import sys
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "export-claude-desktop-gateway.py"
+SPEC = importlib.util.spec_from_file_location("claude_desktop_gateway_export", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+EXPORTER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(EXPORTER)
 FIELDS = {
     "inferenceProvider",
     "inferenceGatewayBaseUrl",
@@ -87,6 +94,50 @@ def test_exports_stable_secret_free_profile_without_home_side_effects(tmp_path):
     assert not (home / "Library").exists()
 
 
+def test_main_emits_parseable_profile_in_process(monkeypatch):
+    output = io.BytesIO()
+
+    class Stdout:
+        buffer = output
+
+    monkeypatch.setattr(EXPORTER.sys, "stdout", Stdout())
+    result = EXPORTER.main(
+        [
+            "--endpoint",
+            "http://127.0.0.1:4000/",
+            "--model",
+            "vendor/model",
+            "--helper",
+            "/opt/helper",
+        ]
+    )
+
+    assert result == 0
+    profile = plistlib.loads(output.getvalue())["PayloadContent"][0]
+    assert profile["inferenceGatewayBaseUrl"] == "http://127.0.0.1:4000"
+    assert profile["inferenceModels"] == '[{"name":"vendor/model"}]'
+
+
+def test_main_reports_invalid_model_in_process(monkeypatch):
+    errors = io.StringIO()
+    monkeypatch.setattr(EXPORTER.sys, "stderr", errors)
+
+    with redirect_stderr(errors), pytest.raises(SystemExit) as error:
+        EXPORTER.main(
+            [
+                "--endpoint",
+                "http://127.0.0.1:4000",
+                "--model",
+                "model id",
+                "--helper",
+                "/opt/helper",
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "model ids must not contain whitespace" in errors.getvalue()
+
+
 @pytest.mark.parametrize(
     ("option", "value"),
     [
@@ -131,3 +182,39 @@ def test_no_static_key_option(tmp_path):
         "must-not-be-accepted",
     )
     assert result.returncode == 2
+
+
+def test_exports_stable_secret_free_profile_in_process(monkeypatch):
+    import runpy
+
+    output = io.BytesIO()
+
+    class Stdout:
+        buffer = output
+
+    monkeypatch.setattr(sys, "stdout", Stdout())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(SCRIPT),
+            "--endpoint",
+            "http://127.0.0.1:4000",
+            "--model",
+            "vendor/exact-id",
+            "--model",
+            "vendor/second",
+            "--helper",
+            "/opt/credential-helper",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as result:
+        runpy.run_path(str(SCRIPT), run_name="__main__")
+
+    assert result.value.code == 0
+    profile = plistlib.loads(output.getvalue())["PayloadContent"][0]
+    assert profile["inferenceModels"] == (
+        '[{"name":"vendor/exact-id"},{"name":"vendor/second"}]'
+    )
+    assert "inferenceGatewayApiKey" not in profile
