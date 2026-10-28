@@ -88,7 +88,9 @@ key_file="${HOME}/.local/share/litellm/clients/copilot-cli.key"
   printf '%s\n' 'copilot-litellm: dedicated key file is unavailable or unsafe.' >&2
   exit 1
 }
-mode=$(stat -f '%Lp' "$key_file" 2>/dev/null || stat -c '%a' "$key_file" 2>/dev/null || true)
+if ! mode=$(stat -f '%Lp' "$key_file" 2>/dev/null); then
+  mode=$(stat -c '%a' "$key_file" 2>/dev/null)
+fi
 [[ -O "$key_file" && "$mode" == 600 ]] || {
   printf '%s\n' 'copilot-litellm: dedicated key file must be owned by this user with mode 0600.' >&2
   exit 1

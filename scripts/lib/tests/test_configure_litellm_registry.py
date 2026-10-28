@@ -158,7 +158,7 @@ def test_copilot_cli_provisioning_requires_all_gates_and_install(
         "which",
         lambda name: "/bin/copilot" if name == "copilot" and installed else None,
     )
-    result = configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
     aliases = [
         call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
     ]
