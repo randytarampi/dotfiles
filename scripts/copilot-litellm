@@ -56,20 +56,6 @@ if [[ "$needs_value" == 1 ]]; then
   exit 2
 fi
 arg_count=${#args[@]}
-if [[ "$COMMON_DRY_RUN" == 0 ]]; then
-  copilot_bin=$(command -v copilot || true)
-  if [[ -z "$copilot_bin" ]]; then
-    printf '%s\n' 'copilot-litellm: copilot CLI not found.' >&2
-    exit 1
-  fi
-fi
-
-if [[ "$COMMON_DRY_RUN" == 1 ]]; then
-  printf '%s\n' 'Copilot LiteLLM adapter preview: endpoint and model are configured (values redacted); no key read or child execution.' \
-    "Arguments: ${arg_count} (redacted)"
-  exit 0
-fi
-
 [[ "${DOTFILES_RUN_COPILOT_SETUP:-0}" == 1 && "${DOTFILES_USE_LITELLM_PROXY:-0}" == 1 ]] || {
   printf '%s\n' 'copilot-litellm: both Copilot setup and LiteLLM proxy gates must equal 1.' >&2
   exit 1
@@ -83,6 +69,44 @@ model=${DOTFILES_COPILOT_LITELLM_MODEL:-}
   printf '%s\n' 'copilot-litellm: DOTFILES_COPILOT_LITELLM_MODEL must be an explicit alias without whitespace.' >&2
   exit 1
 }
+if [[ ${COPILOT_PROVIDERS_CONFIG+x} ]]; then
+  printf '%s\n' 'copilot-litellm: refusing COPILOT_PROVIDERS_CONFIG because provider configuration may override this adapter; unset it and choose routing separately.' >&2
+  exit 1
+fi
+if [[ ${COPILOT_HOME+x} ]]; then
+  printf '%s\n' 'copilot-litellm: refusing COPILOT_HOME because the CLI config location cannot be established safely; unset it and choose routing separately.' >&2
+  exit 1
+fi
+provider_config="${HOME}/.copilot/providers.json"
+if [[ -e "$provider_config" || -L "$provider_config" ]]; then
+  printf '%s\n' 'copilot-litellm: refusing existing ~/.copilot/providers.json because provider configuration may override this adapter; review it and choose supported routing separately. The file was not read or changed.' >&2
+  exit 1
+fi
+if [[ -d "${HOME}/.copilot" && ! -r "${HOME}/.copilot" || -d "${HOME}/.copilot" && ! -x "${HOME}/.copilot" ]]; then
+  printf '%s\n' 'copilot-litellm: cannot establish absence of ~/.copilot/providers.json because ~/.copilot is not readable and searchable; refusing to continue.' >&2
+  exit 1
+fi
+endpoint=${DOTFILES_COPILOT_LITELLM_BASE_URL:-http://127.0.0.1:${LITELLM_PORT:-4000}/v1}
+if [[ ! "$endpoint" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)/v1$ ]]; then
+  printf '%s\n' 'copilot-litellm: endpoint must be loopback HTTP with /v1 path.' >&2
+  exit 1
+fi
+port=${BASH_REMATCH[2]}
+if [[ ${#port} -gt 5 || "$port" == 0* || "$port" -lt 1 || "$port" -gt 65535 ]]; then
+  printf '%s\n' 'copilot-litellm: endpoint port must be decimal 1-65535 without leading zeroes.' >&2
+  exit 1
+fi
+copilot_bin=$(command -v copilot || true)
+if [[ -z "$copilot_bin" ]]; then
+  printf '%s\n' 'copilot-litellm: copilot CLI not found.' >&2
+  exit 1
+fi
+if [[ "$COMMON_DRY_RUN" == 1 ]]; then
+  printf '%s\n' 'Copilot LiteLLM adapter preview: nonsecret gates, model, endpoint and arguments are valid; credential state UNKNOWN (not read); no child execution.' \
+    "Arguments: ${arg_count} (redacted)"
+  exit 0
+fi
+
 key_file="${HOME}/.local/share/litellm/clients/copilot-cli.key"
 [[ -f "$key_file" && ! -L "$key_file" ]] || {
   printf '%s\n' 'copilot-litellm: dedicated key file is unavailable or unsafe.' >&2
@@ -102,16 +126,6 @@ key=$(<"$key_file")
 }
 if [[ -n "${LITELLM_COPILOT_CLI_KEY:-}" && "$LITELLM_COPILOT_CLI_KEY" != "$key" ]]; then
   printf '%s\n' 'copilot-litellm: environment credential conflicts with dedicated key file.' >&2
-  exit 1
-fi
-endpoint=${DOTFILES_COPILOT_LITELLM_BASE_URL:-http://127.0.0.1:${LITELLM_PORT:-4000}/v1}
-if [[ ! "$endpoint" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)/v1$ ]]; then
-  printf '%s\n' 'copilot-litellm: endpoint must be loopback HTTP with /v1 path.' >&2
-  exit 1
-fi
-port=${BASH_REMATCH[2]}
-if [[ ${#port} -gt 5 || "$port" == 0* || "$port" -lt 1 || "$port" -gt 65535 ]]; then
-  printf '%s\n' 'copilot-litellm: endpoint port must be decimal 1-65535 without leading zeroes.' >&2
   exit 1
 fi
 unset COPILOT_PROVIDER_BEARER_TOKEN COPILOT_PROVIDER_API_KEY_COMMAND COPILOT_PROVIDER_HEADERS

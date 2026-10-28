@@ -2220,18 +2220,191 @@ def test_copilot_litellm_requires_both_gates(gate, tmp_path):
 
 def test_copilot_litellm_dry_run_needs_no_key_and_rejects_model_override(tmp_path):
     launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(tmp_path),
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "openai/model-alias",
+    }
     result = subprocess.run(
         [str(launcher), "--dry-run"], env=env, capture_output=True, text=True
     )
-    assert result.returncode == 0
-    assert "no key read or child execution" in result.stdout
-    assert "values redacted" in result.stdout
+    assert result.returncode == 1
+    assert "endpoint and model" not in result.stdout
     assert not (tmp_path / ".local/share/litellm/clients").exists()
     result = subprocess.run(
         [str(launcher), "--model=other"], env=env, capture_output=True, text=True
     )
     assert result.returncode == 2
+
+
+@pytest.mark.parametrize(
+    "config_kind",
+    ["default-file", "default-directory", "default-symlink", "broken-symlink"],
+)
+def test_copilot_litellm_refuses_default_provider_config_before_key_read(
+    tmp_path, config_kind
+):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    providers = home / ".copilot/providers.json"
+    providers.parent.mkdir(parents=True)
+    if config_kind == "default-directory":
+        providers.mkdir()
+    elif config_kind == "default-symlink":
+        target = tmp_path / "provider-target"
+        target.write_text("not inspected")
+        providers.symlink_to(target)
+    elif config_kind == "broken-symlink":
+        providers.symlink_to(tmp_path / "missing-provider-target")
+    else:
+        providers.write_text("not inspected")
+    result = subprocess.run(
+        [str(launcher), "--dry-run"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(home),
+            "DOTFILES_RUN_COPILOT_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "providers.json" in result.stderr
+    assert "not inspected" not in result.stderr
+    assert not (home / ".local/share/litellm/clients").exists()
+
+
+@pytest.mark.parametrize("override", ["", "/custom/providers.json"])
+def test_copilot_litellm_refuses_provider_config_override(tmp_path, override):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    result = subprocess.run(
+        [str(launcher), "--dry-run"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "COPILOT_PROVIDERS_CONFIG": override,
+            "DOTFILES_RUN_COPILOT_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "COPILOT_PROVIDERS_CONFIG" in result.stderr
+
+
+@pytest.mark.parametrize("home_override", ["", "alternate"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_copilot_litellm_refuses_copilot_home_override(
+    home_override, dry_run, tmp_path
+):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    alternate_home = tmp_path / "alternate/copilot-home"
+    alternate_config = alternate_home / "providers.json"
+    alternate_config.parent.mkdir(parents=True)
+    alternate_config.write_text('{"secret":"must-not-leak"}')
+    marker = tmp_path / "child-ran"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "copilot"
+    fake.write_text(f'#!/bin/sh\ntouch "{marker}"\n')
+    fake.chmod(0o755)
+    result = subprocess.run(
+        [str(launcher), *(["--dry-run"] if dry_run else [])],
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "COPILOT_HOME": str(alternate_home) if home_override else "",
+            "DOTFILES_RUN_COPILOT_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+            "CHILD_MARKER": str(marker),
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "COPILOT_HOME" in result.stderr
+    if home_override:
+        assert home_override not in result.stderr
+    assert "must-not-leak" not in result.stderr + result.stdout
+    assert alternate_config.read_text() == '{"secret":"must-not-leak"}'
+    assert not marker.exists()
+
+
+def test_copilot_preview_checks_nonsecret_inputs_without_running_child(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    marker = tmp_path / "child-ran"
+    child = binaries / "copilot"
+    child.write_text(f'#!/bin/sh\ntouch "{marker}"\n')
+    child.chmod(0o700)
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": f"{binaries}:/usr/bin:/bin",
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "fixture/model",
+    }
+    good = subprocess.run(
+        [str(launcher), "--dry-run"], env=env, capture_output=True, text=True
+    )
+    assert good.returncode == 0, good.stderr
+    assert "credential state UNKNOWN" in good.stdout
+    for name, value in (
+        ("DOTFILES_RUN_COPILOT_SETUP", "0"),
+        ("DOTFILES_USE_LITELLM_PROXY", "0"),
+        ("DOTFILES_RUN_LITELLM_SETUP", "0"),
+        ("DOTFILES_COPILOT_LITELLM_MODEL", ""),
+        ("DOTFILES_COPILOT_LITELLM_BASE_URL", "https://untrusted.example"),
+    ):
+        bad = subprocess.run(
+            [str(launcher), "--dry-run"],
+            env={**env, name: value},
+            capture_output=True,
+            text=True,
+        )
+        assert bad.returncode == 1
+        assert "are valid" not in bad.stdout
+    assert not marker.exists()
+    assert not (tmp_path / ".local").exists()
+
+
+def test_copilot_litellm_refuses_unsearchable_provider_directory(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    copilot_dir = home / ".copilot"
+    copilot_dir.mkdir(parents=True)
+    copilot_dir.chmod(0)
+    try:
+        result = subprocess.run(
+            [str(launcher), "--dry-run"],
+            env={
+                "PATH": "/usr/bin:/bin",
+                "HOME": str(home),
+                "DOTFILES_RUN_COPILOT_SETUP": "1",
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "DOTFILES_COPILOT_LITELLM_MODEL": "alias",
+            },
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        copilot_dir.chmod(0o700)
+    assert result.returncode == 1
+    assert "cannot establish" in result.stderr
 
 
 def test_model_catalogue_fetch_uses_45_second_deadline_and_timeout_is_unknown(
