@@ -6,14 +6,19 @@
 
 `scripts/claude-litellm` is an explicit standalone launcher; it does not
 replace `claude`, alter Claude settings, or configure Claude Desktop/Cowork or
-the Claude ACP adapter. It requires both `DOTFILES_RUN_CLAUDE_SETUP=1` and
-`DOTFILES_USE_LITELLM_PROXY=1`, plus a provisioned
+the Claude ACP adapter. It requires `DOTFILES_RUN_CLAUDE_SETUP=1`,
+`DOTFILES_RUN_LITELLM_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`, plus a provisioned
 `~/.local/share/litellm/clients/claude.key` with mode `0600`. It launches Claude
 with `--bare`, disables user/project/local setting sources, sets the gateway
 root endpoint and an explicitly configured model in session-only settings, and supplies the key through
 `ANTHROPIC_API_KEY` without putting it in arguments or settings. The model
 `DOTFILES_CLAUDE_LITELLM_MODEL` is required; no default alias is assumed. Set
 it only to an exact model alias already qualified as served.
+The dedicated local key is restricted to `http://127.0.0.1:${LITELLM_PORT}`
+(port defaults to 4000), with no path. `DOTFILES_CLAUDE_LITELLM_BASE_URL`,
+if supplied, must equal that root exactly; remote destinations are refused
+before the key is read. Remote gateways require a separate credential and
+an explicitly approved contract, not reuse of this local key.
 
 The wrapper strips inherited Anthropic credentials and refuses direct
 endpoint/model/settings switches, but unmanaged policy may still affect

@@ -44,6 +44,7 @@ def _setup(tmp_path):
     capture = tmp_path / "capture.py"
     capture.write_text(
         "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "open(os.environ['CHILD_MARKER'], 'w').close()\n"
         "print(json.dumps({'argv': sys.argv[1:], 'base': os.environ.get('ANTHROPIC_BASE_URL'), 'key': os.environ.get('ANTHROPIC_API_KEY'), 'env_names': sorted(os.environ)}))\n"
     )
     capture.chmod(0o700)
@@ -58,8 +59,10 @@ def _setup(tmp_path):
         "HOME": str(home),
         "PATH": str(path),
         "DOTFILES_RUN_CLAUDE_SETUP": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
         "DOTFILES_USE_LITELLM_PROXY": "1",
         "DOTFILES_CLAUDE_BIN": str(capture),
+        "CHILD_MARKER": str(tmp_path / "child-ran"),
         "DOTFILES_CLAUDE_LITELLM_MODEL": "served-test-alias",
         "ANTHROPIC_API_KEY": "inherited",
     }
@@ -121,7 +124,7 @@ def test_dry_run_does_not_open_key_or_execute_cli(tmp_path):
     )
     assert result.returncode == 0
     assert "credential value not read or displayed" in result.stdout
-    assert not capture.exists()
+    assert not Path(env["CHILD_MARKER"]).exists()
 
 
 def test_missing_key_and_endpoint_override_fail_before_exec(tmp_path):
@@ -137,6 +140,46 @@ def test_missing_key_and_endpoint_override_fail_before_exec(tmp_path):
         [str(SCRIPT), "--model", "direct-model"], env=env, capture_output=True
     )
     assert conflict.returncode == 2
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://untrusted.example:4000",
+        "http://untrusted.example:4000",
+        "http://127.0.0.1.attacker.example:4000",
+        "http://attacker@127.0.0.1:4000",
+        "http://127.0.0.1:4000/path",
+        "http://localhost:4000",
+        "http://127.0.0.1:4001",
+    ],
+)
+def test_noncanonical_endpoint_fails_before_key_read_or_child(tmp_path, endpoint):
+    env, _ = _setup(tmp_path)
+    (Path(env["HOME"]) / ".local/share/litellm/clients/claude.key").unlink()
+    env["DOTFILES_CLAUDE_LITELLM_BASE_URL"] = endpoint
+    result = subprocess.run([str(SCRIPT)], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "Unsafe Claude LiteLLM endpoint" in result.stderr
+    assert not Path(env["CHILD_MARKER"]).exists()
+
+
+@pytest.mark.parametrize(
+    "gate,value",
+    [
+        ("DOTFILES_RUN_CLAUDE_SETUP", "0"),
+        ("DOTFILES_USE_LITELLM_PROXY", "0"),
+        ("DOTFILES_RUN_LITELLM_SETUP", "0"),
+    ],
+)
+def test_each_disabled_gate_fails_before_key_read_or_child(tmp_path, gate, value):
+    env, _ = _setup(tmp_path)
+    (Path(env["HOME"]) / ".local/share/litellm/clients/claude.key").unlink()
+    env[gate] = value
+    result = subprocess.run([str(SCRIPT)], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "requires" in result.stderr
+    assert not Path(env["CHILD_MARKER"]).exists()
 
 
 def test_key_must_be_nonempty_private_regular_owned_and_nonconflicting(tmp_path):
