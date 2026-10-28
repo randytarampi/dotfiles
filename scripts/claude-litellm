@@ -76,11 +76,17 @@ key_file="${DOTFILES_LITELLM_CLAUDE_KEY_FILE:-${HOME:?HOME must be set}/.local/s
   printf 'Claude LiteLLM key file unavailable: %s\n' "$key_file" >&2
   exit 1
 }
-[[ "$(stat -f '%Lp' "$key_file" 2>/dev/null || stat -c '%a' "$key_file" 2>/dev/null)" == 600 ]] || {
+if ! mode=$(stat -f '%Lp' "$key_file" 2>/dev/null); then
+  mode=$(stat -c '%a' "$key_file" 2>/dev/null)
+fi
+[[ "$mode" == 600 ]] || {
   printf 'Claude LiteLLM key file must have mode 0600: %s\n' "$key_file" >&2
   exit 1
 }
-[[ "$(stat -f '%u' "$key_file" 2>/dev/null || stat -c '%u' "$key_file" 2>/dev/null)" == "$(id -u)" ]] || {
+if ! owner=$(stat -f '%u' "$key_file" 2>/dev/null); then
+  owner=$(stat -c '%u' "$key_file" 2>/dev/null)
+fi
+[[ "$owner" == "$(id -u)" ]] || {
   printf 'Claude LiteLLM key file must be owned by the current user: %s\n' "$key_file" >&2
   exit 1
 }

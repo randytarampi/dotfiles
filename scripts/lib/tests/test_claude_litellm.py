@@ -3,9 +3,35 @@ from pathlib import Path
 import subprocess
 import os
 import shutil
+import sys
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "claude-litellm"
+
+
+@pytest.mark.parametrize("mode, expected", [(0o600, 0), (0o644, 1)])
+def test_gnu_stat_fallback_discards_failed_bsd_stdout(tmp_path, mode, expected):
+    env, _ = _setup(tmp_path)
+    key = Path(env["HOME"]) / ".local/share/litellm/clients/claude.key"
+    key.chmod(mode)
+    stub = tmp_path / "bin/stat"
+    stub.unlink()
+    stub.write_text(
+        f"#!{sys.executable}\n"
+        "import os, stat, sys\n"
+        "if sys.argv[1] == '-f':\n"
+        "    print('GNU filesystem output before failure')\n"
+        "    sys.exit(1)\n"
+        "info = os.stat(sys.argv[-1])\n"
+        "print(format(stat.S_IMODE(info.st_mode), 'o') if sys.argv[2] == '%a' else info.st_uid)\n"
+    )
+    stub.chmod(0o700)
+    result = subprocess.run([str(SCRIPT)], env=env, capture_output=True, text=True)
+    assert result.returncode == expected, result.stderr
+    if expected == 0:
+        assert json.loads(result.stdout)["key"] == "dummy-key"
+    else:
+        assert "mode 0600" in result.stderr
 
 
 def _setup(tmp_path):
