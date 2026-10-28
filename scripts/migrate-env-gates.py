@@ -176,7 +176,7 @@ CADDY_V1_REMOVALS_DELETE = {
 }
 
 # Assignment parser: matches KEY='VALUE' or # KEY='VALUE'
-ASSIGNMENT_RE = re.compile(r"^(\s*)(#?\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+ASSIGNMENT_RE = re.compile(r"^(\s*)(#\s*)?(export\s+)?([A-Za-z_][A-Za-z0-9_]*)(=)(.*)$")
 LITERAL_ASSIGNMENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 BARE_LITERAL_RE = re.compile(r"^[A-Za-z0-9_./:,+=@%#-]*$")
 
@@ -209,23 +209,19 @@ def unsafe_value_keys(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        if re.match(r"^\s*export\b", line):
-            candidate = re.match(r"^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)", line)
-            refused.append(candidate.group(1) if candidate else "<unparsed line>")
+        parsed_line = parse_env_line(line)
+        if parsed_line and parsed_line[1].strip().startswith("#"):
             continue
-        match = LITERAL_ASSIGNMENT_RE.match(line.rstrip("\r\n"))
-        if not match:
+        if not parsed_line:
             candidate = re.match(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)", line)
-            print(
-                f"Refused: {candidate.group(1) if candidate else '<unparsed line>'} has non-literal syntax"
-            )
             refused.append(candidate.group(1) if candidate else "<unparsed line>")
             continue
-        key = match.group(1)
-        if match.group(2).startswith('"'):
+        key, value = parsed_line[2], parsed_line[3]
+        # The migration CLI accepts only bare and single-quoted shell literals.
+        if value.startswith('"'):
             refused.append(key)
             continue
-        parsed_value = parse_literal_value(match.group(2))
+        parsed_value = parse_literal_value(value)
         if parsed_value is None:
             refused.append(key)
             continue
@@ -233,16 +229,22 @@ def unsafe_value_keys(lines):
         if key in seen and seen[key] != token:
             refused.append(key)
         seen[key] = token
+    for old, new, _inherit in MIGRATIONS:
+        if old in seen and new in seen and seen[old] != seen[new]:
+            refused.append(new)
     return refused
 
 
 def parse_env_line(line):
-    """Parse an env line into (indent, comment_prefix, key, value, trailing)."""
-    match = ASSIGNMENT_RE.match(line.rstrip("\r\n"))
+    """Parse an env line into (indent, export/comment prefix, key, value)."""
+    content = line.rstrip("\r\n")
+    match = ASSIGNMENT_RE.match(content)
     if not match:
         return None
-    indent, comment_prefix, key, value = match.groups()
-    return indent, comment_prefix, key, value
+    indent, comment, export, key, _separator, value = match.groups()
+    # Preserve both comment and export attributes in the existing prefix slot.
+    prefix = (comment or "") + (export or "")
+    return indent, prefix, key, value
 
 
 def read_env_lines(path):
@@ -297,6 +299,12 @@ def get_active_keys(lines):
 def migrate_env(lines, dry_run=False):
     """Migrate env lines according to MIGRATIONS. Returns (new_lines, changes)."""
     active_keys = get_active_keys(lines)
+    exported_keys = {
+        parsed[2]
+        for parsed in (parse_env_line(line) for line in lines)
+        if parsed and parsed[1].startswith("export")
+    }
+    exported_targets = {new for old, new, _ in MIGRATIONS if old in exported_keys}
     changes = []
     legacy_keys, proxy_key, _policy, legacy_label = LITELLM_PROXY_OR_MIGRATION
     explicit_proxy_value = get_active_value(lines, proxy_key)
@@ -339,11 +347,18 @@ def migrate_env(lines, dry_run=False):
             continue
 
         indent, comment_prefix, key, value = parsed
+        newline = "\r\n" if line.endswith("\r\n") else "\n"
         is_commented = comment_prefix.strip().startswith("#")
+        if key in exported_targets and not is_commented and not comment_prefix:
+            comment_prefix = "export "
+            line = f"{indent}{comment_prefix}{key}={value}{newline}"
+            changes.append(f"Preserved export attribute: {key}")
+        export_prefix = "export " if "export" in comment_prefix.split() else ""
+        comment_indent = indent + "# "
 
         if key in legacy_keys and not is_commented:
             new_lines.append(
-                comment_migrated_line(indent, key, value, f"migrated to {proxy_key}")
+                f"{comment_indent}{export_prefix}{key}={value}  # migrated to {proxy_key}{newline}"
             )
             changes.append(f"Deprecated: {key} → {proxy_key}")
             continue
@@ -363,7 +378,7 @@ def migrate_env(lines, dry_run=False):
             else:
                 value = new_value
             value += inline_comment
-            line = f"{indent}{comment_prefix}{key}={value}\n"
+            line = f"{indent}{comment_prefix}{key}={value}{newline}"
             changes.append(f"Updated: {key} tier value {old_value} → {new_value}")
 
         if key in REMOVED_ENV_VARS or key.startswith(REMOVED_ENV_PREFIXES):
@@ -487,14 +502,14 @@ def migrate_env(lines, dry_run=False):
             new_key = rename_map[key]
             # Only rename if new_key doesn't already exist as active
             if new_key not in active_keys:
-                new_line = f"{indent}{comment_prefix}{new_key}={value}\n"
+                new_line = f"{indent}{comment_prefix}{new_key}={value}{newline}"
                 new_lines.append(new_line)
                 changes.append(f"Renamed: {key} → {new_key} (value preserved)")
                 active_keys.add(new_key)
                 migrated_keys[key] = new_key
             else:
                 # New key already exists — comment out the old one
-                new_line = f"{indent}# {key}={value}  # migrated to {new_key}\n"
+                new_line = f"{comment_indent}{export_prefix}{key}={value}  # migrated to {new_key}{newline}"
                 new_lines.append(new_line)
                 changes.append(
                     f"Commented out: {key} (new key {new_key} already present)"
@@ -502,7 +517,10 @@ def migrate_env(lines, dry_run=False):
         else:
             new_lines.append(line)
 
-    if caddy_access_line_index is None:
+    if caddy_access_line_index is None and not any(
+        parsed and parsed[2] == "CADDY_ACCESS" and not parsed[1].strip().startswith("#")
+        for parsed in (parse_env_line(line) for line in new_lines)
+    ):
         new_lines.append(format_caddy_access_line("", "localhost"))
         changes.append("Added: CADDY_ACCESS='localhost' (v1 default migration)")
 
@@ -532,14 +550,26 @@ def migrate_env(lines, dry_run=False):
                 continue
             indent, comment_prefix, _, value = parsed
             # Insert new gate line right after the inherited line
-            new_gate_line = (
-                f"{indent}{new_key}={value}  # inherited from {inherit_from}\n"
-            )
+            new_gate_line = f"{indent}{comment_prefix}{new_key}={value}  # inherited from {inherit_from}\n"
             new_lines.insert(i + 1, new_gate_line)
             changes.append(f"Added: {new_key} (inherited from {inherit_from})")
             active_keys.add(new_key)
             break
 
+    if changes and lines:
+        # Keep one source newline convention for generated lines as well as
+        # rewrites, and retain a missing final terminator without joining keys.
+        newline = next(
+            (
+                "\r\n" if line.endswith("\r\n") else "\n"
+                for line in lines
+                if line.endswith("\n")
+            ),
+            "\n",
+        )
+        new_lines = [line.rstrip("\r\n") + newline for line in new_lines]
+        if new_lines and not lines[-1].endswith(("\r", "\n")):
+            new_lines[-1] = new_lines[-1].rstrip("\r\n")
     return new_lines, changes
 
 

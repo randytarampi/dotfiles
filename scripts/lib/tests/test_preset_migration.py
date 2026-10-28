@@ -37,8 +37,6 @@ class PresetMigrationTests(unittest.TestCase):
             'A="foo"\n',
             "A =foo\n",
             "A= foo\n",
-            "export A=plain\n",
-            "export A=plain\nA=plain\n",
         )
         with tempfile.TemporaryDirectory() as temp_home:
             for source in cases:
@@ -90,7 +88,7 @@ class PresetMigrationTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0)
             self.assertIn(
-                b"DOTFILES_OPENCODE_TIER='omo-slim-thirty-dollars'  # note\n",
+                b"DOTFILES_OPENCODE_TIER='omo-slim-thirty-dollars'  # note\r\n",
                 env_path.read_bytes(),
             )
             self.assertIn(b"A=alpha#tag\r\n", env_path.read_bytes())
@@ -238,7 +236,7 @@ class PresetMigrationTests(unittest.TestCase):
                 env_path.read_text(encoding="utf-8"), "DOTFILES_RUN_PI='1'\n"
             )
 
-    def test_exported_assignment_is_refused_consistently_before_backup(self):
+    def test_exported_assignment_is_migrated_before_backup(self):
         with tempfile.TemporaryDirectory() as temp_home:
             env_path = Path(temp_home) / ".env"
             original = b"export DOTFILES_RUN_PI='1'\n"
@@ -250,10 +248,132 @@ class PresetMigrationTests(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.returncode, 0)
             self.assertNotIn("secret-marker", result.stdout + result.stderr)
-            self.assertEqual(env_path.read_bytes(), original)
-            self.assertFalse(env_path.with_suffix(".bak").exists())
+            self.assertIn(b"export DOTFILES_RUN_PI_SETUP='1'", env_path.read_bytes())
+            self.assertEqual(env_path.with_suffix(".bak").read_bytes(), original)
+
+    def test_exported_literals_are_migrated_losslessly_and_keep_export(self):
+        lines = [
+            "  export DOTFILES_RUN_PI='1'  # enabled\r\n",
+            "  export DOTFILES_RUN_PI_SETUP='1'\r\n",
+            "export DOTFILES_OPENCODE_TIER='thirtydollars' # tier\r\n",
+        ]
+        migrated, changes = migrate_env_gates.migrate_env(lines)
+        self.assertIn(
+            "  # export DOTFILES_RUN_PI='1'  # enabled  # migrated to DOTFILES_RUN_PI_SETUP\r\n",
+            migrated,
+        )
+        self.assertIn("  export DOTFILES_RUN_PI_SETUP='1'\r\n", migrated)
+        self.assertIn(
+            "export DOTFILES_OPENCODE_TIER='omo-slim-thirty-dollars' # tier\r\n",
+            migrated,
+        )
+        self.assertTrue(changes)
+
+    def test_exported_parser_preserves_attribute_and_alias_canonical_precedence(self):
+        self.assertEqual(
+            migrate_env_gates.parse_env_line("export A='one' # note\r\n"),
+            ("", "export ", "A", "'one' # note"),
+        )
+        lines = ["export DOTFILES_RUN_PI='1'\n", "export DOTFILES_RUN_PI_SETUP='0'\n"]
+        self.assertEqual(
+            migrate_env_gates.unsafe_value_keys(
+                ["export DOTFILES_RUN_PI='1'\n", "DOTFILES_RUN_PI_SETUP='0'\n"]
+            ),
+            ["DOTFILES_RUN_PI_SETUP"],
+        )
+
+    def test_exported_shell_value_and_export_parity(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("export VALUE='dummy value'\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    '. "$1"; printf "%s:%s" "$VALUE" "$(export -p | grep -c VALUE)"',
+                    "sh",
+                    str(env_path),
+                ],
+                capture_output=True,
+                env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0)
+            parsed = migrate_env_gates.parse_env_line(env_path.read_text().strip())
+            self.assertEqual(
+                migrate_env_gates.parse_literal_value(parsed[3])[0], "dummy value"
+            )
+            self.assertEqual(result.stdout.decode(), "dummy value:1")
+
+    def test_generated_lines_keep_crlf_and_missing_final_terminator(self):
+        source = [
+            "export DOTFILES_RUN_CADDY_SETUP='1'\r\n",
+            "CADDY_ALLOW_PUBLIC='1'\r\n",
+        ]
+        migrated, changes = migrate_env_gates.migrate_env(source)
+        self.assertTrue(changes)
+        self.assertTrue(all(line.endswith("\r\n") for line in migrated))
+        self.assertIn("export DOTFILES_RUN_DDNS_SETUP='1'", "".join(migrated))
+        for source in (["export DOTFILES_RUN_PI='1'"], ["CADDY_ALLOW_PUBLIC='1'"]):
+            migrated, _ = migrate_env_gates.migrate_env(source)
+            self.assertFalse(migrated[-1].endswith("\n"))
+            self.assertTrue(all(line.endswith("\n") for line in migrated[:-1]))
+
+    def test_exported_migration_output_is_shell_sourceable(self):
+        original = "export DOTFILES_RUN_PI='1'\n"
+        migrated, _ = migrate_env_gates.migrate_env([original])
+        with tempfile.TemporaryDirectory() as temp_home:
+            env_path = Path(temp_home) / ".env"
+            env_path.write_text("".join(migrated), encoding="utf-8", newline="")
+            result = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    '. "$1"; printf "%s:%s" "$DOTFILES_RUN_PI_SETUP" "$(export -p | grep -c DOTFILES_RUN_PI_SETUP)"',
+                    "sh",
+                    str(env_path),
+                ],
+                capture_output=True,
+                env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0)
+            before = env_path.with_name("before.env")
+            before.write_text(original, encoding="utf-8")
+            prior = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    '. "$1"; printf "%s:%s" "$DOTFILES_RUN_PI" "$(export -p | grep -c DOTFILES_RUN_PI)"',
+                    "sh",
+                    str(before),
+                ],
+                capture_output=True,
+                env={"HOME": temp_home, "PATH": "/usr/bin:/bin"},
+                check=True,
+            )
+            self.assertEqual(result.stdout, prior.stdout)
+            self.assertEqual(result.stdout.decode(), "1:1")
+
+    def test_plain_superseded_alias_is_commented_and_export_target_preserved(self):
+        for lines in (
+            ["export DOTFILES_RUN_PI='1'\n", "DOTFILES_RUN_PI_SETUP='1'\n"],
+            ["DOTFILES_RUN_PI_SETUP='1'\n", "export DOTFILES_RUN_PI='1'\n"],
+            ["DOTFILES_RUN_PI='1'\n", "DOTFILES_RUN_PI_SETUP='1'\n"],
+        ):
+            migrated, _ = migrate_env_gates.migrate_env(lines)
+            self.assertFalse(
+                any(
+                    parsed
+                    and parsed[2] == "DOTFILES_RUN_PI"
+                    and not parsed[1].startswith("#")
+                    for parsed in map(migrate_env_gates.parse_env_line, migrated)
+                )
+            )
+            if any(line.startswith("export ") for line in lines):
+                self.assertIn("export DOTFILES_RUN_PI_SETUP='1'\n", migrated)
 
     def test_substituted_value_is_refused_untouched_in_home_fixture(self):
         with tempfile.TemporaryDirectory() as temp_home:
