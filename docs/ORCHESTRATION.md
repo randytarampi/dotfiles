@@ -229,7 +229,8 @@ stamped block and must be fixed separately by each repository maintainer.
 | `make dry-run` | Dry-run chezmoi apply | Before deploying |
 | `make lint` | Syntax + format checks | Before committing |
 | `make drift` | Verify ~/.env matches .env.example (read-only, includes section mismatch check) | After updating secrets |
-| `make migrate` | Rename deprecated gates + insert missing keys into correct sections | After pulling gate renames |
+| `make migrate-preview` | Preview deprecated gate renames without writing | Before applying gate renames |
+| `make migrate` | Apply deprecated gate renames + insert missing keys into correct sections | After reviewing `make migrate-preview` |
 | `make opencode-start` | Start OpenCode Web LaunchAgent/Service | After config regeneration |
 | `make opencode-stop` | Stop OpenCode Web LaunchAgent/Service | Before config changes |
 | `make opencode-restart` | Stop + start OpenCode Web | After config regeneration |
@@ -439,7 +440,7 @@ When gate names change (e.g., `DOTFILES_RUN_*` → `DOTFILES_RUN_*_SETUP`), the 
 To add a new gate rename in the future:
 1. Add a tuple to `MIGRATIONS` in `scripts/migrate-env-gates.py`: `(old_key, new_key, inherit_from)` — `inherit_from` is the key to inherit value from if the new key is absent (use `None` if no inheritance).
 2. Update `dot_dotfiles/shell/.env.example` with the new gate name.
-3. Run `make migrate --dry-run` to preview, then `make migrate` to apply.
+3. Run `make migrate-preview` to preview, then `make migrate` to apply.
 4. Run `make check-hashes` and `make verify` to confirm.
 
 The `MIGRATIONS` list is the single source of truth for gate rename history.

@@ -140,7 +140,8 @@ make check-env-coverage # Verify env vars are documented in .env.example
 make reset        # Clear chezmoi script state
 make clean-backups       # Remove stale .bak files from ~/.config/opencode/
 make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
-make migrate             # Migrate deprecated gate names + append missing template keys to ~/.env
+make migrate-preview     # Preview deprecated gate migration without writing
+make migrate             # Apply migration + append missing template keys to ~/.env
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py --preset pro-plus   # Switch AI model tier
 scripts/configure-all.sh [options]            # --preset, --mode, --skip, --local-fallback-*, --min-reasoning-embedding
@@ -368,7 +369,7 @@ See [docs/LITELLM.md](docs/LITELLM.md) for the full environment contract.
 
 All secrets live in `~/.env` using `KEY='VALUE'` format. Templates use `{{ env "VAR" }}` syntax.
 
-**`.env.example`** in the repo documents all available keys. Run `make drift` to report drift and `make migrate` to append newly documented keys to `~/.env` as commented examples without overwriting secrets.
+**`.env.example`** in the repo documents all available keys. Run `make drift` to report drift, `make migrate-preview` to preview deprecated gate renames, then `make migrate` to apply them and append newly documented keys to `~/.env` as commented examples without overwriting secrets.
 
 **Load env manually only for ad hoc raw chezmoi commands:** `set -a; source ~/.env; set +a`. Prefer `make diff`, `make dry-run`, and `make deploy` for normal work.
 
