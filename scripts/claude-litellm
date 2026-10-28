@@ -31,14 +31,14 @@ for arg in "$@"; do
 done
 set -- ${COMMON_ARGS_REMAINING[@]+"${COMMON_ARGS_REMAINING[@]}"}
 
-if [[ "${DOTFILES_RUN_CLAUDE_SETUP:-0}" != "1" || "${DOTFILES_USE_LITELLM_PROXY:-0}" != "1" ]]; then
+if [[ "${DOTFILES_RUN_CLAUDE_SETUP:-0}" != "1" || "${DOTFILES_USE_LITELLM_PROXY:-0}" != "1" || "${DOTFILES_RUN_LITELLM_SETUP:-0}" != "1" ]]; then
   case "${1:-}" in
   -*)
     printf 'Unknown option: %s\n' "$1" >&2
     exit 2
     ;;
   esac
-  printf '%s\n' 'Claude LiteLLM launcher requires DOTFILES_RUN_CLAUDE_SETUP=1 and DOTFILES_USE_LITELLM_PROXY=1.' >&2
+  printf '%s\n' 'Claude LiteLLM launcher requires DOTFILES_RUN_CLAUDE_SETUP=1, DOTFILES_USE_LITELLM_PROXY=1, and DOTFILES_RUN_LITELLM_SETUP=1.' >&2
   exit 1
 fi
 
@@ -70,6 +70,17 @@ else
   }
   cli="$cli_path"
 fi
+
+port="${LITELLM_PORT:-4000}"
+if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ! ((10#$port > 0 && 10#$port < 65536)); then
+  printf '%s\n' 'LITELLM_PORT must be a valid TCP port.' >&2
+  exit 1
+fi
+endpoint="${DOTFILES_CLAUDE_LITELLM_BASE_URL:-http://127.0.0.1:${port}}"
+[[ "$endpoint" == "http://127.0.0.1:${port}" ]] || {
+  printf '%s\n' 'Unsafe Claude LiteLLM endpoint.' >&2
+  exit 1
+}
 
 key_file="${DOTFILES_LITELLM_CLAUDE_KEY_FILE:-${HOME:?HOME must be set}/.local/share/litellm/clients/claude.key}"
 [[ -f "$key_file" && ! -L "$key_file" && -r "$key_file" ]] || {
@@ -106,11 +117,6 @@ if [[ -n "${LITELLM_CLAUDE_KEY:-}" && "$LITELLM_CLAUDE_KEY" != "$key" ]]; then
   exit 1
 fi
 
-port="${LITELLM_PORT:-4000}"
-if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ! ((10#$port > 0 && 10#$port < 65536)); then
-  printf '%s\n' 'LITELLM_PORT must be a valid TCP port.' >&2
-  exit 1
-fi
 model="${DOTFILES_CLAUDE_LITELLM_MODEL:-}"
 [[ -n "$model" ]] || {
   printf '%s\n' 'DOTFILES_CLAUDE_LITELLM_MODEL must name an explicitly qualified, served alias.' >&2
@@ -120,12 +126,6 @@ model="${DOTFILES_CLAUDE_LITELLM_MODEL:-}"
   printf '%s\n' 'Unsafe Claude LiteLLM model identifier.' >&2
   exit 1
 }
-endpoint="${DOTFILES_CLAUDE_LITELLM_BASE_URL:-http://127.0.0.1:${port}}"
-[[ "$endpoint" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]] || {
-  printf '%s\n' 'Unsafe Claude LiteLLM endpoint.' >&2
-  exit 1
-}
-
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BEDROCK_BASE_URL AWS_BEARER_TOKEN_BEDROCK
 unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
 unset ANTHROPIC_CUSTOM_HEADERS ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL
