@@ -663,20 +663,40 @@ def main():
 
     temporary_path = None
     try:
-        with tempfile.NamedTemporaryFile(
+        temporary = tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
             dir=env_path.parent,
             prefix=f".{env_path.name}.",
             delete=False,
-        ) as temporary:
+        )
+        temporary_path = Path(temporary.name)
+        with temporary:
             temporary.writelines(new_lines)
-            temporary_path = Path(temporary.name)
-        current_stat = env_path.stat()
-        if (current_stat.st_ino, current_stat.st_mtime_ns, current_stat.st_size) != (
+        if any(parent.is_symlink() for parent in (env_path, *env_path.parents)):
+            raise RuntimeError("env path changed during migration; backup retained")
+        current_stat = env_path.lstat()
+        original_identity = (
+            original_stat.st_dev,
             original_stat.st_ino,
+            original_stat.st_mode,
+            original_stat.st_nlink,
+            original_stat.st_uid,
             original_stat.st_mtime_ns,
             original_stat.st_size,
+        )
+        current_identity = (
+            current_stat.st_dev,
+            current_stat.st_ino,
+            current_stat.st_mode,
+            current_stat.st_nlink,
+            current_stat.st_uid,
+            current_stat.st_mtime_ns,
+            current_stat.st_size,
+        )
+        if (
+            current_identity != original_identity
+            or env_path.read_bytes() != original_bytes
         ):
             raise RuntimeError("env file changed during migration; backup retained")
         original_mode = stat.S_IMODE(original_stat.st_mode)
