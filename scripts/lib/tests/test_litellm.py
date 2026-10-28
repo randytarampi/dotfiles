@@ -1922,6 +1922,8 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_RUN_COPILOT_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "1")
     monkeypatch.setattr(CONFIGURE.shutil, "which", lambda _name: "/bin/client")
 
     CONFIGURE.provision_app_keys("master", path, "http://127.0.0.1:4000")
