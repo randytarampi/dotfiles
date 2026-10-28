@@ -181,7 +181,7 @@ def _free_junie_profiles(root, slim):
     )
     selected = {name: group for name, group in groups.items() if name in names}
     if not selected:
-        raise ValueError("No Junie free selections resolved")
+        return []
     return [
         {
             "groups": generator.derive_litellm_groups(selected),

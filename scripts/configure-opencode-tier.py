@@ -34,6 +34,11 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 )
 from constants import get_litellm_proxy_mode  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
+from unavailable_presets import (
+    DISABLED_PRESETS,
+    reject_disabled_preset,
+    without_disabled_presets,
+)  # noqa: E402
 
 OPENCODE_CONFIG_FILENAME = "opencode.json"
 
@@ -114,6 +119,13 @@ def orchestrate_tier_switch(
     Write the Slim config under OPENCODE_DIR or the global config directory;
     dry runs log planned writes without changing files.
     """
+    try:
+        reject_disabled_preset(tier)
+        if local_fallback_preset:
+            reject_disabled_preset(local_fallback_preset)
+    except ValueError as error:
+        logger.critical("%s", error)
+        sys.exit(1)
     use_litellm_proxy = get_litellm_proxy_mode()
     if use_litellm_proxy and os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
         logger.critical(
@@ -139,15 +151,19 @@ def orchestrate_tier_switch(
 
     had_previous_slim = os.path.exists(config_path)
     if not had_previous_slim:
-        # Project mode: config_path may not exist yet. Copy from source.
+        # Project mode: create a sanitized copy before any discovery or selection.
         if os.path.exists(source_path):
+            with open(source_path, encoding="utf-8") as source_file:
+                source_registry = without_disabled_presets(json.load(source_file))
             config_dir_path = os.path.dirname(config_path)
             if dry_run:
-                logger.info(f"Would copy {source_path} → {config_path}")
+                logger.info(f"Would write sanitized Slim config to {config_path}")
             else:
                 os.makedirs(config_dir_path, exist_ok=True)
-                shutil.copy2(source_path, config_path)
-                logger.info(f"Copied {source_path} → {config_path}")
+                with open(config_path, "w", encoding="utf-8") as target_file:
+                    json.dump(source_registry, target_file, indent=2)
+                    target_file.write("\n")
+                logger.info(f"Wrote sanitized Slim config to {config_path}")
         else:
             logger.critical(f"Config path does not exist: {config_path}")
             sys.exit(1)
@@ -159,6 +175,7 @@ def orchestrate_tier_switch(
 
     try:
         registry = tier_registry.load_registry(tiers_source)
+        registry = without_disabled_presets(registry)
     except Exception as e:
         logger.critical(f"Failed to load tiers source {tiers_source}: {e}")
         sys.exit(1)
@@ -280,7 +297,7 @@ def orchestrate_tier_switch(
     try:
         read_config_path = config_path if os.path.exists(config_path) else source_path
         with open(read_config_path, "r", encoding="utf-8") as f:
-            target_config = json.load(f)
+            target_config = without_disabled_presets(json.load(f))
         previous_slim = (
             json.loads(json.dumps(target_config)) if had_previous_slim else None
         )
@@ -398,7 +415,9 @@ def main():
         action="store_true",
         help="Omit local Ollama models from fallback chains",
     )
-    available_tiers = get_available_tiers()
+    available_tiers = [
+        name for name in get_available_tiers() if name not in DISABLED_PRESETS
+    ]
     add_model_override_args(parser, preset_choices=available_tiers)
     parser.add_argument(
         "--min-reasoning-embedding",

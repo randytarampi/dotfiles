@@ -99,7 +99,7 @@ def harness(tmp_path, monkeypatch):
     return home, target, key_file, groups_path
 
 
-def test_frozen_free_group_overrides_same_named_registry_tier(harness, monkeypatch):
+def test_disabled_free_group_is_not_generated(harness, monkeypatch):
     _, target, _, groups_path = harness
     cfg = json.loads(groups_path.read_text())
     cfg["groups"] = {"free": {"provider": "openai", "primaryModel": "frozen-model"}}
@@ -118,9 +118,7 @@ def test_frozen_free_group_overrides_same_named_registry_tier(harness, monkeypat
         },
     )
     PROFILES.main()
-    generated = json.loads((target / "free.json").read_text())
-    assert generated["primaryModel"]["id"] == "frozen-model"
-    assert "fasterModel" not in generated
+    assert not (target / "free.json").exists()
 
 
 def test_generated_litellm_profiles_are_private_and_share_cli_ide_directory(
@@ -602,9 +600,8 @@ def test_tier_and_pool_profiles_proxy_or_omit_exact_aliases(harness, monkeypatch
     assert missing_fast["id"] == "omlx/pool/model"
     assert "fasterModel" not in missing_fast
     assert (target / "plus.json").read_text() == '{"id":"stale-direct"}'
-    free = json.loads((target / "free.json").read_text())
-    assert free["id"] == "opencode/free-present"
-    assert "fasterModel" not in free
+    assert not (target / "free.json").exists()
+    assert not (target / "litellm-free.json").exists()
     meridian = json.loads((target / "meridian.json").read_text())
     assert meridian["id"] == "meridian/claude-sonnet"
     assert meridian["fasterModel"]["id"] == "openai/gpt-present"
