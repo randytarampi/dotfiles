@@ -22,6 +22,7 @@ if LIB_DIR not in sys.path:
 
 import logger  # noqa: E402 -- scripts/lib is added to sys.path above.
 import tier_registry  # noqa: E402 -- scripts/lib is added to sys.path above.
+from unavailable_presets import DISABLED_PRESETS  # noqa: E402
 from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     MODEL_CATALOGUE_TIMEOUT,
     open_same_origin,
@@ -179,8 +180,15 @@ def _merge_twin(derived, groups, name, twin_name, twin):
 
 def derive_litellm_groups(groups: dict) -> dict:
     """Build gateway twins for routed plain groups, preserving exact model IDs."""
-    derived = dict(groups)
+    derived = {
+        name: group
+        for name, group in groups.items()
+        if name not in DISABLED_PRESETS
+        and name.removeprefix("litellm-") not in DISABLED_PRESETS
+    }
     for name, group in groups.items():
+        if name not in derived:
+            continue
         if group.get("provider") not in LITELLM_ROUTED_PROVIDERS or name.startswith(
             "litellm-"
         ):
@@ -675,8 +683,22 @@ def atomic_write_manifest(target_dir: Path, names: dict[str, str]) -> None:
 
 def resolve_model_groups(cfg, registry):
     """Resolve only explicitly requested shared presets and compatibility names."""
-    groups = {name: dict(group) for name, group in cfg.get("groups", {}).items()}
+    requested_disabled = (set(cfg.get("sharedPresets", {})) & DISABLED_PRESETS) | (
+        set(cfg.get("groups", {})) & DISABLED_PRESETS
+    )
+    if requested_disabled:
+        logger.warning(
+            "Omitting unavailable Junie groups: %s",
+            ", ".join(sorted(requested_disabled)),
+        )
+    groups = {
+        name: dict(group)
+        for name, group in cfg.get("groups", {}).items()
+        if name not in DISABLED_PRESETS
+    }
     for name, preset in cfg.get("sharedPresets", {}).items():
+        if name in DISABLED_PRESETS:
+            continue
         if name != preset:
             raise ValueError("Shared group must retain its canonical preset name")
         roles = tier_registry.materialize_role_models(registry, preset, {})
@@ -692,6 +714,12 @@ def resolve_model_groups(cfg, registry):
             "fasterModel": faster_model,
         }
     for alias, canonical in cfg.get("compatibility", {}).items():
+        if (
+            alias in DISABLED_PRESETS
+            or canonical in DISABLED_PRESETS
+            or canonical.removeprefix("litellm-") in DISABLED_PRESETS
+        ):
+            continue
         if alias in groups or canonical not in groups:
             raise ValueError(f"Invalid compatibility group: {alias}")
         groups[alias] = dict(groups[canonical])
@@ -715,6 +743,8 @@ def main():
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
+    if args.local_fallback_preset in DISABLED_PRESETS:
+        parser.error(f"Preset '{args.local_fallback_preset}' is unavailable")
 
     # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
     # inside make deploy / configure-jetbrains-ai.py the parent already
@@ -734,6 +764,9 @@ def main():
     except Exception as exc:
         logger.critical(f"Failed to read model configuration: {exc}")
         raise SystemExit(1)
+    if not cfg["groups"] and cfg.get("sharedPresets"):
+        logger.info("No enabled Junie groups; skipping profile generation")
+        return
 
     local_models = parse_local_models(args.local_models)
     if not local_models:
@@ -766,6 +799,8 @@ def main():
                 }
     tier_specs = []
     for tier in registry.get("presets", {}):
+        if tier in DISABLED_PRESETS:
+            continue
         if not tier_registry.uses_local_placeholders(registry, tier):
             categories = {}
             roles = tier_registry.materialize_role_models(

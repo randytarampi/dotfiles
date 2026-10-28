@@ -73,6 +73,11 @@ from cli_helpers import (  # noqa: E402 -- local import follows bootstrap.
 from generation_lock import (  # noqa: E402 -- local import follows bootstrap.
     with_generation_lock,
 )
+from unavailable_presets import (
+    DISABLED_PRESETS,
+    reject_disabled_preset,
+    without_disabled_presets,
+)  # noqa: E402
 from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
     POOLSIDE_ROUTED_CONTEXT,
     POOLSIDE_ROUTED_MODEL_ID,
@@ -517,6 +522,7 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
 
 
 def prepare_config_candidates(config, slim_data, previous_slim=None):
+    slim_data = without_disabled_presets(slim_data)
     """Validate both generated payloads before the caller installs either."""
     apply_litellm_client_gate(config)
     slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
@@ -653,15 +659,23 @@ def main():
     add_common_args(parser, no_backup=True)
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
-    available_tiers = get_available_tiers()
+    available_tiers = [
+        name for name in get_available_tiers() if name not in DISABLED_PRESETS
+    ]
     parser.add_argument(
         "--preset",
-        default="pro-plus",
+        default=None,
         choices=available_tiers,
     )
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
+    args.preset = args.preset or os.environ.get("DOTFILES_OPENCODE_TIER") or "pro-plus"
+    try:
+        reject_disabled_preset(args.preset)
+        reject_disabled_preset(os.environ.get("DOTFILES_LOCAL_FALLBACK_PRESET", ""))
+    except ValueError as error:
+        parser.error(str(error))
     source_root = Path(SCRIPT_DIR).resolve().parent
     logger.info("config source: %s/configs", source_root)
     chezmoi_source = os.environ.get("CHEZMOI_SOURCE_DIR")
@@ -1297,7 +1311,7 @@ def main():
 
     try:
         with open(presets_json_path, "r", encoding="utf-8") as f:
-            slim_data = json.load(f)
+            slim_data = without_disabled_presets(json.load(f))
         previous_slim_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
         previous_slim = None
         if os.path.isfile(previous_slim_path):

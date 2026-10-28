@@ -102,7 +102,7 @@ def test_jetbrains_dry_run_materializes_profile_tiers(tmp_path, monkeypatch, cap
     groups.write_text(
         json.dumps(
             {
-                "groups": {},
+                "groups": {"local": {"provider": "ollama", "primaryModel": "model"}},
                 "providers": {"ollama": {"baseUrl": "http://localhost:11434/v1"}},
             }
         ),
@@ -163,6 +163,88 @@ def test_get_available_tiers_includes_deprecated_aliases():
     for alias, canonical in DEPRECATED_TIER_ALIASES.items():
         assert alias in tiers
         assert canonical in tiers
+
+
+def test_disabled_tier_rejected_before_discovery_or_filesystem_writes(tmp_path):
+    target = tmp_path / "oh-my-opencode-slim.json"
+    with (
+        patch.dict(os.environ, {"OPENCODE_DIR": str(tmp_path)}),
+        patch.object(configure_tier, "list_local_ollama_models") as discovery,
+        patch.object(configure_tier.shutil, "copy2") as copy,
+    ):
+        try:
+            configure_tier.orchestrate_tier_switch("free", False, [])
+        except SystemExit as error:
+            assert error.code == 1
+        else:
+            raise AssertionError("disabled preset was accepted")
+    discovery.assert_not_called()
+    copy.assert_not_called()
+    assert not target.exists()
+
+
+def test_disabled_slim_export_drops_presets_tiers_and_councils():
+    from unavailable_presets import without_disabled_presets
+
+    source = json.loads(
+        (REPO_ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+    )
+    clean = without_disabled_presets(source)
+    for key in ("presets", "_tiers", "agents"):
+        assert not ({"free", "omo-slim-opencode-zen-free"} & set(clean.get(key, {})))
+    for tier in clean.get("_tiers", {}).values():
+        assert not (
+            {"free", "omo-slim-opencode-zen-free"}
+            & set(tier.get("council", {}).get("presets", {}))
+        )
+
+
+def test_disabled_slim_rejects_active_council_default_and_strips_top_level_choices():
+    from unavailable_presets import without_disabled_presets
+
+    source = json.loads(
+        (REPO_ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+    )
+    source["council"] = {"default_preset": "free", "presets": {"free": {}}}
+    try:
+        without_disabled_presets(source)
+    except ValueError as error:
+        assert "council preset 'free'" in str(error)
+    else:
+        raise AssertionError("disabled active council default was accepted")
+
+    source["council"] = {
+        "default_preset": "local",
+        "presets": {"local": {}, "free": {}},
+    }
+    clean = without_disabled_presets(source)
+    assert set(clean["council"]["presets"]) == {"local"}
+    assert "free" not in clean["council"]["presets"]
+    source["council"] = {
+        "default_preset": "local",
+        "presets": {"local": {}, "free": {}},
+    }
+    assert set(without_disabled_presets(source)["council"]["presets"]) == {"local"}
+    for name, tier in clean["_tiers"].items():
+        assert tier["council"]["default_preset"] not in {
+            "free",
+            "omo-slim-opencode-zen-free",
+        }
+
+
+def test_sanitizer_rejects_unavailable_tier_council_default():
+    from unavailable_presets import without_disabled_presets
+
+    source = json.loads(
+        (REPO_ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+    )
+    source["_tiers"]["local"]["council"]["default_preset"] = "free"
+    try:
+        without_disabled_presets(source)
+    except ValueError as error:
+        assert "Tier 'local'" in str(error)
+    else:
+        raise AssertionError("unavailable council default remained selectable")
 
 
 def test_tier_script_accepts_deprecated_alias_preset():

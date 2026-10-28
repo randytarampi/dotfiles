@@ -7,6 +7,16 @@ the full tier reference.
 
 ## Provider Presets
 
+The `free` and `omo-slim-opencode-zen-free` selections are currently disabled
+in repository-managed OpenCode and Junie generation because their availability
+is not established. Generation rejects them as active presets and omits their
+choices and compatibility aliases; it does not silently select a paid fallback.
+This repository guard applies when configuration is regenerated. It does not
+change already-installed client files until deployment/regeneration runs, so
+runtime enforcement remains open (tracking issue #119); provenance for any
+existing installed selection remains unverified until that regeneration.
+No route or entitlement is inferred from catalogue presence alone.
+
 Three upstream presets are available in the shared registry. Definitions are
 adopted from the upstream oh-my-opencode-slim docs —
 [openai-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md),
