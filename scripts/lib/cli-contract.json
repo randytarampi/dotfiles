@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/export-claude-desktop-gateway.py",
+      "capabilities": ["public"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--endpoint", "--model", "--helper"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/litellm-costs.py",
       "capabilities": [
         "public",
