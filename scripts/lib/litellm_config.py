@@ -451,7 +451,11 @@ CLIENT_REGISTRY = [
         ["Codex CLI installed"],
         ["Responses API", "OpenAI-compatible"],
         "scripts/configure-codex.py managed block",
-        ["DOTFILES_RUN_CODEX_SETUP=1", "DOTFILES_USE_LITELLM_PROXY=1"],
+        [
+            "DOTFILES_RUN_CODEX_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
         "file-or-env",
         "~/.codex/config.toml [model_providers.litellm]",
         "eligible",
