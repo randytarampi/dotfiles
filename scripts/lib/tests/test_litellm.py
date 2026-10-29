@@ -2220,24 +2220,51 @@ def test_copilot_litellm_requires_both_gates(gate, tmp_path):
 
 def test_copilot_litellm_dry_run_needs_no_key_and_rejects_model_override(tmp_path):
     launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    marker = tmp_path / "child-ran"
+    child = binaries / "copilot"
+    child.write_text(f'#!/bin/sh\ntouch "{marker}"\n')
+    child.chmod(0o700)
     env = {
-        "PATH": "/usr/bin:/bin",
+        "PATH": f"{binaries}:/usr/bin:/bin",
         "HOME": str(tmp_path),
         "DOTFILES_RUN_COPILOT_SETUP": "1",
         "DOTFILES_USE_LITELLM_PROXY": "1",
         "DOTFILES_RUN_LITELLM_SETUP": "1",
-        "DOTFILES_COPILOT_LITELLM_MODEL": "openai/model-alias",
+        "DOTFILES_COPILOT_LITELLM_MODEL": "model-alias",
     }
     result = subprocess.run(
         [str(launcher), "--dry-run"], env=env, capture_output=True, text=True
     )
-    assert result.returncode == 1
-    assert "endpoint and model" not in result.stdout
+    assert result.returncode == 0, result.stderr
+    assert "credential state UNKNOWN" in result.stdout
+    assert not marker.exists()
     assert not (tmp_path / ".local/share/litellm/clients").exists()
     result = subprocess.run(
         [str(launcher), "--model=other"], env=env, capture_output=True, text=True
     )
     assert result.returncode == 2
+
+
+def test_copilot_litellm_dry_run_requires_cli(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    result = subprocess.run(
+        [str(launcher), "--dry-run"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "DOTFILES_RUN_COPILOT_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_COPILOT_LITELLM_MODEL": "model-alias",
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "copilot CLI not found" in result.stderr
+    assert not (tmp_path / ".local").exists()
 
 
 @pytest.mark.parametrize(
