@@ -49,7 +49,10 @@ def test_setup_gates_and_classification_only_credentials():
     ]
     for client in ("opencode", "openwebui", "junie"):
         assert rows[client]["setup_gates"] == ["DOTFILES_RUN_LITELLM_SETUP=1"]
-    assert rows["claude"]["setup_gates"] == ["DOTFILES_RUN_CLAUDE_SETUP=1"]
+    assert rows["claude"]["setup_gates"] == [
+        "DOTFILES_RUN_CLAUDE_SETUP=1",
+        "DOTFILES_RUN_LITELLM_SETUP=1",
+    ]
     for row in litellm_config.CLIENT_REGISTRY:
         if row["classification"] == "classification-only":
             assert row["credential_policy"] == "no-credential"
