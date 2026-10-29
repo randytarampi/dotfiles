@@ -2130,6 +2130,70 @@ def test_copilot_litellm_launcher_isolated_environment_and_policy(tmp_path):
         assert name not in child_env
 
 
+def test_copilot_litellm_accepts_openrouter_free_twin_alias(tmp_path):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    home = tmp_path / "home"
+    key = home / ".local/share/litellm/clients/copilot-cli.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("synthetic-private-key")
+    key.chmod(0o600)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    record = tmp_path / "child-model"
+    fake = binaries / "copilot"
+    fake.write_text(f'#!/bin/sh\nprintf "%s" "$COPILOT_MODEL" > "{record}"\n')
+    fake.chmod(0o700)
+    alias = "openrouter/vendor/twin:free"
+    env = {
+        "HOME": str(home),
+        "PATH": f"{binaries}:/usr/bin:/bin",
+        "DOTFILES_RUN_COPILOT_SETUP": "1",
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_COPILOT_LITELLM_MODEL": alias,
+        "DOTFILES_COPILOT_LITELLM_BASE_URL": "http://localhost:4000/v1",
+    }
+    launched = subprocess.run([str(launcher)], env=env, capture_output=True, text=True)
+    assert launched.returncode == 0, launched.stderr
+    assert record.read_text() == alias
+    record.unlink()
+
+    preview = subprocess.run(
+        [str(launcher), "--dry-run"],
+        env={**env, "HOME": str(tmp_path / "no-key-home")},
+        capture_output=True,
+        text=True,
+    )
+    assert preview.returncode == 0, preview.stderr
+    assert "credential state UNKNOWN" in preview.stdout
+    assert not record.exists()
+
+
+@pytest.mark.parametrize("model", ["", "   ", "-leading-option"])
+def test_copilot_litellm_still_rejects_invalid_aliases(tmp_path, model):
+    launcher = Path(__file__).resolve().parents[2] / "copilot-litellm"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    fake = binaries / "copilot"
+    fake.write_text("#!/bin/sh\nexit 99\n")
+    fake.chmod(0o700)
+    result = subprocess.run(
+        [str(launcher), "--dry-run"],
+        env={
+            "HOME": str(tmp_path),
+            "PATH": f"{binaries}:/usr/bin:/bin",
+            "DOTFILES_RUN_COPILOT_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_COPILOT_LITELLM_MODEL": model,
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "explicit alias" in result.stderr
+
+
 @pytest.mark.parametrize(
     "key_text,mode,symlink",
     [("", 0o600, False), ("key", 0o644, False), ("key", 0o600, True)],
