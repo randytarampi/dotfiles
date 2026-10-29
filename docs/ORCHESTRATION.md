@@ -273,7 +273,7 @@ stamped block and must be fixed separately by each repository maintainer.
 | — | configure-aws | configure-all.sh | Non-secret AWS CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_AWS_CONFIG_SETUP` |
 | — | [configure-docker](../scripts/configure-docker.py) | configure-all.sh | Non-secret Docker CLI config baseline; credentials remain user-owned | `DOTFILES_RUN_DOCKER_CONFIG_SETUP` |
 | 15 | configure-mcp | run_onchange | MCP config generation | `DOTFILES_RUN_MCP_SETUP` |
-| 15 | configure-litellm | run_onchange | Separate LiteLLM loopback gateway; after MCP and before managed clients | `DOTFILES_RUN_LITELLM_SETUP` |
+| 15 | configure-litellm | run_onchange | Separate LiteLLM loopback gateway; after MCP and before managed clients | `DOTFILES_RUN_LITELLM_SETUP` (default `0`) |
 | 16 | configure-opencode | run_onchange | OpenCode tier, models, voice | `DOTFILES_RUN_OPENCODE_SETUP` |
 | 18 | configure-pi | run_onchange | Pi providers, subagents, MCP, and skills | `DOTFILES_RUN_PI_SETUP` |
 | 10, 18 | install/configure-cortex | run_onchange | Snowflake Cortex Code CLI and native config | `DOTFILES_RUN_CORTEX_SETUP` |
@@ -340,6 +340,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_PACKAGES_SETUP` | 0 | Script 04 (Homebrew/Winget installs) |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | 0 | Script 06 (Junie CLI install) |
 | `DOTFILES_RUN_HERMES_SETUP` | 0 | Opt-in `configure-hermes.py` gateway config scaffold; also requires `DOTFILES_USE_LITELLM_PROXY=1`. Does not provision a key or change the default model/provider. |
+| `DOTFILES_RUN_COPILOT_SETUP` | 0 | Standalone Copilot CLI gateway adapter; separately requires `DOTFILES_USE_LITELLM_PROXY=1` and `DOTFILES_RUN_LITELLM_SETUP=1`. Does not qualify the IDE extension. |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | 0 | Scripts 07, 08 (OpenCode plugins + CLI tools) |
 | `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` | 0 | Script 07 opencode-mem plugin and memory configuration |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
@@ -357,7 +358,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | 0 | Script 20 (agent guidance) |
 | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | 0 | Script 27 (Ollama daemon env config) |
 | `DOTFILES_RUN_OPENWEBUI_SETUP` | 0 | Script 30 (Open WebUI venv, LaunchAgent, service env, connection reconciliation) |
-| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 15 (`run_onchange_15-litellm.sh.tmpl`, separate LiteLLM loopback gateway) |
+| `DOTFILES_RUN_LITELLM_SETUP` | 0 | Script 15 (`run_onchange_15-litellm.sh.tmpl`, separate LiteLLM loopback gateway; independent of client proxy switches) |
 | `DOTFILES_RUN_OPENWEBUI_BACKUP_SETUP` | 0 | Script 32 (daily Open WebUI backup timer; requires Open WebUI gate) |
 | `DOTFILES_RUN_SKILLS_SETUP` | 0 | Script 28 + `configure-all.sh` (skills distribution via configure-skills.py) |
 | `DOTFILES_RUN_UPDATE_SYSTEM_SETUP` | 0 | `update-system.sh` (manual cross-platform system/package updater) |
