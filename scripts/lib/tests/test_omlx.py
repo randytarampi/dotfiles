@@ -1747,13 +1747,8 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
 @pytest.mark.parametrize("recovery_fails", [False, True])
 @pytest.mark.parametrize(
     "prior_slim",
-    [
-        None,
-        b"slim sentinel\n",
-        b"prior-slim\xff\n",  # undecodable bytes must restore byte-exact
-        b"prior-slim\r\n",  # CRLF must not be normalised by recovery
-    ],
-    ids=["absent", "utf8", "undecodable", "crlf"],
+    [None, b'{"roles":{"prior":{"model":"openai/prior"}}}'],
+    ids=["absent", "valid-json"],
 )
 def test_opencode_main_slim_write_failure_restores_prior_pair(
     monkeypatch, tmp_path, caplog, prior_slim, recovery_fails
@@ -1767,7 +1762,6 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     slim_path = config_dir / "oh-my-opencode-slim.json"
     opencode_path.write_bytes(b"opencode sentinel\n")
     if prior_slim is not None:
-        prior_slim = b'{"roles":{"prior":{"model":"openai/prior"}}}'
         slim_path.write_bytes(prior_slim)
     scripts = tmp_path / "scripts"
     (tmp_path / "configs/opencode").mkdir(parents=True)
@@ -1844,19 +1838,125 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     assert opencode_path.read_bytes() == b"opencode sentinel\n"
     if recovery_fails:
         assert "simulated recovery failure" in critical[0].message
-        assert slim_path.read_text() == '{"model": "stub-slim-target"}'
-        return
-    assert "restored the prior" in critical[0].message
-    if prior_slim is None:
-        assert write_names == ["slim-ok", "opencode-FAIL"]
+        assert slim_path.read_bytes() == b'{"model": "stub-slim-target"}'
+    elif prior_slim is None:
         assert not slim_path.exists()
-        return
-    assert write_names == ["slim-ok", "opencode-FAIL", "slim-ok"]
-    # The PRIOR slim generation is restored byte-exact with its private mode;
-    # the pair is never left mixed, normalised or lost.
-    assert slim_path.read_bytes() == prior_slim
-    assert stat.S_IMODE(slim_path.stat().st_mode) == 0o600
-    assert opencode_path.read_bytes() == b"opencode sentinel\n"
+    else:
+        assert slim_path.read_bytes() == prior_slim
+
+
+@pytest.mark.parametrize(
+    "prior_slim",
+    [b"slim sentinel\n", b"prior-slim\xff\n", b"prior-slim\r\n"],
+    ids=["utf8", "undecodable", "crlf"],
+)
+@pytest.mark.parametrize("failure", ["first-write", "second-write", "recovery"])
+def test_install_config_pair_preserves_exact_slim_snapshot(
+    monkeypatch, tmp_path, prior_slim, failure
+):
+    script = _load_script("configure_opencode_exact_rollback", "configure-opencode.py")
+    slim = tmp_path / "oh-my-opencode-slim.json"
+    config = tmp_path / "opencode.json"
+    backup = tmp_path / "oh-my-opencode-slim.json.bak"
+    slim.write_bytes(prior_slim)
+    os.chmod(slim, 0o640)
+    backup.write_bytes(b"backup snapshot")
+    before = slim.stat()
+    config.write_bytes(b"config prior\r\n")
+    config_before = config.stat()
+    config_bytes = config.read_bytes()
+    original_write = script.write_private_atomic
+    calls = []
+
+    def fail_at(path, payload):
+        calls.append((Path(path), payload))
+        if failure == "first-write" and len(calls) == 1:
+            raise OSError("first write")
+        if failure in {"second-write", "recovery"} and Path(path) == config:
+            raise OSError("second write")
+        if failure == "recovery" and payload == prior_slim and len(calls) > 2:
+            raise OSError("rollback write")
+        return original_write(path, payload)
+
+    monkeypatch.setattr(script, "write_private_atomic", fail_at)
+    backup_before = backup.stat()
+    with pytest.raises(RuntimeError) as error:
+        script.install_config_pair(slim, config, b"candidate slim", b"candidate config")
+    if failure == "recovery":
+        assert "rollback write" in str(error.value)
+        assert slim.read_bytes() == b"candidate slim"
+    else:
+        assert slim.read_bytes() == prior_slim
+        after = slim.stat()
+        assert stat.S_IMODE(after.st_mode) == 0o640
+        assert after.st_mtime_ns == before.st_mtime_ns
+    assert backup.read_bytes() == b"backup snapshot"
+    assert backup.stat().st_mtime_ns == backup_before.st_mtime_ns
+    assert backup.stat().st_mode == backup_before.st_mode
+    assert config.read_bytes() == config_bytes
+    assert config.stat().st_mtime_ns == config_before.st_mtime_ns
+    assert calls[0][1] == b"candidate slim"
+    if failure == "recovery":
+        assert calls[-1][1] == prior_slim
+
+
+@pytest.mark.parametrize("prior_exists", [False, True], ids=["absent", "present"])
+@pytest.mark.parametrize("failure", ["first-write", "second-write", "recovery"])
+def test_install_config_pair_transaction_restores_snapshot(
+    monkeypatch, tmp_path, prior_exists, failure
+):
+    script = _load_script("configure_opencode_transaction", "configure-opencode.py")
+    slim = tmp_path / "oh-my-opencode-slim.json"
+    config = tmp_path / "opencode.json"
+    original = b'{"prior": "\xff\r\n"}'
+    if prior_exists:
+        slim.write_bytes(original)
+        os.chmod(slim, 0o640)
+        backup = tmp_path / "oh-my-opencode-slim.json.bak"
+        backup.write_bytes(b"private backup")
+        before_stat = slim.stat()
+    else:
+        backup = None
+        before_stat = None
+    config.write_bytes(b"config-before")
+    config_before = config.read_bytes()
+    real_write = script.write_private_atomic
+    calls = []
+
+    def failing_write(path, payload):
+        calls.append((Path(path), payload))
+        if failure == "first-write" and Path(path) == slim:
+            raise OSError("first write failed")
+        if failure in {"second-write", "recovery"} and Path(path) == config:
+            raise OSError("second write failed")
+        if failure == "recovery" and payload == original and len(calls) > 1:
+            raise OSError("recovery failed")
+        return real_write(path, payload)
+
+    monkeypatch.setattr(script, "write_private_atomic", failing_write)
+    with pytest.raises(RuntimeError):
+        script.install_config_pair(slim, config, b"new slim", b"new config")
+
+    if failure == "first-write":
+        assert len(calls) == 1
+    elif failure == "second-write":
+        assert len(calls) == (3 if prior_exists else 2)
+        if prior_exists:
+            assert calls[2][1] == original
+    else:
+        if prior_exists:
+            assert calls[2][1] == original
+    if prior_exists and failure != "recovery":
+        assert slim.read_bytes() == original
+        after_stat = slim.stat()
+        assert stat.S_IMODE(after_stat.st_mode) == 0o640
+        assert after_stat.st_mtime_ns == before_stat.st_mtime_ns
+        assert backup.read_bytes() == b"private backup"
+    elif prior_exists:
+        assert slim.read_bytes() == b"new slim"
+    else:
+        assert not slim.exists()
+    assert config.read_bytes() == config_before
 
 
 def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
