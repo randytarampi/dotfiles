@@ -1181,7 +1181,7 @@ def _run_opencode_main(
     config_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
     config_path.write_bytes(b"prior-opencode\n")
-    slim_path.write_bytes(b"prior-slim\n")
+    slim_path.write_text(json.dumps({"roles": {"prior": {"model": "openai/prior"}}}))
     scripts = tmp_path / "scripts"
     configs = scripts.parent / "configs"
     (configs / "opencode").mkdir(parents=True)
@@ -1253,6 +1253,8 @@ def test_opencode_main_refuses_disabled_env_selection_before_side_effects(
     home = tmp_path / "home"
     config_dir = home / ".config/opencode"
     config_dir.mkdir(parents=True)
+    slim_path = config_dir / "oh-my-opencode-slim.json"
+    slim_path.write_text(json.dumps({"roles": {"prior": {"model": "openai/prior"}}}))
     local_env = config_dir / ".env"
     home_env = home / ".env"
     active = selection == "active"
@@ -1294,7 +1296,165 @@ def test_opencode_main_refuses_disabled_env_selection_before_side_effects(
     assert dict(os.environ) == before_env
     assert error.value.code == 2
     assert not (config_dir / "opencode.json").exists()
-    assert not (config_dir / "oh-my-opencode-slim.json").exists()
+    assert (config_dir / "oh-my-opencode-slim.json").read_text() == json.dumps(
+        {"roles": {"prior": {"model": "openai/prior"}}}
+    )
+
+
+@pytest.mark.parametrize("mode", ["global", "project"])
+@pytest.mark.parametrize(
+    "installed",
+    [
+        {"preset": "free"},
+        {"council": {"default_preset": "free"}},
+        {
+            "_tiers": {
+                "pro-plus": {
+                    "council": {"default_preset": "omo-slim-opencode-zen-free"}
+                }
+            }
+        },
+        {"fallback": {"orchestrator": ["openai/model", "free"]}},
+    ],
+)
+def test_opencode_main_refuses_installed_disabled_slim_without_touching_files(
+    monkeypatch, tmp_path, mode, installed
+):
+    script = _load_script(
+        "configure_opencode_installed_disabled", "configure-opencode.py"
+    )
+    home = tmp_path / "home"
+    config_dir = (
+        home / ".config/opencode"
+        if mode == "global"
+        else tmp_path / "project/.opencode"
+    )
+    config_dir.mkdir(parents=True)
+    slim = config_dir / "oh-my-opencode-slim.json"
+    slim.write_text(json.dumps(installed))
+    opencode = config_dir / "opencode.json"
+    opencode.write_text('{"mcp":{"keep":{"command":"fixture"}}}')
+    mcp = config_dir / "mcp.json"
+    mcp.write_text('{"keep":true}')
+    before = {
+        path: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+        for path in (slim, opencode, mcp)
+    }
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.delenv("DOTFILES_OPENCODE_TIER", raising=False)
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_PRESET", raising=False)
+    monkeypatch.setattr(script, "SCRIPT_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    monkeypatch.setattr(
+        script, "list_local_ollama_models", lambda: pytest.fail("discovery ran")
+    )
+    monkeypatch.setattr(sys, "argv", ["configure-opencode.py", "--mode", mode])
+    with pytest.raises(SystemExit) as error:
+        script.main.__wrapped__()
+    assert error.value.code == 2
+    assert before == {
+        path: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+        for path in before
+    }
+
+
+@pytest.mark.parametrize("mode", ["global", "project"])
+@pytest.mark.parametrize("payload", [b"not json", b"null", b"[]"])
+def test_opencode_main_refuses_malformed_installed_slim_even_with_explicit_preset(
+    monkeypatch, tmp_path, mode, payload
+):
+    script = _load_script(
+        "configure_opencode_installed_malformed", "configure-opencode.py"
+    )
+    home = tmp_path / "home"
+    config_dir = (
+        home / ".config/opencode"
+        if mode == "global"
+        else tmp_path / "project/.opencode"
+    )
+    config_dir.mkdir(parents=True)
+    slim = config_dir / "oh-my-opencode-slim.json"
+    slim.write_bytes(payload)
+    before = (slim.read_bytes(), slim.stat().st_mode, slim.stat().st_mtime_ns)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    monkeypatch.setattr(
+        sys, "argv", ["configure-opencode.py", "--mode", mode, "--preset", "pro-plus"]
+    )
+    with pytest.raises(SystemExit) as error:
+        script.main.__wrapped__()
+    assert error.value.code == 2
+    assert (slim.read_bytes(), slim.stat().st_mode, slim.stat().st_mtime_ns) == before
+
+
+def test_opencode_explicit_replacement_warns_before_discovery(monkeypatch, tmp_path):
+    script = _load_script("configure_opencode_replacement", "configure-opencode.py")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    slim = config_dir / "oh-my-opencode-slim.json"
+    slim.write_text('{"preset":"free"}')
+    before = slim.read_bytes()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "1")
+    monkeypatch.delenv("DOTFILES_OPENCODE_TIER", raising=False)
+    monkeypatch.delenv("DOTFILES_LOCAL_FALLBACK_PRESET", raising=False)
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    warnings = []
+    monkeypatch.setattr(script.logger, "warning", lambda *args: warnings.append(args))
+
+    class DiscoveryReached(BaseException):
+        pass
+
+    def discovery():
+        message = " ".join(str(value) for row in warnings for value in row)
+        assert "free" in message and "pro-plus" in message and "paid" in message
+        raise DiscoveryReached()
+
+    # BaseException bypasses the optional-discovery Exception degradation path.
+    monkeypatch.setattr(script, "list_local_ollama_models", discovery)
+    monkeypatch.setattr(
+        sys, "argv", ["configure-opencode.py", "--preset", "pro-plus", "--dry-run"]
+    )
+    with pytest.raises(DiscoveryReached):
+        script.main.__wrapped__()
+    assert slim.read_bytes() == before
+
+
+@pytest.mark.parametrize("kind", ["directory", "broken-link", "unreadable"])
+def test_opencode_refuses_uninspectable_installed_path(monkeypatch, tmp_path, kind):
+    script = _load_script("configure_opencode_uninspectable", "configure-opencode.py")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    slim = config_dir / "oh-my-opencode-slim.json"
+    if kind == "directory":
+        slim.mkdir()
+    elif kind == "broken-link":
+        slim.symlink_to(config_dir / "absent")
+    else:
+        slim.write_text("{}")
+        import builtins
+
+        real_open = builtins.open
+
+        def guarded_open(path, *args, **kwargs):
+            if str(path) == str(slim):
+                raise PermissionError("fixture")
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", guarded_open)
+    before = slim.lstat()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(script, "load_env", lambda *args: False)
+    monkeypatch.setattr(sys, "argv", ["configure-opencode.py", "--preset", "pro-plus"])
+    with pytest.raises(SystemExit) as error:
+        script.main.__wrapped__()
+    assert error.value.code == 2
+    assert slim.lstat() == before
+    assert not (config_dir / "opencode.json").exists()
 
 
 def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
@@ -1607,6 +1767,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     slim_path = config_dir / "oh-my-opencode-slim.json"
     opencode_path.write_bytes(b"opencode sentinel\n")
     if prior_slim is not None:
+        prior_slim = b'{"roles":{"prior":{"model":"openai/prior"}}}'
         slim_path.write_bytes(prior_slim)
     scripts = tmp_path / "scripts"
     (tmp_path / "configs/opencode").mkdir(parents=True)
