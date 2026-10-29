@@ -658,7 +658,11 @@ def main():
         return 0
 
     if not args.no_backup and (backup_path.is_symlink() or backup_path.exists()):
-        print("Refused: backup path already exists", file=sys.stderr)
+        print(
+            f"Refused: backup path already exists: {backup_path}. "
+            "Preserve it in a private location before retrying, or explicitly use --no-backup.",
+            file=sys.stderr,
+        )
         return 1
     if not args.no_backup:
         flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
@@ -666,7 +670,11 @@ def main():
         try:
             backup_fd = os.open(backup_path, flags, 0o600)
         except FileExistsError:
-            print("Refused: backup path already exists", file=sys.stderr)
+            print(
+                f"Refused: backup path already exists: {backup_path}. "
+                "Preserve it in a private location before retrying, or explicitly use --no-backup.",
+                file=sys.stderr,
+            )
             return 1
         try:
             with os.fdopen(backup_fd, "wb") as backup:
