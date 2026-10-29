@@ -127,7 +127,10 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
     )
     assert rows["claude"]["classification"] == "eligible"
     assert rows["claude"]["credential_policy"] == "provision"
-    assert rows["claude"]["setup_gates"] == ["DOTFILES_RUN_CLAUDE_SETUP=1"]
+    assert rows["claude"]["setup_gates"] == [
+        "DOTFILES_RUN_CLAUDE_SETUP=1",
+        "DOTFILES_RUN_LITELLM_SETUP=1",
+    ]
 
 
 def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):
@@ -161,6 +164,22 @@ def test_claude_provisions_only_with_gateway_and_client_gates(monkeypatch, tmp_p
     key_file = service.parent / "clients/claude.key"
     assert key_file.is_file() and key_file.stat().st_mode & 0o777 == 0o600
     assert key_file.read_text().strip()
+
+
+def test_claude_shared_gateway_gate_is_independently_required(monkeypatch, tmp_path):
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/claude")
+    _enabled(monkeypatch, "DOTFILES_RUN_CLAUDE_SETUP", "DOTFILES_USE_LITELLM_PROXY")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert [call for call in calls if call[0].endswith("/key/generate")] == []
+
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ] == ["claude"]
 
 
 def test_claude_strict_key_check_uses_attribution_and_labels_unqualified_messages(

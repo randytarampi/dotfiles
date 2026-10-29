@@ -472,7 +472,7 @@ CLIENT_REGISTRY = [
             "standalone CLI wrapper; live qualification pending",
         ],
         "scripts/claude-litellm",
-        ["DOTFILES_RUN_CLAUDE_SETUP=1"],
+        ["DOTFILES_RUN_CLAUDE_SETUP=1", LITELLM_SETUP_GATE],
         "file-or-env",
         "Claude gateway configuration",
         "eligible",
