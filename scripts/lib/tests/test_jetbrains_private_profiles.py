@@ -121,6 +121,34 @@ def test_disabled_free_group_is_not_generated(harness, monkeypatch):
     assert not (target / "free.json").exists()
 
 
+def test_enabled_pro_group_is_generated(harness, monkeypatch):
+    _, target, _, groups_path = harness
+    cfg = json.loads(groups_path.read_text())
+    cfg["groups"] = {"pro": {"provider": "openai", "primaryModel": "gpt-pro"}}
+    groups_path.write_text(json.dumps(cfg), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-openai-key")
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {
+            "presets": {
+                "pro": {
+                    "orchestrator": {"model": "openai/registry-main"},
+                    "librarian": {"model": "openai/registry-fast"},
+                }
+            }
+        },
+    )
+
+    PROFILES.main()
+
+    assert (target / "pro.json").is_file()
+    generated = json.loads((target / "pro.json").read_text())
+    assert generated["primaryModel"]["id"] == "gpt-pro"
+    assert not (target / "free.json").exists()
+
+
 def test_generated_litellm_profiles_are_private_and_share_cli_ide_directory(
     harness, caplog, monkeypatch
 ):

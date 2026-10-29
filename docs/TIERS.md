@@ -28,10 +28,10 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-opencode-zen-free** | OpenCode Zen only | Strict free-classified route set; no classified-free fallback is available for roles, see [Catalog Churn Management](#catalog-churn-management) |
+| **omo-slim-opencode-zen-free** (disabled) | Archived OpenCode Zen definitions | Not selectable; its fallback chains are empty and its routes are not all free-classified |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
 | **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
-| **free** | OpenCode Zen + Google | Free cross-provider workflow with cross-provider fallbacks |
+| **free** (disabled) | Archived OpenCode Zen + Google definitions | Not selectable; disabled choices are distinct from free-classified routes |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
@@ -168,7 +168,7 @@ Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
-Strict free-classified preset on OpenCode Zen's free catalog — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator and observer use image-tested `muse-spark-1.3-contributor-free` after older free IDs left the catalog). Requires `OPENCODE_API_KEY` (or `/connect`). Free-classified is catalogue policy metadata, not a request-time zero-charge guarantee; strict-free runtime billing enforcement remains deferred and issue #87 stays open on that point. `opencode/big-pickle` is a dated owner-authorized always-free exception (2026-10-27), not a name-based rule:
+Archived OpenCode Zen definitions adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md), with local deviations (orchestrator and observer use image-tested `muse-spark-1.3-contributor-free` after older free IDs left the catalog). This preset is disabled and not selectable. Free-classified is catalogue policy metadata, not a request-time zero-charge guarantee; issue #87's runtime billing enforcement remains deferred. `opencode/big-pickle` is a dated owner-authorized always-free exception (2026-10-27), not a name-based rule:
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -179,15 +179,17 @@ Strict free-classified preset on OpenCode Zen's free catalog — adopted from [u
 | observer | `muse-spark-1.3-contributor-free` | low, temp 0.2 |
 | council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free) |
 
-No classified-free fallback is available for these roles; the fallback chains are intentionally empty rather than inventing routes. MiMo 2.6 answered text requests but its image path failed or timed out, so it serves only text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta may train on prompts, screenshots and completions sent through it. The user explicitly accepted that risk for the Zen-free observer; avoid this preset for confidential work (see [docs/OPENCODE.md](OPENCODE.md)).
+The configured fallback chains for this preset are empty (`[]`). MiMo 2.6 answered text requests but its image path failed or timed out, so it serves only text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta may train on prompts, screenshots and completions sent through it. The user explicitly accepted that risk for the Zen-free observer; avoid this preset for confidential work (see [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
-The `free` preset combines OpenCode Zen and Google Gemini. Nemotron 3.5
+The disabled `free` preset combines OpenCode Zen and Google Gemini. Nemotron 3.5
 Lightning Free serves exploration and council gamma, with provider-deduplicated
 cross-provider fallbacks. Refresh IDs through
 the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
 
+The preset is disabled and omitted from repository-managed selectors. Its
+disabled status does not establish that every configured route is free-classified.
 Free-classified routes are catalogue policy metadata, not a request-time
 zero-charge guarantee. Strict-free runtime billing enforcement remains deferred;
 issue #87 stays open. `google/gemini-3.5-flash-lite` and
@@ -558,9 +560,10 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 ### Detection
 
 The LiteLLM generator defaults to a **free catalogue scope**
-(`DOTFILES_LITELLM_CATALOGUE_SCOPE=free`): only curated selections plus
-OpenRouter `:free` ids are enumerated, so a config drifts smaller and no longer
-advertises models no credential here can call. Set the scope to `full` to
+(`DOTFILES_LITELLM_CATALOGUE_SCOPE=free`): it enumerates curated catalogue
+selections plus OpenRouter `:free` ids. This catalogue scope is distinct from
+the disabled `free` preset and does not enable its selector choices or prove
+request-time cost. Set the scope to `full` to
 enumerate whole live catalogues (≈758 entries) instead of the free-scope set
 (≈180–220).
 
