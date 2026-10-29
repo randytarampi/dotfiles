@@ -110,6 +110,12 @@ def test_provider_insert_before_following_root_and_semantics():
     assert "settings:\n  keep: value\n" in updated
 
 
+def test_benign_root_flow_collection_is_preserved():
+    original = "fallback_providers: []\r\nmodel: alias\r\n"
+    updated = hermes.reconcile(original, "served", "http://127.0.0.1:4000/v1")
+    assert "fallback_providers: []\r\n" in updated
+
+
 def test_parse_error_is_redacted():
     with pytest.raises(ValueError) as error:
         hermes.reconcile("private: 'DO_NOT_LEAK\n", "alias", "http://127.0.0.1:4000/v1")
@@ -172,6 +178,23 @@ def test_backup_private_and_conflicting_backup_preserved(monkeypatch, tmp_path):
     assert backup.read_text() == original
 
 
+def test_mixed_newlines_refuse_without_normalizing_user_bytes(monkeypatch, tmp_path):
+    root = tmp_path / "hermes"
+    root.mkdir()
+    path = root / "config.yaml"
+    original = b"model: alias\r\nfallback_providers: []\n"
+    path.write_bytes(original)
+    before = path.stat()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("HERMES_HOME", str(root))
+    monkeypatch.setenv(hermes.GATE, "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert hermes.main(["--model", "served"]) == 1
+    assert path.read_bytes() == original
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+    assert not path.with_name("config.yaml.bak").exists()
+
+
 def test_failed_replace_cleans_temporary_and_keeps_original(monkeypatch, tmp_path):
     root = tmp_path / "hermes"
     root.mkdir()
@@ -202,6 +225,42 @@ def test_successful_replacement_preserves_mode(monkeypatch, tmp_path):
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     assert hermes.main(["--model", "alias"]) == 0
     assert path.stat().st_mode & 0o777 == 0o640
+
+
+def test_cli_backup_and_updated_config_preserve_crlf_bytes(monkeypatch, tmp_path):
+    root = tmp_path / "hermes"
+    root.mkdir()
+    path = root / "config.yaml"
+    original = b"fallback_providers: []\r\nmodel: alias\r\n"
+    path.write_bytes(original)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("HERMES_HOME", str(root))
+    monkeypatch.setenv(hermes.GATE, "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert hermes.main(["--model", "served"]) == 0
+    backup = path.with_name("config.yaml.bak")
+    assert backup.read_bytes() == original
+    assert b"fallback_providers: []\r\n" in path.read_bytes()
+    assert b"\n" not in path.read_bytes().replace(b"\r\n", b"")
+    assert backup.stat().st_mode & 0o777 == 0o600
+    stable = (path.read_bytes(), path.stat().st_mtime_ns)
+    assert hermes.main(["--model", "served"]) == 0
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == stable
+    assert backup.read_bytes() == original
+
+
+def test_cli_refuses_non_utf8_without_creating_backup(monkeypatch, tmp_path):
+    root = tmp_path / "hermes"
+    root.mkdir()
+    path = root / "config.yaml"
+    original = b"private:\xff\r\n"
+    path.write_bytes(original)
+    monkeypatch.setenv("HERMES_HOME", str(root))
+    monkeypatch.setenv(hermes.GATE, "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert hermes.main(["--model", "alias"]) == 1
+    assert path.read_bytes() == original
+    assert not path.with_name("config.yaml.bak").exists()
 
 
 def test_empty_and_null_existing_provider_map_refused():

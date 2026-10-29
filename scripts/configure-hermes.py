@@ -52,11 +52,6 @@ def _parse_config(source):
     if parsed is not None:
 
         def check(node):
-            if (
-                isinstance(node, (yaml.MappingNode, yaml.SequenceNode))
-                and node.flow_style
-            ):
-                raise ValueError("refusing YAML flow collections")
             if isinstance(node, yaml.MappingNode):
                 keys = [
                     key.value
@@ -69,7 +64,25 @@ def _parse_config(source):
                     if isinstance(key, yaml.ScalarNode) and key.value == "<<":
                         raise ValueError("refusing YAML merge keys")
                     check(key)
-                    check(value)
+                    if key.value == "providers":
+                        if isinstance(value, yaml.MappingNode) and value.flow_style:
+                            raise ValueError("refusing flow-style Hermes providers")
+                        if isinstance(value, yaml.MappingNode):
+                            for provider_key, provider_value in value.value:
+                                if (
+                                    isinstance(
+                                        provider_value,
+                                        (yaml.MappingNode, yaml.SequenceNode),
+                                    )
+                                    and provider_value.flow_style
+                                ):
+                                    raise ValueError(
+                                        "refusing flow-style Hermes provider entry"
+                                    )
+                                check(provider_key)
+                                check(provider_value)
+                    else:
+                        check(value)
             elif isinstance(node, yaml.SequenceNode):
                 for child in node.value:
                     check(child)
@@ -202,7 +215,13 @@ def main(argv=None):
             or original_stat.st_nlink != 1
         ):
             raise ValueError("refusing non-owned, linked or non-regular Hermes config")
-        source = path.read_text(encoding="utf-8") if path.exists() else ""
+        original_bytes = path.read_bytes() if path.exists() else b""
+        if b"\r\n" in original_bytes and b"\n" in original_bytes.replace(b"\r\n", b""):
+            raise ValueError("refusing mixed newline conventions in Hermes config")
+        try:
+            source = original_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("refusing non-UTF-8 Hermes config") from None
         updated = reconcile(source, args.model, endpoint)
         if updated == source:
             logger.info("Hermes LiteLLM provider already configured: %s", path)
@@ -216,20 +235,24 @@ def main(argv=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         backup = path.with_name(path.name + ".bak")
         original_mode = original_stat.st_mode & 0o777 if original_stat else 0o600
-        original_hash = hashlib.sha256(source.encode()).hexdigest()
+        original_hash = hashlib.sha256(original_bytes).hexdigest()
         if path.exists() and not args.no_backup:
             fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "wb") as handle:
-                handle.write(source.encode())
+                handle.write(original_bytes)
                 handle.flush()
                 os.fsync(handle.fileno())
         temporary = None
         try:
+            newline = "\r\n" if b"\r\n" in original_bytes else "\n"
+            updated_bytes = (
+                updated.replace("\r\n", "\n").replace("\n", newline).encode("utf-8")
+            )
             with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=path.parent, delete=False
+                mode="wb", dir=path.parent, delete=False
             ) as handle:
                 temporary = Path(handle.name)
-                handle.write(updated)
+                handle.write(updated_bytes)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.chmod(temporary, original_mode)
