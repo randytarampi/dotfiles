@@ -65,7 +65,7 @@ arg_count=${#args[@]}
   exit 1
 }
 model=${DOTFILES_COPILOT_LITELLM_MODEL:-}
-[[ -n "$model" && "$model" != *[[:space:]]* && "$model" != -* && "$model" != */*/* ]] || {
+[[ -n "$model" && "$model" != *[[:space:]]* && "$model" != -* ]] || {
   printf '%s\n' 'copilot-litellm: DOTFILES_COPILOT_LITELLM_MODEL must be an explicit alias without whitespace.' >&2
   exit 1
 }
