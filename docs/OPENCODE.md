@@ -37,8 +37,8 @@ disabled choice requires authoritative backend provenance, a passing offline
 route audit and separate owner approval. None of these steps replaces issue
 #87's request-time admission, entitlement, privacy and fallback evidence.
 
-Three upstream presets are available in the shared registry. Definitions are
-adopted from the upstream oh-my-opencode-slim docs —
+Three upstream preset definitions are retained in the shared registry; two are
+selectable. Definitions are adopted from the upstream oh-my-opencode-slim docs —
 [openai-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md),
 [thirty-dollars-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), and
 [opencode-zen-free-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md) —
