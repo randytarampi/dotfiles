@@ -17,6 +17,8 @@ LIB_DIR = SCRIPT_DIR if SCRIPT_DIR.endswith("lib") else os.path.join(SCRIPT_DIR,
 if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
+from env import load_env  # noqa: E402 -- local import follows bootstrap.
+
 import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
 from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
     get_available_tiers,
@@ -39,7 +41,6 @@ from unavailable_presets import (  # noqa: E402 -- scripts/lib bootstrap above.
     reject_disabled_preset,
     without_disabled_presets,
 )
-from env import load_env  # noqa: E402
 
 OPENCODE_CONFIG_FILENAME = "opencode.json"
 
@@ -154,8 +155,14 @@ def orchestrate_tier_switch(
     if not had_previous_slim:
         # Project mode: create a sanitized copy before any discovery or selection.
         if os.path.exists(source_path):
-            with open(source_path, encoding="utf-8") as source_file:
-                source_registry = without_disabled_presets(json.load(source_file))
+            try:
+                with open(source_path, encoding="utf-8") as source_file:
+                    source_registry = without_disabled_presets(json.load(source_file))
+            except (OSError, ValueError, UnicodeDecodeError) as error:
+                logger.critical(
+                    "Failed to load or sanitize Slim source %s: %s", source_path, error
+                )
+                sys.exit(1)
             config_dir_path = os.path.dirname(config_path)
             if dry_run:
                 logger.info(f"Would write sanitized Slim config to {config_path}")
@@ -423,7 +430,7 @@ def main():
     parser.add_argument(
         "--min-reasoning-embedding",
         type=int,
-        default=int(os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"),
+        default=None,
         help="Minimum embedding_length for reasoning/solo roles (0 = disabled). "
         "Env: DOTFILES_MIN_REASONING_EMBEDDING (default 0).",
     )
@@ -436,6 +443,13 @@ def main():
     )
     args = parser.parse_args()
     load_env()
+    if args.min_reasoning_embedding is None:
+        try:
+            args.min_reasoning_embedding = int(
+                os.environ.get("DOTFILES_MIN_REASONING_EMBEDDING", "0") or "0"
+            )
+        except ValueError as error:
+            parser.error(f"Invalid DOTFILES_MIN_REASONING_EMBEDDING value: {error}")
     args.local_fallback_preset = args.local_fallback_preset or os.environ.get(
         "DOTFILES_LOCAL_FALLBACK_PRESET"
     )
