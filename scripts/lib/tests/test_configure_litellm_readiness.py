@@ -14,6 +14,68 @@ assert SPEC and SPEC.loader
 CONFIGURE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONFIGURE)
 
+_CLIENT_ENV = (
+    "DOTFILES_RUN_LITELLM_SETUP",
+    "DOTFILES_RUN_OPENCODE_SETUP",
+    "DOTFILES_RUN_PI_SETUP",
+    "DOTFILES_RUN_JUNIE_CLI_SETUP",
+    "DOTFILES_RUN_OPENWEBUI_SETUP",
+    "DOTFILES_RUN_CODEX_SETUP",
+    "DOTFILES_RUN_CLAUDE_SETUP",
+    "DOTFILES_RUN_COPILOT_SETUP",
+    "DOTFILES_USE_LITELLM_PROXY",
+    "LITELLM_CLIENT_KEY_FILE",
+    "LITELLM_OPENCODE_KEY",
+    "LITELLM_PI_KEY",
+    "LITELLM_JUNIE_KEY",
+    "LITELLM_OPENWEBUI_KEY",
+    "LITELLM_CODEX_KEY",
+    "LITELLM_CLAUDE_KEY",
+    "LITELLM_COPILOT_CLI_KEY",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_client_environment(tmp_path, monkeypatch, provisioning_write_boundary):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for name in _CLIENT_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_writer_dispatch_uses_current_module_callable(monkeypatch, tmp_path):
+    called = []
+    monkeypatch.setattr(
+        CONFIGURE,
+        "_write_opencode_key",
+        lambda path, dry_run=False: called.append((path, dry_run)),
+    )
+    CONFIGURE._write_provisioned_client_keys(
+        [{"client": "opencode"}], tmp_path / "service.env", False
+    )
+    assert called == [(tmp_path / "service.env", False)]
+
+
+def test_misplaced_real_writer_is_blocked_before_write(tmp_path, monkeypatch):
+    sentinel = tmp_path / "sentinel"
+    sentinel.write_bytes(b"unchanged")
+    before = sentinel.stat()
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_OPENCODE_KEY='synthetic-fixture-key'\n")
+    original_mkstemp = CONFIGURE.tempfile.mkstemp
+
+    def misplaced_temp(*args, **kwargs):
+        (tmp_path.parent / "forbidden-client-key").write_bytes(b"forbidden")
+        return original_mkstemp(*args, **kwargs)
+
+    monkeypatch.setattr(CONFIGURE.tempfile, "mkstemp", misplaced_temp)
+    with pytest.raises(AssertionError, match="outside provisioning fixture"):
+        CONFIGURE._write_provisioned_client_keys(
+            [{"client": "opencode"}], tmp_path / "service.env", False
+        )
+    assert sentinel.read_bytes() == b"unchanged"
+    assert sentinel.stat() == before
+    assert not (tmp_path.parent / "forbidden-client-key").exists()
+
 
 @pytest.mark.parametrize("preserves_tier", [True, False])
 def test_service_lane_validation_uses_managed_gateway_installation(
