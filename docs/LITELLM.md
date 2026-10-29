@@ -133,14 +133,17 @@ in a supervised terminal.
 
 ## Client virtual keys
 
-When both `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1` are
+When `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1` are
 enabled, the generator materializes the managed `model_providers.litellm`
 block, reading `LITELLM_CODEX_KEY` with key file
 `~/.local/share/litellm/clients/codex.key`; provisioning uses the same explicit
 client-key authorization and gateway setup contract as other clients. The
-managed shell configuration conditionally exports that file's contents as
-`LITELLM_CODEX_KEY` when proxy mode is enabled and the file exists, but only
-for Codex processes launched from a shell that has sourced that managed
+managed shell configuration exports that file's contents as `LITELLM_CODEX_KEY`
+only when `DOTFILES_RUN_CODEX_SETUP=1`, `DOTFILES_USE_LITELLM_PROXY=1` and
+`DOTFILES_RUN_LITELLM_SETUP=1`, and the file exists. This file-export gate does
+not clear or otherwise isolate an inherited `LITELLM_CODEX_KEY` when any gate is
+off; manually supplied environment values are preserved. Export applies only
+to Codex processes launched from a shell that has sourced that managed
 configuration. This does not establish credential delivery for GUI, ACP or
 other-shell launches and has not been live-verified. Codex's
 provider `env_key` reads it from the process environment. The generated named `litellm` profile is

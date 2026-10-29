@@ -8,7 +8,10 @@
 [ -f "$HOME/.env" ] && set -a && source "$HOME/.env" && set +a
 
 # Codex reads its LiteLLM credential from its process environment.
-if [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ] && [ -f "$HOME/.local/share/litellm/clients/codex.key" ]; then
+if [ "${DOTFILES_RUN_CODEX_SETUP:-0}" = "1" ] &&
+  [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ] &&
+  [ "${DOTFILES_RUN_LITELLM_SETUP:-0}" = "1" ] &&
+  [ -f "$HOME/.local/share/litellm/clients/codex.key" ]; then
   LITELLM_CODEX_KEY="$(<"$HOME/.local/share/litellm/clients/codex.key")"
   export LITELLM_CODEX_KEY
 fi
