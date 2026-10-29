@@ -1,6 +1,8 @@
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -205,6 +207,80 @@ def test_disabled_fallback_loaded_from_home_env_rejected_before_writes(tmp_path)
     discovery.assert_not_called()
     copy.assert_not_called()
     assert not target.exists()
+
+
+def test_min_reasoning_embedding_default_comes_from_home_env(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text("DOTFILES_MIN_REASONING_EMBEDDING=37\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("DOTFILES_MIN_REASONING_EMBEDDING", raising=False)
+    observed = {}
+
+    def capture(*args, **kwargs):
+        observed["min_reasoning_embedding"] = kwargs["min_reasoning_embedding"]
+
+    monkeypatch.setattr(configure_tier, "orchestrate_tier_switch", capture)
+    monkeypatch.setattr(configure_tier.sys, "argv", [str(SCRIPT), "--preset", "local"])
+    with patch.dict(os.environ):
+        configure_tier.main()
+    assert observed["min_reasoning_embedding"] == 37
+
+
+def test_explicit_min_reasoning_embedding_overrides_environment(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text("DOTFILES_MIN_REASONING_EMBEDDING=37\n")
+    monkeypatch.setenv("HOME", str(home))
+    observed = {}
+    monkeypatch.setattr(
+        configure_tier,
+        "orchestrate_tier_switch",
+        lambda *a, **kwargs: observed.update(kwargs),
+    )
+    monkeypatch.setattr(
+        configure_tier.sys,
+        "argv",
+        [str(SCRIPT), "--preset", "local", "--min-reasoning-embedding", "19"],
+    )
+    with patch.dict(os.environ):
+        configure_tier.main()
+    assert observed["min_reasoning_embedding"] == 19
+
+
+def test_malformed_reasoning_embedding_has_usage_diagnostic(
+    tmp_path, monkeypatch, capsys
+):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".env").write_text("DOTFILES_MIN_REASONING_EMBEDDING=bad\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(configure_tier.sys, "argv", [str(SCRIPT), "--preset", "local"])
+    try:
+        with patch.dict(os.environ):
+            configure_tier.main()
+    except SystemExit as error:
+        assert error.code == 2
+    else:
+        raise AssertionError("malformed environment value was accepted")
+    assert "Invalid DOTFILES_MIN_REASONING_EMBEDDING" in capsys.readouterr().err
+
+
+def test_tier_script_accepts_deprecated_alias_preset_with_isolated_environment(
+    tmp_path,
+):
+    home = tmp_path / "home"
+    home.mkdir()
+    environment = {"HOME": str(home), "PATH": os.environ.get("PATH", "")}
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--preset", "local-pro", "--dry-run"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
 
 
 def test_jetbrains_disabled_fallback_loaded_from_home_env_refused(
