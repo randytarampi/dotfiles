@@ -42,13 +42,14 @@ def isolate_client_environment(tmp_path, monkeypatch, provisioning_write_boundar
         monkeypatch.delenv(name, raising=False)
 
 
-def test_writer_dispatch_uses_current_module_callable(monkeypatch, tmp_path):
+def test_writer_dispatch_patches_captured_registry_callable(monkeypatch, tmp_path):
     called = []
-    monkeypatch.setattr(
-        CONFIGURE,
-        "_write_opencode_key",
+    monkeypatch.setitem(
+        CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS,
+        "opencode",
         lambda path, dry_run=False: called.append((path, dry_run)),
     )
+    monkeypatch.setattr(CONFIGURE, "_write_opencode_key", lambda *_a, **_k: None)
     CONFIGURE._write_provisioned_client_keys(
         [{"client": "opencode"}], tmp_path / "service.env", False
     )
@@ -239,10 +240,12 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
 
     monkeypatch.setattr(CONFIGURE, "_request_json", request)
     monkeypatch.setattr(CONFIGURE, "_verify_app_key_hash", lambda *args, **kwargs: None)
-    monkeypatch.setattr(CONFIGURE, "_write_opencode_key", lambda *args, **kwargs: None)
-    monkeypatch.setattr(CONFIGURE, "_write_pi_key", lambda *args, **kwargs: None)
-    monkeypatch.setattr(CONFIGURE, "_write_junie_key", lambda *args, **kwargs: None)
-    monkeypatch.setattr(CONFIGURE, "_write_openwebui_key", lambda *args, **kwargs: None)
+    for client in ("opencode", "pi", "junie", "openwebui"):
+        monkeypatch.setitem(
+            CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS,
+            client,
+            lambda *args, **kwargs: None,
+        )
     assert CONFIGURE.provision_app_keys("master-key", service_env, strict=True) is True
     urls = [url for url, _method in calls]
     assert (
