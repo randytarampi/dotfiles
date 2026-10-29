@@ -9,6 +9,7 @@ source "${LIB_DIR}/env.sh"
 # Script hash triggers (re-run when Junie integration changes):
 # scripts/configure-jetbrains-ai.py: {{ include "scripts/configure-jetbrains-ai.py" | sha256sum }}
 # scripts/generate-jetbrains-profiles.py: {{ include "scripts/generate-jetbrains-profiles.py" | sha256sum }}
+# scripts/lib/unavailable_presets.py: {{ include "scripts/lib/unavailable_presets.py" | sha256sum }}
 # scripts/check-model-drift.py: {{ include "scripts/check-model-drift.py" | sha256sum }}
 # scripts/lib/model_references.py: {{ include "scripts/lib/model_references.py" | sha256sum }}
 # scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}

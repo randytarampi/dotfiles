@@ -294,6 +294,189 @@ def test_dotted_profile_name_cleanup_removes_only_digest_owned_file(
     assert "custom.json" not in ledger["profiles"]
 
 
+def test_empty_shared_groups_still_cleanup_and_generate_enabled_tiers(
+    harness, monkeypatch
+):
+    home, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text(encoding="utf-8"))
+    config["groups"] = {
+        "enabled-group": {"provider": "openai", "primaryModel": "old"},
+        "stale-group": {"provider": "openai", "primaryModel": "stale"},
+    }
+    config["sharedPresets"] = {"free": "free", "pro": "pro"}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {"presets": {"enabled-tier": {}, "pro": {}}},
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "uses_local_placeholders",
+        lambda *_: False,
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {
+            "orchestrator": "openai/gpt-main",
+            "librarian": "openai/gpt-faster",
+        },
+    )
+    PROFILES.main()
+    owned = target / "stale-group.json"
+    assert owned.is_file()
+    manifest = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    before = json.loads(manifest.read_text(encoding="utf-8"))["profiles"]["stale-group"]
+    assert hashlib.sha256(owned.read_bytes()).hexdigest() == before
+    enabled = target / "enabled-group.json"
+    assert enabled.is_file()
+
+    # Disable shared groups; the digest-owned profile should be cleaned up.
+    config["groups"] = {}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    PROFILES.main()
+    assert not owned.exists()
+    assert (
+        "stale-group"
+        not in json.loads(manifest.read_text(encoding="utf-8"))["profiles"]
+    )
+    assert (target / "pro.json").is_file()
+    assert (target / "enabled-tier.json").is_file()
+
+
+def test_empty_shared_groups_cleanup_owned_free_but_preserve_manual_collision(
+    harness, monkeypatch
+):
+    home, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text(encoding="utf-8"))
+    config["groups"] = {}
+    config["sharedPresets"] = {"free": "free"}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {"presets": {"enabled-tier": {}}},
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {
+            "orchestrator": "openai/gpt-main",
+            "librarian": "openai/gpt-faster",
+        },
+    )
+    profile = target / "free.json"
+    target.mkdir(parents=True, exist_ok=True)
+    profile.write_text('{"generated":true}', encoding="utf-8")
+    digest = hashlib.sha256(profile.read_bytes()).hexdigest()
+    PROFILES.atomic_write_manifest(target, {"free": digest})
+    PROFILES.main()
+    assert not profile.exists()
+    ledger = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    assert "free" not in json.loads(ledger.read_text(encoding="utf-8"))["profiles"]
+    assert (target / "enabled-tier.json").is_file()
+    # An edited file with the same prior ownership digest is not ours to delete.
+    profile.write_text('{"manual":true}', encoding="utf-8")
+    manual_bytes = profile.read_bytes()
+    PROFILES.atomic_write_manifest(target, {"free": digest})
+    with pytest.raises(SystemExit) as error:
+        PROFILES.main()
+    assert error.value.code == 1
+    assert profile.read_bytes() == manual_bytes
+
+
+@pytest.mark.parametrize("ledger_kind", ["absent", "untrusted"])
+def test_empty_shared_groups_fail_closed_without_trusted_manifest(
+    harness, monkeypatch, ledger_kind
+):
+    home, target, _, groups_path = harness
+    config = json.loads(groups_path.read_text(encoding="utf-8"))
+    config["groups"] = {
+        "enabled-group": {"provider": "openai", "primaryModel": "frozen"}
+    }
+    config["sharedPresets"] = {"free": "free"}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        PROFILES,
+        "build_provider_configs",
+        lambda *_: {
+            "openai": {
+                "baseUrl": "https://direct.example/v1",
+                "apiType": "OpenAICompletion",
+                "apiKey": "${OPENAI_API_KEY}",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {"presets": {"enabled-tier": {}}},
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "uses_local_placeholders", lambda *_: False
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {
+            "orchestrator": "openai/gpt-main",
+            "librarian": "openai/gpt-faster",
+        },
+    )
+    PROFILES.main()
+    profile = target / "enabled-group.json"
+    assert profile.is_file()
+    original = profile.read_bytes()
+    # Seed an unmanaged would-be stale path: without a trusted ledger the
+    # generator cannot infer ownership or delete it.
+    untracked = target / "free.json"
+    untracked.write_text('{"manual":true}', encoding="utf-8")
+    original_untracked = untracked.read_bytes()
+    ledger = home / ".local/share/dotfiles/jetbrains-profiles-manifest.json"
+    if ledger_kind == "untrusted":
+        ledger.write_text("{}\n", encoding="utf-8")
+        ledger.chmod(0o600)
+    else:
+        ledger.unlink()
+
+    config["groups"] = {}
+    groups_path.write_text(json.dumps(config), encoding="utf-8")
+    PROFILES.main()
+    assert profile.read_bytes() == original
+    assert profile.is_file()
+    assert untracked.read_bytes() == original_untracked
+    assert (target / "enabled-tier.json").is_file()
+
+
 def test_compatibility_names_remain_selectable_after_generation(harness, monkeypatch):
     _, target, _, groups_path = harness
     config = json.loads(groups_path.read_text(encoding="utf-8"))
@@ -358,6 +541,14 @@ def test_crash_after_profile_overwrite_preserves_manual_files_and_refuses_retry(
                 "apiKey": "dummy-junie-key-one",
             },
         },
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry,
+        "load_registry",
+        lambda: {"presets": {"enabled-tier": {}}},
+    )
+    monkeypatch.setattr(
+        PROFILES.tier_registry, "uses_local_placeholders", lambda *_: False
     )
     PROFILES.main()
     profile = target / "litellm-openai-main.json"

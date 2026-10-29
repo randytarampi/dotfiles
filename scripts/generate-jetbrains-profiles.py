@@ -766,10 +766,6 @@ def main():
     except Exception as exc:
         logger.critical(f"Failed to read model configuration: {exc}")
         raise SystemExit(1)
-    if not cfg["groups"] and cfg.get("sharedPresets"):
-        logger.info("No enabled Junie groups; skipping profile generation")
-        return
-
     local_models = parse_local_models(args.local_models)
     if not local_models:
         local_models = [
