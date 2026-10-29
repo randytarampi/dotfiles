@@ -26,9 +26,7 @@ provider behaviour. The installed CLI version's transport, key handling and
 exact gateway model alias require a live check before relying on this adapter;
 no inference qualification is claimed here.
 
-## Gateway
-
-### Claude Desktop third-party gateway (export scaffold only)
+## Claude Desktop third-party gateway (export scaffold only)
 
 `scripts/export-claude-desktop-gateway.py` is an explicit, standalone exporter;
 it is not part of deployment or automatic client configuration. Supply the
@@ -73,6 +71,8 @@ Claude CLI's environment-variable configuration.
 References: [Desktop gateway contract](https://claude.com/docs/third-party/claude-desktop/gateway),
 [configuration encoding](https://claude.com/docs/third-party/claude-desktop/configuration-format),
 and [single-machine setup](https://claude.com/docs/third-party/claude-desktop/installation#single-machine-setup).
+
+## Gateway
 
 The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 `127.0.0.1:4000` (`LITELLM_PORT`). Enable setup with
