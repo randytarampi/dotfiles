@@ -31,6 +31,159 @@ project_spec.loader.exec_module(configure_project)
 
 
 class PresetMigrationTests(unittest.TestCase):
+    def test_split_gates_make_workflow_preserves_independent_values(self):
+        splits = [
+            (old, new)
+            for old, new, inherit in migrate_env_gates.MIGRATIONS
+            if old == inherit
+        ]
+        self.assertEqual(len(splits), 3)
+        for source, target in splits:
+            for left, right in (("1", "0"), ("0", "1")):
+                for reverse in (False, True):
+                    with (
+                        self.subTest(
+                            target=target, values=(left, right), reverse=reverse
+                        ),
+                        tempfile.TemporaryDirectory() as temp,
+                    ):
+                        home = Path(temp)
+                        env = home / ".env"
+                        example = home / "example"
+                        lines = [
+                            f"export {source}='{left}'\n",
+                            f"export {target}='{right}'\n",
+                            "DOTFILES_RUN_PI='1'\n",
+                        ]
+                        if reverse:
+                            lines.reverse()
+                        original = "".join(lines).encode()
+                        env.write_bytes(original)
+                        env.chmod(0o600)
+                        example.write_text("NEW_KEY='fixture'\n")
+                        command = [
+                            MAKE,
+                            "-C",
+                            str(ROOT),
+                            "migrate-preview",
+                            f"ENV_FILE={env}",
+                            f"ENV_EXAMPLE={example}",
+                        ]
+                        before = (
+                            env.read_bytes(),
+                            env.stat().st_mode,
+                            env.stat().st_mtime_ns,
+                        )
+                        result = self._run_make(command, home)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(
+                            (
+                                env.read_bytes(),
+                                env.stat().st_mode,
+                                env.stat().st_mtime_ns,
+                            ),
+                            before,
+                        )
+                        command[command.index("migrate-preview")] = "migrate"
+                        result = self._run_make(command, home)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertIn(f"export {source}='{left}'", env.read_text())
+                        self.assertIn(f"export {target}='{right}'", env.read_text())
+                        self.assertIn("DOTFILES_RUN_PI_SETUP", env.read_text())
+                        self.assertIn("NEW_KEY", env.read_text())
+                        self.assertEqual(env.with_suffix(".bak").read_bytes(), original)
+                        stable = (
+                            env.read_bytes(),
+                            env.stat().st_mode,
+                            env.stat().st_mtime_ns,
+                        )
+                        result = self._run_make(command, home)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(
+                            (
+                                env.read_bytes(),
+                                env.stat().st_mode,
+                                env.stat().st_mtime_ns,
+                            ),
+                            stable,
+                        )
+
+    def test_split_gate_explicit_values_survive_migration_and_export(self):
+        lines = [
+            "export DOTFILES_RUN_CADDY_SETUP='1'\n",
+            "DOTFILES_RUN_DDNS_SETUP='0'\n",
+        ]
+        migrated, changes = migrate_env_gates.migrate_env(lines)
+        self.assertIn("export DOTFILES_RUN_CADDY_SETUP='1'\n", migrated)
+        self.assertIn("DOTFILES_RUN_DDNS_SETUP='0'\n", migrated)
+        self.assertFalse(
+            any(
+                "DOTFILES_RUN_DDNS_SETUP" in line and "inherited from" in line
+                for line in migrated
+            )
+        )
+        self.assertEqual(migrate_env_gates.migrate_env(migrated), (migrated, []))
+
+    def test_split_gate_inherits_only_when_target_absent(self):
+        migrated, _ = migrate_env_gates.migrate_env(["DOTFILES_RUN_CADDY_SETUP='1'\n"])
+        self.assertIn(
+            "DOTFILES_RUN_DDNS_SETUP='1'  # inherited from DOTFILES_RUN_CADDY_SETUP\n",
+            migrated,
+        )
+
+    def test_rename_conflict_still_refuses_both_values(self):
+        lines = ["DOTFILES_RUN_PI='1'\n", "DOTFILES_RUN_PI_SETUP='0'\n"]
+        self.assertIn(
+            "DOTFILES_RUN_PI_SETUP", migrate_env_gates.unsafe_value_keys(lines)
+        )
+
+    def test_windows_refusal_precedes_getuid_and_file_access(self):
+        with (
+            patch.object(migrate_env_gates.os, "name", "nt"),
+            patch.object(
+                migrate_env_gates.os,
+                "getuid",
+                side_effect=AssertionError("getuid called"),
+            ),
+            patch.object(sys, "argv", [MIGRATE_PATH, "--env", "/unavailable/.env"]),
+            patch("builtins.print") as output,
+        ):
+            self.assertEqual(migrate_env_gates.main(), 1)
+        self.assertIn("POSIX", output.call_args.args[0])
+
+    def test_make_migrate_refuses_existing_shared_backup_without_sync(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            home = Path(temp_home)
+            env_path = home / ".env"
+            example_path = home / ".env.example"
+            backup_path = env_path.with_suffix(".bak")
+            original = b"DOTFILES_RUN_PI='1'\n"
+            backup = b"private sync backup\n"
+            env_path.write_bytes(original)
+            env_path.chmod(0o600)
+            example_path.write_text("EXTRA_KEY='value'\n")
+            backup_path.write_bytes(backup)
+            backup_path.chmod(0o640)
+            before = (backup_path.stat().st_mode, backup_path.stat().st_mtime_ns)
+            result = self._run_make(
+                [
+                    MAKE,
+                    "-C",
+                    str(ROOT),
+                    "migrate",
+                    f"ENV_FILE={env_path}",
+                    f"ENV_EXAMPLE={example_path}",
+                ],
+                home,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(env_path.read_bytes(), original)
+            self.assertEqual(backup_path.read_bytes(), backup)
+            self.assertEqual(
+                (backup_path.stat().st_mode, backup_path.stat().st_mtime_ns), before
+            )
+            self.assertNotIn(b"EXTRA_KEY", env_path.read_bytes())
+
     def _make_env(self, home):
         return {
             "HOME": str(home),
