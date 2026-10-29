@@ -28,10 +28,10 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-opencode-zen-free** (disabled) | Archived OpenCode Zen definitions | Not selectable; its fallback chains are empty and its routes are not all free-classified |
+| **omo-slim-opencode-zen-free** | Disabled: archived OpenCode Zen definitions | Not selectable; its fallback chains are empty and its routes are not all free-classified |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
 | **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
-| **free** (disabled) | Archived OpenCode Zen + Google definitions | Not selectable; disabled choices are distinct from free-classified routes |
+| **free** | Disabled: archived OpenCode Zen + Google definitions | Not selectable; disabled choices are distinct from free-classified routes |
 | **local** | Local Ollama + oMLX under the gate (reasoning + code-gen + lightweight + vision) | Balanced offline/air-gapped |
 | **local-solo** | Local Ollama + oMLX under the gate (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
