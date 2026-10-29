@@ -14,6 +14,8 @@ import os
 import shutil
 import subprocess  # nosec B404 - managed script/gateway orchestration; no shell, env-staged
 import tempfile
+import stat
+import shutil
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -522,8 +524,8 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
 
 
 def prepare_config_candidates(config, slim_data, previous_slim=None):
-    slim_data = without_disabled_presets(slim_data)
     """Validate both generated payloads before the caller installs either."""
+    slim_data = without_disabled_presets(slim_data)
     apply_litellm_client_gate(config)
     slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
     return (
@@ -608,6 +610,47 @@ def write_private_atomic(path, content):
         except FileNotFoundError:
             pass
         raise
+
+
+def install_config_pair(slim_path, config_path, slim_payload, config_payload):
+    """Install the generated pair, recovering the prior Slim bytes on failure."""
+    slim_path = Path(slim_path)
+    config_path = Path(config_path)
+    prior_slim = slim_path.read_bytes() if slim_path.exists() else None
+    slim_mode = stat.S_IMODE(slim_path.stat().st_mode) if slim_path.exists() else None
+    slim_mtime_ns = slim_path.stat().st_mtime_ns if slim_path.exists() else None
+    candidate_slim = (
+        slim_payload.encode("utf-8")
+        if isinstance(slim_payload, str)
+        else bytes(slim_payload)
+    )
+    try:
+        write_private_atomic(slim_path, slim_payload)
+    except Exception as error:
+        raise RuntimeError(
+            f"Failed to write oh-my-opencode-slim.json: {error}"
+        ) from error
+    try:
+        write_private_atomic(config_path, config_payload)
+    except Exception as error:
+        try:
+            if not slim_path.exists() or slim_path.read_bytes() != candidate_slim:
+                raise RuntimeError("second write failed before Slim replacement")
+            if prior_slim is not None:
+                write_private_atomic(slim_path, prior_slim)
+                os.chmod(slim_path, slim_mode)
+                os.utime(slim_path, ns=(slim_mtime_ns, slim_mtime_ns))
+            elif slim_path.exists():
+                os.remove(slim_path)
+        except Exception as recovery_error:
+            raise RuntimeError(
+                f"Failed to write opencode.json: {error}; failed to recover "
+                f"oh-my-opencode-slim.json: {recovery_error}"
+            ) from error
+        raise RuntimeError(
+            f"Failed to write opencode.json: {error}; restored the prior "
+            "oh-my-opencode-slim.json generation"
+        ) from error
 
 
 def _build_ollama_cloud_model_maps(cloud_models, models_dev_data, local_ollama, preset):
@@ -1433,7 +1476,6 @@ def main():
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")
         sys.exit(1)
 
-    prior_pair = {}
     slim_output_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
     if args.dry_run:
         logger.info(
@@ -1441,45 +1483,17 @@ def main():
         )
         logger.info(f"[dry-run] Would write opencode.json to {output_path}")
     else:
-        # R6.4 pair recovery: snapshot BOTH prior generations BYTE-EXACT,
-        # install in the production order (Slim, then opencode.json), and
-        # restore the prior first-installed generation (or remove the fresh
-        # orphan) when a later installation fails — never leave a mixed or
-        # normalised pair. An undecodable prior stays byte-representable.
-        for target_path in (slim_output_path, output_path):
-            try:
-                with open(target_path, "rb") as _prior_handle:
-                    prior_pair[target_path] = _prior_handle.read()
-            except FileNotFoundError:
-                prior_pair[target_path] = None
         try:
-            write_private_atomic(
+            install_config_pair(
                 slim_output_path,
+                output_path,
                 tier_candidate if tier_candidate is not None else slim_candidate,
+                opencode_candidate,
             )
             logger.info("oh-my-opencode-slim.json written (base config)")
-        except Exception as e:
-            logger.critical(f"Failed to write oh-my-opencode-slim.json: {e}")
-            sys.exit(1)
-        try:
-            write_private_atomic(output_path, opencode_candidate)
             logger.info("opencode.json written")
-        except Exception as e:
-            try:
-                if prior_pair[slim_output_path] is not None:
-                    write_private_atomic(slim_output_path, prior_pair[slim_output_path])
-                elif os.path.exists(slim_output_path):
-                    os.remove(slim_output_path)
-            except Exception as recovery_error:
-                logger.critical(
-                    f"Failed to write opencode.json: {e}; failed to recover "
-                    f"oh-my-opencode-slim.json: {recovery_error}"
-                )
-                sys.exit(1)
-            logger.critical(
-                f"Failed to write opencode.json: {e}; restored the prior "
-                "oh-my-opencode-slim.json generation"
-            )
+        except Exception as error:
+            logger.critical("%s", error)
             sys.exit(1)
 
     vibeguard_src = os.path.join(configs_dir_path, "opencode", "vibeguard.config.json")
