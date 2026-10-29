@@ -961,6 +961,30 @@ def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
         ) is expected
 
 
+def test_openrouter_automatic_twins_require_exact_free_suffix(monkeypatch):
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
+    monkeypatch.setattr(litellm_config, "provider_models", lambda _provider: [])
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda *_args: [
+            "vendor/twin:free",
+            "vendor/twin:free-fallback",
+            "vendor/freeform-70b",
+            "vendor/twin:free-paid-fallback",
+            "vendor/paid:freeish",
+        ],
+    )
+    entries = litellm_config.compute_model_list({"OPENROUTER_API_KEY": "test-key"})
+    aliases = {e["model_name"] for e in entries}
+    assert "openrouter/vendor/twin:free" in aliases
+    assert "openrouter/vendor/twin:free-fallback" not in aliases
+    assert "openrouter/vendor/freeform-70b" not in aliases
+    assert "openrouter/vendor/twin:free-paid-fallback" not in aliases
+    assert "openrouter/vendor/paid:freeish" not in aliases
+
+
 def test_openrouter_free_twin_toggle_rejects_invalid_value():
     with pytest.raises(
         RuntimeError, match="DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS"

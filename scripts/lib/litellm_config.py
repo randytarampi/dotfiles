@@ -1592,7 +1592,8 @@ def compute_model_list(environ=None, previous_entries=None):
                     curated |= {
                         item
                         for item in raw_confirmed
-                        if classify_free_route(
+                        if item.endswith(":free")
+                        and classify_free_route(
                             f"openrouter/{item}",
                             "openrouter",
                             "live-catalogue",
