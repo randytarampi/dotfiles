@@ -11,7 +11,8 @@
 if [ "${DOTFILES_RUN_CODEX_SETUP:-0}" = "1" ] &&
   [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ] &&
   [ "${DOTFILES_RUN_LITELLM_SETUP:-0}" = "1" ] &&
-  [ -f "$HOME/.local/share/litellm/clients/codex.key" ]; then
+  [ -f "$HOME/.local/share/litellm/clients/codex.key" ] &&
+  [ -r "$HOME/.local/share/litellm/clients/codex.key" ]; then
   LITELLM_CODEX_KEY="$(<"$HOME/.local/share/litellm/clients/codex.key")"
   export LITELLM_CODEX_KEY
 fi
