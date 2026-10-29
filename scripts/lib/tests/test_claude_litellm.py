@@ -29,7 +29,7 @@ def test_gnu_stat_fallback_discards_failed_bsd_stdout(tmp_path, mode, expected):
     result = subprocess.run([str(SCRIPT)], env=env, capture_output=True, text=True)
     assert result.returncode == expected, result.stderr
     if expected == 0:
-        assert json.loads(result.stdout)["key"] == "dummy-key"
+        assert json.loads(result.stdout)["key_delivered"] is True
     else:
         assert "mode 0600" in result.stderr
 
@@ -43,9 +43,9 @@ def _setup(tmp_path):
     key.chmod(0o600)
     capture = tmp_path / "capture.py"
     capture.write_text(
-        "#!/usr/bin/env python3\nimport json, os, sys\n"
+        f"#!{sys.executable}\nimport json, os, sys\n"
         "open(os.environ['CHILD_MARKER'], 'w').close()\n"
-        "print(json.dumps({'argv': sys.argv[1:], 'base': os.environ.get('ANTHROPIC_BASE_URL'), 'key': os.environ.get('ANTHROPIC_API_KEY'), 'env_names': sorted(os.environ)}))\n"
+        "print(json.dumps({'argv': sys.argv[1:], 'base': os.environ.get('ANTHROPIC_BASE_URL'), 'key_delivered': os.environ.get('ANTHROPIC_API_KEY') == 'dummy-key', 'env_names': sorted(os.environ)}))\n"
     )
     capture.chmod(0o700)
     path = tmp_path / "bin"
@@ -55,7 +55,6 @@ def _setup(tmp_path):
         if resolved:
             (path / command).symlink_to(resolved)
     env = {
-        **os.environ,
         "HOME": str(home),
         "PATH": str(path),
         "DOTFILES_RUN_CLAUDE_SETUP": "1",
@@ -64,7 +63,7 @@ def _setup(tmp_path):
         "DOTFILES_CLAUDE_BIN": str(capture),
         "CHILD_MARKER": str(tmp_path / "child-ran"),
         "DOTFILES_CLAUDE_LITELLM_MODEL": "served-test-alias",
-        "ANTHROPIC_API_KEY": "inherited",
+        "ANTHROPIC_API_KEY": "",
     }
     return env, capture
 
@@ -102,8 +101,11 @@ def test_gateway_wrapper_uses_session_settings_and_preserves_safe_args(tmp_path)
         "hello world",
     ]
     assert received["base"] == "http://127.0.0.1:4000"
-    assert received["key"] == "dummy-key"
-    assert "dummy-key" not in result.args
+    assert received["key_delivered"] is True
+    assert Path(env["CHILD_MARKER"]).exists()
+    assert all("dummy-key" not in argument for argument in received["argv"])
+    assert "dummy-key" not in result.stderr
+    assert "dummy-key" not in result.stdout
     for name in (
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
