@@ -229,8 +229,14 @@ def unsafe_value_keys(lines):
         if key in seen and seen[key] != token:
             refused.append(key)
         seen[key] = token
-    for old, new, _inherit in MIGRATIONS:
-        if old in seen and new in seen and seen[old] != seen[new]:
+    for old, new, inherit_from in MIGRATIONS:
+        # A split retains its source, so independently set targets are valid.
+        if (
+            old != inherit_from
+            and old in seen
+            and new in seen
+            and seen[old] != seen[new]
+        ):
             refused.append(new)
     return refused
 
@@ -304,7 +310,11 @@ def migrate_env(lines, dry_run=False):
         for parsed in (parse_env_line(line) for line in lines)
         if parsed and parsed[1].startswith("export")
     }
-    exported_targets = {new for old, new, _ in MIGRATIONS if old in exported_keys}
+    exported_targets = {
+        new
+        for old, new, inherit_from in MIGRATIONS
+        if old in exported_keys and old != inherit_from
+    }
     changes = []
     legacy_keys, proxy_key, _policy, legacy_label = LITELLM_PROXY_OR_MIGRATION
     explicit_proxy_value = get_active_value(lines, proxy_key)
@@ -535,7 +545,7 @@ def migrate_env(lines, dry_run=False):
 
     # Handle inheritance: for new gates that are absent, inherit from predecessor
     for old_key, new_key, inherit_from in MIGRATIONS:
-        if new_key in active_keys:
+        if get_active_value(new_lines, new_key) is not None:
             continue
         if not inherit_from or inherit_from not in active_keys:
             continue
@@ -592,6 +602,13 @@ def main():
         "--dry-run", action="store_true", help="Preview changes without writing"
     )
     args = parser.parse_args()
+
+    if os.name == "nt":
+        print(
+            "Refused: environment migration requires POSIX ownership and permissions",
+            file=sys.stderr,
+        )
+        return 1
 
     env_path = Path(args.env).expanduser().absolute()
 
