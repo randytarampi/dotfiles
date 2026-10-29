@@ -338,6 +338,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_MACOS_SECURITY_SETUP` | 0 | Script 02 (firewall, Gatekeeper) |
 | `DOTFILES_RUN_PACKAGES_SETUP` | 0 | Script 04 (Homebrew/Winget installs) |
 | `DOTFILES_RUN_JUNIE_CLI_SETUP` | 0 | Script 06 (Junie CLI install) |
+| `DOTFILES_RUN_HERMES_SETUP` | 0 | Opt-in `configure-hermes.py` gateway config scaffold; also requires `DOTFILES_USE_LITELLM_PROXY=1`. Does not provision a key or change the default model/provider. |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | 0 | Scripts 07, 08 (OpenCode plugins + CLI tools) |
 | `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` | 0 | Script 07 opencode-mem plugin and memory configuration |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |

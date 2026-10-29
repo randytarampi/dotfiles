@@ -11,6 +11,15 @@ hermes = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(hermes)
 
 
+def test_unmanaged_nested_providers_flow_is_preserved():
+    source = "settings:\n  providers: {custom: [one, two]}\n"
+    updated = hermes.reconcile(source, "served-alias", "http://127.0.0.1:4000/v1")
+    assert updated.startswith(source)
+    assert yaml.safe_load(updated)["settings"] == {
+        "providers": {"custom": ["one", "two"]}
+    }
+
+
 def test_disabled_gate_is_no_write(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
