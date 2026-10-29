@@ -64,7 +64,11 @@ def _parse_config(source):
                     if isinstance(key, yaml.ScalarNode) and key.value == "<<":
                         raise ValueError("refusing YAML merge keys")
                     check(key)
-                    if key.value == "providers":
+                    if (
+                        node is parsed
+                        and isinstance(key, yaml.ScalarNode)
+                        and key.value == "providers"
+                    ):
                         if isinstance(value, yaml.MappingNode) and value.flow_style:
                             raise ValueError("refusing flow-style Hermes providers")
                         if isinstance(value, yaml.MappingNode):
