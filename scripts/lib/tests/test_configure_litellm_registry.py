@@ -35,8 +35,22 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_CODEX_SETUP",
         "DOTFILES_USE_LITELLM_PROXY",
         "LITELLM_CLIENT_KEY_FILE",
+        "DOTFILES_RUN_CODEX_SETUP",
+        "DOTFILES_RUN_CLAUDE_SETUP",
+        "LITELLM_OPENCODE_KEY",
+        "LITELLM_PI_KEY",
+        "LITELLM_JUNIE_KEY",
+        "LITELLM_OPENWEBUI_KEY",
+        "LITELLM_CODEX_KEY",
+        "LITELLM_CLAUDE_KEY",
+        "LITELLM_COPILOT_CLI_KEY",
     ):
         monkeypatch.delenv(gate, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_home(tmp_path, monkeypatch, provisioning_write_boundary):
+    monkeypatch.setenv("HOME", str(tmp_path))
 
 
 def _fake_gateway(monkeypatch):
@@ -50,7 +64,7 @@ def _fake_gateway(monkeypatch):
         if url.endswith("/key/generate"):
             assert payload is not None
             records.append({"key_alias": payload["key_alias"]})
-            return {"key": "generated-secret"}
+            return {"key": "synthetic-generated-key"}
         if url.endswith("/v1/models"):
             return {"data": []}
         return {}
