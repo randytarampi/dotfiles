@@ -781,17 +781,11 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
     "openwebui": _write_openwebui_key,
     "codex": _write_codex_key,
     "claude": _write_claude_key,
+    "copilot-cli": _write_copilot_cli_key,
 }
 
 
 def _write_provisioned_client_keys(rows, service_env_path, dry_run):
-    writers = {
-        "opencode": _write_opencode_key,
-        "pi": _write_pi_key,
-        "junie": _write_junie_key,
-        "copilot-cli": _write_copilot_cli_key,
-        "openwebui": _write_openwebui_key,
-    }
     for row in rows:
         writer = PROVISIONED_CLIENT_KEY_WRITERS.get(row["client"])
         if writer:
