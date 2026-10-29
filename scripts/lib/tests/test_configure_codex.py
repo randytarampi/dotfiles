@@ -86,16 +86,74 @@ def test_litellm_profile_is_opt_in_and_selects_gateway_model(monkeypatch):
     assert "litellm" not in profiles
 
 
-def test_managed_shell_exports_codex_key_only_when_proxy_enabled_and_file_exists():
-    template = (REPO_ROOT / "dot_dotfiles/shell/variables.sh").read_text()
-    assert 'if [ "${DOTFILES_USE_LITELLM_PROXY:-0}" = "1" ]' in template
-    assert '[ -f "$HOME/.local/share/litellm/clients/codex.key" ]' in template
-    assert (
-        'LITELLM_CODEX_KEY="$(<"$HOME/.local/share/litellm/clients/codex.key")"'
-        in template
+@pytest.mark.parametrize("shell_mode", ["login", "noninteractive"])
+@pytest.mark.parametrize(
+    "gates",
+    [
+        ("0", "0", "0"),
+        ("1", "0", "0"),
+        ("0", "1", "0"),
+        ("0", "0", "1"),
+        ("1", "1", "0"),
+        ("1", "0", "1"),
+        ("0", "1", "1"),
+        ("1", "1", "1"),
+    ],
+)
+def test_managed_shell_exports_codex_key_only_with_all_gates(
+    tmp_path, gates, shell_mode
+):
+    home = tmp_path / "home"
+    key_path = home / ".local/share/litellm/clients/codex.key"
+    key_path.parent.mkdir(parents=True)
+    key_path.write_text("synthetic-codex-key")
+    script = REPO_ROOT / "dot_dotfiles/shell/variables.sh"
+    command = (
+        f'source "{script}"; bash -c \'printf "%s" "${{LITELLM_CODEX_KEY-unset}}"\''
     )
-    assert "export LITELLM_CODEX_KEY" in template
-    assert "echo" not in template
+    args = ["bash"]
+    if shell_mode == "login":
+        args.append("--login")
+    args.extend(["-c", command])
+    env = {
+        "HOME": str(home),
+        "PATH": "/usr/bin:/bin",
+        "DOTFILES_RUN_CODEX_SETUP": gates[0],
+        "DOTFILES_USE_LITELLM_PROXY": gates[1],
+        "DOTFILES_RUN_LITELLM_SETUP": gates[2],
+    }
+    result = subprocess.run(args, env=env, capture_output=True, text=True, check=True)
+    assert result.stdout == (
+        "synthetic-codex-key" if gates == ("1", "1", "1") else "unset"
+    )
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize("shell_mode", ["login", "noninteractive"])
+@pytest.mark.parametrize("enabled", [True, False])
+def test_managed_shell_preserves_inherited_codex_key(tmp_path, shell_mode, enabled):
+    home = tmp_path / "home"
+    home.mkdir()
+    gates = ("1", "1", "1") if enabled else ("1", "0", "1")
+    script = REPO_ROOT / "dot_dotfiles/shell/variables.sh"
+    command = (
+        f'source "{script}"; bash -c \'printf "%s" "${{LITELLM_CODEX_KEY-unset}}"\''
+    )
+    args = ["bash"]
+    if shell_mode == "login":
+        args.append("--login")
+    args.extend(["-c", command])
+    env = {
+        "HOME": str(home),
+        "PATH": "/usr/bin:/bin",
+        "LITELLM_CODEX_KEY": "manual-inherited-key",
+        "DOTFILES_RUN_CODEX_SETUP": gates[0],
+        "DOTFILES_USE_LITELLM_PROXY": gates[1],
+        "DOTFILES_RUN_LITELLM_SETUP": gates[2],
+    }
+    result = subprocess.run(args, env=env, capture_output=True, text=True, check=True)
+    assert result.stdout == "manual-inherited-key"
+    assert result.stderr == ""
 
 
 def test_reconcile_managed_block_repeatably_and_gate_off_preserves_user_toml(
