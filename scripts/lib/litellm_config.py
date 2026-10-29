@@ -1606,10 +1606,7 @@ def compute_model_list(environ=None, previous_entries=None):
                 confirmed_models = curated
         else:
             confirmed_models = confirmed
-        if provider == "poolside" and scope == "free":
-            # Poolside's own server of record classifies these routes as free.
-            confirmed_models = confirmed
-        if not confirmed_models and provider != "poolside":
+        if not confirmed_models:
             last_generation_notes.append(f"{provider}: UNKNOWN (no confirmed models)")
             continue
         if provider in LIVE_CATALOGUE_PROVIDERS:

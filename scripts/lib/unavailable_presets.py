@@ -34,7 +34,7 @@ def without_disabled_presets(registry):
                 for name, value in result[key].items()
                 if name not in DISABLED_PRESETS
             }
-    for tier in result.get("_tiers", {}).values():
+    for name, tier in result.get("_tiers", {}).items():
         council = tier.get("council", {}) if isinstance(tier, dict) else {}
         choices = council.get("presets") if isinstance(council, dict) else None
         if isinstance(choices, dict):
@@ -43,14 +43,10 @@ def without_disabled_presets(registry):
                 for name, value in choices.items()
                 if name not in DISABLED_PRESETS
             }
-    for name, tier in result.get("_tiers", {}).items():
-        council = tier.get("council", {}) if isinstance(tier, dict) else {}
         if (
             isinstance(council, dict)
             and council.get("default_preset") in DISABLED_PRESETS
         ):
-            if name in DISABLED_PRESETS:
-                continue
             raise ValueError(
                 f"Tier '{name}' selects unavailable council default "
                 f"'{council['default_preset']}'"
