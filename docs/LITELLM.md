@@ -280,10 +280,12 @@ At deploy, the LiteLLM venv receives an idempotent, narrow Hugging Face bypass f
 ## Catalogue scope
 
 By default the generator enumerates live catalogues in a **free scope**:
-curated selections plus routes classified free by a model name containing
+curated catalogue selections plus routes classified free by a model name containing
 `free`, or Cohere/Poolside when served by that provider itself (directly or
 through this gateway). Third-party hosted Cohere/Poolside routes do not qualify.
-OpenRouter `:free` twins are included by default; set
+This catalogue enumeration scope is separate from the disabled `free` preset:
+including a model in the free-scope catalogue does not enable a preset or prove
+request-time cost. OpenRouter `:free` twins are included by default; set
 `DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS=0` to disable them.
 Automatic OpenRouter twin enumeration requires the exact `:free` suffix;
 this narrower catalogue rule is distinct from general name-based free

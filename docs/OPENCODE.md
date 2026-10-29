@@ -9,8 +9,10 @@ the full tier reference.
 
 The `free` and `omo-slim-opencode-zen-free` selections are currently disabled
 in repository-managed OpenCode and Junie generation because their availability
-is not established. Generation rejects them as active presets and omits their
-choices and compatibility aliases; it does not silently select a paid fallback.
+is not established. They are disabled selections, not proof that every route
+they contain is free-classified. Generation rejects them as active presets and
+omits their choices and compatibility aliases; it does not silently select a
+paid fallback.
 This repository guard applies when configuration is regenerated. It does not
 change already-installed client files until deployment/regeneration runs, so
 runtime enforcement remains open (issue #87; classification work is PR #119); provenance for any
