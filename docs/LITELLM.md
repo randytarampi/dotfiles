@@ -285,6 +285,9 @@ curated selections plus routes classified free by a model name containing
 through this gateway). Third-party hosted Cohere/Poolside routes do not qualify.
 OpenRouter `:free` twins are included by default; set
 `DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS=0` to disable them.
+Automatic OpenRouter twin enumeration requires the exact `:free` suffix;
+this narrower catalogue rule is distinct from general name-based free
+classification, which matches `free` anywhere in a model ID.
 `DOTFILES_LITELLM_CATALOGUE_SCOPE=full` enumerates whole live catalogues. Any
 other scope value is a **hard configuration error** at generation time. Free
 classification is metadata and does not guarantee request-time no-charge
