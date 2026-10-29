@@ -370,6 +370,7 @@ def _write_codex_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the Codex app key without sourcing service.env."""
     _write_client_key(service_env_path, "codex", "LITELLM_CODEX_KEY", dry_run)
 
+
 def _write_claude_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the standalone Claude CLI key without sourcing service.env."""
     _write_client_key(service_env_path, "claude", "LITELLM_CLAUDE_KEY", dry_run)
@@ -767,17 +768,11 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
     "junie": _write_junie_key,
     "openwebui": _write_openwebui_key,
     "codex": _write_codex_key,
+    "claude": _write_claude_key,
 }
 
 
 def _write_provisioned_client_keys(rows, service_env_path, dry_run):
-    writers = {
-        "opencode": _write_opencode_key,
-        "pi": _write_pi_key,
-        "junie": _write_junie_key,
-        "openwebui": _write_openwebui_key,
-        "claude": _write_claude_key,
-    }
     for row in rows:
         writer = PROVISIONED_CLIENT_KEY_WRITERS.get(row["client"])
         if writer:
