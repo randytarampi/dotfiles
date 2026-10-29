@@ -707,9 +707,89 @@ def main():
                 f"{env_path} not found — run configure-secrets.py first for MCP server configs"
             )
 
-    args.preset = (
-        explicit_preset or os.environ.get("DOTFILES_OPENCODE_TIER") or "pro-plus"
-    )
+    configured_preset = os.environ.get("DOTFILES_OPENCODE_TIER")
+    requested_preset = explicit_preset or configured_preset
+    installed_slim_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
+    if os.path.lexists(installed_slim_path):
+        if os.path.islink(installed_slim_path) or not os.path.isfile(
+            installed_slim_path
+        ):
+            parser.error(
+                "Cannot safely inspect installed Slim config: expected a regular file"
+            )
+        try:
+            with open(installed_slim_path, "rb") as f:
+                installed_bytes = f.read()
+            installed_slim = json.loads(installed_bytes)
+        except (OSError, ValueError, UnicodeDecodeError):
+            parser.error(
+                "Cannot safely inspect installed Slim config; refusing overwrite"
+            )
+        if not isinstance(installed_slim, dict):
+            parser.error(
+                "Cannot safely inspect installed Slim config: expected an object"
+            )
+        disabled = set()
+        if (
+            isinstance(installed_slim, dict)
+            and isinstance(installed_slim.get("preset"), str)
+            and installed_slim.get("preset") in DISABLED_PRESETS
+        ):
+            disabled.add(installed_slim["preset"])
+        council = (
+            installed_slim.get("council") if isinstance(installed_slim, dict) else None
+        )
+        if (
+            isinstance(council, dict)
+            and isinstance(council.get("default_preset"), str)
+            and council.get("default_preset") in DISABLED_PRESETS
+        ):
+            disabled.add(council["default_preset"])
+
+        def scan_fallbacks(node):
+            if isinstance(node, dict):
+                for key, child in node.items():
+                    if key == "fallback" and isinstance(child, dict):
+                        for chain in child.values():
+                            if isinstance(chain, list):
+                                disabled.update(
+                                    item
+                                    for item in chain
+                                    if isinstance(item, str)
+                                    and item in DISABLED_PRESETS
+                                )
+                    else:
+                        scan_fallbacks(child)
+            elif isinstance(node, list):
+                for child in node:
+                    scan_fallbacks(child)
+
+        scan_fallbacks(installed_slim)
+        tiers = (
+            installed_slim.get("_tiers", {}) if isinstance(installed_slim, dict) else {}
+        )
+        for tier in tiers.values() if isinstance(tiers, dict) else ():
+            tier_council = tier.get("council", {}) if isinstance(tier, dict) else {}
+            if (
+                isinstance(tier_council, dict)
+                and isinstance(tier_council.get("default_preset"), str)
+                and tier_council.get("default_preset") in DISABLED_PRESETS
+            ):
+                disabled.add(tier_council["default_preset"])
+        if disabled and not requested_preset:
+            parser.error(
+                "Installed Slim selects disabled preset(s) "
+                f"{', '.join(sorted(disabled))}; choose an explicit --preset replacement"
+            )
+        if disabled:
+            logger.warning(
+                "Replacing installed disabled preset(s) %s with explicitly selected %s; "
+                "the replacement may use paid routes. Review the route and cost implications before proceeding.",
+                ", ".join(sorted(disabled)),
+                requested_preset,
+            )
+
+    args.preset = requested_preset or "pro-plus"
     try:
         reject_disabled_preset(args.preset)
         reject_disabled_preset(os.environ.get("DOTFILES_LOCAL_FALLBACK_PRESET", ""))
@@ -1323,7 +1403,9 @@ def main():
                 with open(previous_slim_path, encoding="utf-8") as f:
                     previous_slim = json.load(f)
             except (OSError, ValueError):
-                previous_slim = None
+                raise RuntimeError(
+                    "Cannot safely inspect installed Slim config; refusing overwrite"
+                ) from None
         opencode_candidate, slim_candidate = prepare_config_candidates(
             config, slim_data, previous_slim
         )
