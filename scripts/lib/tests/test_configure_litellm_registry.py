@@ -96,6 +96,22 @@ def test_pi_requires_both_registry_gates(monkeypatch, tmp_path):
     assert generated == []
 
 
+def test_codex_requires_shared_litellm_setup_gate(monkeypatch, tmp_path):
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    _enabled(monkeypatch, "DOTFILES_RUN_CODEX_SETUP", "DOTFILES_USE_LITELLM_PROXY")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert [call for call in calls if call[0].endswith("/key/generate")] == []
+
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    assert [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ] == ["codex"]
+
+
 def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
     rows = {row["client"]: row for row in litellm_config.CLIENT_REGISTRY}
     assert set(rows["pi"]["setup_gates"]) == {

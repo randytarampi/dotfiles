@@ -322,6 +322,7 @@ def test_codex_registry_is_provisionable_but_not_live_verified(monkeypatch):
     assert row["setup_gates"] == [
         "DOTFILES_RUN_CODEX_SETUP=1",
         "DOTFILES_USE_LITELLM_PROXY=1",
+        "DOTFILES_RUN_LITELLM_SETUP=1",
     ]
     assert "model_providers.litellm" in row["consumer_read_path"]
     assert row["transports"] == ["Responses API", "OpenAI-compatible"]
