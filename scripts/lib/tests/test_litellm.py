@@ -1039,13 +1039,53 @@ def test_free_classifier_callable_contract_and_exception_provenance():
 def test_disabled_junie_free_selections_and_twins_are_absent():
     from pathlib import Path
     import json
+    import importlib.util
 
     root = Path(__file__).resolve().parents[3]
     slim = json.loads((root / "configs/opencode/oh-my-opencode-slim.json").read_text())
     slim["_audit_disabled_presets"] = True
     profiles = free_classifier._free_junie_profiles(root, slim)
     assert profiles == []
-    groups = {}
+    module_path = root / "scripts/generate-jetbrains-profiles.py"
+    spec = importlib.util.spec_from_file_location(
+        "junie_profiles_disabled_test", module_path
+    )
+    assert spec is not None and spec.loader is not None
+    profiles_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(profiles_module)
+    groups = profiles_module.resolve_model_groups(
+        {
+            "groups": {
+                "free": {"provider": "openai", "primaryModel": "openai/free-model"},
+                "omo-slim-opencode-zen-free": {
+                    "provider": "openai",
+                    "primaryModel": "openai/zen-free-model",
+                },
+                "healthy": {
+                    "provider": "openai",
+                    "primaryModel": "openai/gpt-4.1",
+                    "fasterModel": "openai/gpt-4.1-mini",
+                },
+            },
+            "sharedPresets": {
+                "free": "free",
+                "omo-slim-opencode-zen-free": "omo-slim-opencode-zen-free",
+            },
+            "compatibility": {"free-compat": "free", "healthy-compat": "healthy"},
+        },
+        {},
+    )
+    groups = profiles_module.derive_litellm_groups(groups)
+    assert set(groups) == {
+        "healthy",
+        "healthy-compat",
+        "litellm-healthy",
+        "litellm-healthy-compat",
+    }
+    assert groups["healthy"]["primaryModel"] == "openai/gpt-4.1"
+    assert groups["healthy"]["fasterModel"] == "openai/gpt-4.1-mini"
+    assert groups["litellm-healthy"]["primaryModel"] == "openai/gpt-4.1"
+    assert groups["litellm-healthy"]["fasterModel"] == "openai/gpt-4.1-mini"
     assert not (
         {
             "free",
@@ -1055,14 +1095,7 @@ def test_disabled_junie_free_selections_and_twins_are_absent():
         }
         & groups.keys()
     )
-    records = free_classifier.collect_routes({}, profiles)
-    assert len(records) == 2 * len(groups)
-    for name in groups:
-        assert {row[2] for row in records if row[3] == f"junie.{name}"} == {
-            "primaryModel",
-            "fasterModel",
-        }
-    assert not any(record[3].startswith("junie.free") for record in records)
+    assert not any(name.startswith("free") for name in groups)
 
 
 def test_free_audit_resolved_gateway_backends_and_nested_selections():
