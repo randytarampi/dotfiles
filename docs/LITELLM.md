@@ -81,6 +81,8 @@ The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on
 generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied.
 The gateway serves discovered chat and modality models. Direct loopback service
 endpoints remain the always-available route, including when the gateway is off.
+The `DOTFILES_RUN_LITELLM_SETUP` gate defaults to `0`; enabling it provisions
+the local gateway.
 
 ### Two-mode client contract
 
@@ -91,6 +93,8 @@ consumer and never replace a model identity. In proxy mode (`1`), routing is
 gateway-only: `DOTFILES_RUN_LITELLM_SETUP=1`, each client key file, and every
 exact gateway alias are required. Missing prerequisites are configuration
 errors, never a direct-routing fallback.
+This proxy switch is independent of the setup gate and defaults to `0`; setting
+it to `1` without the required setup and client prerequisites fails closed.
 
 In gateway mode, a previously selected local-owner model (`ollama/`, `omlx/`,
 or `llamacpp/`) without a matching served alias is marked UNRESOLVED with the
@@ -127,8 +131,11 @@ confirms this configuration surface, but a live request is not qualified and
 remains UNKNOWN; this does not imply ACP or IDE support.
 The wrapper forwards a bounded set of session options, including prompt,
 resume, output, reasoning and tool-approval options; unsupported flags fail
-with a usage error rather than being guessed from help text. All three setup,
-proxy and LiteLLM gates must be enabled. Endpoint overrides remain loopback-only.
+with a usage error rather than being guessed from help text. In addition to
+`DOTFILES_RUN_COPILOT_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`,
+`DOTFILES_RUN_LITELLM_SETUP=1` is required. Each gate defaults to `0` and is
+independent; enabling the Copilot adapter and proxy does not enable gateway
+provisioning. Endpoint overrides remain loopback-only.
 The launcher fails closed whenever `COPILOT_PROVIDERS_CONFIG` is set (even to
 an empty value) or `~/.copilot/providers.json` exists in any form. It checks
 only the file's presence and never reads, edits or deletes it: the installed
