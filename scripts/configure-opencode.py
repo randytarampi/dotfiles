@@ -375,7 +375,12 @@ def apply_litellm_client_gate(config: dict) -> None:
 
 
 def apply_litellm_slim_gate(
-    slim: dict, config: dict, previous_slim=None, *, preserve_dynamic=False
+    slim: dict,
+    config: dict,
+    previous_slim=None,
+    *,
+    preserve_dynamic=False,
+    selected_preset=None,
 ) -> dict:
     """Route every Slim selection using the gateway inventory built for OpenCode."""
     if not get_litellm_proxy_mode():
@@ -542,7 +547,94 @@ def apply_litellm_slim_gate(
             return [visit(child) for child in node]
         return node
 
-    return visit(slim)
+    import copy
+
+    result = copy.deepcopy(slim)
+    if selected_preset is None:
+        selected_preset = slim.get("preset")
+
+    presets = result.get("presets", {})
+    if not isinstance(presets, dict):
+        raise RuntimeError("Slim presets must be an object")
+    has_selector = isinstance(selected_preset, str) and bool(selected_preset)
+
+    def validate_section(section, location):
+        try:
+            return visit(section)
+        except RuntimeError as error:
+            raise RuntimeError(f"{location}: {error}") from error
+
+    if not has_selector:
+        return visit(result)
+
+    if selected_preset not in presets:
+        raise RuntimeError(f"Active Slim preset is unavailable: {selected_preset}")
+    tiers = result.get("_tiers", {})
+    councils = result.get("council", {})
+    if not isinstance(tiers, dict) or not isinstance(councils, dict):
+        raise RuntimeError("Slim tier and council selectors must be objects")
+    council_presets = councils.get("presets", {})
+    if not isinstance(council_presets, dict):
+        raise RuntimeError("Slim council presets must be an object")
+    names = set(presets) | set(tiers) | set(council_presets)
+    unavailable = {}
+    routed = {}
+    for name in names:
+        try:
+            routed[name] = [
+                (
+                    validate_section(section[name], f"{label}.{name}")
+                    if name in section
+                    else None
+                )
+                for label, section in (
+                    ("presets", presets),
+                    ("_tiers", tiers),
+                    ("council.presets", council_presets),
+                )
+            ]
+        except RuntimeError as error:
+            unavailable[name] = error
+    # A retained tier cannot point to a council choice that was omitted.
+    changed = True
+    while changed:
+        changed = False
+        for name, tier in tiers.items():
+            dependency = (
+                tier.get("council", {}).get("default_preset")
+                if isinstance(tier, dict)
+                else None
+            )
+            if (
+                name not in unavailable
+                and dependency
+                and (dependency not in council_presets or dependency in unavailable)
+            ):
+                unavailable[name] = RuntimeError(
+                    f"Unavailable council choice: {dependency}"
+                )
+                changed = True
+    required = {selected_preset}
+    if councils.get("default_preset"):
+        required.add(councils["default_preset"])
+    for name in required:
+        if name not in names or name in unavailable:
+            raise RuntimeError(
+                f"Active Slim selection unavailable: {name}: {unavailable.get(name, 'missing definition')}"
+            ) from unavailable.get(name)
+    for name in names:
+        for index, section in enumerate((presets, tiers, council_presets)):
+            if name in unavailable:
+                section.pop(name, None)
+            elif name in section:
+                section[name] = routed[name][index]
+    for key, value in list(councils.items()):
+        if key != "presets":
+            councils[key] = validate_section(value, f"council.{key}")
+    for key, value in list(result.items()):
+        if key not in {"presets", "_tiers", "council"}:
+            result[key] = validate_section(value, key)
+    return result
 
 
 def route_dynamic_free_registry(registry, audit, preset, config):
@@ -640,7 +732,12 @@ def route_dynamic_free_registry(registry, audit, preset, config):
 
 
 def prepare_config_candidates(
-    config, slim_data, previous_slim=None, *, preserve_dynamic=False
+    config,
+    slim_data,
+    previous_slim=None,
+    *,
+    preserve_dynamic=False,
+    selected_preset=None,
 ):
     """Validate both generated payloads before the caller installs either."""
     if not preserve_dynamic:
@@ -650,7 +747,16 @@ def prepare_config_candidates(
         slim_candidate = slim_data
     else:
         apply_litellm_client_gate(config)
-        slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
+        gate_kwargs = (
+            {"selected_preset": selected_preset}
+            if selected_preset
+            and isinstance(slim_data.get("presets"), dict)
+            and slim_data.get("presets")
+            else {}
+        )
+        slim_candidate = apply_litellm_slim_gate(
+            slim_data, config, previous_slim, **gate_kwargs
+        )
     return (
         json.dumps(config, indent=2) + "\n",
         json.dumps(slim_candidate, indent=2) + "\n",
@@ -669,6 +775,7 @@ def prepare_tier_candidate(
     base_slim=None,
     previous_slim=None,
     preserve_dynamic=False,
+    selected_preset=None,
 ):
     """Run the tier writer with a private, owner-only consumer config.
 
@@ -709,7 +816,12 @@ def prepare_tier_candidate(
         routed = (
             staged_slim
             if preserve_dynamic and get_litellm_proxy_mode()
-            else apply_litellm_slim_gate(staged_slim, consumer_config, previous_slim)
+            else apply_litellm_slim_gate(
+                staged_slim,
+                consumer_config,
+                previous_slim,
+                selected_preset=selected_preset or staged_slim.get("preset"),
+            )
         )
         return json.dumps(routed, indent=2) + "\n"
 
@@ -1685,6 +1797,7 @@ def main():
             slim_data,
             previous_slim,
             preserve_dynamic=dynamic_registry is not None,
+            selected_preset=args.preset,
         )
         tier_candidate = None
         if "tier" not in skipped and not args.dry_run:
@@ -1705,6 +1818,7 @@ def main():
                 config,
                 base_slim=slim_data,
                 previous_slim=previous_slim,
+                selected_preset=args.preset,
                 **({"preserve_dynamic": True} if dynamic_registry is not None else {}),
             )
     except Exception as e:
