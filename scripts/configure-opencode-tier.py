@@ -543,7 +543,9 @@ def orchestrate_tier_switch(
                 spec.loader.exec_module(helper)
                 if gateway_aliases:
                     if dynamic_audit is None:
-                        raise RuntimeError("Dynamic free tier gateway audit is unavailable")
+                        raise RuntimeError(
+                            "Dynamic free tier gateway audit is unavailable"
+                        )
                     selected = dynamic_audit["presets"][tier]["selected"]
                     for role, serving_ref in selected.items():
                         if (
