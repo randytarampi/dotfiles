@@ -854,8 +854,13 @@ def main():
             preset = cfg.get("compatibility", {}).get(preset, preset)
             if preset in DYNAMIC_FREE_PRESETS:
                 required_dynamic.add(preset)
-        if requested_dynamic and (args.role_models or args.category_models):
+        has_model_overrides = bool(args.role_models or args.category_models)
+        if required_dynamic and has_model_overrides:
             raise ValueError("Dynamic free preset overrides are refused")
+        if has_model_overrides:
+            # Optional dynamic groups may be omitted while ordinary profile
+            # overrides are active; required groups remain fail-closed above.
+            requested_dynamic.clear()
         dynamic_registry = None
         available_dynamic = set()
         full_registry = isinstance(registry.get("_tiers"), dict) and all(
