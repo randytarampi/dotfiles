@@ -43,17 +43,26 @@ def isolate_client_environment(tmp_path, monkeypatch, provisioning_write_boundar
 
 
 def test_writer_dispatch_patches_captured_registry_callable(monkeypatch, tmp_path):
-    called = []
-    monkeypatch.setitem(
-        CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS,
-        "opencode",
-        lambda path, dry_run=False: called.append((path, dry_run)),
-    )
-    monkeypatch.setattr(CONFIGURE, "_write_opencode_key", lambda *_a, **_k: None)
-    CONFIGURE._write_provisioned_client_keys(
-        [{"client": "opencode"}], tmp_path / "service.env", False
-    )
-    assert called == [(tmp_path / "service.env", False)]
+    for client, writer_name in (
+        ("opencode", "_write_opencode_key"),
+        ("pi", "_write_pi_key"),
+        ("junie", "_write_junie_key"),
+        ("openwebui", "_write_openwebui_key"),
+        ("codex", "_write_codex_key"),
+        ("claude", "_write_claude_key"),
+        ("copilot-cli", "_write_copilot_cli_key"),
+    ):
+        called = []
+        monkeypatch.setitem(
+            CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS,
+            client,
+            lambda path, dry_run=False: called.append((path, dry_run)),
+        )
+        monkeypatch.setattr(CONFIGURE, writer_name, lambda *_a, **_k: None)
+        CONFIGURE._write_provisioned_client_keys(
+            [{"client": client}], tmp_path / "service.env", False
+        )
+        assert called == [(tmp_path / "service.env", False)]
 
 
 def test_misplaced_real_writer_is_blocked_before_write(tmp_path, monkeypatch):
