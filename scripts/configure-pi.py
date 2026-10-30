@@ -23,7 +23,6 @@ from constants import (  # noqa: E402 -- local import follows bootstrap.
 )
 from discover_models import (  # noqa: E402 -- local import follows bootstrap.
     is_ollama_cloud_model,
-    list_cloud_ollama_models,
     list_local_ollama_models,
 )
 from file_utils import (  # noqa: E402 -- local import follows bootstrap.

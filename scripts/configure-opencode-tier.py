@@ -9,10 +9,8 @@ import sys
 import json
 import importlib.util
 import argparse
-import shutil
 import os
 import stat
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -328,7 +326,6 @@ def orchestrate_tier_switch(
         sys.exit(1)
 
     tier_config = tiers_dict[tier]
-    preset = tier_registry.get_preset(registry, tier)
     profile = tier_registry.get_profile_name(registry, tier)
     logger.info("Resolved tier profile for '%s': %s", tier, profile or "none")
     resolution_preset = local_fallback_preset or (

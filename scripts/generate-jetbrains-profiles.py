@@ -54,8 +54,8 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     local_endpoint_for,
     resolve_engine,
 )
-from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS
-from free_preset_runtime import prepare_dynamic_free_registry
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
+from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 
 JUNIE_KEY_FILE = "~/.local/share/litellm/clients/junie.key"
 PROFILE_MANIFEST = ".dotfiles-generated-profiles.json"

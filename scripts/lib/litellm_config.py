@@ -35,7 +35,6 @@ from provider_endpoints import (
     POOLSIDE_ROUTED_MODEL_INFO,
     PROVIDER_ENDPOINTS,
     conservative_limit,
-    provider_models,
 )
 from litellm_routing import routing_entries_are_safe
 from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.

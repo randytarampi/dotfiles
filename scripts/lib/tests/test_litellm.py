@@ -45,10 +45,8 @@ def test_opencode_live_producer_evidence_reaches_zen_resolver(monkeypatch):
         item for item in entries if item["model_name"] == "opencode/big-pickle-free"
     )
     assert route["_route_provenance"]["source_kind"] == "live-catalogue"
-    manifest = free_route_manifest.build_manifest(
-        entries, now=observed + timedelta(seconds=3)
-    )
-    projection = free_route_manifest.expected_config_routes(entries)
+    free_route_manifest.build_manifest(entries, now=observed + timedelta(seconds=3))
+    free_route_manifest.expected_config_routes(entries)
     gateway_routes = [
         {
             "model_name": "zen",
@@ -147,8 +145,8 @@ def test_live_catalogue_manifest_reaches_free_gateway_validator(monkeypatch):
     assert [candidate.serving_ref for candidate in candidates] == ["cohere/command-r"]
 
 
-from constants import OMLX_DEFAULT_PORT
-from provider_endpoints import POOLSIDE_ROUTED_MODEL_INFO
+from constants import OMLX_DEFAULT_PORT  # noqa: E402
+from provider_endpoints import POOLSIDE_ROUTED_MODEL_INFO  # noqa: E402
 
 
 @pytest.mark.parametrize("engine_order", [("omlx", "ollama"), ("ollama", "omlx")])
@@ -996,7 +994,6 @@ def test_model_field_collector_uses_faster_provider_not_primary():
 )
 def test_empty_provider_sources_never_emit_default_aliases(monkeypatch, provider, key):
     monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: [])
-    monkeypatch.setattr(litellm_config, "provider_models", lambda name: [])
     entries = litellm_config.compute_model_list({key: "test-key"})
     assert not any(item["model_name"].endswith("/default") for item in entries)
     assert not any(item["model_name"].startswith(f"{provider}/") for item in entries)
@@ -1078,7 +1075,6 @@ def test_free_scope_poolside_direct_model_has_no_paid_fallback_entries(monkeypat
 def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
     monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
-    monkeypatch.setattr(litellm_config, "provider_models", lambda _provider: [])
     monkeypatch.setattr(
         litellm_config, "_live_catalogue", lambda *_args: ["vendor/twin:free"]
     )
@@ -1097,7 +1093,6 @@ def test_free_scope_openrouter_twin_toggle_is_parameterized(monkeypatch):
 def test_openrouter_automatic_twins_require_exact_free_suffix(monkeypatch):
     monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
     monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: set())
-    monkeypatch.setattr(litellm_config, "provider_models", lambda _provider: [])
     monkeypatch.setattr(
         litellm_config,
         "_live_catalogue",

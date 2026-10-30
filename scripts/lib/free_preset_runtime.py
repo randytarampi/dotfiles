@@ -7,7 +7,7 @@ import stat
 from datetime import datetime, timezone
 from pathlib import Path
 
-from free_route_manifest import config_binding_digest, expected_config_routes
+from free_route_manifest import config_binding_digest
 from free_preset_evidence import EvidenceError, normalize_free_preset_evidence
 from free_gateway_evidence import validate_free_gateway_evidence
 from free_preset_registry import PRESETS, materialize_free_presets

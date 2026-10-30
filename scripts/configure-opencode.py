@@ -11,11 +11,9 @@ import sys
 import json
 import argparse
 import os
-import shutil
 import subprocess  # nosec B404 - managed script/gateway orchestration; no shell, env-staged
 import tempfile
 import stat
-import shutil
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -87,8 +85,8 @@ from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap
     conservative_limit,
     PROVIDER_ENDPOINTS,
 )
-from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS
-from free_preset_runtime import prepare_dynamic_free_registry
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
+from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -225,7 +223,6 @@ def apply_litellm_client_gate(config: dict) -> None:
     if not key_path.is_file() or key_path.is_symlink():
         raise RuntimeError(f"OpenCode LiteLLM key file is unavailable: {key_path}")
     providers = config.setdefault("provider", {})
-    source_provider_names = set(providers)
     models = {}
     for provider_name, provider in providers.items():
         for model_id, model in (provider.get("models", {}) or {}).items():
