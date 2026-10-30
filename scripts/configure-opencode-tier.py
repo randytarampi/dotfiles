@@ -141,17 +141,8 @@ def _dynamic_gateway_aliases(environ, audit):
     ):
         raise ValueError("trusted route projection digest is invalid")
     for preset, chosen in audit["presets"].items():
-        aliases_by_identity = {}
-        for route in routes:
-            identity = route.get("_route_provenance", {})
-            aliases_by_identity.setdefault(
-                (identity.get("upstream_host"), identity.get("upstream_model_id")), []
-            ).append(route.get("model_name"))
-        for role, ref in chosen["selected"].items():
-            host, model = ref.split("/", 1)
-            matches = aliases_by_identity.get((host, model), [])
-            advertised = [alias for alias in matches if alias in aliases]
-            if not advertised:
+        for role, serving_ref in chosen["selected"].items():
+            if not isinstance(serving_ref, str) or serving_ref not in aliases:
                 raise ValueError(f"no advertised LiteLLM alias for selected {role}")
     return {"manifest": manifest, "projection": projection, "aliases": aliases}
 
@@ -262,6 +253,7 @@ def orchestrate_tier_switch(
 
     dynamic_source_registry = None
     dynamic_audit = None
+    gateway_aliases = None
     if dynamic_free:
         if role_models:
             logger.critical(
@@ -272,7 +264,9 @@ def orchestrate_tier_switch(
             with open(source_path, encoding="utf-8") as source_file:
                 source_registry = json.load(source_file)
             dynamic_source_registry, dynamic_audit = prepare_dynamic_free_registry(
-                source_registry, [tier], os.environ
+                source_registry,
+                [tier],
+                os.environ,
             )
         except Exception as error:
             logger.critical(
@@ -361,8 +355,12 @@ def orchestrate_tier_switch(
         registry, tier, fallback_role_models, role_models
     )
     if dynamic_free:
+        if dynamic_audit is None:
+            raise RuntimeError("Dynamic free tier audit is unavailable")
         resolved_role_models = dict(dynamic_audit["presets"][tier]["selected"])
         fallback_role_models = {}
+        if use_litellm_proxy and not dry_run:
+            gateway_aliases = _dynamic_gateway_aliases(os.environ, dynamic_audit)
     if not fallback_role_models:
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
     else:
@@ -502,7 +500,8 @@ def orchestrate_tier_switch(
 
     target_config["council"]["presets"] = source_presets
 
-    if dynamic_free and dynamic_audit:
+    if dynamic_free:
+        assert dynamic_source_registry is not None
         dynamic_source = dynamic_source_registry["_tiers"][tier]
         target_config.setdefault("_tiers", {})[tier] = copy.deepcopy(dynamic_source)
 
@@ -544,9 +543,27 @@ def orchestrate_tier_switch(
                     raise RuntimeError("Unable to load OpenCode transport helper")
                 helper = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(helper)
-                target_config = helper.apply_litellm_slim_gate(
-                    target_config, consumer_config, previous_slim
-                )
+                if gateway_aliases:
+                    assert dynamic_audit is not None
+                    selected = dynamic_audit["presets"][tier]["selected"]
+                    for role, serving_ref in selected.items():
+                        if (
+                            not isinstance(serving_ref, str)
+                            or serving_ref not in gateway_aliases["aliases"]
+                        ):
+                            raise ValueError(
+                                f"no advertised LiteLLM alias for selected {role}"
+                            )
+                    target_config = helper.route_dynamic_free_registry(
+                        target_config,
+                        {"presets": {tier: {"selected": selected}}},
+                        tier,
+                        consumer_config,
+                    )
+                else:
+                    target_config = helper.apply_litellm_slim_gate(
+                        target_config, consumer_config, previous_slim
+                    )
             except Exception as exc:
                 raise RuntimeError(
                     f"Failed to apply LiteLLM mapping to standalone tier output: {exc}"

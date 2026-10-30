@@ -1570,8 +1570,23 @@ def compute_model_list(environ=None, previous_entries=None):
         if not key:
             continue
         if provider == "opencode":
-            confirmed = set(provider_models("opencode"))
-            catalogue_snapshot = None
+            try:
+                catalogue_snapshot = _live_catalogue_snapshot(
+                    provider, key, PROVIDER_ENDPOINTS[provider]["baseUrl"]
+                )
+                confirmed = set(catalogue_snapshot["models"])
+            except LiveCatalogueError:
+                last_generation_notes.append(
+                    "opencode: UNKNOWN; configured catalogue not accepted as live evidence"
+                )
+                retained = _retained_ledger_families(
+                    provider,
+                    previous_entries,
+                    key_env=None,
+                    expected_api_base=None,
+                )
+                entries.extend(retained)
+                continue
         elif provider in LIVE_CATALOGUE_PROVIDERS and provider != "poolside":
             live_base = PROVIDER_ENDPOINTS.get(provider, {}).get("baseUrl", base_url)
             try:
@@ -1739,11 +1754,7 @@ def compute_model_list(environ=None, previous_entries=None):
                     upstream_model_id=(
                         f"cohere/{model_id}" if provider == "cohere" else model_id
                     ),
-                    source_kind=(
-                        "configured-provider"
-                        if provider == "opencode"
-                        else "live-catalogue"
-                    ),
+                    source_kind="live-catalogue",
                     metadata_model_id=model_id,
                     metadata_provider=provider,
                     observed_at=(catalogue_snapshot or {}).get("observed_at"),

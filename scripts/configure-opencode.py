@@ -633,9 +633,11 @@ def route_dynamic_free_registry(registry, audit, preset, config):
     import copy
 
     result = copy.deepcopy(registry)
-    result["presets"][preset] = rewrite(sections[0])
-    result["_tiers"][preset] = rewrite(sections[1])
-    result["council"]["presets"][preset] = rewrite(sections[2])
+    result.setdefault("presets", {})[preset] = rewrite(sections[0])
+    result.setdefault("_tiers", {})[preset] = rewrite(sections[1])
+    result.setdefault("council", {}).setdefault("presets", {})[preset] = rewrite(
+        sections[2]
+    )
     return result
 
 
@@ -1116,7 +1118,6 @@ def main():
         with open(openrouter_models_path, "r", encoding="utf-8") as f:
             openrouter_models = json.load(f).get("models", {})
 
-    # Fetch model metadata from models.dev (24h-cached, graceful degradation)
     models_dev_data = fetch_models_dev()
 
     # Decode local ollama
