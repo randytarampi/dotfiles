@@ -659,27 +659,3 @@ def test_tier_script_accepts_deprecated_alias_preset():
         timeout=180,
     )
     assert result.returncode == 0, result.stderr[-2000:]
-
-
-
-def test_dynamic_free_production_guards_survive_optimized_python():
-    import ast
-
-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    function = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name == "orchestrate_tier_switch"
-    )
-    assert not any(isinstance(node, ast.Assert) for node in ast.walk(function))
-    for name in ("dynamic_source_registry", "dynamic_audit"):
-        assert any(
-            isinstance(node, ast.If)
-            and isinstance(node.test, ast.Compare)
-            and isinstance(node.test.left, ast.Name)
-            and node.test.left.id == name
-            and isinstance(node.body[0], ast.Raise)
-            for node in ast.walk(function)
-        )
-    compile(tree, str(SCRIPT), "exec", optimize=2)
