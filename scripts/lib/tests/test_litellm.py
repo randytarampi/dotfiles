@@ -22,6 +22,76 @@ import free_route_manifest
 from free_gateway_evidence import validate_free_gateway_evidence
 
 
+def test_opencode_live_producer_evidence_reaches_zen_resolver(monkeypatch):
+    observed = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    ticks = iter((observed, observed + timedelta(seconds=2)))
+    refs = {"opencode/big-pickle-free"}
+    monkeypatch.setattr(litellm_config, "_registry_model_refs", lambda: refs)
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "free")
+    monkeypatch.setattr(
+        litellm_config,
+        "_live_catalogue",
+        lambda provider, key, base, timeout=10: ["big-pickle-free"],
+    )
+    monkeypatch.setattr(
+        litellm_config,
+        "datetime",
+        type("Clock", (), {"now": staticmethod(lambda *_: next(ticks))}),
+    )
+    entries = litellm_config.compute_model_list()
+    route = next(
+        item for item in entries if item["model_name"] == "opencode/big-pickle-free"
+    )
+    assert route["_route_provenance"]["source_kind"] == "live-catalogue"
+    manifest = free_route_manifest.build_manifest(
+        entries, now=observed + timedelta(seconds=3)
+    )
+    projection = free_route_manifest.expected_config_routes(entries)
+    gateway_routes = [
+        {
+            "model_name": "zen",
+            "litellm_params": {
+                "model": "opencode/big-pickle-free",
+                "api_base": "https://opencode.ai/zen/v1",
+            },
+            "_route_provenance": route["_route_provenance"],
+        }
+    ]
+    gateway_manifest = free_route_manifest.build_manifest(
+        gateway_routes, now=observed + timedelta(seconds=3)
+    )
+    gateway_projection = free_route_manifest.expected_config_routes(gateway_routes)
+    gateway = {
+        "observed_at": observed.isoformat(),
+        "expires_at": (observed + timedelta(minutes=5)).isoformat(),
+        "source": "synthetic gateway catalogue",
+        "models": ["zen"],
+    }
+    candidates = validate_free_gateway_evidence(
+        manifest=gateway_manifest,
+        expected_config_routes=gateway_projection,
+        gateway_models=gateway,
+        trusted_endpoints={"https://opencode.ai/zen/v1": "opencode"},
+        trusted_native={},
+        models_dev={
+            "observed_at": observed.isoformat(),
+            "expires_at": (observed + timedelta(minutes=5)).isoformat(),
+            "source": "models.dev",
+            "models": {
+                "opencode": {
+                    "models": {
+                        "big-pickle-free": {"reasoning": True, "tool_call": True}
+                    }
+                }
+            },
+        },
+        now=observed + timedelta(seconds=3),
+    )
+    assert [candidate.serving_ref for candidate in candidates] == ["zen"]
+
+
 def test_live_catalogue_manifest_reaches_free_gateway_validator(monkeypatch):
     observed = datetime(2026, 10, 30, tzinfo=timezone.utc)
     ticks = iter((observed, observed + timedelta(seconds=3)))
@@ -842,6 +912,9 @@ def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
             ref.split("/", 1)[1] for ref in verified if ref.startswith("openai/")
         ],
         "ollama-cloud": [],
+        "opencode": [
+            ref.split("/", 1)[1] for ref in verified if ref.startswith("opencode/")
+        ],
     }
     monkeypatch.setattr(
         litellm_config,

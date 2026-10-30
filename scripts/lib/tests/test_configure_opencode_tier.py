@@ -51,7 +51,7 @@ def test_dynamic_tier_uses_runtime_and_preserves_installed_custom_state(
         },
     }
 
-    def resolve(registry, requested, environ):
+    def resolve(registry, requested, environ, **kwargs):
         return prepare_dynamic_free_registry(
             registry,
             requested,
@@ -59,6 +59,7 @@ def test_dynamic_tier_uses_runtime_and_preserves_installed_custom_state(
             metadata_fetch=lambda: snapshot,
             route_fetch=lambda *_: ["big-pickle"],
             clock=lambda: now,
+            **kwargs,
         )
 
     target = tmp_path / "oh-my-opencode-slim.json"
@@ -83,6 +84,138 @@ def test_dynamic_tier_uses_runtime_and_preserves_installed_custom_state(
     assert result["presets"][preset]["observer"]["model"] == "opencode/big-pickle"
     assert (
         result["council"]["presets"][preset]["beta"]["model"] == "opencode/big-pickle"
+    )
+
+
+def test_real_dynamic_tier_child_routes_validated_gateway_alias(tmp_path, monkeypatch):
+    from free_route_manifest import build_manifest
+
+    alias = "zen"
+    route = {
+        "model_name": alias,
+        "litellm_params": {
+            "model": "opencode/big-pickle-free",
+            "api_base": "https://opencode.ai/zen/v1",
+        },
+        "_route_provenance": {
+            "upstream_host": "opencode",
+            "upstream_model_id": "big-pickle-free",
+            "metadata_model_id": "big-pickle-free",
+            "metadata_provider": "opencode",
+            "source_kind": "live-catalogue",
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).isoformat(),
+        },
+    }
+    manifest = build_manifest([route])
+    evidence_dir = tmp_path / "litellm"
+    (evidence_dir / "clients").mkdir(parents=True)
+    (evidence_dir / "config.yaml").write_text(
+        "model_list:\n  - model_name: zen\n    litellm_params:\n      model: opencode/big-pickle-free\n      api_base: https://opencode.ai/zen/v1\n"
+    )
+    (evidence_dir / "free-route-manifest.json").write_text(json.dumps(manifest))
+    (evidence_dir / "free-route-config.json").write_text(
+        json.dumps(
+            {
+                "config_binding_sha256": manifest["config_binding_sha256"],
+                "routes": [route],
+            }
+        )
+    )
+    key_file = evidence_dir / "clients/opencode.key"
+    key_file.write_text("synthetic")
+    key_file.chmod(0o600)
+    target = tmp_path / "opencode"
+    target.mkdir()
+    (target / "opencode.json").write_text("{}")
+    target_file = target / "oh-my-opencode-slim.json"
+    target_file.write_text("{}")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(target))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("LITELLM_ROOT", str(evidence_dir))
+    key_path = tmp_path / ".local/share/litellm/clients"
+    key_path.mkdir(parents=True)
+    client_key = key_path / "opencode.key"
+    client_key.write_text("synthetic")
+    client_key.chmod(0o600)
+    monkeypatch.setattr(configure_tier, "get_litellm_proxy_mode", lambda: True)
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(
+        "model_catalogues.get_catalogue",
+        lambda *args, **kwargs: {"data": [{"id": "zen"}]},
+    )
+    real_prepare = configure_tier.prepare_dynamic_free_registry
+
+    def prepare(registry, requested, environ):
+        snapshot = {
+            "source": "models.dev",
+            "observed_at": now.isoformat(),
+            "expires_at": (now + timedelta(minutes=5)).isoformat(),
+            "models": {
+                "opencode": {
+                    "models": {
+                        "big-pickle-free": {
+                            "reasoning": True,
+                            "tool_call": True,
+                            "modalities": {
+                                "input": ["text", "image"],
+                                "output": ["text"],
+                            },
+                        }
+                    }
+                }
+            },
+        }
+        return real_prepare(
+            registry,
+            requested,
+            environ,
+            metadata_fetch=lambda: snapshot,
+            route_fetch=lambda *_: ["big-pickle-free"],
+            clock=lambda: now,
+            gateway_evidence={
+                "manifest": manifest,
+                "expected_config_routes": [route],
+                "gateway_models": {
+                    "source": "fixture",
+                    "observed_at": now.isoformat(),
+                    "expires_at": (now + timedelta(minutes=5)).isoformat(),
+                    "models": ["zen"],
+                },
+                "trusted_endpoints": {"https://opencode.ai/zen/v1": "opencode"},
+                "trusted_native": {},
+            },
+        )
+
+    monkeypatch.setattr(configure_tier, "prepare_dynamic_free_registry", prepare)
+    monkeypatch.setattr(configure_tier, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        configure_tier, "load_effective_opencode_config", lambda _dir: {}
+    )
+    original_spec = configure_tier.importlib.util.spec_from_file_location
+    monkeypatch.setattr(
+        configure_tier.importlib.util,
+        "spec_from_file_location",
+        lambda name, path: original_spec(name, path),
+    )
+    helper_spec = importlib.util.spec_from_file_location(
+        "configure_opencode_transport", REPO_ROOT / "scripts/configure-opencode.py"
+    )
+    assert helper_spec is not None and helper_spec.loader is not None
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
+    monkeypatch.setattr(helper, "apply_litellm_slim_gate", lambda slim, *_: slim)
+    configure_tier.orchestrate_tier_switch(
+        "omo-slim-opencode-zen-free", True, [], dry_run=False
+    )
+    output = json.loads(target_file.read_text())
+    assert (
+        output["presets"]["omo-slim-opencode-zen-free"]["observer"]["model"]
+        == "litellm/zen"
     )
 
 
