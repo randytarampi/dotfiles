@@ -184,6 +184,241 @@ def test_copilot_cli_writer_materializes_private_key(tmp_path):
     assert key.stat().st_mode & 0o777 == 0o600
 
 
+def test_client_key_writer_refuses_symlinked_ancestor_without_touching_target(
+    tmp_path,
+):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    service = tmp_path / "linked" / "service.env"
+    service.parent.symlink_to(outside, target_is_directory=True)
+    service_file = outside / "service.env"
+    service_file.write_text("LITELLM_CODEX_KEY='secret'\n")
+    before = service_file.read_bytes()
+
+    configure_litellm._write_codex_key(service)
+
+    assert not (outside / "clients").exists()
+    assert service_file.read_bytes() == before
+
+
+def test_client_key_writer_refuses_destination_symlink_without_touching_target(
+    tmp_path,
+):
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_CODEX_KEY='secret'\n")
+    outside = tmp_path / "outside.key"
+    outside.write_bytes(b"preserve me")
+    clients = tmp_path / "clients"
+    clients.mkdir()
+    (clients / "codex.key").symlink_to(outside)
+
+    configure_litellm._write_codex_key(service)
+
+    assert outside.read_bytes() == b"preserve me"
+    assert (clients / "codex.key").is_symlink()
+
+
+def test_client_key_writer_repeat_and_rotation_match_canonical_service_key(tmp_path):
+    service = tmp_path / "service.env"
+    key = tmp_path / "clients" / "codex.key"
+    service.write_text("LITELLM_CODEX_KEY='first-secret'\n")
+
+    configure_litellm._write_codex_key(service)
+    first_bytes = key.read_bytes()
+    configure_litellm._write_codex_key(service)
+    assert key.read_bytes() == first_bytes
+
+    service.write_text("LITELLM_CODEX_KEY='rotated-secret'\n")
+    configure_litellm._write_codex_key(service)
+    assert key.read_text(encoding="utf-8") == "rotated-secret"
+    assert key.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize(
+    "disabled_client,disabled_mode,expected",
+    [
+        (None, None, {"codex", "claude", "copilot-cli"}),
+        ("codex", "gate", {"claude", "copilot-cli"}),
+        ("claude", "gate", {"codex", "copilot-cli"}),
+        ("copilot-cli", "gate", {"codex", "claude"}),
+        ("codex", "absent", {"claude", "copilot-cli"}),
+        ("claude", "absent", {"codex", "copilot-cli"}),
+        ("copilot-cli", "absent", {"codex", "claude"}),
+    ],
+)
+def test_codex_claude_copilot_gate_overlap_provisions_only_enabled_installed(
+    monkeypatch, tmp_path, disabled_client, disabled_mode, expected
+):
+    calls = _fake_gateway(monkeypatch)
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_USE_LITELLM_PROXY")
+    client_gates = {
+        "codex": "DOTFILES_RUN_CODEX_SETUP",
+        "claude": "DOTFILES_RUN_CLAUDE_SETUP",
+        "copilot-cli": "DOTFILES_RUN_COPILOT_SETUP",
+    }
+    for gate in client_gates.values():
+        monkeypatch.setenv(gate, "1")
+    for gate in (
+        "DOTFILES_RUN_OPENCODE_SETUP",
+        "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_RUN_OPENWEBUI_SETUP",
+        "DOTFILES_RUN_JUNIE_CLI_SETUP",
+    ):
+        monkeypatch.setenv(gate, "0")
+    if disabled_client and disabled_mode == "gate":
+        monkeypatch.setenv(client_gates[disabled_client], "0")
+    installed = {"codex": "codex", "claude": "claude", "copilot-cli": "copilot"}
+
+    def which(binary):
+        return (
+            f"/fake-bin/{binary}"
+            if any(
+                client != disabled_client or disabled_mode != "absent"
+                for client, name in installed.items()
+                if name == binary
+            )
+            else None
+        )
+
+    monkeypatch.setattr(configure_litellm.shutil, "which", which)
+    service = tmp_path / "service.env"
+    assert configure_litellm.provision_app_keys("master", service)
+
+    aliases = {
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    }
+    assert aliases == expected
+    for client in installed:
+        key_file = tmp_path / "clients" / f"{client}.key"
+        assert key_file.is_file() is (client in expected)
+
+
+@pytest.mark.parametrize(
+    "client,env_name",
+    [
+        ("opencode", "LITELLM_OPENCODE_KEY"),
+        ("pi", "LITELLM_PI_KEY"),
+        ("openwebui", "LITELLM_OPENWEBUI_KEY"),
+        ("junie", "LITELLM_JUNIE_KEY"),
+        ("codex", "LITELLM_CODEX_KEY"),
+        ("claude", "LITELLM_CLAUDE_KEY"),
+        ("copilot-cli", "LITELLM_COPILOT_CLI_KEY"),
+    ],
+)
+def test_all_provisionable_clients_write_exact_private_key_path(
+    tmp_path, client, env_name
+):
+    service = tmp_path / "service.env"
+    service.write_text(f"{env_name}='client-secret'\n")
+    row = next(row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client)
+
+    configure_litellm._write_provisioned_client_keys([row], service, dry_run=False)
+
+    key = tmp_path / "clients" / f"{client}.key"
+    assert key.read_text(encoding="utf-8") == "client-secret"
+    assert key.stat().st_mode & 0o777 == 0o600
+    configure_litellm._write_provisioned_client_keys([row], service, dry_run=False)
+    assert key.read_bytes() == b"client-secret"
+    service.write_text(f"{env_name}='rotated-secret'\n")
+    configure_litellm._write_provisioned_client_keys([row], service, dry_run=False)
+    assert key.read_bytes() == b"rotated-secret"
+    assert key.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize(
+    "client,binary,enable_gates",
+    [
+        ("codex", "codex", ("DOTFILES_RUN_CODEX_SETUP", "DOTFILES_USE_LITELLM_PROXY")),
+        (
+            "claude",
+            "claude",
+            ("DOTFILES_RUN_CLAUDE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+        ),
+        (
+            "copilot-cli",
+            "copilot",
+            ("DOTFILES_RUN_COPILOT_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+        ),
+        ("opencode", "opencode", ("DOTFILES_RUN_OPENCODE_SETUP",)),
+        ("pi", "pi", ("DOTFILES_RUN_PI_SETUP", "DOTFILES_USE_LITELLM_PROXY")),
+    ],
+)
+@pytest.mark.parametrize("disabled", ["none", "setup", "enable", "proxy", "installed"])
+def test_cli_provisioning_requires_gates_and_installed_binary(
+    monkeypatch, tmp_path, client, binary, enable_gates, disabled
+):
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    for gate in enable_gates:
+        monkeypatch.setenv(gate, "1")
+    installed = disabled != "installed"
+    if disabled == "setup":
+        monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+    elif disabled == "enable":
+        monkeypatch.setenv(enable_gates[0], "0")
+    elif disabled == "proxy" and "DOTFILES_USE_LITELLM_PROXY" in enable_gates:
+        monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    elif disabled == "proxy":
+        monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    elif disabled == "installed":
+        installed = False
+
+    monkeypatch.setattr(
+        configure_litellm.shutil,
+        "which",
+        lambda name: f"/fake-bin/{name}" if installed and name == binary else None,
+    )
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    aliases = [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ]
+    expected = disabled == "none" or (
+        disabled == "proxy" and client in {"opencode", "claude"}
+    )
+    assert (client in aliases) is expected
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_registry_gate_is_enforced_independently(monkeypatch, enabled):
+    row = dict(
+        next(r for r in litellm_config.CLIENT_REGISTRY if r["client"] == "codex")
+    )
+    row["setup_gates"] = ["TEST_REGISTRY_ONLY=1"]
+    monkeypatch.setenv("TEST_REGISTRY_ONLY", "1" if enabled else "0")
+    for gate in configure_litellm._CLIENT_ENABLE_GATES["codex"]:
+        monkeypatch.setenv(gate, "1")
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _: "/fake/codex")
+    accepted, reason = configure_litellm._client_provisioning_state(row)
+    assert accepted is enabled
+    assert reason == ("eligible" if enabled else "setup gate disabled")
+
+
+def test_provisioning_authorities_have_exact_seven_client_parity():
+    provisioned = {
+        row["client"]
+        for row in litellm_config.CLIENT_REGISTRY
+        if row["credential_policy"].startswith("provision")
+    }
+    expected = {
+        "opencode",
+        "pi",
+        "openwebui",
+        "junie",
+        "codex",
+        "claude",
+        "copilot-cli",
+    }
+    assert provisioned == expected
+    assert set(litellm_config.APP_KEYS) == expected
+    assert set(configure_litellm.PROVISIONED_CLIENT_KEY_WRITERS) == expected
+    assert set(configure_litellm._CLIENT_ENABLE_GATES) == expected
+    for row in litellm_config.CLIENT_REGISTRY:
+        if row["client"] in expected:
+            assert row["env_name"] == litellm_config.APP_KEYS[row["client"]]
+            assert configure_litellm.PROVISIONED_CLIENT_KEY_WRITERS[row["client"]]
+
+
 def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):
     assert (
         next(row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "junie")[
@@ -231,6 +466,29 @@ def test_claude_shared_gateway_gate_is_independently_required(monkeypatch, tmp_p
     assert [
         call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
     ] == ["claude"]
+
+
+def test_strict_provisioning_bypasses_install_probe_but_not_client_gates(
+    monkeypatch, tmp_path
+):
+    calls = _fake_gateway(monkeypatch)
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_CODEX_SETUP")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: None)
+
+    assert configure_litellm.provision_app_keys(
+        "master", tmp_path / "service.env", strict=True
+    )
+    assert [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ] == ["codex"]
+
+    calls.clear()
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "0")
+    assert configure_litellm.provision_app_keys(
+        "master", tmp_path / "service.env", strict=True
+    )
+    assert [call for call in calls if call[0].endswith("/key/generate")] == []
 
 
 def test_claude_strict_key_check_uses_attribution_and_labels_unqualified_messages(
