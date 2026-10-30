@@ -3,10 +3,12 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 import tier_resolve
+import pytest
 
 TESTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TESTS_DIR.parents[2]
@@ -23,6 +25,114 @@ JETBRAINS_SPEC = importlib.util.spec_from_file_location(
 assert JETBRAINS_SPEC is not None and JETBRAINS_SPEC.loader is not None
 jetbrains_profiles = importlib.util.module_from_spec(JETBRAINS_SPEC)
 JETBRAINS_SPEC.loader.exec_module(jetbrains_profiles)
+
+
+@pytest.mark.parametrize("preset", ["free", "omo-slim-opencode-zen-free"])
+def test_dynamic_tier_uses_runtime_and_preserves_installed_custom_state(
+    tmp_path, preset
+):
+    from free_preset_runtime import prepare_dynamic_free_registry
+
+    now = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    snapshot = {
+        "source": "fixture",
+        "observed_at": now.isoformat(),
+        "expires_at": (now + timedelta(hours=1)).isoformat(),
+        "models": {
+            "opencode": {
+                "models": {
+                    "big-pickle": {
+                        "reasoning": True,
+                        "tool_call": True,
+                        "modalities": {"input": ["text", "image"], "output": ["text"]},
+                    }
+                }
+            }
+        },
+    }
+
+    def resolve(registry, requested, environ):
+        return prepare_dynamic_free_registry(
+            registry,
+            requested,
+            environ,
+            metadata_fetch=lambda: snapshot,
+            route_fetch=lambda *_: ["big-pickle"],
+            clock=lambda: now,
+        )
+
+    target = tmp_path / "oh-my-opencode-slim.json"
+    target.write_text(json.dumps({"preset": preset, "custom": {"keep": 7}}))
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "HOME": str(tmp_path),
+                "OPENCODE_DIR": str(tmp_path),
+                "OPENCODE_API_KEY": "synthetic",
+                "DOTFILES_USE_LITELLM_PROXY": "0",
+            },
+            clear=True,
+        ),
+        patch.object(configure_tier, "prepare_dynamic_free_registry", resolve),
+        patch.object(configure_tier, "list_local_ollama_models", return_value=[]),
+    ):
+        configure_tier.orchestrate_tier_switch(preset, False, [], dry_run=False)
+    result = json.loads(target.read_text())
+    assert result["custom"] == {"keep": 7}
+    assert result["presets"][preset]["observer"]["model"] == "opencode/big-pickle"
+    assert (
+        result["council"]["presets"][preset]["beta"]["model"] == "opencode/big-pickle"
+    )
+
+
+@pytest.mark.parametrize("preset", ["free", "omo-slim-opencode-zen-free"])
+@pytest.mark.parametrize("existing", [False, True])
+def test_dynamic_tier_evidence_refusal_preserves_directory_snapshot(
+    tmp_path, preset, existing
+):
+    from free_preset_runtime import DynamicFreeRegistryError
+
+    directory = tmp_path / "config"
+    target = directory / "oh-my-opencode-slim.json"
+    if existing:
+        directory.mkdir()
+        target.write_bytes(b'{"custom":"preserve"}\r\n')
+        target.chmod(0o640)
+    before = (
+        (target.read_bytes(), target.stat().st_mode, target.stat().st_mtime_ns)
+        if existing
+        else None
+    )
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "HOME": str(tmp_path),
+                "OPENCODE_DIR": str(directory),
+                "DOTFILES_USE_LITELLM_PROXY": "0",
+            },
+            clear=True,
+        ),
+        patch.object(
+            configure_tier,
+            "prepare_dynamic_free_registry",
+            side_effect=DynamicFreeRegistryError("unknown evidence"),
+        ),
+        patch.object(configure_tier, "list_local_ollama_models") as discovery,
+    ):
+        with pytest.raises(SystemExit, match="1"):
+            configure_tier.orchestrate_tier_switch(preset, False, [], dry_run=False)
+    discovery.assert_not_called()
+    if existing:
+        assert (
+            target.read_bytes(),
+            target.stat().st_mode,
+            target.stat().st_mtime_ns,
+        ) == before
+        assert list(directory.iterdir()) == [target]
+    else:
+        assert not directory.exists()
 
 
 def test_council_null_preset_values_are_ignored_without_crashing(tmp_path):
@@ -167,10 +277,15 @@ def test_get_available_tiers_includes_deprecated_aliases():
         assert canonical in tiers
 
 
-def test_disabled_tier_rejected_before_discovery_or_filesystem_writes(tmp_path):
+def test_dynamic_free_unavailable_refused_before_writes(tmp_path, monkeypatch):
     target = tmp_path / "oh-my-opencode-slim.json"
+
+    def refuse(*args, **kwargs):
+        raise ValueError("no evidence")
+
     with (
         patch.dict(os.environ, {"OPENCODE_DIR": str(tmp_path)}),
+        patch.object(configure_tier, "prepare_dynamic_free_registry", refuse),
         patch.object(configure_tier, "list_local_ollama_models") as discovery,
         patch.object(configure_tier.shutil, "copy2") as copy,
     ):
@@ -179,10 +294,23 @@ def test_disabled_tier_rejected_before_discovery_or_filesystem_writes(tmp_path):
         except SystemExit as error:
             assert error.code == 1
         else:
-            raise AssertionError("disabled preset was accepted")
+            raise AssertionError("unresolved dynamic free preset was accepted")
     discovery.assert_not_called()
     copy.assert_not_called()
     assert not target.exists()
+
+
+def test_dynamic_free_merge_preserves_custom_settings_and_original_snapshot():
+    target = {"custom": {"sentinel": True}, "presets": {"local": {}}}
+    resolved = {
+        "presets": {"free": {"orchestrator": {"model": "poolside/x"}}},
+        "_tiers": {"free": {"fallback": {}}},
+        "council": {"default_preset": "local"},
+    }
+    merged = configure_tier._merge_dynamic_free_registry(target, resolved, "free")
+    assert merged["custom"] == {"sentinel": True}
+    assert target == {"custom": {"sentinel": True}, "presets": {"local": {}}}
+    assert merged["presets"]["free"]["orchestrator"]["model"] == "poolside/x"
 
 
 def test_disabled_fallback_loaded_from_home_env_rejected_before_writes(tmp_path):

@@ -87,6 +87,8 @@ from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap
     conservative_limit,
     PROVIDER_ENDPOINTS,
 )
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS
+from free_preset_runtime import prepare_dynamic_free_registry
 
 DEFAULT_CADDY_ZONES_CONFIG = "~/.config/caddy/ddns-zones.json"
 
@@ -374,11 +376,21 @@ def apply_litellm_client_gate(config: dict) -> None:
         config[field] = rewrite_models(config[field])
 
 
-def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dict:
+def apply_litellm_slim_gate(
+    slim: dict, config: dict, previous_slim=None, *, preserve_dynamic=False
+) -> dict:
     """Route every Slim selection using the gateway inventory built for OpenCode."""
     if not get_litellm_proxy_mode():
         return slim
     gateway = config.get("provider", {}).get("litellm", {}).get("models", {})
+    dynamic_selected_refs = {
+        value["model"]
+        for preset in ("free", "omo-slim-opencode-zen-free")
+        for value in slim.get("presets", {}).get(preset, {}).values()
+        if isinstance(value, dict)
+        and isinstance(value.get("model"), str)
+        and value["model"].startswith("litellm/")
+    }
     available = {
         model.get("id") for model in gateway.values() if isinstance(model, dict)
     }
@@ -445,13 +457,19 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
             "anthropic": "meridian",
             "cohere": "cohere_chat",
         }.get(owner, owner)
+        exact_alias = f"{owner_for_lookup}/{model}"
+        matches = [item for item in available if item == exact_alias]
+        if not matches and owner == "anthropic":
+            direct_alias = f"anthropic/{model}"
+            matches = [item for item in available if item == direct_alias]
         canonical_model = canonical_allowlist_key(model)
-        matches = [
-            item
-            for item in available
-            if item.split("/", 1)[0] == owner_for_lookup
-            and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
-        ]
+        if not matches:
+            matches = [
+                item
+                for item in available
+                if item.split("/", 1)[0] == owner_for_lookup
+                and canonical_allowlist_key(item.split("/", 1)[1]) == canonical_model
+            ]
         if not matches and owner == "anthropic":
             matches = [
                 item
@@ -503,7 +521,13 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
             result = {}
             for key, child in node.items():
                 if key in model_fields:
-                    result[key] = rewrite_model(child)
+                    result[key] = (
+                        child
+                        if preserve_dynamic
+                        and key == "model"
+                        and child in dynamic_selected_refs
+                        else rewrite_model(child)
+                    )
                 elif key == "fallback" and isinstance(child, dict):
                     result[key] = {
                         role: (
@@ -523,11 +547,110 @@ def apply_litellm_slim_gate(slim: dict, config: dict, previous_slim=None) -> dic
     return visit(slim)
 
 
-def prepare_config_candidates(config, slim_data, previous_slim=None):
+def route_dynamic_free_registry(registry, audit, preset, config):
+    """Route only dynamically selected free references through validated aliases."""
+    if not get_litellm_proxy_mode():
+        return registry
+    selected = audit.get("presets", {}).get(preset, {}).get("selected", {})
+    if not isinstance(selected, dict) or not selected:
+        raise RuntimeError("Dynamic free preset audit has no selected routes")
+    key_path = Path("~/.local/share/litellm/clients/opencode.key").expanduser()
+    if not key_path.is_file() or key_path.is_symlink():
+        raise RuntimeError(f"OpenCode LiteLLM key file is unavailable: {key_path}")
+    if os.environ.get("DOTFILES_RUN_LITELLM_SETUP") != "1":
+        raise RuntimeError("LiteLLM proxy mode requires the LiteLLM setup gate")
+    base_url = f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1"
+    aliases = set()
+    for serving_ref in selected.values():
+        if not isinstance(serving_ref, str) or not serving_ref:
+            raise RuntimeError(
+                "Dynamic free audit contains an invalid serving reference"
+            )
+        aliases.add(serving_ref)
+    sections = [
+        registry["presets"][preset],
+        registry.get("_tiers", {}).get(preset, {}),
+        registry.get("council", {}).get("presets", {}).get(preset, {}),
+    ]
+
+    def collect(node):
+        if isinstance(node, dict):
+            for field, value in node.items():
+                if field in {"model", "primaryModel"} and isinstance(value, str):
+                    aliases.add(value)
+                elif field == "fallback" and isinstance(value, dict):
+                    for chain in value.values():
+                        if isinstance(chain, list):
+                            aliases.update(chain)
+                else:
+                    collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    for section in sections:
+        collect(section)
+    models = {}
+    for alias in sorted(aliases):
+        models[alias] = {"id": alias, "name": alias}
+    config["provider"] = {
+        "litellm": {
+            "name": "LiteLLM",
+            "npm": "@ai-sdk/openai-compatible",
+            "options": {
+                "baseURL": base_url,
+                "apiKey": "{file:" + str(key_path.resolve()) + "}",
+            },
+            "models": models,
+        }
+    }
+
+    def rewrite(node):
+        if isinstance(node, dict):
+            result = {}
+            for key, child in node.items():
+                if key in {"model", "primaryModel"} and isinstance(child, str):
+                    result[key] = f"litellm/{child}" if child in aliases else child
+                elif key == "fallback" and isinstance(child, dict):
+                    result[key] = {
+                        role: (
+                            [
+                                f"litellm/{item}" if item in aliases else item
+                                for item in chain
+                            ]
+                            if isinstance(chain, list)
+                            else chain
+                        )
+                        for role, chain in child.items()
+                    }
+                else:
+                    result[key] = rewrite(child)
+            return result
+        if isinstance(node, list):
+            return [rewrite(item) for item in node]
+        return node
+
+    import copy
+
+    result = copy.deepcopy(registry)
+    result["presets"][preset] = rewrite(sections[0])
+    result["_tiers"][preset] = rewrite(sections[1])
+    result["council"]["presets"][preset] = rewrite(sections[2])
+    return result
+
+
+def prepare_config_candidates(
+    config, slim_data, previous_slim=None, *, preserve_dynamic=False
+):
     """Validate both generated payloads before the caller installs either."""
-    slim_data = without_disabled_presets(slim_data)
-    apply_litellm_client_gate(config)
-    slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
+    if not preserve_dynamic:
+        slim_data = without_disabled_presets(slim_data)
+    if preserve_dynamic and get_litellm_proxy_mode():
+        # The selected dynamic routes were already validated against gateway evidence.
+        slim_candidate = slim_data
+    else:
+        apply_litellm_client_gate(config)
+        slim_candidate = apply_litellm_slim_gate(slim_data, config, previous_slim)
     return (
         json.dumps(config, indent=2) + "\n",
         json.dumps(slim_candidate, indent=2) + "\n",
@@ -540,7 +663,12 @@ def prepare_project_candidate(config):
 
 
 def prepare_tier_candidate(
-    config_dir, tier_args, consumer_config, base_slim=None, previous_slim=None
+    config_dir,
+    tier_args,
+    consumer_config,
+    base_slim=None,
+    previous_slim=None,
+    preserve_dynamic=False,
 ):
     """Run the tier writer with a private, owner-only consumer config.
 
@@ -578,7 +706,11 @@ def prepare_tier_candidate(
         if not staged_path.is_file():
             raise RuntimeError("tier staging did not produce Slim config")
         staged_slim = json.loads(staged_path.read_text(encoding="utf-8"))
-        routed = apply_litellm_slim_gate(staged_slim, consumer_config, previous_slim)
+        routed = (
+            staged_slim
+            if preserve_dynamic and get_litellm_proxy_mode()
+            else apply_litellm_slim_gate(staged_slim, consumer_config, previous_slim)
+        )
         return json.dumps(routed, indent=2) + "\n"
 
 
@@ -703,7 +835,9 @@ def main():
     add_model_override_args(parser)
     add_min_reasoning_embedding_arg(parser)
     available_tiers = [
-        name for name in get_available_tiers() if name not in DISABLED_PRESETS
+        name
+        for name in get_available_tiers()
+        if name not in DISABLED_PRESETS or name in DYNAMIC_FREE_PRESETS
     ]
     parser.add_argument(
         "--preset",
@@ -834,10 +968,26 @@ def main():
 
     args.preset = requested_preset or "pro-plus"
     try:
-        reject_disabled_preset(args.preset)
+        if args.preset not in DYNAMIC_FREE_PRESETS:
+            reject_disabled_preset(args.preset)
         reject_disabled_preset(os.environ.get("DOTFILES_LOCAL_FALLBACK_PRESET", ""))
     except ValueError as error:
         parser.error(str(error))
+
+    dynamic_registry = None
+    dynamic_audit = None
+    if args.preset in DYNAMIC_FREE_PRESETS:
+        try:
+            with open(get_slim_config_path(), encoding="utf-8") as source_file:
+                source_registry = json.load(source_file)
+            dynamic_registry, dynamic_audit = prepare_dynamic_free_registry(
+                source_registry, [args.preset], os.environ
+            )
+        except Exception as error:
+            logger.critical(
+                "Unable to resolve dynamic free preset before writes: %s", error
+            )
+            sys.exit(1)
 
     if args.dry_run:
         logger.info(
@@ -1054,6 +1204,12 @@ def main():
         # anthropic, but a project `anthropic` preset still works).
         try:
             needed_providers = get_preset_providers(args.preset, get_slim_config_path())
+            if dynamic_registry is not None:
+                needed_providers = {
+                    ref["model"].split("/", 1)[0]
+                    for ref in dynamic_registry["presets"][args.preset].values()
+                    if isinstance(ref, dict) and isinstance(ref.get("model"), str)
+                }
         except Exception as e:
             logger.warning(
                 f"Could not derive required providers for preset "
@@ -1128,6 +1284,30 @@ def main():
                 },
                 "options": {"baseURL": "https://api.githubcopilot.com"},
             }
+
+        if dynamic_registry is not None:
+            selected_roles = dynamic_registry["presets"][args.preset]
+            dynamic_models = {}
+            for role in selected_roles.values():
+                ref = role.get("model") if isinstance(role, dict) else None
+                if isinstance(ref, str) and "/" in ref:
+                    provider, model_id = ref.split("/", 1)
+                    dynamic_models.setdefault(provider, set()).add(model_id)
+            for provider, model_ids in dynamic_models.items():
+                endpoint = PROVIDER_ENDPOINTS.get(provider)
+                if endpoint:
+                    config["provider"][provider] = {
+                        "models": {
+                            model_id: build_model_entry(
+                                model_id, models_dev_data, provider
+                            )
+                            for model_id in model_ids
+                        },
+                        "options": {
+                            "baseURL": endpoint["baseUrl"],
+                            "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
+                        },
+                    }
 
         if meridian_plugin_path:
             config["plugin"].append(meridian_plugin_path)
@@ -1242,6 +1422,44 @@ def main():
                     "options": {"baseURL": "https://api.githubcopilot.com"},
                 }
             config["disabled_providers"].extend(["anthropic", "ollama-cloud", "ollama"])
+        elif args.preset in DYNAMIC_FREE_PRESETS:
+            selected_roles = dynamic_registry["presets"][args.preset]
+            dynamic_models = {}
+            for role in selected_roles.values():
+                ref = role.get("model") if isinstance(role, dict) else None
+                if isinstance(ref, str) and "/" in ref:
+                    provider, model_id = ref.split("/", 1)
+                    dynamic_models.setdefault(provider, set()).add(model_id)
+            needed_providers = set(dynamic_models)
+            for provider, model_ids in dynamic_models.items():
+                endpoint = PROVIDER_ENDPOINTS.get(provider)
+                if endpoint:
+                    config["provider"][provider] = {
+                        "models": {
+                            model_id: build_model_entry(
+                                model_id, models_dev_data, provider
+                            )
+                            for model_id in model_ids
+                        },
+                        "options": {
+                            "baseURL": endpoint["baseUrl"],
+                            "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
+                        },
+                    }
+            config["disabled_providers"].extend(
+                provider
+                for provider in (
+                    "openai",
+                    "anthropic",
+                    "ollama-cloud",
+                    "ollama",
+                    "github-copilot",
+                    "google",
+                    "openrouter",
+                    "opencode",
+                )
+                if provider not in needed_providers
+            )
         elif args.preset == "omo-slim-opencode-zen-free":
             if "openai" in global_needed_providers and openai_models:
                 config["provider"]["openai"] = {
@@ -1378,6 +1596,11 @@ def main():
         if not config["mcp"]:
             del config["mcp"]
 
+    if dynamic_registry is not None and get_litellm_proxy_mode():
+        dynamic_registry = route_dynamic_free_registry(
+            dynamic_registry, dynamic_audit, args.preset, config
+        )
+
     server_config = build_opencode_server_config()
     if server_config:
         existing_server = config.get("server")
@@ -1391,7 +1614,11 @@ def main():
 
     if args.mode == "project":
         try:
-            project_candidate = prepare_project_candidate(config)
+            project_candidate = (
+                config
+                if dynamic_registry is not None and get_litellm_proxy_mode()
+                else prepare_project_candidate(config)
+            )
             opencode_candidate = json.dumps(project_candidate, indent=2) + "\n"
         except Exception as e:
             logger.critical(f"Failed to prepare OpenCode project config: {e}")
@@ -1438,7 +1665,12 @@ def main():
 
     try:
         with open(presets_json_path, "r", encoding="utf-8") as f:
-            slim_data = without_disabled_presets(json.load(f))
+            slim_data = json.load(f)
+        if dynamic_registry is not None:
+            slim_data = dynamic_registry
+            slim_data.setdefault("council", {})["default_preset"] = args.preset
+        else:
+            slim_data = without_disabled_presets(slim_data)
         previous_slim_path = os.path.join(config_dir_path, "oh-my-opencode-slim.json")
         previous_slim = None
         if os.path.isfile(previous_slim_path):
@@ -1450,7 +1682,10 @@ def main():
                     "Cannot safely inspect installed Slim config; refusing overwrite"
                 ) from None
         opencode_candidate, slim_candidate = prepare_config_candidates(
-            config, slim_data, previous_slim
+            config,
+            slim_data,
+            previous_slim,
+            preserve_dynamic=dynamic_registry is not None,
         )
         tier_candidate = None
         if "tier" not in skipped and not args.dry_run:
@@ -1471,6 +1706,7 @@ def main():
                 config,
                 base_slim=slim_data,
                 previous_slim=previous_slim,
+                **({"preserve_dynamic": True} if dynamic_registry is not None else {}),
             )
     except Exception as e:
         logger.critical(f"Failed to prepare OpenCode Slim config: {e}")

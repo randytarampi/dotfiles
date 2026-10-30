@@ -48,6 +48,9 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
 from litellm_aliases import resolve_alias  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 import pi_profiles  # noqa: E402
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
+from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
+from unavailable_presets import DISABLED_PRESETS  # noqa: E402
 from model_catalogues import (  # noqa: E402 -- local import follows bootstrap.
     get_catalogue,
 )
@@ -342,7 +345,7 @@ def litellm_cloud_aliases(port="4000"):
             routes["openrouter"][identity.removeprefix("openrouter/")] = wire
         elif identity.startswith("opencode/"):
             routes["opencode"][identity.removeprefix("opencode/")] = wire
-    routes["_available"] = available
+    routes["_available"] = {item: item for item in available}
     return routes
 
 
@@ -598,7 +601,11 @@ def main():
     add_model_override_args(p)
     add_min_reasoning_embedding_arg(p)
     p.add_argument("--mode", choices=["global", "project"], default="global")
-    available_tiers = get_available_tiers()
+    available_tiers = [
+        tier
+        for tier in get_available_tiers()
+        if tier not in DISABLED_PRESETS or tier in DYNAMIC_FREE_PRESETS
+    ]
     p.add_argument("--preset", choices=available_tiers, required=True)
     p.add_argument(
         "--skip",
@@ -615,6 +622,11 @@ def main():
     args = p.parse_args()
 
     if args.profiles_only:
+        if args.preset in DYNAMIC_FREE_PRESETS:
+            logger.critical(
+                "Dynamic free presets are not supported with --profiles-only"
+            )
+            return 1
         unsupported = []
         if args.mode != "global":
             unsupported.append("--mode")
@@ -634,9 +646,17 @@ def main():
             unsupported.append("--ollama-base-url")
         if args.no_backup:
             unsupported.append("--no-backup")
+        if args.preset in DYNAMIC_FREE_PRESETS:
+            unsupported.append(
+                "dynamic free preset (profiles-only requires current selection evidence)"
+            )
         if unsupported:
             p.error("--profiles-only does not support: " + ", ".join(unsupported))
         registry = tier_registry.load_registry(SLIM)
+        if args.preset in DYNAMIC_FREE_PRESETS:
+            registry, _ = prepare_dynamic_free_registry(
+                registry, [args.preset], os.environ
+            )
         try:
             profile = pi_profiles.build_profile(
                 registry, args.preset, {}, ROLE_TO_BUILTIN
@@ -685,6 +705,17 @@ def main():
         args.role_models = _role_models_from_env()
     registry = copy.deepcopy(tier_registry.load_registry(SLIM))
     preset = args.preset or registry.get("preset", "pro-plus")
+    dynamic_audit = None
+    if preset in DYNAMIC_FREE_PRESETS:
+        try:
+            registry, dynamic_audit = prepare_dynamic_free_registry(
+                registry, [preset], os.environ, consumer="pi"
+            )
+        except Exception as error:
+            logger.critical(
+                "Unable to resolve dynamic free preset before writes: %s", error
+            )
+            return 1
     roles = tier_registry.get_preset(registry, preset)
     local_preset = tier_registry.uses_local_placeholders(registry, preset)
     if args.local_fallback_preset:
@@ -697,7 +728,7 @@ def main():
     if args.no_local_fallbacks and local_preset:
         logger.warning("--no-local-fallbacks is ignored for local preset %s", preset)
     discover_local = not args.no_local_fallbacks or local_preset
-    if discover_local:
+    if discover_local and preset not in DYNAMIC_FREE_PRESETS:
         local_models = list_local_ollama_models()
     else:
         logger.info(
@@ -729,6 +760,13 @@ def main():
         category_models,
         args.role_models,
     )
+    if preset in DYNAMIC_FREE_PRESETS and dynamic_audit:
+        role_models = {
+            role: ref
+            for role, ref in dynamic_audit["presets"][preset]["selected"].items()
+            if role in role_models or role in {"coder", "task_worker"}
+        }
+        category_models = dict(role_models)
     if any(
         isinstance(model, str) and model.startswith("github-copilot/")
         for model in role_models.values()
@@ -827,6 +865,7 @@ def main():
     proxy_key_path = Path("~/.local/share/litellm/clients/pi.key").expanduser()
     gateway_models = set()
     cloud_routes = {}
+    dynamic_gateway_roles = set()
     if pi_litellm_proxy:
         if os.environ.get("DOTFILES_RUN_LITELLM_SETUP", "0") != "1":
             raise RuntimeError(
@@ -888,11 +927,23 @@ def main():
             return
         # Every advertised gateway identity belongs in Pi's model list —
         # users pick from /model, not just preset role selections.
-        for advertised in cloud_routes.get("_available", set()):
-            if advertised.startswith("litellm/"):
-                gateway_models.add(advertised.removeprefix("litellm/"))
+        gateway_models.update(cloud_routes.get("_available", {}))
+        if preset in DYNAMIC_FREE_PRESETS and dynamic_audit:
+            selected_refs = dynamic_audit["presets"][preset]["selected"]
+            selected_gateway = {}
+            for role, ref in selected_refs.items():
+                if ref not in cloud_routes.get("_available", {}):
+                    raise RuntimeError(
+                        f"Pi dynamic route {role} has no advertised LiteLLM alias: {ref}"
+                    )
+                selected_gateway[role] = "litellm/" + ref
+                dynamic_gateway_roles.add(role)
+            role_models.update(selected_gateway)
         resolved = {}
         for role, model_ref in role_models.items():
+            if role in dynamic_gateway_roles:
+                resolved[role] = model_ref
+                continue
             if (
                 not isinstance(model_ref, str)
                 or "/" not in model_ref
@@ -971,7 +1022,13 @@ def main():
         default = "ollama/no-model-available"
     else:
         default = orchestrator_model
-    if pi_litellm_proxy and isinstance(default, str) and "/" in default:
+    if (
+        pi_litellm_proxy
+        and preset in DYNAMIC_FREE_PRESETS
+        and "orchestrator" in dynamic_gateway_roles
+    ):
+        default = role_models["orchestrator"]
+    elif pi_litellm_proxy and isinstance(default, str) and "/" in default:
         canonical_default = default.removeprefix("litellm/")
         if canonical_default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
@@ -993,6 +1050,10 @@ def main():
             gateway_models.add(canonical_default)
         if default is None or default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
+    if pi_litellm_proxy and preset in DYNAMIC_FREE_PRESETS and dynamic_audit:
+        if dynamic_audit["presets"][preset]["eligible_count"] < 1:
+            raise RuntimeError("Dynamic Pi preset has no eligible models")
+        default = role_models["orchestrator"]
     provider, _, default_model = default.partition("/")
     settings = {
         "defaultProvider": provider,
@@ -1248,6 +1309,8 @@ def main():
     for name, val in old_overrides.items():
         if name not in managed:
             settings["subagents"]["agentOverrides"][name] = val
+    if preset in DYNAMIC_FREE_PRESETS:
+        settings = {**previous, **settings}
     apply_preserved_preferences(settings, previous)
     settings["theme"] = os.environ.get("PI_THEME", "").strip() or previous.get(
         "theme", "light/dark"

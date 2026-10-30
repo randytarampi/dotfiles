@@ -56,7 +56,7 @@ def test_frozen_group_input_does_not_implicitly_derive_free():
     )
 
 
-def test_free_gateway_compatibility_cannot_reintroduce_disabled_groups():
+def test_gateway_group_derivation_preserves_exact_existing_dynamic_aliases():
     groups = {
         "litellm-free": {"provider": "litellm", "primaryModel": "openai/free"},
         "litellm-omo-slim-opencode-zen-free": {
@@ -64,7 +64,7 @@ def test_free_gateway_compatibility_cannot_reintroduce_disabled_groups():
             "primaryModel": "opencode/free",
         },
     }
-    assert PROFILES.derive_litellm_groups(groups) == {}
+    assert PROFILES.derive_litellm_groups(groups) == groups
 
 
 def test_catalogue_uses_private_key_and_exact_known_ids(monkeypatch):

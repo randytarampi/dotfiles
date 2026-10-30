@@ -13,6 +13,14 @@ source "$LIB_DIR/tier_args.sh"
 # scripts/lib/tier_registry.py: {{ include "scripts/lib/tier_registry.py" | sha256sum }}
 # scripts/lib/pi_profiles.py: {{ include "scripts/lib/pi_profiles.py" | sha256sum }}
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
+# scripts/lib/free_presets.py: {{ include "scripts/lib/free_presets.py" | sha256sum }}
+# scripts/lib/free_preset_runtime.py: {{ include "scripts/lib/free_preset_runtime.py" | sha256sum }}
+# scripts/lib/free_preset_registry.py: {{ include "scripts/lib/free_preset_registry.py" | sha256sum }}
+# scripts/lib/free_preset_evidence.py: {{ include "scripts/lib/free_preset_evidence.py" | sha256sum }}
+# scripts/lib/free_gateway_evidence.py: {{ include "scripts/lib/free_gateway_evidence.py" | sha256sum }}
+# scripts/lib/free_route_manifest.py: {{ include "scripts/lib/free_route_manifest.py" | sha256sum }}
+# scripts/lib/free_route_catalogues.py: {{ include "scripts/lib/free_route_catalogues.py" | sha256sum }}
+# scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
 load_env || true
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then

@@ -7,35 +7,26 @@ the full tier reference.
 
 ## Provider Presets
 
-The `free` and `omo-slim-opencode-zen-free` selections are currently disabled
-in repository-managed OpenCode and Junie generation because their availability
-is not established. They are disabled selections, not proof that every route
-they contain is free-classified. Generation rejects them as active presets and
-omits their choices and compatibility aliases; it does not silently select a
-paid fallback.
-This repository guard applies when configuration is regenerated. It does not
-change already-installed client files until deployment/regeneration runs, so
-runtime enforcement remains open (issue #87; classification work is PR #119); provenance for any
-existing installed selection remains unverified until that regeneration.
-No route or entitlement is inferred from catalogue presence alone.
+The `free` and `omo-slim-opencode-zen-free` presets are dynamically composed
+from fresh catalogue snapshots and route evidence when generated. Selection is
+fail-closed: missing, stale, malformed or unqualified evidence refuses the
+selection rather than silently substituting a paid route. These checks establish
+catalogue and configured-route provenance, not request-time billing, entitlement,
+privacy or a guarantee of zero cost. No live availability was verified by this
+documentation update. See [docs/TIERS.md](TIERS.md) and
+[docs/LITELLM.md](LITELLM.md) for scope and remaining gaps.
 
 ### Temporary Disablement and Recovery
 
-The owner reconfirmed this temporary release behaviour on 2026-10-28. A
-previously selected disabled agent or council default must cause refusal before
-replacement files are installed, not an automatic switch to a paid preset.
-Keep a private backup of the current configuration before any separately
-authorized regeneration. Existing installed profiles and Pi's shared inventory
-are not retroactively repaired by this guard.
+Generation refuses to publish an unqualified dynamic preset; it does not
+automatically switch to a paid preset. Existing installed files are not
+retroactively repaired until configuration is regenerated. Review the generated
+selection and its provenance before use.
 
-To migrate, explicitly choose an available, owner-approved preset and resolve
-any disabled defaults in the input configuration before regeneration. Do not
-remove the guard or restore an unqualified archived preset as a workaround.
-Rollback requires an owner-approved known-good configuration and its own
-validation; it must not silently restore a paid fallback. Re-enabling either
-disabled choice requires authoritative backend provenance, a passing offline
-route audit and separate owner approval. None of these steps replaces issue
-#87's request-time admission, entitlement, privacy and fallback evidence.
+Catalogue availability and provenance are refreshed during generation; a
+catalogue listing alone does not prove inference access. Do not treat generated
+classification as runtime cost enforcement. Request-time admission, entitlement,
+privacy and paid-route-spy evidence remain outside this mechanism (issue #87).
 
 Three upstream preset definitions are retained in the shared registry; two are
 selectable. Definitions are adopted from the upstream oh-my-opencode-slim docs —

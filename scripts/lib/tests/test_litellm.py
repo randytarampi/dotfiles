@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timedelta, timezone
 import os
 import json
 import io
@@ -17,6 +18,65 @@ import yaml
 import litellm_config
 import model_catalogues
 import free_classifier
+import free_route_manifest
+from free_gateway_evidence import validate_free_gateway_evidence
+
+
+def test_live_catalogue_manifest_reaches_free_gateway_validator(monkeypatch):
+    observed = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    ticks = iter((observed, observed + timedelta(seconds=3)))
+    monkeypatch.setattr(litellm_config, "active_engines", lambda: [])
+    monkeypatch.setattr(
+        litellm_config, "_registry_model_refs", lambda: {"cohere/command-r"}
+    )
+    monkeypatch.setenv("COHERE_API_KEY", "test")
+    monkeypatch.setenv("DOTFILES_LITELLM_CATALOGUE_SCOPE", "free")
+    monkeypatch.setattr(litellm_config, "_live_catalogue", lambda *args: ["command-r"])
+    monkeypatch.setattr(
+        litellm_config,
+        "datetime",
+        type("Clock", (), {"now": staticmethod(lambda *_: next(ticks))}),
+    )
+    entries = litellm_config.compute_model_list()
+    entry = next(item for item in entries if item["model_name"] == "cohere/command-r")
+    assert entry["_route_provenance"]["metadata_provider"] == "cohere"
+    projected = free_route_manifest.expected_config_routes(entries)
+    manifest = free_route_manifest.build_manifest(
+        entries, now=observed + timedelta(seconds=4)
+    )
+    assert "api_key" not in str(projected)
+    route = next(
+        row for row in manifest["routes"] if row["alias"] == "cohere/command-r"
+    )
+    assert route["evidence_state"] == "VERIFIED"
+    assert route["observed_at"] == (observed + timedelta(seconds=3)).isoformat()
+    candidates = validate_free_gateway_evidence(
+        manifest=manifest,
+        expected_config_routes=projected,
+        gateway_models={
+            "observed_at": observed.isoformat(),
+            "expires_at": (observed + timedelta(minutes=5)).isoformat(),
+            "source": "fixture gateway",
+            "models": ["cohere/command-r"],
+        },
+        trusted_endpoints={},
+        trusted_native={("cohere/command-r", "cohere_chat/command-r"): "cohere"},
+        models_dev={
+            "observed_at": observed.isoformat(),
+            "expires_at": (observed + timedelta(minutes=5)).isoformat(),
+            "source": "models.dev",
+            "models": {
+                "cohere": {
+                    "id": "cohere",
+                    "models": {"command-r": {"reasoning": True}},
+                }
+            },
+        },
+        now=observed + timedelta(seconds=4),
+    )
+    assert [candidate.serving_ref for candidate in candidates] == ["cohere/command-r"]
+
+
 from constants import OMLX_DEFAULT_PORT
 from provider_endpoints import POOLSIDE_ROUTED_MODEL_INFO
 
@@ -1733,7 +1793,9 @@ def test_model_list_and_config_are_stable_across_discovery_order(tmp_path, monke
     cloud_models.reverse()
     second_entries = litellm_config.compute_model_list(environ)
     second_config = litellm_config.render_config(environ, second_entries)
-    assert second_entries == first_entries
+    assert free_route_manifest._route_projection(
+        second_entries
+    ) == free_route_manifest._route_projection(first_entries)
     assert second_config == first_config
     assert litellm_config.write_config(config_path, environ, second_entries) is False
     assert config_path.read_bytes() == first_bytes
