@@ -198,7 +198,7 @@ def test_unadvertised_manifest_alias_is_not_selected_and_stale_metadata_is_rejec
         normalize(bundle)
 
 
-def test_unknown_native_backend_is_refused():
+def test_unknown_native_backend_alias_is_excluded():
     bundle = fixture()
     params = bundle[1][0]["litellm_params"]
     params.pop("api_base")
@@ -209,5 +209,12 @@ def test_unknown_native_backend_is_refused():
     )
     manifest = build_manifest(bundle[1], now=NOW)
     bundle = (manifest, bundle[1], bundle[2], bundle[3])
-    with pytest.raises(EvidenceError, match="native"):
+    assert normalize(bundle) == []
+
+
+def test_native_backend_config_binding_tampering_still_fails_closed():
+    bundle = fixture()
+    bundle[1][0]["litellm_params"].pop("api_base")
+    bundle[1][0]["_route_provenance"]["upstream_host"] = "unknown"
+    with pytest.raises(EvidenceError, match="digest"):
         normalize(bundle)

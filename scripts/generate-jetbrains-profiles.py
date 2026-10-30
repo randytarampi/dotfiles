@@ -688,31 +688,56 @@ def atomic_write_manifest(target_dir: Path, names: dict[str, str]) -> None:
     )
 
 
-def resolve_model_groups(cfg, registry, dynamic_registry=None, use_litellm=False):
+def resolve_model_groups(
+    cfg, registry, dynamic_registry=None, use_litellm=False, available_dynamic=None
+):
     """Resolve only explicitly requested shared presets and compatibility names."""
+    required = cfg.get("requiredGroups", [])
+    if not isinstance(required, list) or any(
+        not isinstance(name, str) for name in required
+    ):
+        raise ValueError("requiredGroups must be a list of group names")
+    known = set(cfg.get("groups", {})) | set(cfg.get("sharedPresets", {}))
+    known.update(cfg.get("compatibility", {}))
+    unknown = set(required) - known
+    if unknown:
+        raise ValueError(f"Unknown required Junie groups: {', '.join(sorted(unknown))}")
+    if available_dynamic is None:
+        available_dynamic = (
+            set(DYNAMIC_FREE_PRESETS) if dynamic_registry is not None else set()
+        )
+    else:
+        available_dynamic = set(available_dynamic)
     requested_disabled = (
         set(cfg.get("sharedPresets", {})) | set(cfg.get("groups", {}))
-    ) & (DISABLED_PRESETS - set(DYNAMIC_FREE_PRESETS))
+    ) & DISABLED_PRESETS
+    requested_disabled -= {
+        name for name in DYNAMIC_FREE_PRESETS if name in available_dynamic
+    }
     if requested_disabled:
         logger.warning(
             "Omitting unavailable Junie groups: %s",
             ", ".join(sorted(requested_disabled)),
         )
+    requested_groups = dict(cfg.get("groups", {}))
+    for name in DYNAMIC_FREE_PRESETS:
+        if name in requested_groups and name not in available_dynamic:
+            requested_groups.pop(name)
     groups = {
         name: dict(group)
-        for name, group in cfg.get("groups", {}).items()
+        for name, group in requested_groups.items()
         if name not in DISABLED_PRESETS
-        or (name in DYNAMIC_FREE_PRESETS and dynamic_registry is not None)
+        or (name in DYNAMIC_FREE_PRESETS and name in available_dynamic)
     }
     for name, preset in cfg.get("sharedPresets", {}).items():
-        if name in DISABLED_PRESETS and (
-            name not in DYNAMIC_FREE_PRESETS or dynamic_registry is None
-        ):
+        if name in DISABLED_PRESETS and name not in available_dynamic:
             continue
         if name != preset:
             raise ValueError("Shared group must retain its canonical preset name")
         role_registry = dynamic_registry if preset in DYNAMIC_FREE_PRESETS else registry
-        if role_registry is None:
+        if role_registry is None or (
+            preset in DYNAMIC_FREE_PRESETS and preset not in available_dynamic
+        ):
             continue
         roles = tier_registry.materialize_role_models(role_registry, preset, {})
         primary, faster = roles["orchestrator"], roles["librarian"]
@@ -736,11 +761,27 @@ def resolve_model_groups(cfg, registry, dynamic_registry=None, use_litellm=False
             **({"gateway_alias": True} if is_gateway_alias else {}),
         }
     for alias, canonical in cfg.get("compatibility", {}).items():
-        if alias in DISABLED_PRESETS or canonical in DISABLED_PRESETS:
+        dynamic_canonical = canonical.removeprefix("litellm-")
+        if alias in DISABLED_PRESETS and alias not in DYNAMIC_FREE_PRESETS:
+            continue
+        if (
+            dynamic_canonical in DYNAMIC_FREE_PRESETS
+            and dynamic_canonical not in available_dynamic
+        ):
+            if alias in required:
+                raise ValueError(f"Required Junie group unavailable: {alias}")
+            continue
+        if canonical in DISABLED_PRESETS and dynamic_canonical not in available_dynamic:
             continue
         if alias in groups or canonical not in groups:
             raise ValueError(f"Invalid compatibility group: {alias}")
         groups[alias] = dict(groups[canonical])
+    unavailable_required = set(required) - set(groups)
+    if unavailable_required:
+        raise ValueError(
+            "Required Junie groups unavailable: "
+            + ", ".join(sorted(unavailable_required))
+        )
     return groups
 
 
@@ -791,21 +832,58 @@ def main():
             if preset in cfg.get("sharedPresets", {}).values()
             or preset in cfg.get("groups", {})
         }
+        required_groups = cfg.get("requiredGroups", [])
+        if not isinstance(required_groups, list) or any(
+            not isinstance(name, str) for name in required_groups
+        ):
+            raise ValueError("requiredGroups must be a list of group names")
+        known_groups = (
+            set(cfg.get("groups", {}))
+            | set(cfg.get("sharedPresets", {}))
+            | set(cfg.get("compatibility", {}))
+        )
+        unknown_required = set(required_groups) - known_groups
+        if unknown_required:
+            raise ValueError(
+                "Unknown required Junie groups: " + ", ".join(sorted(unknown_required))
+            )
+        required_groups = cfg.get("requiredGroups", [])
+        required_dynamic = set()
+        for group_name in required_groups:
+            preset = cfg.get("sharedPresets", {}).get(group_name, group_name)
+            preset = cfg.get("compatibility", {}).get(preset, preset)
+            if preset in DYNAMIC_FREE_PRESETS:
+                required_dynamic.add(preset)
         if requested_dynamic and (args.role_models or args.category_models):
             raise ValueError("Dynamic free preset overrides are refused")
         dynamic_registry = None
+        available_dynamic = set()
         full_registry = isinstance(registry.get("_tiers"), dict) and all(
             preset in registry.get("presets", {}) for preset in requested_dynamic
         )
         if requested_dynamic and full_registry:
-            dynamic_registry, _ = prepare_dynamic_free_registry(
-                registry, sorted(requested_dynamic), os.environ, consumer="junie"
-            )
+            dynamic_registry = json.loads(json.dumps(registry))
+            for preset in sorted(requested_dynamic):
+                try:
+                    resolved_registry, _ = prepare_dynamic_free_registry(
+                        registry, [preset], os.environ, consumer="junie"
+                    )
+                except Exception:
+                    if preset in required_dynamic:
+                        raise
+                    logger.warning("Optional Junie free group unavailable: %s", preset)
+                    continue
+                dynamic_registry["presets"][preset] = resolved_registry["presets"][
+                    preset
+                ]
+                dynamic_registry["_tiers"][preset] = resolved_registry["_tiers"][preset]
+                available_dynamic.add(preset)
         cfg["groups"] = resolve_model_groups(
             cfg,
             registry,
             dynamic_registry,
             use_litellm=os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") == "1",
+            available_dynamic=available_dynamic,
         )
     except Exception as exc:
         logger.critical(f"Failed to read model configuration: {exc}")
@@ -841,7 +919,7 @@ def main():
                 }
     tier_specs = []
     for tier in list(registry.get("presets", {})):
-        if tier in DYNAMIC_FREE_PRESETS and dynamic_registry is None:
+        if tier in DYNAMIC_FREE_PRESETS and tier not in available_dynamic:
             continue
         if tier in DISABLED_PRESETS and tier not in DYNAMIC_FREE_PRESETS:
             continue
@@ -948,36 +1026,15 @@ def main():
         if not isinstance(model, dict) or model.get("provider", "ollama") == "ollama"
     ]
     temperatures = cfg.get("modelTemperatures", {})
+    required_groups = set(cfg.get("requiredGroups", []))
     generated = set()
     generated_digests = {}
     generated_names = set()
-    output_dir = Path(target_dir).expanduser()
-    try:
-        previous_generated = read_profile_manifest(output_dir)
-        output_dir = prepare_profile_dir(target_dir, use_litellm, args.dry_run)
-    except OSError as exc:
-        logger.critical(str(exc))
-        raise SystemExit(1)
-    try:
-        for name, expected_digest in previous_generated.items():
-            path = output_dir / f"{name}.json"
-            if path.is_symlink():
-                raise OSError(f"unsafe stale Junie profile path: {path.name}")
-            if path.exists() and (
-                not path.is_file()
-                or hashlib.sha256(path.read_bytes()).hexdigest() != expected_digest
-            ):
-                raise OSError(
-                    f"modified managed Junie profile; refusing overwrite: {path.name}"
-                )
-    except OSError as exc:
-        logger.critical(str(exc))
-        raise SystemExit(1)
-    logger.info("Generating JetBrains AI model profiles...")
-
+    profile_plan = []
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
         if not isinstance(primary_ref, str) or not primary_ref:
-            logger.warning("No resolved primary model for %s — skipping", name)
+            if name in required_groups:
+                raise ValueError(f"Required Junie group unavailable: {name}")
             continue
         temperature_ref = specs_temperature_identity.get(name, primary_ref)
         provider = explicit_provider or model_provider(primary_ref)
@@ -996,54 +1053,43 @@ def main():
             and route_faster_provider in LITELLM_ROUTED_PROVIDERS
         )
         if route_primary and not is_gateway_alias_spec:
-            if catalogue is None:
-                logger.warning("Omitting %s: LiteLLM model catalogue unavailable", name)
-                continue
             alias = litellm_alias(primary_ref, provider)
-            if alias not in catalogue:
-                logger.warning("Omitting %s: LiteLLM primary alias unavailable", name)
+            if catalogue is None or alias not in catalogue:
+                if name in required_groups:
+                    raise ValueError(f"Required Junie group unavailable: {name}")
                 continue
-            provider = "litellm"
-            primary_ref = alias
+            provider, primary_ref = "litellm", alias
         if route_faster and not is_gateway_alias_spec:
             faster_alias = litellm_alias(faster_ref, route_faster_provider)
             if catalogue is None or faster_alias not in catalogue:
-                logger.info(
-                    "Omitting faster model for %s: LiteLLM alias unavailable", name
-                )
                 faster_ref = ""
             else:
-                faster_ref = faster_alias
-                explicit_faster = "litellm"
-        if provider == "litellm":
-            if faster_ref and explicit_faster and explicit_faster != "litellm":
-                logger.error(
-                    f"LiteLLM profile {name} cannot use direct faster provider "
-                    f"'{explicit_faster}'"
-                )
-                raise SystemExit(1)
-            faster_provider = "litellm"
-        else:
-            faster_provider = explicit_faster or (
-                model_provider(faster_ref) if faster_ref else provider
-            )
-        if not provider or provider not in providers:
-            logger.warning(f"Unknown provider for {name} — skipping")
-            continue
-        if faster_provider not in providers:
-            logger.warning(
-                f"Unknown faster provider '{faster_provider}' for {name} — skipping"
-            )
+                faster_ref, explicit_faster = faster_alias, "litellm"
+        faster_provider = (
+            "litellm"
+            if provider == "litellm"
+            else explicit_faster
+            or (model_provider(faster_ref) if faster_ref else provider)
+        )
+        if (
+            not provider
+            or provider not in providers
+            or faster_provider not in providers
+        ):
+            if name in required_groups:
+                raise ValueError(f"Required Junie group unavailable: {name}")
             continue
         if (
             provider == "github-copilot"
             and not os.environ.get("GITHUB_TOKEN", "").strip()
         ):
-            logger.info(f"GITHUB_TOKEN not set — skipping experimental {name} group")
+            if name in required_groups:
+                raise ValueError(f"Required Junie group unavailable: {name}")
             continue
         engine = resolve_engine(provider)
         if engine and not local_models and not primary_ref.startswith("_local:"):
-            logger.info(f"No local Ollama models available — skipping {name}")
+            if name in required_groups:
+                raise ValueError(f"Required Junie group unavailable: {name}")
             continue
         primary = model_id(primary_ref, provider)
         if (
@@ -1053,7 +1099,8 @@ def main():
         ):
             primary = resolve_model(primary, ollama_model_names)
         if primary_ref.startswith("_local:") or not primary:
-            logger.warning(f"Could not resolve primary model for {name} — skipping")
+            if name in required_groups:
+                raise ValueError(f"Required Junie group unavailable: {name}")
             continue
         faster = model_id(faster_ref, faster_provider) if faster_ref else ""
         faster_engine = resolve_engine(faster_provider)
@@ -1081,24 +1128,71 @@ def main():
             if faster_provider != provider:
                 faster_data.update(providers[faster_provider])
             data["fasterModel"] = faster_data
-        output = json.dumps(data, indent=2) + "\n"
         if not valid_profile_name(name):
-            logger.error("Unsafe generated Junie profile name; refusing to write")
-            raise SystemExit(1)
+            raise ValueError("Unsafe generated Junie profile name; refusing to write")
+        output = json.dumps(data, indent=2) + "\n"
+        profile_plan.append((name, primary, faster, output))
+
+    output_dir = Path(target_dir).expanduser()
+    try:
+        previous_generated = read_profile_manifest(output_dir)
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
+    try:
+        for name, _primary, _faster, _output in profile_plan:
+            path = output_dir / f"{name}.json"
+            if path.is_symlink():
+                raise OSError(f"unsafe symlink at Junie profile: {path.name}")
+            if path.exists():
+                if not path.is_file():
+                    raise OSError(
+                        f"unsafe owner or type for Junie profile: {path.name}"
+                    )
+                expected_owner = getattr(os, "getuid", lambda: None)()
+                if expected_owner is not None and path.stat().st_uid != expected_owner:
+                    raise OSError(f"unsafe owner for Junie profile: {path.name}")
+                owned_digest = previous_generated.get(name)
+                if owned_digest is None:
+                    if name in required_groups:
+                        raise OSError(
+                            f"Required Junie profile is unmanaged: {path.name}"
+                        )
+                elif hashlib.sha256(path.read_bytes()).hexdigest() != owned_digest:
+                    raise OSError(
+                        f"modified managed Junie profile; refusing overwrite: {path.name}"
+                    )
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
+    try:
+        for name, expected_digest in previous_generated.items():
+            path = output_dir / f"{name}.json"
+            if path.is_symlink():
+                raise OSError(f"unsafe stale Junie profile path: {path.name}")
+            if path.exists() and (
+                not path.is_file()
+                or hashlib.sha256(path.read_bytes()).hexdigest() != expected_digest
+            ):
+                raise OSError(
+                    f"modified managed Junie profile; refusing overwrite: {path.name}"
+                )
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
+    try:
+        output_dir = prepare_profile_dir(target_dir, use_litellm, args.dry_run)
+    except OSError as exc:
+        logger.critical(str(exc))
+        raise SystemExit(1)
+    logger.info("Generating JetBrains AI model profiles...")
+
+    for name, primary, faster, output in profile_plan:
         filename = f"{name}.json"
         path = output_dir / filename
-        if path.exists():
-            existing = path.read_bytes()
-            owned_digest = previous_generated.get(name)
-            if owned_digest is None:
-                logger.info(
-                    "Preserving unmanaged Junie profile collision: %s", filename
-                )
-                continue
-            if hashlib.sha256(existing).hexdigest() != owned_digest:
-                raise OSError(
-                    f"modified managed Junie profile; refusing overwrite: {filename}"
-                )
+        if path.exists() and name not in previous_generated:
+            logger.info("Preserving unmanaged Junie profile collision: %s", filename)
+            continue
         elif args.dry_run and name in previous_generated:
             logger.info("Would create generated Junie profile: %s", filename)
         generated.add(name)

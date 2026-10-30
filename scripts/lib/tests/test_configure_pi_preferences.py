@@ -1021,6 +1021,8 @@ def test_pi_malformed_settings_json_refuses_write_and_preserves_user_overrides(
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_ROLE_MODELS", "")
+    monkeypatch.setenv("DOTFILES_CATEGORY_MODELS", "")
     monkeypatch.setattr(
         configure_pi,
         "get_catalogue",

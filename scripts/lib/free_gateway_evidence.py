@@ -164,9 +164,9 @@ def validate_free_gateway_evidence(
                 or trusted_native.get((alias, route.get("wire_model")))
                 != route.get("upstream_host")
             ):
-                raise EvidenceError(
-                    "native route lacks a matching caller-trusted binding"
-                )
+                # An unsupported native alias is unqualified, not evidence corruption.
+                valid = False
+                break
             start = free_preset_evidence_timestamp_value(route.get("observed_at"))
             end = free_preset_evidence_timestamp_value(route.get("expires_at"))
             if (
