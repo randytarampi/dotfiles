@@ -954,7 +954,95 @@ def test_opencode_slim_refuses_ambiguous_nonexact_canonical_alias(
     }
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
-            {"roles": {"x": {"model": "openrouter/example:variant"}}},
+            {
+                "preset": "active",
+                "presets": {
+                    "active": {"roles": {"x": {"model": "openrouter/example:variant"}}}
+                },
+            },
+            config,
+        )
+
+
+def test_opencode_slim_gate_prunes_unserved_dormant_preset_but_fails_active(
+    tmp_path, monkeypatch
+):
+    script = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {"model": f"litellm/{alias}"},
+    )
+    config = {"provider": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
+    source = {
+        "preset": "active",
+        "presets": {
+            "active": {"agent": {"model": "openai/served"}},
+            "dormant": {"agent": {"model": "openai/missing"}},
+        },
+    }
+    original = __import__("copy").deepcopy(source)
+    routed = script.apply_litellm_slim_gate(source, config)
+    assert list(routed["presets"]) == ["active"]
+    assert source == original
+    with pytest.raises(RuntimeError, match="presets.dormant"):
+        script.apply_litellm_slim_gate(source, config, selected_preset="dormant")
+    source["presets"]["dormant"] = {"agent": {"model": "openai/served"}}
+    source["_tiers"] = {
+        "active": {"fallback": {"agent": ["openai/served"]}},
+        "dormant": {"fallback": {"agent": ["openai/missing"]}},
+    }
+    source["council"] = {
+        "default_preset": "active",
+        "presets": {
+            "active": {"alpha": {"model": "openai/served"}},
+            "dormant": {"alpha": {"model": "openai/served"}},
+        },
+    }
+    routed = script.apply_litellm_slim_gate(source, config)
+    for section in (routed["presets"], routed["_tiers"], routed["council"]["presets"]):
+        assert set(section) == {"active"}
+    with pytest.raises(RuntimeError, match="_tiers.dormant"):
+        script.apply_litellm_slim_gate(source, config, selected_preset="dormant")
+    source["council"]["default_preset"] = "dormant"
+    with pytest.raises(RuntimeError, match="Active Slim selection unavailable"):
+        script.apply_litellm_slim_gate(source, config)
+
+
+def test_opencode_slim_gate_validates_legacy_preset_fragment_without_pruning(
+    tmp_path, monkeypatch
+):
+    script = _load_script("configure_opencode_legacy_fragment", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    monkeypatch.setattr(
+        script,
+        "resolve_alias",
+        lambda alias, *args, **kwargs: {"model": f"litellm/{alias}"},
+    )
+    fragment = {"presets": {"one": {"agent": {"model": "openai/served"}}}}
+    config = {"provider": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
+    routed = script.apply_litellm_slim_gate(fragment, config)
+    assert set(routed["presets"]) == {"one"}
+    assert routed["presets"]["one"]["agent"]["model"] == "litellm/openai/served"
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        script.apply_litellm_slim_gate(
+            {
+                "presets": {
+                    "one": {"agent": {"model": "openai/served"}},
+                    "two": {"agent": {"model": "openai/missing"}},
+                }
+            },
             config,
         )
 
@@ -1259,7 +1347,7 @@ def _run_opencode_main(
     monkeypatch.setattr(
         script,
         "apply_litellm_slim_gate",
-        lambda slim, config, previous=None: {
+        lambda slim, config, previous=None, **kwargs: {
             "roles": {"x": {"model": "litellm/openai/fixture"}}
         },
     )
@@ -1692,7 +1780,7 @@ def test_prepare_tier_candidate_seeds_staging_with_base_slim(monkeypatch, tmp_pa
     monkeypatch.setattr(
         script,
         "apply_litellm_slim_gate",
-        lambda slim, config, previous_slim=None: slim,
+        lambda slim, config, previous_slim=None, **kwargs: slim,
     )
     result = script.prepare_tier_candidate(
         str(tmp_path),
@@ -1762,8 +1850,8 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
         "get_preset_providers": lambda *args: set(),
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
-        "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None: (
+        "apply_litellm_slim_gate": lambda slim, config, previous=None, **kwargs: slim,
+        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None, selected_preset=None: (
             _ for _ in ()
         ).throw(
             RuntimeError("final tier validation")
@@ -1833,8 +1921,8 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
         "get_preset_providers": lambda *args: set(),
         "get_litellm_proxy_mode": lambda: False,
         "apply_litellm_client_gate": lambda config: None,
-        "apply_litellm_slim_gate": lambda slim, config, previous=None: slim,
-        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None: (
+        "apply_litellm_slim_gate": lambda slim, config, previous=None, **kwargs: slim,
+        "prepare_tier_candidate": lambda config_dir, args, consumer, base_slim=None, previous_slim=None, selected_preset=None: (
             '{"model": "stub-slim-target"}'
         ),
     }.items():
