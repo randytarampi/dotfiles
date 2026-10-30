@@ -39,7 +39,8 @@ def test_target_alias_fails_closed_without_local_model(monkeypatch):
         raise AssertionError("missing local model must fail closed")
 
 
-def test_generator_emits_canonical_ollama_alias(monkeypatch):
+def test_generator_emits_canonical_ollama_alias(monkeypatch, tmp_path):
+    monkeypatch.setattr(litellm_config.os, "environ", {"HOME": str(tmp_path)})
     monkeypatch.setattr(
         VERIFY, "list_local_ollama_models", lambda: [{"name": "fixture-model"}]
     )
