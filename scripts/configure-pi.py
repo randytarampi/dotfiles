@@ -682,6 +682,15 @@ def main():
     # inside make deploy the parent environment already carries them.
     load_env()
 
+    effective_roles = args.role_models or _role_models_from_env() or []
+    preset = args.preset
+    override_registry = None
+    if effective_roles or args.category_models or preset in DYNAMIC_FREE_PRESETS:
+        override_registry = tier_registry.load_registry(SLIM)
+        preset = preset or override_registry.get("preset", "pro-plus")
+    if preset in DYNAMIC_FREE_PRESETS and (effective_roles or args.category_models):
+        p.error("Dynamic free preset model overrides are refused")
+
     out = (
         Path(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")).expanduser()
         if args.mode == "global"
@@ -702,9 +711,9 @@ def main():
     # Env bridge mirroring configure-opencode-tier.py: DOTFILES_ROLE_MODELS
     # feeds --role-model so role overrides work without flags.
     if args.role_models is None:
-        args.role_models = _role_models_from_env()
-    registry = copy.deepcopy(tier_registry.load_registry(SLIM))
-    preset = args.preset or registry.get("preset", "pro-plus")
+        args.role_models = effective_roles or None
+    registry = copy.deepcopy(override_registry or tier_registry.load_registry(SLIM))
+    preset = preset or registry.get("preset", "pro-plus")
     dynamic_audit = None
     if preset in DYNAMIC_FREE_PRESETS:
         try:

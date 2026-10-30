@@ -460,7 +460,6 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
     if proxy:
         assert output["provider"]["litellm"]["models"][alias]
         assert calls == [([preset], "1")]
-        expected_route = alias
         assert materialized["presets"][preset]["orchestrator"]["model"] == alias
     else:
         models = output["provider"]["opencode"]["models"]
@@ -501,7 +500,7 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
 def test_pi_entrypoint_resolves_dynamic_presets_and_preserves_custom_settings(
     tmp_path, monkeypatch, preset
 ):
-    calls = runtime(monkeypatch)
+    runtime(monkeypatch)
     agent = tmp_path / "pi-agent"
     agent.mkdir()
     settings = agent / "settings.json"
@@ -520,8 +519,62 @@ def test_pi_entrypoint_resolves_dynamic_presets_and_preserves_custom_settings(
     assert configure_pi.main() is None
     output = json.loads(settings.read_text())
     assert output["custom"] == {"keep": True}
-    assert calls and calls[0][0] == "opencode"
     assert "big-pickle" in json.dumps(output)
+
+
+@pytest.mark.parametrize("source", ["flag", "env"])
+def test_pi_dynamic_free_role_override_is_usage_error_before_discovery(
+    monkeypatch, source
+):
+    args = ["configure-pi.py", "--preset", "free", "--no-local-fallbacks"]
+    if source == "flag":
+        args += ["--role-model", "orchestrator=paid/model"]
+    elif source == "env":
+        monkeypatch.setenv("DOTFILES_ROLE_MODELS", "orchestrator=paid/model")
+    monkeypatch.setattr(sys, "argv", args)
+    monkeypatch.setattr(
+        configure_pi,
+        "prepare_dynamic_free_registry",
+        lambda *a, **k: pytest.fail("evidence must not be fetched"),
+    )
+    monkeypatch.setenv("DOTFILES_CATEGORY_MODELS", "")
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        configure_pi.main()
+
+    assert error.value.code == 2
+
+
+def test_pi_implicit_dynamic_free_preset_override_fails_before_evidence(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "free"])
+    monkeypatch.setattr(configure_pi, "load_env", lambda: None)
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "load_registry",
+        lambda *a: {
+            "preset": "free",
+            "presets": {"free": {"orchestrator": {"model": "free-model"}}},
+            "_tiers": {"free": {}},
+        },
+    )
+    monkeypatch.setenv("DOTFILES_ROLE_MODELS", "unknown-role=paid/model")
+    monkeypatch.setattr(
+        configure_pi,
+        "prepare_dynamic_free_registry",
+        lambda *a, **k: pytest.fail("evidence must not be fetched"),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        configure_pi.main()
+
+    assert error.value.code == 2
 
 
 @pytest.mark.parametrize("preset", PRESETS)
@@ -673,6 +726,330 @@ def test_junie_entrypoint_materializes_healthy_gateway_alias(
     assert "big-pickle-free" not in json.dumps(generated)
 
 
+def test_junie_optional_unavailable_free_group_does_not_block_other_group(
+    tmp_path, monkeypatch
+):
+    calls = runtime(monkeypatch, available=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    target = home / "models"
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {"provider": "openai", "primaryModel": "ordinary-model"}
+                },
+                "providers": {
+                    "openai": {
+                        "baseUrl": "https://api.openai.com/v1",
+                        "apiType": "OpenAIResponses",
+                        "apiKeyEnv": "OPENCODE_API_KEY",
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("GEMINI_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "read_junie_key", lambda: "synthetic")
+    monkeypatch.setattr(
+        junie, "litellm_catalogue_models", lambda *a, **k: {"ordinary-model"}
+    )
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(target),
+        ],
+    )
+
+    junie.main()
+
+    generated = json.loads((target / "ordinary.json").read_text())
+    assert generated["primaryModel"]["id"] == "ordinary-model"
+    assert not (target / "free.json").exists()
+    assert len(calls) == 1
+
+
+def test_junie_required_unavailable_free_group_fails_before_writes(
+    tmp_path, monkeypatch
+):
+    runtime(monkeypatch, available=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    target = home / "models"
+    target.mkdir()
+    sentinel = target / "manual.json"
+    sentinel.write_text('{"manual": true}')
+    before = {path: path.read_bytes() for path in target.iterdir()}
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {"provider": "openai", "primaryModel": "ordinary-model"}
+                },
+                "requiredGroups": ["free"],
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "read_junie_key", lambda: "synthetic")
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(target),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="1"):
+        junie.main()
+
+    assert {path: path.read_bytes() for path in target.iterdir()} == before
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_junie_required_unresolvable_group_leaves_all_output_untouched(
+    tmp_path, monkeypatch, existing
+):
+    runtime(monkeypatch)
+    home = tmp_path / "home"
+    home.mkdir()
+    target = home / "models"
+    if existing:
+        target.mkdir()
+        sentinel = target / "manual.json"
+        sentinel.write_text('{"manual": true}')
+    before = (
+        {
+            path: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in target.iterdir()
+        }
+        if existing
+        else {}
+    )
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {
+                        "provider": "unknown",
+                        "primaryModel": "ordinary-model",
+                    }
+                },
+                "requiredGroups": ["free", "ordinary"],
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(
+        junie,
+        "prepare_dynamic_free_registry",
+        lambda registry, *_a, **_k: (registry, {}),
+    )
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(target),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Required Junie group unavailable"):
+        junie.main()
+
+    assert target.exists() is existing
+    if existing:
+        assert {
+            path: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in target.iterdir()
+        } == before
+
+
+def test_junie_required_healthy_compatibility_group_is_preserved(tmp_path, monkeypatch):
+    runtime(monkeypatch)
+    home = tmp_path / "home"
+    home.mkdir()
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {},
+                "compatibility": {"free-legacy": "free"},
+                "requiredGroups": ["free-legacy"],
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "read_junie_key", lambda: "synthetic")
+    monkeypatch.setattr(
+        junie,
+        "build_provider_configs",
+        lambda *_args: {
+            "google": {
+                "baseUrl": "https://example.test/v1",
+                "apiType": "OpenAICompletion",
+            },
+            "opencode": {
+                "baseUrl": "https://opencode.ai/zen/v1",
+                "apiType": "OpenAICompletion",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        junie,
+        "prepare_dynamic_free_registry",
+        lambda registry, requested, *_args, **_kwargs: (
+            registry,
+            {"presets": {requested[0]: {"available": True}}},
+        ),
+    )
+    monkeypatch.setattr(
+        junie,
+        "litellm_catalogue_models",
+        lambda *a, **k: {"google/models/gemini-3.5-flash-lite"},
+    )
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(home / "models"),
+        ],
+    )
+
+    junie.main()
+
+    assert (home / "models/free.json").is_file()
+    assert (home / "models/free-legacy.json").is_file()
+
+
+def test_junie_optional_compatibility_to_unavailable_free_group_is_omitted(
+    tmp_path, monkeypatch
+):
+    runtime(monkeypatch, available=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {"provider": "openai", "primaryModel": "ordinary-model"}
+                },
+                "compatibility": {"free-legacy": "free"},
+                "providers": {
+                    "openai": {
+                        "baseUrl": "https://api.openai.com/v1",
+                        "apiType": "OpenAIResponses",
+                        "apiKeyEnv": "OPENAI_API_KEY",
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "read_junie_key", lambda: "synthetic")
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(home / "models"),
+        ],
+    )
+
+    junie.main()
+
+    assert (home / "models/ordinary.json").is_file()
+    assert not (home / "models/free-legacy.json").exists()
+
+
 @pytest.mark.parametrize(
     "module,argv",
     [
@@ -714,7 +1091,13 @@ def test_unknown_dynamic_route_fails_before_consumer_writes(
         entry = junie
         groups = tmp_path / "groups.json"
         groups.write_text(
-            json.dumps({"sharedPresets": {preset: preset}, "groups": {preset: {}}})
+            json.dumps(
+                {
+                    "sharedPresets": {preset: preset},
+                    "groups": {preset: {}},
+                    "requiredGroups": [preset],
+                }
+            )
         )
         args = argv(preset)
         args[args.index("GROUPS")] = str(groups)

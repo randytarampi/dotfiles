@@ -15,6 +15,10 @@ Dynamic free presets are composed from fresh catalogue and route-evidence inputs
 when profiles are generated. Missing, stale or insufficient provenance fails
 closed rather than selecting a paid substitute. This is not a request-time cost
 or entitlement guarantee, and no live catalogue status is claimed here.
+An optional `requiredGroups` list in `model-groups.json` names groups that must
+resolve: an unavailable listed dynamic-free group aborts before profile writes.
+Unlisted dynamic-free groups are optional and omitted when their evidence is
+unavailable; unrelated groups continue, with no stale or paid substitute.
 Compatibility names `openai-gpt-6-luna`, `openai-gpt-6.1-sol` and the four
 `meridian-*` names generate selectable profiles equivalent to their renamed
 `openai-*` and `anthropic-*` groups, including derived gateway twins. Retain
