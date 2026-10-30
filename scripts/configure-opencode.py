@@ -11,6 +11,7 @@ import sys
 import json
 import argparse
 import os
+import shutil
 import subprocess  # nosec B404 - managed script/gateway orchestration; no shell, env-staged
 import tempfile
 import stat
