@@ -692,9 +692,7 @@ def test_dynamic_free_production_guards_survive_optimized_python():
         ]
         assert len(guards) == expected_count
         for guard in guards:
-            block = ast.fix_missing_locations(
-                ast.Module(body=[guard], type_ignores=[])
-            )
+            block = ast.fix_missing_locations(ast.Module(body=[guard], type_ignores=[]))
             optimized = compile(block, str(SCRIPT), "exec", optimize=2)
             with pytest.raises(RuntimeError, match="Dynamic free"):
                 exec(optimized, {name: None})
