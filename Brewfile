@@ -1,5 +1,6 @@
 tap "anomalyco/tap", trusted: true
 tap "facebook/fb", trusted: true
+tap "meta/fb", "https://github.com/meta/homebrew-fb.git", trusted: true
 tap "heroku/brew", trusted: true
 tap "microsoft/mssql-release", trusted: true
 tap "mistertea/et", trusted: true

@@ -563,7 +563,10 @@ def orchestrate_tier_switch(
                     )
                 else:
                     target_config = helper.apply_litellm_slim_gate(
-                        target_config, consumer_config, previous_slim
+                        target_config,
+                        consumer_config,
+                        previous_slim,
+                        selected_preset=tier,
                     )
             except Exception as exc:
                 raise RuntimeError(

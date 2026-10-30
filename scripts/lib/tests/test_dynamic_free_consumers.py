@@ -783,10 +783,127 @@ def test_junie_optional_unavailable_free_group_does_not_block_other_group(
 
     junie.main()
 
+    assert (target / "ordinary.json").exists()
+    assert not (target / "free.json").exists()
+    assert len(calls) == 1
+
+
+def test_junie_override_skips_optional_dynamic_group_and_generates_ordinary(
+    tmp_path, monkeypatch
+):
+    runtime(monkeypatch, available=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    target = home / "models"
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {"provider": "openai", "primaryModel": "ordinary-model"}
+                },
+                "providers": {
+                    "openai": {
+                        "baseUrl": "https://api.openai.com/v1",
+                        "apiType": "OpenAIResponses",
+                        "apiKeyEnv": "OPENCODE_API_KEY",
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic")
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "read_junie_key", lambda: "synthetic")
+    monkeypatch.setattr(
+        junie, "litellm_catalogue_models", lambda *a, **k: {"ordinary-model"}
+    )
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(target),
+            "--role-model",
+            "observer=openai/override-model",
+        ],
+    )
+
+    junie.main()
+
     generated = json.loads((target / "ordinary.json").read_text())
     assert generated["primaryModel"]["id"] == "ordinary-model"
     assert not (target / "free.json").exists()
-    assert len(calls) == 1
+
+
+def test_junie_required_dynamic_group_with_override_fails_before_writes(
+    tmp_path, monkeypatch
+):
+    runtime(monkeypatch, available=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    target = home / "models"
+    target.mkdir()
+    sentinel = target / "manual.json"
+    sentinel.write_text('{"manual": true}')
+    before = {path: path.read_bytes() for path in target.iterdir()}
+    groups = tmp_path / "groups.json"
+    groups.write_text(
+        json.dumps(
+            {
+                "sharedPresets": {"free": "free"},
+                "groups": {
+                    "ordinary": {"provider": "openai", "primaryModel": "ordinary-model"}
+                },
+                "requiredGroups": ["free"],
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_API_KEY", "synthetic")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setattr(
+        junie.tier_registry,
+        "load_registry",
+        lambda *a: json.loads(
+            (ROOT / "configs/opencode/oh-my-opencode-slim.json").read_text()
+        ),
+    )
+    monkeypatch.setattr(junie, "parse_local_models", lambda *_: [])
+    monkeypatch.setattr(junie, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-jetbrains-profiles.py",
+            "--groups-json",
+            str(groups),
+            "--target-dir",
+            str(target),
+            "--role-model",
+            "observer=openai/override-model",
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="1"):
+        junie.main()
+
+    assert {path: path.read_bytes() for path in target.iterdir()} == before
 
 
 def test_junie_required_unavailable_free_group_fails_before_writes(
