@@ -96,26 +96,6 @@ def validate_free_gateway_evidence(
                 },
             }
         )
-    binding_routes = [
-        {
-            "model_name": route.get("alias"),
-            "litellm_params": {
-                "model": route.get("wire_model"),
-                "api_base": route.get("api_base"),
-            },
-            "_route_provenance": {
-                key: route.get(key)
-                for key in (
-                    "upstream_host",
-                    "upstream_model_id",
-                    "metadata_model_id",
-                    "metadata_provider",
-                    "source_kind",
-                )
-            },
-        }
-        for route in routes
-    ]
     # The manifest digest binds identity, not mutable validity state; timestamps
     # are checked independently against the trusted config envelope below.
     if manifest.get("provenance_binding_sha256") != free_route_manifest.binding_digest(

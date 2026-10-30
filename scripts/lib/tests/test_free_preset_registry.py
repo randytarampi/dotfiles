@@ -9,8 +9,12 @@ import pytest
 LIB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LIB))
 
-from free_preset_registry import materialize_free_presets
-from free_presets import REQUIRED_ROLES, Candidate, FreePresetResolutionError
+from free_preset_registry import materialize_free_presets  # noqa: E402
+from free_presets import (  # noqa: E402 -- test bootstrap above.
+    REQUIRED_ROLES,
+    Candidate,
+    FreePresetResolutionError,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 REGISTRY_PATH = ROOT / "configs/opencode/oh-my-opencode-slim.json"

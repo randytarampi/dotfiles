@@ -420,7 +420,7 @@ def test_dynamic_free_unavailable_refused_before_writes(tmp_path, monkeypatch):
         patch.dict(os.environ, {"OPENCODE_DIR": str(tmp_path)}),
         patch.object(configure_tier, "prepare_dynamic_free_registry", refuse),
         patch.object(configure_tier, "list_local_ollama_models") as discovery,
-        patch.object(configure_tier.shutil, "copy2") as copy,
+        patch.object(configure_tier.os, "makedirs") as create_dir,
     ):
         try:
             configure_tier.orchestrate_tier_switch("free", False, [])
@@ -429,7 +429,7 @@ def test_dynamic_free_unavailable_refused_before_writes(tmp_path, monkeypatch):
         else:
             raise AssertionError("unresolved dynamic free preset was accepted")
     discovery.assert_not_called()
-    copy.assert_not_called()
+    create_dir.assert_not_called()
     assert not target.exists()
 
 
@@ -456,7 +456,7 @@ def test_disabled_fallback_loaded_from_home_env_rejected_before_writes(tmp_path)
     with (
         patch.dict(os.environ, {"HOME": str(home)}, clear=True),
         patch.object(configure_tier, "list_local_ollama_models") as discovery,
-        patch.object(configure_tier.shutil, "copy2") as copy,
+        patch.object(configure_tier.os, "makedirs") as create_dir,
         patch.object(configure_tier.sys, "argv", [str(SCRIPT), "--preset", "local"]),
     ):
         try:
@@ -466,7 +466,7 @@ def test_disabled_fallback_loaded_from_home_env_rejected_before_writes(tmp_path)
         else:
             raise AssertionError("disabled loaded fallback was accepted")
     discovery.assert_not_called()
-    copy.assert_not_called()
+    create_dir.assert_not_called()
     assert not target.exists()
 
 

@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[3]
 LIB = ROOT / "scripts/lib"
 sys.path.insert(0, str(LIB))
 
-from free_preset_runtime import DynamicFreeRegistryError, prepare_dynamic_free_registry
-from free_route_manifest import build_manifest
-from free_preset_runtime import fetch_models_dev_snapshot, load_gateway_free_evidence
+from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
+from free_route_manifest import build_manifest  # noqa: E402
+from free_preset_runtime import load_gateway_free_evidence  # noqa: E402
 
 NOW = datetime(2026, 10, 30, tzinfo=timezone.utc)
 PRESETS = ("free", "omo-slim-opencode-zen-free")
