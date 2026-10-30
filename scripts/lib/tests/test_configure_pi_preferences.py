@@ -178,7 +178,7 @@ def test_pi_main_refuses_settings_changed_during_discovery_before_any_writes(
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_dir))
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
-    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "free"])
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "pro-plus"])
 
     intervening_state = []
 
@@ -208,6 +208,38 @@ def test_pi_main_refuses_settings_changed_during_discovery_before_any_writes(
 
     monkeypatch.setattr(configure_pi, "list_local_ollama_models", save_during_discovery)
     monkeypatch.setattr(configure_pi, "load_env", lambda: None)
+    monkeypatch.setattr(
+        configure_pi,
+        "prepare_dynamic_free_registry",
+        lambda registry, presets, environ: (
+            registry,
+            {
+                "presets": {
+                    preset: {
+                        "eligible_count": 1,
+                        "selected": {
+                            role: "opencode/big-pickle"
+                            for role in (
+                                "orchestrator",
+                                "oracle",
+                                "librarian",
+                                "explorer",
+                                "coder",
+                                "task_worker",
+                                "fixer",
+                                "designer",
+                                "observer",
+                                "council-alpha",
+                                "council-beta",
+                                "council-gamma",
+                            )
+                        },
+                    }
+                    for preset in presets
+                }
+            },
+        ),
+    )
     side_effects = [
         patch.object(configure_pi, name, side_effect=AssertionError(name))
         for name in (
@@ -676,12 +708,51 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
         key_file.write_text("fixture-secret", encoding="utf-8")
         key_file.chmod(0o600)
     monkeypatch.setattr(configure_pi, "get_catalogue", lambda *_args: catalogue)
+    # Transport regressions use the former static role fixture, not the new
+    # evidence-dependent free selector. Dynamic selection has separate tests.
+    registry = configure_pi.tier_registry.load_registry(configure_pi.SLIM)
+    registry["presets"]["pro-plus"] = registry["presets"]["free"]
+    monkeypatch.setattr(
+        configure_pi.tier_registry, "load_registry", lambda *_: registry
+    )
     monkeypatch.setattr(configure_pi, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        configure_pi,
+        "prepare_dynamic_free_registry",
+        lambda registry, presets, environ: (
+            registry,
+            {
+                "presets": {
+                    preset: {
+                        "eligible_count": 1,
+                        "selected": {
+                            role: "opencode/big-pickle"
+                            for role in (
+                                "orchestrator",
+                                "oracle",
+                                "librarian",
+                                "explorer",
+                                "coder",
+                                "task_worker",
+                                "fixer",
+                                "designer",
+                                "observer",
+                                "council-alpha",
+                                "council-beta",
+                                "council-gamma",
+                            )
+                        },
+                    }
+                    for preset in presets
+                }
+            },
+        ),
+    )
     monkeypatch.setattr(
         configure_pi, "_ensure_packages", lambda *_args, **_kwargs: None
     )
     monkeypatch.setattr(
-        sys, "argv", ["configure-pi.py", "--preset", "free", "--no-local-fallbacks"]
+        sys, "argv", ["configure-pi.py", "--preset", "pro-plus", "--no-local-fallbacks"]
     )
     configure_pi.main()
     return agent_dir

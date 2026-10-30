@@ -199,6 +199,13 @@ loader (ruling dated 2026-10-26), so preservation of custom settings is an
 accepted manual discipline here, not a proven automatic guarantee. This mode
 does not provide automatic loading or qualify strict-free execution.
 
+The shared `free` presets are composed dynamically from fresh catalogue and
+route-evidence inputs during generation. Insufficient or stale provenance
+refuses selection instead of falling back silently. Generated evidence is not
+request-time billing or entitlement enforcement, and this documentation does
+not claim live availability was verified. The manual profile loader does not
+itself refresh or validate this evidence.
+
 `configure-pi.py` codifies defaults for these `~/.pi/agent/settings.json` keys:
 
 | Key | Codified default |

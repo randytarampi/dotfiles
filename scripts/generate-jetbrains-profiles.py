@@ -54,6 +54,8 @@ from local_engines import (  # noqa: E402 -- scripts/lib bootstrap.
     local_endpoint_for,
     resolve_engine,
 )
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS
+from free_preset_runtime import prepare_dynamic_free_registry
 
 JUNIE_KEY_FILE = "~/.local/share/litellm/clients/junie.key"
 PROFILE_MANIFEST = ".dotfiles-generated-profiles.json"
@@ -126,6 +128,8 @@ def select_model_groups(groups: dict, use_litellm: bool) -> dict:
     for name, group in groups.items():
         provider = group.get("provider")
         if provider == "litellm":
+            if group.get("gateway_alias"):
+                selected[name] = group
             continue
         if provider in LITELLM_ROUTED_PROVIDERS:
             routed_name = f"litellm-{name}"
@@ -164,7 +168,10 @@ def _twin_for_group(name, group):
                 twin_name,
             )
             continue
-        twin[field] = litellm_alias(model, model_provider_name)
+        if group.get("gateway_alias") or model_provider_name == "litellm":
+            twin[field] = model
+        else:
+            twin[field] = litellm_alias(model, model_provider_name)
     if group.get("fasterModel") and "fasterModel" in twin:
         twin["fasterProvider"] = "litellm"
     return twin_name, twin
@@ -184,7 +191,7 @@ def derive_litellm_groups(groups: dict) -> dict:
         name: group
         for name, group in groups.items()
         if name not in DISABLED_PRESETS
-        and name.removeprefix("litellm-") not in DISABLED_PRESETS
+        or name.removeprefix("litellm-") in DYNAMIC_FREE_PRESETS
     }
     for name, group in groups.items():
         if name not in derived:
@@ -681,11 +688,11 @@ def atomic_write_manifest(target_dir: Path, names: dict[str, str]) -> None:
     )
 
 
-def resolve_model_groups(cfg, registry):
+def resolve_model_groups(cfg, registry, dynamic_registry=None, use_litellm=False):
     """Resolve only explicitly requested shared presets and compatibility names."""
-    requested_disabled = (set(cfg.get("sharedPresets", {})) & DISABLED_PRESETS) | (
-        set(cfg.get("groups", {})) & DISABLED_PRESETS
-    )
+    requested_disabled = (
+        set(cfg.get("sharedPresets", {})) | set(cfg.get("groups", {}))
+    ) & (DISABLED_PRESETS - set(DYNAMIC_FREE_PRESETS))
     if requested_disabled:
         logger.warning(
             "Omitting unavailable Junie groups: %s",
@@ -695,30 +702,41 @@ def resolve_model_groups(cfg, registry):
         name: dict(group)
         for name, group in cfg.get("groups", {}).items()
         if name not in DISABLED_PRESETS
+        or (name in DYNAMIC_FREE_PRESETS and dynamic_registry is not None)
     }
     for name, preset in cfg.get("sharedPresets", {}).items():
-        if name in DISABLED_PRESETS:
+        if name in DISABLED_PRESETS and (
+            name not in DYNAMIC_FREE_PRESETS or dynamic_registry is None
+        ):
             continue
         if name != preset:
             raise ValueError("Shared group must retain its canonical preset name")
-        roles = tier_registry.materialize_role_models(registry, preset, {})
+        role_registry = dynamic_registry if preset in DYNAMIC_FREE_PRESETS else registry
+        if role_registry is None:
+            continue
+        roles = tier_registry.materialize_role_models(role_registry, preset, {})
         primary, faster = roles["orchestrator"], roles["librarian"]
-        if not all(isinstance(ref, str) and "/" in ref for ref in (primary, faster)):
+        is_gateway_alias = preset in DYNAMIC_FREE_PRESETS and use_litellm
+        if not all(
+            isinstance(ref, str) and ref and (is_gateway_alias or "/" in ref)
+            for ref in (primary, faster)
+        ):
             raise ValueError("Shared group has unresolved model assignments")
-        provider, model = primary.split("/", 1)
-        faster_provider, faster_model = faster.split("/", 1)
+        if is_gateway_alias:
+            provider, model = "litellm", primary
+            faster_provider, faster_model = "litellm", faster
+        else:
+            provider, model = primary.split("/", 1)
+            faster_provider, faster_model = faster.split("/", 1)
         groups[name] = {
             "provider": provider,
             "primaryModel": model,
             "fasterProvider": faster_provider,
             "fasterModel": faster_model,
+            **({"gateway_alias": True} if is_gateway_alias else {}),
         }
     for alias, canonical in cfg.get("compatibility", {}).items():
-        if (
-            alias in DISABLED_PRESETS
-            or canonical in DISABLED_PRESETS
-            or canonical.removeprefix("litellm-") in DISABLED_PRESETS
-        ):
+        if alias in DISABLED_PRESETS or canonical in DISABLED_PRESETS:
             continue
         if alias in groups or canonical not in groups:
             raise ValueError(f"Invalid compatibility group: {alias}")
@@ -750,8 +768,13 @@ def main():
     args.local_fallback_preset = args.local_fallback_preset or os.environ.get(
         "DOTFILES_LOCAL_FALLBACK_PRESET"
     )
-    if args.local_fallback_preset in DISABLED_PRESETS:
+    if (
+        args.local_fallback_preset in DISABLED_PRESETS
+        and args.local_fallback_preset not in DYNAMIC_FREE_PRESETS
+    ):
         parser.error(f"Preset '{args.local_fallback_preset}' is unavailable")
+    if args.local_fallback_preset in DYNAMIC_FREE_PRESETS:
+        parser.error("Dynamic free presets cannot be local fallback presets")
 
     groups_path = os.path.abspath(os.path.expanduser(args.groups_json))
     target_dir = os.path.abspath(os.path.expanduser(args.target_dir))
@@ -762,7 +785,28 @@ def main():
         with open(groups_path, encoding="utf-8") as file:
             cfg = json.load(file)
         registry = tier_registry.load_registry()
-        cfg["groups"] = resolve_model_groups(cfg, registry)
+        requested_dynamic = {
+            preset
+            for preset in DYNAMIC_FREE_PRESETS
+            if preset in cfg.get("sharedPresets", {}).values()
+            or preset in cfg.get("groups", {})
+        }
+        if requested_dynamic and (args.role_models or args.category_models):
+            raise ValueError("Dynamic free preset overrides are refused")
+        dynamic_registry = None
+        full_registry = isinstance(registry.get("_tiers"), dict) and all(
+            preset in registry.get("presets", {}) for preset in requested_dynamic
+        )
+        if requested_dynamic and full_registry:
+            dynamic_registry, _ = prepare_dynamic_free_registry(
+                registry, sorted(requested_dynamic), os.environ, consumer="junie"
+            )
+        cfg["groups"] = resolve_model_groups(
+            cfg,
+            registry,
+            dynamic_registry,
+            use_litellm=os.environ.get("DOTFILES_USE_LITELLM_PROXY", "0") == "1",
+        )
     except Exception as exc:
         logger.critical(f"Failed to read model configuration: {exc}")
         raise SystemExit(1)
@@ -796,13 +840,27 @@ def main():
                     "apiKeyEnv": engine["api_key_env"],
                 }
     tier_specs = []
-    for tier in registry.get("presets", {}):
-        if tier in DISABLED_PRESETS:
+    for tier in list(registry.get("presets", {})):
+        if tier in DYNAMIC_FREE_PRESETS and dynamic_registry is None:
             continue
-        if not tier_registry.uses_local_placeholders(registry, tier):
+        if tier in DISABLED_PRESETS and tier not in DYNAMIC_FREE_PRESETS:
+            continue
+        tier_registry_source = (
+            dynamic_registry if tier in DYNAMIC_FREE_PRESETS else registry
+        )
+        if tier in DYNAMIC_FREE_PRESETS and dynamic_registry is not None:
+            registry["presets"][tier] = dynamic_registry["presets"][tier]
+            registry["_tiers"][tier] = dynamic_registry["_tiers"][tier]
+        if tier in DYNAMIC_FREE_PRESETS and dynamic_registry is not None:
+            resolved = tier_registry_source["presets"][tier]
+            roles = {
+                "orchestrator": resolved["orchestrator"]["model"],
+                "librarian": resolved["librarian"]["model"],
+            }
+        elif not tier_registry.uses_local_placeholders(tier_registry_source, tier):
             categories = {}
             roles = tier_registry.materialize_role_models(
-                registry, tier, categories, args.role_models
+                tier_registry_source, tier, categories, args.role_models
             )
         else:
             tier_resolution_preset = args.local_fallback_preset or tier
@@ -810,7 +868,7 @@ def main():
             if local_models:
                 categories = tier_registry.classify_models_for_preset(
                     local_models,
-                    registry,
+                    tier_registry_source,
                     tier_resolution_preset,
                     args.min_reasoning_embedding,
                     profile=tier_registry.get_profile_name(registry, tier),
@@ -819,7 +877,7 @@ def main():
                     categories, args.category_models
                 )
             roles = tier_registry.materialize_role_models(
-                registry, tier, categories, args.role_models
+                tier_registry_source, tier, categories, args.role_models
             )
         orchestrator_ref = roles.get("orchestrator", "")
         librarian_ref = roles.get("librarian", "")
@@ -832,6 +890,8 @@ def main():
                 None,
             )
         )
+        if tier in DYNAMIC_FREE_PRESETS:
+            registry["presets"][tier] = tier_registry_source["presets"][tier]
     if args.local_fallback_preset:
         logger.info(f"Using local fallback preset: {args.local_fallback_preset}")
 
@@ -916,8 +976,12 @@ def main():
     logger.info("Generating JetBrains AI model profiles...")
 
     for name, primary_ref, faster_ref, explicit_provider, explicit_faster in specs:
+        if not isinstance(primary_ref, str) or not primary_ref:
+            logger.warning("No resolved primary model for %s — skipping", name)
+            continue
         temperature_ref = specs_temperature_identity.get(name, primary_ref)
         provider = explicit_provider or model_provider(primary_ref)
+        is_gateway_alias_spec = explicit_provider == "litellm" and name in group_names
         is_routed_spec = name in tier_names or name in pool_profile_names
         route_primary = (
             litellm_gate and is_routed_spec and provider in LITELLM_ROUTED_PROVIDERS
@@ -931,7 +995,7 @@ def main():
             and faster_ref
             and route_faster_provider in LITELLM_ROUTED_PROVIDERS
         )
-        if route_primary:
+        if route_primary and not is_gateway_alias_spec:
             if catalogue is None:
                 logger.warning("Omitting %s: LiteLLM model catalogue unavailable", name)
                 continue
@@ -941,7 +1005,7 @@ def main():
                 continue
             provider = "litellm"
             primary_ref = alias
-        if route_faster:
+        if route_faster and not is_gateway_alias_spec:
             faster_alias = litellm_alias(faster_ref, route_faster_provider)
             if catalogue is None or faster_alias not in catalogue:
                 logger.info(

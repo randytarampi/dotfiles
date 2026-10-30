@@ -11,6 +11,10 @@ its own frozen assignments. Free classification follows model-name markers or
 Cohere/Poolside when served directly or through this gateway; it is assignment
 metadata, not request-time zero-cost qualification. Third-party hosting does
 not inherit provider free status; see [the acceptance ledger](POST72-ACCEPTANCE.md).
+Dynamic free presets are composed from fresh catalogue and route-evidence inputs
+when profiles are generated. Missing, stale or insufficient provenance fails
+closed rather than selecting a paid substitute. This is not a request-time cost
+or entitlement guarantee, and no live catalogue status is claimed here.
 Compatibility names `openai-gpt-6-luna`, `openai-gpt-6.1-sol` and the four
 `meridian-*` names generate selectable profiles equivalent to their renamed
 `openai-*` and `anthropic-*` groups, including derived gateway twins. Retain

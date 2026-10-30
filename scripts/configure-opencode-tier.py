@@ -4,12 +4,15 @@ OpenCode Tier Helper.
 Handles local Ollama model role classification and placeholder resolution.
 """
 
+import copy
 import sys
 import json
 import importlib.util
 import argparse
 import shutil
 import os
+import stat
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -41,6 +44,8 @@ from unavailable_presets import (  # noqa: E402 -- scripts/lib bootstrap above.
     reject_disabled_preset,
     without_disabled_presets,
 )
+from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
+from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 
 OPENCODE_CONFIG_FILENAME = "opencode.json"
 
@@ -49,6 +54,106 @@ def _csv_env(name):
     return [
         value.strip() for value in os.environ.get(name, "").split(",") if value.strip()
     ]
+
+
+def _merge_dynamic_free_registry(target, resolved, selected):
+    """Retain custom config while replacing stale dynamic-free selections."""
+    result = copy.deepcopy(target)
+    for name in DYNAMIC_FREE_PRESETS:
+        result.get("presets", {}).pop(name, None)
+        result.get("_tiers", {}).pop(name, None)
+        result.get("council", {}).get("presets", {}).pop(name, None)
+    result.setdefault("presets", {})[selected] = copy.deepcopy(
+        resolved["presets"][selected]
+    )
+    result.setdefault("_tiers", {})[selected] = copy.deepcopy(
+        resolved["_tiers"][selected]
+    )
+    council = result.setdefault("council", {})
+    council["default_preset"] = resolved.get("council", {}).get("default_preset")
+    selected_council = resolved.get("council", {}).get("presets", {}).get(selected)
+    if selected_council is not None:
+        council.setdefault("presets", {})[selected] = copy.deepcopy(selected_council)
+    return result
+
+
+def _dynamic_gateway_aliases(environ, audit):
+    """Bind selected upstream identities to aliases advertised by LiteLLM."""
+    from pathlib import Path
+    from model_catalogues import get_catalogue
+
+    port = environ.get("LITELLM_PORT", "4000")
+    endpoint = f"http://127.0.0.1:{port}/v1"
+    key_path = Path("~/.local/share/litellm/clients/opencode.key").expanduser()
+    if (
+        key_path.is_symlink()
+        or not key_path.is_file()
+        or stat.S_IMODE(key_path.stat().st_mode) != 0o600
+        or key_path.stat().st_uid != os.getuid()
+    ):
+        raise ValueError("OpenCode LiteLLM key file is unavailable or unsafe")
+    key = key_path.read_text(encoding="utf-8").strip()
+    if not key:
+        raise ValueError("OpenCode LiteLLM client key is empty")
+    payload = get_catalogue(f"{endpoint}/models", key)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        raise ValueError("LiteLLM /models response is malformed")
+    aliases = [row.get("id") for row in data if isinstance(row, dict)]
+    if len(aliases) != len(data) or any(
+        not isinstance(alias, str) for alias in aliases
+    ):
+        raise ValueError("LiteLLM /models aliases are malformed")
+    if len(aliases) != len(set(aliases)):
+        raise ValueError("LiteLLM /models aliases are ambiguous")
+
+    config_path = Path(
+        os.path.join(
+            environ.get("LITELLM_ROOT", "~/.local/share/litellm"), "config.yaml"
+        )
+    ).expanduser()
+    manifest_path = config_path.with_name("free-route-manifest.json")
+    if config_path.is_symlink() or manifest_path.is_symlink():
+        raise ValueError("refusing symlinked LiteLLM evidence file")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # The route projection comes from the trusted producer config, never from
+    # the manifest. LiteLLM writes a credential-free companion route projection.
+    projection_path = config_path.with_name("free-route-config.json")
+    projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    routes = projection.get("routes") if isinstance(projection, dict) else None
+    if not isinstance(routes, list):
+        raise ValueError("trusted LiteLLM route projection is unavailable")
+    if not all(isinstance(route, dict) for route in routes):
+        raise ValueError("trusted LiteLLM route projection is malformed")
+    if projection.get("config_binding_sha256") != manifest.get("config_binding_sha256"):
+        raise ValueError("trusted route projection does not match manifest binding")
+    from free_route_manifest import config_binding_digest
+
+    config_projection = [
+        {
+            "model_name": row.get("model_name"),
+            "litellm_params": row.get("litellm_params"),
+        }
+        for row in routes
+    ]
+    if config_binding_digest(config_projection) != manifest.get(
+        "config_binding_sha256"
+    ):
+        raise ValueError("trusted route projection digest is invalid")
+    for preset, chosen in audit["presets"].items():
+        aliases_by_identity = {}
+        for route in routes:
+            identity = route.get("_route_provenance", {})
+            aliases_by_identity.setdefault(
+                (identity.get("upstream_host"), identity.get("upstream_model_id")), []
+            ).append(route.get("model_name"))
+        for role, ref in chosen["selected"].items():
+            host, model = ref.split("/", 1)
+            matches = aliases_by_identity.get((host, model), [])
+            advertised = [alias for alias in matches if alias in aliases]
+            if not advertised:
+                raise ValueError(f"no advertised LiteLLM alias for selected {role}")
+    return {"manifest": manifest, "projection": projection, "aliases": aliases}
 
 
 def load_effective_opencode_config(config_dir):
@@ -121,10 +226,14 @@ def orchestrate_tier_switch(
     Write the Slim config under OPENCODE_DIR or the global config directory;
     dry runs log planned writes without changing files.
     """
+    dynamic_free = tier in DYNAMIC_FREE_PRESETS
     try:
-        reject_disabled_preset(tier)
+        if not dynamic_free:
+            reject_disabled_preset(tier)
         if local_fallback_preset:
             reject_disabled_preset(local_fallback_preset)
+        if dynamic_free and (role_models or category_models):
+            raise ValueError("Model overrides are refused for dynamic free presets")
     except ValueError as error:
         logger.critical("%s", error)
         sys.exit(1)
@@ -151,13 +260,38 @@ def orchestrate_tier_switch(
         )
     )
 
+    dynamic_source_registry = None
+    dynamic_audit = None
+    if dynamic_free:
+        if role_models:
+            logger.critical(
+                "Role model overrides are refused for dynamically resolved free tiers"
+            )
+            sys.exit(1)
+        try:
+            with open(source_path, encoding="utf-8") as source_file:
+                source_registry = json.load(source_file)
+            dynamic_source_registry, dynamic_audit = prepare_dynamic_free_registry(
+                source_registry, [tier], os.environ
+            )
+        except Exception as error:
+            logger.critical(
+                "Unable to resolve dynamic free tier before writes: %s", error
+            )
+            sys.exit(1)
+
     had_previous_slim = os.path.exists(config_path)
     if not had_previous_slim:
         # Project mode: create a sanitized copy before any discovery or selection.
         if os.path.exists(source_path):
             try:
                 with open(source_path, encoding="utf-8") as source_file:
-                    source_registry = without_disabled_presets(json.load(source_file))
+                    pristine_source = json.load(source_file)
+                source_registry = (
+                    dynamic_source_registry
+                    if dynamic_source_registry is not None
+                    else without_disabled_presets(pristine_source)
+                )
             except (OSError, ValueError, UnicodeDecodeError) as error:
                 logger.critical(
                     "Failed to load or sanitize Slim source %s: %s", source_path, error
@@ -183,7 +317,13 @@ def orchestrate_tier_switch(
 
     try:
         registry = tier_registry.load_registry(tiers_source)
-        registry = without_disabled_presets(registry)
+        if dynamic_source_registry is not None:
+            registry = copy.deepcopy(dynamic_source_registry)
+        registry = (
+            dynamic_source_registry
+            if dynamic_source_registry is not None
+            else without_disabled_presets(registry)
+        )
     except Exception as e:
         logger.critical(f"Failed to load tiers source {tiers_source}: {e}")
         sys.exit(1)
@@ -203,7 +343,7 @@ def orchestrate_tier_switch(
     local_preset = tier_registry.uses_local_placeholders(registry, resolution_preset)
 
     local_role_models = {}
-    if not no_local_fallbacks or local_preset:
+    if (not no_local_fallbacks or local_preset) and not dynamic_free:
         models_list = list_local_ollama_models()
         models_list = filter_omlx_models_for_gate(models_list)
         if models_list:
@@ -220,6 +360,9 @@ def orchestrate_tier_switch(
     resolved_role_models = tier_registry.materialize_role_models(
         registry, tier, fallback_role_models, role_models
     )
+    if dynamic_free:
+        resolved_role_models = dict(dynamic_audit["presets"][tier]["selected"])
+        fallback_role_models = {}
     if not fallback_role_models:
         logger.warning("No local Ollama models discovered; skipping local fallbacks")
     else:
@@ -249,7 +392,7 @@ def orchestrate_tier_switch(
                 )
             else:
                 logger.info("Cloud role assignments:\n" + "\n".join(role_assignments))
-        if tier_registry.uses_local_placeholders(registry, tier):
+        if not dynamic_free and tier_registry.uses_local_placeholders(registry, tier):
             tier_council = tier_config.get("council", {})
             council_presets = tier_council.get("presets", {})
             if tier in council_presets:
@@ -305,10 +448,14 @@ def orchestrate_tier_switch(
     try:
         read_config_path = config_path if os.path.exists(config_path) else source_path
         with open(read_config_path, "r", encoding="utf-8") as f:
-            target_config = without_disabled_presets(json.load(f))
-        previous_slim = (
-            json.loads(json.dumps(target_config)) if had_previous_slim else None
-        )
+            loaded_target = json.load(f)
+        previous_slim = copy.deepcopy(loaded_target) if had_previous_slim else None
+        if dynamic_source_registry is not None:
+            target_config = _merge_dynamic_free_registry(
+                loaded_target, dynamic_source_registry, tier
+            )
+        else:
+            target_config = without_disabled_presets(loaded_target)
     except Exception as e:
         logger.critical(f"Failed to load target config {config_path}: {e}")
         sys.exit(1)
@@ -318,7 +465,7 @@ def orchestrate_tier_switch(
     # Update preset role assignments from source presets
     source_presets_data = registry.get("presets", {})
     if tier in source_presets_data:
-        source_preset = json.loads(json.dumps(preset))
+        source_preset = json.loads(json.dumps(source_presets_data[tier]))
         for role, model in resolved_role_models.items():
             if role in source_preset and isinstance(source_preset[role], dict):
                 if model is None:
@@ -354,6 +501,10 @@ def orchestrate_tier_switch(
                 source_presets[other_tier_name]["council"] = council_preset
 
     target_config["council"]["presets"] = source_presets
+
+    if dynamic_free and dynamic_audit:
+        dynamic_source = dynamic_source_registry["_tiers"][tier]
+        target_config.setdefault("_tiers", {})[tier] = copy.deepcopy(dynamic_source)
 
     if "_tiers" in target_config:
         del target_config["_tiers"]
@@ -424,7 +575,9 @@ def main():
         help="Omit local Ollama models from fallback chains",
     )
     available_tiers = [
-        name for name in get_available_tiers() if name not in DISABLED_PRESETS
+        name
+        for name in get_available_tiers()
+        if name not in DISABLED_PRESETS or name in DYNAMIC_FREE_PRESETS
     ]
     add_model_override_args(parser, preset_choices=available_tiers)
     parser.add_argument(
@@ -453,6 +606,10 @@ def main():
     args.local_fallback_preset = args.local_fallback_preset or os.environ.get(
         "DOTFILES_LOCAL_FALLBACK_PRESET"
     )
+    if args.preset in DYNAMIC_FREE_PRESETS and (
+        args.role_models or args.category_models or args.local_fallback_preset
+    ):
+        parser.error("Dynamic free presets refuse model and local fallback overrides")
     # Accept the deprecated tier names everywhere (choices include them via
     # get_available_tiers); resolve to canonical presets before use so
     # forwarded children never receive an alias.

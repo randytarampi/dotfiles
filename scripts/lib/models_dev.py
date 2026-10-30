@@ -14,6 +14,7 @@ so OpenCode config generation never breaks due to metadata fetch issues.
 """
 
 import json
+import datetime
 import os
 import subprocess
 import time
@@ -25,6 +26,79 @@ MODELS_DEV_URL = "https://models.dev/api.json"
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "dotfiles")
 CACHE_FILE = os.path.join(CACHE_DIR, "models-dev.json")
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 24 hours
+
+
+class ModelsDevEvidenceError(RuntimeError):
+    """Raised when a trustworthy models.dev snapshot cannot be obtained."""
+
+
+def fetch_models_dev_snapshot(*, clock=time.time, fetch=None, cache_path=None):
+    """Return a timestamped raw models.dev snapshot without writing the cache.
+
+    A fresh cache is usable only when its mtime is not in the future and its
+    provider mapping validates. Otherwise a successful HTTPS fetch is required.
+    """
+    path = cache_path or CACHE_FILE
+    now = clock()
+
+    def validate(data):
+        if not isinstance(data, dict) or not data:
+            raise ModelsDevEvidenceError("models.dev provider data is unavailable")
+        for provider, record in data.items():
+            if not isinstance(provider, str) or not isinstance(record, dict):
+                raise ModelsDevEvidenceError("malformed models.dev provider data")
+            if not isinstance(record.get("models"), dict):
+                raise ModelsDevEvidenceError("malformed models.dev provider models")
+        return data
+
+    try:
+        if os.path.exists(path):
+            mtime = os.path.getmtime(path)
+            age = now - mtime
+            if 0 <= age < CACHE_TTL_SECONDS:
+                with open(path, "r", encoding="utf-8") as cache:
+                    models = validate(json.load(cache))
+                observed = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc)
+                return {
+                    "source": "models.dev",
+                    "observed_at": observed.isoformat(),
+                    "expires_at": (
+                        observed + datetime.timedelta(seconds=CACHE_TTL_SECONDS)
+                    ).isoformat(),
+                    "models": models,
+                }
+    except ModelsDevEvidenceError:
+        raise
+    except (OSError, ValueError, TypeError):
+        pass
+
+    try:
+        data = (fetch or _fetch_models_dev_raw)()
+        models = validate(data)
+        observed = datetime.datetime.fromtimestamp(clock(), datetime.timezone.utc)
+    except Exception as exc:
+        if isinstance(exc, ModelsDevEvidenceError):
+            raise
+        raise ModelsDevEvidenceError(
+            "models.dev snapshot evidence unavailable"
+        ) from exc
+    return {
+        "source": "models.dev",
+        "observed_at": observed.isoformat(),
+        "expires_at": (
+            observed + datetime.timedelta(seconds=CACHE_TTL_SECONDS)
+        ).isoformat(),
+        "models": models,
+    }
+
+
+def _fetch_models_dev_raw():
+    req = urllib.request.Request(
+        MODELS_DEV_URL, headers={"User-Agent": "dotfiles/configure-opencode"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
 
 # models.dev providers that map to OpenCode provider keys.
 # Note: models.dev has `ollama-cloud` (not bare `ollama`) for cloud models.

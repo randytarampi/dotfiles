@@ -10,6 +10,7 @@ import re
 import stat
 import time
 import tempfile
+from datetime import datetime, timedelta, timezone
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -692,6 +693,13 @@ def _entry(
     alias_kind=None,
     model_info=None,
     service_tier=None,
+    upstream_host=None,
+    upstream_model_id=None,
+    source_kind=None,
+    metadata_model_id=None,
+    metadata_provider=None,
+    observed_at=None,
+    expires_at=None,
 ):
     params = {"model": model}
     if api_base:
@@ -709,6 +717,15 @@ def _entry(
         "litellm_params": params,
         "_alias_kind": alias_kind or ("bare" if "/" not in alias else "qualified"),
         "_upstream_ref": (api_base or "", model),
+        "_route_provenance": {
+            "upstream_host": upstream_host or "unknown",
+            "upstream_model_id": upstream_model_id or "unknown",
+            "source_kind": source_kind or "unknown",
+            "metadata_model_id": metadata_model_id or upstream_model_id or "unknown",
+            "metadata_provider": metadata_provider or "unknown",
+            "observed_at": observed_at,
+            "expires_at": expires_at,
+        },
     }
 
 
@@ -981,6 +998,29 @@ def _live_catalogue(provider, key, base_url, timeout=10):
     return sorted(
         str(item["id"]) for item in data if isinstance(item, dict) and item.get("id")
     )
+
+
+def _live_catalogue_snapshot(
+    provider, key, base_url, timeout=10, *, clock=None, fetch=None
+):
+    """Return catalogue IDs with a bounded window measured around a full fetch."""
+    clock = clock or (lambda: datetime.now(timezone.utc))
+    started = clock()
+    if started.tzinfo is None or started.utcoffset() is None:
+        raise LiveCatalogueError("catalogue observation clock must be timezone-aware")
+    observed = started.astimezone(timezone.utc)
+    models = (fetch or _live_catalogue)(provider, key, base_url, timeout)
+    finished = clock()
+    if finished.tzinfo is None or finished.utcoffset() is None:
+        raise LiveCatalogueError("catalogue observation clock must be timezone-aware")
+    completed = finished.astimezone(timezone.utc)
+    if completed < observed or completed >= observed + timedelta(hours=1):
+        raise LiveCatalogueError("catalogue observation interval is invalid or expired")
+    return {
+        "models": models,
+        "observed_at": completed.isoformat(),
+        "expires_at": (observed + timedelta(hours=1)).isoformat(),
+    }
 
 
 def _safe_models(provider):
@@ -1262,6 +1302,12 @@ def _retained_ledger_families(
                 **item,
                 "_alias_kind": "qualified",
                 "_upstream_ref": params.get("model", ""),
+                "_route_provenance": {
+                    "upstream_host": "unknown",
+                    "upstream_model_id": "unknown",
+                    "metadata_model_id": "unknown",
+                    "source_kind": "retained-ledger",
+                },
             }
         )
     return retained
@@ -1329,7 +1375,11 @@ def compute_model_list(environ=None, previous_entries=None):
                     "ledger family retained (bare twins regenerate on recovery)"
                 )
                 entries.extend(
-                    {**item, "_alias_kind": item.get("_alias_kind", "qualified")}
+                    {
+                        **item,
+                        "_alias_kind": item.get("_alias_kind", "qualified"),
+                        "_route_provenance": {"source_kind": "retained-ledger"},
+                    }
                     for item in retained
                 )
             if provider != "ollama":
@@ -1385,7 +1435,11 @@ def compute_model_list(environ=None, previous_entries=None):
                     f"{provider}: UNKNOWN local endpoint unavailable; ledger family retained"
                 )
                 entries.extend(
-                    {**item, "_alias_kind": item.get("_alias_kind", "qualified")}
+                    {
+                        **item,
+                        "_alias_kind": item.get("_alias_kind", "qualified"),
+                        "_route_provenance": {"source_kind": "retained-ledger"},
+                    }
                     for item in retained
                 )
             continue
@@ -1517,10 +1571,12 @@ def compute_model_list(environ=None, previous_entries=None):
             continue
         if provider == "opencode":
             confirmed = set(provider_models("opencode"))
+            catalogue_snapshot = None
         elif provider in LIVE_CATALOGUE_PROVIDERS and provider != "poolside":
             live_base = PROVIDER_ENDPOINTS.get(provider, {}).get("baseUrl", base_url)
             try:
-                confirmed = set(_live_catalogue(provider, key, live_base))
+                catalogue_snapshot = _live_catalogue_snapshot(provider, key, live_base)
+                confirmed = set(catalogue_snapshot["models"])
             except LiveCatalogueError:
                 last_generation_notes.append(
                     f"{provider}: UNKNOWN; ledger family retained"
@@ -1551,6 +1607,7 @@ def compute_model_list(environ=None, previous_entries=None):
                 continue
         else:
             confirmed = set()
+            catalogue_snapshot = None
         # Canonicalize confirmed ids to the bare gateway-alias spelling so the
         # comparison matches how requested ids are collected (strips models/
         # and :free transport spellings).
@@ -1639,6 +1696,7 @@ def compute_model_list(environ=None, previous_entries=None):
                             "_upstream_ref": previous.get("litellm_params", {}).get(
                                 "model", ""
                             ),
+                            "_route_provenance": {"source_kind": "retained-ledger"},
                         }
                     )
             entries.extend(retained)
@@ -1677,6 +1735,19 @@ def compute_model_list(environ=None, previous_entries=None):
                     ),
                     key_env=key_env,
                     model_info=model_info,
+                    upstream_host=provider,
+                    upstream_model_id=(
+                        f"cohere/{model_id}" if provider == "cohere" else model_id
+                    ),
+                    source_kind=(
+                        "configured-provider"
+                        if provider == "opencode"
+                        else "live-catalogue"
+                    ),
+                    metadata_model_id=model_id,
+                    metadata_provider=provider,
+                    observed_at=(catalogue_snapshot or {}).get("observed_at"),
+                    expires_at=(catalogue_snapshot or {}).get("expires_at"),
                 )
             )
             if provider == "cohere":
@@ -1689,6 +1760,13 @@ def compute_model_list(environ=None, previous_entries=None):
                         f"cohere_chat/{model_id}",
                         key_env=key_env,
                         model_info=model_info,
+                        upstream_host=provider,
+                        upstream_model_id=f"cohere/{model_id}",
+                        source_kind="live-catalogue",
+                        metadata_model_id=model_id,
+                        metadata_provider=provider,
+                        observed_at=(catalogue_snapshot or {}).get("observed_at"),
+                        expires_at=(catalogue_snapshot or {}).get("expires_at"),
                     )
                 )
             # Only confirmed direct API-key OpenAI routes may publish service
@@ -1791,6 +1869,7 @@ def compute_model_list(environ=None, previous_entries=None):
                             "_upstream_ref": previous.get("litellm_params", {}).get(
                                 "model", ""
                             ),
+                            "_route_provenance": {"source_kind": "retained-ledger"},
                         }
                     )
             for model_id in sorted(selected):
@@ -1973,15 +2052,62 @@ def render_config(environ=None, entries=None):
 
 
 def write_config(path, environ=None, entries=None):
+    from free_route_manifest import (
+        build_manifest,
+        expected_config_routes,
+        write_manifest,
+    )
+
     path = Path(path)
+    if entries is None:
+        entries = compute_model_list(environ)
+    manifest_path = path.with_name("free-route-manifest.json")
+    projection_path = path.with_name("free-route-config.json")
+    # Writing configuration is not a new catalogue observation.
+    manifest = build_manifest(entries)
+    projection = {
+        "config_binding_sha256": manifest["config_binding_sha256"],
+        "routes": expected_config_routes(entries),
+    }
     rendered = render_config(environ, entries)
-    if path.exists() and path.read_text(encoding="utf-8") == rendered:
+    unchanged = path.exists() and path.read_text(encoding="utf-8") == rendered
+    if unchanged:
+        write_manifest(manifest_path, manifest)
+        write_manifest(projection_path, projection)
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or (path.exists() and path.stat().st_nlink != 1):
+        raise ValueError(f"refusing unsafe LiteLLM config target: {path}")
     fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=".litellm.", text=True)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(rendered)
-    os.replace(temp_name, path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+    write_manifest(manifest_path, manifest)
+    write_manifest(projection_path, projection)
+    ledger_path = previous_entries_ledger_path(path)
+    fd, ledger_temp = tempfile.mkstemp(dir=path.parent, prefix=".litellm-models.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(entries, handle, sort_keys=True, indent=2)
+            handle.write("\n")
+        os.replace(ledger_temp, ledger_path)
+    except BaseException:
+        try:
+            os.unlink(ledger_temp)
+        except FileNotFoundError:
+            pass
+        raise
     return True
 
 

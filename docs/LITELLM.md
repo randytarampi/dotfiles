@@ -283,9 +283,10 @@ By default the generator enumerates live catalogues in a **free scope**:
 curated catalogue selections plus routes classified free by a model name containing
 `free`, or Cohere/Poolside when served by that provider itself (directly or
 through this gateway). Third-party hosted Cohere/Poolside routes do not qualify.
-This catalogue enumeration scope is separate from the disabled `free` preset:
-including a model in the free-scope catalogue does not enable a preset or prove
-request-time cost. OpenRouter `:free` twins are included by default; set
+The dynamically composed `free` presets consume fresh catalogue and route
+evidence during generation; missing or insufficient evidence fails selection
+closed. Catalogue enumeration and free classification do not prove inference
+access, request-time cost, entitlement or zero-charge service. OpenRouter `:free` twins are included by default; set
 `DOTFILES_LITELLM_INCLUDE_OPENROUTER_FREE_TWINS=0` to disable them.
 Automatic OpenRouter twin enumeration requires the exact `:free` suffix;
 this narrower catalogue rule is distinct from general name-based free
@@ -308,7 +309,8 @@ The default gate has no deployed route records and remains blocked by
 unresolved provenance and the retained Google assignments. It is not wired
 into `make verify`; a passing unit suite does not mean this gate passes or
 that #87's request-time admission, entitlement, privacy or paid-route-spy
-requirements are satisfied.
+requirements are satisfied. This documentation update did not verify live
+availability.
 
 ## OpenAI service lanes (Flex/Fast)
 

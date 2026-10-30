@@ -906,6 +906,59 @@ def test_opencode_slim_wrapped_gateway_alias_unwraps_uniquely(tmp_path, monkeypa
     assert routed["roles"]["x"]["model"] == "litellm/openai/unique"
 
 
+def test_opencode_slim_prefers_exact_alias_over_canonical_collision(
+    tmp_path, monkeypatch
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    routed = configure_opencode.apply_litellm_slim_gate(
+        {"roles": {"x": {"model": "openrouter/example:free"}}},
+        {
+            "provider": {
+                "litellm": {
+                    "models": {
+                        "free": {"id": "openrouter/example:free"},
+                        "paid": {"id": "openrouter/example"},
+                    }
+                }
+            }
+        },
+    )
+    assert routed["roles"]["x"]["model"] == "litellm/openrouter/example:free"
+
+
+def test_opencode_slim_refuses_ambiguous_nonexact_canonical_alias(
+    tmp_path, monkeypatch
+):
+    configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    key = tmp_path / ".local/share/litellm/clients/opencode.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("test-key")
+    config = {
+        "provider": {
+            "litellm": {
+                "models": {
+                    "free": {"id": "openrouter/example:free"},
+                    "paid": {"id": "openrouter/example"},
+                }
+            }
+        }
+    }
+    with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
+        configure_opencode.apply_litellm_slim_gate(
+            {"roles": {"x": {"model": "openrouter/example:variant"}}},
+            config,
+        )
+
+
 def test_opencode_candidates_prepare_before_any_install(tmp_path, monkeypatch):
     configure_opencode = _load_script("configure_opencode", "configure-opencode.py")
     target = tmp_path / "opencode.json"
@@ -1294,7 +1347,7 @@ def test_opencode_main_refuses_disabled_env_selection_before_side_effects(
     with patch.dict(os.environ), pytest.raises(SystemExit) as error:
         script.main.__wrapped__()
     assert dict(os.environ) == before_env
-    assert error.value.code == 2
+    assert error.value.code == (1 if active else 2)
     assert not (config_dir / "opencode.json").exists()
     assert (config_dir / "oh-my-opencode-slim.json").read_text() == json.dumps(
         {"roles": {"prior": {"model": "openai/prior"}}}
