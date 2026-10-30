@@ -1,5 +1,5 @@
 cask "balenaetcher"
-cask "breitbandmessung"
+cask "festnetz-check"
 cask "geekbench"
 cask "geekbench-ai"
 cask "keka"
