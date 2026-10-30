@@ -498,7 +498,8 @@ def orchestrate_tier_switch(
     target_config["council"]["presets"] = source_presets
 
     if dynamic_free:
-        assert dynamic_source_registry is not None
+        if dynamic_source_registry is None:
+            raise RuntimeError("Dynamic free source registry is unavailable")
         dynamic_source = dynamic_source_registry["_tiers"][tier]
         target_config.setdefault("_tiers", {})[tier] = copy.deepcopy(dynamic_source)
 
@@ -541,7 +542,8 @@ def orchestrate_tier_switch(
                 helper = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(helper)
                 if gateway_aliases:
-                    assert dynamic_audit is not None
+                    if dynamic_audit is None:
+                        raise RuntimeError("Dynamic free tier gateway audit is unavailable")
                     selected = dynamic_audit["presets"][tier]["selected"]
                     for role, serving_ref in selected.items():
                         if (
