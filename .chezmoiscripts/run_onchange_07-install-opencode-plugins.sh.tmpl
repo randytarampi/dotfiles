@@ -60,7 +60,7 @@ ok "oh-my-opencode-slim installed"
 
 # Plugin definitions matching ~/.config/opencode/opencode.json. The dedicated
 # oh-my installer above is the first manifest entry and is not an opencode plugin.
-# opencode plugin <module> --global — installs the plugin and updates global config
+# opencode plugin add <module> — installs the plugin in OpenCode v2
 PLUGINS=(
   "@tarquinen/opencode-dcp@latest"
 )
@@ -68,13 +68,18 @@ for plugin in "${PLUGIN_SPECS[@]}"; do
   [[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")
 done
 
+PLUGIN_INSTALL_FAILED=0
 for plugin in "${PLUGINS[@]}"; do
-  if opencode plugin "${plugin}" --global 2>/dev/null; then
+  if opencode plugin add "${plugin}" 2>/dev/null; then
     ok "opencode plugin: ${plugin}"
   else
-    warn "opencode plugin ${plugin} failed (may already be installed)"
+    warn "opencode plugin ${plugin} failed"
+    PLUGIN_INSTALL_FAILED=1
   fi
 done
+if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
+  die "One or more OpenCode plugins failed to install"
+fi
 
 # The meridian plugin is installed globally via npm and referenced by local path.
 # No opencode plugin install needed — it's already at its nvm global path.

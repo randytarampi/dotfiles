@@ -152,7 +152,7 @@ brew "parallel"
 brew "cask"
 
 # --- Shared tap formulas (from core Brewfile) ---
-brew "anomalyco/tap/opencode", trusted: true
+brew "anomalyco/tap/opencode-v2", trusted: true
 brew "facebook/fb/idb-companion"
 brew "microsoft/mssql-release/msodbcsql18"
 brew "microsoft/mssql-release/mssql-tools18"

@@ -108,14 +108,12 @@ jobs:
         run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
 
       - name: Install and verify the pinned OpenCode CLI
-        env:
-          OPENCODE_VERSION: "1.18.34"
         run: |
           set -euo pipefail
-          npm install --global "opencode-ai@${OPENCODE_VERSION}"
+          curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.5
           command -v opencode
           version_output="$(opencode --version)"
-          version_pattern="(^|[^0-9])${OPENCODE_VERSION//./\\.}([^0-9]|$)"
+          version_pattern="(^|[^0-9])2\\.2\\.5([^0-9]|$)"
           [[ "${version_output}" =~ ${version_pattern} ]]
 
       - name: Generate the requested fix with the OpenCode CLI
