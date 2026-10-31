@@ -77,7 +77,7 @@ def write_bundles(expected: dict[str, str], data: dict) -> None:
             data["assets"][relative] = hashlib.sha256(
                 output.encode("utf-8")
             ).hexdigest()
-    MANIFEST.write_text(json.dumps(data, indent=2) + "\\n", encoding="utf-8")
+    MANIFEST.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -96,7 +96,7 @@ def main() -> int:
         return 0
     errors = check_bundles(expected, data["assets"])
     if errors:
-        print("\\n".join(errors))
+        print("\n".join(errors))
         return 1
     print("Review bundles match canonical method and references")
     return 0
