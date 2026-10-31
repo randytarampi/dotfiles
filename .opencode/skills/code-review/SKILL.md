@@ -23,7 +23,7 @@ Review, investigation and mentoring are read-only unless separate authorization 
 
 ## Compose the review job (one agent can run any subset)
 
-There are three independently invocable **facets**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. A single agent can execute all selected facets within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
+There are three independently invocable **jobs**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. An optional claims-audit lens can be invoked separately or combined. A single agent can execute the selected jobs and lens within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
 
 - Explicit facet requests win. For a normal code/PR review select E; add F when there are contested findings or prior threads; add M when coaching, reviewer calibration or teaching is requested. For an explicit `/randy-review all`, or a request for all perspectives, use E+F+M.
 - Select risk/effort separately from facets: `light` for bounded low-risk work, `deep` for high-risk/shared contracts/contested reviews or explicit request. Deep means additional evidence, not endless passes. The heuristic of fewer than 100 lines is not a safety guarantee.
@@ -49,6 +49,7 @@ Use Canadian English in formal reports; adopt the surrounding register in conver
 - `references/facilitation.md` — conversations, finding lifecycle, re-review and compact reporting.
 - `references/mentoring.md` — peer coaching, disputes and learning.
 - `references/philosophy.md` — contextual Randy-isms and exceptions.
+- `references/claims-audit.md` — optional standalone or combined claims audit.
 - `configs/review/method-evaluation.md` — **offline evaluation only**, never injected into runtime review prompts.
 
 The generated `configs/review/code-review-prompt.md` and GitHub/OpenCode skill copies below are self-contained because some vendor CI lanes consume prompt text without adjacent reference files. They are derived from this entry point and its four references; retain exact shared method content. `make update-ci-assets` and `make check-ci-assets` maintain manifest hashes, but this PR also requires explicit source-to-bundle parity verification.
@@ -144,5 +145,19 @@ These are **defeasible heuristics**, not authority, mandatory vocabulary or shor
 - **"There are 14 competing standards." → "There are 15 competing standards."** ([xkcd #927, *Standards*](https://xkcd.com/927/)): A well-meant "universal" standard can become just another incompatible registry, API, configuration contract or workflow. Before introducing one, identify the existing alternatives and real consumers; explain why reuse, extension or an adapter cannot meet the requirement. If replacement is justified, name the adoption, compatibility and retirement path; if coexistence is necessary, document its boundaries, cost and owner. **Counterexample:** A genuinely unmet need, unsafe legacy contract or demonstrable interoperability benefit can warrant a new standard. Do not reject it merely because it is new; assess the net reduction in fragmentation and long-term burden.
 
 Use technical lenses as needed: direction, root cause, partial migration, standards proliferation, actual consumer, conventions, security, owner boundaries, long-term obligations, attribution, delegation and authorized override. Select lenses for the risk at hand; do not exhaustively apply every lens to every change.
+
+---
+
+## Claims audit (optional lens: claims-audit)
+
+**Purpose:** Independently test falsifiable technical claims from code, reviewers, authors or the caller. This lens can be selected on its own or combined with any review facet. It does not grant review, merge or risk-acceptance authority.
+
+1. Identify the material claims and their exact sources, including the strongest plausible alternative explanation. Never infer personal motives or authorship from prose.
+2. Seek decisive, reproducible counterevidence before endorsing a preferred conclusion. Do not manufacture an objection where no credible counter-case exists.
+3. For each claim, record the check attempted, source freshness, and **supported**, **contradicted**, **unverified** or **not testable**, with specific evidence and limitations.
+4. If another reviewer's finding is contradicted, identify the technical mismatch and evidence; do not merely vote with or against a confidence score. Publish only new, material evidence rather than duplicating discussions.
+5. Recommend the smallest further check that could change the conclusion. Keep private or access-restricted evidence out of public comments.
+
+A claims audit is not a request to target a person or change a formal GitHub review state; it evaluates the work and evidence.
 
 <!-- END BUNDLED FACET REFERENCES -->
