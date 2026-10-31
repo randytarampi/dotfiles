@@ -324,20 +324,11 @@ def litellm_cloud_aliases(port="4000"):
         # providers exist, nothing is confirmed — never a silent absence.
         return {provider: {} for provider in ("google", "openrouter", "opencode")}
     routes = {provider: {} for provider in ("google", "openrouter", "opencode")}
-    available.update(
-        {
-            f"litellm/{identity}"
-            for identity in available
-            if not identity.startswith("litellm/")
-        }
-    )
     for catalogue_id in available:
-        wire = (
-            catalogue_id
-            if catalogue_id.startswith("litellm/")
-            else f"litellm/{catalogue_id}"
-        )
-        identity = catalogue_id.removeprefix("litellm/")
+        # Pi's provider model id is already the exact LiteLLM wire id. Provider
+        # qualification belongs in settings references, not the catalogue.
+        identity = catalogue_id
+        wire = f"litellm/{identity}"
         if identity.startswith("google/models/"):
             routes["google"][identity.removeprefix("google/models/")] = wire
         elif identity.startswith("openrouter/"):
@@ -960,7 +951,10 @@ def main():
                 resolved[role] = model_ref
                 continue
             provider, model_id = model_ref.split("/", 1)
-            if provider == "anthropic":
+            if model_ref in cloud_routes.get("_available", {}):
+                canonical_ref = model_ref
+                transport = "litellm/" + model_ref
+            elif provider == "anthropic":
                 lookup_id = model_id
                 transport = resolve_alias(
                     f"meridian/{model_id}",
@@ -969,7 +963,9 @@ def main():
                     gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
                 )["model"]
                 canonical_ref = f"meridian/{model_id}"
-                if transport not in cloud_routes.get("_available", set()):
+                if transport.removeprefix("litellm/") not in cloud_routes.get(
+                    "_available", set()
+                ):
                     logger.warning(
                         "Pi LiteLLM alias is not advertised for %s", canonical_ref
                     )
@@ -999,13 +995,15 @@ def main():
                     client_key=proxy_key_path.resolve(),
                     gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
                 )["model"]
-                if transport not in cloud_routes.get("_available", set()):
+                if transport.removeprefix("litellm/") not in cloud_routes.get(
+                    "_available", set()
+                ):
                     logger.warning(
                         "Pi LiteLLM alias is not advertised for %s", model_ref
                     )
                     resolved[role] = None
                     continue
-            gateway_models.add(canonical_ref)
+            gateway_models.add(transport.removeprefix("litellm/"))
             resolved[role] = transport
         role_models = resolved
     compaction_tokens = _compaction_tokens(local_refs)
@@ -1053,9 +1051,11 @@ def main():
                 client_key=proxy_key_path.resolve(),
                 gateway_url=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
             )["model"]
-            if default not in cloud_routes.get("_available", set()):
+            if default.removeprefix("litellm/") not in cloud_routes.get(
+                "_available", set()
+            ):
                 raise RuntimeError("Pi default model has no advertised LiteLLM alias")
-            gateway_models.add(canonical_default)
+            gateway_models.add(default.removeprefix("litellm/"))
         if default is None or default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
     if pi_litellm_proxy and preset in DYNAMIC_FREE_PRESETS and dynamic_audit:

@@ -691,6 +691,29 @@ def test_pi_cloud_aliases_keep_nested_wire_ids_and_fail_closed(tmp_path, monkeyp
     }
 
 
+def test_pi_cloud_aliases_advertise_exact_gateway_ids_once(tmp_path, monkeypatch):
+    key_file = tmp_path / ".local/share/litellm/clients/pi.key"
+    key_file.parent.mkdir(parents=True)
+    key_file.parent.chmod(0o700)
+    key_file.write_text("fixture-secret", encoding="utf-8")
+    key_file.chmod(0o600)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    catalogue_ids = ["omlx/model", "openrouter/vendor/twin:free"]
+    monkeypatch.setattr(
+        configure_pi,
+        "get_catalogue",
+        lambda *_args: {"data": [{"id": model_id} for model_id in catalogue_ids]},
+    )
+
+    routes = configure_pi.litellm_cloud_aliases()
+
+    assert routes["_available"] == {model_id: model_id for model_id in catalogue_ids}
+    assert (
+        routes["openrouter"]["vendor/twin:free"]
+        == "litellm/openrouter/vendor/twin:free"
+    )
+
+
 def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
     agent_dir = Path(home) / "pi-agent"
     agent_dir.mkdir(exist_ok=True)
@@ -796,6 +819,32 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     assert "litellm/google/models/gemini-3.8-flash" in settings["enabledModels"]
     assert "litellm/opencode/nemotron-3.5-lightning-free" in settings["enabledModels"]
     assert "fixture-secret" not in json.dumps([providers, settings, auth])
+
+
+def test_pi_main_keeps_gateway_wire_ids_and_qualified_settings_refs(
+    tmp_path, monkeypatch
+):
+    gateway_ids = ["omlx/model", "openrouter/vendor/twin:free"]
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": "openrouter/vendor/twin:free"},
+    )
+    out = _run_pi_main(
+        tmp_path,
+        {"data": [{"id": model_id} for model_id in gateway_ids]},
+        monkeypatch,
+    )
+    providers = json.loads((out / "models.json").read_text())["providers"]
+    settings = json.loads((out / "settings.json").read_text())
+    entries = providers["litellm"]["models"]
+
+    assert [entry["id"] for entry in entries] == gateway_ids
+    assert settings["defaultProvider"] == "litellm"
+    assert settings["defaultModel"] == "openrouter/vendor/twin:free"
+    assert (
+        settings["subagents"]["defaultModel"] == "litellm/openrouter/vendor/twin:free"
+    )
 
 
 def test_pi_main_lists_every_advertised_gateway_identity(tmp_path, monkeypatch):
