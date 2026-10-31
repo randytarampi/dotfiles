@@ -130,6 +130,13 @@ physical first-install behaviour on a fresh machine.
 
 ### Delegated worktree readiness preflight
 
+Use separate dispatch fields for PR number, absolute working directory, branch,
+expected HEAD, base SHA, owned paths, validation owner and permissions. Record
+expected dirty paths and upstream divergence explicitly. Require a final receipt
+with actual HEAD, changed paths, merge/rebase state, checks and unfinished work;
+a partial run is not completion. The preflight below checks the environment,
+not whether a specialist fulfilled that contract.
+
 Before handing implementation to a child in an existing checkout, run
 `make worktree-ready WORKTREE="/absolute/path/to/worktree"`. The helper verifies
 that the path is the root of this dotfiles Git project, reports its branch,

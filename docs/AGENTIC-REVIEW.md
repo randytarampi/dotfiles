@@ -458,6 +458,38 @@ The dedicated Junie App `junie-randytarampi-ca[bot]` published the head-specific
 
 ## Phase II integration retrospective (2026-10-31)
 
+### Release checkpoint receipt
+
+Use this compact receipt for each candidate head. Refresh it when the head or
+target main changes; an old green result is not evidence for the new tree.
+
+| Field | Required evidence |
+|---|---|
+| Candidate | PR number and full reviewed HEAD SHA, recorded separately |
+| Parent/base | Exact parent and fetched target-main SHAs; intended landing order |
+| Residual delta | Changed paths and which concern owns each; distinguish already-landed work |
+| Decisive check | Actual user entrypoint, isolated inputs, expected side effects and negative/no-touch case |
+| Local verification | Exact command, exit and retained output; normal coverage; PASS/FAIL/BLOCKED/NOT RUN separately |
+| Remote verification | Check runs **and** legacy statuses, including Qlty/Coveralls, on that exact SHA |
+| Review disposition | Blocking findings fixed with evidence, explicitly amended, or still open; skipped bots are not approvals |
+| Host boundary | Authorized host actions, remaining consent gates and CONFIG-ONLY/PROVISIONED/LIVE-VERIFIED status |
+| Delivery | Intended remote ref, original/new SHAs, publication permission and actual outcome; human merge authority remains separate |
+
+Run the existing `make worktree-ready` preflight from
+[ORCHESTRATION.md](ORCHESTRATION.md#delegated-worktree-readiness-preflight) rather
+than inventing another environment bootstrap. After parent PRs land, compare the
+aggregate against current main and the exact surviving parents. Prefer rebuilding
+an integration view from those reviewed parents plus its genuine residual delta
+over repeatedly replaying stale aggregate merge history. Preserve the previous
+head as a recovery reference; branch/worktree operations still need the existing
+permissions, and no checked-out user branch may be advanced behind its worktree.
+
+Attribution: ChatGPT, based on the owner-requested reflection of this session's
+handoff, rebase and verification failures (2026-10-31); complements the earlier
+Phase II retrospective and preserves its provenance.
+
+### Existing lessons
+
 The lessons below complement, rather than override, `AGENTS.md`, the shared
 agent guidance, and the PR template.
 
