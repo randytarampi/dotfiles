@@ -1324,6 +1324,26 @@ def check_opencode_orphan_files():
     else:
         print("  \u2713 OpenCode compaction: native auto-compaction disabled")
 
+    # Native v2 only: the external-directory ask rule must lead the ordered
+    # permissions array so the narrower allows win the last match (fail-closed
+    # migration stop condition). Legacy v1 files carry "permission" maps and
+    # are checked only after the machine cutover.
+    permissions = (
+        managed_config.get("permissions") if isinstance(managed_config, dict) else None
+    )
+    if isinstance(permissions, list):
+        ask_first = [
+            {"action": "external_directory", "resource": "*", "effect": "ask"}
+        ] == permissions[:1]
+        if ask_first:
+            print("  \u2713 OpenCode permissions: external-directory ask rule leads")
+        else:
+            print(
+                "  \u2717 OpenCode permissions: the external-directory ask rule "
+                "must be the first entry of the ordered permissions array"
+            )
+            exit_code = 1
+
     for path in sorted(opencode_dir.glob("*.jsonc")):
         if path.name in {"dcp.jsonc", "opencode-mem.jsonc"}:
             continue
