@@ -20,7 +20,7 @@ Review, investigation and mentoring are read-only unless separate authorization 
 
 There are three independently invocable **jobs**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. An optional claims-audit lens can be invoked separately or combined. A single agent can execute the selected jobs and lens within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
 
-- Explicit facet requests win. For a normal code/PR review select E; add F when there are contested findings or prior threads; add M when coaching, reviewer calibration or teaching is requested. For an explicit `/randy-review all`, or a request for all perspectives, use E+F+M.
+- Explicit facet requests win. Run the claims-audit lens only when explicitly selected; For a normal code/PR review select E; add F when there are contested findings or prior threads; add M when coaching, reviewer calibration or teaching is requested. For an explicit `/randy-review all`, or a request for all perspectives, use E+F+M.
 - Select risk/effort separately from facets: `light` for bounded low-risk work, `deep` for high-risk/shared contracts/contested reviews or explicit request. Deep means additional evidence, not endless passes. The heuristic of fewer than 100 lines is not a safety guarantee.
 - Every selected facet follows the **shared trust boundary** and evidentiary contract. Do not require an unselected facet's outputs: M alone needs no merge verdict; F alone may triage discussion without independently performing an exhaustive code review.
 - Read the references listed below for selected facets, and `philosophy.md` when using heuristics. In consumers that cannot follow local references, use the bundled self-contained generated method. The bundles include **all** facets so one identical prompt can be given to multiple vendors and selected by the caller.
@@ -47,7 +47,7 @@ Use Canadian English in formal reports; adopt the surrounding register in conver
 - `references/claims-audit.md` — optional standalone or combined claims audit.
 - `configs/review/method-evaluation.md` — **offline evaluation only**, never injected into runtime review prompts.
 
-The generated `configs/review/code-review-prompt.md` and GitHub/OpenCode skill copies below are self-contained because some vendor CI lanes consume prompt text without adjacent reference files. They are derived from this entry point and its four references; retain exact shared method content. `make update-ci-assets` and `make check-ci-assets` maintain manifest hashes, but this PR also requires explicit source-to-bundle parity verification.
+The generated `configs/review/code-review-prompt.md` and GitHub/OpenCode skill copies below are self-contained because some vendor CI lanes consume prompt text without adjacent reference files. They are derived from this entry point and its five references; retain exact shared method content. `make update-ci-assets` and `make check-ci-assets` maintain manifest hashes, but this PR also requires explicit source-to-bundle parity verification.
 
 
 <!-- START BUNDLED FACET REFERENCES: generated from configs/skills/randy-review/references/ -->
