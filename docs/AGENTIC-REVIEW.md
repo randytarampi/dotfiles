@@ -455,3 +455,33 @@ The previously observed Junie publication and repeat-update [on PR #102](https:/
 ### Final handoff — dedicated publisher Apps
 
 The dedicated Junie App `junie-randytarampi-ca[bot]` published the head-specific [review on PR #105](https://github.com/randytarampi/dotfiles/pull/105#issuecomment-6388327089) in [run 40123686460](https://github.com/randytarampi/dotfiles/actions/runs/40123686460). [Run 40125515479](https://github.com/randytarampi/dotfiles/actions/runs/40125515479) updated the same comment without duplication. The fixture's head did not change. [Gemini run 40125520755](https://github.com/randytarampi/dotfiles/actions/runs/40125520755) failed during generation with HTTP 503 and free-tier quota 429, and `notify` failed closed. The maintainer explicitly accepted deferring Gemini's **actual model and App comment publication** verification to [issue #106](https://github.com/randytarampi/dotfiles/issues/106). The configured GitHub App publishing path is therefore implemented, but Gemini is not independently proven. The stable dispatcher is back on `@main`. Review security and tests must still pass the final PR head checks.
+
+## Phase II integration retrospective (2026-10-31)
+
+The lessons below complement, rather than override, `AGENTS.md`, the shared
+agent guidance, and the PR template.
+
+- **Define observable acceptance before coding.** Name the actual client and
+  protocol, expected effective configuration, owner-held state, side effects,
+  negative cases, and evidence needed to call a transport usable. Installing an
+  app, generating a key and running a real inference task are separate milestones.
+- **Keep a single integration steward.** Shared client registries, key writers,
+  gate names, environment templates and doctor rules must change as one contract.
+  Rebase each narrow PR after its predecessor lands; test the combined state.
+- **Test the user entrypoint.** A successful helper unit test does not prove a
+  `make` target, generated LaunchAgent, GUI environment, or real client reads it.
+  Isolate `HOME` and `PATH`; test malformed input, absent installation, gate-off
+  conditions, symlink/permissions failures, no-touch refusal and idempotence.
+- **Make evidence labels explicit.** Record targeted tests, full `make verify`,
+  exact-head required CI, Qlty, owner-reported deployment, and independently
+  observed live gateway requests separately. Do not upgrade UNKNOWN to PASS.
+- **Apply a stop budget.** After two failed repair attempts in the same subsystem,
+  inspect logs, reset the test seam or ask for a bounded scope decision rather
+  than stacking speculative commits. Run the project formatter and executable
+  contract before pushing a patch that changes a public script.
+- **Preserve user-owned state.** Prefer dry-run, private backup, compare-and-swap
+  and explicit refusal to destructive reconciliation; verify real producer to
+  consumer readback and deploy twice only with authorization.
+- **Close review findings deliberately.** Mark each as fixed with decisive
+  evidence, owner-declined, tracked follow-up, advisory or still open. A green
+  bot check is not a substitute for this review ledger.
