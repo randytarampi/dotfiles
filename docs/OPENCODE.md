@@ -91,9 +91,10 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
 
 ## Fleet Plugins
 
-The generated `plugin` array in `opencode.json` (via `scripts/configure-opencode.py`,
-mirrored in `.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`) is
-driven by the pinned canonical manifest at
+The generated `plugins` array in `opencode.json` (native OpenCode v2 config, via
+`scripts/configure-opencode.py`, mirrored in
+`.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`) is driven by
+the canonical manifest (all plugins pinned to `@latest`, per migration plan) at
 `configs/opencode/opencode-plugins.json`:
 
 | Plugin | Purpose |
@@ -179,6 +180,6 @@ of 2026-10-13:
 
 `@ramtinj95/opencode-tokenscope` is an OpenCode plugin for analyzing token usage and costs:
 
-- **Install**: `opencode plugin @ramtinj95/opencode-tokenscope@1.8.1 --global` (via the canonical plugin manifest)
+- **Install**: `opencode plugin add @ramtinj95/opencode-tokenscope@latest` (canonical plugin manifest; no `--global` under the v2 warm install flow)
 - **Usage**: Run `/tokenscope` in OpenCode UI to analyze token usage and costs for the current session
-- **Config**: Added to the `plugin` array in `opencode.json` by `scripts/configure-opencode.py`
+- **Config**: Added to the `plugins` array in `opencode.json` by `scripts/configure-opencode.py`
