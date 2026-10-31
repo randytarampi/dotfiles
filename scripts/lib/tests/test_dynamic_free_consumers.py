@@ -454,11 +454,28 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
     configure_opencode.main.__wrapped__()
 
     output = json.loads(config_path.read_text())
+    # Native v2 shape contract, asserted on real emitter output: no legacy
+    # top-level key may survive, and the external-directory ask rule must
+    # lead the ordered permissions array so the narrower allows can win the
+    # last match.
+    assert not {"provider", "plugin", "agent", "permission"} & set(output)
+    permissions = output["permissions"]
+    assert permissions[0] == {
+        "action": "external_directory",
+        "resource": "*",
+        "effect": "ask",
+    }
     if mode == "global":
         assert output["mcp"]["servers"]["custom"] == {
             "keep": True,
             "disabled": False,
         }
+        assert any(
+            rule.get("action") == "external_directory"
+            and rule.get("effect") in ("allow", "ask")
+            and rule.get("resource") != "*"
+            for rule in permissions
+        )
     else:
         assert "mcp" not in output
     if proxy:
