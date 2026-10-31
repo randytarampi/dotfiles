@@ -32,7 +32,9 @@ def test_manifest_matches_config_and_install_template():
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest
     loader = load_pinned_spec_loader()
-    assert not any("opencode-quota" in spec for spec in full_manifest)
+    assert not any(
+        "opencode-quota" in spec for spec in full_manifest
+    ), "opencode-quota must not be re-added to the canonical manifest"
     assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
     manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
