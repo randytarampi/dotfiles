@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/generate-review-bundles.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--check", "--write", "--dry-run"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/export-claude-desktop-gateway.py",
       "capabilities": ["public"],
       "enforcement": "strict",
