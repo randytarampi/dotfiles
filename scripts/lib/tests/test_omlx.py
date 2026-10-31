@@ -603,7 +603,7 @@ def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_
     key_file.write_text("dummy-key", encoding="utf-8")
     direct = {
         "model": "openai/gpt-x",
-        "provider": {
+        "providers": {
             "openai": {"models": {"gpt-x": {"name": "GPT X"}}},
         },
     }
@@ -635,8 +635,8 @@ def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_
         proxied = json.loads(json.dumps(expected_direct))
         configure_opencode.apply_litellm_client_gate(proxied)
     assert proxied["model"] == "litellm/openai/gpt-x"
-    assert set(proxied["provider"]) == {"litellm"}
-    assert proxied["provider"]["litellm"]["options"]["apiKey"] == (
+    assert set(proxied["providers"]) == {"litellm"}
+    assert proxied["providers"]["litellm"]["options"]["apiKey"] == (
         "{file:" + str(key_file) + "}"
     )
 
@@ -667,7 +667,7 @@ def test_configure_opencode_gate_filters_unserved_when_catalogue_responds(
     key_file.write_text("dummy-key", encoding="utf-8")
     direct = {
         "model": "openai/gpt-x",
-        "provider": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
+        "providers": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
     }
     with (
         patch.dict(
@@ -695,7 +695,7 @@ def test_configure_opencode_gate_keeps_inventory_when_catalogue_unavailable(
     key_file.write_text("dummy-key", encoding="utf-8")
     direct = {
         "model": "openai/gpt-x",
-        "provider": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
+        "providers": {"openai": {"models": {"gpt-x": {"name": "GPT X"}}}},
     }
     with (
         patch.dict(
@@ -732,7 +732,7 @@ def test_opencode_slim_output_routes_every_inventory_selection_and_direct_mode_i
     )
     refs = [f"{provider}/fixture-model" for provider in providers]
     inventory = {ref: {"id": ref} for ref in refs}
-    config = {"provider": {"litellm": {"models": inventory}}}
+    config = {"providers": {"litellm": {"models": inventory}}}
     slim = {
         "roles": {"orchestrator": {"model": refs[0]}},
         "council": {"presets": {"active": {"alpha": {"model": refs[1]}}}},
@@ -808,7 +808,7 @@ def test_opencode_slim_preserves_previously_resolved_selection_when_catalogue_un
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
             {"roles": {"orchestrator": {"model": selection}}},
-            {"provider": {"litellm": {"models": {}}}},
+            {"providers": {"litellm": {"models": {}}}},
         )
 
 
@@ -825,7 +825,7 @@ def test_opencode_slim_gate_does_not_return_raw_gateway_selection(
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
             {"roles": {"x": {"model": "ollama-cloud/absent"}}},
-            {"provider": {"litellm": {"models": {}}}},
+            {"providers": {"litellm": {"models": {}}}},
             {"roles": {"x": {"model": "ollama-cloud/absent"}}},
         )
 
@@ -841,7 +841,7 @@ def test_opencode_slim_gateway_refuses_existing_local_direct_selection(
     key.parent.mkdir(parents=True)
     key.write_text("test-key")
     selection = "omlx/existing-model"
-    config = {"provider": {"litellm": {"models": {}}}}
+    config = {"providers": {"litellm": {"models": {}}}}
     with pytest.raises(
         RuntimeError,
         match=r"UNRESOLVED.*omlx/existing-model.*Re-run generation once the alias exists",
@@ -867,7 +867,7 @@ def test_opencode_slim_gateway_alias_key_absent_fails_closed(tmp_path, monkeypat
     with pytest.raises(RuntimeError, match="no LiteLLM gateway alias"):
         configure_opencode.apply_litellm_slim_gate(
             {"roles": {"x": {"model": "omlx/absent"}}},
-            {"provider": {"litellm": {"models": {}}}},
+            {"providers": {"litellm": {"models": {}}}},
         )
 
 
@@ -885,7 +885,7 @@ def test_opencode_slim_gateway_installs_existing_local_model_alias(
     key.write_text("test-key")
     routed = configure_opencode.apply_litellm_slim_gate(
         {"roles": {"x": {"model": "omlx/existing-model"}}},
-        {"provider": {"litellm": {"models": {"x": {"id": "omlx/existing-model"}}}}},
+        {"providers": {"litellm": {"models": {"x": {"id": "omlx/existing-model"}}}}},
         {"roles": {"x": {"model": "omlx/existing-model"}}},
     )
     assert routed["roles"]["x"]["model"] == "litellm/omlx/existing-model"
@@ -901,7 +901,7 @@ def test_opencode_slim_wrapped_gateway_alias_unwraps_uniquely(tmp_path, monkeypa
     key.write_text("test-key")
     routed = configure_opencode.apply_litellm_slim_gate(
         {"roles": {"x": {"model": "litellm/openai/unique"}}},
-        {"provider": {"litellm": {"models": {"x": {"id": "openai/unique"}}}}},
+        {"providers": {"litellm": {"models": {"x": {"id": "openai/unique"}}}}},
     )
     assert routed["roles"]["x"]["model"] == "litellm/openai/unique"
 
@@ -919,7 +919,7 @@ def test_opencode_slim_prefers_exact_alias_over_canonical_collision(
     routed = configure_opencode.apply_litellm_slim_gate(
         {"roles": {"x": {"model": "openrouter/example:free"}}},
         {
-            "provider": {
+            "providers": {
                 "litellm": {
                     "models": {
                         "free": {"id": "openrouter/example:free"},
@@ -943,7 +943,7 @@ def test_opencode_slim_refuses_ambiguous_nonexact_canonical_alias(
     key.parent.mkdir(parents=True)
     key.write_text("test-key")
     config = {
-        "provider": {
+        "providers": {
             "litellm": {
                 "models": {
                     "free": {"id": "openrouter/example:free"},
@@ -979,7 +979,7 @@ def test_opencode_slim_gate_prunes_unserved_dormant_preset_but_fails_active(
         "resolve_alias",
         lambda alias, *args, **kwargs: {"model": f"litellm/{alias}"},
     )
-    config = {"provider": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
+    config = {"providers": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
     source = {
         "preset": "active",
         "presets": {
@@ -1031,7 +1031,7 @@ def test_opencode_slim_gate_validates_legacy_preset_fragment_without_pruning(
         lambda alias, *args, **kwargs: {"model": f"litellm/{alias}"},
     )
     fragment = {"presets": {"one": {"agent": {"model": "openai/served"}}}}
-    config = {"provider": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
+    config = {"providers": {"litellm": {"models": {"served": {"id": "openai/served"}}}}}
     routed = script.apply_litellm_slim_gate(fragment, config)
     assert set(routed["presets"]) == {"one"}
     assert routed["presets"]["one"]["agent"]["model"] == "litellm/openai/served"
@@ -1076,7 +1076,7 @@ def test_opencode_inventory_missing_alias_fails_before_candidate_write(
     key = tmp_path / ".local/share/litellm/clients/opencode.key"
     key.parent.mkdir(parents=True)
     key.write_text("test-key")
-    config = {"model": "cerebras/new-model", "provider": {}}
+    config = {"model": "cerebras/new-model", "providers": {}}
     with pytest.raises(RuntimeError, match="not configured for canonical model"):
         configure_opencode.prepare_config_candidates(config, {"roles": {}})
     assert config["model"] == "cerebras/new-model"
@@ -1102,14 +1102,14 @@ def test_opencode_client_gate_only_rewrites_model_fields(tmp_path, monkeypatch):
     )
     config = {
         "model": "openai/present",
-        "plugin": ["@scope/plugin@1.0"],
+        "plugins": ["@scope/plugin@1.0"],
         "instructions": "docs/AGENTS.md",
         "command": {"run": "tools/build.sh"},
-        "provider": {"openai": {"models": {"present": {"name": "Present"}}}},
+        "providers": {"openai": {"models": {"present": {"name": "Present"}}}},
     }
     script.apply_litellm_client_gate(config)
     assert config["model"] == "litellm/openai/present"
-    assert config["plugin"] == ["@scope/plugin@1.0"]
+    assert config["plugins"] == ["@scope/plugin@1.0"]
     assert config["instructions"] == "docs/AGENTS.md"
     assert config["command"] == {"run": "tools/build.sh"}
 
@@ -1158,7 +1158,7 @@ def test_opencode_poolside_routed_entries_get_conservative_limits(
     # Oversized limits are capped (without widening) to the ceiling values;
     # custom fields are preserved through the gate transform.
     config = {
-        "provider": {
+        "providers": {
             "poolside": {
                 "models": {
                     "laguna-s-2.1": {
@@ -1172,7 +1172,7 @@ def test_opencode_poolside_routed_entries_get_conservative_limits(
         }
     }
     script.apply_litellm_client_gate(config)
-    routed = config["provider"]["litellm"]["models"]
+    routed = config["providers"]["litellm"]["models"]
     assert routed["poolside/laguna-s-2.1"]["limit"] == {
         "context": POOLSIDE_ROUTED_CONTEXT,
         "output": POOLSIDE_ROUTED_OUTPUT,
@@ -1221,12 +1221,12 @@ def test_opencode_poolside_allowlist_only_entry_gets_capped_limits(
         },
     )
     config = {
-        "provider": {
+        "providers": {
             "openai": {"models": {"ordinary": {"name": "Ordinary"}}},
         }
     }
     script.apply_litellm_client_gate(config)
-    routed = config["provider"]["litellm"]["models"]
+    routed = config["providers"]["litellm"]["models"]
     assert routed["poolside/laguna-s-2.1"]["limit"] == {
         "context": POOLSIDE_ROUTED_CONTEXT,
         "output": POOLSIDE_ROUTED_OUTPUT,
@@ -1708,7 +1708,7 @@ def test_opencode_tier_staging_is_private_and_staging_dir_is_private(
 
     monkeypatch.setattr(script.subprocess, "run", fake_run)
     script.prepare_tier_candidate(
-        str(tmp_path), ["tier-writer"], {"provider": {"key": "staged-secret"}}
+        str(tmp_path), ["tier-writer"], {"providers": {"key": "staged-secret"}}
     )
     assert observed["directory_mode"] == 0o700
     assert observed["file_mode"] == 0o600
@@ -1747,7 +1747,7 @@ def test_opencode_tier_staging_refuses_previous_local_owner(monkeypatch, tmp_pat
         script.prepare_tier_candidate(
             str(tmp_path),
             ["tier-writer"],
-            {"provider": {"litellm": {"models": {}}}},
+            {"providers": {"litellm": {"models": {}}}},
             previous,
         )
     assert previous_bytes == json.dumps(previous).encode()
@@ -1785,7 +1785,7 @@ def test_prepare_tier_candidate_seeds_staging_with_base_slim(monkeypatch, tmp_pa
     result = script.prepare_tier_candidate(
         str(tmp_path),
         ["tier-writer"],
-        {"provider": {"litellm": {"models": {}}}},
+        {"providers": {"litellm": {"models": {}}}},
         base_slim=base_slim,
         previous_slim=previous_slim,
     )
@@ -2118,14 +2118,14 @@ def test_opencode_inventory_keys_anthropic_under_meridian_and_routes_slim(
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     config = {
         "model": "anthropic/claude-sonnet-5-5",
-        "provider": {
+        "providers": {
             "anthropic": {
                 "models": {"claude-sonnet-5-5": {"name": "Sonnet 5.5"}},
             },
         },
     }
     configure_opencode.apply_litellm_client_gate(config)
-    inventory = config["provider"]["litellm"]["models"]
+    inventory = config["providers"]["litellm"]["models"]
     assert "meridian/claude-sonnet-5-5" in inventory
     assert not any(item.startswith("anthropic/") for item in inventory)
     assert config["model"] == "litellm/meridian/claude-sonnet-5-5"
@@ -2155,14 +2155,14 @@ def test_opencode_slim_anthropic_falls_back_to_direct_anthropic_alias(
     monkeypatch.delenv("MERIDIAN_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     config = {
-        "provider": {
+        "providers": {
             "anthropic": {
                 "models": {"claude-sonnet-5-5": {"name": "Sonnet 5.5"}},
             },
         },
     }
     configure_opencode.apply_litellm_client_gate(config)
-    inventory = config["provider"]["litellm"]["models"]
+    inventory = config["providers"]["litellm"]["models"]
     assert "anthropic/claude-sonnet-5-5" in inventory
     slim = {
         "presets": {"x": {"designer": {"model": "anthropic/claude-sonnet-5-5"}}},
@@ -2187,7 +2187,7 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
     monkeypatch.delenv("MERIDIAN_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     config = {
-        "provider": {
+        "providers": {
             "openai": {"models": {"gpt-x": {"name": "X"}}},
         },
     }
@@ -2204,7 +2204,7 @@ def test_opencode_inventory_seeds_allowlisted_dormant_owners(tmp_path, monkeypat
         },
     )
     configure_opencode.apply_litellm_client_gate(config)
-    inventory = config["provider"]["litellm"]["models"]
+    inventory = config["providers"]["litellm"]["models"]
     assert "opencode/big-pickle" in inventory
     assert "google/models/gemini-3.8-flash" in inventory
     assert "github-copilot/gemini-3.5-flash" in inventory
@@ -2228,7 +2228,7 @@ def test_opencode_slim_refuses_local_engine_selections_without_alias(
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("HOME", str(tmp_path))
     slim = {"roles": {"observer": {"model": f"{owner}/fixture-model"}}}
-    consumer = {"provider": {"litellm": {"models": {}}}}
+    consumer = {"providers": {"litellm": {"models": {}}}}
 
     with pytest.raises(RuntimeError, match="UNRESOLVED"):
         configure_opencode.apply_litellm_slim_gate(slim, consumer, previous_slim=slim)
@@ -2309,9 +2309,9 @@ def test_configure_opencode_global_cloud_tier_registers_omlx_provider():
         ),
     ):
         provider = configure_opencode.build_local_provider("omlx", models)
-        config = {"provider": {}}
+        config = {"providers": {}}
         configure_opencode.register_local_provider(config, "omlx", provider)
-    assert config["provider"]["omlx"] is provider
+    assert config["providers"]["omlx"] is provider
 
 
 def test_tier_switch_filters_omlx_models_when_gate_is_off():
@@ -3306,7 +3306,7 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
     consumer.write_text(
         json.dumps(
             {
-                "provider": {
+                "providers": {
                     "litellm": {
                         "models": {f"litellm/{i}": {"id": i} for i in inventory_ids}
                     }
@@ -3319,7 +3319,7 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
             json.dumps({"model": "litellm/openai/gpt-6-luna"})
         )
         (cfgdir / "opencode.json").write_text(
-            json.dumps({"provider": {"litellm": {"options": {"timeout": 12345}}}})
+            json.dumps({"providers": {"litellm": {"options": {"timeout": 12345}}}})
         )
     with patch.dict(
         os.environ,
