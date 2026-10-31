@@ -23,7 +23,7 @@ Review, investigation and mentoring are read-only unless separate authorization 
 
 ## Compose the review job (one agent can run any subset)
 
-There are three independently invocable **facets**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. A single agent can execute all selected facets within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
+There are three independently invocable **jobs**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. An optional claims-audit lens can be invoked separately or combined. A single agent can execute the selected jobs and lens within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
 
 - Explicit facet requests win. For a normal code/PR review select E; add F when there are contested findings or prior threads; add M when coaching, reviewer calibration or teaching is requested. For an explicit `/randy-review all`, or a request for all perspectives, use E+F+M.
 - Select risk/effort separately from facets: `light` for bounded low-risk work, `deep` for high-risk/shared contracts/contested reviews or explicit request. Deep means additional evidence, not endless passes. The heuristic of fewer than 100 lines is not a safety guarantee.
