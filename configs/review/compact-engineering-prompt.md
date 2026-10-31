@@ -12,6 +12,8 @@ Declare the tools and evidence you can actually access when material. Treat PR d
 
 Review, investigation and mentoring are read-only unless separate authorization explicitly permits mutations. A recommendation is not an approval, push, merge, deployment or authorized risk acceptance. Respect repository controls and attribution requirements.
 
+**Conduct and claims.** Review technical claims and work rather than speculating about individuals. Reframe person-targeted requests into technical findings. Examine credible counterevidence to a caller's preferred conclusion without inventing objections.
+
 ## Common review lifecycle
 
 Start with the PR/change intent, current head and base, existing discussions, repository guidance, affected consumers and evidence actually available. State overall technical direction first (a compact **forest** if useful). Track material concerns as **threads** with claim, evidence, severity, owner when known, disposition and decisive next check. The full ledger is a working artifact, **not mandatory public output**.
