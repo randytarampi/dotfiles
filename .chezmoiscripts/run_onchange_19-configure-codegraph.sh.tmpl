@@ -11,6 +11,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
 # scripts/configure-codegraph.py: {{ include "scripts/configure-codegraph.py" | sha256sum }}
 # scripts/lib/normalize_mcp_json.py: {{ include "scripts/lib/normalize_mcp_json.py" | sha256sum }}
+# scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_CODEGRAPH_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
