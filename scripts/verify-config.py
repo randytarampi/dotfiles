@@ -390,7 +390,7 @@ def validate_litellm_service_env(
     return problems
 
 
-def litellm_client_gate_errors(environ=None, home=None):
+def litellm_client_gate_errors(environ=None, home=None, slim_registry=None):
     """Validate gateway-only mode prerequisites and canonical alias coverage."""
     environ = os.environ if environ is None else environ
     try:
@@ -425,7 +425,12 @@ def litellm_client_gate_errors(environ=None, home=None):
             continue
         if isinstance(alias, str):
             aliases.add(alias)
-    for canonical in litellm_config._registry_model_refs():
+    canonical_refs = (
+        litellm_config._collect_model_refs(slim_registry)
+        if isinstance(slim_registry, dict)
+        else litellm_config._registry_model_refs()
+    )
+    for canonical in canonical_refs:
         transport = f"litellm/{canonical}"
         resolved = resolve_canonical_identity(transport, True)
         if canonical.startswith("openai/"):
@@ -555,19 +560,63 @@ def litellm_tier_coverage_errors(environ=None):
         return [f"LiteLLM tier coverage: slim registry unreadable: {error}"], []
     if not isinstance(slim, dict):
         return ["LiteLLM tier coverage: slim registry is not an object"], []
+    home = Path(environ.get("HOME", HOME)).expanduser()
+    installed_slim_path = home / ".config/opencode/oh-my-opencode-slim.json"
+    try:
+        installed_slim = json.loads(installed_slim_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return [
+            f"LiteLLM tier coverage: installed Slim projection unreadable: {error}"
+        ], []
+    if not isinstance(installed_slim, dict):
+        return ["LiteLLM tier coverage: installed Slim projection is not an object"], []
+    selected_preset = installed_slim.get("preset")
+    presets = slim.get("presets")
+    if (
+        not isinstance(selected_preset, str)
+        or not isinstance(presets, dict)
+        or selected_preset not in presets
+    ):
+        return [
+            "LiteLLM tier coverage: installed Slim projection selects an unknown preset"
+        ], []
+    if (
+        not isinstance(installed_slim.get("presets"), dict)
+        or selected_preset not in installed_slim["presets"]
+    ):
+        return [
+            f"LiteLLM tier coverage: installed Slim projection omits selected preset {selected_preset!r}"
+        ], []
+    council_containers = [("root", installed_slim.get("council"))]
+    for name, tier in installed_slim.get("_tiers", {}).items():
+        if isinstance(tier, dict):
+            council_containers.append((f"tier {name}", tier.get("council")))
+    for label, council in council_containers:
+        if council is None or isinstance(council, dict) and "model" in council:
+            continue
+        if not isinstance(council, dict) or not isinstance(
+            council.get("presets"), dict
+        ):
+            return [f"LiteLLM tier coverage: {label} lacks council presets"], []
+        council_default = council.get("default_preset")
+        if (
+            not isinstance(council_default, str)
+            or council_default not in council["presets"]
+        ):
+            return [f"LiteLLM tier coverage: {label} has missing council default"], []
     inventory = tier_coverage.load_inventory_from_opencode_json(
-        Path(environ.get("HOME", HOME)).expanduser() / ".config/opencode/opencode.json"
+        home / ".config/opencode/opencode.json"
     )
     if inventory is None:
         return [], ["LiteLLM tier coverage: gateway inventory unavailable (UNKNOWN)"]
-    unserved = tier_coverage.unresolved_refs(slim, inventory)
+    unserved = tier_coverage.unresolved_refs(installed_slim, inventory)
     if not unserved:
         return [], []
     shown = sorted(unserved, key=lambda item: item.location)[:8]
     suffix = " …" if len(unserved) > len(shown) else ""
     detail = ", ".join(f"{entry.location}: {entry.ref}" for entry in shown)
     return [
-        f"LiteLLM tier coverage: {len(unserved)} Slim registry selection(s) "
+        f"LiteLLM tier coverage: {len(unserved)} installed Slim selection(s) "
         f"have no gateway alias: {detail}{suffix}"
     ], []
 
@@ -1993,7 +2042,13 @@ def main():
     for provider, status, detail in litellm_oauth_readiness():
         print(f"  {status}: LiteLLM {provider} OAuth — {detail}")
     litellm_root = HOME / ".local/share/litellm"
-    for error in litellm_client_gate_errors(home=HOME):
+    installed_slim = None
+    installed_slim_path = HOME / ".config/opencode/oh-my-opencode-slim.json"
+    try:
+        installed_slim = json.loads(installed_slim_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pass  # The tier-coverage check below reports a missing projection.
+    for error in litellm_client_gate_errors(home=HOME, slim_registry=installed_slim):
         print(f"  \u2717 {error}")
         exit_code = 1
     for error in litellm_ui_contradiction_errors():
