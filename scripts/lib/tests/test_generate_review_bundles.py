@@ -104,6 +104,7 @@ def test_write_mode_regenerates_content(generator, tmp_path, monkeypatch):
     assert (tmp_path / "out.md").read_text() == "expected"
     assert json.loads(manifest.read_text())["assets"]["out.md"] != "old"
 
+
 def test_dry_run_previews_without_writing(generator, tmp_path, monkeypatch):
     manifest = tmp_path / "manifest.json"
     manifest.write_text('{"assets": {"out.md": "old"}}')
