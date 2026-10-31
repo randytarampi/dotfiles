@@ -2,7 +2,7 @@
 
 **Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).
 **Status:** First draft PR removes obsolete Quota only; v2 runtime migration remains unimplemented.
-**Author:** ChatGPT (GPT-6); no independent colleague review or live host tests performed.
+**Author:** ChatGPT (GPT-6), research and implementation foundation. The initial draft received an independent OpenCode reviewer-agent engineering review of the quota removal and plan (PR #133, 2026-10-31); live host tests remain unperformed.
 
 ## Decisions
 
@@ -17,12 +17,12 @@
 
 | Feature | Package / source | Minimum candidate version |
 |---|---|---|
-| Host | Latest official stable OpenCode v2 | 2.2.0+ (currently 2.2.5) |
-| Orchestration | `oh-my-opencode-slim@latest` | 3.0.4+ |
-| DCP | `@tarquinen/opencode-dcp@latest` | 3.2.0+ |
+| Host | Latest official stable OpenCode v2 | 2.2.0+, assert installed major is 2 (currently 2.2.5) |
+| Orchestration | `oh-my-opencode-slim@latest` | 3.0.4+, reject major 4+ |
+| DCP | `@tarquinen/opencode-dcp@latest` | 3.2.0+, reject major 4+ |
 | Plannotator | `@plannotator/opencode@latest` | 0.28.22+ source candidate, check npm |
-| TokenScope | `@cheesecodestudio/opencode-tokenscope-v2@latest` | 2.0.0+ |
-| Secret redaction | `link-seek/opencode-vibeguard` | reviewed Git commit at source 0.2.0+ |
+| TokenScope | `@cheesecodestudio/opencode-tokenscope-v2@latest` | 2.0.0+, reject major 3+ |
+| Secret redaction | `link-seek/opencode-vibeguard` | reviewed Git commit, `package.json` source 0.2.0 |
 | Voice | `@bojackduy/opencode-voice@latest` | 0.11.1+ source candidate, check npm |
 | Memory | `opencode-mem@latest` | 2.29.2+; prefer verified 2.31.x+ |
 | Quota | **none** | intentionally removed |
@@ -32,7 +32,7 @@
 
 ## Meridian version strategy
 
-Upstream `docs/agents.md` currently qualifies OpenCode **2.2.0** on Darwin arm64 and released **2.0.16, 2.0.21, 2.0.31** (plus named betas). It uses a fail-closed `SUPPORTED_OPENCODE_V2_VERSIONS` allowlist. The current latest v2 may be newer than its qualified set.
+Upstream `docs/agents.md` currently lists OpenCode **2.2.0** on Darwin arm64 and **2.0.16, 2.0.21, 2.0.31** (plus named betas) in its qualified set. It uses a fail-closed `SUPPORTED_OPENCODE_V2_VERSIONS` allowlist. The current latest v2 may be newer than its qualified set.
 
 1. Detect the installed executable's real version and platform; include desktop bundle path where appropriate.
 2. Update Meridian and run `meridian setup --v2 --opencode-bin <path>`.
@@ -46,7 +46,7 @@ Upstream `docs/agents.md` currently qualifies OpenCode **2.2.0** on Darwin arm64
 
 Remove the Quota manifest entry, adjust regression test, and delete stale docs. Preserve `opencode-mem@latest` gate. User-owned Quota sidecar settings remain untouched.
 
-**Acceptance:** canonical manifest/installer/config remain consistent; focused regression and `make verify` pass. **Evidence:** diff inspected; host tests and `make verify` NOT RUN in this environment.
+**Acceptance:** canonical manifest, installer and generated config stay consistent (`make check-plugin-consistency`); focused regression suite passes; CI `ci/required` is green on the merge head. **Evidence:** focused plugin regression (15 passing), `make check-plugin-consistency`, and `make lint` verified on the owner machine; a full `make verify` reaches `doctor`, whose only failure is a pre-existing live-machine Caddy TLS certificate permission condition reproducing identically on baseline `main`; per-head CI status is recorded on the pull request.
 
 ### B. Host installer and v2 configuration
 
@@ -70,7 +70,7 @@ Consider Pi `@xzzpig/pi-vibeguard >=0.2.1`; verify its actual Pi-fork API and ru
 
 Block default deployment on unsupported/latest-non-v2 executable, Meridian misrouting, widened external-directory permissions, canary-secret egress, plugin load failures, wrong provider/model alias, lost memory, user-owned JSON overwrite, false HTTP health check, or CI still pinned to v1. One-way means no dual support, **not** no backups or unsafe state mutation.
 
-Owner-only verification: real model credentials/entitlements and billing, Meridian OAuth, hardware voice, native macOS/Windows installs, production memory migration, live Caddy and ACP paths. Mark untested as **UNKNOWN**, not passed. Work in small draft PRs and follow current `AGENTS.md`/home guidance for authorisation, CI assets, reviewer attribution, and merge.
+Owner-only verification: real model credentials/entitlements and billing, Meridian OAuth, hardware voice, native macOS/Windows installs, production memory migration, live Caddy and ACP paths. Mark untested as **UNKNOWN**, not passed. Work in small draft PRs and follow current `AGENTS.md`/home guidance for authorization, CI assets, reviewer attribution, and merge.
 
 ## References
 
