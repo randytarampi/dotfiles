@@ -171,7 +171,7 @@ def test_presence_check_is_read_only_and_mockable(tmp_path):
 
 def test_plan_agent_is_disabled_but_not_plannotator_planning_agent():
     source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
-    assert '"plan": {"disable": True}' in source
+    assert '"plan": {"disabled": True}' in source
     planning_block = source.split('"planningAgents":', 1)[1].split("]", 1)[0]
     assert '"plan"' not in planning_block
 
@@ -179,6 +179,25 @@ def test_plan_agent_is_disabled_but_not_plannotator_planning_agent():
 def test_generated_global_config_disables_native_auto_compaction():
     source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
     assert '"compaction": {"auto": False}' in source
+
+
+def test_native_config_shape_contract():
+    source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
+    assert 'config["permissions"] = _native_permissions(' in source
+    assert (
+        '{"action": "external_directory", "resource": "*", "effect": "ask"}' in source
+    )
+    assert '"mcp.servers"' not in source  # runtime wrapper, not a static literal
+    assert "def _native_mcp_config" in source
+    assert '"plugins": [' in source
+    assert '"package": plannotator' in source  # v2 {package, options} object form
+    assert '"agents": {' in source  # native v2 agents key
+    assert '"providers": {}' in source  # native v2 providers key
+    assert '"lsp"' not in source
+    assert 'config.pop("server", None)' in source
+    assert 'config.pop("logLevel", None)' in source
+    assert '"policies"' not in source  # v1 provider filters normalize silently
+    assert '"disabled_providers": []' in source
 
 
 # trufflehog:ignore - package specs and semver strings, not credentials.
