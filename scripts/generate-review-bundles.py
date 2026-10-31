@@ -16,7 +16,7 @@ COMPACT_LIMIT = 9500
 GITHUB = ".github/skills/code-review/SKILL.md"
 OPENCODE = ".opencode/skills/code-review/SKILL.md"
 MANIFEST = ROOT / "configs/review/assets-manifest.json"
-FACETS = ("engineering", "facilitation", "mentoring", "philosophy")
+FACETS = ("engineering", "facilitation", "mentoring", "philosophy", "claims-audit")
 START = "## Purpose and success criterion"
 
 
