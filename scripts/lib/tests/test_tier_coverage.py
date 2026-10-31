@@ -129,20 +129,23 @@ def test_local_direct_exceptions_and_slim_gate_parity():
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
-    function = ast.parse(script.read_text(encoding="utf-8"))
     gate = next(
         node
-        for node in function.body
+        for node in ast.parse(script.read_text(encoding="utf-8")).body
         if isinstance(node, ast.FunctionDef) and node.name == "apply_litellm_slim_gate"
     )
-    gate_sets = {}
+    policies = {}
     for node in ast.walk(gate):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Set):
+        if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name):
-                    gate_sets[target.id] = ast.literal_eval(node.value)
+                if isinstance(target, ast.Name) and target.id in {
+                    "direct_exceptions",
+                    "local_owners",
+                }:
+                    policies[target.id] = ast.literal_eval(node.value)
+    assert set(policies) == {"direct_exceptions", "local_owners"}
     assert tier_coverage.DIRECT_EXCEPTIONS == (
-        gate_sets["direct_exceptions"] | gate_sets["local_owners"]
+        policies["direct_exceptions"] | policies["local_owners"]
     )
 
 

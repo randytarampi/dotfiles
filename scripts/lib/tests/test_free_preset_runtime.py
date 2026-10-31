@@ -151,10 +151,12 @@ def test_snapshot_to_materializer_preserves_registry_and_qualifies_routes():
     assert registry == original
 
 
-def test_gateway_unknown_refuses_without_direct_fallback():
+def test_gateway_unknown_refuses_without_direct_fallback(monkeypatch, tmp_path):
     def forbidden():
         pytest.fail("gateway refusal must precede direct discovery")
 
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("LITELLM_PORT", raising=False)
     with pytest.raises(DynamicFreeRegistryError, match="gateway"):
         prepare_dynamic_free_registry(
             {},
