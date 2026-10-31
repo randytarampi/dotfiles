@@ -47,7 +47,9 @@ def test_missing_canonical_method_marker_is_rejected(generator, tmp_path, monkey
         generator.generated()
 
 
-def test_check_bundles_catches_missing_stale_and_oversize(generator, tmp_path, monkeypatch):
+def test_check_bundles_catches_missing_stale_and_oversize(
+    generator, tmp_path, monkeypatch
+):
     monkeypatch.setattr(generator, "ROOT", tmp_path)
     monkeypatch.setattr(generator, "COMPACT_LIMIT", 5)
     output = {generator.COMPACT: "too many characters", "existing.md": "new"}
@@ -60,7 +62,9 @@ def test_check_bundles_catches_missing_stale_and_oversize(generator, tmp_path, m
     assert any("Manifest" in error for error in errors)
 
 
-def test_write_bundles_keeps_unrelated_manifest_entries(generator, tmp_path, monkeypatch):
+def test_write_bundles_keeps_unrelated_manifest_entries(
+    generator, tmp_path, monkeypatch
+):
     monkeypatch.setattr(generator, "ROOT", tmp_path)
     manifest = tmp_path / "manifest.json"
     monkeypatch.setattr(generator, "MANIFEST", manifest)
