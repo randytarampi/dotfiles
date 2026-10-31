@@ -49,6 +49,7 @@ Use Canadian English in formal reports; adopt the surrounding register in conver
 - `references/facilitation.md` — conversations, finding lifecycle, re-review and compact reporting.
 - `references/mentoring.md` — peer coaching, disputes and learning.
 - `references/philosophy.md` — contextual Randy-isms and exceptions.
+- `references/claims-audit.md` — optional standalone or combined claims audit.
 - `configs/review/method-evaluation.md` — **offline evaluation only**, never injected into runtime review prompts.
 
 The generated `configs/review/code-review-prompt.md` and GitHub/OpenCode skill copies below are self-contained because some vendor CI lanes consume prompt text without adjacent reference files. They are derived from this entry point and its four references; retain exact shared method content. `make update-ci-assets` and `make check-ci-assets` maintain manifest hashes, but this PR also requires explicit source-to-bundle parity verification.
