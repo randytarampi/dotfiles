@@ -99,24 +99,28 @@ the canonical manifest (all plugins pinned to `@latest`, per migration plan) at
 
 | Plugin | Purpose |
 |--------|---------|
-| `oh-my-opencode-slim@3.0.1` | Orchestrator agent suite (deepwork, skills distribution) |
-| `@tarquinen/opencode-dcp@latest` | Core dynamic context pruning; TUI entry is owned separately |
-| `@plannotator/opencode@0.27.21` | Interactive plan/code review UI |
-| `opencode-vibeguard@0.1.0` | Secrets redaction before LLM requests |
-| `@ramtinj95/opencode-tokenscope@1.8.1` | Token usage/cost reporting |
-| `opencode-mem@2.26.0` | Persistent project/user memory with vector search |
+| `oh-my-opencode-slim@latest` | Orchestrator agent suite (deepwork, skills distribution) |
+| `@tarquinen/opencode-dcp@latest` | Dynamic context pruning (v2: single manifest registration; TUI panel auto-loads) |
+| `@plannotator/opencode` | Interactive plan/code review UI (emitted as a `{package, options}` object) |
+| `github:AxeForce/opencode-vibeguard-v2#934823e5` | Secrets redaction before LLM requests — GitHub-pinned dual-runtime build (v1 `server()` + v2 `setup()`), package.json 0.2.0 |
+| `@cheesecodestudio/opencode-tokenscope-v2@latest` | Token usage/cost reporting (replaces `@ramtinj95/opencode-tokenscope`) |
+| `opencode-mem@latest` | Persistent project/user memory with vector search (opt-in gated) |
 | Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
 
-DCP is intentionally excluded from the canonical manifest because it has dual
-ownership: the pinned manifest contract does not govern its legacy core entry,
-while `configure-opencode-dcp.py` owns its `/dcp` TUI entry in `tui.json`.
-Voice remains TUI-owned and is configured by `configure-opencode-voice.py`.
+Voice is a global TUI-client-only plugin: it lives in `~/.config/opencode/cli.json`
+(manifest `cli_plugins` registry; tier options attached by
+`configure-opencode-voice.py`) — see [VOICE.md](VOICE.md). DCP and memory are
+TUI-capable and load from the `plugins` array above; they are never duplicated
+in `cli.json`.
 
-> **Migration note (2026-10-31):** `@slkiser/opencode-quota` is no longer a
-> managed dependency, at the owner’s request. TokenScope remains the token
-> usage reporting plugin. The previous 4.10.8 pin targeted OpenCode v1;
-> the v2 migration must not re-introduce Quota. Existing user-owned Quota
-> configuration files are deliberately left untouched.
+> **Note (2026-10-13, revised 2026-10-31):** `@slkiser/opencode-quota` and its
+> quota surfaces are retired from the fleet as part of the one-way OpenCode v2
+> migration (user-owned quota files were never deleted). Removed earlier:
+> `opencode-plugin-openspec` (underutilized) and
+> `opencode-planning-with-files` (experiment retired) — see
+> `configs/opencode/opencode-plugins.json` for the live canonical set. The
+> original VibeGuard npm line (0.1.0) and TokenScope (`@ramtinj95`, 1.8.1) are
+> replaced by the v2-capable builds in the table above.
 
 ### Memory opt-in
 
@@ -170,16 +174,16 @@ of 2026-10-13:
   observations plus an explicit error note. The file ships untracked —
   create it on new machines when the observer lane is in use.
 
-> **Note (2026-09-24):** These plugins are registered for the v1 CLI
-> (1.18.32). Upstream `v2` builds still do not exist for `opencode-mem` — on an
-> OpenCode v2 binary it fails the plugin loader (no v2 `default {id, setup}`).
-> Revisit before migrating to OpenCode v2; see
-> [docs/OPENCODE-V2-MIGRATION-PLAN.md](OPENCODE-V2-MIGRATION-PLAN.md).
+> **Note (2026-09-24, revised 2026-10-31):** These plugins are registered for
+> the OpenCode v2 CLI. `opencode-mem` 2.39.0 ships `./v2` and `./tui` exports
+> (v2-capable; the older "no v2 build" note no longer applies). Quota is
+> retired from the fleet and must not be re-added.
 
 ## Tokenscope
 
-`@ramtinj95/opencode-tokenscope` is an OpenCode plugin for analyzing token usage and costs:
+`@cheesecodestudio/opencode-tokenscope-v2` is an OpenCode plugin for analyzing
+token usage and costs (replaces `@ramtinj95/opencode-tokenscope`):
 
-- **Install**: `opencode plugin add @ramtinj95/opencode-tokenscope@latest` (canonical plugin manifest; no `--global` under the v2 warm install flow)
-- **Usage**: Run `/tokenscope` in OpenCode UI to analyze token usage and costs for the current session
+- **Install**: `opencode plugin add @cheesecodestudio/opencode-tokenscope-v2@latest` (canonical plugin manifest; no `--global` under the v2 warm install flow)
+- **Usage**: Token usage/cost surfaces in the TUI — the v2 package's exact command surface is unverified until machine validation; current docs carry the `/tokenscope` name forward
 - **Config**: Added to the `plugins` array in `opencode.json` by `scripts/configure-opencode.py`
