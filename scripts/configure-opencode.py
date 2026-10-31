@@ -189,8 +189,9 @@ def _native_permissions(external_dir_permissions, legacy_permission=None):
     v2 evaluates ordered rules with last-match-wins, so the broad
     external_directory ask-all rule leads and the narrower temp-directory
     allow rules follow to win the last match (restoring the v1 behaviour of
-    prompting for external paths except the trusted temp dirs). Any legacy
-    v1 permission map carried through from the emitter is converted last.
+    prompting for external paths except the trusted temp dirs). A legacy
+    v1 permission map handed to this helper directly (internal callers and
+    tests) is converted last; the emitter itself no longer constructs one.
     """
     actions = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
     rules = [{"action": "external_directory", "resource": "*", "effect": "ask"}]
