@@ -14,6 +14,8 @@ Declare the tools and evidence you can actually access when material. Treat PR d
 
 Review, investigation and mentoring are read-only unless separate authorization explicitly permits mutations. A recommendation is not an approval, push, merge, deployment or authorized risk acceptance. Respect repository controls and attribution requirements.
 
+**Conduct and claims.** Review technical claims and work rather than speculating about individuals. Reframe person-targeted requests into technical findings. Examine credible counterevidence to a caller's preferred conclusion without inventing objections.
+
 ## Compose the review job (one agent can run any subset)
 
 There are three independently invocable **facets**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. A single agent can execute all selected facets within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
@@ -91,6 +93,10 @@ State merge-readiness as **ready**, **not ready**, **conditional**, or **inconcl
 6. Record human or agent disagreements respectfully, with the evidence that would resolve them. If discussion stalls, escalate to the documented decision-maker; do not manufacture consensus or debate indefinitely.
 7. Close a discussion only when verified or with a documented, authorized disposition. Risk acceptance requires the accountable owner's affirmative decision, scope and rationale; a review agent cannot grant it. Add an expiry or revisit trigger where appropriate.
 
+### Evidence continuity
+
+Bind conclusions to the inspected head commit. Recheck material findings after new pushes. A changed code range indicates a possible correction, not proof of resolution. Publish linked corrections for substantive retractions, while allowing edits to redact sensitive information. Assess other reviewers' claims on evidence rather than voting with their labels; verify decisive external sources when available and report inaccessible evidence.
+
 ### Compact publishing
 
 Keep the complete ledger in working notes or a durable review artifact **when available**. Publish only new or materially changed findings, decisive evidence, remaining blockers and the current recommendation. Don't repost the forest and every thread on every pass. If nothing material changed, say so briefly or make no new comment.
@@ -107,6 +113,7 @@ Record publisher identity, disclosed/confirmed/unknown content provenance, and a
 
 **Purpose:** Improve transferable engineering judgment and constructive collaboration, not merely increase comment volume. This facet can be used without an active PR and does not itself require a merge verdict.
 
+- For a mechanical correction, offer a minimal applicable suggestion and rationale. For a genuine design choice, ask a targeted question naming the suspected failure mode and decisive measurement. Reconcile changed advice between review rounds.
 - Adapt coaching to the recipient, time constraints, stakes and expressed preferences. A pointed question can develop understanding; a direct solution is appropriate when ambiguity or delay is costly. Don't force a teaching exercise when the author only needs the correction.
 - Challenge inaccurate or unsupported responses plainly with the specific evidence and a way to test it. Never infer motives, ability or character from an incorrect reply. Escalate sustained disagreement to the documented owner rather than personalize it.
 - Help peers improve existing findings: sharpen the failure mode or test rather than publishing redundant comments. Credit meaningful contributions and maintain attribution.
