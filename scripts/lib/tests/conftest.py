@@ -48,6 +48,20 @@ def provisioning_write_boundary(tmp_path, monkeypatch):
         monkeypatch.setattr(os, name, guarded_mutation)
 
 
+@pytest.fixture(autouse=True)
+def assume_v2_opencode_host(monkeypatch):
+    """Emitter suites run on machines with any installed OpenCode host; the
+    native v2 emitter contract applies. Gate tests override
+    ``resolve_opencode_host`` in the test body (later monkeypatch wins)."""
+    try:
+        import opencode_host
+    except ImportError:  # pragma: no cover - lib always present in this repo
+        return
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+
+
 def pytest_configure():
     # coverage's installed .pth starts child Python processes when this points
     # at the in-repo config, including subprocesses launched by these tests.

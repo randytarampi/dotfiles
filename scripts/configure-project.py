@@ -14,6 +14,7 @@ LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 sys.path.insert(0, LIB_DIR)
 
 import logger
+import opencode_host
 from env import load_env
 from preset_migration import migrate_preset_value
 from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_targets
@@ -211,6 +212,11 @@ def configure_skills(root, profiles, extras, skipped):
 
     opencode_path = Path(root) / "opencode.json"
     config_paths = [opencode_path, Path(root) / ".opencode" / "opencode.json"]
+    # Skill deny rules follow the installed host: a v2 (or not-yet-installed)
+    # host gets native ordered rules; a v1 host keeps the legacy permission
+    # map, which v2 also normalizes if it arrives late.
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    native_permission_rules = host_state == "absent" or host_major == 2
     if skipped and not any(path.exists() for path in config_paths):
         config_paths = [config_paths[-1]]
         config_paths[0].parent.mkdir(parents=True, exist_ok=True)
@@ -220,21 +226,27 @@ def configure_skills(root, profiles, extras, skipped):
             continue
         with config_path.open(encoding="utf-8") as handle:
             config = json.load(handle)
-        permissions = config.setdefault("permissions", [])
-        if isinstance(permissions, list):
-            permissions[:] = [
-                rule
-                for rule in permissions
-                if isinstance(rule, dict) and rule.get("action") != "skill"
-            ]
-            permissions.extend(
-                {"action": "skill", "resource": name, "effect": "deny"}
-                for name in skipped
-            )
-            skill_permissions = None
+        if native_permission_rules:
+            permissions = config.setdefault("permissions", [])
+            if isinstance(permissions, list):
+                permissions[:] = [
+                    rule
+                    for rule in permissions
+                    if isinstance(rule, dict) and rule.get("action") != "skill"
+                ]
+                permissions.extend(
+                    {"action": "skill", "resource": name, "effect": "deny"}
+                    for name in skipped
+                )
+                skill_permissions = None
+            else:
+                skill_permissions = permissions.setdefault("skill", {})
+            if skill_permissions is not None:
+                for name in skipped:
+                    skill_permissions[name] = "deny"
         else:
+            permissions = config.setdefault("permission", {})
             skill_permissions = permissions.setdefault("skill", {})
-        if skill_permissions is not None:
             for name in skipped:
                 skill_permissions[name] = "deny"
         with config_path.open("w", encoding="utf-8") as handle:

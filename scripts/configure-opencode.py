@@ -25,6 +25,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
+import opencode_host  # noqa: E402 -- local import follows the bootstrap.
 from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
@@ -1028,6 +1029,12 @@ def main():
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
+    # One-way migration gate: native v2 configuration is only written for
+    # a compatible host. A v1 (or unprobeable) host keeps its last honest
+    # v1-shaped config; nothing is written this run.
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    if not opencode_host.native_emission_decision(host_state, host_major, logger):
+        return
     explicit_preset = args.preset
     source_root = Path(SCRIPT_DIR).resolve().parent
     logger.info("config source: %s/configs", source_root)
