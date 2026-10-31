@@ -1276,9 +1276,19 @@ def check_opencode_orphan_files():
 
     opencode_dir = HOME / ".config/opencode"
     managed_config_path = opencode_dir / "opencode.json"
+    cli_path = opencode_dir / "cli.json"
     dcp_json_path = opencode_dir / "dcp.json"
     dcp_config_path = opencode_dir / "dcp.jsonc"
     exit_code = 0
+
+    if cli_path.exists():
+        try:
+            cli_config = json.loads(cli_path.read_text(encoding="utf-8"))
+            if not isinstance(cli_config, list):
+                raise ValueError("cli.json root must be an array")
+        except (json.JSONDecodeError, OSError, ValueError) as error:
+            print(f"  \u2717 OpenCode cli.json: could not parse {cli_path}: {error}")
+            exit_code = 1
 
     if dcp_json_path.exists() and dcp_config_path.exists():
         print(
