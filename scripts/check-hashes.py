@@ -22,6 +22,8 @@ NON_TRACKED_CONFIGS = {
     "configs/opencode/acp-agents.json",
     "configs/opencode/ci/opencode.json",
     "configs/review/code-review-prompt.md",
+    "configs/review/compact-engineering-prompt.md",  # exported for manual use, not a deploy input
+    "configs/review/method-evaluation.md",  # offline research, not an installed skill
     "configs/review/assets-manifest.json",
     # Point-in-time catalogue snapshots (PR E0) are review documentation, not
     # deploy inputs; a hash trigger would rerun config on every snapshot.
@@ -54,6 +56,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/run-local-review.sh",  # local-only asset verified by check-ci-assets
     "scripts/onboard-agentic-review.py",  # CI-only asset verified by check-ci-assets
     "scripts/verify-ci-assets.py",  # self-verifying manifest checker
+    "scripts/generate-review-bundles.py",  # CI-only generator checked by Makefile
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
