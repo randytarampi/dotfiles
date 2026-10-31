@@ -8,17 +8,17 @@ The codegraph CLI (1.6.2) emits an undocumented nested snippet shape:
 Direction follows the installed OpenCode host (see scripts/lib/opencode_host.py):
 
 - OpenCode v2 (or not installed): the managed native shape is the nested
-  "mcp.servers" wrapper matching the v2 config docs and the canonical
-  emitter. Flat legacy "mcp" entries are promoted into the wrapper with
-  "enabled" inverted to "disabled"; field whitelisting is dropped so v2
-  fields (timeout {catalog,execution}, snake_case OAuth members, codemode,
-  ...) survive untouched. A conflicting flat entry loses to the nested one;
-  a malformed nested entry never overrides its flat twin.
+    "mcp.servers" wrapper matching the v2 config docs and the canonical
+    emitter. Flat legacy "mcp" entries are promoted into the wrapper with
+    "enabled" inverted to "disabled"; field whitelisting is dropped so v2
+    fields (timeout {catalog,execution}, snake_case OAuth members, codemode,
+    ...) survive untouched. A conflicting flat entry loses to the nested one;
+    a malformed nested entry never overrides its flat twin.
 - OpenCode v1 (or an unprobeable host): the legacy v1 behaviour applies —
-  promote nested entries to flat keys keeping only documented v1 fields,
-  convert "disabled" to inverted "enabled", drop undocumented fields, and
-  remove the wrapper, so the v1 binary (which does not read mcp.servers)
-  keeps codegraph registered.
+    promote nested entries to flat keys keeping only documented v1 fields,
+    convert "disabled" to inverted "enabled", drop undocumented fields, and
+    remove the wrapper, so the v1 binary (which does not read mcp.servers)
+    keeps codegraph registered.
 
 Both directions are idempotent and atomic; malformed or non-dict inputs are
 left untouched and return False.

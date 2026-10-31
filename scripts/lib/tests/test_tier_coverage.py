@@ -176,7 +176,6 @@ def test_inventory_loader_known_and_unknown_shapes(tmp_path):
 
 def test_inventory_loader_native_providers_shape(tmp_path):
     """The doctor row and deploy gate read the native v2 providers key."""
-    import pathlib
 
     populated = tmp_path / "native-populated.json"
     populated.write_text(

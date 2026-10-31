@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-resolved binary.
 
 _VERSION_RE = re.compile(r"(?:^|\s)v?(\d+)\.\d+")
 
@@ -36,7 +36,7 @@ def _probe_host(binary: str) -> tuple[str, int | None]:
     if resolved is None:
         return ("absent", None)
     try:
-        probe = subprocess.run(
+        probe = subprocess.run(  # nosec B603 - absolute binary from shutil.which; literal args.
             [resolved, "--version"],
             capture_output=True,
             text=True,
