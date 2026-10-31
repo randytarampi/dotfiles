@@ -13,8 +13,8 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 sys.path.insert(0, LIB_DIR)
 
-import logger
-import opencode_host
+import logger  # noqa: E402  # sys.path bootstrap above is intentional.
+import opencode_host  # noqa: E402
 from env import load_env
 from preset_migration import migrate_preset_value
 from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_targets

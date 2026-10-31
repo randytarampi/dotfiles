@@ -7,7 +7,6 @@ import pytest
 
 import normalize_mcp_json
 import opencode_host
-from opencode_host import resolve_opencode_host
 
 
 @pytest.fixture(autouse=True)
