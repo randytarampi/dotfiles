@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-OpenCode DCP TUI Plugin Configurator.
+OpenCode DCP configuration reconciler.
 
-Generates/merges the DCP entry into ~/.config/opencode/tui.json so the /dcp
-TUI panel (DCP v3.1.13+) is loaded. Core compression still loads via
-opencode.json's plugins array — this script only owns the DCP entry in tui.json.
+Removes obsolete DCP entries from ~/.config/opencode/tui.json. Registration
+and TUI loading are owned by the opencode.json plugin manifest.
 
 tui.json is a SHARED file: each TUI plugin has its own configure-opencode-*.py
 that defensively merges only its own entry. This script does NOT touch voice
@@ -35,23 +34,23 @@ from file_utils import backup_file, write_text_file
 from env import load_env
 
 DCP_PLUGIN_KEY = "@tarquinen/opencode-dcp"
-DCP_PLUGIN_ENTRY = "@tarquinen/opencode-dcp@latest"
 
 
 def is_dcp_entry(entry) -> bool:
     if isinstance(entry, str):
-        return entry == DCP_PLUGIN_KEY or entry.startswith(DCP_PLUGIN_KEY + "@")
+        value = entry.removeprefix("-")
+        return value == DCP_PLUGIN_KEY or value.startswith(DCP_PLUGIN_KEY + "@")
+    if isinstance(entry, dict):
+        return is_dcp_entry(entry.get("package", ""))
     if isinstance(entry, (list, tuple)) and entry:
         first = entry[0]
-        return isinstance(first, str) and (
-            first == DCP_PLUGIN_KEY or first.startswith(DCP_PLUGIN_KEY + "@")
-        )
+        return is_dcp_entry(first)
     return False
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Configure OpenCode DCP plugin (tui.json)."
+        description="Remove obsolete DCP registration from tui.json."
     )
     parser.add_argument(
         "--dry-run",
@@ -94,30 +93,21 @@ def main():
             existing_plugins = []
             existing_config = {}
 
-    filtered_plugins = []
-    for entry in existing_plugins:
-        if is_dcp_entry(entry):
-            continue
-        filtered_plugins.append(entry)
-    filtered_plugins.append(DCP_PLUGIN_ENTRY)
+    filtered_plugins = [entry for entry in existing_plugins if not is_dcp_entry(entry)]
+    tui_config = existing_config or {}
+    changed = filtered_plugins != existing_plugins
+    if changed:
+        tui_config["plugin"] = filtered_plugins
 
-    tui_config: dict[str, Any] = (
-        existing_config
-        if existing_config
-        else {
-            "$schema": "https://opencode.ai/tui.json",
-        }
-    )
-    tui_config["$schema"] = "https://opencode.ai/tui.json"
-    tui_config["plugin"] = filtered_plugins
-
-    if args.dry_run:
-        print("# Dry-run: tui.json DCP entry")
-        print(f"# Config dir: {config_dir_path}")
-        print(json.dumps(tui_config.get("plugin", []), indent=2))
+    if not changed:
+        logger.info("No obsolete DCP tui.json registration to remove")
         return
 
-    os.makedirs(config_dir_path, exist_ok=True)
+    if args.dry_run:
+        print("# Dry-run: remove obsolete tui.json DCP entry")
+        print(f"# Config dir: {config_dir_path}")
+        print(json.dumps(filtered_plugins, indent=2))
+        return
 
     if os.path.exists(output_path) and not args.no_backup:
         backup_path = backup_file(output_path, enabled=True)
@@ -135,16 +125,9 @@ def main():
         logger.critical(f"Failed to write tui.json: {e}")
         sys.exit(1)
 
-    summary_lines = [
-        "DCP TUI plugin configured!",
-        "",
-        f"tui.json written to: {output_path}",
-        "  • @tarquinen/opencode-dcp@latest (string form, /dcp panel)",
-        "",
-        "tui.json is a shared file — other TUI plugins (e.g. voice) are preserved.",
-        "Core compression still loads via opencode.json plugins array (unchanged).",
-    ]
-    logger.info("\n".join(summary_lines))
+    logger.info(
+        "Removed obsolete DCP registration from tui.json; plugin loading is owned by opencode.json"
+    )
 
 
 if __name__ == "__main__":
