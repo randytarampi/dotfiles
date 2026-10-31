@@ -96,14 +96,18 @@ def write_bundles(expected: dict[str, str], data: dict) -> None:
     for relative, output in expected.items():
         (ROOT / relative).write_text(output, encoding="utf-8")
         if relative in data["assets"]:
-            data["assets"][relative] = hashlib.sha256(output.encode("utf-8")).hexdigest()
+            data["assets"][relative] = hashlib.sha256(
+                output.encode("utf-8")
+            ).hexdigest()
     MANIFEST.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--check", action="store_true", help="Verify generated bundles")
+    mode.add_argument(
+        "--check", action="store_true", help="Verify generated bundles"
+    )
     mode.add_argument("--write", action="store_true", help="Regenerate bundles")
     args = parser.parse_args()
     expected = generated()
