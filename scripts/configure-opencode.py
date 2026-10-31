@@ -54,6 +54,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
 )
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
+    configured_plugin_specs,
     plugin_specs,
 )
 from models_dev import (  # noqa: E402 -- local import follows bootstrap.
