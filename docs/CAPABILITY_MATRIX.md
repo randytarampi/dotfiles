@@ -73,6 +73,10 @@ tracked separately; this is not the Claude CLI environment-variable route.
 - Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through
   its generated `models.json`; tools marked “no” have no direct Meridian wiring.
   Mozart routes provider traffic and is not an additional per-tool ACP target.
+- Xcode's LiteLLM integration is credential-only: an installed, identity-checked
+  app and all three opt-in gates permit a private `xcode.key`. IDE consumption,
+  effective authentication and routed inference remain UNKNOWN. Keys are
+  per client, not per operating system; see [LITELLM.md](LITELLM.md).
 - `scripts/configure-hermes.py` adds `providers.dotfiles-litellm` to
   `$HERMES_HOME/config.yaml` only when `DOTFILES_RUN_HERMES_SETUP=1` and
   `DOTFILES_USE_LITELLM_PROXY=1`; choose it explicitly with
