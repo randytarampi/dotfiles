@@ -452,7 +452,7 @@ def apply_litellm_slim_gate(
     """Route every Slim selection using the gateway inventory built for OpenCode."""
     if not get_litellm_proxy_mode():
         return slim
-    gateway = config.get("provider", {}).get("litellm", {}).get("models", {})
+    gateway = config.get("providers", {}).get("litellm", {}).get("models", {})
     dynamic_selected_refs = {
         value["model"]
         for preset in ("free", "omo-slim-opencode-zen-free")
