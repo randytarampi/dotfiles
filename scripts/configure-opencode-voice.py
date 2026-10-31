@@ -1384,6 +1384,44 @@ def main():
         (entry for entry in cli_config if _voice_entry_matches(entry)),
         None,
     )
+    # When cli.json has no voice entry yet, the previously managed tui.json
+    # route seeds the v2 entry: the package maps onto the current manifest
+    # spec and its options are preserved verbatim.
+    legacy_options = None
+    if existing_voice is None:
+        try:
+            with open(
+                os.path.join(config_dir_path, "tui.json"), encoding="utf-8"
+            ) as tui_file:
+                legacy_tui = json.load(tui_file)
+            if isinstance(legacy_tui, dict) and isinstance(
+                legacy_tui.get("plugin", []), list
+            ):
+                legacy_entry = next(
+                    (
+                        entry
+                        for entry in legacy_tui["plugin"]
+                        if _voice_tui_entry_matches(entry)
+                    ),
+                    None,
+                )
+                if legacy_entry is not None:
+                    if isinstance(legacy_entry, dict):
+                        legacy_options = legacy_entry.get("options")
+                    elif (
+                        isinstance(legacy_entry, (list, tuple))
+                        and len(legacy_entry) > 1
+                    ):
+                        legacy_options = legacy_entry[1]
+                    if isinstance(legacy_options, str):
+                        try:
+                            legacy_options = json.loads(legacy_options)
+                        except json.JSONDecodeError:
+                            legacy_options = None
+                    if not isinstance(legacy_options, dict):
+                        legacy_options = None
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            logger.debug("No usable legacy tui.json voice route: %s", error)
     entry_options = {
         key: value
         for key, value in voice_config.items()
@@ -1393,11 +1431,22 @@ def main():
     existing_options = (
         existing_voice.get("options", {}) if isinstance(existing_voice, dict) else {}
     )
+    route_installed = False
     if (
         not (voice_config.get("endpoint") and voice_config.get("model"))
         and existing_voice is not None
     ):
         filtered_plugins.append(existing_voice)
+        route_installed = True
+    elif not (voice_config.get("endpoint") and voice_config.get("model")) and (
+        legacy_options is not None
+    ):
+        # The legacy v1 route's working selection maps onto the current
+        # manifest spec, options preserved verbatim.
+        filtered_plugins.append(
+            {"package": voice_plugin_spec, "options": legacy_options}
+        )
+        route_installed = True
     elif unresolved:
         if existing_voice is not None:
             for key in ("endpoint", "model", "apiKeyEnv"):
@@ -1406,10 +1455,13 @@ def main():
             filtered_plugins.append(
                 {"package": voice_plugin_spec, "options": entry_options}
             )
+            route_installed = True
+        # Unresolved without anything preserved: do not register a route.
     elif voice_config.get("endpoint") and voice_config.get("model"):
         filtered_plugins.append(
             {"package": voice_plugin_spec, "options": entry_options}
         )
+        route_installed = True
 
     # Dry-run mode
     if args.dry_run:
@@ -1462,7 +1514,7 @@ def main():
         sys.exit(1)
 
     tui_path = os.path.join(config_dir_path, "tui.json")
-    if os.path.exists(tui_path):
+    if route_installed and os.path.exists(tui_path):
         try:
             with open(tui_path, encoding="utf-8") as tui_file:
                 tui_config = json.load(tui_file)

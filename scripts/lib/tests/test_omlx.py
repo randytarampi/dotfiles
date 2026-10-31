@@ -1623,6 +1623,8 @@ def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
         "fetch_models_dev": lambda: {},
         "build_opencode_server_config": lambda: None,
         "active_plugin_specs": lambda: [
+            "oh-my-opencode-slim@latest",
+            "@tarquinen/opencode-dcp@test",
             "@plannotator/opencode@test",
             "plugin-a",
             "plugin-b",
@@ -1842,6 +1844,8 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
         "fetch_models_dev": lambda: {},
         "build_opencode_server_config": lambda: None,
         "active_plugin_specs": lambda: [
+            "oh-my-opencode-slim@latest",
+            "@tarquinen/opencode-dcp@test",
             "@plannotator/opencode@test",
             "plugin-a",
             "plugin-b",
@@ -1916,7 +1920,13 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
         "list_local_ollama_models": lambda: [],
         "fetch_models_dev": lambda: {},
         "build_opencode_server_config": lambda: None,
-        "active_plugin_specs": lambda: ["@plannotator/opencode@test"],
+        "active_plugin_specs": lambda: [
+            "oh-my-opencode-slim@latest",
+            "@tarquinen/opencode-dcp@test",
+            "@plannotator/opencode@test",
+            "plugin-a",
+            "plugin-b",
+        ],
         "plugin_specs": lambda: ["plugin-a"],
         "get_preset_providers": lambda *args: set(),
         "get_litellm_proxy_mode": lambda: False,
