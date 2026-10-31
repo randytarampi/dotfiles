@@ -95,7 +95,6 @@ def test_dry_run_does_not_write(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     "source",
     [
-        "providers: {}\n",
         "providers: null\n",
         "providers: [one, two]\n",
         "providers:\n  dotfiles-litellm: null\n",
@@ -272,8 +271,28 @@ def test_cli_refuses_non_utf8_without_creating_backup(monkeypatch, tmp_path):
     assert not path.with_name("config.yaml.bak").exists()
 
 
+def test_empty_flow_provider_map_is_expanded_without_changing_surrounding_yaml():
+    original = "# before\nmodel: alias\nproviders: {} # keep this comment\nsettings:\n  keep: value\n# after\n"
+    updated = hermes.reconcile(original, "alias", "http://127.0.0.1:4000/v1")
+
+    assert "# before\n" in updated
+    assert "providers: # keep this comment\n" in updated
+    assert "settings:\n  keep: value\n# after\n" in updated
+    parsed, _ = hermes._parse_config(updated)
+    expected = yaml.safe_load(original)
+    expected["providers"]["dotfiles-litellm"] = {
+        "name": "dotfiles-litellm",
+        "api": "http://127.0.0.1:4000/v1",
+        "transport": "chat_completions",
+        "key_env": "LITELLM_HERMES_KEY",
+        "default_model": "alias",
+    }
+    assert parsed == expected
+    assert hermes.reconcile(updated, "alias", "http://127.0.0.1:4000/v1") == updated
+
+
 def test_empty_and_null_existing_provider_map_refused():
-    for source in ("providers: {}\n", "providers: null\n"):
+    for source in ("providers: null\n", "providers: {custom: value}\n"):
         with pytest.raises(ValueError):
             hermes.reconcile(source, "alias", "http://127.0.0.1:4000/v1")
 
