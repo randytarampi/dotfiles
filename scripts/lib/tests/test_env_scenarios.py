@@ -52,6 +52,13 @@ def run_configure(home, **values):
     (stub_bin / "systemctl").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     (stub_bin / "launchctl").chmod(0o755)
     (stub_bin / "systemctl").chmod(0o755)
+    # The emitter gates native v2 emission on the installed host; scenarios
+    # pretend a machine that completed the v2 cutover, so the stub binary
+    # reports a v2 version instead of a real host's (possibly v1) one.
+    (stub_bin / "opencode").write_text(
+        "#!/bin/sh\nprintf 'opencode version 2.2.5\\n'\n", encoding="utf-8"
+    )
+    (stub_bin / "opencode").chmod(0o755)
     env["PATH"] = f"{stub_bin}:{env.get('PATH', '')}"
     (home / ".env").write_text(
         ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8"
