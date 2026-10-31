@@ -225,10 +225,10 @@ def configure_skills(root, profiles, extras, skipped):
             permissions[:] = [
                 rule
                 for rule in permissions
-                if isinstance(rule, dict) and rule.get("resource") != "skill"
+                if isinstance(rule, dict) and rule.get("action") != "skill"
             ]
             permissions.extend(
-                {"action": name, "resource": "skill", "effect": "deny"}
+                {"action": "skill", "resource": name, "effect": "deny"}
                 for name in skipped
             )
             skill_permissions = None
