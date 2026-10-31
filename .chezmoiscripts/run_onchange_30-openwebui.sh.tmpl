@@ -34,9 +34,9 @@ source "${LIB_DIR}/openwebui_service.sh"
 # configs/opencode/openrouter-models.json: {{ include "configs/opencode/openrouter-models.json" | sha256sum }}
 # configs/opencode/opencode-models.json: {{ include "configs/opencode/opencode-models.json" | sha256sum }}
 # configs/opencode/ollama-cloud-models.json: {{ include "configs/opencode/ollama-cloud-models.json" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.3" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.5" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret fingerprint: {{ env "WEBUI_SECRET_KEY" | sha256sum | trunc 12 }}:{{ env "WEBUI_ADMIN_PASSWORD" | sha256sum | trunc 12 }}:{{ env "OPENWEBUI_API_KEY" | sha256sum | trunc 12 }}
-# terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.0" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
+# terminal fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_TERMINAL_VERSION" | default "0.14.7" }}:{{ env "OPENWEBUI_TERMINAL_PORT" | default "8123" }}:{{ env "OPEN_TERMINAL_API_KEY" | sha256sum | trunc 12 }}
 # computer fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_COMPUTER_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_COMPUTER_VERSION" | default "0.9.21" }}:{{ env "OPENWEBUI_COMPUTER_PORT" | default "8124" }}
 
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -86,7 +86,7 @@ VENV_DIR="$OPENWEBUI_HOME/venv"
 DATA_DIR="$OPENWEBUI_HOME/data"
 LOG_DIR="$OPENWEBUI_HOME/logs"
 SERVICE_ENV="$OPENWEBUI_HOME/service.env"
-VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.12.3}"
+VERSION="${DOTFILES_OPENWEBUI_VERSION:-0.12.5}"
 
 PYTHON_BIN=""
 for candidate in python3.11 python3.12; do
@@ -297,7 +297,7 @@ if [[ "$TERMINAL_GATE" != "1" ]]; then
   info "DOTFILES_RUN_OPENWEBUI_TERMINAL_SETUP='$TERMINAL_GATE' — skipping Open Terminal; preserved workspace and key material"
 else
   # No exit on gate-off: the cptr section below has its own independent sub-gate.
-  TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.0}"
+  TERMINAL_VERSION="${DOTFILES_OPENWEBUI_TERMINAL_VERSION:-0.14.7}"
   if ! "$VENV_DIR/bin/python" -m pip install -q "open-terminal==${TERMINAL_VERSION}"; then
     warn "Open Terminal install failed; retrying once"
     sleep 2

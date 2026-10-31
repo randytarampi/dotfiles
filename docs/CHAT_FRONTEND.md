@@ -749,7 +749,8 @@ never issue a live write.
   the same engines, not a replacement for the slim.json tier registry.
 - Update pinned Open WebUI releases deliberately (change
   `DOTFILES_OPENWEBUI_VERSION`; the default lives at
-  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.3 since this
+  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.12.5 is the target;
+  0.12.3 is the last live-verified release. Rehearse before deployment.
   change; check release notes for security fixes first). Since 0.12.0 the
   deploy template stops the service and backs up `webui.db` (+ WAL/SHM)
   automatically whenever the pinned version changes, before the upgrade runs.
@@ -764,7 +765,7 @@ never issue a live write.
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
 - Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
-  0.12.3 postdates the fix's merge to `dev`, so after the 0.12.3 deploy the
+  0.12.5 postdates the fix's merge to `dev`; after the upgrade rehearsal, the
   `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if
   titles such as `settings.admin.connections.title` render correctly.
 
@@ -819,12 +820,12 @@ live-validated against `open-webui==0.11.4`:
    as a reconciler-managed `meridian` connection whenever
    `is_meridian_configured()` reports availability; no entry is created
    otherwise. Not a general subscription-to-API bridge.
-2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.12.3}`
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.12.5}`
    in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
    3.14 unsupported upstream). LaunchAgent behaviour verified live
    (KeepAlive respawn works; see the bootout/bootstrap retry note below).
    Early Phase 4 validation was against 0.11.4; the pinned default is
-   0.12.3 (live deployment verified on 0.12.3).
+   0.12.5 (target; live deployment verified on 0.12.3; upgrade rehearsal required before deployment).
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
    `chat.<CADDY_DOMAIN>`, LAN-only by default with the explicit
    `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
