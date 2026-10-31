@@ -107,8 +107,10 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert 'review-all" then "opencode,junie,gemini,copilot"' not in workflow
     assert 'review-opencode" then "opencode"' not in workflow
     fix = read(".github/workflows/agentic-review-fix.yml")
-    assert 'OPENCODE_VERSION: "1.18.34"' in fix
-    assert 'npm install --global "opencode-ai@' in fix
+    assert (
+        "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.5" in fix
+    )
+    assert 'version_pattern="(^|[^0-9])2\\\\.2\\\\.5([^0-9]|$)"' in fix
 
 
 def test_multiline_review_outputs_keep_closers_on_their_own_line():
@@ -171,10 +173,13 @@ def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
     assert "opencode run --auto" in generator
     assert "anomalyco/opencode/github" not in generator
     assert "use_github_token" not in generator
-    assert 'npm install --global "opencode-ai@${OPENCODE_VERSION}"' in generator
+    assert (
+        "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.5"
+        in generator
+    )
     assert "command -v opencode" in generator
     assert "opencode --version" in generator
-    assert 'OPENCODE_VERSION: "1.18.34"' in generator
+    assert 'version_pattern="(^|[^0-9])2\\\\.2\\\\.5([^0-9]|$)"' in generator
     assert "version_pattern=" in generator
     assert '[[ "${version_output}" =~ ${version_pattern} ]]' in generator
     assert "git commit" not in generator
