@@ -1178,6 +1178,13 @@ def test_tier_coverage_uses_supplied_home(tmp_path, monkeypatch):
             }
         )
     )
+    source = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "configs/opencode/oh-my-opencode-slim.json"
+        ).read_text()
+    )
+    (home / ".config/opencode/oh-my-opencode-slim.json").write_text(json.dumps(source))
     env = {
         "HOME": str(home),
         "DOTFILES_USE_LITELLM_PROXY": "1",
@@ -1187,3 +1194,89 @@ def test_tier_coverage_uses_supplied_home(tmp_path, monkeypatch):
     assert len(errors) == 1
     assert "have no gateway alias:" in errors[0]
     assert notices == []
+
+
+def test_tier_coverage_checks_entire_installed_projection(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    source_root = tmp_path / "source"
+    script_dir = source_root / "scripts"
+    slim_dir = source_root / "configs/opencode"
+    script_dir.mkdir(parents=True)
+    slim_dir.mkdir(parents=True)
+    monkeypatch.setattr(VERIFY_CONFIG, "__file__", str(script_dir / "verify-config.py"))
+    source_path = slim_dir / "oh-my-opencode-slim.json"
+    source = {
+        "preset": "active",
+        "presets": {
+            "active": {
+                "agent": {"model": "served/model"},
+                "council": {
+                    "default_preset": "active-council",
+                    "presets": {
+                        "active-council": {"council": {"model": "served/council"}}
+                    },
+                },
+                "fallback": {"agent": ["served/fallback"]},
+            },
+            "inactive": {"agent": {"model": "missing/inactive"}},
+        },
+    }
+    source["presets"]["archived-test"] = {"agent": {"model": "missing/archived-model"}}
+    source_path.write_text(json.dumps(source))
+    selected = source["presets"][source["preset"]]
+    (config_dir / "oh-my-opencode-slim.json").write_text(
+        json.dumps(
+            {
+                "preset": "active",
+                "presets": {"active": selected},
+                "council": selected["council"],
+            }
+        )
+    )
+    (config_dir / "opencode.json").write_text(
+        json.dumps(
+            {
+                "provider": {
+                    "litellm": {
+                        "models": {
+                            "m1": {"id": "served/model"},
+                            "m2": {"id": "served/council"},
+                            "m3": {"id": "served/fallback"},
+                        }
+                    }
+                }
+            }
+        )
+    )
+    env = {
+        "HOME": str(home),
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+    }
+    errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert errors == []
+
+    installed = json.loads((config_dir / "oh-my-opencode-slim.json").read_text())
+    installed["presets"]["active"]["fallback"]["agent"] = ["missing/fallback"]
+    (config_dir / "oh-my-opencode-slim.json").write_text(json.dumps(installed))
+    errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert len(errors) == 1 and "missing/fallback" in errors[0]
+    installed["presets"]["active"]["fallback"]["agent"] = ["served/fallback"]
+    installed["presets"]["inactive"] = source["presets"]["inactive"]
+    (config_dir / "oh-my-opencode-slim.json").write_text(json.dumps(installed))
+    errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert len(errors) == 1 and "missing/inactive" in errors[0]
+
+    installed["council"]["default_preset"] = "missing-council"
+    (config_dir / "oh-my-opencode-slim.json").write_text(json.dumps(installed))
+    errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert len(errors) == 1 and "council" in errors[0]
+
+    (config_dir / "oh-my-opencode-slim.json").write_text(
+        json.dumps({"preset": "active", "presets": {}})
+    )
+    errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
+    assert len(errors) == 1
+    assert "omits selected preset 'active'" in errors[0]
