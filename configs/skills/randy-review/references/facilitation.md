@@ -12,6 +12,10 @@
 6. Record human or agent disagreements respectfully, with the evidence that would resolve them. If discussion stalls, escalate to the documented decision-maker; do not manufacture consensus or debate indefinitely.
 7. Close a discussion only when verified or with a documented, authorized disposition. Risk acceptance requires the accountable owner's affirmative decision, scope and rationale; a review agent cannot grant it. Add an expiry or revisit trigger where appropriate.
 
+### Evidence continuity
+
+Bind conclusions to the inspected head commit. Recheck material findings after new pushes. A changed code range indicates a possible correction, not proof of resolution. Publish linked corrections for substantive retractions, while allowing edits to redact sensitive information. Assess other reviewers' claims on evidence rather than voting with their labels; verify decisive external sources when available and report inaccessible evidence.
+
 ### Compact publishing
 
 Keep the complete ledger in working notes or a durable review artifact **when available**. Publish only new or materially changed findings, decisive evidence, remaining blockers and the current recommendation. Don't repost the forest and every thread on every pass. If nothing material changed, say so briefly or make no new comment.
