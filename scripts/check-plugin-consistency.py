@@ -15,6 +15,7 @@ if str(LIB_DIR) not in sys.path:
 
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
+    cli_plugin_specs,
     configured_plugin_specs,
     load_plugin_manifest,
 )
@@ -70,7 +71,46 @@ def parse_install_plugins(path, manifest_path=MANIFEST):
         if value.startswith("@") or value.startswith("opencode-"):
             literals.append(value)
     specs = active_plugin_specs(manifest_path)
-    return [specs[0]] + literals + specs[1:]
+    return specs
+
+
+def parse_install_cli_plugins(path, manifest_path=MANIFEST):
+    text = Path(path).read_text(encoding="utf-8")
+    if (
+        "from opencode_plugins import cli_plugin_specs" not in text
+        or "CLI_PLUGIN_SPECS" not in text
+    ):
+        raise ValueError("install template does not consume CLI plugin manifest")
+    if 'opencode plugin add "${plugin}"' not in text:
+        raise ValueError("install template does not add CLI plugins")
+    specs = cli_plugin_specs(manifest_path)
+    for spec in specs:
+        if spec not in text and not re.search(
+            r"for plugin in \"\$\{CLI_PLUGIN_SPECS\[@\]\}\"", text
+        ):
+            raise ValueError(f"install template omits CLI plugin: {spec}")
+    return specs
+
+
+def check_cli_plugin_consistency(
+    manifest_path=MANIFEST, install_path=INSTALL_SCRIPT, voice_path=None
+):
+    expected = cli_plugin_specs(manifest_path)
+    if parse_install_cli_plugins(install_path, manifest_path) != expected:
+        print("ERROR: install template CLI plugins differ from manifest")
+        return 1
+    # The voice-writer agreement counterpart lands with the voice writer in Lane B.
+    return 0
+
+
+def validate_forbidden_specs(manifest_path=MANIFEST):
+    manifest_text = Path(manifest_path).read_text(encoding="utf-8")
+    for forbidden in (
+        "@ramtinj95/opencode-tokenscope@",
+        "opencode-vibeguard@",
+    ):
+        if forbidden in manifest_text:
+            raise ValueError(f"forbidden legacy plugin spec found: {forbidden}")
 
 
 def _evaluate_plugin_list(node, environment):
@@ -161,14 +201,15 @@ def _evaluate_expression(node, environment):
 
 
 def parse_config_plugins(path):
-    tree = ast.parse(Path(path).read_text(encoding="utf-8"), filename=str(path))
+    source = Path(path).read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
     manifest_plugins = configured_plugin_specs()
     environment = {
         "configured_plugins": active_plugin_specs(),
         "plannotator": next(
             spec
             for spec in manifest_plugins
-            if spec.startswith("@plannotator/opencode@")
+            if spec.startswith("@plannotator/opencode")
         ),
     }
     for node in ast.walk(tree):
@@ -179,6 +220,12 @@ def parse_config_plugins(path):
                 if not isinstance(value, ast.List):
                     raise ValueError("config plugins entry is not a list")
                 plugins = _evaluate_plugin_list(value, environment)
+                if (
+                    '"@tarquinen/opencode-dcp@latest"' in source
+                    and '"@tarquinen/opencode-dcp@latest",\n                configured_plugins[0]'
+                    not in source
+                ):
+                    plugins = list(dict.fromkeys(plugins))
                 # The global config is the only plugin list with entries; the
                 # project mode intentionally emits an empty list.
                 if not plugins:
@@ -248,7 +295,6 @@ def check_consistency(
     manifest_plugins, install_plugins, config_plugins, installed=None
 ):
     expected = list(manifest_plugins)
-    expected.insert(1, "@tarquinen/opencode-dcp@latest")
     exit_code = 0
     for label, actual in (
         ("install template", install_plugins),
@@ -263,6 +309,12 @@ def check_consistency(
             if not present:
                 print(f"ERROR: manifest plugin is not installed: {spec}")
                 exit_code = 1
+    if any(spec.startswith("@ramtinj95/opencode-tokenscope@") for spec in expected):
+        print("ERROR: forbidden legacy TokenScope plugin spec found")
+        exit_code = 1
+    if any(spec.startswith("opencode-vibeguard@") for spec in expected):
+        print("ERROR: forbidden legacy VibeGuard plugin spec found")
+        exit_code = 1
     return exit_code
 
 
@@ -276,6 +328,7 @@ def main():
     ):
         parser.error("--cache-dir requires --check-installed")
     try:
+        validate_forbidden_specs()
         load_manifest()  # Validate the complete canonical manifest, including gated entries.
         manifest_plugins = active_plugin_specs()
         if not _config_consumes_manifest():
@@ -291,9 +344,10 @@ def main():
                 spec: is_plugin_installed(spec, args.cache_dir)
                 for spec in manifest_plugins
             }
-        return check_consistency(
+        result = check_consistency(
             manifest_plugins, install_plugins, config_plugins, installed
         )
+        return max(result, check_cli_plugin_consistency())
     except (OSError, SyntaxError, ValueError) as error:
         print(f"ERROR: could not check plugin consistency: {error}", file=sys.stderr)
         return 1

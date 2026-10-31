@@ -2,6 +2,7 @@
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
@@ -51,8 +52,7 @@ PY
   exit 0
 fi
 
-# Read the checked-in manifest. DCP and voice are TUI-owned and deliberately
-# absent from the canonical manifest; their configure scripts own tui.json.
+# Read the checked-in manifest; the voice writer owns cli.json registration.
 PLUGIN_MANIFEST="{{ .chezmoi.sourceDir }}/configs/opencode/opencode-plugins.json"
 PLUGIN_SPECS=()
 while IFS= read -r plugin; do
@@ -86,7 +86,6 @@ ok "oh-my-opencode-slim installed"
 # oh-my installer above is the first manifest entry and is not an opencode plugin.
 # opencode plugin add <module> — installs the plugin in OpenCode v2
 PLUGINS=(
-  "@tarquinen/opencode-dcp@latest"
 )
 for plugin in "${PLUGIN_SPECS[@]}"; do
   [[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")
@@ -103,6 +102,54 @@ for plugin in "${PLUGINS[@]}"; do
 done
 if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
   die "One or more OpenCode plugins failed to install"
+fi
+
+CLI_PLUGIN_SPECS=()
+while IFS= read -r plugin; do
+  CLI_PLUGIN_SPECS+=("$plugin")
+done < <(
+  PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 - "$PLUGIN_MANIFEST" <<'PY'
+import sys
+from opencode_plugins import cli_plugin_specs
+for plugin in cli_plugin_specs(sys.argv[1]):
+    print(plugin)
+PY
+)
+
+PLUGIN_INSTALL_FAILED=0
+for plugin in "${CLI_PLUGIN_SPECS[@]}"; do
+  if opencode plugin add "${plugin}" 2>/dev/null; then
+    ok "opencode CLI plugin: ${plugin}"
+  else
+    warn "opencode CLI plugin ${plugin} failed"
+    PLUGIN_INSTALL_FAILED=1
+  fi
+done
+if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
+  die "One or more OpenCode CLI plugins failed to install"
+fi
+
+for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
+  if output="$(opencode plugin check "${plugin}" 2>&1)"; then
+    info "OpenCode plugin check ${plugin}: ${output}"
+  else
+    warn "OpenCode plugin check ${plugin} (check failed): ${output}"
+  fi
+done
+
+if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
+  PLUGIN_UPDATE_FAILED=0
+  for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
+    if output="$(opencode plugin update "${plugin}" 2>&1)"; then
+      info "OpenCode plugin update ${plugin}: ${output}"
+    else
+      warn "OpenCode plugin update ${plugin} failed: ${output}"
+      PLUGIN_UPDATE_FAILED=1
+    fi
+  done
+  if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then
+    die "One or more OpenCode plugin updates failed"
+  fi
 fi
 
 # The meridian plugin is installed globally via npm and referenced by local path.

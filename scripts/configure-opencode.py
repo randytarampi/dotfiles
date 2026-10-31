@@ -1403,7 +1403,7 @@ def main():
     plannotator = next(
         plugin
         for plugin in configured_plugins
-        if plugin.startswith("@plannotator/opencode@")
+        if plugin.startswith("@plannotator/opencode")
     )
 
     if args.mode == "project":
@@ -1553,7 +1553,7 @@ def main():
             "providers": {},
             "plugins": [
                 configured_plugins[0],
-                "@tarquinen/opencode-dcp@latest",
+                configured_plugins[1],
                 {
                     "package": plannotator,
                     "options": {
@@ -1570,7 +1570,7 @@ def main():
                         ],
                     },
                 },
-                *configured_plugins[2:],
+                *configured_plugins[3:],
             ],
             "agents": {
                 "build": {"disabled": True},
