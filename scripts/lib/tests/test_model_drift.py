@@ -20,6 +20,55 @@ def test_live_drift_allowlist_uses_ids_not_display_names(tmp_path):
     assert load_allowlists({"openai": path}) == {"openai": {"real-id"}}
 
 
+def test_opencode_native_providers_inventory_is_audited(tmp_path, monkeypatch):
+    """The drift lane must read OpenCode's native v2 providers key (falling
+    back to the legacy provider key) instead of reporting a malformed
+    inventory."""
+    path = tmp_path / "opencode.json"
+    path.write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "litellm": {"models": {"gpt": {"id": "litellm/openai/gpt-x"}}}
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(DRIFT, "_client_is_active", lambda client, port: True)
+    monkeypatch.setattr(
+        DRIFT, "_audit_providers", lambda *args, **kwargs: ([], [], False)
+    )
+    result = DRIFT._audit_client("opencode", path, 4000)
+    assert not any(
+        report.get("reason") == "malformed provider inventory"
+        for report in result["results"]
+    )
+    assert result["complete"]
+
+
+def test_opencode_legacy_provider_inventory_is_still_audited(tmp_path, monkeypatch):
+    path = tmp_path / "opencode.json"
+    path.write_text(
+        json.dumps(
+            {
+                "provider": {
+                    "litellm": {"models": {"gpt": {"id": "litellm/openai/gpt-x"}}}
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(DRIFT, "_client_is_active", lambda client, port: True)
+    monkeypatch.setattr(
+        DRIFT, "_audit_providers", lambda *args, **kwargs: ([], [], False)
+    )
+    result = DRIFT._audit_client("opencode", path, 4000)
+    assert not any(
+        report.get("reason") == "malformed provider inventory"
+        for report in result["results"]
+    )
+    assert result["complete"]
+
+
 def test_json_main_keeps_progress_out_of_stdout(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", [str(SCRIPT_PATH), "--json"])
     monkeypatch.setattr(DRIFT, "load_env", lambda: None)
