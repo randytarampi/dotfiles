@@ -107,10 +107,13 @@ def test_native_opencode_uses_oidc_and_hardened_plan_agent():
     assert 'review-all" then "opencode,junie,gemini,copilot"' not in workflow
     assert 'review-opencode" then "opencode"' not in workflow
     fix = read(".github/workflows/agentic-review-fix.yml")
+    assert 'OPENCODE_VERSION: "2.2.5"' in fix
     assert (
-        "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.5" in fix
+        'curl -fsSL https://opencode.ai/v2/install | bash -s -- --version "${OPENCODE_VERSION}"'
+        in fix
     )
-    assert 'version_pattern="(^|[^0-9])2\\\\.2\\\\.5([^0-9]|$)"' in fix
+    assert 'export PATH="$HOME/.opencode/bin:$PATH"' in fix
+    assert 'escaped_version="${OPENCODE_VERSION//./\\\\.}"' in fix
 
 
 def test_multiline_review_outputs_keep_closers_on_their_own_line():
@@ -174,13 +177,19 @@ def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
     assert "anomalyco/opencode/github" not in generator
     assert "use_github_token" not in generator
     assert (
-        "curl -fsSL https://opencode.ai/v2/install | bash -s -- --version 2.2.5"
+        'OPENCODE_VERSION: "2.2.5"' in generator
+        or "OPENCODE_VERSION: '2.2.5'" in generator
+    )
+    assert (
+        'curl -fsSL https://opencode.ai/v2/install | bash -s -- --version "${OPENCODE_VERSION}"'
         in generator
     )
+    assert 'export PATH="$HOME/.opencode/bin:$PATH"' in generator
+    assert 'printf \'%s/.opencode/bin\\n\' "${HOME}" >> "${GITHUB_PATH}"' in generator
     assert "command -v opencode" in generator
     assert "opencode --version" in generator
-    assert 'version_pattern="(^|[^0-9])2\\\\.2\\\\.5([^0-9]|$)"' in generator
-    assert "version_pattern=" in generator
+    assert 'escaped_version="${OPENCODE_VERSION//./\\\\.}"' in generator
+    assert 'version_pattern="(^|[^0-9])${escaped_version}([^0-9]|$)"' in generator
     assert '[[ "${version_output}" =~ ${version_pattern} ]]' in generator
     assert "git commit" not in generator
     assert "git push" not in generator
