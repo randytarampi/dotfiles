@@ -108,7 +108,9 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="Verify generated bundles")
     mode.add_argument("--write", action="store_true", help="Regenerate bundles")
-    parser.add_argument("--dry-run", action="store_true", help="Preview writes without modifying files")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview writes without modifying files"
+    )
     args = parser.parse_args()
     expected = generated()
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
