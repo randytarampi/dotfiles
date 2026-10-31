@@ -5,6 +5,7 @@ set -euo pipefail
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/lib/opencode_service.sh: {{ include "scripts/lib/opencode_service.sh" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
+# dot_dotfiles/shell/litellm-opencode-env.sh: {{ include "dot_dotfiles/shell/litellm-opencode-env.sh" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 # shellcheck disable=SC1091
@@ -54,7 +55,7 @@ if [[ "$OS_NAME" == "darwin" ]]; then
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>set -a && source "\$HOME/.env" && set +a && exec "${OPENCODE_BIN}" serve --port "\${OPENCODE_SERVER_PORT:-4096}"</string>
+    <string>set -a && source "\$HOME/.env" && set +a && source "\$HOME/.dotfiles/shell/litellm-opencode-env.sh" && exec "${OPENCODE_BIN}" serve --port "\${OPENCODE_SERVER_PORT:-4096}"</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

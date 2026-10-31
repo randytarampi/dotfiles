@@ -156,6 +156,299 @@ def test_managed_shell_preserves_inherited_codex_key(tmp_path, shell_mode, enabl
     assert result.stderr == ""
 
 
+@pytest.mark.parametrize(
+    "gates, expected",
+    [
+        (("0", "0", "0"), False),
+        (("1", "0", "0"), False),
+        (("0", "1", "0"), False),
+        (("0", "0", "1"), False),
+        (("1", "1", "0"), False),
+        (("1", "0", "1"), False),
+        (("0", "1", "1"), False),
+        (("1", "1", "1"), True),
+    ],
+)
+def test_opencode_shell_bridge_requires_all_gates(tmp_path, gates, expected):
+    home = tmp_path / "home"
+    key_path = home / ".local/share/litellm/clients/opencode.key"
+    key_path.parent.mkdir(parents=True)
+    key_path.write_text("synthetic-opencode-key")
+    key_path.chmod(0o600)
+    script = REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"
+    (home / ".dotfiles/shell").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(script, home / ".dotfiles/shell/litellm-opencode-env.sh")
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; [[ -n "${LITELLM_OPENCODE_KEY:-}" ]]',
+            "test",
+            str(script),
+        ],
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "DOTFILES_RUN_OPENCODE_SETUP": gates[0],
+            "DOTFILES_USE_LITELLM_PROXY": gates[1],
+            "DOTFILES_RUN_LITELLM_SETUP": gates[2],
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is expected
+    assert "synthetic-opencode-key" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("state", ["missing", "empty", "unsafe-mode", "symlink"])
+def test_opencode_shell_bridge_rejects_unsafe_or_empty_key(tmp_path, state):
+    home = tmp_path / "home"
+    key_path = home / ".local/share/litellm/clients/opencode.key"
+    key_path.parent.mkdir(parents=True)
+    if state != "missing":
+        key_path.write_text("" if state == "empty" else "synthetic-opencode-key")
+        key_path.chmod(0o644 if state == "unsafe-mode" else 0o600)
+    if state == "symlink":
+        target = key_path.with_suffix(".target")
+        target.write_text("synthetic-opencode-key")
+        target.chmod(0o600)
+        key_path.unlink()
+        key_path.symlink_to(target)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; [[ -z "${LITELLM_OPENCODE_KEY:-}" ]]',
+            "test",
+            str(REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"),
+        ],
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "DOTFILES_RUN_OPENCODE_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "synthetic-opencode-key" not in result.stdout + result.stderr
+
+
+def test_opencode_shell_bridge_preserves_manual_value_and_conflict(tmp_path):
+    home = tmp_path / "home"
+    key_path = home / ".local/share/litellm/clients/opencode.key"
+    key_path.parent.mkdir(parents=True)
+    key_path.write_text("synthetic-managed-key")
+    key_path.chmod(0o600)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; [[ "$LITELLM_OPENCODE_KEY" == "$EXPECTED_KEY" ]] && printf ok',
+            "test",
+            str(REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"),
+        ],
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "DOTFILES_RUN_OPENCODE_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "LITELLM_OPENCODE_KEY": "synthetic-manual-key",
+            "EXPECTED_KEY": "synthetic-manual-key",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout == "ok"
+    assert "synthetic-" not in result.stdout + result.stderr
+
+
+def test_opencode_shell_bridge_rejects_symlinked_parent(tmp_path):
+    home = tmp_path / "home"
+    real = home / ".local/share/litellm/clients"
+    real.mkdir(parents=True)
+    key_path = real / "opencode.key"
+    key_path.write_text("synthetic-opencode-key")
+    key_path.chmod(0o600)
+    real.rename(home / ".local/share/litellm/clients-real")
+    (home / ".local/share/litellm/clients").symlink_to(
+        home / ".local/share/litellm/clients-real", target_is_directory=True
+    )
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; [[ -z "${LITELLM_OPENCODE_KEY:-}" ]]',
+            "test",
+            str(REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"),
+        ],
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "DOTFILES_RUN_OPENCODE_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "synthetic-opencode-key" not in result.stdout + result.stderr
+
+
+def _run_opencode_bridge(
+    tmp_path, source, gates=("1", "1", "1"), manual=None, fake_stat=None
+):
+    home = tmp_path / "home"
+    key_path = home / ".local/share/litellm/clients/opencode.key"
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    key_path.write_text("synthetic-opencode-key")
+    key_path.chmod(0o600)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(exist_ok=True)
+    if fake_stat:
+        stat = fake_bin / "stat"
+        stat.write_text(fake_stat, encoding="utf-8")
+        stat.chmod(0o755)
+    recorder = tmp_path / "fake-opencode"
+    recorder.write_text(
+        "#!/bin/bash\n"
+        'if [[ "${LITELLM_OPENCODE_KEY:-}" == "synthetic-opencode-key" ]]; then has_key=true; else has_key=false; fi\n'
+        'printf \'%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" > "$OPENCODE_RECORD"\n',
+        encoding="utf-8",
+    )
+    recorder.chmod(0o755)
+    script = REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"
+    command = f'source "{script}"; exec "$OPENCODE_BIN" serve --port 4096'
+    if source == "variables":
+        deployed_shell = home / ".dotfiles/shell"
+        deployed_shell.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(
+            REPO_ROOT / "dot_dotfiles/shell/variables.sh",
+            deployed_shell / "variables.sh",
+        )
+        shutil.copy2(
+            REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh",
+            deployed_shell / "litellm-opencode-env.sh",
+        )
+        command = (
+            f'source "{deployed_shell / "variables.sh"}"; '
+            'exec "$OPENCODE_BIN" serve --port 4096'
+        )
+    env = {
+        "HOME": str(home),
+        "PATH": f"{fake_bin}:/usr/bin:/bin",
+        "DOTFILES_RUN_OPENCODE_SETUP": gates[0],
+        "DOTFILES_USE_LITELLM_PROXY": gates[1],
+        "DOTFILES_RUN_LITELLM_SETUP": gates[2],
+        "OPENCODE_BIN": str(recorder),
+        "OPENCODE_RECORD": str(tmp_path / "record"),
+    }
+    if manual is not None:
+        env["LITELLM_OPENCODE_KEY"] = manual
+    result = subprocess.run(
+        ["bash", "-c", command], env=env, capture_output=True, text=True, check=False
+    )
+    return result, Path(env["OPENCODE_RECORD"])
+
+
+def test_opencode_bridge_exports_only_to_cli_child(tmp_path):
+    result, record = _run_opencode_bridge(tmp_path, "variables")
+    assert result.returncode == 0
+    assert record.read_text().splitlines() == ["true", "serve", "--port", "4096"]
+    assert "synthetic-opencode-key" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("source", ["variables", "web"])
+def test_opencode_launch_consumer_executes_bridge_before_fake_child(tmp_path, source):
+    if source == "variables":
+        result, record = _run_opencode_bridge(tmp_path, "variables")
+    else:
+        template = (
+            REPO_ROOT / ".chezmoiscripts/run_onchange_26-install-opencode-web.sh.tmpl"
+        ).read_text(encoding="utf-8")
+        command = template.split("<string>-lc</string>", 1)[1].split("</string>", 1)[0]
+        command = command.strip().removeprefix("<string>")
+        helper = REPO_ROOT / "dot_dotfiles/shell/litellm-opencode-env.sh"
+        home = tmp_path / "home"
+        key_path = home / ".local/share/litellm/clients/opencode.key"
+        key_path.parent.mkdir(parents=True)
+        key_path.write_text("synthetic-opencode-key")
+        key_path.chmod(0o600)
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        fake = fake_bin / "opencode"
+        fake.write_text(
+            "#!/bin/bash\n"
+            'if [[ "${LITELLM_OPENCODE_KEY:-}" == "synthetic-opencode-key" ]]; then has_key=true; else has_key=false; fi\n'
+            'printf \'%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" > "$OPENCODE_RECORD"\n',
+            encoding="utf-8",
+        )
+        fake.chmod(0o755)
+        command = command.replace("${OPENCODE_BIN}", str(fake)).replace(
+            "${OPENCODE_SERVER_PORT:-4096}", "4096"
+        )
+        # Use the same rendered argument string, replacing deployed HOME helper path with fixture helper.
+        command = command.replace(
+            '\\"$HOME/.dotfiles/shell/litellm-opencode-env.sh\\"',
+            f'"{home}/.dotfiles/shell/litellm-opencode-env.sh"',
+        )
+        command = command.replace('\\"$HOME/.env\\"', f'"{home}/.env"')
+        command = command.replace("\\$HOME/.env", f"{home}/.env")
+        command = command.replace(
+            "\\$HOME/.dotfiles/shell/litellm-opencode-env.sh",
+            f"{home}/.dotfiles/shell/litellm-opencode-env.sh",
+        )
+        command = command.replace("\\${OPENCODE_SERVER_PORT:-4096}", "4096")
+        command = command.replace("\\4096", "4096")
+        command = command.replace('\\"', '"')
+        (home / ".env").write_text("", encoding="utf-8")
+        (home / ".dotfiles/shell").mkdir(parents=True)
+        shutil.copy2(helper, home / ".dotfiles/shell/litellm-opencode-env.sh")
+        result = subprocess.run(
+            ["bash", "-c", command],
+            env={
+                "HOME": str(home),
+                "PATH": f"{fake_bin}:/usr/bin:/bin",
+                "DOTFILES_RUN_OPENCODE_SETUP": "1",
+                "DOTFILES_USE_LITELLM_PROXY": "1",
+                "DOTFILES_RUN_LITELLM_SETUP": "1",
+                "OPENCODE_RECORD": str(tmp_path / "record"),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        record = tmp_path / "record"
+    assert result.returncode == 0, result.stderr
+    assert record.read_text().splitlines() == ["true", "serve", "--port", "4096"]
+    assert "synthetic-opencode-key" not in result.stdout + result.stderr
+
+
+def test_opencode_bridge_rejects_wrong_owner_from_stat(tmp_path):
+    fake_stat = '#!/bin/sh\nprintf "99999 600\\n"\n'
+    result, record = _run_opencode_bridge(tmp_path, "helper", fake_stat=fake_stat)
+    assert result.returncode == 0
+    assert record.read_text().splitlines()[0] == "false"
+
+
+def test_opencode_web_launch_sources_bridge_before_exec():
+    template = (
+        REPO_ROOT / ".chezmoiscripts/run_onchange_26-install-opencode-web.sh.tmpl"
+    ).read_text(encoding="utf-8")
+    command = template.split("<string>-lc</string>", 1)[1].split("</string>", 1)[0]
+    assert 'source "\\$HOME/.dotfiles/shell/litellm-opencode-env.sh"' in command
+    assert command.index("litellm-opencode-env.sh") < command.index("exec ")
+
+
 def test_reconcile_managed_block_repeatably_and_gate_off_preserves_user_toml(
     monkeypatch,
 ):
