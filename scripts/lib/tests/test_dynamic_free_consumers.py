@@ -454,15 +454,18 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
 
     output = json.loads(config_path.read_text())
     if mode == "global":
-        assert output["mcp"]["custom"] == {"keep": True}
+        assert output["mcp"]["servers"]["custom"] == {
+            "keep": True,
+            "disabled": False,
+        }
     else:
         assert "mcp" not in output
     if proxy:
-        assert output["provider"]["litellm"]["models"][alias]
+        assert output["providers"]["litellm"]["models"][alias]
         assert calls == [([preset], "1")]
         assert materialized["presets"][preset]["orchestrator"]["model"] == alias
     else:
-        models = output["provider"]["opencode"]["models"]
+        models = output["providers"]["opencode"]["models"]
         assert calls == [([preset], None)]
         assert "big-pickle" in models
     if mode == "global":
@@ -489,7 +492,7 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
         installed = json.loads(slim_path.read_text())
         selected = installed["presets"][preset]
         assert installed["council"]["default_preset"] == preset
-        models = output["provider"]["opencode"]["models"]
+        models = output["providers"]["opencode"]["models"]
         for role in selected.values():
             ref = role.get("model") if isinstance(role, dict) else None
             if isinstance(ref, str) and ref.startswith("opencode/"):
