@@ -186,7 +186,6 @@ def test_unresolved_ignores_malformed_inventory_ids():
     assert tier_coverage.unresolved_refs(slim, malformed + inventory_ids()) == []
 
 
-
 def test_routed_aliases_use_exact_inventory_ids_including_fallbacks():
     slim = {
         "presets": {

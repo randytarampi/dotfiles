@@ -406,8 +406,7 @@ def litellm_client_gate_errors(environ=None, home=None, slim_registry=None):
     for client in APP_KEYS:
         if client in litellm_config.IDE_APP_BUNDLES:
             row = next(
-                row for row in litellm_config.CLIENT_REGISTRY
-                if row["client"] == client
+                row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client
             )
             if not all(
                 environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
