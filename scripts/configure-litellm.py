@@ -4,10 +4,11 @@
 import argparse
 import glob
 import hashlib
-import os
 import json
-import shutil
+import os
+import plistlib
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,7 @@ from litellm_client_auth import resolve_client_auth  # noqa: E402
 
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 SERVICE_ENV_DEFAULT = "~/.local/share/litellm/service.env"
+_APPLICATION_ROOTS = (Path("/Applications"), Path.home() / "Applications")
 
 _CLIENT_ENABLE_GATES = {
     "opencode": ("DOTFILES_RUN_OPENCODE_SETUP",),
@@ -44,6 +46,8 @@ _CLIENT_ENABLE_GATES = {
     "codex": ("DOTFILES_RUN_CODEX_SETUP",),
     "claude": ("DOTFILES_RUN_CLAUDE_SETUP",),
     "copilot-cli": ("DOTFILES_RUN_COPILOT_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "jetbrains": ("DOTFILES_RUN_JETBRAINS_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "vscode": ("DOTFILES_RUN_VSCODE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
 }
 _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_OPENCODE_SETUP",
@@ -85,6 +89,9 @@ def _client_provisioning_state(
         and shutil.which("claude") is None
     ):
         return False, "not installed"
+    if row["client"] in {"jetbrains", "vscode"} and enforce_registry_gates:
+        if not _ide_app_installed(row["client"]):
+            return False, "not installed"
     binary = _CLI_INSTALLS.get(row["client"])
     # Fleet-managed clients (openwebui/junie) prove installation through their
     # own DOTFILES_RUN_* enablement gates — their configure scripts own the
@@ -97,9 +104,35 @@ def _client_provisioning_state(
         and not strict_provisioning
     ):
         return False, "not installed"
+    if row["client"] in {"jetbrains", "vscode"}:
+        return True, "credential provisioning eligible; transport UNVERIFIED"
     if "OpenAI-compatible" not in row["transports"] and row["client"] != "claude":
         return False, "usable transport UNKNOWN"
     return True, "eligible"
+
+
+def _ide_app_installed(client):
+    """Check known macOS app bundles and their bundle identifiers."""
+    app_name, bundle_id = {
+        "jetbrains": ("JetBrains Toolbox.app", "com.jetbrains.toolbox"),
+        "vscode": ("Visual Studio Code.app", "com.microsoft.VSCode"),
+    }[client]
+    for root in _APPLICATION_ROOTS:
+        app = root / app_name
+        if app.is_symlink() or not app.is_dir():
+            continue
+        info = app / "Contents/Info.plist"
+        try:
+            with info.open("rb") as source:
+                metadata = plistlib.load(source)
+                if (
+                    isinstance(metadata, dict)
+                    and metadata.get("CFBundleIdentifier") == bundle_id
+                ):
+                    return True
+        except (OSError, plistlib.InvalidFileException, ValueError, TypeError):
+            continue
+    return False
 
 
 def validate_service_lane_runtime():
@@ -386,6 +419,14 @@ def _write_codex_key(service_env_path: Path, dry_run=False) -> None:
 def _write_claude_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the standalone Claude CLI key without sourcing service.env."""
     _write_client_key(service_env_path, "claude", "LITELLM_CLAUDE_KEY", dry_run)
+
+
+def _write_jetbrains_key(service_env_path: Path, dry_run=False) -> None:
+    _write_client_key(service_env_path, "jetbrains", "LITELLM_JETBRAINS_KEY", dry_run)
+
+
+def _write_vscode_key(service_env_path: Path, dry_run=False) -> None:
+    _write_client_key(service_env_path, "vscode", "LITELLM_VSCODE_KEY", dry_run)
 
 
 def _materialized_client_key_value(
@@ -782,6 +823,8 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
     "codex": _write_codex_key,
     "claude": _write_claude_key,
     "copilot-cli": _write_copilot_cli_key,
+    "jetbrains": _write_jetbrains_key,
+    "vscode": _write_vscode_key,
 }
 
 

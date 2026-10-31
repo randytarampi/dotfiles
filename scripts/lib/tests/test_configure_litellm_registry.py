@@ -31,6 +31,8 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_OPENCODE_SETUP",
         "DOTFILES_RUN_PI_SETUP",
         "DOTFILES_RUN_CLAUDE_SETUP",
+        "DOTFILES_RUN_JETBRAINS_SETUP",
+        "DOTFILES_RUN_VSCODE_SETUP",
         "DOTFILES_RUN_OPENWEBUI_SETUP",
         "DOTFILES_RUN_JUNIE_CLI_SETUP",
         "DOTFILES_RUN_CODEX_SETUP",
@@ -46,6 +48,8 @@ def _isolate_client_gates(monkeypatch):
         "LITELLM_CODEX_KEY",
         "LITELLM_CLAUDE_KEY",
         "LITELLM_COPILOT_CLI_KEY",
+        "LITELLM_JETBRAINS_KEY",
+        "LITELLM_VSCODE_KEY",
     ):
         monkeypatch.delenv(gate, raising=False)
 
@@ -124,7 +128,7 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
     }
     assert all(
         rows[name]["credential_policy"] == "no-credential"
-        for name in ("cursor", "copilot", "vscode")
+        for name in ("cursor", "copilot")
     )
     assert rows["claude"]["classification"] == "eligible"
     assert rows["claude"]["credential_policy"] == "provision"
@@ -394,7 +398,7 @@ def test_registry_gate_is_enforced_independently(monkeypatch, enabled):
     assert reason == ("eligible" if enabled else "setup gate disabled")
 
 
-def test_provisioning_authorities_have_exact_seven_client_parity():
+def test_provisioning_authorities_have_exact_nine_client_parity():
     provisioned = {
         row["client"]
         for row in litellm_config.CLIENT_REGISTRY
@@ -408,15 +412,103 @@ def test_provisioning_authorities_have_exact_seven_client_parity():
         "codex",
         "claude",
         "copilot-cli",
+        "jetbrains",
+        "vscode",
     }
     assert provisioned == expected
     assert set(litellm_config.APP_KEYS) == expected
+    assert set(configure_litellm.APP_KEYS) == expected
     assert set(configure_litellm.PROVISIONED_CLIENT_KEY_WRITERS) == expected
     assert set(configure_litellm._CLIENT_ENABLE_GATES) == expected
+    assert {
+        row["client"]
+        for row in litellm_config.CLIENT_REGISTRY
+        if row["client"] in expected
+    } == expected
     for row in litellm_config.CLIENT_REGISTRY:
         if row["client"] in expected:
             assert row["env_name"] == litellm_config.APP_KEYS[row["client"]]
             assert configure_litellm.PROVISIONED_CLIENT_KEY_WRITERS[row["client"]]
+
+
+@pytest.mark.parametrize(
+    "client,app_name,bundle_id,gate",
+    [
+        (
+            "jetbrains",
+            "JetBrains Toolbox.app",
+            "com.jetbrains.toolbox",
+            "DOTFILES_RUN_JETBRAINS_SETUP",
+        ),
+        (
+            "vscode",
+            "Visual Studio Code.app",
+            "com.microsoft.VSCode",
+            "DOTFILES_RUN_VSCODE_SETUP",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "proxy,setup,installed",
+    [(1, 1, True), (0, 1, True), (1, 0, True), (1, 1, False)],
+)
+def test_ide_keys_require_all_gates_and_verified_app_bundle(
+    monkeypatch, tmp_path, client, app_name, bundle_id, gate, proxy, setup, installed
+):
+    import plistlib
+
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", str(proxy))
+    monkeypatch.setenv(gate, str(setup))
+    monkeypatch.setattr(
+        configure_litellm,
+        "_APPLICATION_ROOTS",
+        (tmp_path / "System Applications", tmp_path / "Applications"),
+    )
+    bundle = tmp_path / "Applications" / app_name / "Contents"
+    bundle.mkdir(parents=True)
+    (bundle / "Info.plist").write_bytes(
+        plistlib.dumps({"CFBundleIdentifier": bundle_id if installed else "wrong.id"})
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    assert configure_litellm.provision_app_keys("master", tmp_path / "service.env")
+    aliases = [
+        call[2]["key_alias"] for call in calls if call[0].endswith("/key/generate")
+    ]
+    eligible = bool(proxy and setup and installed)
+    assert (client in aliases) is eligible
+    assert (tmp_path / "clients" / f"{client}.key").exists() is eligible
+
+
+@pytest.mark.parametrize(
+    "client,env_name",
+    [("jetbrains", "LITELLM_JETBRAINS_KEY"), ("vscode", "LITELLM_VSCODE_KEY")],
+)
+def test_ide_writer_materializes_private_rotatable_key(tmp_path, client, env_name):
+    service = tmp_path / "service.env"
+    service.write_text(f"{env_name}='first-key'\n")
+    writer = configure_litellm.PROVISIONED_CLIENT_KEY_WRITERS[client]
+    writer(service)
+    key = tmp_path / "clients" / f"{client}.key"
+    assert key.read_text() == "first-key"
+    assert key.stat().st_mode & 0o777 == 0o600
+    service.write_text(f"{env_name}='rotated-key'\n")
+    writer(service)
+    assert key.read_text() == "rotated-key"
+    assert key.stat().st_mode & 0o777 == 0o600
+
+
+def test_ide_bundle_requires_directory_and_mapping_plist(monkeypatch, tmp_path):
+    import plistlib
+
+    app = tmp_path / "Visual Studio Code.app"
+    contents = app / "Contents"
+    contents.mkdir(parents=True)
+    (contents / "Info.plist").write_bytes(plistlib.dumps(["not", "a", "mapping"]))
+    monkeypatch.setattr(configure_litellm, "_APPLICATION_ROOTS", (tmp_path,))
+    assert not configure_litellm._ide_app_installed("vscode")
 
 
 def test_junie_file_consumer_remains_materialized(monkeypatch, tmp_path):

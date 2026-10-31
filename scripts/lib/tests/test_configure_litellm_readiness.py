@@ -23,6 +23,8 @@ _CLIENT_ENV = (
     "DOTFILES_RUN_CODEX_SETUP",
     "DOTFILES_RUN_CLAUDE_SETUP",
     "DOTFILES_RUN_COPILOT_SETUP",
+    "DOTFILES_RUN_JETBRAINS_SETUP",
+    "DOTFILES_RUN_VSCODE_SETUP",
     "DOTFILES_USE_LITELLM_PROXY",
     "LITELLM_CLIENT_KEY_FILE",
     "LITELLM_OPENCODE_KEY",
@@ -232,6 +234,8 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
     monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_COPILOT_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JETBRAINS_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_VSCODE_SETUP", "0")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     calls = []
 
@@ -384,6 +388,8 @@ def test_provisioning_second_pass_is_byte_stable(tmp_path, monkeypatch):
     for gate in ("OPENCODE", "PI", "JUNIE_CLI", "OPENWEBUI"):
         monkeypatch.setenv(f"DOTFILES_RUN_{gate}_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_CLAUDE_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JETBRAINS_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_VSCODE_SETUP", "0")
     monkeypatch.setattr(
         CONFIGURE,
         "_request_json",

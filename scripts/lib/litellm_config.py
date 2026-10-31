@@ -6,6 +6,7 @@ import json
 import math
 import logging
 import os
+import os
 import re
 import stat
 import time
@@ -393,6 +394,8 @@ APP_KEYS = {
     "codex": "LITELLM_CODEX_KEY",
     "claude": "LITELLM_CLAUDE_KEY",
     "copilot-cli": "LITELLM_COPILOT_CLI_KEY",
+    "jetbrains": "LITELLM_JETBRAINS_KEY",
+    "vscode": "LITELLM_VSCODE_KEY",
 }
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
@@ -545,29 +548,55 @@ CLIENT_REGISTRY = [
     ),
     _client_row(
         "jetbrains",
-        "LITELLM_JETBRAINS_KEY",
-        ["JetBrains IDE installed"],
-        ["OpenAI-compatible"],
-        "scripts/generate-jetbrains-profiles.py",
-        ["DOTFILES_RUN_JETBRAINS_SETUP=1"],
-        "file-or-env",
-        "generated JetBrains profile",
-        "pending-qualification",
-        "pending",
-        "D2a; needs F frozen snapshot",
+        APP_KEYS["jetbrains"],
+        [
+            "/Applications/JetBrains Toolbox.app or ~/Applications/JetBrains Toolbox.app",
+            "CFBundleIdentifier com.jetbrains.toolbox verified",
+        ],
+        ["credential provisioning only; transport UNVERIFIED"],
+        "credential provisioning only; no IDE settings consumer claimed",
+        [
+            "DOTFILES_RUN_JETBRAINS_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "~/.local/share/litellm/clients/jetbrains.key",
+        "eligible",
+        "provision",
+        "Credential provisioning only; transport remains UNVERIFIED",
+        eligibility={
+            "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
+            "installed": "JetBrains Toolbox app bundle with expected bundle identifier",
+            "user_enabled": "DOTFILES_RUN_JETBRAINS_SETUP=1",
+            "verified_usable_transport": "Credential provisioning eligibility only; transport UNVERIFIED",
+        },
     ),
     _client_row(
         "vscode",
-        "not-applicable",
-        ["VS Code installed"],
-        ["extension-dependent"],
-        "pending",
-        ["DOTFILES_RUN_VSCODE_SETUP=1"],
-        "env",
-        "VS Code extension settings",
-        "classification-only",
-        "no-credential",
-        "D2b real-session qualification",
+        APP_KEYS["vscode"],
+        [
+            "/Applications/Visual Studio Code.app or ~/Applications/Visual Studio Code.app",
+            "CFBundleIdentifier com.microsoft.VSCode verified",
+        ],
+        ["extension-dependent; UNVERIFIED"],
+        "credential provisioning only; no IDE settings consumer claimed",
+        [
+            "DOTFILES_RUN_VSCODE_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "~/.local/share/litellm/clients/vscode.key",
+        "eligible",
+        "provision",
+        "Credential provisioning only; transport remains UNVERIFIED",
+        eligibility={
+            "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
+            "installed": "Visual Studio Code app bundle with expected bundle identifier",
+            "user_enabled": "DOTFILES_RUN_VSCODE_SETUP=1",
+            "verified_usable_transport": "Credential provisioning eligibility only; transport UNVERIFIED",
+        },
     ),
     _client_row(
         "copilot",

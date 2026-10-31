@@ -2033,6 +2033,8 @@ def test_provisioned_client_key_writers_cover_every_registered_app_key():
         "codex",
         "claude",
         "copilot-cli",
+        "jetbrains",
+        "vscode",
     }
 
 
@@ -2358,14 +2360,14 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
     )
 
-    # Codex is config-only; credential provisioning is deferred.
-    # Responses transport and credential qualification remain separate work;
-    # the generic key-generation path must not provision this client.
+    # Credentials can be provisioned for supported or explicitly provision-only
+    # clients; app-specific transport qualification remains separate.
     registry = {row["client"]: row for row in CONFIGURE.CLIENT_REGISTRY}
     expected_clients = [
         c
         for c in CONFIGURE.APP_KEYS
-        if "OpenAI-compatible" in registry[c]["transports"] or c == "claude"
+        if "OpenAI-compatible" in registry[c]["transports"]
+        or c in {"claude", "jetbrains", "vscode"}
     ]
     assert len(generate_attempts) == len(expected_clients)
     # A 400 is not persisted as a key; the service env keeps its prior state.
