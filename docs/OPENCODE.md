@@ -103,7 +103,6 @@ driven by the pinned canonical manifest at
 | `@plannotator/opencode@0.27.21` | Interactive plan/code review UI |
 | `opencode-vibeguard@0.1.0` | Secrets redaction before LLM requests |
 | `@ramtinj95/opencode-tokenscope@1.8.1` | Token usage/cost reporting |
-| `@slkiser/opencode-quota@4.10.8` | Quota/usage/cost surfaces (reads `~/.config/opencode/opencode-quota/quota-toast.jsonc`); pinned — see note below |
 | `opencode-mem@2.26.0` | Persistent project/user memory with vector search |
 | Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
 
@@ -112,15 +111,11 @@ ownership: the pinned manifest contract does not govern its legacy core entry,
 while `configure-opencode-dcp.py` owns its `/dcp` TUI entry in `tui.json`.
 Voice remains TUI-owned and is configured by `configure-opencode-voice.py`.
 
-> **Note (2026-10-13):** `@slkiser/opencode-quota` is pinned to `4.10.8`
-> deliberately: the upstream 5.x releases switch the plugin contract and fail
-> to load on OpenCode CLI 1.19.0 ("must default export an object with
-> server()"), which silently dropped the quota sidebar. 4.10.8 probed clean on
-> 1.19.0 (headless run, no plugin load errors). Revisit the pin when upstream
-> restores compatibility. Removed from the fleet in this round:
-> `opencode-plugin-openspec` (underutilized) and
-> `opencode-planning-with-files` (experiment retired) — see
-> `configs/opencode/opencode-plugins.json` for the live canonical set.
+> **Migration note (2026-10-31):** `@slkiser/opencode-quota` is no longer a
+> managed dependency, at the owner’s request. TokenScope remains the token
+> usage reporting plugin. The previous 4.10.8 pin targeted OpenCode v1;
+> the v2 migration must not re-introduce Quota. Existing user-owned Quota
+> configuration files are deliberately left untouched.
 
 ### Memory opt-in
 
