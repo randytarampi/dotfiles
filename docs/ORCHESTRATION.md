@@ -277,7 +277,7 @@ stamped block and must be fixed separately by each repository maintainer.
 | 04 | install-packages | run_onchange | Homebrew/Winget packages | `DOTFILES_RUN_PACKAGES_SETUP` |
 | 05 | setup-bin-symlinks | run_onchange | Symlink scripts to ~/bin | — |
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
-| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (DCP, plannotator, oh-my-opencode-slim, vibeguard, tokenscope, opencode-mem) | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP`; memory opt-in |
+| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (oh-my-opencode-slim dedicated installer, DCP, plannotator, vibeguard (pinned git build), tokenscope-v2, opencode-mem, voice (cli.json)) + per-spec resolved-version checks; opt-in refresh | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP`; memory opt-in; update refresh opt-in (`DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE`) |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
@@ -382,6 +382,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper.cpp, sox, piper-tts, models) |
+| `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE` | 0 | Script 07 opt-in refresh: runs `opencode plugin update` per installed spec (with resolved-version logging) instead of the default non-mutating `opencode plugin check` |
 
 ## Dependency Ordering
 
