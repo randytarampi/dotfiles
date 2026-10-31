@@ -74,3 +74,17 @@ insert_final_newline = unset
 trim_trailing_whitespace = unset
 indent_style = unset
 indent_size = unset
+
+# Review prompts contain Markdown lists and code examples with semantic indentation.
+# Lint their content as Markdown; do not enforce a uniform indentation width.
+[configs/skills/randy-review/SKILL.md]
+indent_size = unset
+
+[configs/review/code-review-prompt.md]
+indent_size = unset
+
+[.github/skills/code-review/SKILL.md]
+indent_size = unset
+
+[.opencode/skills/code-review/SKILL.md]
+indent_size = unset
