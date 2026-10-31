@@ -161,6 +161,22 @@ def load_effective_opencode_config(config_dir):
     def merge(target, overrides):
         """Recursively apply overrides to target, replacing non-dict values."""
         for key, value in overrides.items():
+            if key in {"provider", "plugin", "agent", "permission"}:
+                canonical = {
+                    "provider": "providers",
+                    "plugin": "plugins",
+                    "agent": "agents",
+                    "permission": "permissions",
+                }[key]
+                if canonical in overrides:
+                    continue
+                key = canonical
+            if (
+                key == "mcp"
+                and isinstance(value, dict)
+                and isinstance(value.get("servers"), dict)
+            ):
+                value = {**value, **value["servers"]}
             if isinstance(value, dict) and isinstance(target.get(key), dict):
                 merge(target[key], value)
             else:

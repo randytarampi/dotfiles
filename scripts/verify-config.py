@@ -485,7 +485,7 @@ def _direct_mode_routing_errors(home):
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        providers = data.get("provider", data.get("providers", {}))
+        providers = data.get("providers", data.get("provider", {}))
         if isinstance(providers, dict) and "litellm" in providers:
             errors.append(f"Direct mode has a LiteLLM provider in {path}")
         values = []
@@ -1344,21 +1344,22 @@ def check_opencode_orphan_files():
             print(f"  \u26a0 Orphan config file: {path.name} (not managed by dotfiles)")
             continue
 
-        if "plugin" in config:
+        plugin_override_keys = {"plugin", "plugins"} & set(config)
+        for key in sorted(plugin_override_keys):
             print(
-                f"  \u2717 OpenCode override risk: {path.name} has a 'plugin' key "
+                f"  \u2717 OpenCode override risk: {path.name} has a '{key}' key "
                 "that replaces the managed opencode.json plugin array"
             )
             exit_code = 1
 
-        overlapping_keys = (set(config) & managed_keys) - {"plugin"}
+        overlapping_keys = (set(config) & managed_keys) - {"plugin", "plugins"}
         if overlapping_keys:
             for key in sorted(overlapping_keys):
                 print(
                     f"  \u26a0 OpenCode override: {path.name} has key '{key}' "
                     "that may override opencode.json"
                 )
-        elif "plugin" not in config:
+        elif not plugin_override_keys:
             print(
                 f"  \u26a0 Orphan config file: {path.name} " "(not managed by dotfiles)"
             )
@@ -1379,6 +1380,20 @@ def check_opencode_orphan_files():
         print(f"  \u26a0 Stale backup: {path.name}")
 
     return exit_code
+
+
+def meridian_registration_present(config):
+    """Return True when opencode.json registers the Meridian plugin (v1 or v2)."""
+    if config is None:
+        return False
+    plugins = config.get("plugins", config.get("plugin", []))
+    if not isinstance(plugins, list):
+        return False
+    return any(
+        (isinstance(entry, str) and "meridian.ts" in entry)
+        or (isinstance(entry, dict) and "meridian.ts" in str(entry.get("package", "")))
+        for entry in plugins
+    )
 
 
 def main():
@@ -2335,20 +2350,17 @@ def main():
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
     if meridian_gate:
-        if opencode_config is not None:
-            plugins = opencode_config.get("plugin", [])
-            meridian_present = any(
-                isinstance(plugin, str) and "meridian.ts" in plugin
-                for plugin in plugins
-            )
-            if meridian_present:
+        if opencode_json.exists():
+            if opencode_config is not None and meridian_registration_present(
+                opencode_config
+            ):
                 print("  \u2713 Meridian plugin: registered in opencode.json")
-            else:
+            elif opencode_config is not None:
                 print("  \u2717 Meridian plugin: not found in opencode.json")
                 exit_code = 1
-        elif opencode_json.exists():
-            print("  \u2717 Meridian plugin: could not parse opencode.json")
-            exit_code = 1
+            else:
+                print("  \u2717 Meridian plugin: could not parse opencode.json")
+                exit_code = 1
         else:
             print("  \u2717 Meridian plugin: opencode.json not found")
             exit_code = 1
@@ -2379,6 +2391,7 @@ def main():
     if codegraph_gate:
         if opencode_config is not None:
             mcps = opencode_config.get("mcp", {})
+            mcps = mcps.get("servers", mcps) if isinstance(mcps, dict) else {}
             if "codegraph" in mcps:
                 print("  \u2713 CodeGraph MCP: registered in opencode.json")
             else:

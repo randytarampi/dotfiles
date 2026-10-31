@@ -220,10 +220,23 @@ def configure_skills(root, profiles, extras, skipped):
             continue
         with config_path.open(encoding="utf-8") as handle:
             config = json.load(handle)
-        permissions = config.setdefault("permission", {})
-        skill_permissions = permissions.setdefault("skill", {})
-        for name in skipped:
-            skill_permissions[name] = "deny"
+        permissions = config.setdefault("permissions", [])
+        if isinstance(permissions, list):
+            permissions[:] = [
+                rule
+                for rule in permissions
+                if isinstance(rule, dict) and rule.get("resource") != "skill"
+            ]
+            permissions.extend(
+                {"action": name, "resource": "skill", "effect": "deny"}
+                for name in skipped
+            )
+            skill_permissions = None
+        else:
+            skill_permissions = permissions.setdefault("skill", {})
+        if skill_permissions is not None:
+            for name in skipped:
+                skill_permissions[name] = "deny"
         with config_path.open("w", encoding="utf-8") as handle:
             json.dump(config, handle, indent=2)
             handle.write("\n")

@@ -161,13 +161,13 @@ class TierEffectiveConfigTests(unittest.TestCase):
             opencode_dir = Path(project) / ".opencode"
             opencode_dir.mkdir()
             (opencode_dir / "opencode.json").write_text(
-                json.dumps({"provider": {"litellm": {"options": {"timeout": 30}}}})
+                json.dumps({"providers": {"litellm": {"options": {"timeout": 30}}}})
             )
             (Path(project) / "opencode.json").write_text(
                 json.dumps(
                     {
                         "model": "project-model",
-                        "provider": {"litellm": {"options": {"timeout": 20}}},
+                        "providers": {"litellm": {"options": {"timeout": 20}}},
                     }
                 )
             )
@@ -177,7 +177,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                 json.dumps(
                     {
                         "model": "global-model",
-                        "provider": {
+                        "providers": {
                             "litellm": {
                                 "models": {"test": {"id": "openai/test"}},
                                 "options": {
@@ -197,7 +197,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                     ),
                     {
                         "model": "project-model",
-                        "provider": {
+                        "providers": {
                             "litellm": {
                                 "models": {"test": {"id": "openai/test"}},
                                 "options": {
@@ -222,7 +222,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
             global_dir = Path(home) / ".config" / "opencode"
             global_dir.mkdir(parents=True)
             (global_dir / "opencode.json").write_text(
-                '{"model": "global-model", "provider": {"litellm": {}}}\n',
+                '{"model": "global-model", "providers": {"litellm": {}}}\n',
                 encoding="utf-8",
             )
 
@@ -231,7 +231,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                     configure_opencode_tier.load_effective_opencode_config(
                         str(opencode_dir)
                     ),
-                    {"model": "project-model", "provider": {"litellm": {}}},
+                    {"model": "project-model", "providers": {"litellm": {}}},
                 )
 
     def test_uses_global_config_when_project_has_no_consumer_config(self):
