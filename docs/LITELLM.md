@@ -260,6 +260,13 @@ refer to a removed section; the generator does not repair these references.
 | Open WebUI | `LITELLM_OPENWEBUI_KEY` | `openwebui.key` |
 | Junie | `LITELLM_JUNIE_KEY` | `junie.key` |
 | Codex | `LITELLM_CODEX_KEY` | `codex.key` |
+| JetBrains Toolbox | `LITELLM_JETBRAINS_KEY` | `jetbrains.key` |
+| Visual Studio Code | `LITELLM_VSCODE_KEY` | `vscode.key` |
+
+JetBrains Toolbox and Visual Studio Code keys are provisioned only when their
+app bundle identifier is verified and both client opt-in and proxy gates are
+enabled. This provisions private credentials only; transport and IDE settings
+consumption remain UNVERIFIED. No live integration is implied.
 
 ## UI exposure
 
