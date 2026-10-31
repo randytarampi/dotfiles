@@ -59,7 +59,7 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking heredocs in .chezmoiscripts..."
 	@python3 scripts/check-heredocs.py
 	@echo "Checking Python formatting with black (dry-run)..."
-	@poetry run black --check scripts/ scripts/lib/
+	@poetry run black --check --diff scripts/ scripts/lib/
 
 fix: ## Format shell and Python files and normalize text files
 	@if [ -n "$(SHFMT)" ]; then \
