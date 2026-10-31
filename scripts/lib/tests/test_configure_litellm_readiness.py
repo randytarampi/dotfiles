@@ -111,9 +111,9 @@ def test_service_lane_validation_uses_managed_gateway_installation(
             else "    return {}\n"
         )
     )
-    metadata = site_packages / "litellm-1.102.1.dist-info"
+    metadata = site_packages / "litellm-1.106.6.dist-info"
     metadata.mkdir()
-    (metadata / "METADATA").write_text("Name: litellm\nVersion: 1.102.1\n")
+    (metadata / "METADATA").write_text("Name: litellm\nVersion: 1.106.6\n")
     # Neither the caller's modules nor PYTHONPATH may replace the gateway package.
     monkeypatch.setitem(sys.modules, "litellm", None)
     shadow = tmp_path / "shadow"
@@ -123,7 +123,7 @@ def test_service_lane_validation_uses_managed_gateway_installation(
 
     assert CONFIGURE.validate_service_lane_runtime() is preserves_tier
     if preserves_tier:
-        assert "VERIFIED: version=1.102.1" in caplog.text
+        assert "VERIFIED: version=1.106.6" in caplog.text
         assert "pricing lookup uses top-level model_info" in caplog.text
     else:
         assert "UNVERIFIED" in caplog.text
