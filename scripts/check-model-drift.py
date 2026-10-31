@@ -622,7 +622,12 @@ def _audit_client(client, path, port):
         return _client_result(
             [_client_report(client, path, "<config>", "malformed client config")]
         )
-    providers = data.get("provider") if client == "opencode" else data.get("providers")
+    if client == "opencode":
+        # Native OpenCode v2 config keys the inventory under "providers";
+        # legacy v1 files keyed it under "provider".
+        providers = data.get("providers", data.get("provider"))
+    else:
+        providers = data.get("providers")
     if not isinstance(providers, dict) or not providers:
         return _client_result(
             [_client_report(client, path, "provider", "malformed provider inventory")]

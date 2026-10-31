@@ -157,7 +157,7 @@ def load_inventory_from_opencode_json(path: Path) -> list[str] | None:
         return None
     if not isinstance(document, dict):
         return None
-    provider = document.get("provider")
+    provider = document.get("providers", document.get("provider"))
     if not isinstance(provider, dict):
         return None
     litellm = provider.get("litellm")
