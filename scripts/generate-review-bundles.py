@@ -96,9 +96,7 @@ def write_bundles(expected: dict[str, str], data: dict) -> None:
     for relative, output in expected.items():
         (ROOT / relative).write_text(output, encoding="utf-8")
         if relative in data["assets"]:
-            data["assets"][relative] = hashlib.sha256(
-                output.encode("utf-8")
-            ).hexdigest()
+            data["assets"][relative] = hashlib.sha256(output.encode("utf-8")).hexdigest()
     MANIFEST.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
