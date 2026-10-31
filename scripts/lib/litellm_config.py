@@ -420,7 +420,10 @@ def ide_app_installed(client, roots=None):
         try:
             with info.open("rb") as source:
                 metadata = plistlib.load(source)
-            if isinstance(metadata, dict) and metadata.get("CFBundleIdentifier") == bundle_id:
+            if (
+                isinstance(metadata, dict)
+                and metadata.get("CFBundleIdentifier") == bundle_id
+            ):
                 return True
         except (OSError, plistlib.InvalidFileException, ValueError, TypeError):
             continue

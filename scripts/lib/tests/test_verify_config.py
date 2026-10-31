@@ -1282,47 +1282,73 @@ def test_tier_coverage_checks_entire_installed_projection(tmp_path, monkeypatch)
     assert "omits selected preset 'active'" in errors[0]
 
 
-
+@pytest.mark.parametrize(
+    "setup_gate,proxy_gate,client_gate,installed,required",
+    [
+        ("1", "1", "1", True, True),
+        ("0", "1", "1", True, False),
+        ("1", "0", "1", True, False),
+        ("1", "1", "0", True, False),
+        ("1", "1", "1", False, False),
+    ],
+)
 def test_optional_ide_credentials_match_provisioning_eligibility(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, setup_gate, proxy_gate, client_gate, installed, required
 ):
     import plistlib
 
+    real_app_installed = VERIFY_CONFIG.litellm_config.ide_app_installed
+    monkeypatch.setattr(
+        VERIFY_CONFIG.litellm_config,
+        "ide_app_installed",
+        lambda client, roots=None: real_app_installed(
+            client, (tmp_path / "Applications",)
+        ),
+    )
     root = tmp_path / ".local/share/litellm"
     root.mkdir(parents=True)
     (root / "config.yaml").write_text("model_list: []\n")
     for client, app, identifier, gate in (
-        ("jetbrains", "JetBrains Toolbox.app", "com.jetbrains.toolbox",
-         "DOTFILES_RUN_JETBRAINS_SETUP"),
-        ("vscode", "Visual Studio Code.app", "com.microsoft.VSCode",
-         "DOTFILES_RUN_VSCODE_SETUP"),
+        (
+            "jetbrains",
+            "JetBrains Toolbox.app",
+            "com.jetbrains.toolbox",
+            "DOTFILES_RUN_JETBRAINS_SETUP",
+        ),
+        (
+            "vscode",
+            "Visual Studio Code.app",
+            "com.microsoft.VSCode",
+            "DOTFILES_RUN_VSCODE_SETUP",
+        ),
         ("xcode", "Xcode.app", "com.apple.dt.Xcode", "DOTFILES_RUN_XCODE_SETUP"),
     ):
         settings = {
-            "DOTFILES_USE_LITELLM_PROXY": "1",
-            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "DOTFILES_USE_LITELLM_PROXY": proxy_gate,
+            "DOTFILES_RUN_LITELLM_SETUP": setup_gate,
             "HOME": str(tmp_path),
-            gate: "1",
+            gate: client_gate,
         }
-        bundle = tmp_path / "Applications" / app / "Contents"
-        bundle.mkdir(parents=True)
-        (bundle / "Info.plist").write_bytes(
-            plistlib.dumps({"CFBundleIdentifier": identifier})
-        )
-        missing = VERIFY_CONFIG.litellm_client_gate_errors(
+        if installed:
+            bundle = tmp_path / "Applications" / app / "Contents"
+            bundle.mkdir(parents=True)
+            (bundle / "Info.plist").write_bytes(
+                plistlib.dumps({"CFBundleIdentifier": identifier})
+            )
+        errors = VERIFY_CONFIG.litellm_client_gate_errors(
             settings, home=tmp_path, slim_registry={"presets": {}}
         )
-        assert any(f"{client}.key" in error for error in missing)
-        settings[gate] = "0"
-        disabled = VERIFY_CONFIG.litellm_client_gate_errors(
-            settings, home=tmp_path, slim_registry={"presets": {}}
-        )
-        assert not any(f"{client}.key" in error for error in disabled)
-        settings[gate] = "1"
-        (bundle / "Info.plist").write_bytes(
-            plistlib.dumps({"CFBundleIdentifier": "wrong.bundle"})
-        )
-        absent = VERIFY_CONFIG.litellm_client_gate_errors(
-            settings, home=tmp_path, slim_registry={"presets": {}}
-        )
-        assert not any(f"{client}.key" in error for error in absent)
+        credential_error = any(f"{client}.key" in error for error in errors)
+        assert credential_error is required
+        if installed:
+            (bundle / "Info.plist").write_bytes(
+                plistlib.dumps({"CFBundleIdentifier": "wrong.bundle"})
+            )
+            wrong_identity = VERIFY_CONFIG.litellm_client_gate_errors(
+                settings, home=tmp_path, slim_registry={"presets": {}}
+            )
+            assert not any(f"{client}.key" in error for error in wrong_identity)
+        if not installed:
+            assert not VERIFY_CONFIG.litellm_config.ide_app_installed(
+                client, (tmp_path / "Applications",)
+            )

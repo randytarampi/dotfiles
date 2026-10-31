@@ -65,8 +65,10 @@ def collect_registry_refs(slim: dict) -> list[RegistryRef]:
     def add_ref(location: str, value: str) -> None:
         """Collect routed aliases and provider-qualified model selections."""
         if isinstance(value, str) and (
-            value.startswith("litellm/") and bool(value.removeprefix("litellm/"))
-            or "/" in value and not value.startswith("litellm/")
+            value.startswith("litellm/")
+            and bool(value.removeprefix("litellm/"))
+            or "/" in value
+            and not value.startswith("litellm/")
         ):
             refs.append(RegistryRef(location, value))
 
@@ -110,14 +112,16 @@ def _matches_inventory(ref: str, inventory: set[str]) -> bool:
     matches = [
         item
         for item in inventory
-        if item.split("/", 1)[0] == owner_for_lookup
+        if "/" in item
+        and item.split("/", 1)[0] == owner_for_lookup
         and canonical_allowlist_key(item.split("/", 1)[1]) == canonical
     ]
     if not matches and owner == "anthropic":
         matches = [
             item
             for item in inventory
-            if item.split("/", 1)[0] == "anthropic"
+            if "/" in item
+            and item.split("/", 1)[0] == "anthropic"
             and canonical_allowlist_key(item.split("/", 1)[1]) == canonical
         ]
     if not matches and owner == "cohere":
