@@ -49,6 +49,26 @@ def test_configure_skills_writes_native_skill_deny_rules(tmp_path):
     assert preserved == [{"action": "edit", "resource": "src/**", "effect": "ask"}]
 
 
+def test_configure_skills_keeps_legacy_map_on_v1_host(tmp_path, monkeypatch):
+    """A v1 host cannot read ordered rule arrays; skill denies must stay in
+    the legacy permission map (v2 normalizes it silently if it arrives
+    late)."""
+    import opencode_host
+
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 1)
+    )
+    opencode_dir = tmp_path / ".opencode"
+    opencode_dir.mkdir()
+    config_path = opencode_dir / "opencode.json"
+    config_path.write_text(json.dumps({"model": "project-model"}))
+    configure_project.configure_skills(tmp_path, [], [], ["one"])
+    config = json.loads(config_path.read_text())
+    assert config["permission"]["skill"]["one"] == "deny"
+    assert "permissions" not in config
+    assert config["model"] == "project-model"
+
+
 TIER_SPEC = importlib.util.spec_from_file_location(
     "configure_opencode_tier",
     os.path.join(TESTS_DIR, "..", "..", "configure-opencode-tier.py"),

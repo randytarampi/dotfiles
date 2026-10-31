@@ -14,6 +14,7 @@ sys.path.insert(0, str(LIB))
 from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 from free_route_manifest import build_manifest  # noqa: E402
 from free_preset_runtime import load_gateway_free_evidence  # noqa: E402
+import opencode_host  # noqa: E402 -- shared emitter-host seam
 
 NOW = datetime(2026, 10, 30, tzinfo=timezone.utc)
 PRESETS = ("free", "omo-slim-opencode-zen-free")
@@ -1245,3 +1246,22 @@ def test_unknown_dynamic_route_fails_before_consumer_writes(
         if p.is_file()
     }
     assert after == before
+
+
+def test_emitter_skips_native_write_on_v1_host(tmp_path, monkeypatch):
+    """The one-way migration gate must never hand native v2 config to a v1
+    host: main() returns before any write and the existing v1 file survives
+    byte-identical."""
+    opencode_dir = tmp_path / "config"
+    opencode_dir.mkdir()
+    sentinel = '{"model": "v1-era"}'
+    opencode_path = opencode_dir / "opencode.json"
+    opencode_path.write_text(sentinel)
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 1)
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(opencode_dir))
+    monkeypatch.setattr(sys, "argv", ["configure-opencode.py", "--mode", "project"])
+    configure_opencode.main.__wrapped__()
+    assert opencode_path.read_text() == sentinel
