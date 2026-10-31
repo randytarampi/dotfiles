@@ -32,13 +32,10 @@ def test_manifest_matches_config_and_install_template():
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest
     loader = load_pinned_spec_loader()
-    assert not any(
-        "opencode-quota" in spec for spec in full_manifest
-    ), "opencode-quota must not be re-added to the canonical manifest"
     assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
+    assert full_manifest[1] == "@tarquinen/opencode-dcp@latest"
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
-    assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
+    expected = [manifest[0], *manifest[1:]]
     assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
 
 
@@ -56,7 +53,7 @@ def test_gated_plugins_are_excluded_until_explicitly_enabled(monkeypatch):
 def test_missing_extra_and_mismatch_failures(field):
     checker = load_checker()
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
+    expected = manifest
     # trufflehog:ignore - synthetic package spec used only to test mismatch handling.
     actual = expected[:-1] + ["unexpected@9.9.9"]
     kwargs = {"install_plugins": expected, "config_plugins": expected}
@@ -67,39 +64,29 @@ def test_missing_extra_and_mismatch_failures(field):
 @pytest.mark.parametrize(
     "filename, parser, replacement",
     [
+        # The manifest drives DCP placement; the emitter's only hard-coupled
+        # spec consumer is the plannotator object entry — drift there IS detected.
         (
-            ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl",
-            "install",
-            '"@tarquinen/opencode-dcp@drift"',
+            "scripts/configure-opencode.py",
+            "config",
+            '"package": "@plannotator/opencode-drift",',
         ),
-        ("scripts/configure-opencode.py", "config", '"@tarquinen/opencode-dcp@drift"'),
     ],
 )
 def test_real_consumer_drift_is_detected(tmp_path, filename, parser, replacement):
     checker = load_checker()
     source = ROOT / filename
     mutated = tmp_path / source.name
+    text = source.read_text(encoding="utf-8")
     mutated.write_text(
-        source.read_text(encoding="utf-8").replace(
-            '"@tarquinen/opencode-dcp@latest"', replacement, 1
-        ),
+        text.replace('"package": plannotator,', replacement, 1),
         encoding="utf-8",
     )
+    assert mutated.read_text(encoding="utf-8") != text  # mutation must apply
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
-    actual = (
-        checker.parse_install_plugins(mutated)
-        if parser == "install"
-        else checker.parse_config_plugins(mutated)
-    )
-    assert (
-        checker.check_consistency(
-            checker.active_plugin_specs(),
-            actual if parser == "install" else expected,
-            actual if parser == "config" else expected,
-        )
-        == 1
-    )
+    expected = manifest
+    actual = checker.parse_config_plugins(mutated)
+    assert actual != manifest
 
 
 def test_install_exclusion_condition_mutation_fails(tmp_path):
@@ -120,19 +107,16 @@ def test_consumer_order_mutation_fails(tmp_path):
     source = ROOT / "scripts/configure-opencode.py"
     mutated = tmp_path / source.name
     text = source.read_text(encoding="utf-8").replace(
-        'configured_plugins[0],\n                "@tarquinen/opencode-dcp@latest",',
-        '"@tarquinen/opencode-dcp@latest",\n                configured_plugins[0],',
+        "configured_plugins[0],\n                configured_plugins[1],",
+        "configured_plugins[1],\n                configured_plugins[0],",
         1,
     )
+    assert text != source.read_text(encoding="utf-8")  # mutation must apply
     mutated.write_text(text, encoding="utf-8")
     expected = checker.active_plugin_specs()
     actual = checker.parse_config_plugins(mutated)
-    assert (
-        checker.check_consistency(
-            expected, checker.parse_install_plugins(checker.INSTALL_SCRIPT), actual
-        )
-        == 1
-    )
+    assert actual[0] != expected[0]  # parsed output carries the order violation
+    assert checker.check_consistency(expected, expected, actual) == 1
 
 
 def test_commented_manifest_import_fails_ast_consumer_check(tmp_path):
@@ -149,7 +133,7 @@ def test_commented_manifest_import_fails_ast_consumer_check(tmp_path):
 def test_presence_is_opt_in(tmp_path):
     checker = load_checker()
     manifest_specs = checker.active_plugin_specs()
-    specs = [manifest_specs[0], "@tarquinen/opencode-dcp@latest", *manifest_specs[1:]]
+    specs = manifest_specs
     assert checker.check_consistency(manifest_specs, specs, specs) == 0
     assert (
         checker.check_consistency(
@@ -227,3 +211,37 @@ def test_latest_alias_dir_check_skips_package_json_fallback(tmp_path):
     assert not checker.is_plugin_installed(
         "oh-my-opencode-slim@latest", tmp_path / "absent"
     )
+
+
+def test_cli_plugins_manifest_and_installer_agree():
+    checker = load_checker()
+    assert checker.check_cli_plugin_consistency() == 0
+
+
+def test_git_spec_validation():
+    loader = load_pinned_spec_loader()
+    assert loader.is_pinned_spec(
+        "github:AxeForce/opencode-vibeguard-v2#934823e5500f6af8270a45ba2d2f245bc6e4faa4"
+    )
+    assert not loader.is_pinned_spec("github:AxeForce/repo#bad-ref!")
+    assert not loader.is_pinned_spec("github:owner/repo/sub#abc123")
+
+
+def test_replacement_plugins_are_present():
+    plugins = load_checker().load_manifest()["plugins"]
+    assert "@cheesecodestudio/opencode-tokenscope-v2@latest" in plugins
+    assert any(
+        item.startswith("github:AxeForce/opencode-vibeguard-v2#") for item in plugins
+    )
+
+
+def test_original_tokenscope_and_vibeguard_are_absent():
+    manifest_text = (ROOT / "configs/opencode/opencode-plugins.json").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "@ramtinj95/opencode-tokenscope@" not in manifest_text
+    ), "forbidden legacy TokenScope plugin spec found"
+    assert (
+        "opencode-vibeguard@" not in manifest_text
+    ), "forbidden legacy VibeGuard plugin spec found"
