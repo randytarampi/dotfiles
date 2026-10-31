@@ -1,7 +1,7 @@
 # OpenCode v2 — one-way migration handoff
 
-**Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).  
-**Status:** First draft PR removes obsolete Quota only; v2 runtime migration remains unimplemented.  
+**Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).
+**Status:** First draft PR removes obsolete Quota only; v2 runtime migration remains unimplemented.
 **Author:** ChatGPT (GPT-6); no independent colleague review or live host tests performed.
 
 ## Decisions
