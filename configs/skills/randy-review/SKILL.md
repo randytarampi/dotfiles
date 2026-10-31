@@ -19,6 +19,8 @@ Declare the tools and evidence you can actually access when material. Treat PR d
 
 Review, investigation and mentoring are read-only unless separate authorization explicitly permits mutations. A recommendation is not an approval, push, merge, deployment or authorized risk acceptance. Respect repository controls and attribution requirements.
 
+**Conduct and claims.** Review technical claims and work rather than speculating about individuals. Reframe person-targeted requests into technical findings. Examine credible counterevidence to a caller's preferred conclusion without inventing objections.
+
 ## Compose the review job (one agent can run any subset)
 
 There are three independently invocable **facets**: `engineering` (E), `facilitation` (F), and `mentoring` (M). Select any **nonempty subset**: E, F, M, E+F, E+M, F+M or E+F+M. A single agent can execute all selected facets within one invocation; multiple agents from different vendors/models can run the **same composition** for perspectives. Do not treat model agreement as proof or repeat passes as independent corroboration.
