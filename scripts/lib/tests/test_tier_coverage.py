@@ -78,10 +78,8 @@ def test_collect_walks_presets_council_tiers_and_fallbacks():
         "openrouter/nvidia/nemotron-3.5-lightning:free"
     )
     assert "_tiers.free.council.presets.free.gamma.model" in locations
-    # Transport-prefixed and non-ref values are excluded.
-    assert not any(
-        location.startswith("presets.pro-x.observer") for location in locations
-    )
+    # Routed transport aliases must also be checked (not silently skipped).
+    assert locations["presets.pro-x.observer.model"] == "litellm/ollama-cloud/glm-5.3"
     assert not any(
         "multiplexer" in location or "disabled_agents" in location
         for location in locations
@@ -186,3 +184,20 @@ def test_unresolved_ignores_malformed_inventory_ids():
         )
     ]
     assert tier_coverage.unresolved_refs(slim, malformed + inventory_ids()) == []
+
+
+
+def test_routed_aliases_use_exact_inventory_ids_including_fallbacks():
+    slim = {
+        "presets": {
+            "free": {
+                "orchestrator": {"model": "litellm/zen"},
+                "fallback": {"orchestrator": ["litellm/other/vendor:free"]},
+            }
+        }
+    }
+    assert tier_coverage.unresolved_refs(slim, ["zen", "other/vendor:free"]) == []
+    missing = tier_coverage.unresolved_refs(slim, ["zen"])
+    assert len(missing) == 1
+    assert missing[0].ref == "litellm/other/vendor:free"
+    assert len(tier_coverage.unresolved_refs(slim, ["other/vendor:free"])) == 1

@@ -7,9 +7,11 @@
 # Load secrets from ~/.env (replaces ~/.credentials.sh)
 [ -f "$HOME/.env" ] && set -a && source "$HOME/.env" && set +a
 
-OPENCODE_ENV_HELPER="$(dirname "${BASH_SOURCE[0]}")/litellm-opencode-env.sh"
-# shellcheck disable=SC1090
-source "$OPENCODE_ENV_HELPER"
+OPENCODE_ENV_HELPER="$HOME/.dotfiles/shell/litellm-opencode-env.sh"
+if [ -r "$OPENCODE_ENV_HELPER" ]; then
+  # shellcheck disable=SC1090
+  source "$OPENCODE_ENV_HELPER"
+fi
 unset OPENCODE_ENV_HELPER
 
 # Codex reads its LiteLLM credential from its process environment.

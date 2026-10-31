@@ -404,6 +404,20 @@ def litellm_client_gate_errors(environ=None, home=None, slim_registry=None):
         return ["DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"]
     errors = []
     for client in APP_KEYS:
+        if client in litellm_config.IDE_APP_BUNDLES:
+            row = next(
+                row for row in litellm_config.CLIENT_REGISTRY
+                if row["client"] == client
+            )
+            if not all(
+                environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
+                for gate in row["setup_gates"]
+            ):
+                continue
+            if not litellm_config.ide_app_installed(
+                client, (Path("/Applications"), root / "Applications")
+            ):
+                continue
         key_path = root / ".local/share/litellm/clients" / f"{client}.key"
         if key_path.is_symlink() or not key_path.is_file():
             errors.append(f"LiteLLM proxy mode requires client key file: {key_path}")
@@ -588,7 +602,10 @@ def litellm_tier_coverage_errors(environ=None):
             f"LiteLLM tier coverage: installed Slim projection omits selected preset {selected_preset!r}"
         ], []
     council_containers = [("root", installed_slim.get("council"))]
-    for name, tier in installed_slim.get("_tiers", {}).items():
+    installed_tiers = installed_slim.get("_tiers", {})
+    if not isinstance(installed_tiers, dict):
+        return ["LiteLLM tier coverage: installed _tiers is not an object"], []
+    for name, tier in installed_tiers.items():
         if isinstance(tier, dict):
             council_containers.append((f"tier {name}", tier.get("council")))
     for label, council in council_containers:
@@ -599,7 +616,7 @@ def litellm_tier_coverage_errors(environ=None):
         ):
             return [f"LiteLLM tier coverage: {label} lacks council presets"], []
         council_default = council.get("default_preset")
-        if (
+        if council_default and (
             not isinstance(council_default, str)
             or council_default not in council["presets"]
         ):

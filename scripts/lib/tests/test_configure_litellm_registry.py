@@ -414,6 +414,7 @@ def test_provisioning_authorities_have_exact_nine_client_parity():
         "copilot-cli",
         "jetbrains",
         "vscode",
+        "xcode",
     }
     assert provisioned == expected
     assert set(litellm_config.APP_KEYS) == expected
@@ -446,6 +447,7 @@ def test_provisioning_authorities_have_exact_nine_client_parity():
             "com.microsoft.VSCode",
             "DOTFILES_RUN_VSCODE_SETUP",
         ),
+        ("xcode", "Xcode.app", "com.apple.dt.Xcode", "DOTFILES_RUN_XCODE_SETUP"),
     ],
 )
 @pytest.mark.parametrize(
@@ -484,7 +486,7 @@ def test_ide_keys_require_all_gates_and_verified_app_bundle(
 
 @pytest.mark.parametrize(
     "client,env_name",
-    [("jetbrains", "LITELLM_JETBRAINS_KEY"), ("vscode", "LITELLM_VSCODE_KEY")],
+    [("jetbrains", "LITELLM_JETBRAINS_KEY"), ("vscode", "LITELLM_VSCODE_KEY"), ("xcode", "LITELLM_XCODE_KEY")],
 )
 def test_ide_writer_materializes_private_rotatable_key(tmp_path, client, env_name):
     service = tmp_path / "service.env"

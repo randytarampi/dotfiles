@@ -6,7 +6,6 @@ import glob
 import hashlib
 import json
 import os
-import plistlib
 import shlex
 import shutil
 import subprocess
@@ -48,6 +47,7 @@ _CLIENT_ENABLE_GATES = {
     "copilot-cli": ("DOTFILES_RUN_COPILOT_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "jetbrains": ("DOTFILES_RUN_JETBRAINS_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "vscode": ("DOTFILES_RUN_VSCODE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "xcode": ("DOTFILES_RUN_XCODE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
 }
 _LEGACY_CLIENT_GATES = (
     "DOTFILES_RUN_OPENCODE_SETUP",
@@ -89,7 +89,7 @@ def _client_provisioning_state(
         and shutil.which("claude") is None
     ):
         return False, "not installed"
-    if row["client"] in {"jetbrains", "vscode"} and enforce_registry_gates:
+    if row["client"] in litellm_config.IDE_APP_BUNDLES and enforce_registry_gates:
         if not _ide_app_installed(row["client"]):
             return False, "not installed"
     binary = _CLI_INSTALLS.get(row["client"])
@@ -104,7 +104,7 @@ def _client_provisioning_state(
         and not strict_provisioning
     ):
         return False, "not installed"
-    if row["client"] in {"jetbrains", "vscode"}:
+    if row["client"] in litellm_config.IDE_APP_BUNDLES:
         return True, "credential provisioning eligible; transport UNVERIFIED"
     if "OpenAI-compatible" not in row["transports"] and row["client"] != "claude":
         return False, "usable transport UNKNOWN"
@@ -112,27 +112,8 @@ def _client_provisioning_state(
 
 
 def _ide_app_installed(client):
-    """Check known macOS app bundles and their bundle identifiers."""
-    app_name, bundle_id = {
-        "jetbrains": ("JetBrains Toolbox.app", "com.jetbrains.toolbox"),
-        "vscode": ("Visual Studio Code.app", "com.microsoft.VSCode"),
-    }[client]
-    for root in _APPLICATION_ROOTS:
-        app = root / app_name
-        if app.is_symlink() or not app.is_dir():
-            continue
-        info = app / "Contents/Info.plist"
-        try:
-            with info.open("rb") as source:
-                metadata = plistlib.load(source)
-                if (
-                    isinstance(metadata, dict)
-                    and metadata.get("CFBundleIdentifier") == bundle_id
-                ):
-                    return True
-        except (OSError, plistlib.InvalidFileException, ValueError, TypeError):
-            continue
-    return False
+    """Share the verifier's bundle-identity rule for macOS IDEs."""
+    return litellm_config.ide_app_installed(client, _APPLICATION_ROOTS)
 
 
 def validate_service_lane_runtime():
@@ -427,6 +408,10 @@ def _write_jetbrains_key(service_env_path: Path, dry_run=False) -> None:
 
 def _write_vscode_key(service_env_path: Path, dry_run=False) -> None:
     _write_client_key(service_env_path, "vscode", "LITELLM_VSCODE_KEY", dry_run)
+
+
+def _write_xcode_key(service_env_path: Path, dry_run=False) -> None:
+    _write_client_key(service_env_path, "xcode", "LITELLM_XCODE_KEY", dry_run)
 
 
 def _materialized_client_key_value(
@@ -825,6 +810,7 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
     "copilot-cli": _write_copilot_cli_key,
     "jetbrains": _write_jetbrains_key,
     "vscode": _write_vscode_key,
+    "xcode": _write_xcode_key,
 }
 
 

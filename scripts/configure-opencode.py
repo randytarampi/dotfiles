@@ -614,6 +614,8 @@ def apply_litellm_slim_gate(
                     f"Unavailable council choice: {dependency}"
                 )
                 changed = True
+    for name, error in sorted(unavailable.items()):
+        logger.warning("Omitting unavailable Slim choice %s: %s", name, error)
     required = {selected_preset}
     if councils.get("default_preset"):
         required.add(councils["default_preset"])
