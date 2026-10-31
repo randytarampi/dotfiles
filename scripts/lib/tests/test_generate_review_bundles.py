@@ -103,3 +103,15 @@ def test_write_mode_regenerates_content(generator, tmp_path, monkeypatch):
     assert generator.main() == 0
     assert (tmp_path / "out.md").read_text() == "expected"
     assert json.loads(manifest.read_text())["assets"]["out.md"] != "old"
+
+def test_dry_run_previews_without_writing(generator, tmp_path, monkeypatch):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"assets": {"out.md": "old"}}')
+    monkeypatch.setattr(generator, "ROOT", tmp_path)
+    monkeypatch.setattr(generator, "MANIFEST", manifest)
+    monkeypatch.setattr(generator, "generated", lambda: {"out.md": "expected"})
+    monkeypatch.setattr(sys, "argv", ["generator", "--write", "--dry-run"])
+
+    assert generator.main() == 0
+    assert not (tmp_path / "out.md").exists()
+    assert json.loads(manifest.read_text())["assets"]["out.md"] == "old"
