@@ -170,10 +170,10 @@ of 2026-10-13:
   create it on new machines when the observer lane is in use.
 
 > **Note (2026-09-24):** These plugins are registered for the v1 CLI
-> (1.18.32). `@slkiser/opencode-quota` is now pinned (see note above); upstream
-> `v2` builds still do not exist for `opencode-mem` — on an OpenCode v2 binary
-> it fails the plugin loader (no v2 `default {id, setup}`).
-> Revisit before migrating to OpenCode v2.
+> (1.18.32). Upstream `v2` builds still do not exist for `opencode-mem` — on an
+> OpenCode v2 binary it fails the plugin loader (no v2 `default {id, setup}`).
+> Revisit before migrating to OpenCode v2; see
+> [docs/OPENCODE-V2-MIGRATION-PLAN.md](OPENCODE-V2-MIGRATION-PLAN.md).
 
 ## Tokenscope
 
