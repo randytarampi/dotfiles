@@ -16,6 +16,39 @@ assert PROJECT_SPEC is not None and PROJECT_SPEC.loader is not None
 configure_project = importlib.util.module_from_spec(PROJECT_SPEC)
 PROJECT_SPEC.loader.exec_module(configure_project)
 
+
+def test_configure_skills_writes_native_skill_deny_rules(tmp_path):
+    """Skipped skills become ordered v2 rules with action "skill" and the
+    skill name as resource, replacing previous skill rules only."""
+    opencode_dir = tmp_path / ".opencode"
+    opencode_dir.mkdir()
+    config_path = opencode_dir / "opencode.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "model": "project-model",
+                "permissions": [
+                    {"action": "edit", "resource": "src/**", "effect": "ask"},
+                    {"action": "skill", "resource": "stale", "effect": "deny"},
+                ],
+            }
+        )
+    )
+    configure_project.configure_skills(tmp_path, [], [], ["one", "two"])
+    config = json.loads(config_path.read_text())
+    deny_rules = [
+        rule for rule in config["permissions"] if rule.get("action") == "skill"
+    ]
+    assert deny_rules == [
+        {"action": "skill", "resource": "one", "effect": "deny"},
+        {"action": "skill", "resource": "two", "effect": "deny"},
+    ]
+    preserved = [
+        rule for rule in config["permissions"] if rule.get("action") != "skill"
+    ]
+    assert preserved == [{"action": "edit", "resource": "src/**", "effect": "ask"}]
+
+
 TIER_SPEC = importlib.util.spec_from_file_location(
     "configure_opencode_tier",
     os.path.join(TESTS_DIR, "..", "..", "configure-opencode-tier.py"),
