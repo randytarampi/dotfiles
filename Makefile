@@ -4,7 +4,7 @@
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
-.PHONY: lint fix env drift migrate migrate-preview stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-setup caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref
+.PHONY: check-review-bundles lint fix env drift migrate migrate-preview stamp-repo-guidance check-repo-guidance brewfile-sync brewfile-diff brewfile-cleanup categories diff dry-run deploy configure doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-plugin-consistency check-actionlint verify reset symlinks test test-shell test-tier-registry caddy-setup caddy-deploy caddy-validate caddy-reload caddy-migrate opencode-start opencode-stop opencode-restart openwebui-start openwebui-stop openwebui-restart openwebui-backup openwebui-terminal-start openwebui-terminal-stop openwebui-terminal-restart openwebui-computer-start openwebui-computer-stop openwebui-computer-restart litellm-start litellm-stop litellm-restart openwebui-backup-timer-start openwebui-backup-timer-stop plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart services-restart skills-update codegraph clean-backups project-cleanup anchor-review-ref
 
 anchor-review-ref: ## Refresh the main review dispatcher's trusted_ref from reachable origin/main
 	@python3 scripts/anchor-review-ref.py $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
@@ -156,8 +156,11 @@ check-hashes: ## Verify hash trigger coverage in run_onchange scripts
 check-ci-assets: ## Verify CI/local-only asset hashes
 	@python3 scripts/verify-ci-assets.py
 
+check-review-bundles: ## Check review profile parity and canonical references
+	@python3 scripts/generate-review-bundles.py --check
+
 update-ci-assets: ## Regenerate configs/review/assets-manifest.json after editing CI/local-only assets
-	@python3 -c "import json, hashlib; from pathlib import Path; root = Path('.'); assets = ['configs/review/code-review-prompt.md', '.github/skills/code-review/SKILL.md', 'scripts/run-local-review.sh', 'scripts/ci-codegraph.sh', 'scripts/verify-ci-assets.py', 'configs/opencode/ci/opencode.json', 'scripts/onboard-agentic-review.py']; manifest = {'assets': {a: hashlib.sha256((root / a).read_bytes()).hexdigest() for a in assets}}; Path('configs/review/assets-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')"
+	@python3 -c "import json, hashlib; from pathlib import Path; root = Path('.'); assets = ['configs/review/compact-engineering-prompt.md', 'configs/review/code-review-prompt.md', '.github/skills/code-review/SKILL.md', 'scripts/run-local-review.sh', 'scripts/ci-codegraph.sh', 'scripts/verify-ci-assets.py', 'configs/opencode/ci/opencode.json', 'scripts/onboard-agentic-review.py']; manifest = {'assets': {a: hashlib.sha256((root / a).read_bytes()).hexdigest() for a in assets}}; Path('configs/review/assets-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')"
 	@python3 scripts/verify-ci-assets.py
 
 check-env-coverage: ## Verify DOTFILES_* env vars are documented in .env.example
@@ -229,11 +232,11 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-ci-assets check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
+ci-verify: lint drift doctor check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
