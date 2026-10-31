@@ -1038,7 +1038,10 @@ def main():
         canonical_default = default.removeprefix("litellm/")
         if canonical_default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
-        if canonical_default.startswith("google/"):
+        if canonical_default in cloud_routes.get("_available", set()):
+            default = "litellm/" + canonical_default
+            gateway_models.add(canonical_default)
+        elif canonical_default.startswith("google/"):
             key = canonical_default.split("/", 2)[-1].removeprefix("models/")
             default = cloud_routes.get("google", {}).get(key)
         elif canonical_default.startswith("openrouter/"):

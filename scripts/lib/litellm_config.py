@@ -6,7 +6,7 @@ import json
 import math
 import logging
 import os
-import os
+import plistlib
 import re
 import stat
 import time
@@ -396,7 +396,36 @@ APP_KEYS = {
     "copilot-cli": "LITELLM_COPILOT_CLI_KEY",
     "jetbrains": "LITELLM_JETBRAINS_KEY",
     "vscode": "LITELLM_VSCODE_KEY",
+    "xcode": "LITELLM_XCODE_KEY",
 }
+
+# Bundle identity is installation evidence, not proof of a usable IDE transport.
+IDE_APP_BUNDLES = {
+    "jetbrains": ("JetBrains Toolbox.app", "com.jetbrains.toolbox"),
+    "vscode": ("Visual Studio Code.app", "com.microsoft.VSCode"),
+    "xcode": ("Xcode.app", "com.apple.dt.Xcode"),
+}
+
+
+def ide_app_installed(client, roots=None):
+    """Require an actual app directory and its expected macOS bundle identity."""
+    app_name, bundle_id = IDE_APP_BUNDLES[client]
+    if roots is None:
+        roots = (Path("/Applications"), Path.home() / "Applications")
+    for root in roots:
+        app = Path(root) / app_name
+        info = app / "Contents/Info.plist"
+        if app.is_symlink() or not app.is_dir() or info.is_symlink():
+            continue
+        try:
+            with info.open("rb") as source:
+                metadata = plistlib.load(source)
+            if isinstance(metadata, dict) and metadata.get("CFBundleIdentifier") == bundle_id:
+                return True
+        except (OSError, plistlib.InvalidFileException, ValueError, TypeError):
+            continue
+    return False
+
 
 # Descriptive inventory only; provisioning and consumer wiring remain owned by
 # their existing configure/generate scripts.
@@ -595,6 +624,32 @@ CLIENT_REGISTRY = [
             "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
             "installed": "Visual Studio Code app bundle with expected bundle identifier",
             "user_enabled": "DOTFILES_RUN_VSCODE_SETUP=1",
+            "verified_usable_transport": "Credential provisioning eligibility only; transport UNVERIFIED",
+        },
+    ),
+    _client_row(
+        "xcode",
+        APP_KEYS["xcode"],
+        [
+            "/Applications/Xcode.app or ~/Applications/Xcode.app",
+            "CFBundleIdentifier com.apple.dt.Xcode verified",
+        ],
+        ["credential provisioning only; transport UNVERIFIED"],
+        "credential provisioning only; no Xcode model-settings consumer claimed",
+        [
+            "DOTFILES_RUN_XCODE_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "~/.local/share/litellm/clients/xcode.key",
+        "eligible",
+        "provision",
+        "Credential provisioning only; Xcode AI transport remains UNVERIFIED",
+        eligibility={
+            "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
+            "installed": "Xcode app bundle with expected bundle identifier",
+            "user_enabled": "DOTFILES_RUN_XCODE_SETUP=1",
             "verified_usable_transport": "Credential provisioning eligibility only; transport UNVERIFIED",
         },
     ),

@@ -58,13 +58,16 @@ def collect_registry_refs(slim: dict) -> list[RegistryRef]:
 
     Walks presets, council presets, the per-tier ``_tiers`` mirror, and
     fallback chains — exactly the shapes apply_litellm_slim_gate visits.
-    ``litellm/``-prefixed transport strings are already routed and skipped.
+    Routed ``litellm/`` aliases are checked against inventory IDs exactly.
     """
     refs: list[RegistryRef] = []
 
     def add_ref(location: str, value: str) -> None:
-        """Collect provider-qualified strings that lack the litellm/ prefix."""
-        if isinstance(value, str) and "/" in value and not value.startswith("litellm/"):
+        """Collect routed aliases and provider-qualified model selections."""
+        if isinstance(value, str) and (
+            value.startswith("litellm/") and bool(value.removeprefix("litellm/"))
+            or "/" in value and not value.startswith("litellm/")
+        ):
             refs.append(RegistryRef(location, value))
 
     def visit(node, location: str) -> None:
@@ -94,6 +97,8 @@ def collect_registry_refs(slim: dict) -> list[RegistryRef]:
 
 def _matches_inventory(ref: str, inventory: set[str]) -> bool:
     """Apply apply_litellm_slim_gate's owner-fallback and canonical matching."""
+    if ref.startswith("litellm/"):
+        return ref.removeprefix("litellm/") in inventory
     owner, model = ref.split("/", 1)
     if owner in DIRECT_EXCEPTIONS:
         return True
@@ -127,7 +132,7 @@ def _matches_inventory(ref: str, inventory: set[str]) -> bool:
 
 def unresolved_refs(slim: dict, inventory: Iterable[str]) -> list[RegistryRef]:
     """Return registry selections the given gateway inventory cannot serve."""
-    available = {item for item in inventory if isinstance(item, str) and "/" in item}
+    available = {item for item in inventory if isinstance(item, str) and item}
     return [
         entry
         for entry in collect_registry_refs(slim)

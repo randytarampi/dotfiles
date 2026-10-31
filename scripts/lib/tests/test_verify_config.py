@@ -1280,3 +1280,49 @@ def test_tier_coverage_checks_entire_installed_projection(tmp_path, monkeypatch)
     errors, _ = VERIFY_CONFIG.litellm_tier_coverage_errors(env)
     assert len(errors) == 1
     assert "omits selected preset 'active'" in errors[0]
+
+
+
+def test_optional_ide_credentials_match_provisioning_eligibility(
+    tmp_path, monkeypatch
+):
+    import plistlib
+
+    root = tmp_path / ".local/share/litellm"
+    root.mkdir(parents=True)
+    (root / "config.yaml").write_text("model_list: []\n")
+    for client, app, identifier, gate in (
+        ("jetbrains", "JetBrains Toolbox.app", "com.jetbrains.toolbox",
+         "DOTFILES_RUN_JETBRAINS_SETUP"),
+        ("vscode", "Visual Studio Code.app", "com.microsoft.VSCode",
+         "DOTFILES_RUN_VSCODE_SETUP"),
+        ("xcode", "Xcode.app", "com.apple.dt.Xcode", "DOTFILES_RUN_XCODE_SETUP"),
+    ):
+        settings = {
+            "DOTFILES_USE_LITELLM_PROXY": "1",
+            "DOTFILES_RUN_LITELLM_SETUP": "1",
+            "HOME": str(tmp_path),
+            gate: "1",
+        }
+        bundle = tmp_path / "Applications" / app / "Contents"
+        bundle.mkdir(parents=True)
+        (bundle / "Info.plist").write_bytes(
+            plistlib.dumps({"CFBundleIdentifier": identifier})
+        )
+        missing = VERIFY_CONFIG.litellm_client_gate_errors(
+            settings, home=tmp_path, slim_registry={"presets": {}}
+        )
+        assert any(f"{client}.key" in error for error in missing)
+        settings[gate] = "0"
+        disabled = VERIFY_CONFIG.litellm_client_gate_errors(
+            settings, home=tmp_path, slim_registry={"presets": {}}
+        )
+        assert not any(f"{client}.key" in error for error in disabled)
+        settings[gate] = "1"
+        (bundle / "Info.plist").write_bytes(
+            plistlib.dumps({"CFBundleIdentifier": "wrong.bundle"})
+        )
+        absent = VERIFY_CONFIG.litellm_client_gate_errors(
+            settings, home=tmp_path, slim_registry={"presets": {}}
+        )
+        assert not any(f"{client}.key" in error for error in absent)
