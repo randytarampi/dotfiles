@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "configs/skills/randy-review/SKILL.md"
 REFERENCES = SOURCE.parent / "references"
 PROMPT = "configs/review/code-review-prompt.md"
+COMPACT = "configs/review/compact-engineering-prompt.md"
+COMPACT_LIMIT = 9500
 GITHUB = ".github/skills/code-review/SKILL.md"
 OPENCODE = ".opencode/skills/code-review/SKILL.md"
 MANIFEST = ROOT / "configs/review/assets-manifest.json"
@@ -23,6 +25,23 @@ def generated() -> dict[str, str]:
     if source.count(START) != 1:
         raise ValueError("Canonical skill must contain one common method marker")
     common = START + source.split(START, 1)[1]
+    sections = {}
+    for header in (
+        "## Purpose and success criterion",
+        "## Trust and permissions",
+        "## Common review lifecycle",
+        "## Communication and output",
+    ):
+        if header not in common:
+            raise ValueError(f"Missing common section: {header}")
+        sections[header] = common.split(header, 1)[1].split("\n## ", 1)[0]
+    compact = (
+        "# Compact engineering review — generated, read-only\n\n"
+        + "\n".join(header + sections[header] for header in sections)
+        + "\n\n"
+        + (REFERENCES / "engineering.md").read_text(encoding="utf-8").strip()
+        + "\n"
+    )
     references = "\n\n---\n\n".join(
         (REFERENCES / f"{facet}.md").read_text(encoding="utf-8").strip()
         for facet in FACETS
@@ -33,6 +52,7 @@ def generated() -> dict[str, str]:
         f"{references}\n\n<!-- END BUNDLED FACET REFERENCES -->\n"
     )
     return {
+        COMPACT: compact,
         PROMPT: (
             "# Pull request review\n\n"
             "<!-- GENERATED PORTABLE COPY; canonical entry point: "
@@ -62,6 +82,8 @@ def check_bundles(expected: dict[str, str], assets: dict[str, str]) -> list[str]
     for relative, output in expected.items():
         path = ROOT / relative
         digest = hashlib.sha256(output.encode("utf-8")).hexdigest()
+        if relative == COMPACT and len(output) > COMPACT_LIMIT:
+            errors.append(f"Compact prompt exceeds {COMPACT_LIMIT} characters")
         if not path.is_file() or path.read_text(encoding="utf-8") != output:
             errors.append(f"Bundle out of sync: {relative}")
         if relative in assets and assets[relative] != digest:
