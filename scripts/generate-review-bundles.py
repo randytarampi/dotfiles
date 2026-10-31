@@ -104,15 +104,19 @@ def write_bundles(expected: dict[str, str], data: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="Verify generated bundles")
     mode.add_argument("--write", action="store_true", help="Regenerate bundles")
+    parser.add_argument("--dry-run", action="store_true", help="Preview writes without modifying files")
     args = parser.parse_args()
     expected = generated()
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     if "assets" not in data:
         raise ValueError("Missing assets in manifest")
+    if args.write and args.dry_run:
+        print("Would regenerate: " + ", ".join(expected))
+        return 0
     if args.write:
         write_bundles(expected, data)
         print("Updated review bundles and trusted asset manifest")
