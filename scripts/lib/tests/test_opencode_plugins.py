@@ -32,9 +32,7 @@ def test_manifest_matches_config_and_install_template():
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest
     loader = load_pinned_spec_loader()
-    # trufflehog:ignore - spec literal, not a credential. Quota is pinned:
-    # upstream 5.x fails the OpenCode 1.19.0 plugin loader contract.
-    assert "@slkiser/opencode-quota@4.10.8" in full_manifest
+    assert not any("opencode-quota" in spec for spec in full_manifest)
     assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
     manifest = checker.active_plugin_specs()
     expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]

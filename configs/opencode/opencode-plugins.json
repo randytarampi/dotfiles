@@ -6,7 +6,6 @@
     "@plannotator/opencode@latest",
     "opencode-vibeguard@latest",
     "@ramtinj95/opencode-tokenscope@latest",
-    "@slkiser/opencode-quota@4.10.8",
     "opencode-mem@latest"
   ],
   "gated": {
