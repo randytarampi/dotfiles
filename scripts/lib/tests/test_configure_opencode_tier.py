@@ -18,6 +18,41 @@ assert SPEC is not None and SPEC.loader is not None
 configure_tier = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(configure_tier)
 
+
+@pytest.mark.parametrize("legacy", [True, False])
+def test_effective_config_accepts_legacy_and_native_provider_keys(
+    tmp_path, monkeypatch, legacy
+):
+    config_dir = tmp_path / "project" / ".opencode"
+    config_dir.mkdir(parents=True)
+    home_config = tmp_path / "home" / ".config/opencode"
+    home_config.mkdir(parents=True)
+    key = "provider" if legacy else "providers"
+    (home_config / "opencode.json").write_text(
+        json.dumps({key: {"sample": {"models": {}}}})
+    )
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    effective = configure_tier.load_effective_opencode_config(config_dir)
+    assert effective["providers"] == {"sample": {"models": {}}}
+
+
+def test_effective_config_replaces_permission_and_plugin_arrays(tmp_path, monkeypatch):
+    config_dir = tmp_path / "project" / ".opencode"
+    config_dir.mkdir(parents=True)
+    home_config = tmp_path / "home" / ".config/opencode"
+    home_config.mkdir(parents=True)
+    (home_config / "opencode.json").write_text(
+        json.dumps({"permissions": [{"action": "old"}], "plugins": ["old"]})
+    )
+    (config_dir.parent / "opencode.json").write_text(
+        json.dumps({"permissions": [{"action": "new"}], "plugins": ["new"]})
+    )
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    effective = configure_tier.load_effective_opencode_config(config_dir)
+    assert effective["permissions"] == [{"action": "new"}]
+    assert effective["plugins"] == ["new"]
+
+
 JETBRAINS_SCRIPT = REPO_ROOT / "scripts/generate-jetbrains-profiles.py"
 JETBRAINS_SPEC = importlib.util.spec_from_file_location(
     "generate_jetbrains_profiles", JETBRAINS_SCRIPT

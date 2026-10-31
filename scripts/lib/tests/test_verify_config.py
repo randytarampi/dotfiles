@@ -501,6 +501,24 @@ general_settings:
 """
 
 
+def test_meridian_registration_present_accepts_v1_and_v2_shapes():
+    plugin_path = "x/@rynfar/meridian/plugin/meridian.ts"
+    assert VERIFY_CONFIG.meridian_registration_present({"plugin": [plugin_path]})
+    assert VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": [{"package": plugin_path}]}
+    )
+    assert VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": [{"package": plugin_path, "options": {}}]}
+    )
+    # A non-plugin entry must never satisfy the registration check.
+    assert not VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": ["@some/other-plugin"]}
+    )
+    assert not VERIFY_CONFIG.meridian_registration_present({"permission": []})
+    assert not VERIFY_CONFIG.meridian_registration_present({"plugin": "not-a-list"})
+    assert not VERIFY_CONFIG.meridian_registration_present(None)
+
+
 def _litellm_env(**overrides):
     values = {
         "LITELLM_MASTER_KEY": "sk-" + "x" * 20,

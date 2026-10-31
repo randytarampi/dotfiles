@@ -79,10 +79,20 @@ def main():
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        plugins = config.get("plugin", [])
-        if meridian_plugin_path not in plugins:
+        plugins = config.get("plugins", config.get("plugin", []))
+        if not isinstance(plugins, list):
+            raise ValueError("OpenCode plugins must be an array")
+        installed = any(
+            entry == meridian_plugin_path
+            or (
+                isinstance(entry, dict) and entry.get("package") == meridian_plugin_path
+            )
+            for entry in plugins
+        )
+        if not installed:
             plugins.append(meridian_plugin_path)
-            config["plugin"] = plugins
+            config.pop("plugin", None)
+            config["plugins"] = plugins
             if args.dry_run:
                 logger.info(f"Would append Meridian plugin path to {config_path}")
             else:
