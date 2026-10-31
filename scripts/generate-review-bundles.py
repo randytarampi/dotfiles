@@ -105,9 +105,7 @@ def write_bundles(expected: dict[str, str], data: dict) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument(
-        "--check", action="store_true", help="Verify generated bundles"
-    )
+    mode.add_argument("--check", action="store_true", help="Verify generated bundles")
     mode.add_argument("--write", action="store_true", help="Regenerate bundles")
     args = parser.parse_args()
     expected = generated()
