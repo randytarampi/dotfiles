@@ -262,11 +262,23 @@ refer to a removed section; the generator does not repair these references.
 | Codex | `LITELLM_CODEX_KEY` | `codex.key` |
 | JetBrains Toolbox | `LITELLM_JETBRAINS_KEY` | `jetbrains.key` |
 | Visual Studio Code | `LITELLM_VSCODE_KEY` | `vscode.key` |
+| Xcode | `LITELLM_XCODE_KEY` | `xcode.key` |
 
-JetBrains Toolbox and Visual Studio Code keys are provisioned only when their
-app bundle identifier is verified and both client opt-in and proxy gates are
-enabled. This provisions private credentials only; transport and IDE settings
-consumption remain UNVERIFIED. No live integration is implied.
+JetBrains Toolbox, Visual Studio Code and Xcode keys are provisioned only
+when the matching macOS app bundle identifier is verified and all three gates
+are enabled: `DOTFILES_RUN_LITELLM_SETUP=1`,
+`DOTFILES_USE_LITELLM_PROXY=1` and the client-specific
+`DOTFILES_RUN_JETBRAINS_SETUP=1`, `DOTFILES_RUN_VSCODE_SETUP=1`, or
+`DOTFILES_RUN_XCODE_SETUP=1`. The app probe checks `/Applications` and
+`~/Applications`; a bundle match is installation evidence, **not** evidence
+that the IDE reads this key or supports gateway AI routing. All three
+IDE-native transports remain **UNVERIFIED**. The existing Junie key is
+distinct from the Toolbox key.
+
+These are client-specific credentials, not host-OS credentials. Per-host
+virtual keys should be introduced only for a multi-host gateway requiring
+independent revocation, after choosing a stable, non-secret host identifier
+and documenting rotation, provisioning and verification across hosts.
 
 ## UI exposure
 
