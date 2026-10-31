@@ -69,7 +69,11 @@ def _parse_config(source):
                         and isinstance(key, yaml.ScalarNode)
                         and key.value == "providers"
                     ):
-                        if isinstance(value, yaml.MappingNode) and value.flow_style:
+                        if (
+                            isinstance(value, yaml.MappingNode)
+                            and value.flow_style
+                            and value.value
+                        ):
                             raise ValueError("refusing flow-style Hermes providers")
                         if isinstance(value, yaml.MappingNode):
                             for provider_key, provider_value in value.value:
@@ -121,8 +125,15 @@ def reconcile(source, model, endpoint):
     providers = parsed.get("providers", {})
     if providers is not None and not isinstance(providers, dict):
         raise ValueError("refusing malformed Hermes providers mapping")
+    empty_flow_providers = (
+        isinstance(providers_node, yaml.MappingNode)
+        and providers_node.flow_style
+        and not providers_node.value
+        and providers == {}
+    )
     if "providers" in parsed and (
-        not isinstance(providers_node, yaml.MappingNode) or not providers_node.value
+        not isinstance(providers_node, yaml.MappingNode)
+        or (not providers_node.value and not empty_flow_providers)
     ):
         raise ValueError("refusing non-block or empty providers mapping")
     existing = (providers or {}).get(PROVIDER)
@@ -137,7 +148,25 @@ def reconcile(source, model, endpoint):
         if existing == desired:
             return source
         raise ValueError(f"refusing existing providers.{PROVIDER} entry")
-    if providers_node is None:
+    if empty_flow_providers:
+        replacement = yaml.safe_dump(
+            {PROVIDER: desired}, default_flow_style=False, sort_keys=False
+        )
+        line_end = source.find("\n", providers_node.end_mark.index)
+        if line_end == -1:
+            line_end = len(source)
+        trailing = source[providers_node.end_mark.index : line_end]
+        replacement = "".join(
+            "  " + line for line in replacement.splitlines(keepends=True)
+        )
+        result = (
+            source[: providers_node.start_mark.index].rstrip(" \t")
+            + trailing
+            + "\n"
+            + replacement
+            + source[line_end + 1 :]
+        )
+    elif providers_node is None:
         prefix = source + ("\n" if source and not source.endswith("\n") else "")
         insertion = "providers:\n" + "".join(
             "  " + line
