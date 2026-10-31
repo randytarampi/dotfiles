@@ -89,6 +89,7 @@ def _evaluate_plugin_list(node, environment):
     return result
 
 
+<<<<<<< HEAD
 def _evaluate_subscript(node, environment):
     value = _evaluate_expression(node.value, environment)
     if isinstance(node.slice, ast.Slice):
@@ -105,6 +106,37 @@ def _evaluate_package_dict(node, environment):
         if isinstance(key, ast.Constant) and key.value == "package":
             return _evaluate_expression(value, environment)
     return None
+=======
+def _evaluate_expression(node, environment):
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        return environment[node.id]
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id == "active_plugin_specs":
+            return active_plugin_specs()
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _evaluate_expression(node.left, environment) + _evaluate_expression(
+            node.right, environment
+        )
+    if isinstance(node, ast.Subscript):
+        value = _evaluate_expression(node.value, environment)
+        if isinstance(node.slice, ast.Slice):
+            lower = node.slice.lower.value if node.slice.lower else None
+            upper = node.slice.upper.value if node.slice.upper else None
+            return value[lower:upper]
+        return value[node.slice.value]
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return _evaluate_plugin_list(node, environment)
+    if isinstance(node, ast.Dict):
+        # A v2 {package, options} plugin object normalizes to its package
+        # spec, matching the v1 tuple handling above.
+        for key, value in zip(node.keys, node.values):
+            if isinstance(key, ast.Constant) and key.value == "package":
+                return _evaluate_expression(value, environment)
+        return None
+    raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
+>>>>>>> 4ca973c2 (feat(scripts): emit native OpenCode v2 configuration)
 
 
 def _evaluate_expression(node, environment):
