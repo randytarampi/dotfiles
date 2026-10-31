@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate or validate self-contained review prompts from the canonical skill."""
+
 from __future__ import annotations
 
 import argparse
