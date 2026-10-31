@@ -14,10 +14,30 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-
 import litellm_config
 import model_catalogues
 import free_classifier
+
+
+@pytest.fixture(autouse=True)
+def isolate_litellm_client_credentials(monkeypatch, tmp_path):
+    client_keys = (
+        "LITELLM_OPENCODE_KEY",
+        "LITELLM_PI_KEY",
+        "LITELLM_OPENWEBUI_KEY",
+        "LITELLM_JUNIE_KEY",
+        "LITELLM_CODEX_KEY",
+        "LITELLM_CLAUDE_KEY",
+        "LITELLM_COPILOT_CLI_KEY",
+        "LITELLM_JETBRAINS_KEY",
+        "LITELLM_VSCODE_KEY",
+        "LITELLM_XCODE_KEY",
+    )
+    for name in ("LITELLM_MASTER_KEY", "LITELLM_API_KEY", *client_keys):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
 import free_route_manifest
 from free_gateway_evidence import validate_free_gateway_evidence
 
@@ -2031,13 +2051,14 @@ def test_provisioned_client_key_writers_cover_every_registered_app_key():
     assert set(CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS) == {
         "opencode",
         "pi",
-        "junie",
         "openwebui",
+        "junie",
         "codex",
         "claude",
         "copilot-cli",
         "jetbrains",
         "vscode",
+        "xcode",
     }
 
 
@@ -2370,7 +2391,7 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
         c
         for c in CONFIGURE.APP_KEYS
         if "OpenAI-compatible" in registry[c]["transports"]
-        or c in {"claude", "jetbrains", "vscode"}
+        or c in {"claude", "jetbrains", "vscode", "xcode"}
     ]
     assert len(generate_attempts) == len(expected_clients)
     # A 400 is not persisted as a key; the service env keeps its prior state.

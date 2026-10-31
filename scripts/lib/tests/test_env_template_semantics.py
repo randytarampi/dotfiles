@@ -5,7 +5,7 @@ from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "4adeab015d116727c063ed45bc5ccd8f2900142f5c3efad5fbd8521d8d98c955"
+    "23c1791ae3c71bed9d32697dfcd17616b1517fe981f7b3ce383e1842b727b9a7"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
