@@ -132,8 +132,9 @@ lane. The owner must provide:
 - `trusted_ref`: an immutable 40-hex dotfiles commit containing the verifier.
 
 The generator runs `opencode run` directly with a read-only token and only
-edits its workspace. It installs the repository-pinned OpenCode CLI
-(`opencode-ai@1.18.34`) and verifies both its executable and reported version;
+edits its workspace. It installs OpenCode 2.2.5 through the official pinned
+install script (https://opencode.ai/v2/install with `--version`) and verifies
+both its executable and reported version;
 it does not commit, push, or create a PR. After the
 `agentic-review-fix` environment approval, the publisher creates the unique
 `agentic-review-bot/<run-id>` branch. On reruns it records the current remote
