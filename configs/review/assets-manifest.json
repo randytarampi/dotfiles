@@ -1,7 +1,7 @@
 {
   "assets": {
-    "configs/review/code-review-prompt.md": "9a8e686da3ea583976a7b1a0cc2f002d432d744bab9b1b93bb88fa33a22e85c3",
-    ".github/skills/code-review/SKILL.md": "2b6fc80ca213698a3368281494444e7fc104e50975ac0adb4e8d8e0808940dde",
+    "configs/review/code-review-prompt.md": "03c126ec69932027c8e66293e8bbeb1b24c165cf2f8f141d17eee67c707b05f0",
+    ".github/skills/code-review/SKILL.md": "6b8a327f8d4c5de80c6638c6a6e54f7168390214dfeda1ccaaa1b907f491d5bd",
     "scripts/run-local-review.sh": "f9e0d4cfc36ceabfc06766d3faf835f8b674cc4124596260de3381b749174cb0",
     "scripts/ci-codegraph.sh": "9b5dde7b5da5d5f695668f2f0c70089467fa1dabe7559ae12f58b0992c73c175",
     "scripts/verify-ci-assets.py": "cb7d903fe640802b97a820409f0718eb422172f07aff9d82ecabc8fd7164bb22",
