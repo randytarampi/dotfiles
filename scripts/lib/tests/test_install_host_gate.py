@@ -35,7 +35,7 @@ def run_installer(tmp_path, version=None, *, missing=False, status=0, twice=Fals
             "if [ \"$1\" = --version ]; then printf '%s\\n' "
             + repr(version or "")
             + f"; exit {status}; fi\n"
-            'if [ "$1" = plugin ] && [ "$2" = check ]; then echo "${3#*@} 3.2.0 (current)"; exit 0; fi\n'
+            'if [ "$1" = plugin ] && [ "$2" = check ]; then case "$3" in github:*) echo "opencode-vibeguard-v2 3.2.0 (current)" ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi\n'
             'printf \'%s\\n\' "$*" >> "$HOME/recorder"\n',
             encoding="utf-8",
         )
