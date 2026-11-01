@@ -29,11 +29,10 @@ HOST_STATE="absent"
 HOST_MAJOR=""
 if command -v opencode >/dev/null 2>&1; then
   HOST_INFO="$(PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -c 'import opencode_host; print(" ".join(str(x) if x is not None else "" for x in opencode_host.resolve_opencode_host()))' 2>/dev/null || true)"
-  HOST_STATE="${HOST_INFO%% *}"
-  HOST_MAJOR="${HOST_INFO#* }"
+  read -r HOST_STATE HOST_MAJOR <<<"${HOST_INFO}"
 fi
 if [[ "${HOST_STATE}" != "known" || "${HOST_MAJOR}" != "2" ]]; then
-  warn "OpenCode host is ${HOST_STATE}${HOST_MAJOR:+ (major ${HOST_MAJOR})}; skipping v2 plugin commands."
+  warn "OpenCode host is ${HOST_STATE:-unknown}${HOST_MAJOR:+ (major ${HOST_MAJOR})}; skipping v2 plugin commands."
   # OMO Slim uses its own installer and is intentionally retained on v1.
   PLUGIN_MANIFEST="{{ .chezmoi.sourceDir }}/configs/opencode/opencode-plugins.json"
   PLUGIN_SPECS=()
