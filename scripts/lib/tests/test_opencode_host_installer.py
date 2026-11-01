@@ -16,6 +16,7 @@ def run(
     gate="1",
     install_rc=0,
     path_mode="stubbed",
+    args=(),
 ):
     """install_rc="absent" omits the bash channel stub entirely.
     path_mode="isolated" leaves no system dirs on PATH (no curl, no real
@@ -61,7 +62,7 @@ def run(
         )
         bash_stub.chmod(0o755)
     result = subprocess.run(
-        ["/bin/bash", str(INSTALLER)], env=env, capture_output=True, text=True
+        ["/bin/bash", str(INSTALLER), *args], env=env, capture_output=True, text=True
     )
     return result, recorder
 
@@ -166,3 +167,79 @@ def test_host_template_invokes_the_helper_explicitly():
     ).read_text()
     assert "bash " in template and "scripts/install-opencode-v2.sh" in template
     assert template.strip().splitlines()[-1].startswith("bash ")
+
+
+def test_mode_pinned_already_present_is_noop(tmp_path):
+    result, recorder_path = run(
+        tmp_path, pre_version="opencode 2.0.31", args=["--version", "2.0.31"]
+    )
+    assert result.returncode == 0, result.stderr
+    # No install recording at all is the strongest no-op evidence.
+    assert recorder_path.exists() is False or "install" not in recorder_path.read_text()
+    assert "2.0.31 already installed" in result.stderr
+
+
+def test_mode_pinned_mismatch_installs_exact_version(tmp_path):
+    result, recorder = run(
+        tmp_path,
+        pre_version="opencode 1.19.5",
+        post_version="opencode 2.0.31",
+        args=["--version", "2.0.31"],
+    )
+    assert result.returncode == 0, result.stderr
+    assert "install" in recorder.read_text()
+
+
+def test_mode_pinned_post_version_mismatch_fails_closed(tmp_path):
+    result, _ = run(
+        tmp_path,
+        pre_version="opencode 1.19.5",
+        post_version="opencode 2.2.5",
+        args=["--version", "2.0.31"],
+    )
+    assert result.returncode != 0
+    assert "does not verify as the pinned version" in result.stderr
+
+
+def test_mode_verify_never_installs(tmp_path):
+    result, recorder = run(tmp_path, pre_version="opencode 2.2.5", args=["--verify"])
+    assert result.returncode == 0, result.stderr
+    assert recorder.exists() is False or "install" not in recorder.read_text()
+    (tmp_path / "bin" / "bash").unlink()
+    # A v1 host + verify = exit 1 with no install attempt.
+    home = tmp_path / "home"
+    (tmp_path / "bin" / "opencode").write_text(
+        '#!/bin/sh\nprintf "opencode 1.19.5\\n"\n'
+    )
+    (tmp_path / "bin" / "opencode").chmod(0o755)
+    second = subprocess.run(
+        ["/bin/bash", str(INSTALLER), "--verify"],
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "PATH": str(tmp_path / "bin"),
+            "DOTFILES_RUN_OPENCODE_TOOLS_SETUP": "1",
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert second.returncode == 1
+    assert "no stable OpenCode v2 CLI" in second.stderr
+
+
+def test_mode_install_latest_refreshes_existing_v2(tmp_path):
+    result, recorder = run(
+        tmp_path, pre_version="opencode 2.0.31", args=["--install-latest"]
+    )
+    assert result.returncode == 0, result.stderr
+    assert "install" in recorder.read_text()
+
+
+def test_mode_unknown_flag_rejected(tmp_path):
+    result, _ = run(tmp_path, args=["--wat"])
+    assert result.returncode == 2
+
+
+def test_mode_pinned_garbage_version_rejected(tmp_path):
+    result, _ = run(tmp_path, args=["--version", "9x"])
+    assert result.returncode == 2
