@@ -315,6 +315,9 @@ jobs:
           HAS_MISTRAL_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
           HAS_CLOUDFLARE_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
           HAS_NVIDIA_NIM_KEY: ${{ secrets.NVIDIA_NIM_API_KEY != '' }}
+          REVIEW_FREE_MISTRAL_APPROVED: ${{ vars.REVIEW_FREE_MISTRAL_APPROVED }}
+          REVIEW_FREE_CLOUDFLARE_APPROVED: ${{ vars.REVIEW_FREE_CLOUDFLARE_APPROVED }}
+          REVIEW_FREE_GROQ_APPROVED: ${{ vars.REVIEW_FREE_GROQ_APPROVED }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
@@ -344,12 +347,15 @@ jobs:
           # runtime 429 failover chain. The active GitHub action still uses
           # exactly one primary model per review invocation.
           if requested == "free":
-              for name, available in (
-                  ("mistral", "HAS_MISTRAL_KEY"),
-                  ("cloudflare", "HAS_CLOUDFLARE_KEY"),
-                  ("groq", "HAS_GROQ_KEY"),
+              for name, available, approved in (
+                  ("mistral", "HAS_MISTRAL_KEY", "REVIEW_FREE_MISTRAL_APPROVED"),
+                  ("cloudflare", "HAS_CLOUDFLARE_KEY", "REVIEW_FREE_CLOUDFLARE_APPROVED"),
+                  ("groq", "HAS_GROQ_KEY", "REVIEW_FREE_GROQ_APPROVED"),
               ):
-                  if os.environ.get(available) == "true":
+                  if (
+                      os.environ.get(available) == "true"
+                      and os.environ.get(approved, "").strip().lower() == "true"
+                  ):
                       requested = name
                       break
               else:
