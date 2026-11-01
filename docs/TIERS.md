@@ -28,7 +28,7 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-fourty-dollars** | OpenAI + Anthropic | Upstream-inspired dual-subscription preset (historical spelling preserved) |
+| **omo-slim-forty-dollars** | OpenAI + Anthropic | Upstream-inspired dual-subscription preset (historical spelling preserved) |
 | **omo-slim-opencode-zen-free** | Fresh qualifying OpenCode upstream routes, direct or proxied | Dynamic, capability-checked selection; no request-time cost guarantee |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
 | **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
@@ -141,9 +141,9 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-6-luna`. Requires GitHub Copilot auth via `/connect`.
 
 
-### Forty Dollars Tier (`omo-slim-fourty-dollars`)
+### Forty Dollars Tier (`omo-slim-forty-dollars`)
 
-Adapted from [upstream's $40 preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/forty-dollars-preset.md) without copying upstream credentials, transport assumptions, or the old two-seat-only council shape. The intentionally retained `fourty` spelling matches the requested selector; it can be aliased separately after consumer checks. This is **not** a claim that ChatGPT Plus/Claude Pro subscriptions confer usable direct API keys: both actual routes require valid provider authentication, and ChatGPT OAuth/Meridian entitlement remains a separate concern.
+Adapted from [upstream's $40 preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/forty-dollars-preset.md) without copying upstream credentials, transport assumptions, or the old two-seat-only council shape. The selector uses the canonical spelling from the upstream `forty-dollars-preset.md`. This is **not** a claim that ChatGPT Plus/Claude Pro subscriptions confer usable direct API keys: both actual routes require valid provider authentication, and ChatGPT OAuth/Meridian entitlement remains a separate concern.
 
 | Role | Model | Variant |
 |---|---|---|
