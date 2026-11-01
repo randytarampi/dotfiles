@@ -902,7 +902,7 @@
         "variant": "max"
       }
     },
-    "omo-slim-fourty-dollars": {
+    "omo-slim-forty-dollars": {
       "orchestrator": {
         "model": "anthropic/claude-opus-5-5",
         "variant": "xhigh",
@@ -1092,7 +1092,7 @@
           "model": "opencode/nemotron-3.5-lightning-free"
         }
       },
-      "omo-slim-fourty-dollars": {
+      "omo-slim-forty-dollars": {
         "alpha": {
           "model": "openai/gpt-6-astra",
           "variant": "max"
@@ -1742,11 +1742,11 @@
         ]
       }
     },
-    "omo-slim-fourty-dollars": {
+    "omo-slim-forty-dollars": {
       "council": {
-        "default_preset": "omo-slim-fourty-dollars",
+        "default_preset": "omo-slim-forty-dollars",
         "presets": {
-          "omo-slim-fourty-dollars": {
+          "omo-slim-forty-dollars": {
             "alpha": {
               "model": "openai/gpt-6-astra",
               "variant": "max"
