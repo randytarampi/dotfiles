@@ -1,5 +1,11 @@
 # Junie Model Groups ↔ Oh My OpenCode Sync
 
+
+Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM have opt-in direct
+model groups and LiteLLM twins. Groups without credentials or advertised
+proxy aliases are not guaranteed usable. See
+[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for configuration and tests.
+
 > Deep reference for Junie model profile definitions and their alignment with OpenCode presets.
 
 The shared tier registry in `scripts/lib/tier_registry.py` is the single source of truth for tier → role → model mapping. OpenCode, Junie, and Pi consume the presets in `configs/opencode/oh-my-opencode-slim.json` through this registry. `configs/junie/model-groups.json` supplies Junie-specific profile metadata, provider endpoints (including Google, OpenRouter, and OpenCode Zen), and temperature overrides.
