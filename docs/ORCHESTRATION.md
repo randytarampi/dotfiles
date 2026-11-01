@@ -1,5 +1,13 @@
 # Dotfiles Orchestration Architecture
 
+
+Optional inference provider generation preserves the existing three-layer
+contract: `provider_endpoints.py` defines trusted endpoints and account
+binding; OpenCode/Pi/Junie consume enabled, credentialed routes; LiteLLM
+exposes separate opt-in full-scope aliases. Hosted review actions use direct
+provider selection, not local loopback LiteLLM. See
+[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+
 > This document is the canonical reference for the dotfiles orchestration architecture.
 > All changes to scripts, Makefile targets, or configure scripts must be evaluated
 > against the principles documented here.
