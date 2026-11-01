@@ -36,6 +36,8 @@ from provider_endpoints import (
     POOLSIDE_ROUTED_MODEL_INFO,
     PROVIDER_ENDPOINTS,
     conservative_limit,
+    selected_optional_providers,
+    provider_models,
 )
 from litellm_routing import routing_entries_are_safe
 from litellm_aliases import canonical_allowlist_key  # noqa: E402 -- lib sibling import.
@@ -1549,6 +1551,31 @@ def compute_model_list(environ=None, previous_entries=None):
                     ),
                 ]
             )
+
+    # These accounts may offer trials, free tiers or paid capacity depending on
+    # model and entitlement. Only full-scope, expressly opted-in routes are
+    # advertised; a key or curated name never establishes a zero-charge route.
+    # Free-scope LiteLLM catalogues continue to fail closed.
+    if scope == "full":
+        for provider, base_url in selected_optional_providers(environ).items():
+            wire_provider = (
+                "nvidia_nim" if provider == "nvidia-nim" else provider
+            )
+            key_env = PROVIDER_ENDPOINTS[provider]["apiKeyEnv"]
+            for model_id in provider_models(provider):
+                entries.append(
+                    _entry(
+                        f"{provider}/{model_id}",
+                        f"{wire_provider}/{model_id}",
+                        api_base=base_url,
+                        key_env=key_env,
+                    )
+                )
+    elif environ.get("DOTFILES_OPTIONAL_INFERENCE_PROVIDERS", "").strip():
+        last_generation_notes.append(
+            "Optional inference providers are not eligible for free-scope "
+            "catalogue without independent recurring-zero-charge evidence"
+        )
 
     if is_meridian_configured() and environ.get("MERIDIAN_API_KEY", "").strip():
         allowlist = (
