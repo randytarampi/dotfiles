@@ -4,6 +4,16 @@
 
 Use this playbook when adding or changing models, switching tiers, or updating provider configuration. Keep the source JSON, tier behavior, documentation, and generated configuration aligned.
 
+## November 2026 model-refresh validation
+
+The upstream `openai`, `$30`, and `$40` preset references are compared against `docs/presets/` in `alvinunreal/oh-my-opencode-slim`; this repository retains its own observer, librarian, three-seat council, credential and fallback contracts. The `$40` adaptation is deliberately named `omo-slim-fourty-dollars`, with the requested spelling. No OpenAI or Anthropic consumer subscription implies API entitlement.
+
+The static free-model entries introduced in November are *preferences only*: use the existing fresh-evidence resolver, exact upstream host, price provenance, tool/image capability and expiry checks. Do not interpret screenshots, model listings or HTTP 200 on `/models` as successful inference. An unqualified replacement must remain unavailable; never silently substitute paid or contributor-tier routes. Ollama Cloud MiMo and Kimi Junie groups likewise need authenticated primary and faster probes, including gateway twins.
+
+Acceptance before promotion: `make check-slim-invariants`, targeted `PYTHONPATH=scripts/lib pytest scripts/lib/tests/test_model_refresh_contract.py -q`, `make check-model-drift`, `make check-hashes`, `make verify`, two idempotent generations, and installed OpenCode/Junie/Pi/LiteLLM inference with real client-scoped authentication. The exact wire model ID, endpoint, actual request protocol, tool/image support, spend and latency should be recorded for each changed primary and fallback; a catalogue `MATCH` alone remains insufficient. If the operator cannot perform host tests, report UNKNOWN and retain a draft PR.
+
+Rollback: restore the previous registry/allowlist/group versions, regenerate through the normal gated `make deploy` path, and verify user-owned files remain intact. Do not mutate service secrets or delete the generated Junie manifest to force reconciliation.
+
 ## Update Flow
 
 ```mermaid
