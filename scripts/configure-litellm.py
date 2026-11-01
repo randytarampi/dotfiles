@@ -612,6 +612,17 @@ def _provisioning_preflight(records, service_env_path, enforce_registry_gates, s
             )
             refusal = "credential conflict"
         refusal = _preflight_refusal(auth, remote, refusal)
+        # Preflight every existing alias before issuing any new credentials.
+        # Late detection can leave a partially provisioned gateway when a
+        # stranded alias appears after a fresh client in registry order.
+        if remote is not None and not _key_file_materialized(
+            client_key_path, env_name, service_env_path
+        ):
+            logger.error(
+                "LiteLLM client %s has a remote alias without local key material",
+                alias,
+            )
+            refusal = refusal or f"stranded LiteLLM client credential: {alias}"
         if auth.state == "absent" and remote is not None and not strict:
             logger.info("LiteLLM client %s not authorized: credential absent", alias)
         preflight.append((row, auth, remote))

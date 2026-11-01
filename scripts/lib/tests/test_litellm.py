@@ -1933,6 +1933,11 @@ def test_app_key_provisioning_is_alias_idempotent_and_mode_600(tmp_path, monkeyp
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+    client_dir = tmp_path / "clients"
+    client_dir.mkdir(mode=0o700)
+    existing = client_dir / "opencode.key"
+    existing.write_text("sk-existing-opencode", encoding="utf-8")
+    existing.chmod(0o600)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "1")
@@ -2105,21 +2110,33 @@ def test_existing_alias_recreates_file_from_service_env_without_generation(
     tmp_path, monkeypatch
 ):
 
+    calls = []
+
     def fake_request(url, method, master_key, payload=None, timeout=5):
+        calls.append((url, method))
         if "/key/list" in url:
-            return {"keys": [{"key_alias": alias} for alias in CONFIGURE.APP_KEYS]}
+            return {
+                "keys": [{"key_alias": alias} for alias in ("opencode", "junie")]
+            }
+        if url.endswith("/key/generate"):
+            raise AssertionError("existing aliases must not be regenerated")
         return {"status": "healthy"}
 
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    monkeypatch.setattr(CONFIGURE.shutil, "which", lambda _name: "/bin/client")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "1")
     service = tmp_path / "service.env"
     service.write_text(
         "LITELLM_OPENCODE_KEY='dummy-existing'\n"
         "LITELLM_JUNIE_KEY='dummy-junie-existing'\n",
         encoding="utf-8",
     )
-    CONFIGURE.provision_app_keys(
-        "dummy-master", service, "http://127.0.0.1:4000", enforce_registry_gates=False
+    assert CONFIGURE.provision_app_keys(
+        "dummy-master", service, "http://127.0.0.1:4000"
     )
+    assert not any(url.endswith("/key/generate") for url, _method in calls)
     assert (tmp_path / "clients/opencode.key").read_text(encoding="utf-8") == (
         "dummy-existing"
     )
