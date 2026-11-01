@@ -2115,9 +2115,7 @@ def test_existing_alias_recreates_file_from_service_env_without_generation(
     def fake_request(url, method, master_key, payload=None, timeout=5):
         calls.append((url, method))
         if "/key/list" in url:
-            return {
-                "keys": [{"key_alias": alias} for alias in ("opencode", "junie")]
-            }
+            return {"keys": [{"key_alias": alias} for alias in ("opencode", "junie")]}
         if url.endswith("/key/generate"):
             raise AssertionError("existing aliases must not be regenerated")
         return {"status": "healthy"}

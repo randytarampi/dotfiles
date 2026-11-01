@@ -783,8 +783,7 @@ def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tm
     os.chmod(client_path, 0o600)
     service = tmp_path / "service.env"
     service.write_text(
-        "LITELLM_OPENCODE_KEY='existing-key'\n"
-        "LITELLM_PI_KEY='existing-pi-key'\n",
+        "LITELLM_OPENCODE_KEY='existing-key'\n" "LITELLM_PI_KEY='existing-pi-key'\n",
         encoding="utf-8",
     )
     records = ["opencode", "pi"]
