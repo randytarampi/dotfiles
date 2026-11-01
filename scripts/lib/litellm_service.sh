@@ -210,9 +210,17 @@ litellm_service_env_sync() {
   local client_dir
   client_dir="$(dirname "$service_env")/clients"
   local client client_file file_value
-  if [[ -L "$client_dir" ]]; then
-    printf 'Unsafe LiteLLM client directory symlink\n' >&2
-    return 1
+  local private_mode
+  if [[ -e "$client_dir" ]]; then
+    if [[ -L "$client_dir" || ! -d "$client_dir" || ! -O "$client_dir" ]]; then
+      printf 'Unsafe LiteLLM client directory path or ownership\n' >&2
+      return 1
+    fi
+    private_mode="$(stat -c %a "$client_dir" 2>/dev/null || stat -f %Lp "$client_dir" 2>/dev/null)" || return 1
+    if [[ "$private_mode" != "700" ]]; then
+      printf 'Unsafe LiteLLM client directory permissions (expected 0700)\n' >&2
+      return 1
+    fi
   fi
   for key in "${managed_client_keys[@]}"; do
     client="${key#LITELLM_}"
@@ -224,8 +232,13 @@ litellm_service_env_sync() {
       return 1
     fi
     if [[ -f "$client_file" ]]; then
-      if [[ ! -r "$client_file" ]]; then
-        printf 'Unreadable LiteLLM client key file: %s\n' "$client" >&2
+      if [[ ! -O "$client_file" || ! -r "$client_file" ]]; then
+        printf 'Unsafe LiteLLM client key ownership or readability: %s\n' "$client" >&2
+        return 1
+      fi
+      private_mode="$(stat -c %a "$client_file" 2>/dev/null || stat -f %Lp "$client_file" 2>/dev/null)" || return 1
+      if [[ "$private_mode" != "600" ]]; then
+        printf 'Unsafe LiteLLM client key permissions (expected 0600): %s\n' "$client" >&2
         return 1
       fi
       file_value="$(<"$client_file")"
@@ -238,8 +251,8 @@ litellm_service_env_sync() {
       fi
     fi
   done
-  tmp="${service_env}.tmp.$"
   umask 077
+  tmp="$(mktemp "${service_env}.tmp.XXXXXXXX")" || return 1
   {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
     printf 'LITELLM_PORT=%q\n' "$LITELLM_PORT"
