@@ -3253,6 +3253,104 @@ def test_litellm_env_sync_local_only_config_does_not_copy_bootstrap_keys(tmp_pat
     assert "OPENAI_API_KEY" not in env_path.read_text(encoding="utf-8")
 
 
+def test_litellm_env_sync_client_registry_parity():
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    text = helper.read_text(encoding="utf-8")
+    keys = text.split("local -a managed_client_keys=(", 1)[1].split(")", 1)[0]
+    assert set(keys.split()) == set(litellm_config.APP_KEYS.values())
+
+
+def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    clients = root / "clients"
+    clients.mkdir(parents=True)
+    env_path = root / "service.env"
+    (tmp_path / ".env").write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\\n",
+        encoding="utf-8",
+    )
+    script = (
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    def sync():
+        return subprocess.run(
+            ["bash", "-c", script],
+            env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+        )
+
+    first = sync()
+    assert first.returncode == 0, first.stderr
+    keys = {
+        name: f"sk-fixture-{client}"
+        for client, name in litellm_config.APP_KEYS.items()
+    }
+    with env_path.open("a", encoding="utf-8") as f:
+        for name, value in keys.items():
+            f.write(f"{name}={value}\\n")
+    for client, name in litellm_config.APP_KEYS.items():
+        path = clients / f"{client}.key"
+        path.write_text(keys[name], encoding="utf-8")
+        path.chmod(0o600)
+
+    assert sync().returncode == 0
+    persisted = env_path.read_bytes()
+    assert all(f"{name}={value}\\n".encode() in persisted for name, value in keys.items())
+    assert sync().returncode == 0
+    assert env_path.read_bytes() == persisted
+    # A missing env entry is restored from the actual canonical client file.
+    lost = "LITELLM_VSCODE_KEY"
+    env_path.write_text(
+        env_path.read_text().replace(f"{lost}={keys[lost]}\\n", ""),
+        encoding="utf-8",
+    )
+    assert sync().returncode == 0
+    assert env_path.read_bytes() == persisted
+    assert env_path.stat().st_mode & 0o777 == 0o600
+    for client, name in litellm_config.APP_KEYS.items():
+        assert (clients / f"{client}.key").read_text() == keys[name]
+
+
+@pytest.mark.parametrize("unsafe", ["conflict", "symlink"])
+def test_litellm_env_sync_refuses_unsafe_client_file_without_writing(tmp_path, unsafe):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    clients = root / "clients"
+    clients.mkdir(parents=True)
+    env_path = root / "service.env"
+    env_path.write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\\n"
+        "LITELLM_VSCODE_KEY='sk-env-key'\\n",
+        encoding="utf-8",
+    )
+    key = clients / "vscode.key"
+    if unsafe == "conflict":
+        key.write_text("sk-different-key", encoding="utf-8")
+    else:
+        outside = tmp_path / "external-secret"
+        outside.write_text("sk-env-key", encoding="utf-8")
+        key.symlink_to(outside)
+    before = env_path.read_bytes()
+    script = (
+        f"source {shlex.quote(str(helper))}; "
+        f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "LiteLLM client" in result.stderr or "Unsafe LiteLLM" in result.stderr
+    assert "sk-env-key" not in result.stderr
+    assert "sk-different-key" not in result.stderr
+    assert env_path.read_bytes() == before
+
+
 def test_litellm_env_sync_is_byte_identical_on_repeated_runs(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
