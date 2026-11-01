@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 """
 OpenCode Voice Plugin Configurator.
@@ -28,6 +27,8 @@ Environment variables:
   DOTFILES_WHISPER_MODEL    - Whisper model filename (default: ggml-large-v3-turbo.bin)
   DOTFILES_PIPER_VOICE       - Piper voice name (default: en_US-lessac-high)
 """
+
+from __future__ import annotations
 
 import sys
 import json
@@ -90,7 +91,9 @@ from selected_service import (  # noqa: E402
 from litellm_client_auth import (  # noqa: E402 -- scripts/lib bootstrap ordering.
     resolve_client_auth,
 )
-from opencode_plugins import active_cli_plugin_specs
+from opencode_plugins import (  # noqa: E402 -- scripts/lib bootstrap ordering.
+    active_cli_plugin_specs,
+)
 
 VOICE_PLUGIN_KEY = "@bojackduy/opencode-voice"
 # The previously managed v1-era voice package: its stale tui.json entries are
@@ -1388,7 +1391,7 @@ def main():
                 raise ValueError(
                     "cli.json root must be an array or a {plugins: [...]} object"
                 )
-        except (OSError, json.JSONDecodeError, ValueError) as error:
+        except (OSError, ValueError) as error:
             logger.critical(f"Could not read existing cli.json safely: {error}")
             return 1
     else:
@@ -1436,7 +1439,7 @@ def main():
                             legacy_options = None
                     if not isinstance(legacy_options, dict):
                         legacy_options = None
-        except (OSError, json.JSONDecodeError, ValueError) as error:
+        except (OSError, ValueError) as error:
             logger.debug("No usable legacy tui.json voice route: %s", error)
     entry_options = {
         # Tier-derived keys win; unknown user-set option keys (e.g.
@@ -1575,7 +1578,7 @@ def main():
                     write_text_file(
                         tui_path, json.dumps(tui_config, indent=2) + "\n", backup=False
                     )
-        except (OSError, json.JSONDecodeError, ValueError) as error:
+        except (OSError, ValueError) as error:
             logger.warning(
                 "Could not remove managed voice entry from tui.json: %s", error
             )
