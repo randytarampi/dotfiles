@@ -643,6 +643,15 @@ def _provisioning_preflight(records, service_env_path, enforce_registry_gates, s
             )
             refusal = "credential conflict"
         refusal = _preflight_refusal(auth, remote, refusal)
+        # service.env is another credential source. When an alias is missing,
+        # never generate a new remote key while a stale local secret exists:
+        # the later writer could replace the freshly issued key with that secret.
+        if remote is None and _service_env_value(env_name, service_env_path):
+            logger.error(
+                "LiteLLM client %s has a service.env key without a gateway alias",
+                alias,
+            )
+            refusal = refusal or "invalid state: service.env key without gateway alias"
         # Preflight every existing alias before issuing any new credentials.
         # Late detection can leave a partially provisioned gateway when a
         # stranded alias appears after a fresh client in registry order.
