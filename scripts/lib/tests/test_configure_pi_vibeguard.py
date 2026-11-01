@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -88,5 +89,61 @@ def test_committed_config_has_no_keywords_and_is_enabled():
     config = json.loads((ROOT / "configs/pi/vibeguard.config.json").read_text())
     assert config["enabled"] is True
     assert config["patterns"].get("keywords", []) == []
-    assert len(config["patterns"]["regex"]) == 15
+    assert len(config["patterns"]["regex"]) == 17
     assert config["patterns"]["builtin"] == ["email", "ipv4", "ipv6", "uuid"]
+
+
+def test_pi_openai_regex_corpus_and_opencode_parity():
+    pi_config = json.loads((ROOT / "configs/pi/vibeguard.config.json").read_text())
+    opencode_config = json.loads(
+        (ROOT / "configs/opencode/vibeguard.config.json").read_text()
+    )
+    pi_patterns = [rule["pattern"] for rule in pi_config["patterns"]["regex"]]
+    opencode_patterns = [
+        rule["pattern"] for rule in opencode_config["patterns"]["regex"]
+    ]
+    modern_openai_patterns = [
+        "(?<![A-Za-z0-9_])sk-(?:proj-|svcacct-)[A-Za-z0-9_-]{20,200}(?![A-Za-z0-9_-])",
+        "(?<![A-Za-z0-9_])sk-[A-Za-z0-9]{48}(?![A-Za-z0-9])",
+    ]
+    assert [
+        pattern for pattern in pi_patterns if pattern in modern_openai_patterns
+    ] == (modern_openai_patterns)
+    assert [
+        pattern for pattern in opencode_patterns if pattern in modern_openai_patterns
+    ] == modern_openai_patterns
+    assert set(modern_openai_patterns).issubset(pi_patterns)
+
+    compiled = [re.compile(pattern) for pattern in pi_patterns]
+    positives = [
+        "sk-proj-" + "A1_b-" * 14,
+        "sk-svcacct-" + "Z9_-x" * 12,
+        "sk-" + "a" * 48,
+    ]
+    negatives = [
+        "sk-proj-placeholder",
+        "sk-svcacct-" + "x" * 19,
+        "sk-proj-" + "x" * 201,
+        "https://example.test/path?key=sk-proj-placeholder",
+        "id_" + "sk-proj-" + "A" * 24,
+    ]
+    for sample in positives:
+        assert any(pattern.search(sample) for pattern in compiled), sample
+    for sample in negatives:
+        assert not any(pattern.search(sample) for pattern in compiled), sample
+
+
+def test_pi_config_regex_schema_is_valid_and_documented():
+    config = json.loads((ROOT / "configs/pi/vibeguard.config.json").read_text())
+    assert set(config) == {
+        "enabled",
+        "debug",
+        "placeholder_prefix",
+        "session",
+        "patterns",
+    }
+    assert set(config["session"]) == {"ttl", "max_mappings"}
+    assert set(config["patterns"]) == {"keywords", "regex", "builtin", "exclude"}
+    for rule in config["patterns"]["regex"]:
+        assert set(rule) == {"pattern", "category"}
+        re.compile(rule["pattern"])
