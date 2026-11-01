@@ -14,6 +14,16 @@ Acceptance before promotion: `make check-slim-invariants`, targeted `PYTHONPATH=
 
 Rollback: restore the previous registry/allowlist/group versions, regenerate through the normal gated `make deploy` path, and verify user-owned files remain intact. Do not mutate service secrets or delete the generated Junie manifest to force reconciliation.
 
+
+## Optional inference provider onboarding — November 2026
+
+Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and
+NVIDIA NIM. These model IDs establish neither tool-call compatibility nor
+recurring free capacity. The default cross-provider free fallback chains are
+unchanged pending account-level evidence; GitHub review action selection is
+trusted and opt-in. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md)
+for setup, verification and rollback.
+
 ## Update Flow
 
 ```mermaid
