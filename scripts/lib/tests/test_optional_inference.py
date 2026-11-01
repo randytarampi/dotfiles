@@ -258,3 +258,64 @@ def test_review_cloudflare_rejects_malformed_account(tmp_path):
     )
     assert result.returncode != 0
     assert "Invalid Cloudflare account ID" in result.stderr
+
+
+def test_review_free_native_router_has_independent_ordered_deployments(tmp_path):
+    result, config, output = _run_review_model_setup(
+        tmp_path,
+        HAS_MISTRAL_KEY="true",
+        REVIEW_FREE_MISTRAL_APPROVED="true",
+        HAS_GROQ_KEY="true",
+        REVIEW_FREE_GROQ_APPROVED="true",
+        HAS_NVIDIA_NIM_KEY="true",
+        HAS_OPENCODE_KEY="true",
+    )
+    assert result.returncode == 0, result.stderr
+    assert output["selected_provider"] == "review-free"
+    assert config["model"] == "review-free/review-free"
+    assert config["provider"]["review-free"]["options"]["baseURL"] == (
+        "http://127.0.0.1:4907/v1"
+    )
+    router_config = json.loads(
+        (tmp_path / "review-free-litellm.json").read_text(encoding="utf-8")
+    )
+    deployments = router_config["model_list"]
+    assert [row["litellm_params"]["model"] for row in deployments] == [
+        "mistral/mistral-small-latest",
+        "groq/openai/gpt-oss-120b",
+        "openai/big-pickle",
+    ]
+    assert [row["litellm_params"]["order"] for row in deployments] == [1, 2, 3]
+    assert all(row["model_name"] == "review-free" for row in deployments)
+    assert all(
+        row["litellm_params"]["api_key"].startswith("os.environ/")
+        for row in deployments
+    )
+    assert router_config["router_settings"]["num_retries"] == 1
+    assert router_config["general_settings"]["master_key"] == (
+        "os.environ/REVIEW_LITELLM_KEY"
+    )
+    assert not any("nvidia" in str(row) for row in deployments)
+
+
+def test_review_free_invalid_cloudflare_account_fails_closed(tmp_path):
+    result, _, _ = _run_review_model_setup(
+        tmp_path,
+        HAS_CLOUDFLARE_KEY="true",
+        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
+        CLOUDFLARE_ACCOUNT_ID="invalid",
+    )
+    assert result.returncode != 0
+    assert "Invalid Cloudflare account ID" in result.stderr
+
+
+def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
+    workflow = (ROOT / ".github/workflows/agentic-review.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "steps.review_model.outputs.selected_provider == 'review-free'" in workflow
+    assert "--host 127.0.0.1 --port 4907" in workflow
+    assert "litellm[proxy]==1.102.1" in workflow
+    assert "RUNNER_TRACKING_ID" in workflow
+    assert "Review with official OpenCode GitHub App" in workflow
+    assert "Stop runner-local LiteLLM" in workflow
