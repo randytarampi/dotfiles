@@ -31,6 +31,19 @@ setup_managed_opencode() {
   # (later PATH dirs); curl/brew are stubbed to protect network/registry.
   local bin="$BATS_TEST_TMPDIR/stubbin"
   mkdir -p "$bin" "$HOME/.opencode/bin" "$HOME/.config/opencode"
+  # Stub nvm.sh so the npm-globals lane succeeds deterministically on any
+  # host (a brew-nvm on the owner machine masked this in local runs).
+  mkdir -p "$HOME/.nvm"
+  cat > "$HOME/.nvm/nvm.sh" <<'NVMSH'
+nvm() {
+  case "$1 $2" in
+    "version default") printf "v22.1.0\n" ;;
+    "ls"*) printf "v22.1.0\nv20.11.0\n" ;;
+    *) return 0 ;;
+  esac
+}
+NVMSH
+  chmod +x "$HOME/.nvm/nvm.sh"
   local tool
   for tool in brew apt-get dnf pacman winget npm uv pipx pi junie ollama omllx curl; do
     printf '#!/bin/sh\nprintf "%%s|%%s\\n" "$(basename "$0")" "$*" >> "%s"\nexit 0\n' "$BATS_TEST_TMPDIR/calls" > "$bin/$tool"
@@ -50,9 +63,6 @@ setup_managed_opencode() {
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
     PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
-  if [ "$status" -ne 0 ]; then
-    printf 'DIAG7 status=%s\nDIAG7 output=%s\nDIAG7 stderr=%s\n' "$status" "$output" "$stderr" >&3
-  fi
 
   [ "$status" -eq 0 ]
   calls="$(cat "$BATS_TEST_TMPDIR/calls")"
