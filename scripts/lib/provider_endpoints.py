@@ -94,6 +94,7 @@ def provider_models(provider):
         models = json.load(file).get("models", {})
     return sorted(models)
 
+
 OPTIONAL_INFERENCE_PROVIDERS = ("groq", "mistral", "cloudflare", "nvidia-nim")
 
 
@@ -110,10 +111,7 @@ def provider_base_url(provider, environ=None):
         return None
     if not re.fullmatch(r"[a-fA-F0-9]{32}", account):
         raise ValueError("CLOUDFLARE_ACCOUNT_ID must be a 32-character hex ID")
-    return (
-        "https://api.cloudflare.com/client/v4/accounts/"
-        f"{account}/ai/v1"
-    )
+    return "https://api.cloudflare.com/client/v4/accounts/" f"{account}/ai/v1"
 
 
 def selected_optional_providers(environ=None):
