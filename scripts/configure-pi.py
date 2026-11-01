@@ -325,8 +325,24 @@ def litellm_cloud_aliases(port="4000"):
         )
         # Explicit empty presence per provider (UNKNOWN discipline): the
         # providers exist, nothing is confirmed — never a silent absence.
-        return {provider: {} for provider in ("google", "openrouter", "opencode", *OPTIONAL_INFERENCE_PROVIDERS)}
-    routes = {provider: {} for provider in ("google", "openrouter", "opencode", *OPTIONAL_INFERENCE_PROVIDERS)}
+        return {
+            provider: {}
+            for provider in (
+                "google",
+                "openrouter",
+                "opencode",
+                *OPTIONAL_INFERENCE_PROVIDERS,
+            )
+        }
+    routes = {
+        provider: {}
+        for provider in (
+            "google",
+            "openrouter",
+            "opencode",
+            *OPTIONAL_INFERENCE_PROVIDERS,
+        )
+    }
     for catalogue_id in available:
         # Pi's provider model id is already the exact LiteLLM wire id. Provider
         # qualification belongs in settings references, not the catalogue.
