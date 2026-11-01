@@ -2402,7 +2402,6 @@ def test_app_key_provisioning_refuses_ambiguous_400_generate(tmp_path, monkeypat
     )
 
 
-@pytest.mark.parametrize("strict", [False, True])
 def test_app_key_provisioning_persists_earlier_key_after_later_error(
     tmp_path, monkeypatch
 ):
@@ -2471,6 +2470,7 @@ def test_litellm_env_sync_refuses_world_readable_canonical_key(tmp_path, unsafe_
     assert key_file.stat().st_mode & 0o777 == unsafe_mode
 
 
+@pytest.mark.parametrize("strict", [False, True])
 def test_app_key_provisioning_refuses_stranded_alias_without_remote_mutation(
     tmp_path, monkeypatch, strict
 ):
