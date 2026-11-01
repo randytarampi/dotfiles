@@ -206,7 +206,7 @@ def test_review_free_uses_credentialed_mistral_primary_without_secret_literal(tm
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-            )
+    )
     assert result.returncode == 0, result.stderr
     assert config["model"] == "mistral/mistral-small-latest"
     assert output["selected_provider"] == "mistral"
@@ -221,7 +221,7 @@ def test_review_free_uses_account_bound_cloudflare_with_key(tmp_path):
         tmp_path,
         HAS_CLOUDFLARE_KEY="true",
         CLOUDFLARE_ACCOUNT_ID=account,
-            )
+    )
     assert result.returncode == 0, result.stderr
     assert output["selected_provider"] == "cloudflare"
     assert config["model"].startswith("cloudflare/")
@@ -255,8 +255,8 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-            HAS_GROQ_KEY="true",
-                HAS_NVIDIA_NIM_KEY="true",
+        HAS_GROQ_KEY="true",
+        HAS_NVIDIA_NIM_KEY="true",
         HAS_OPENCODE_KEY="true",
     )
     assert result.returncode == 0, result.stderr
@@ -292,7 +292,7 @@ def test_review_free_router_includes_credentialed_cloudflare_with_account_url(tm
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-            HAS_CLOUDFLARE_KEY="true",
+        HAS_CLOUDFLARE_KEY="true",
         CLOUDFLARE_ACCOUNT_ID=account,
     )
     assert result.returncode == 0, result.stderr
