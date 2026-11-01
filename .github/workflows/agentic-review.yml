@@ -48,10 +48,10 @@ on:
         required: true
         type: string
       inference_provider:
-        description: "Trusted review-model provider: opencode (default), groq, mistral, cloudflare, nvidia-nim"
+        description: "Trusted review pool: free (default), opencode, groq, mistral, cloudflare, nvidia-nim"
         required: false
         type: string
-        default: "opencode"
+        default: "free"
       allow_nvidia_review:
         description: "Opt in explicitly after confirming NVIDIA NIM development-use terms"
         required: false
@@ -206,21 +206,27 @@ jobs:
               done
             fi
           fi
-          # Provider hints are accepted only for already-authorized review
-          # comments; untrusted PR content cannot select a secret-bearing route.
+          # Only an authorized /opencode comment may select a review pool.
+          # The --pool= syntax never creates GitHub user mentions.
           provider="${DEFAULT_INFERENCE_PROVIDER}"
           if [[ -n "${EVENT_JSON}" ]] && jq -e '.comment != null' >/dev/null <<<"${EVENT_JSON}"; then
             body="$(jq -r '.comment.body // ""' <<<"${EVENT_JSON}")"
-            if [[ "${agents}" == *opencode* ]]; then
-              matches="$(printf '%s\n' "${body}" | grep -Eo '(^|[[:space:]])@(groq|mistral|cloudflare|nim)([[:space:],]|$)' | sed -E 's/^[[:space:]]*@//; s/[[:space:],]*$//' | sort -u || true)"
+            if [[ ",${agents}," == *,opencode,* ]]; then
+              matches="$(printf '%s\n' "${body}" | grep -Eo '(^|[[:space:]])--pool=(free|opencode|groq|mistral|cloudflare|nim|nvidia-nim)([[:space:]]|$)' | sed -E 's/^[[:space:]]*--pool=//; s/[[:space:]]*$//' | sort -u || true)"
               count="$(printf '%s\n' "${matches}" | grep -c . || true)"
               if [[ "${count}" -gt 1 ]]; then
-                echo "Ambiguous OpenCode review provider tags" >&2
+                echo "Ambiguous OpenCode review pool selectors" >&2
                 exit 1
               fi
               if [[ "${count}" -eq 1 ]]; then
                 provider="${matches}"
                 [[ "${provider}" == nim ]] && provider=nvidia-nim
+              fi
+              # Reject unknown --pool values rather than silently invoking a
+              # different model; never expand URLs or shell expressions.
+              if [[ "${body}" == *--pool=* && "${count}" -eq 0 ]]; then
+                echo "Unsupported OpenCode review pool selector" >&2
+                exit 1
               fi
             fi
           fi
@@ -324,10 +330,24 @@ jobs:
               "mistral": ("mistral-small-latest", "https://api.mistral.ai/v1", "MISTRAL_API_KEY", "HAS_MISTRAL_KEY"),
               "nvidia-nim": ("openai/gpt-oss-20b", "https://integrate.api.nvidia.com/v1", "NVIDIA_NIM_API_KEY", "HAS_NVIDIA_NIM_KEY"),
           }
-          requested = os.environ.get("REVIEW_INFERENCE_PROVIDER", "opencode")
-          if requested not in ("opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
+          requested = os.environ.get("REVIEW_INFERENCE_PROVIDER", "free")
+          if requested not in ("free", "opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
               raise SystemExit("Unsupported trusted review inference provider")
           selected = "opencode/big-pickle"
+          # Configuration-time candidate order. These are not a verified
+          # runtime 429 failover chain. The active GitHub action still uses
+          # exactly one primary model per review invocation.
+          if requested == "free":
+              for name, available in (
+                  ("mistral", "HAS_MISTRAL_KEY"),
+                  ("cloudflare", "HAS_CLOUDFLARE_KEY"),
+                  ("groq", "HAS_GROQ_KEY"),
+              ):
+                  if os.environ.get(available) == "true":
+                      requested = name
+                      break
+              else:
+                  requested = "opencode"
           if requested == "cloudflare":
               account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
               if os.environ.get("HAS_CLOUDFLARE_KEY") == "true" and not re.fullmatch(r"[0-9a-fA-F]{32}", account):
