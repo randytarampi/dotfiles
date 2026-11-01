@@ -15,6 +15,7 @@ if str(LIB_DIR) not in sys.path:
 
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
+    is_pinned_spec,
     cli_plugin_specs,
     configured_plugin_specs,
     load_plugin_manifest,
@@ -26,6 +27,7 @@ INSTALL_SCRIPT = (
 )
 CONFIG_SCRIPT = REPO_ROOT / "scripts/configure-opencode.py"
 MANIFEST = REPO_ROOT / "configs/opencode/opencode-plugins.json"
+GITHUB_SPEC_PREFIX = "github:"
 
 
 def load_manifest(path=MANIFEST):
@@ -154,7 +156,10 @@ def _evaluate_plugin_list(node, environment):
     return result
 
 
-<<<<<<< HEAD
+# Marker returned by helper evaluators when the node shape is not theirs.
+_SENTINEL = object()
+
+
 def _evaluate_subscript(node, environment):
     value = _evaluate_expression(node.value, environment)
     if isinstance(node.slice, ast.Slice):
@@ -171,90 +176,86 @@ def _evaluate_package_dict(node, environment):
         if isinstance(key, ast.Constant) and key.value == "package":
             return _evaluate_expression(value, environment)
     return None
-=======
-def _evaluate_expression(node, environment):
-    if isinstance(node, ast.Constant):
-        return node.value
-    if isinstance(node, ast.Name):
-        return environment[node.id]
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-        if node.func.id == "active_plugin_specs":
-            return active_plugin_specs()
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        return _evaluate_expression(node.left, environment) + _evaluate_expression(
-            node.right, environment
-        )
-    if isinstance(node, ast.Subscript):
-        value = _evaluate_expression(node.value, environment)
-        if isinstance(node.slice, ast.Slice):
-            lower = node.slice.lower.value if node.slice.lower else None
-            upper = node.slice.upper.value if node.slice.upper else None
-            return value[lower:upper]
-        return value[node.slice.value]
-    if isinstance(node, (ast.List, ast.Tuple)):
-        return _evaluate_plugin_list(node, environment)
-    if isinstance(node, ast.Dict):
-        # A v2 {package, options} plugin object normalizes to its package
-        # spec, matching the v1 tuple handling above.
-        for key, value in zip(node.keys, node.values):
-            if isinstance(key, ast.Constant) and key.value == "package":
-                return _evaluate_expression(value, environment)
-        return None
+
+
+def _evaluate_method_call(node, environment):
+    """Evaluate the supported attribute-call forms (startswith guards)."""
+    receiver = _evaluate_expression(node.func.value, environment)
+    if (
+        node.func.attr == "startswith"
+        and isinstance(receiver, str)
+        and len(node.args) == 1
+    ):
+        return receiver.startswith(_evaluate_expression(node.args[0], environment))
     raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
->>>>>>> 4ca973c2 (feat(scripts): emit native OpenCode v2 configuration)
 
 
-def _evaluate_expression(node, environment):
-    if isinstance(node, ast.Constant):
-        return node.value
-    if isinstance(node, ast.Name):
-        return environment[node.id]
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+def _evaluate_comprehension(node, environment):
+    """Evaluate the emitter's single-generator list comprehension."""
+    if len(node.generators) != 1:
+        raise ValueError("unsupported plugin comprehension")
+    (generator,) = node.generators
+    if not isinstance(generator.target, ast.Name) or generator.ifs:
+        raise ValueError("unsupported plugin comprehension")
+    result = []
+    for item in _evaluate_expression(generator.iter, environment):
+        scope = dict(environment)
+        scope[generator.target.id] = item
+        result.append(_evaluate_expression(node.elt, scope))
+    return result
+
+
+def _evaluate_call(node, environment):
+    if isinstance(node.func, ast.Name):
         if node.func.id == "active_plugin_specs":
             return active_plugin_specs()
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        return _evaluate_expression(node.left, environment) + _evaluate_expression(
-            node.right, environment
-        )
-    if isinstance(node, ast.Subscript):
-        return _evaluate_subscript(node, environment)
-    if isinstance(node, (ast.List, ast.Tuple)):
-        return _evaluate_plugin_list(node, environment)
-    if isinstance(node, ast.Dict):
-        return _evaluate_package_dict(node, environment)
+        return _SENTINEL
+    if isinstance(node.func, ast.Attribute):
+        return _evaluate_method_call(node, environment)
+    return _SENTINEL
+
+
+def _evaluate_binary_add(node, environment):
+    return _evaluate_expression(node.left, environment) + _evaluate_expression(
+        node.right, environment
+    )
+
+
+def _evaluate_ifexp(node, environment):
     # The emitter derives the plugins array with a list comprehension whose
     # element is a conditional ({package, options} object for plannotator,
     # else the manifest spec). Support exactly that shape.
-    if isinstance(node, ast.IfExp):
-        if _evaluate_expression(node.test, environment):
-            return _evaluate_expression(node.body, environment)
-        return _evaluate_expression(node.orelse, environment)
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        receiver = _evaluate_expression(node.func.value, environment)
-        if (
-            node.func.attr == "startswith"
-            and isinstance(receiver, str)
-            and len(node.args) == 1
-        ):
-            return receiver.startswith(_evaluate_expression(node.args[0], environment))
-    if isinstance(node, ast.ListComp) and len(node.generators) == 1:
-        (generator,) = node.generators
-        if not isinstance(generator.target, ast.Name) or generator.ifs:
-            raise ValueError("unsupported plugin comprehension")
-        result = []
-        for item in _evaluate_expression(generator.iter, environment):
-            scope = dict(environment)
-            scope[generator.target.id] = item
-            result.append(_evaluate_expression(node.elt, scope))
-        return result
+    if _evaluate_expression(node.test, environment):
+        return _evaluate_expression(node.body, environment)
+    return _evaluate_expression(node.orelse, environment)
+
+
+_DISPATCH = (
+    (ast.Constant, lambda node, _env: node.value),
+    (ast.Name, lambda node, env: env[node.id]),
+    ((ast.List, ast.Tuple), _evaluate_plugin_list),
+    (ast.Dict, _evaluate_package_dict),
+    (ast.Subscript, _evaluate_subscript),
+    (ast.IfExp, _evaluate_ifexp),
+    (ast.ListComp, _evaluate_comprehension),
+)
+
+
+def _evaluate_expression(node, environment):
+    for kinds, evaluator in _DISPATCH:
+        if isinstance(node, kinds):
+            return evaluator(node, environment)
+    if isinstance(node, ast.Call):
+        result = _evaluate_call(node, environment)
+        if result is not _SENTINEL:
+            return result
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _evaluate_binary_add(node, environment)
     raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
 
 
-def parse_config_plugins(path):
-    source = Path(path).read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(path))
-    manifest_plugins = configured_plugin_specs()
-    environment = {
+def _plugin_list_environment(manifest_plugins):
+    return {
         "configured_plugins": active_plugin_specs(),
         "plannotator": next(
             spec
@@ -262,20 +263,37 @@ def parse_config_plugins(path):
             if spec.startswith("@plannotator/opencode")
         ),
     }
+
+
+def _plugins_entry_from_dict_node(node, environment):
+    """Return the evaluated plugins list from one {plugins: [...]} literal."""
+    for key, value in zip(node.keys, node.values):
+        if isinstance(key, ast.Constant) and key.value == "plugins":
+            if not isinstance(value, ast.List):
+                raise ValueError("config plugins entry is not a list")
+            plugins = _evaluate_plugin_list(value, environment)
+            # The global config is the only plugin list with entries; the
+            # project mode intentionally emits an empty list.
+            if not plugins:
+                continue
+            return plugins
+    return None
+
+
+def _plugins_entry_from_tree(tree, environment):
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        for key, value in zip(node.keys, node.values):
-            if isinstance(key, ast.Constant) and key.value == "plugins":
-                if not isinstance(value, ast.List):
-                    raise ValueError("config plugins entry is not a list")
-                plugins = _evaluate_plugin_list(value, environment)
-                # The global config is the only plugin list with entries; the
-                # project mode intentionally emits an empty list.
-                if not plugins:
-                    continue
-                return plugins
+        if isinstance(node, ast.Dict):
+            found = _plugins_entry_from_dict_node(node, environment)
+            if found is not None:
+                return found
     raise ValueError('config generator contains no "plugins" entry')
+
+
+def parse_config_plugins(path):
+    source = Path(path).read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    environment = _plugin_list_environment(configured_plugin_specs())
+    return _plugins_entry_from_tree(tree, environment)
 
 
 def _config_consumes_manifest(path=CONFIG_SCRIPT):
@@ -303,6 +321,8 @@ def _config_consumes_manifest(path=CONFIG_SCRIPT):
 
 
 def plugin_name_version(spec):
+    if spec.startswith(GITHUB_SPEC_PREFIX):
+        raise ValueError("Git plugin specs do not use npm name@version syntax")
     name, version = spec.rsplit("@", 1)
     return name, version
 
@@ -312,7 +332,33 @@ def is_plugin_installed(spec, cache_dir=None):
     cache = Path(
         cache_dir or os.environ.get("OPENCODE_CACHE", Path.home() / ".cache/opencode")
     )
-    name, version = plugin_name_version(spec)
+    if spec.startswith(GITHUB_SPEC_PREFIX):
+        if not is_pinned_spec(spec):
+            return False
+        repository, commit = spec.removeprefix(GITHUB_SPEC_PREFIX).split("#", 1)
+        package_name = repository.rsplit("/", 1)[-1]
+        slug = re.sub(r"[^A-Za-z0-9._-]", "-", package_name)
+        prefix = f"git-{slug}-"
+        if not cache.exists():
+            return False
+        for candidate in (cache / "npm").glob(f"{prefix}*"):
+            if not candidate.is_dir():
+                continue
+            for package_json in candidate.glob("*/package.json"):
+                try:
+                    data = json.loads(package_json.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                metadata = json.dumps(data).lower()
+                if data.get("name") == package_name and commit.lower() in metadata:
+                    return True
+        # Floating Git refs have no stable cache identity until OpenCode has
+        # resolved them; never claim installation without proving a match.
+        return False
+    try:
+        name, version = plugin_name_version(spec)
+    except ValueError:
+        return False
     expected_dir = name.replace("/", os.sep) + "@" + version
     for root in (cache / "npm", cache / "packages"):
         if (root / expected_dir).exists():
