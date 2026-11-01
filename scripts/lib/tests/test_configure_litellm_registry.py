@@ -770,6 +770,35 @@ def test_strict_preflight_refuses_second_row_before_any_generation(
     assert (clients / "opencode.key").read_bytes() == before_opencode
 
 
+@pytest.mark.parametrize("strict", [False, True])
+def test_stale_service_env_key_refuses_new_alias(tmp_path, monkeypatch, strict):
+    calls = []
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_OPENCODE_SETUP")
+    monkeypatch.delenv("LITELLM_OPENCODE_KEY", raising=False)
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_OPENCODE_KEY='sk-stale-key'\n", encoding="utf-8")
+    before = service_env.read_bytes()
+    key_file = tmp_path / "clients/opencode.key"
+    assert not key_file.exists()
+
+    def request(url, method, master_key, payload=None):
+        calls.append((url, method))
+        if "/key/list" in url:
+            return {"keys": []}
+        if method == "POST":
+            pytest.fail("stale key preflight must refuse before remote mutation")
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    assert not configure_litellm.provision_app_keys(
+        "master", service_env, strict=strict
+    )
+    assert calls and all(method == "GET" for _, method in calls)
+    assert service_env.read_bytes() == before
+    assert not key_file.exists()
+
+
 @pytest.mark.parametrize(
     "scenario", ["conflicting-sources", "dangling-key", "dangling-directory"]
 )
