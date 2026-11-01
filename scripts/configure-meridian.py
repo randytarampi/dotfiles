@@ -8,8 +8,6 @@ import sys
 import json
 import argparse
 import os
-import shutil
-import subprocess
 import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -24,6 +22,7 @@ from file_utils import backup_file, write_text_file
 from meridian_path import (
     resolve_meridian_plugin_path,
 )  # noqa: E402  # loader bootstraps scripts/lib.
+import opencode_host  # noqa: E402
 
 
 def main():
@@ -44,6 +43,16 @@ def main():
     meridian_port = os.environ.get("MERIDIAN_PORT", MERIDIAN_DEFAULT_PORT)
 
     logger.info("Checking prerequisites...")
+
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    if host_state != "known" or host_major not in (1, 2):
+        if os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1":
+            logger.critical(
+                f"Cannot configure Meridian for unverified OpenCode host ({host_state}, major {host_major})"
+            )
+            sys.exit(1)
+        logger.info("Skipping Meridian setup: OpenCode host is unverified")
+        return
 
     if not os.path.exists(config_path):
         logger.critical(
@@ -79,7 +88,8 @@ def main():
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        plugins = config.get("plugins", config.get("plugin", []))
+        plugin_key = "plugin" if host_major == 1 else "plugins"
+        plugins = config.get(plugin_key, config.get("plugin", []))
         if not isinstance(plugins, list):
             raise ValueError("OpenCode plugins must be an array")
         installed = any(
@@ -92,7 +102,7 @@ def main():
         if not installed:
             plugins.append(meridian_plugin_path)
             config.pop("plugin", None)
-            config["plugins"] = plugins
+            config[plugin_key] = plugins
             if args.dry_run:
                 logger.info(f"Would append Meridian plugin path to {config_path}")
             else:
