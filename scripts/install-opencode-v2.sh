@@ -91,7 +91,8 @@ pinned)
     exit 0
   fi
   ;;
-*) if [[ "$MODE" == "auto" ]] && probe_v2; then
+*)
+  if [[ "$MODE" == "auto" ]] && probe_v2; then
     printf '[INFO] Existing OpenCode v2 install is current; verification-only pass. Latest-stable refresh belongs to the update lane (opencode upgrade + plugin re-check).\n' >&2
     exit 0
   fi
