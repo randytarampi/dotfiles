@@ -1,0 +1,10 @@
+{
+  "models": {
+    "mistral-small-latest": {
+      "name": "Mistral Small (current alias)"
+    },
+    "codestral-latest": {
+      "name": "Codestral (current alias)"
+    }
+  }
+}
