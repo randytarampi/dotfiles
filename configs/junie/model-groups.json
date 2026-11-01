@@ -137,7 +137,7 @@
     },
     "openai": {
       "provider": "openai",
-      "primaryModel": "gpt-6.1-sol",
+      "primaryModel": "gpt-6.1-terra",
       "fasterModel": "gpt-6-luna",
       "fasterProvider": "openai"
     },
