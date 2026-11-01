@@ -47,6 +47,16 @@ on:
         description: "Required immutable 40-hex dotfiles commit containing trusted review assets"
         required: true
         type: string
+      inference_provider:
+        description: "Trusted review-model provider: opencode (default), groq, mistral, cloudflare, nvidia-nim"
+        required: false
+        type: string
+        default: "opencode"
+      allow_nvidia_review:
+        description: "Opt in explicitly after confirming NVIDIA NIM development-use terms"
+        required: false
+        type: boolean
+        default: false
     secrets:
       OPENCODE_API_KEY:
         required: false
@@ -59,6 +69,16 @@ on:
       GEMINI_API_KEY:
         required: false
       OPENROUTER_API_KEY:
+        required: false
+      GROQ_API_KEY:
+        required: false
+      MISTRAL_API_KEY:
+        required: false
+      CLOUDFLARE_API_TOKEN:
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
+      NVIDIA_NIM_API_KEY:
         required: false
       JUNIE_APP_ID:
         required: false
@@ -256,22 +276,70 @@ jobs:
       - name: Install codegraph + build index
         run: bash "${TRUSTED_DOTFILES}/scripts/ci-codegraph.sh"
       - name: Configure read-only OpenCode plan agent
+        id: review_model
+        env:
+          REVIEW_INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
+          REVIEW_ALLOW_NVIDIA: ${{ inputs.allow_nvidia_review }}
+          HAS_GROQ_KEY: ${{ secrets.GROQ_API_KEY != '' }}
+          HAS_MISTRAL_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
+          HAS_CLOUDFLARE_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          HAS_NVIDIA_NIM_KEY: ${{ secrets.NVIDIA_NIM_API_KEY != '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           import os
+          import re
           from pathlib import Path
+
           source = Path(os.environ["TRUSTED_DOTFILES"]) / "configs/opencode/ci/opencode.json"
           config = json.loads(source.read_text())
           config.setdefault("agent", {})["plan"] = {
               "mode": "primary",
               "permission": {"edit": "deny", "bash": "deny", "task": "deny"},
           }
+
+          options = {
+              "groq": ("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "HAS_GROQ_KEY"),
+              "mistral": ("mistral-small-latest", "https://api.mistral.ai/v1", "MISTRAL_API_KEY", "HAS_MISTRAL_KEY"),
+              "nvidia-nim": ("openai/gpt-oss-20b", "https://integrate.api.nvidia.com/v1", "NVIDIA_NIM_API_KEY", "HAS_NVIDIA_NIM_KEY"),
+          }
+          requested = os.environ.get("REVIEW_INFERENCE_PROVIDER", "opencode")
+          if requested not in ("opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
+              raise SystemExit("Unsupported trusted review inference provider")
+          selected = "opencode/big-pickle"
+          if requested == "cloudflare":
+              account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+              if os.environ.get("HAS_CLOUDFLARE_KEY") == "true" and not re.fullmatch(r"[0-9a-fA-F]{32}", account):
+                  raise SystemExit("Invalid Cloudflare account ID")
+              if os.environ.get("HAS_CLOUDFLARE_KEY") == "true":
+                  options["cloudflare"] = (
+                      "@cf/meta/llama-3.1-8b-instruct-fp8",
+                      f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1",
+                      "CLOUDFLARE_API_TOKEN",
+                      "HAS_CLOUDFLARE_KEY",
+                  )
+          if requested == "nvidia-nim" and os.environ.get("REVIEW_ALLOW_NVIDIA") != "true":
+              raise SystemExit("NVIDIA NIM review requires explicit development-use approval")
+          if requested in options:
+              model, base, key, available = options[requested]
+              if os.environ.get(available) == "true":
+                  selected = f"{requested}/{model}"
+                  config.setdefault("provider", {})[requested] = {
+                      "npm": "@ai-sdk/openai-compatible",
+                      "options": {"baseURL": base, "apiKey": "{env:" + key + "}"},
+                      "models": {model: {"name": model}},
+                  }
+              else:
+                  print("::notice::Requested provider credential unavailable; using existing Big Pickle model")
+          config["model"] = selected
           dest = Path(os.environ["RUNNER_TEMP"]) / "opencode-review-config.json"
           dest.write_text(json.dumps(config) + "\n")
           with open(os.environ["GITHUB_ENV"], "a") as output:
               print(f"OPENCODE_CONFIG={dest}", file=output)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"model={selected}", file=output)
           PY
           mkdir -p "${RUNNER_TEMP}/review-no-push"
           printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
@@ -293,8 +361,12 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY: ${{ inputs.inference_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
+          MISTRAL_API_KEY: ${{ inputs.inference_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ inputs.inference_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          NVIDIA_NIM_API_KEY: ${{ inputs.inference_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
         with:
-          model: opencode/big-pickle
+          model: ${{ steps.review_model.outputs.model }}
           agent: plan
           share: "false"
       - name: Remove native OpenCode authentication placeholder
