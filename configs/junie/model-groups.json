@@ -117,7 +117,7 @@
     },
     "openai": {
       "provider": "openai",
-      "primaryModel": "gpt-6.1-sol",
+      "primaryModel": "gpt-6.1-terra",
       "fasterModel": "gpt-6-luna",
       "fasterProvider": "openai"
     },
@@ -149,7 +149,23 @@
       "provider": "ollama-cloud",
       "primaryModel": "mistral-large-4"
     },
-    "free": {}
+    "free": {},
+    "openai-terra": {
+      "provider": "openai",
+      "primaryModel": "gpt-6.1-terra"
+    },
+    "ollama-cloud-mimo": {
+      "provider": "ollama-cloud",
+      "primaryModel": "mimo-v2.6-pro",
+      "fasterModel": "mimo-v2.6-flash",
+      "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-kimi": {
+      "provider": "ollama-cloud",
+      "primaryModel": "kimi-k3",
+      "fasterModel": "kimi-k2.7-code",
+      "fasterProvider": "ollama-cloud"
+    }
   },
   "sharedPresets": {
     "free": "free"
