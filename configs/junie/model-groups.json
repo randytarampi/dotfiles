@@ -185,6 +185,7 @@
       "primaryModel": "kimi-k3",
       "fasterModel": "kimi-k2.7-code",
       "fasterProvider": "ollama-cloud"
+<<<<<<< HEAD
     },
     "groq-gpt-oss": {
       "provider": "groq",
@@ -203,6 +204,22 @@
     "nvidia-nim-gpt-oss": {
       "provider": "nvidia-nim",
       "primaryModel": "openai/gpt-oss-20b"
+    },
+    "openai-terra": {
+      "provider": "openai",
+      "primaryModel": "gpt-6.1-terra"
+    },
+    "ollama-cloud-mimo": {
+      "provider": "ollama-cloud",
+      "primaryModel": "mimo-v2.6-pro",
+      "fasterModel": "mimo-v2.6-flash",
+      "fasterProvider": "ollama-cloud"
+    },
+    "ollama-cloud-kimi": {
+      "provider": "ollama-cloud",
+      "primaryModel": "kimi-k3",
+      "fasterModel": "kimi-k2.7-code",
+      "fasterProvider": "ollama-cloud"
     }
   },
   "sharedPresets": {
