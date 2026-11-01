@@ -379,6 +379,7 @@ jobs:
               print(f"OPENCODE_CONFIG={dest}", file=output)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               print(f"model={selected}", file=output)
+              print(f"selected_provider={requested}", file=output)
           PY
           mkdir -p "${RUNNER_TEMP}/review-no-push"
           printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
@@ -400,10 +401,10 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GROQ_API_KEY: ${{ needs.parse.outputs.inference_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
-          MISTRAL_API_KEY: ${{ needs.parse.outputs.inference_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
-          CLOUDFLARE_API_TOKEN: ${{ needs.parse.outputs.inference_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
-          NVIDIA_NIM_API_KEY: ${{ needs.parse.outputs.inference_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
+          GROQ_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
+          MISTRAL_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.review_model.outputs.selected_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          NVIDIA_NIM_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'nvidia-nim' && inputs.allow_nvidia_review && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
         with:
           model: ${{ steps.review_model.outputs.model }}
           agent: plan
