@@ -17,26 +17,26 @@ def test_resolve_host_known_versions(monkeypatch):
             self.returncode = 0
 
     _stub_probe(monkeypatch, lambda *a, **k: Probe("opencode version 1.19.5\n"))
-    assert opencode_host._probe_host("opencode") == ("known", 1)
+    assert opencode_host._probe_host("opencode") == ("known", 1, "1.19.5")
     _stub_probe(monkeypatch, lambda *a, **k: Probe("2.2.5\n"))
-    assert opencode_host._probe_host("opencode") == ("known", 2)
+    assert opencode_host._probe_host("opencode") == ("known", 2, "2.2.5")
 
 
 def test_resolve_host_absent_and_unknown(monkeypatch):
     monkeypatch.setattr(opencode_host.shutil, "which", lambda name: None)
-    assert opencode_host._probe_host("opencode") == ("absent", None)
+    assert opencode_host._probe_host("opencode") == ("absent", None, None)
 
     def boom(*args, **kwargs):
         raise subprocess.SubprocessError("crashed")
 
     _stub_probe(monkeypatch, boom)
-    assert opencode_host._probe_host("opencode") == ("unknown", None)
+    assert opencode_host._probe_host("opencode") == ("unknown", None, None)
 
     _stub_probe(
         monkeypatch,
         lambda *a, **k: subprocess.CompletedProcess(["opencode"], 1, "", "nope"),
     )
-    assert opencode_host._probe_host("opencode") == ("unknown", None)
+    assert opencode_host._probe_host("opencode") == ("unknown", None, None)
 
 
 def test_native_emission_decision_matrix(capsys):

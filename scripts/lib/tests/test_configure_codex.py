@@ -389,7 +389,7 @@ def test_opencode_launch_consumer_executes_bridge_before_fake_child(tmp_path, so
         fake.write_text(
             "#!/bin/bash\n"
             'if [[ "${LITELLM_OPENCODE_KEY:-}" == "synthetic-opencode-key" ]]; then has_key=true; else has_key=false; fi\n'
-            'printf \'%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" > "$OPENCODE_RECORD"\n',
+            'printf \'%s\\n%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" "$4" > "$OPENCODE_RECORD"\n',
             encoding="utf-8",
         )
         fake.chmod(0o755)
@@ -429,7 +429,20 @@ def test_opencode_launch_consumer_executes_bridge_before_fake_child(tmp_path, so
         )
         record = tmp_path / "record"
     assert result.returncode == 0, result.stderr
-    assert record.read_text().splitlines() == ["true", "serve", "--port", "4096"]
+    # The variables-path fixture records the direct exec (no service flag);
+    # the web branch replays the deploy template, which now serves through
+    # the managed v2 service (`serve --service`).
+    if source == "variables":
+        expected_argv = ["true", "serve", "--port", "4096"]
+    else:
+        expected_argv = [
+            "true",
+            "serve",
+            "--service",
+            "--port",
+            "4096",
+        ]
+    assert record.read_text().splitlines() == expected_argv
     assert "synthetic-opencode-key" not in result.stdout + result.stderr
 
 
