@@ -7,8 +7,11 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
 def load(path):
     return json.loads((ROOT / path).read_text(encoding="utf-8"))
+
 
 def test_terra_and_upstream_translations():
     slim = load("configs/opencode/oh-my-opencode-slim.json")
@@ -28,6 +31,7 @@ def test_terra_and_upstream_translations():
         nested = slim["_tiers"][name]["council"]["presets"][name]
         assert p[name]["council"]["model"] == nested["council"]["model"]
 
+
 def test_junie_candidates_and_allowlists():
     groups = load("configs/junie/model-groups.json")["groups"]
     assert groups["openai"]["primaryModel"] == "gpt-6.1-terra"
@@ -38,11 +42,23 @@ def test_junie_candidates_and_allowlists():
     for provider, models in {
         "openai": ("gpt-6.1-terra",),
         "ollama-cloud": ("mimo-v2.6-pro", "mimo-v2.6-flash"),
-        "opencode": ("glm-5.3-flash-free", "deepseek-v4.1-flash-free", "nemotron-3.5-super-vl-free"),
+        "opencode": (
+            "glm-5.3-flash-free",
+            "deepseek-v4.1-flash-free",
+            "nemotron-3.5-super-vl-free",
+        ),
     }.items():
-        assert set(models) <= set(load(f"configs/opencode/{provider}-models.json")["models"])
+        assert set(models) <= set(
+            load(f"configs/opencode/{provider}-models.json")["models"]
+        )
 
 def test_free_candidates_remain_fail_closed():
     slim = load("configs/opencode/oh-my-opencode-slim.json")
-    assert slim["presets"]["omo-slim-opencode-zen-free"]["observer"]["model"] == "opencode/nemotron-3.5-super-vl-free"
-    assert all(not chain for chain in slim["_tiers"]["omo-slim-opencode-zen-free"]["fallback"].values())
+    assert (
+        slim["presets"]["omo-slim-opencode-zen-free"]["observer"]["model"]
+        == "opencode/nemotron-3.5-super-vl-free"
+    )
+    assert all(
+        not chain
+        for chain in slim["_tiers"]["omo-slim-opencode-zen-free"]["fallback"].values()
+    )
