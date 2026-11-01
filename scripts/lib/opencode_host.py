@@ -26,7 +26,7 @@ import re
 import shutil
 import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-resolved binary.
 
-_VERSION_RE = re.compile(r"(?:^|\s)v?(\d+)\.\d+")
+_VERSION_RE = re.compile(r"(?:^|\s)v?(\d+)\.\d+(?:\.\d+)?")
 
 
 def _probe_host(binary: str) -> tuple[str, int | None, str | None]:
@@ -49,7 +49,7 @@ def _probe_host(binary: str) -> tuple[str, int | None, str | None]:
     for stream in (probe.stdout or "", probe.stderr or ""):
         match = _VERSION_RE.search(stream)
         if match:
-            return ("known", int(match.group(1)), match.group(1))
+            return ("known", int(match.group(1)), match.group(0).strip())
     return ("unknown", None, None)
 
 
