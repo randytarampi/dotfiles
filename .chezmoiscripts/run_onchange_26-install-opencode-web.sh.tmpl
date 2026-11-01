@@ -5,6 +5,9 @@ set -euo pipefail
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/lib/opencode_service.sh: {{ include "scripts/lib/opencode_service.sh" | sha256sum }}
 # scripts/lib/opencode_web.py: {{ include "scripts/lib/opencode_web.py" | sha256sum }}
+# scripts/install-opencode-v2.sh: {{ include "scripts/install-opencode-v2.sh" | sha256sum }}
+# dot_dotfiles/shell/paths.sh: {{ include "dot_dotfiles/shell/paths.sh" | sha256sum }}
+# scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
 # scripts/configure-opencode.py: {{ include "scripts/configure-opencode.py" | sha256sum }}
 # dot_dotfiles/shell/litellm-opencode-env.sh: {{ include "dot_dotfiles/shell/litellm-opencode-env.sh" | sha256sum }}
 
@@ -33,15 +36,14 @@ if [[ "$OS_NAME" == "darwin" ]]; then
     exit 0
   fi
 
-  if ! command -v opencode >/dev/null 2>&1; then
+  OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+  if [[ ! -x "$OPENCODE_BIN" ]]; then
     warn "opencode CLI not found — skipping OpenCode web LaunchAgent"
     exit 0
   fi
 
   PLIST_PATH="$PLIST_DIR/com.opencode.web.plist"
   # launchd requires absolute path — bare "opencode" fails with EX_CONFIG (78)
-  OPENCODE_BIN="$(command -v opencode)"
-
   info "Installing OpenCode web LaunchAgent..."
   mkdir -p "$PLIST_DIR"
 
