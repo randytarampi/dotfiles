@@ -613,6 +613,7 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     is_plus_tier = tier in (
         "plus",
         "plus-anthropic",
+        "omo-slim-fourty-dollars",
         "omo-slim-openai",
         "omo-slim-thirty-dollars",
     )
