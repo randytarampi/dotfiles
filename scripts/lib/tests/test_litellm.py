@@ -2439,9 +2439,7 @@ def test_app_key_provisioning_persists_earlier_key_after_later_error(
 
 
 @pytest.mark.parametrize("unsafe_mode", [0o644, 0o666])
-def test_litellm_env_sync_refuses_world_readable_canonical_key(
-    tmp_path, unsafe_mode
-):
+def test_litellm_env_sync_refuses_world_readable_canonical_key(tmp_path, unsafe_mode):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
     clients = root / "clients"
