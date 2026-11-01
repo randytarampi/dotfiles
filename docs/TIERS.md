@@ -1,5 +1,12 @@
 # Model Tiers & Selection Strategy
 
+
+**Optional provider capacity:** Groq, Mistral, Cloudflare Workers AI and
+NVIDIA NIM are selectable as explicitly enabled inference routes, but they
+are not automatically additional models in the strict-free preset. See
+[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for exact entitlement,
+LiteLLM scope and fallback constraints. The Zen-only tier remains Zen-only.
+
 > Deep reference for tier definitions, model classification, fallback chains, and variant policy.
 > For the quick summary, see the Model Tiers section in [AGENTS.md](../AGENTS.md).
 
