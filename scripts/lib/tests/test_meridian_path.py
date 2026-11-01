@@ -79,6 +79,15 @@ def test_meridian_unprobeable_fails_closed_or_skips_when_gate_off(
     assert json.loads(config.read_text()) == initial
 
 
+def test_meridian_v2_qualification_exact_membership():
+    assert meridian_path.meridian_v2_qualification("2.2.0")
+    assert meridian_path.meridian_v2_qualification("2.0.16")
+    assert meridian_path.meridian_v2_qualification("2.0.21")
+    assert meridian_path.meridian_v2_qualification("2.0.31")
+    assert not meridian_path.meridian_v2_qualification("2.2.5")
+    assert not meridian_path.meridian_v2_qualification("unknown")
+
+
 def make_root(tmp_path, relative):
     path = tmp_path / relative / PLUGIN
     path.parent.mkdir(parents=True)

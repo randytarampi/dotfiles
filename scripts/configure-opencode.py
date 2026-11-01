@@ -100,37 +100,8 @@ def expand_path(path_value: str) -> Path:
 
 
 def build_opencode_server_config() -> dict[str, object] | None:
-    if os.environ.get("DOTFILES_RUN_OPENCODE_WEB_SETUP", "0") != "1":
-        return None
-
-    access_mode = (
-        os.environ.get("CADDY_ACCESS", "localhost").strip().lower() or "localhost"
-    )
-    zones_path = expand_path(DEFAULT_CADDY_ZONES_CONFIG)
-    domains = load_domains(zones_path)
-
-    cors_origins = ["https://localhost"]
-    cors_origins.extend(f"https://{domain}" for domain in domains)
-
-    seen_origins: set[str] = set()
-    cors: list[str] = []
-    for origin in cors_origins:
-        if origin in seen_origins:
-            continue
-        seen_origins.add(origin)
-        cors.append(origin)
-
-    mdns_enabled = access_mode in ("lan", "public")
-    mdns_domain = "opencode.local"
-    if domains:
-        mdns_domain = domains[0]
-
-    return {
-        "hostname": "127.0.0.1",
-        "mdns": mdns_enabled,
-        "mdnsDomain": mdns_domain,
-        "cors": cors,
-    }
+    """Retained compatibility seam; the v2 web service owns this config now."""
+    return None
 
 
 def build_local_provider(provider: str, models: list[dict]) -> dict[str, object] | None:
@@ -1368,7 +1339,6 @@ def main():
             )
         local_ollama = local_provider_block("ollama", models_obj)
 
-    meridian_plugin_path = os.environ.get("MERIDIAN_PLUGIN_PATH", "")
     # include_anthropic governs the anthropic provider block in global mode.
     # Project mode derives providers from the preset instead (see below).
     include_anthropic = args.preset in [
@@ -1376,7 +1346,7 @@ def main():
         "plus-anthropic",
         "omo-slim-forty-dollars",
         "anthropic",
-    ] or bool(meridian_plugin_path)
+    ]
 
     # Allow access to cross-platform temp directories (/tmp, macOS
     # $TMPDIR, Windows %TEMP%) without prompting. These are used by
@@ -1506,9 +1476,6 @@ def main():
                             "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
                         },
                     }
-
-        if meridian_plugin_path:
-            config["plugins"].append(meridian_plugin_path)
 
         # Mirror oh-my-opencode-slim PR #520: disable the full OpenCode
         # built-in agent set replaced by OMOS (build, explore, general, plan).
@@ -1790,9 +1757,6 @@ def main():
         # call after the tier chain so omlx/ fallbacks always resolve).
         for provider, block in local_engine_providers.items():
             register_local_provider(config, provider, block)
-
-        if meridian_plugin_path:
-            config["plugins"].append(meridian_plugin_path)
 
         if not config["mcp"]:
             del config["mcp"]

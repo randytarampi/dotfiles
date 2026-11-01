@@ -8,6 +8,8 @@ import sys
 import json
 import argparse
 import os
+import shutil
+import subprocess
 import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -19,7 +21,9 @@ import logger
 from constants import MERIDIAN_DEFAULT_HOST, MERIDIAN_DEFAULT_PORT
 from cli_helpers import add_common_args
 from file_utils import backup_file, write_text_file
-from meridian_path import (
+from meridian_path import (  # noqa: E402
+    meridian_v2_qualification,
+    resolve_meridian_binary,
     resolve_meridian_plugin_path,
 )  # noqa: E402  # loader bootstraps scripts/lib.
 import opencode_host  # noqa: E402
@@ -52,6 +56,50 @@ def main():
             )
             sys.exit(1)
         logger.info("Skipping Meridian setup: OpenCode host is unverified")
+        return
+    if host_state == "known" and host_major == 2:
+        if os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") != "1":
+            logger.info("DOTFILES_RUN_MERIDIAN_SETUP='0' — skipping Meridian v2 setup")
+            return
+        opencode_bin = shutil.which("opencode")
+        if not opencode_bin:
+            logger.critical("Meridian v2 setup failed: opencode binary is not resolvable")
+            sys.exit(1)
+        host_version = opencode_host.host_version_string()
+        if not host_version or not meridian_v2_qualification(
+            host_version, binary_form="cli"
+        ):
+            reported = host_version or "unknown"
+            logger.critical(
+                f"Meridian v2 setup failed hard: OpenCode host {reported} is not in the upstream qualified CLI set (2.0.16, 2.0.21, 2.0.31); desktop 2.2.0 darwin-arm64 applies only to the desktop-bundled binary. Deployment stops here until Meridian qualifies upstream or the owner decides otherwise."
+            )
+            sys.exit(1)
+        meridian_bin = resolve_meridian_binary()
+        if not meridian_bin:
+            logger.critical("Meridian v2 setup failed hard: meridian binary is not resolvable")
+            sys.exit(1)
+        if args.dry_run:
+            logger.info(
+                "Would run Meridian v2 setup for OpenCode %s using %s",
+                host_version,
+                opencode_bin,
+            )
+            return
+        try:
+            result = subprocess.run(  # nosec B603 - fixed args, resolved Meridian executable.
+                [meridian_bin, "setup", "--v2", "--opencode-bin", opencode_bin],
+                check=False,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            logger.critical("Meridian v2 setup timed out after 300 seconds")
+            sys.exit(1)
+        if result.returncode:
+            logger.critical(
+                "Meridian v2 setup failed with exit code %s", result.returncode
+            )
+            sys.exit(result.returncode)
+        logger.info("Meridian v2 setup completed")
         return
 
     if not os.path.exists(config_path):
@@ -101,7 +149,8 @@ def main():
         )
         if not installed:
             plugins.append(meridian_plugin_path)
-            config.pop("plugin", None)
+            if plugin_key != "plugin":
+                config.pop("plugin", None)
             config[plugin_key] = plugins
             if args.dry_run:
                 logger.info(f"Would append Meridian plugin path to {config_path}")
