@@ -40,6 +40,41 @@ def test_voice_matches_forms_and_preserves_cli_directives():
     assert not module._voice_entry_matches("-team.*")
 
 
+def test_cli_reconcile_preserves_object_root_form(tmp_path, monkeypatch):
+    """The {plugins} object root (probe-verified upstream v2 form) is merged,
+    never converted, and its non-array shape survives the voice entry write."""
+    module = _load("voice_cli_object_root", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "false")
+    monkeypatch.setenv("DOTFILES_USE_LOCAL_OLLAMA", "false")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module,
+        "get_voice_config",
+        lambda *_args, **_kwargs: {"endpoint": "https://v.example", "model": "m"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(
+        module.sys, "argv", ["voice", "--preset", "local", "--no-backup"]
+    )
+    seed = {
+        "$schema": "https://opencode.ai/cli.json",
+        "plugins": ["first", ["foreign", {}]],
+    }
+    (tmp_path / "cli.json").write_text(json.dumps(seed))
+    assert module.main() is None
+    result = json.loads((tmp_path / "cli.json").read_text())
+    assert set(result) == {"$schema", "plugins"}
+    assert result["plugins"][:-1] == ["first", ["foreign", {}]]
+    assert result["plugins"][-1] == {
+        "package": "@bojackduy/opencode-voice@latest",
+        "options": {"endpoint": "https://v.example", "model": "m"},
+    }
+
+
 def test_cli_reconcile_preserves_entries_and_removes_old_tui(tmp_path, monkeypatch):
     module = _load("voice_cli_reconcile", ROOT / "configure-opencode-voice.py")
     monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
@@ -135,6 +170,14 @@ def test_verify_cli_json_parseable_or_absent(tmp_path, monkeypatch, capsys):
     (config / "cli.json").write_text("not json")
     assert module.check_opencode_orphan_files() == 1
     assert "✗ OpenCode cli.json" in capsys.readouterr().out
+    # The object {plugins} root is probe-verified as a valid v2 form.
+    (config / "cli.json").write_text('{"plugins": [{"package": "x@1"}]}')
+    capsys.readouterr()
+    assert module.check_opencode_orphan_files() == 0
+    (config / "cli.json").write_text('{"plugins": ["@slkiser/opencode-quota@4.10.2"]}')
+    capsys.readouterr()
+    assert module.check_opencode_orphan_files() == 0
+    assert "retired quota plugin" in capsys.readouterr().out
     (config / "cli.json").unlink()
     assert module.check_opencode_orphan_files() == 0
 
