@@ -76,7 +76,7 @@ tool calling—not inference evidence gathered by the workflow. Without them,
 the default remains Big Pickle. NIM is never automatically eligible.
 Requests specifying `--pool=<provider>` bypass the `free` qualification
 gate and may be billable, so treat explicit selection as an owner action. This is
-**not** runtime 429 failover or positive proof of zero-charge entitlement.
+**not** positive proof of zero-charge entitlement; the multi-deployment route uses LiteLLM native retry/failover when at least two eligible deployments are available.
 NVIDIA is excluded from the automatic pool. Multiple conflicting selectors
 are rejected. The trusted-ref must be refreshed before new commands go live.
 The GitHub repository or
@@ -96,7 +96,7 @@ trusted input or a malformed Cloudflare account ID fails closed.
 **Hosted GitHub runners cannot reach the workstation's loopback LiteLLM**
 without separately approved network/service deployment. The review job uses
 direct providers only; it does **not** automatically load your local Slim
-preset. Its optional model selection is **not an automatic 429 fallback chain**.
+preset. With at least two eligible `free` deployments, the workflow starts a runner-local loopback LiteLLM proxy (pinned to 1.102.1) and presents the `review-free` model group to the OpenCode action. The proxy uses native LiteLLM ordered deployments, retries and cooldowns for 429 failover; the actual hosted route still needs a controlled integration probe. An explicit provider selection or a single eligible deployment has **no cross-provider fallback**.
 
 ## Fallback and 429 boundaries
 
@@ -145,12 +145,25 @@ credential stores, existing client virtual keys or user-owned profiles.
 A fully verified default `free` pool remains an extension after credentialed tool-call,
 licensing, cost and independent-rate-limit evidence for each account/model.
 The action currently has one primary `with.model`, not the local Slim
-orchestrator/fallback engine. The default `free` pool picks a single primary
-model at job configuration time and **does not yet perform a request-time
-fallback after a 429**. A real hosted fallback requires a separately
-validated host plugin or a runner-local LiteLLM router and synthetic 429
-verification. Do not mark this capability complete based on static tests. A catalogue of names does not provide an ordered
+orchestrator/fallback engine. The default `free` pool builds an ordered list of eligible independent
+routes. With more than one deployment, it boots an ephemeral runner-local
+LiteLLM group, so fallback is handled by LiteLLM rather than custom code.
+Without enough deployments, it uses the single selected model directly or
+Big Pickle when none qualify. **A synthetic provider-429 test and a live
+review publication are required before claiming operational failover.** A catalogue of names does not provide an ordered
 runtime fallback chain for GitHub reviews. Future work should re-use the existing
 evidence-qualified dynamic-free registry or explicitly configure the host's
 supported fallback plugin, without silently enabling paid/development-only
 capacity. The fallback when no preferred provider is configured remains `opencode/big-pickle`.
+
+### Hosted pool operations
+
+The ephemeral LiteLLM proxy binds **only** `127.0.0.1:4907` and uses a
+random, masked, job-scoped master key. Its generated JSON/YAML config contains
+only `os.environ/` credential references (not raw secrets); service output
+stays in runner-local temporary files and the proxy process is stopped after
+the native OpenCode action. New provider keys are used only on approved paths.
+An absent, failed, or unready proxy fails closed; it does not fall back to
+unexpected charged providers. The pool uses LiteLLM 1.102.1's native
+`router_settings` with ranked deployments and cooldowns; avoid claiming
+zero-charge capacity without owner verification of the account entitlement.
