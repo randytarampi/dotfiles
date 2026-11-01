@@ -29,16 +29,43 @@ import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-reso
 _VERSION_RE = re.compile(r"(?<![A-Za-z0-9.+-])v?(\d+\.\d+\.\d+)(?![A-Za-z0-9.+-])")
 
 
+def host_binary(binary: str = "opencode") -> str | None:
+    """Canonical managed-executable resolution.
+
+    Precedence mirrors scripts/lib/opencode_bin.sh: an explicit
+    OPENCODE_MANAGED_BIN override wins; then the managed install directory
+    ($HOME/.opencode/bin/<name> — the official v2 installer's destination);
+    then the PATH fallback. Non-login consumers (chezmoi children, launchd
+    jobs, doctor runs) must never have a stale PATH v1 shadow a managed v2
+    binary.
+    """
+    import os
+
+    env_override = os.environ.get("OPENCODE_MANAGED_BIN")
+    candidates = []
+    if env_override:
+        candidates.append(env_override)
+    managed = os.path.join(os.path.expanduser("~"), ".opencode", "bin", binary)
+    candidates.append(managed)
+    resolved = shutil.which(binary)
+    if resolved:
+        candidates.append(resolved)
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def _probe_host(binary: str) -> tuple[str, int | None, str | None]:
     """Implementation of the host probe; public names stay patchable seams.
 
     Returns (state, major, version-string) where the version string is the
     exact matched stable ``X.Y.Z`` token, when found."""
-    resolved = shutil.which(binary)
+    resolved = host_binary(binary)
     if resolved is None:
         return ("absent", None, None)
     try:
-        probe = subprocess.run(  # nosec B603 - absolute binary from shutil.which; literal args.
+        probe = subprocess.run(  # nosec B603 - absolute binary from host_binary/which; literal args.
             [resolved, "--version"],
             capture_output=True,
             text=True,
