@@ -66,16 +66,20 @@ The reusable `.github/workflows/agentic-review.yml` accepts the trusted
 `/opencode --pool=opencode` select an OpenCode inference pool without
 notifying GitHub user accounts. `/opencode` uses the `free` pool, whose
 configuration-time preference is Mistral, Cloudflare, Groq, then the existing
-OpenCode Big Pickle. A provider is eligible for the default `free` pool **only**
-when its key is present **and** the owner explicitly sets the GitHub Actions
-repository variable `REVIEW_FREE_MISTRAL_APPROVED=true`,
-`REVIEW_FREE_CLOUDFLARE_APPROVED=true`, or
-`REVIEW_FREE_GROQ_APPROVED=true`, respectively. These variables are owner
-assertions of repeatable zero-charge entitlement, permitted usage and tested
-tool calling—not inference evidence gathered by the workflow. Without them,
-the default remains Big Pickle. NIM is never automatically eligible.
-Requests specifying `--pool=<provider>` bypass the `free` qualification
-gate and may be billable, so treat explicit selection as an owner action. This is
+OpenCode Big Pickle. A provider joins the default `free` pool when
+the corresponding GitHub Actions API-key secret is nonempty (Cloudflare also
+needs a valid `CLOUDFLARE_ACCOUNT_ID` repository variable). There are no
+separate `REVIEW_FREE_*` approval variables. When none of the candidate
+provider keys are available, the default remains Big Pickle. NIM is never
+automatically eligible.
+
+**Cost risk:** `free` is the name of the review model pool, not proof
+that all selected providers/models are zero-cost for the configured accounts.
+A present key may permit billable inference and consumption beyond free
+quotas. Provider entitlements and billing must be checked by the account
+owner before enabling the key for unattended reviews.
+Requests specifying `--pool=<provider>` choose that provider directly,
+and may also be billable; treat explicit selection as an owner action. This is
 **not** positive proof of zero-charge entitlement; the multi-deployment route uses LiteLLM native retry/failover when at least two eligible deployments are available.
 NVIDIA is excluded from the automatic pool. Multiple conflicting selectors
 are rejected. The trusted-ref must be refreshed before new commands go live.
@@ -166,7 +170,7 @@ The ephemeral LiteLLM proxy binds **only** `127.0.0.1:4907` and uses a
 random, masked, job-scoped master key. Its generated JSON/YAML config contains
 only `os.environ/` credential references (not raw secrets); service output
 stays in runner-local temporary files and the proxy process is stopped after
-the native OpenCode action. New provider keys are used only on approved paths.
+the native OpenCode action. Provider keys are used only on credentialed routes selected by the workflow.
 An absent, failed, or unready proxy fails closed; it does not fall back to
 unexpected charged providers. The pool uses LiteLLM 1.102.1's native
 `router_settings` with ranked deployments and cooldowns; avoid claiming
