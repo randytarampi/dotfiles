@@ -125,7 +125,7 @@ class TierRegistryTests(unittest.TestCase):
         tiers = set(configure_pi.get_available_tiers())
         self.assertIn("omo-slim-openai", tiers)
         self.assertIn("omo-slim-thirty-dollars", tiers)
-        self.assertIn("omo-slim-fourty-dollars", tiers)
+        self.assertIn("omo-slim-forty-dollars", tiers)
         self.assertIn("omo-slim-opencode-zen-free", tiers)
 
     def test_voice_mapping_for_remote_presets_admits_config_only_routes(self):
@@ -145,12 +145,12 @@ class TierRegistryTests(unittest.TestCase):
             for tier in (
                 "omo-slim-openai",
                 "omo-slim-thirty-dollars",
-                "omo-slim-fourty-dollars",
+                "omo-slim-forty-dollars",
                 "omo-slim-opencode-zen-free",
             ):
                 config = configure_voice.get_voice_config(tier)
                 self.assertIn("model", config)
-                if tier == "omo-slim-fourty-dollars":
+                if tier == "omo-slim-forty-dollars":
                     self.assertEqual(config["model"], "gpt-6-luna")
                     self.assertNotIn("ollama", config["endpoint"])
                 sidecar = config.get("_voice_state", {})
