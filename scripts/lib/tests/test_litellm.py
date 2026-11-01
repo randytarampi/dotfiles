@@ -2414,7 +2414,7 @@ def test_app_key_provisioning_refuses_stranded_alias_without_remote_mutation(
 
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     service_env = tmp_path / "service.env"
-    service_env.write_text("LITELLM_MASTER_KEY='master'\\n")
+    service_env.write_text("LITELLM_MASTER_KEY='master'\n")
     before = service_env.read_bytes()
     assert not CONFIGURE.provision_app_keys(
         "master", service_env, "http://127.0.0.1:4000",
@@ -2438,7 +2438,7 @@ def test_app_key_duplicate_alias_race_refuses_to_delete(tmp_path, monkeypatch):
 
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     service_env = tmp_path / "service.env"
-    service_env.write_text("LITELLM_MASTER_KEY='master'\\n")
+    service_env.write_text("LITELLM_MASTER_KEY='master'\n")
     assert not CONFIGURE.provision_app_keys(
         "master", service_env, "http://127.0.0.1:4000",
         strict=True, enforce_registry_gates=False,
@@ -3273,7 +3273,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
     clients.mkdir(parents=True)
     env_path = root / "service.env"
     (tmp_path / ".env").write_text(
-        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\\n",
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
         encoding="utf-8",
     )
     script = (
@@ -3296,7 +3296,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
     }
     with env_path.open("a", encoding="utf-8") as f:
         for name, value in keys.items():
-            f.write(f"{name}={value}\\n")
+            f.write(f"{name}={value}\n")
     for client, name in litellm_config.APP_KEYS.items():
         path = clients / f"{client}.key"
         path.write_text(keys[name], encoding="utf-8")
@@ -3304,13 +3304,13 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
 
     assert sync().returncode == 0
     persisted = env_path.read_bytes()
-    assert all(f"{name}={value}\\n".encode() in persisted for name, value in keys.items())
+    assert all(f"{name}={value}\n".encode() in persisted for name, value in keys.items())
     assert sync().returncode == 0
     assert env_path.read_bytes() == persisted
     # A missing env entry is restored from the actual canonical client file.
     lost = "LITELLM_VSCODE_KEY"
     env_path.write_text(
-        env_path.read_text().replace(f"{lost}={keys[lost]}\\n", ""),
+        env_path.read_text().replace(f"{lost}={keys[lost]}\n", ""),
         encoding="utf-8",
     )
     assert sync().returncode == 0
@@ -3328,8 +3328,8 @@ def test_litellm_env_sync_refuses_unsafe_client_file_without_writing(tmp_path, u
     clients.mkdir(parents=True)
     env_path = root / "service.env"
     env_path.write_text(
-        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\\n"
-        "LITELLM_VSCODE_KEY='sk-env-key'\\n",
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n"
+        "LITELLM_VSCODE_KEY='sk-env-key'\n",
         encoding="utf-8",
     )
     key = clients / "vscode.key"
