@@ -28,6 +28,7 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **anthropic** | Anthropic only | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI (fallbacks: OpenCode Zen) | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot (fallbacks: OpenCode Zen) | Low-cost OpenAI workflow with Copilot designer |
+| **omo-slim-fourty-dollars** | OpenAI + Anthropic | Upstream-inspired dual-subscription preset (historical spelling preserved) |
 | **omo-slim-opencode-zen-free** | Fresh qualifying OpenCode upstream routes, direct or proxied | Dynamic, capability-checked selection; no request-time cost guarantee |
 | **cohere** | Cohere Direct (`cohere_chat` wire via LiteLLM; Command family) | Anthropic-alternative orchestration — trial-capped (1,000 calls/month), see [Cohere Tier](#cohere-tier-cohere) |
 | **poolside** | Poolside Direct (`openai`-compatible wire via LiteLLM; Laguna 2.1 family) | Code-specialized workflow — free when served by Poolside itself |
@@ -108,16 +109,16 @@ Observers may be Ollama Cloud models.
 
 ### OpenAI Tier (`omo-slim-openai`)
 
-OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md), with local cross-provider fallbacks:
+OpenAI-only preset adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/openai-preset.md), with local cross-provider fallbacks:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `gpt-6.1-sol` | high |
+| orchestrator | `gpt-6.1-sol` | medium |
 | oracle | `gpt-6.1-sol` | high |
 | librarian | `gpt-6-luna` | low |
 | explorer | `gpt-6-luna` | low |
 | designer | `gpt-6-luna` | medium |
-| fixer | `gpt-6-luna` | high |
+| fixer | `gpt-6.1-sol` | low |
 | observer | `openai/gpt-6-luna` | low |
 | council | `gpt-6.1-sol` | high (α sol, β astra, γ luna) |
 
@@ -125,12 +126,12 @@ Fallbacks cross to OpenCode Zen (`big-pickle` for orchestrator/oracle, nemotron-
 
 ### Thirtydollars Tier (`omo-slim-thirty-dollars`)
 
-Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), with local cross-provider fallbacks:
+Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — adopted from [upstream oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/thirty-dollars-preset.md), with local cross-provider fallbacks:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `openai/gpt-6.1-sol` | high |
-| oracle | `openai/gpt-6.1-sol` | high |
+| orchestrator | `openai/gpt-6.1-sol` | medium |
+| oracle | `openai/gpt-6-astra` | high |
 | librarian / explorer | `openai/gpt-6-luna` | low |
 | designer | `google/models/gemini-3.5-flash` | — |
 | fixer | `openai/gpt-6-luna` | medium |
@@ -138,6 +139,31 @@ Same OpenAI anchors as `omo-slim-openai`, with the Copilot Gemini designer — a
 | council | `openai/gpt-6.1-sol` | high (α sol, β astra, γ luna) |
 
 Designer fallback: `opencode/gemini-3.5-flash` (same model via Zen, dodging Copilot quota). The explicit observer uses `openai/gpt-6-luna`. Requires GitHub Copilot auth via `/connect`.
+
+
+### Forty Dollars Tier (`omo-slim-fourty-dollars`)
+
+Adapted from [upstream's $40 preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/forty-dollars-preset.md) without copying upstream credentials, transport assumptions, or the old two-seat-only council shape. The intentionally retained `fourty` spelling matches the requested selector; it can be aliased separately after consumer checks. This is **not** a claim that ChatGPT Plus/Claude Pro subscriptions confer usable direct API keys: both actual routes require valid provider authentication, and ChatGPT OAuth/Meridian entitlement remains a separate concern.
+
+| Role | Model | Variant |
+|---|---|---|
+| orchestrator / designer | `anthropic/claude-opus-5-5` | xhigh / high |
+| oracle | `openai/gpt-6-astra` | max |
+| librarian / explorer | `openai/gpt-6-luna` | low |
+| fixer | `openai/gpt-6.1-sol` | high |
+| observer | `anthropic/claude-haiku-5-5` | low |
+| council | `openai/gpt-6.1-sol` | max; seats Astra / Opus / Luna |
+
+Fallbacks stay within the OpenAI/Anthropic provider boundary; no paid entitlement or real consumer inference has been demonstrated in this repository change.
+
+### November 2026 experimental and capability notes
+
+- `plus` now prefers `gpt-6.1-terra` (medium) for orchestration/design and (low) for observation, with Sol reserved for oracle and synthesis. Its three council seats are Terra / Sol / Astra. The `plus-anthropic` orchestrator likewise uses Terra; the existing Anthropic specialization remains.
+- `omo-slim-openai` follows upstream's Sol/medium orchestrator and Sol/low fixer, while preserving this repository's librarian, observer and gateway fallback conventions. `omo-slim-thirty-dollars` follows upstream's Astra oracle and Sol/medium orchestrator, preserving the existing working Copilot designer ID instead of blindly adopting a different Copilot wire spelling.
+- The Zen-free static *preferences* now name GLM-5.3-Flash Free for orchestration, DeepSeek V4.1 Flash Free for designer/fixer, and Nemotron 3.5 Super VL Free for observation. These are **candidates**, not verified requests. Dynamic materialization still requires fresh endpoint-scoped provenance, free classification, role capabilities and expiry; do not select them from Console screenshots alone. Images and confidential data must not go to contributor endpoints without explicit acceptance.
+- MiMo V2.6 Pro/Flash and the Kimi K3/K2.7 Code paired groups are selectable from Junie only where the exact Ollama Cloud wire IDs and credentials qualify. `fasterModel` means a cheaper/smaller option, not proven latency. LiteLLM twins are generated only when authenticated aliases exist.
+- Existing `pro`, `pro-plus`, `pro-plus-anthropic`, local and Anthropic-only defaults are deliberately unchanged pending comparative task-level probes. A new model's availability is not evidence it outperforms the incumbent in an actual tool loop.
+- **Owner validation:** verify provider catalogue IDs and actual inference on OpenCode/Junie/Pi/LiteLLM, including tools, image input, rate limits, spending, and a rollback by restoring the previous preset. No host-specific inference, credential, or CI verification is claimed here.
 
 ### Cohere Tier (`cohere`)
 
@@ -320,7 +346,7 @@ OpenAI-only preset with gpt-6.1-sol as orchestrator, oracle and council anchor:
 
 | Role | Model | Variant |
 |------|-------|---------|
-| orchestrator | `openai/gpt-6.1-sol` | high |
+| orchestrator | `openai/gpt-6.1-terra` | medium |
 | oracle | `openai/gpt-6.1-sol` | high |
 | librarian / explorer | `openai/gpt-6-luna` | low |
 | designer | `openai/gpt-6-luna` | medium |
