@@ -26,6 +26,7 @@ source "$LIB_DIR/tier_args.sh"
 # scripts/lib/free_route_catalogues.py: {{ include "scripts/lib/free_route_catalogues.py" | sha256sum }}
 # scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # scripts/configure-pi.py: {{ include "scripts/configure-pi.py" | sha256sum }}
+# configs/pi/vibeguard.config.json: {{ include "configs/pi/vibeguard.config.json" | sha256sum }}
 load_env || true
 if [[ "${DOTFILES_RUN_PI_SETUP:-0}" != "1" ]]; then
   info "DOTFILES_RUN_PI_SETUP='${DOTFILES_RUN_PI_SETUP:-0}' — skipping Pi configuration"
