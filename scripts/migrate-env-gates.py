@@ -171,7 +171,6 @@ CADDY_V1_REMOVALS = {
 }
 
 CADDY_V1_REMOVALS_DELETE = {
-    "OPENCODE_SERVER_PASSWORD",
     "OPENCODE_SERVER_USERNAME",
 }
 
@@ -316,6 +315,24 @@ def migrate_env(lines, dry_run=False):
         if old in exported_keys and old != inherit_from
     }
     changes = []
+    old_password = get_active_value(lines, "OPENCODE_SERVER_PASSWORD")
+    new_password = get_active_value(lines, "OPENCODE_PASSWORD")
+    if old_password is not None and new_password is not None:
+        old_value = normalize_env_value(split_inline_comment(old_password)[0])
+        new_value = normalize_env_value(split_inline_comment(new_password)[0])
+        if old_value != new_value:
+            raise ValueError(
+                "OPENCODE_SERVER_PASSWORD conflicts with OPENCODE_PASSWORD; resolve manually"
+            )
+    for key, value in (
+        ("OPENCODE_SERVER_PASSWORD", old_password),
+        ("OPENCODE_PASSWORD", new_password),
+    ):
+        if (
+            value is not None
+            and normalize_env_value(split_inline_comment(value)[0]) == ""
+        ):
+            raise ValueError(f"{key} must not be empty")
     legacy_keys, proxy_key, _policy, legacy_label = LITELLM_PROXY_OR_MIGRATION
     explicit_proxy_value = get_active_value(lines, proxy_key)
     legacy_enabled = any(
@@ -359,11 +376,20 @@ def migrate_env(lines, dry_run=False):
         indent, comment_prefix, key, value = parsed
         newline = "\r\n" if line.endswith("\r\n") else "\n"
         is_commented = comment_prefix.strip().startswith("#")
+        export_prefix = "export " if "export" in comment_prefix.split() else ""
+        if key == "OPENCODE_SERVER_PASSWORD" and not is_commented:
+            if new_password is None:
+                new_lines.append(
+                    f"{indent}{export_prefix}OPENCODE_PASSWORD={value}{newline}"
+                )
+                changes.append("Migrated: OPENCODE_SERVER_PASSWORD → OPENCODE_PASSWORD")
+            else:
+                changes.append("Removed duplicate: OPENCODE_SERVER_PASSWORD")
+            continue
         if key in exported_targets and not is_commented and not comment_prefix:
             comment_prefix = "export "
             line = f"{indent}{comment_prefix}{key}={value}{newline}"
             changes.append(f"Preserved export attribute: {key}")
-        export_prefix = "export " if "export" in comment_prefix.split() else ""
         comment_indent = indent + "# "
 
         if key in legacy_keys and not is_commented:
