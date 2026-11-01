@@ -1558,9 +1558,7 @@ def compute_model_list(environ=None, previous_entries=None):
     # Free-scope LiteLLM catalogues continue to fail closed.
     if scope == "full":
         for provider, base_url in selected_optional_providers(environ).items():
-            wire_provider = (
-                "nvidia_nim" if provider == "nvidia-nim" else provider
-            )
+            wire_provider = "nvidia_nim" if provider == "nvidia-nim" else provider
             key_env = PROVIDER_ENDPOINTS[provider]["apiKeyEnv"]
             for model_id in provider_models(provider):
                 entries.append(
