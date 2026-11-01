@@ -31,6 +31,37 @@ project_spec.loader.exec_module(configure_project)
 
 
 class PresetMigrationTests(unittest.TestCase):
+    def test_opencode_password_migrates_losslessly_and_conflicts_refuse(self):
+        migrated, _ = migrate_env_gates.migrate_env(
+            [
+                "export OPENCODE_SERVER_PASSWORD='quoted-secret' # legacy\n",
+                "CADDY_ACCESS='localhost'\n",
+            ]
+        )
+        self.assertEqual(
+            migrated,
+            [
+                "export OPENCODE_PASSWORD='quoted-secret' # legacy\n",
+                "CADDY_ACCESS='localhost'\n",
+            ],
+        )
+        same, _ = migrate_env_gates.migrate_env(
+            [
+                "OPENCODE_PASSWORD='same'\n",
+                "OPENCODE_SERVER_PASSWORD='same'\n",
+                "CADDY_ACCESS='localhost'\n",
+            ]
+        )
+        self.assertEqual(
+            same, ["OPENCODE_PASSWORD='same'\n", "CADDY_ACCESS='localhost'\n"]
+        )
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            migrate_env_gates.migrate_env(
+                ["OPENCODE_PASSWORD='new'\n", "OPENCODE_SERVER_PASSWORD='old'\n"]
+            )
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            migrate_env_gates.migrate_env(["OPENCODE_SERVER_PASSWORD=''\n"])
+
     def test_split_gates_make_workflow_preserves_independent_values(self):
         splits = [
             (old, new)
