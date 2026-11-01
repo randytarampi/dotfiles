@@ -79,9 +79,9 @@ def active_cli_plugin_specs(path=MANIFEST_PATH, _environ=None):
 
 def is_pinned_spec(spec: str) -> bool:
     if spec.startswith("github:"):
-        return bool(
-            re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[A-Za-z0-9]+", spec)
-        )
+        # Owner/repo (a single "/"), then "#" + a nonempty alphanumeric ref
+        # (floating branch like "main" or an immutable commit SHA).
+        return bool(re.fullmatch(r"github:[^/#]+/[^/#]+#[A-Za-z0-9]+", spec))
     if "@" not in spec:
         return False
     version = spec.rsplit("@", 1)[1]
