@@ -2064,10 +2064,15 @@ def main():
             (computer_plist, "cptr LaunchAgent"),
         ):
             if not path.exists():
-                print(f"  \u2717 {label}: MISSING {path}")
+                # The label identifies the component; the doctor never logs
+                # the service-env file path (it is a credential-bearing file).
+                if path == computer_env:
+                    print(f"  \u2717 {label}: MISSING (under {computer_root})")
+                else:
+                    print(f"  \u2717 {label}: MISSING {path}")
                 exit_code = 1
         if not (computer_venv.is_file() and os.access(computer_venv, os.X_OK)):
-            print(f"  \u2717 cptr executable: not executable {computer_venv}")
+            print(f"  \u2717 cptr executable: not executable (under {computer_root})")
             exit_code = 1
         if computer_data.exists() and (computer_data.stat().st_mode & 0o777) != 0o700:
             print("  \u2717 cptr data directory: expected mode 0o700")
