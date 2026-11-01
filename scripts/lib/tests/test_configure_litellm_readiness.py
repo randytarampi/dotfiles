@@ -213,6 +213,43 @@ def test_generation_requires_valid_runtime_only_when_emitting_enabled_lanes(
         )
 
 
+@pytest.mark.parametrize(("provisioned", "expected_exit"), [(True, 0), (False, 1)])
+def test_normal_setup_propagates_client_key_provisioning_status(
+    tmp_path, monkeypatch, provisioned, expected_exit
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_OPENAI_SERVICE_LANES", "0")
+    monkeypatch.setattr(CONFIGURE, "load_env", lambda: True)
+    monkeypatch.setattr(CONFIGURE, "_database_url_configured", lambda: True)
+    monkeypatch.setattr(CONFIGURE, "validate_service_lane_runtime", lambda: False)
+    monkeypatch.setattr(
+        CONFIGURE.litellm_config, "read_previous_entries", lambda *_: []
+    )
+    monkeypatch.setattr(CONFIGURE, "compute_model_list", lambda **_: [])
+    monkeypatch.setattr(CONFIGURE.litellm_config, "last_generation_notes", [])
+    monkeypatch.setattr(CONFIGURE, "write_config", lambda *_, **__: False)
+    monkeypatch.setattr(
+        CONFIGURE.litellm_config, "write_previous_entries", lambda *args: None
+    )
+    monkeypatch.setattr(CONFIGURE, "_persist_generation_notes", lambda *_: None)
+    monkeypatch.setattr(
+        CONFIGURE, "_refresh_rates_snapshot", lambda *_, **__: "unchanged"
+    )
+    calls = []
+
+    def provision(*args, **kwargs):
+        calls.append((args, kwargs))
+        return provisioned
+
+    monkeypatch.setattr(CONFIGURE, "provision_app_keys", provision)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+
+    assert CONFIGURE.main() == expected_exit
+    assert len(calls) == 1
+    assert calls[0][1]["dry_run"] is False
+
+
 def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monkeypatch):
     service_env = tmp_path / "service.env"
     service_env.write_text(
