@@ -382,7 +382,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | 0 | Activate the MongoDB skills category globally |
 | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | 0 | Activate the Prisma skills category globally |
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper.cpp, sox, piper-tts, models) |
-| `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE` | 0 | Script 07 opt-in refresh: runs `opencode plugin update` per installed spec (with resolved-version logging) instead of the default non-mutating `opencode plugin check` |
+| `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE` | 0 | Script 07 opt-in refresh: runs `opencode plugin update` per installed spec in addition to the default non-mutating `opencode plugin check` (check runs always and fails closed when it cannot resolve a concrete version) |
 
 ## Dependency Ordering
 
