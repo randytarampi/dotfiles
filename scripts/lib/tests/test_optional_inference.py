@@ -298,6 +298,29 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     assert not any("nvidia" in str(row) for row in deployments)
 
 
+def test_review_free_router_includes_approved_cloudflare_with_account_url(tmp_path):
+    account = "c" * 32
+    result, config, output = _run_review_model_setup(
+        tmp_path,
+        HAS_MISTRAL_KEY="true",
+        REVIEW_FREE_MISTRAL_APPROVED="true",
+        HAS_CLOUDFLARE_KEY="true",
+        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
+        CLOUDFLARE_ACCOUNT_ID=account,
+    )
+    assert result.returncode == 0, result.stderr
+    assert output["selected_provider"] == "review-free"
+    assert config["model"] == "review-free/review-free"
+    rows = json.loads(
+        (tmp_path / "review-free-litellm.json").read_text(encoding="utf-8")
+    )["model_list"]
+    assert len(rows) == 2
+    assert rows[1]["litellm_params"]["model"].startswith("cloudflare/")
+    assert rows[1]["litellm_params"]["api_base"].endswith(
+        f"/accounts/{account}/ai/v1"
+    )
+
+
 def test_review_free_invalid_cloudflare_account_fails_closed(tmp_path):
     result, _, _ = _run_review_model_setup(
         tmp_path,
