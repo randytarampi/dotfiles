@@ -340,3 +340,4 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert "RUNNER_TRACKING_ID" in workflow
     assert "Review with official OpenCode GitHub App" in workflow
     assert "Stop runner-local LiteLLM" in workflow
+    assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
