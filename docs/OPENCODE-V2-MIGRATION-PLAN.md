@@ -1,7 +1,7 @@
 # OpenCode v2 — one-way migration handoff
 
 **Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).
-**Status:** Phased implementation is underway across PRs #133–#136; the actual one-way host cutover and owner-controlled live validation remain outstanding. No host proof is claimed here.
+**Status:** Phased implementation complete via PRs #133–#137 (2026-11-01): quota retirement, native v2 config/installer, plugin stack + voice/cli.json, Meridian/services/ACP hardening, optional Pi parity. This cutover change removes the package-manager channel and hands the host to the official install script; Meridian's fail-closed qualification rule applies at every deploy (the one-time 2.2.0 qualification install is a machine-cutover step, per the cutover runbook; see the maintainer-reported issue-1094 workaround: run `meridian setup --v2` once on 2.2.0, then update normally).
 **Author:** ChatGPT (GPT-6), research and implementation foundation. The initial draft received an independent OpenCode reviewer-agent engineering review of the quota removal and plan (PR #133, 2026-10-31); live host tests remain unperformed.
 
 ## Decisions
