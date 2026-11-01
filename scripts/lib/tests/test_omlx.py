@@ -3382,10 +3382,23 @@ def test_standalone_tier_switch_wraps_selections_and_direct_mode_is_canonical(
     # Disabled free definitions are not exported as selectable tiers.
     assert "free" not in output["presets"]
     assert "omo-slim-opencode-zen-free" not in output["presets"]
-    # Count changes when tier definitions are added; preserve route wrapping
-    # and ensure no direct cloud model escapes proxy qualification.
-    assert routed
+    # This fixture advertises every configured gateway alias. Its exact
+    # selection count guards against partial deletion while the active-tier
+    # assertions verify the intended producer-to-consumer model identities.
+    assert len(routed) == 92
     assert unwrapped == []
+    assert "pro" in output["presets"]
+    assert "pro" in output["council"]["presets"]
+    for role, selected in deployed_slim["presets"]["pro"].items():
+        if not isinstance(selected, dict) or "model" not in selected:
+            continue
+        expected = f"litellm/{selected['model']}"
+        assert output["presets"]["pro"][role]["model"] == expected
+    for seat in ("alpha", "beta", "gamma"):
+        selected = deployed_slim["council"]["presets"]["pro"][seat]["model"]
+        assert output["council"]["presets"]["pro"][seat]["model"] == (
+            f"litellm/{selected}"
+        )
     assert output["skills"] == ["frontend/design"]
 
 
