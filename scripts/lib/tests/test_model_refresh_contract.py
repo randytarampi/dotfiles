@@ -53,6 +53,7 @@ def test_junie_candidates_and_allowlists():
             load(f"configs/opencode/{provider}-models.json")["models"]
         )
 
+
 def test_free_candidates_remain_fail_closed():
     slim = load("configs/opencode/oh-my-opencode-slim.json")
     assert (
