@@ -553,7 +553,7 @@ Use `scripts/run-local-review.sh --help` for the local pre-push review runner; d
 | **anthropic** | Anthropic only (`sonnet-5-5`, `fable-5-1`, `haiku-5-5`, `opus-5-5`) | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI only | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-fourty-dollars** | OpenAI + Anthropic | Opt-in upstream-inspired mixed-provider workflow |
+| **omo-slim-forty-dollars** | OpenAI + Anthropic | Opt-in upstream-inspired mixed-provider workflow |
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
 | **cohere** | Direct Cohere via LiteLLM | Command-family trial-capped workflow |
 | **poolside** | Direct Poolside via LiteLLM | Laguna-family coding workflow |
