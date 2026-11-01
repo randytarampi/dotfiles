@@ -88,6 +88,10 @@ not a secret. NVIDIA's `--pool=nim` option also requires explicit trusted
 Do not inject
 them into untrusted PR files.
 
+The official OpenCode GitHub App disables project-level OpenCode config and
+plugins on the untrusted PR checkout so the trusted read-only plan settings
+cannot be overridden by PR-owned code. The reviewer can still read the source.
+
 The official OpenCode GitHub App still publishes with OIDC, using its
 read-only `plan` agent, trusted-ref assets, and no-push guard. A missing
 selected credential uses the previous `opencode/big-pickle` model. Invalid
