@@ -113,14 +113,16 @@ def test_plugin_check_failure_is_fail_closed():
     source = (
         ROOT.parent / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
     ).read_text()
-    check_block = source.split('if output="$(opencode plugin check', 1)[1].split(
+    check_block = source.split('if output="$("${OC_MANAGED}" plugin check', 1)[1].split(
         "done", 1
     )[0]
     assert "PLUGIN_INSTALL_FAILED=1" in check_block
     assert "check failed" not in check_block.split("else", 1)[0]
-    assert 'opencode plugin update "${plugin}"' in source
+    assert '"${OC_MANAGED}" plugin update "${plugin}"' in source
     assert 'if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then' in source
-    assert "PLUGIN_INSTALL_FAILED=1" in check_block
+    # Every plugin subcommand runs through the managed-binary resolver.
+    assert 'opencode plugin add "${plugin}"' not in source
+    assert "opencode_managed_bin" in source
 
 
 def test_plugin_parser_accepts_concrete_version_only():

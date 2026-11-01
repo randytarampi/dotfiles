@@ -84,7 +84,7 @@ def parse_install_cli_plugins(path, manifest_path=MANIFEST):
         or "CLI_PLUGIN_SPECS" not in text
     ):
         raise ValueError("install template does not consume CLI plugin manifest")
-    if 'opencode plugin add "${plugin}"' not in text:
+    if '"${OC_MANAGED}" plugin add "${plugin}"' not in text:
         raise ValueError("install template does not add CLI plugins")
     cli_sites = [line for line in text.splitlines() if "CLI_PLUGIN_SPECS+=(" in line]
     if len(cli_sites) != 1 or cli_sites[0].strip() != 'CLI_PLUGIN_SPECS+=("$plugin")':
@@ -262,6 +262,10 @@ def _plugin_list_environment(manifest_plugins):
             for spec in manifest_plugins
             if spec.startswith("@plannotator/opencode")
         ),
+        # Machine-state-dependent entries (Meridian registration preserved by
+        # the generator from the on-disk config) are opaque to this static
+        # AST check; the manifest contract is what is asserted here.
+        "meridian_preserved": [],
     }
 
 

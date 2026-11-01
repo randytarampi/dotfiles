@@ -229,6 +229,43 @@ def _convert_mcp_server_entry(name, entry):
     return server
 
 
+OPENCODE_CONFIG_FILE_NAME = "opencode.json"
+
+
+def meridian_preserved_entries(config_dir_path):
+    """Return Meridian plugin entries from the on-disk config worth
+    preserving across regeneration.
+
+    `meridian setup --v2` owns its OpenCode registration outside this repo's
+    manifest; a wholesale plugins rebuild would erase it on every generate.
+    Preserved exactly as found (string path or `{package}` object). Opt-out is
+    respected: when the prior config has no Meridian entry, or only a
+    disable-directive form (`-@rynfar/meridian...`), nothing is synthesized.
+    Unreadable prior config = no preservation (additive feature; fail open).
+    """
+    entries = []
+    try:
+        with open(
+            os.path.join(config_dir_path, OPENCODE_CONFIG_FILE_NAME), encoding="utf-8"
+        ) as f:
+            prior = json.load(f)
+    except (OSError, ValueError):
+        return entries
+    prior_plugins = prior.get("plugins", prior.get("plugin", []))
+    if not isinstance(prior_plugins, list):
+        return entries
+    for entry in prior_plugins:
+        if isinstance(entry, str):
+            value = entry
+        elif isinstance(entry, dict):
+            value = entry.get("package", "")
+        else:
+            value = None
+        if isinstance(value, str) and "@rynfar/meridian" in value:
+            entries.append(entry)
+    return entries
+
+
 def _native_mcp_config(mcp_config):
     """Convert the merged v1 flat MCP map to the native v2 mcp.servers shape."""
     if isinstance(mcp_config.get("servers"), dict):
@@ -847,7 +884,7 @@ def prepare_tier_candidate(
     ``apply_litellm_slim_gate`` regression tracking.
     """
     with tempfile.TemporaryDirectory(prefix="opencode-tier-") as staging_dir:
-        staged_input = Path(staging_dir) / "opencode.json"
+        staged_input = Path(staging_dir) / OPENCODE_CONFIG_FILE_NAME
         fd, temporary = tempfile.mkstemp(prefix=".opencode.", dir=staging_dir)
         try:
             os.fchmod(fd, 0o600)
@@ -1193,7 +1230,7 @@ def main():
     mcp_config = {}
     # When --skip mcps, preserve existing MCP config instead of erasing it
     if args.mode == "global" and "mcps" in skipped:
-        _output_path = os.path.join(config_dir_path, "opencode.json")
+        _output_path = os.path.join(config_dir_path, OPENCODE_CONFIG_FILE_NAME)
         if os.path.exists(_output_path):
             try:
                 with open(_output_path, "r", encoding="utf-8") as _f:
@@ -1513,6 +1550,13 @@ def main():
                 f"'{args.preset}' ({e}); using legacy global provider rules."
             )
             global_needed_providers = set()
+        # Machine-state-dependent Meridian registration (meridian setup --v2
+        # is not manifest-owned); filtered against the manifest entries.
+        meridian_preserved = [
+            entry
+            for entry in meridian_preserved_entries(config_dir_path)
+            if entry not in configured_plugins
+        ]
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
@@ -1545,6 +1589,8 @@ def main():
                     )
                     for plugin_spec in configured_plugins[1:]
                 ],
+                # Upstream Meridian registration, preserved verbatim.
+                *meridian_preserved,
             ],
             "agents": {
                 "build": {"disabled": True},
@@ -1809,7 +1855,7 @@ def main():
     config.pop("logLevel", None)
 
     # Prepare both managed outputs before either one is installed.
-    output_path = os.path.join(config_dir_path, "opencode.json")
+    output_path = os.path.join(config_dir_path, OPENCODE_CONFIG_FILE_NAME)
 
     if args.mode == "project":
         try:

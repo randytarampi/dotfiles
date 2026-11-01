@@ -88,7 +88,7 @@ def main():
         if os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") != "1":
             logger.info("DOTFILES_RUN_MERIDIAN_SETUP='0' — skipping Meridian v2 setup")
             return
-        opencode_bin = shutil.which("opencode")
+        opencode_bin = opencode_host.host_binary()
         if not opencode_bin:
             logger.critical(
                 "Meridian v2 setup failed: opencode binary is not resolvable"
