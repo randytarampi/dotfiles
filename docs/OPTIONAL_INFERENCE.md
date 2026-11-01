@@ -66,7 +66,16 @@ The reusable `.github/workflows/agentic-review.yml` accepts the trusted
 `/opencode --pool=opencode` select an OpenCode inference pool without
 notifying GitHub user accounts. `/opencode` uses the `free` pool, whose
 configuration-time preference is Mistral, Cloudflare, Groq, then the existing
-OpenCode Big Pickle when none of those credentials are present. This is
+OpenCode Big Pickle. A provider is eligible for the default `free` pool **only**
+when its key is present **and** the owner explicitly sets the GitHub Actions
+repository variable `REVIEW_FREE_MISTRAL_APPROVED=true`,
+`REVIEW_FREE_CLOUDFLARE_APPROVED=true`, or
+`REVIEW_FREE_GROQ_APPROVED=true`, respectively. These variables are owner
+assertions of repeatable zero-charge entitlement, permitted usage and tested
+tool calling—not inference evidence gathered by the workflow. Without them,
+the default remains Big Pickle. NIM is never automatically eligible.
+Requests specifying `--pool=<provider>` bypass the `free` qualification
+gate and may be billable, so treat explicit selection as an owner action. This is
 **not** runtime 429 failover or positive proof of zero-charge entitlement.
 NVIDIA is excluded from the automatic pool. Multiple conflicting selectors
 are rejected. The trusted-ref must be refreshed before new commands go live.
@@ -136,7 +145,11 @@ credential stores, existing client virtual keys or user-owned profiles.
 A fully verified default `free` pool remains an extension after credentialed tool-call,
 licensing, cost and independent-rate-limit evidence for each account/model.
 The action currently has one primary `with.model`, not the local Slim
-orchestrator/fallback engine. A catalogue of names does not provide an ordered
+orchestrator/fallback engine. The default `free` pool picks a single primary
+model at job configuration time and **does not yet perform a request-time
+fallback after a 429**. A real hosted fallback requires a separately
+validated host plugin or a runner-local LiteLLM router and synthetic 429
+verification. Do not mark this capability complete based on static tests. A catalogue of names does not provide an ordered
 runtime fallback chain for GitHub reviews. Future work should re-use the existing
 evidence-qualified dynamic-free registry or explicitly configure the host's
 supported fallback plugin, without silently enabling paid/development-only
