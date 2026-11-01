@@ -28,18 +28,21 @@ catalogue listing alone does not prove inference access. Do not treat generated
 classification as runtime cost enforcement. Request-time admission, entitlement,
 privacy and paid-route-spy evidence remain outside this mechanism (issue #87).
 
-Three upstream preset definitions are retained in the shared registry; two are
-selectable. Definitions are adopted from the upstream oh-my-opencode-slim docs —
-[openai-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md),
-[thirty-dollars-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/thirty-dollars-preset.md), and
-[opencode-zen-free-preset](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-zen-free-preset.md) —
-with local deviations noted in [docs/TIERS.md](TIERS.md):
+Four upstream-inspired preset families are represented in the shared registry:
+[OpenAI](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/openai-preset.md),
+[$30](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/thirty-dollars-preset.md),
+[$40](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/presets/forty-dollars-preset.md),
+and [Zen Free](https://github.com/alvinunreal/oh-my-opencode-slim/tree/master/docs/presets).
+The first three are selectable with the required provider credentials; Zen Free is
+evidence-gated and may be withheld when fresh qualifying routes are unavailable.
+Local deviations are documented in [docs/TIERS.md](TIERS.md):
 
 | Preset | Providers | Observer | Fallback policy |
-|--------|-----------|----------|------------------|
-| `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | Explicit (`openai/gpt-6-luna`) | OpenCode Zen (`big-pickle` orchestrator, `nemotron-3.5-lightning-free` other roles) |
-| `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | Explicit (`openai/gpt-6-luna`) | OpenCode Zen; Copilot designer falls back to Zen Gemini |
-| `omo-slim-opencode-zen-free` (disabled) | Archived OpenCode Zen definitions; not selectable | Archived (`opencode/muse-spark-1.3-contributor-free`) | Empty fallback chains; availability unqualified |
+|--------|-----------|----------|-----------------|
+| `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | `openai/gpt-6-luna` | OpenCode Zen |
+| `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | `openai/gpt-6-luna` | OpenCode Zen; Copilot designer may fall back to Zen Gemini |
+| `omo-slim-fourty-dollars` | OpenAI + Anthropic | `anthropic/claude-haiku-5-5` | Explicit OpenAI/Anthropic alternatives |
+| `omo-slim-opencode-zen-free` (qualification required) | OpenCode Zen | `opencode/nemotron-3.5-super-vl-free` candidate | Empty fallback chains; selection fails closed without evidence |
 
 All presets define an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer; the hook strips them from the main conversation
@@ -50,13 +53,12 @@ alternative is `/connect`, which stores authentication in OpenCode's
 `auth.json`; a key is not required for the generated provider block. GitHub
 Copilot authentication uses the `/connect` GitHub device flow.
 
-The archived, disabled Zen free preset names `muse-spark-1.3-contributor-free`
-for both orchestrator and image-tested observer, `mimo-v2.6-flash-free` for
-text-oriented designer work, and `nemotron-3.5-lightning-free` for fixer.
-MiMo's image path failed or timed out in a live probe, despite catalogue
-metadata advertising image input; do not use it as the observer. The
-contributor-free tier means Meta may train on prompts, images and completions;
-do not use this preset for confidential work. Free-tier
+The current Zen free candidates are GLM-5.3 Flash for orchestration, DeepSeek
+V4.1 Flash for design/fixing, and Nemotron 3.5 Super VL for observation.
+These names alone do not demonstrate authenticated inference, image support,
+or guaranteed zero cost. Earlier MiMo image probes failed or timed out;
+Muse contributor routes may train on submitted prompts or images and are
+not current defaults. Free-tier
 IDs churn: `x-preview-f-free` and `hy3-free` were removed between 2026-08 and
 2026-09.
 
