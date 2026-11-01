@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the pinned VibeGuard repository audit without enabling fixes.
+"""Optionally run a read-only VibeGuard repository audit without enabling fixes.
 
 Uses npx with @taehwandev/vibeguard@26.40.1 for a reproducible pilot. Bump
 that exact pin only after reviewing and validating a newer upstream release.
