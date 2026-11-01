@@ -52,7 +52,7 @@ def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
     ("opencode_script", "npx_exit", "update_gate", "should_pass"),
     [
         (
-            "if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then echo '@tarquinen/opencode-dcp 3.2.0 (current)'; exit 0; fi\n",
+            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'opencode-vibeguard-v2 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi\n',
             "0",
             "0",
             True,
@@ -71,7 +71,7 @@ def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
             False,
         ),
         (
-            "if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then echo '@tarquinen/opencode-dcp 3.2.0 (latest)'; exit 0; fi\n",
+            'if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\nif [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo \'opencode-vibeguard-v2 3.2.0 (current)\' ;; *) echo "${3%@*} 3.2.0 (latest)" ;; esac; exit 0; fi\n',
             "0",
             "0",
             True,
@@ -134,6 +134,28 @@ def test_plugin_parser_accepts_concrete_version_only():
     assert parser.findall("opencode-dcp (check failed)") == []
     assert parser.findall("opencode-dcp (check") == []
     assert parser.findall("opencode-dcp 3.2.1 (latest)") == [("opencode-dcp", "3.2.1")]
+
+
+def test_successful_update_recheck_uses_same_current_line_parser(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then case "$3" in github:*) echo 'opencode-vibeguard-v2 3.2.0 (current)' ;; *) echo "${3%@*} 3.2.0 (current)" ;; esac; exit 0; fi
+if [[ $1 == plugin && $2 == update ]]; then exit 0; fi
+"""
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "did not converge" not in result.stdout + result.stderr
+
+
+def test_parser_failure_is_reported_intentionally_not_by_pipefail(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then echo "${3%@*} garbled response"; exit 0; fi
+"""
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "parser failed" in combined
+    assert "pipefail" not in combined
+    assert "unbound variable" not in combined
 
 
 def test_git_cache_probe_layout_detectable(tmp_path):
