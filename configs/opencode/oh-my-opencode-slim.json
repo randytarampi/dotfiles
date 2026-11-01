@@ -263,7 +263,7 @@
     "plus": {
       "orchestrator": {
         "model": "openai/gpt-6.1-terra",
-        "variant": "medium",
+        "variant": "high",
         "skills": [
           "*"
         ],
@@ -328,7 +328,7 @@
     "plus-anthropic": {
       "orchestrator": {
         "model": "openai/gpt-6.1-terra",
-        "variant": "medium",
+        "variant": "high",
         "skills": [
           "*"
         ],
@@ -1015,7 +1015,8 @@
       },
       "plus": {
         "alpha": {
-          "model": "openai/gpt-6.1-terra"
+          "model": "openai/gpt-6.1-terra",
+          "variant": "high"
         },
         "beta": {
           "model": "openai/gpt-6.1-sol"
@@ -1029,7 +1030,8 @@
           "model": "anthropic/claude-fable-5-1"
         },
         "beta": {
-          "model": "openai/gpt-6.1-terra"
+          "model": "openai/gpt-6.1-terra",
+          "variant": "high"
         },
         "gamma": {
           "model": "openai/gpt-6.1-sol"
@@ -1294,7 +1296,8 @@
         "presets": {
           "plus": {
             "alpha": {
-              "model": "openai/gpt-6.1-terra"
+              "model": "openai/gpt-6.1-terra",
+              "variant": "high"
             },
             "beta": {
               "model": "openai/gpt-6.1-sol"
@@ -1343,7 +1346,8 @@
               "model": "anthropic/claude-fable-5-1"
             },
             "beta": {
-              "model": "openai/gpt-6.1-terra"
+              "model": "openai/gpt-6.1-terra",
+              "variant": "high"
             },
             "gamma": {
               "model": "openai/gpt-6.1-sol"
