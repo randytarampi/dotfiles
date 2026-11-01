@@ -623,9 +623,7 @@ def _provisioning_preflight(records, service_env_path, enforce_registry_gates, s
     for row in provisioning_rows:
         alias, env_name = row["client"], row["env_name"]
         client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
-        issue = _client_key_preflight_issue(
-            client_key_path, env_name, service_env_path
-        )
+        issue = _client_key_preflight_issue(client_key_path, env_name, service_env_path)
         if issue:
             logger.error("LiteLLM client %s preflight refused: %s", alias, issue)
             refusal = refusal or issue

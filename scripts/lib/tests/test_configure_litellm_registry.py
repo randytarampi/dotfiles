@@ -780,9 +780,7 @@ def test_preflight_rejects_conflicting_or_unsafe_canonical_sources(
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
     _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_OPENCODE_SETUP")
     service_env = tmp_path / "service.env"
-    service_env.write_text(
-        "LITELLM_OPENCODE_KEY='sk-service-key'\n", encoding="utf-8"
-    )
+    service_env.write_text("LITELLM_OPENCODE_KEY='sk-service-key'\n", encoding="utf-8")
     clients = tmp_path / "clients"
     key_file = clients / "opencode.key"
     if scenario == "dangling-directory":
