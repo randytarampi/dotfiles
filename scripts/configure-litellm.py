@@ -883,9 +883,7 @@ def _provision_app_keys(
             # Remote key generation is irreversible without its plaintext.
             # Preserve successful earlier results even when a later row fails.
             _persist_generated_app_keys(found, provisioning_rows, service_env_path)
-            _write_provisioned_client_keys(
-                provisioning_rows, service_env_path, dry_run
-            )
+            _write_provisioned_client_keys(provisioning_rows, service_env_path, dry_run)
         if strict and not _verify_provisioned_keys(
             provisioning_rows, api_base, service_env_path
         ):
