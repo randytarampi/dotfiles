@@ -1,6 +1,7 @@
 """Shared provider endpoint metadata for generated agent configurations."""
 
 import json
+import re
 from pathlib import Path
 
 POOLSIDE_ROUTED_MODEL_ID = "poolside/laguna-s-2.1"
@@ -58,6 +59,30 @@ PROVIDER_ENDPOINTS = {
         "baseUrl": "https://router.huggingface.co",
         "apiKeyEnv": "HF_TOKEN",
     },
+    "groq": {
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "api": "openai-completions",
+        "apiKeyEnv": "GROQ_API_KEY",
+        "allowlist": "configs/opencode/groq-models.json",
+    },
+    "mistral": {
+        "baseUrl": "https://api.mistral.ai/v1",
+        "api": "openai-completions",
+        "apiKeyEnv": "MISTRAL_API_KEY",
+        "allowlist": "configs/opencode/mistral-models.json",
+    },
+    "cloudflare": {
+        "baseUrl": None,  # Account-specific; see provider_base_url().
+        "api": "openai-completions",
+        "apiKeyEnv": "CLOUDFLARE_API_TOKEN",
+        "allowlist": "configs/opencode/cloudflare-models.json",
+    },
+    "nvidia-nim": {
+        "baseUrl": "https://integrate.api.nvidia.com/v1",
+        "api": "openai-completions",
+        "apiKeyEnv": "NVIDIA_NIM_API_KEY",
+        "allowlist": "configs/opencode/nvidia-nim-models.json",
+    },
 }
 
 
@@ -68,3 +93,24 @@ def provider_models(provider):
     with path.open(encoding="utf-8") as file:
         models = json.load(file).get("models", {})
     return sorted(models)
+
+OPTIONAL_INFERENCE_PROVIDERS = ("groq", "mistral", "cloudflare", "nvidia-nim")
+
+
+def provider_base_url(provider, environ=None):
+    """Resolve only trusted provider origins; never interpolate an arbitrary host."""
+    import os
+
+    spec = PROVIDER_ENDPOINTS[provider]
+    if provider != "cloudflare":
+        return spec["baseUrl"]
+    env = os.environ if environ is None else environ
+    account = str(env.get("CLOUDFLARE_ACCOUNT_ID", "")).strip()
+    if not account:
+        return None
+    if not re.fullmatch(r"[a-fA-F0-9]{32}", account):
+        raise ValueError("CLOUDFLARE_ACCOUNT_ID must be a 32-character hex ID")
+    return (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{account}/ai/v1"
+    )
