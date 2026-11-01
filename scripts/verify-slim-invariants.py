@@ -81,6 +81,10 @@ MODEL_ALLOWLIST_PATHS = {
     "openrouter": REPO_ROOT / "configs" / "opencode" / "openrouter-models.json",
     "cohere": REPO_ROOT / "configs" / "opencode" / "cohere-models.json",
     "poolside": REPO_ROOT / "configs" / "opencode" / "poolside-models.json",
+    "groq": REPO_ROOT / "configs" / "opencode" / "groq-models.json",
+    "mistral": REPO_ROOT / "configs" / "opencode" / "mistral-models.json",
+    "cloudflare": REPO_ROOT / "configs" / "opencode" / "cloudflare-models.json",
+    "nvidia-nim": REPO_ROOT / "configs" / "opencode" / "nvidia-nim-models.json",
 }
 SUPPORTED_JUNIE_PROVIDERS = frozenset(MODEL_ALLOWLIST_PATHS) | {
     "litellm",
@@ -94,6 +98,10 @@ LITELLM_MODEL_PREFIXES = (
     ("openai/", "openai"),
     ("ollama-cloud/", "ollama-cloud"),
     ("meridian/", "meridian"),
+    ("groq/", "groq"),
+    ("mistral/", "mistral"),
+    ("cloudflare/", "cloudflare"),
+    ("nvidia-nim/", "nvidia-nim"),
 )
 
 
@@ -245,6 +253,10 @@ def _check_junie_model_reference(name, group, field, allowlists, violations):
         "ollama-cloud",
         "github-copilot",
         "opencode",
+        "groq",
+        "mistral",
+        "cloudflare",
+        "nvidia-nim",
     }:
         _require_allowlisted_model(provider, model, path, allowlists, violations)
 
