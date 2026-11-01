@@ -3300,8 +3300,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
     first = sync()
     assert first.returncode == 0, first.stderr
     keys = {
-        name: f"sk-fixture-{client}"
-        for client, name in litellm_config.APP_KEYS.items()
+        name: f"sk-fixture-{client}" for client, name in litellm_config.APP_KEYS.items()
     }
     with env_path.open("a", encoding="utf-8") as f:
         for name, value in keys.items():
