@@ -78,6 +78,97 @@ def test_cli_reconcile_preserves_object_root_form(tmp_path, monkeypatch):
     }
 
 
+def test_cli_object_root_without_plugins_is_preserved(tmp_path, monkeypatch):
+    module = _load("voice_cli_schema_root", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module,
+        "get_voice_config",
+        lambda *_a, **_k: {"endpoint": "https://v.example", "model": "m"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(
+        module.sys, "argv", ["voice", "--preset", "local", "--no-backup"]
+    )
+    (tmp_path / "cli.json").write_text('{"$schema":"schema"}')
+    assert module.main() is None
+    result = json.loads((tmp_path / "cli.json").read_text())
+    assert result["$schema"] == "schema"
+    assert result["plugins"][-1]["package"] == "@bojackduy/opencode-voice@latest"
+
+
+def test_cli_voice_disable_directive_is_not_reenabled(tmp_path, monkeypatch):
+    module = _load("voice_cli_disabled", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module,
+        "get_voice_config",
+        lambda *_a, **_k: {"endpoint": "https://v.example", "model": "m"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(
+        module.sys, "argv", ["voice", "--preset", "local", "--no-backup"]
+    )
+    disabled = "-@bojackduy/opencode-voice@latest"
+    (tmp_path / "cli.json").write_text(json.dumps([disabled]))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == [disabled]
+
+
+def test_cli_voice_unknown_options_migrate_from_legacy_with_fresh_route(
+    tmp_path, monkeypatch
+):
+    module = _load("voice_cli_legacy_options", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module,
+        "get_voice_config",
+        lambda *_a, **_k: {"endpoint": "https://new.example", "model": "new"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(
+        module.sys, "argv", ["voice", "--preset", "local", "--no-backup"]
+    )
+    (tmp_path / "tui.json").write_text(
+        json.dumps(
+            {
+                "plugin": [
+                    [
+                        "@renjfk/opencode-voice",
+                        {
+                            "endpoint": "https://old.example",
+                            "model": "old",
+                            "apiKeyEnv": "OLD_KEY",
+                            "sttEndpoint": "https://old-stt.example",
+                            "sttModel": "old-stt",
+                            "sttApiKeyEnv": "OLD_STT_KEY",
+                            "sttAutoSubmit": True,
+                            "ttsVoice": "user-voice",
+                        },
+                    ]
+                ]
+            }
+        )
+    )
+    assert module.main() is None
+    options = json.loads((tmp_path / "cli.json").read_text())[0]["options"]
+    assert options == {
+        "endpoint": "https://new.example",
+        "model": "new",
+        "sttAutoSubmit": True,
+        "ttsVoice": "user-voice",
+    }
+
+
 def test_cli_reconcile_preserves_entries_and_removes_old_tui(tmp_path, monkeypatch):
     module = _load("voice_cli_reconcile", ROOT / "configure-opencode-voice.py")
     monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))

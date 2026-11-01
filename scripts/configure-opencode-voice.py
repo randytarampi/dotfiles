@@ -114,9 +114,12 @@ def _voice_entry_matches(entry):
         value = value[0]
     if not isinstance(value, str):
         return False
+    if value.startswith("-") and _spec_matches_key(value[1:], VOICE_PLUGIN_KEY):
+        return True
     if value.startswith("*") or value.startswith("-") and value[1:].endswith(".*"):
         return False
-    value = value.removeprefix("-")
+    if value.startswith("-"):
+        return False
     if value == "*" or value.endswith(".*"):
         return False
     return _spec_matches_key(value, VOICE_PLUGIN_KEY)
@@ -1385,7 +1388,7 @@ def main():
             elif isinstance(cli_root, dict) and isinstance(
                 cli_root.get("plugins", []), list
             ):
-                cli_config = cli_root["plugins"]
+                cli_config = cli_root.get("plugins", [])
                 cli_root_form = "object"
             else:
                 raise ValueError(
@@ -1397,11 +1400,24 @@ def main():
     else:
         cli_config = []
     filtered_plugins = [
-        entry for entry in cli_config if not _voice_entry_matches(entry)
+        entry
+        for entry in cli_config
+        if not _voice_entry_matches(entry)
+        or (
+            isinstance(entry, str)
+            and entry.startswith("-")
+            and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
+        )
     ]
     existing_voice = next(
         (entry for entry in cli_config if _voice_entry_matches(entry)),
         None,
+    )
+    voice_disabled = any(
+        isinstance(entry, str)
+        and entry.startswith("-")
+        and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
+        for entry in cli_config
     )
     # When cli.json has no voice entry yet, the previously managed tui.json
     # route seeds the v2 entry: the package maps onto the current manifest
@@ -1441,34 +1457,46 @@ def main():
                         legacy_options = None
         except (OSError, ValueError) as error:
             logger.debug("No usable legacy tui.json voice route: %s", error)
+    managed_keys = {
+        "endpoint",
+        "model",
+        "apiKeyEnv",
+        "sttEndpoint",
+        "sttModel",
+        "sttApiKeyEnv",
+    }
+    user_options = {}
+    if isinstance(existing_voice, dict) and isinstance(
+        existing_voice.get("options"), dict
+    ):
+        user_options.update(
+            {
+                key: value
+                for key, value in existing_voice["options"].items()
+                if key not in managed_keys
+            }
+        )
+    if isinstance(legacy_options, dict):
+        user_options.update(
+            {
+                key: value
+                for key, value in legacy_options.items()
+                if key not in managed_keys
+            }
+        )
     entry_options = {
         # Tier-derived keys win; unknown user-set option keys (e.g.
         # sttAutoSubmit, ttsVoice) survive every rewrite of the entry.
-        **(
-            existing_voice.get("options", {})
-            if isinstance(existing_voice, dict)
-            and isinstance(existing_voice.get("options", {}), dict)
-            else {}
-        ),
-        **{
-            key: value
-            for key, value in voice_config.items()
-            if key
-            in {
-                "endpoint",
-                "model",
-                "apiKeyEnv",
-                "sttEndpoint",
-                "sttModel",
-                "sttApiKeyEnv",
-            }
-        },
+        **(user_options),
+        **{key: value for key, value in voice_config.items() if key in managed_keys},
     }
     existing_options = (
         existing_voice.get("options", {}) if isinstance(existing_voice, dict) else {}
     )
     route_installed = False
-    if (
+    if voice_disabled:
+        route_installed = False
+    elif (
         not (voice_config.get("endpoint") and voice_config.get("model"))
         and existing_voice is not None
     ):
@@ -1476,8 +1504,10 @@ def main():
         # entry as-is instead of rebuilding it into an empty route.
         filtered_plugins.append(existing_voice)
         route_installed = True
-    elif not (voice_config.get("endpoint") and voice_config.get("model")) and (
-        legacy_options is not None
+    elif (
+        not voice_disabled
+        and not (voice_config.get("endpoint") and voice_config.get("model"))
+        and legacy_options is not None
     ):
         # The legacy v1 route's working selection maps onto the current
         # manifest spec, options preserved verbatim.
@@ -1485,14 +1515,18 @@ def main():
             {"package": voice_plugin_spec, "options": legacy_options}
         )
         route_installed = True
-    elif unresolved:
+    elif unresolved and not voice_disabled:
         if existing_voice is not None:
             filtered_plugins.append(
                 {"package": voice_plugin_spec, "options": entry_options}
             )
             route_installed = True
         # Unresolved without anything preserved: do not register a route.
-    elif voice_config.get("endpoint") and voice_config.get("model"):
+    elif (
+        not voice_disabled
+        and voice_config.get("endpoint")
+        and voice_config.get("model")
+    ):
         filtered_plugins.append(
             {"package": voice_plugin_spec, "options": entry_options}
         )
@@ -1654,4 +1688,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)
