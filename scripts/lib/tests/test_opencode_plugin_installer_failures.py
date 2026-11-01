@@ -16,7 +16,10 @@ def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
     bin_dir.mkdir()
     home.mkdir()
     opencode = bin_dir / "opencode"
-    opencode.write_text("#!/bin/bash\n" + opencode_script)
+    opencode.write_text(
+        "#!/bin/bash\nif [[ $1 == --version ]]; then echo 'opencode v2.2.5'; exit 0; fi\n"
+        + opencode_script
+    )
     opencode.chmod(0o755)
     npx = bin_dir / "npx"
     npx.write_text(f"#!/bin/bash\nexit {npx_exit}\n")
@@ -33,7 +36,8 @@ def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
     env = {
         **os.environ,
         "HOME": str(home),
-        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "PATH": f"{bin_dir}:{Path(__import__('sys').executable).parent}:/usr/bin:/bin",
+        "PYTHONPATH": str(REPO_ROOT / "scripts/lib"),
         "DOTFILES_RUN_OPENCODE_TOOLS_SETUP": "1",
         "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE": update_gate,
         "DOTFILES_RUN_OPENCODE_MEMORY_SETUP": "0",

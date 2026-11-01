@@ -35,6 +35,7 @@ def run_installer(tmp_path, version=None, *, missing=False, status=0, twice=Fals
             "if [ \"$1\" = --version ]; then printf '%s\\n' "
             + repr(version or "")
             + f"; exit {status}; fi\n"
+            'if [ "$1" = plugin ] && [ "$2" = check ]; then echo "${3#*@} 3.2.0 (current)"; exit 0; fi\n'
             'printf \'%s\\n\' "$*" >> "$HOME/recorder"\n',
             encoding="utf-8",
         )
@@ -46,7 +47,7 @@ def run_installer(tmp_path, version=None, *, missing=False, status=0, twice=Fals
     script = render_template(tmp_path)
     env = {
         "HOME": str(home),
-        "PATH": f"{stubs}:{Path('/usr/bin')}:{Path('/bin')}",
+        "PATH": f"{stubs}:{Path(__import__('sys').executable).parent}:{Path('/usr/bin')}:{Path('/bin')}",
         "DOTFILES_RUN_OPENCODE_TOOLS_SETUP": "1",
         "DOTFILES_RUN_OPENCODE_MEMORY_SETUP": "0",
         "DOTFILES_RUN_VOICE_SETUP": "0",
@@ -80,15 +81,18 @@ def test_v2_installs_manifest_plugins_and_is_idempotent(tmp_path):
     assert [result.returncode for result in results] == [0, 0]
     assert calls
     assert all(call.startswith("plugin add ") for call in calls)
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts/lib"))
     from opencode_plugins import active_plugin_specs
 
-    expected = ["plugin add @tarquinen/opencode-dcp@latest"] + [
+    expected = [
         f"plugin add {spec}"
         for spec in active_plugin_specs(
             ROOT / "configs/opencode/opencode-plugins.json"
         )[1:]
         if spec != "opencode-mem@latest"
-    ]
+    ] + ["plugin add @bojackduy/opencode-voice@latest"]
     assert calls == expected * 2
 
 
