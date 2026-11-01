@@ -341,7 +341,9 @@ def litellm_cloud_aliases(port="4000"):
         else:
             for provider in OPTIONAL_INFERENCE_PROVIDERS:
                 if identity.startswith(provider + "/"):
-                    routes.setdefault(provider, {})[identity[len(provider) + 1 :]] = wire
+                    routes.setdefault(provider, {})[
+                        identity[len(provider) + 1 :]
+                    ] = wire
                     break
     routes["_available"] = {item: item for item in available}
     return routes
