@@ -1305,7 +1305,7 @@ def check_opencode_orphan_files():
                         "  \u26a0 OpenCode cli.json: retired quota plugin "
                         "still registered (remove during cutover)"
                     )
-        except (json.JSONDecodeError, OSError, ValueError) as error:
+        except (OSError, ValueError) as error:
             print(f"  \u2717 OpenCode cli.json: could not parse {cli_path}: {error}")
             exit_code = 1
 

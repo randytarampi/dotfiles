@@ -73,7 +73,7 @@ def cli_plugin_specs(path=MANIFEST_PATH):
     return [item["package"] for item in load_plugin_manifest(path)["cli_plugins"]]
 
 
-def active_cli_plugin_specs(path=MANIFEST_PATH, environ=None):
+def active_cli_plugin_specs(path=MANIFEST_PATH, _environ=None):
     return cli_plugin_specs(path)
 
 
