@@ -211,7 +211,7 @@ litellm_service_env_sync() {
   client_dir="$(dirname "$service_env")/clients"
   local client client_file file_value
   local private_mode
-  if [[ -e "$client_dir" ]]; then
+  if [[ -e "$client_dir" || -L "$client_dir" ]]; then
     if [[ -L "$client_dir" || ! -d "$client_dir" || ! -O "$client_dir" ]]; then
       printf 'Unsafe LiteLLM client directory path or ownership\n' >&2
       return 1

@@ -770,6 +770,50 @@ def test_strict_preflight_refuses_second_row_before_any_generation(
     assert (clients / "opencode.key").read_bytes() == before_opencode
 
 
+@pytest.mark.parametrize(
+    "scenario", ["conflicting-sources", "dangling-key", "dangling-directory"]
+)
+def test_preflight_rejects_conflicting_or_unsafe_canonical_sources(
+    monkeypatch, tmp_path, scenario
+):
+    calls = []
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_OPENCODE_SETUP")
+    service_env = tmp_path / "service.env"
+    service_env.write_text(
+        "LITELLM_OPENCODE_KEY='sk-service-key'\n", encoding="utf-8"
+    )
+    clients = tmp_path / "clients"
+    key_file = clients / "opencode.key"
+    if scenario == "dangling-directory":
+        clients.symlink_to(tmp_path / "missing-directory", target_is_directory=True)
+    else:
+        clients.mkdir(mode=0o700)
+        if scenario == "dangling-key":
+            key_file.symlink_to(tmp_path / "missing-key")
+        else:
+            key_file.write_text("sk-file-key", encoding="utf-8")
+            key_file.chmod(0o600)
+    before = service_env.read_bytes()
+
+    def request(url, method, master_key, payload=None):
+        calls.append((url, method))
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": "opencode"}]}
+        if method == "POST":
+            pytest.fail("preflight must refuse before remote mutation")
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    assert not configure_litellm.provision_app_keys("master", service_env)
+    assert not any(method == "POST" for _, method in calls)
+    assert service_env.read_bytes() == before
+    if scenario == "conflicting-sources":
+        assert key_file.read_text(encoding="utf-8") == "sk-file-key"
+    else:
+        assert (clients if scenario == "dangling-directory" else key_file).is_symlink()
+
+
 def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tmp_path):
     calls = _fake_gateway(monkeypatch)
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")

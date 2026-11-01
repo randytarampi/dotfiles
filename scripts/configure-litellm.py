@@ -581,6 +581,32 @@ def provision_app_keys(
     )
 
 
+def _client_key_preflight_issue(client_key_path, env_name, service_env_path):
+    """Refuse unsafe paths or divergent sources before any gateway mutation."""
+    directory = client_key_path.parent
+    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+        return "unsafe client directory path"
+    if client_key_path.is_symlink() or (
+        client_key_path.exists() and not client_key_path.is_file()
+    ):
+        return "unsafe client key path"
+    try:
+        file_value = (
+            client_key_path.read_text(encoding="utf-8").strip()
+            if client_key_path.is_file()
+            else ""
+        )
+    except OSError:
+        return "unreadable client key file"
+    service_value = _service_env_value(env_name, service_env_path).strip()
+    if file_value and service_value and file_value != service_value:
+        return "service.env and file credentials differ"
+    environment_value = os.environ.get(env_name, "").strip()
+    if environment_value and service_value and environment_value != service_value:
+        return "process environment and service.env credentials differ"
+    return None
+
+
 def _provisioning_preflight(records, service_env_path, enforce_registry_gates, strict):
     provisioning_rows = []
     for row in CLIENT_REGISTRY:
@@ -597,6 +623,13 @@ def _provisioning_preflight(records, service_env_path, enforce_registry_gates, s
     for row in provisioning_rows:
         alias, env_name = row["client"], row["env_name"]
         client_key_path = service_env_path.parent / "clients" / f"{alias}.key"
+        issue = _client_key_preflight_issue(
+            client_key_path, env_name, service_env_path
+        )
+        if issue:
+            logger.error("LiteLLM client %s preflight refused: %s", alias, issue)
+            refusal = refusal or issue
+            continue
         auth = resolve_client_auth(env_name, client_key_path)
         remote = next(
             (

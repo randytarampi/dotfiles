@@ -3437,6 +3437,35 @@ def test_litellm_env_sync_refuses_unsafe_client_file_without_writing(tmp_path, u
     assert env_path.read_bytes() == before
 
 
+def test_litellm_env_sync_rejects_dangling_client_directory(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    (root / "clients").symlink_to(
+        root / "missing-clients", target_is_directory=True
+    )
+    service_env = root / "service.env"
+    service_env.write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
+        encoding="utf-8",
+    )
+    original = service_env.read_bytes()
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(helper))}; "
+            f"litellm_service_env_sync {shlex.quote(str(service_env))}",
+        ],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "Unsafe LiteLLM client directory" in result.stderr
+    assert service_env.read_bytes() == original
+
+
 def test_litellm_env_sync_is_byte_identical_on_repeated_runs(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
