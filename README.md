@@ -643,17 +643,8 @@ Plannotator CLI is installed via the existing install script. The paste backend 
 The canonical pinned OpenCode plugin set is maintained in
 `configs/opencode/opencode-plugins.json`: `oh-my-opencode-slim@3.0.1`,
 `@plannotator/opencode@0.27.21`, `opencode-vibeguard@0.1.0`,
-`@ramtinj95/opencode-tokenscope@1.8.1`, `@slkiser/opencode-quota@4.10.8`, and
-`opencode-mem@2.26.0`. DCP has a separate dual core/TUI ownership contract;
+`@ramtinj95/opencode-tokenscope@1.8.1`, and `opencode-mem@2.26.0`. DCP has a separate dual core/TUI ownership contract;
 voice is TUI-owned.
-
-### OpenCode Quota
-
-Quota/usage/cost surfaces for OpenCode sessions.
-
-- OpenCode plugin: `@slkiser/opencode-quota@4.10.8` (config-registered; pinned deliberately — upstream 5.x fails the OpenCode 1.19.0 plugin loader, see [docs/OPENCODE.md](docs/OPENCODE.md))
-- Sidecar config: `~/.config/opencode/opencode-quota/quota-toast.jsonc` (`enabledProviders: "auto"`)
-- Upstream: https://github.com/slkiser/opencode-quota
 
 ### OpenCode Mem
 
