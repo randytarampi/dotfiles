@@ -45,3 +45,13 @@ Use this repeatable procedure to refresh the preset with high confidence.
 
 OpenCode Zen contributor models may have privacy considerations; review the
 current Zen terms before relying on them.
+
+## Optional provider guard (November 2026)
+
+Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM are candidate inference
+providers, not automatically qualified strict-free routes. The optional
+provider setting and `full` LiteLLM catalogue do not constitute evidence of
+recurring zero-charge billing, tool-call success or image capability. Do not
+insert these providers into the `free` fallback until authenticated
+source-bound entitlement and capability evidence is recorded. Never add them
+to the Zen-only preset. See `docs/OPTIONAL_INFERENCE.md`.
