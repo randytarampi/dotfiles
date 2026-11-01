@@ -40,6 +40,7 @@ def test_configure_skills_writes_native_skill_deny_rules(tmp_path):
         rule for rule in config["permissions"] if rule.get("action") == "skill"
     ]
     assert deny_rules == [
+        {"action": "skill", "resource": "stale", "effect": "deny"},
         {"action": "skill", "resource": "one", "effect": "deny"},
         {"action": "skill", "resource": "two", "effect": "deny"},
     ]
@@ -67,6 +68,42 @@ def test_configure_skills_keeps_legacy_map_on_v1_host(tmp_path, monkeypatch):
     assert config["permission"]["skill"]["one"] == "deny"
     assert "permissions" not in config
     assert config["model"] == "project-model"
+
+
+def test_project_orchestration_explicitly_skips_v1_opencode_and_runs_other_steps(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "project"
+    root.mkdir()
+    calls = []
+    monkeypatch.setattr(
+        configure_project.opencode_host,
+        "resolve_opencode_host",
+        lambda: ("known", 1),
+    )
+    monkeypatch.setattr(
+        configure_project, "run", lambda command, cwd, env=None: calls.append(command)
+    )
+    monkeypatch.setattr(
+        configure_project.sys,
+        "argv",
+        [
+            "configure-project.py",
+            "--steps",
+            "opencode,junie",
+            "--preset",
+            "anthropic",
+            "--workspace-root",
+            str(root),
+        ],
+    )
+    with mock.patch.object(configure_project.logger, "warning") as warning:
+        configure_project.main()
+    assert len(calls) == 1 and "configure-jetbrains-ai.py" in calls[0][1]
+    warning.assert_called_once()
+    assert warning.call_args.args[1:] == ("known", 1)
+    assert "unsupported host state %s (major %s)" in warning.call_args.args[0]
+    assert not (root / "opencode.json").exists()
 
 
 TIER_SPEC = importlib.util.spec_from_file_location(

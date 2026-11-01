@@ -212,6 +212,8 @@ def configure_skills(root, profiles, extras, skipped):
 
     opencode_path = Path(root) / "opencode.json"
     config_paths = [opencode_path, Path(root) / ".opencode" / "opencode.json"]
+    if not skipped:
+        return
     # Skill deny rules follow the installed host: a v2 (or not-yet-installed)
     # host gets native ordered rules; a v1 host keeps the legacy permission
     # map, which v2 also normalizes if it arrives late.
@@ -229,15 +231,19 @@ def configure_skills(root, profiles, extras, skipped):
         if native_permission_rules:
             permissions = config.setdefault("permissions", [])
             if isinstance(permissions, list):
-                permissions[:] = [
-                    rule
+                existing = {
+                    (rule.get("resource"), rule.get("effect"))
                     for rule in permissions
-                    if isinstance(rule, dict) and rule.get("action") != "skill"
-                ]
-                permissions.extend(
-                    {"action": "skill", "resource": name, "effect": "deny"}
-                    for name in skipped
-                )
+                    if isinstance(rule, dict) and rule.get("action") == "skill"
+                }
+                # Retain user rules: generator ownership cannot be inferred safely.
+                for name in skipped:
+                    item = (name, "deny")
+                    if item not in existing:
+                        permissions.append(
+                            {"action": "skill", "resource": name, "effect": "deny"}
+                        )
+                        existing.add(item)
                 skill_permissions = None
             else:
                 skill_permissions = permissions.setdefault("skill", {})
@@ -339,7 +345,11 @@ def main():
     else:
         os.makedirs(opencode_dir, exist_ok=True)
 
-    if "opencode" in steps:
+    project_host_state, project_host_major = opencode_host.resolve_opencode_host()
+    project_host_supported = project_host_state == "absent" or (
+        project_host_state == "known" and project_host_major == 2
+    )
+    if "opencode" in steps and project_host_supported:
         if not project_opencode_overrides_global(args):
             global_tier = _global_tier() or "unknown"
             if args.dry_run:
@@ -386,6 +396,12 @@ def main():
                     )
                 shutil.copy(generated, os.path.join(root, "opencode.json"))
                 shutil.rmtree(temp, ignore_errors=True)
+    elif "opencode" in steps:
+        logger.warning(
+            "Skipping project OpenCode generation: unsupported host state %s (major %s); unrelated project steps will continue",
+            project_host_state,
+            project_host_major,
+        )
     if "tier" in steps:
         env = child_env.copy()
         env["OPENCODE_DIR"] = opencode_dir
