@@ -159,17 +159,43 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" == "1" ]]; then
   if ! "$SCRIPT_DIR/install-opencode-v2.sh"; then
     failures=$((failures + 1))
     failed_lanes+=("opencode install/verify")
-  elif ! opencode upgrade; then
-    failures=$((failures + 1))
-    failed_lanes+=("opencode upgrade")
-  elif ! DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
-    chezmoi execute-template --source "$(dirname "$SCRIPT_DIR")" \
-    <"$SCRIPT_DIR/../.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl" | bash; then
-    failures=$((failures + 1))
-    failed_lanes+=("opencode plugins")
   else
-    ran_lanes+=("opencode")
-    ran_lanes+=("opencode plugins")
+    # Managed-binary upgrade: in non-login contexts a PATH v1 must never
+    # receive `opencode upgrade` (paths.sh is not sourced chezmoi-side).
+    # Managed binary resolver; see scripts/lib/opencode_bin.sh.
+    # shellcheck disable=SC1091  # repo lint does not feed sourced libs as inputs.
+    source "$SCRIPT_DIR/lib/opencode_bin.sh"
+    managed_bin="$(opencode_managed_bin)"
+    if [[ -z "$managed_bin" ]]; then
+      failures=$((failures + 1))
+      failed_lanes+=("opencode managed binary unresolved after install/verify")
+    elif ! "$managed_bin" upgrade; then
+      failures=$((failures + 1))
+      failed_lanes+=("opencode upgrade")
+    elif ! opencode_bin_output_is_stable_v2 "$("$managed_bin" --version 2>&1)"; then
+      failures=$((failures + 1))
+      failed_lanes+=("opencode post-upgrade probe")
+    elif ! {
+      # Render to a FILE, then execute the file: a stdin-executed script
+      # consumes its own stdin stream and silently loses heredoc sections
+      # (the per-spec plugin checks and later loop bodies) — deployed
+      # chezmoi scripts run as files, so only this lane had the hazard.
+      rendered_plugins="$(mktemp "${TMPDIR:-/tmp}/opencode-update-plugins.XXXXXX.sh")"
+      pipeline_rc=0
+      DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
+        chezmoi execute-template --source "$(dirname "$SCRIPT_DIR")" \
+        <"$SCRIPT_DIR/../.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl" \
+        >"$rendered_plugins" &&
+        bash "$rendered_plugins" || pipeline_rc=$?
+      rm -f "$rendered_plugins" 2>/dev/null
+      (exit "$pipeline_rc")
+    }; then
+      failures=$((failures + 1))
+      failed_lanes+=("opencode plugins")
+    else
+      ran_lanes+=("opencode")
+      ran_lanes+=("opencode plugins")
+    fi
   fi
 else
   skipped_lanes+=("opencode")
