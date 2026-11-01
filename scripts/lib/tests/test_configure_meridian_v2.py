@@ -66,6 +66,9 @@ def test_unqualified_v2_hard_fails_without_touching_config(
         "host_version_string",
         lambda _binary="opencode": "2.2.5",
     )
+    # CI runners have no real opencode on PATH; the resolvability check must
+    # pass so the qualification hard-failure is what is exercised.
+    monkeypatch.setattr(configure_meridian.shutil, "which", lambda _: "/bin/opencode")
     monkeypatch.setattr(sys, "argv", [SCRIPT])
     with pytest.raises(SystemExit) as excinfo:
         configure_meridian.main()
