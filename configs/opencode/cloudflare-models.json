@@ -1,0 +1,7 @@
+{
+  "models": {
+    "@cf/meta/llama-3.1-8b-instruct": {
+      "name": "Cloudflare Llama 3.1 8B"
+    }
+  }
+}
