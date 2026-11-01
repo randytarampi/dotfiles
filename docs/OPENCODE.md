@@ -41,7 +41,7 @@ Local deviations are documented in [docs/TIERS.md](TIERS.md):
 |--------|-----------|----------|-----------------|
 | `omo-slim-openai` | OpenAI, with OpenCode Zen fallbacks | `openai/gpt-6-luna` | OpenCode Zen |
 | `omo-slim-thirty-dollars` | OpenAI + GitHub Copilot | `openai/gpt-6-luna` | OpenCode Zen; Copilot designer may fall back to Zen Gemini |
-| `omo-slim-fourty-dollars` | OpenAI + Anthropic | `anthropic/claude-haiku-5-5` | Explicit OpenAI/Anthropic alternatives |
+| `omo-slim-forty-dollars` | OpenAI + Anthropic | `anthropic/claude-haiku-5-5` | Explicit OpenAI/Anthropic alternatives |
 | `omo-slim-opencode-zen-free` (qualification required) | OpenCode Zen | `opencode/nemotron-3.5-super-vl-free` candidate | Empty fallback chains; selection fails closed without evidence |
 
 All presets define an explicit observer. `image_routing: "auto"` routes image
