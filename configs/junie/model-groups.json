@@ -60,6 +60,26 @@
       "baseUrl": "https://opencode.ai/zen/v1",
       "apiType": "OpenAICompletion",
       "apiKeyEnv": "OPENCODE_API_KEY"
+    },
+    "groq": {
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "GROQ_API_KEY"
+    },
+    "mistral": {
+      "baseUrl": "https://api.mistral.ai/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "MISTRAL_API_KEY"
+    },
+    "cloudflare": {
+      "baseUrl": "",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "CLOUDFLARE_API_TOKEN"
+    },
+    "nvidia-nim": {
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "NVIDIA_NIM_API_KEY"
     }
   },
   "modelTemperatures": {
@@ -165,6 +185,24 @@
       "primaryModel": "kimi-k3",
       "fasterModel": "kimi-k2.7-code",
       "fasterProvider": "ollama-cloud"
+    },
+    "groq-gpt-oss": {
+      "provider": "groq",
+      "primaryModel": "openai/gpt-oss-120b",
+      "fasterModel": "openai/gpt-oss-20b",
+      "fasterProvider": "groq"
+    },
+    "mistral-small": {
+      "provider": "mistral",
+      "primaryModel": "mistral-small-latest"
+    },
+    "cloudflare-llama": {
+      "provider": "cloudflare",
+      "primaryModel": "@cf/meta/llama-3.1-8b-instruct-fp8"
+    },
+    "nvidia-nim-gpt-oss": {
+      "provider": "nvidia-nim",
+      "primaryModel": "openai/gpt-oss-20b"
     }
   },
   "sharedPresets": {
