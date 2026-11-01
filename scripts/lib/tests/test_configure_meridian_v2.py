@@ -22,7 +22,11 @@ def test_v2_setup_invokes_meridian_with_resolved_binary(tmp_path, monkeypatch):
         "resolve_opencode_host",
         lambda: ("known", 2),
     )
-    monkeypatch.setattr(configure_meridian.shutil, "which", lambda _: "/bin/opencode")
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "host_binary",
+        lambda _binary="opencode": "/bin/opencode",
+    )
     monkeypatch.setattr(
         configure_meridian.opencode_host,
         "host_version_string",
@@ -64,7 +68,11 @@ def test_v2_setup_failure_does_not_reconcile_features(tmp_path, monkeypatch):
     monkeypatch.setattr(
         configure_meridian.opencode_host, "host_version_string", lambda *_: "2.0.21"
     )
-    monkeypatch.setattr(configure_meridian.shutil, "which", lambda _: "/bin/opencode")
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "host_binary",
+        lambda _binary="opencode": "/bin/opencode",
+    )
     monkeypatch.setattr(
         configure_meridian, "resolve_meridian_binary", lambda: "/bin/meridian"
     )
@@ -130,7 +138,11 @@ def test_unqualified_v2_hard_fails_without_touching_config(
     )
     # CI runners have no real opencode on PATH; the resolvability check must
     # pass so the qualification hard-failure is what is exercised.
-    monkeypatch.setattr(configure_meridian.shutil, "which", lambda _: "/bin/opencode")
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "host_binary",
+        lambda _binary="opencode": "/bin/opencode",
+    )
     monkeypatch.setattr(sys, "argv", [SCRIPT])
     with pytest.raises(SystemExit) as excinfo:
         configure_meridian.main()
