@@ -541,7 +541,7 @@ Packages available on both platforms by category:
 
 Use `scripts/run-local-review.sh --help` for the local pre-push review runner; details are in [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md).
 
-Fourteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
+17 presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
 
 | Tier | Providers | Best For |
 |------|-----------|----------|
@@ -553,14 +553,17 @@ Fourteen presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim
 | **anthropic** | Anthropic only (`sonnet-5-5`, `fable-5-1`, `haiku-5-5`, `opus-5-5`) | Anthropic-first workflow |
 | **omo-slim-openai** | OpenAI only | OpenAI-first workflow |
 | **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
+| **omo-slim-fourty-dollars** | OpenAI + Anthropic | Opt-in upstream-inspired mixed-provider workflow |
 | **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
+| **cohere** | Direct Cohere via LiteLLM | Command-family trial-capped workflow |
+| **poolside** | Direct Poolside via LiteLLM | Laguna-family coding workflow |
 | **free** | OpenCode Zen + Google + OpenRouter (all free tiers) | Free cross-provider workflow with cross-provider fallbacks |
 | **local** | Local Ollama (reasoning + code-gen + lightweight + vision), balanced profile | Balanced local selection for offline/air-gapped use |
 | **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
 | **local-quiet** | Local profile ranking | Quiet local selection; policy does not guarantee hardware fit or latency |
 | **local-loud** | Local profile ranking | Quality-first candidate ranking; no guarantee of hardware fit, latency or concurrency |
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4.1-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-opencode-zen-free` uses OpenCode Zen with OpenAI fallbacks; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3`, `deepseek-v4.1-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-opencode-zen-free` uses evidence-gated OpenCode Zen models with empty configured fallback chains; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.
 
 **Variant policy:** oracle/council roles use `max` or `xhigh` (for models whose default is already high, like `fable-5-1`). Orchestrator gets no variant (default). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
 
