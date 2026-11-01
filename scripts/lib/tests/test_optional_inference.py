@@ -120,8 +120,12 @@ def test_review_action_keeps_trusted_model_selection_and_no_push_guards():
     workflow = (ROOT / ".github/workflows/agentic-review.yml").read_text(
         encoding="utf-8"
     )
-    assert 'default: "opencode"' in workflow
+    assert 'default: "free"' in workflow
     assert "steps.review_model.outputs.model" in workflow
+    assert "--pool=" in workflow
+    assert "CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}" in workflow
+    assert "HAS_MISTRAL_KEY" in workflow
+    assert "HAS_GROQ_KEY" in workflow
     assert "TRUSTED_DOTFILES" in workflow
     assert "permission" in workflow and '"edit": "deny"' in workflow
     assert "review-no-push/pre-push" in workflow
