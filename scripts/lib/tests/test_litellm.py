@@ -2417,8 +2417,11 @@ def test_app_key_provisioning_refuses_stranded_alias_without_remote_mutation(
     service_env.write_text("LITELLM_MASTER_KEY='master'\n")
     before = service_env.read_bytes()
     assert not CONFIGURE.provision_app_keys(
-        "master", service_env, "http://127.0.0.1:4000",
-        strict=strict, enforce_registry_gates=False,
+        "master",
+        service_env,
+        "http://127.0.0.1:4000",
+        strict=strict,
+        enforce_registry_gates=False,
     )
     assert not any(method == "POST" for _, method, _ in requests)
     assert service_env.read_bytes() == before
@@ -2431,7 +2434,9 @@ def test_app_key_duplicate_alias_race_refuses_to_delete(tmp_path, monkeypatch):
     def fake_request(url, method, master_key, payload=None, timeout=30):
         requests.append((url, method, payload))
         if "/key/list" in url:
-            return {"keys": [{"key_alias": "openwebui", "token": "hash"}]} if len(requests) > 2 else {"keys": []}
+            if len(requests) > 2:
+                return {"keys": [{"key_alias": "openwebui", "token": "hash"}]}
+            return {"keys": []}
         if url.endswith("/key/generate"):
             raise urllib.error.HTTPError(url, 400, "alias exists", None, None)
         return {"status": "healthy"}
@@ -2440,8 +2445,11 @@ def test_app_key_duplicate_alias_race_refuses_to_delete(tmp_path, monkeypatch):
     service_env = tmp_path / "service.env"
     service_env.write_text("LITELLM_MASTER_KEY='master'\n")
     assert not CONFIGURE.provision_app_keys(
-        "master", service_env, "http://127.0.0.1:4000",
-        strict=True, enforce_registry_gates=False,
+        "master",
+        service_env,
+        "http://127.0.0.1:4000",
+        strict=True,
+        enforce_registry_gates=False,
     )
     assert not any(url.endswith("/key/delete") for url, _, _ in requests)
 
@@ -3280,6 +3288,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
         f"source {shlex.quote(str(helper))}; "
         f"litellm_service_env_sync {shlex.quote(str(env_path))}"
     )
+
     def sync():
         return subprocess.run(
             ["bash", "-c", script],
@@ -3304,7 +3313,9 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
 
     assert sync().returncode == 0
     persisted = env_path.read_bytes()
-    assert all(f"{name}={value}\n".encode() in persisted for name, value in keys.items())
+    assert all(
+        f"{name}={value}\n".encode() in persisted for name, value in keys.items()
+    )
     assert sync().returncode == 0
     assert env_path.read_bytes() == persisted
     # A missing env entry is restored from the actual canonical client file.
