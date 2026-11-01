@@ -61,7 +61,7 @@ NVMSH
 @test "opencode upgrade lane uses the managed binary, never the PATH v1" {
   setup_managed_opencode
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
-    PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
+    PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
 
   [ "$status" -eq 0 ]
@@ -80,7 +80,7 @@ NVMSH
   : > "$BATS_TEST_TMPDIR/calls"
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
     DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
-    PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
+    PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
   [ "$status" -eq 0 ]
   calls="$(cat "$BATS_TEST_TMPDIR/calls")"
@@ -96,7 +96,7 @@ NVMSH
   # No PATH binary at all + broken channel stub (curl emits nothing) ->
   # the installer must fail closed and the upgrade must never run.
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
-    PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
+    PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
 
   [ "$status" -eq 1 ]
@@ -110,7 +110,7 @@ NVMSH
   printf '#!/bin/sh\nif [ "$1" = --version ]; then printf "opencode v2.2.5\\n"; exit 0; fi\nexit 1\n' > "$HOME/.opencode/bin/opencode"
   chmod +x "$HOME/.opencode/bin/opencode"
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
-    PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
+    PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
 
   [ "$status" -eq 1 ]
