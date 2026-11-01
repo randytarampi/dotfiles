@@ -24,6 +24,8 @@ Two transition guarantees:
 - **Creation is deferred**: when `cli.json` does not exist yet and the tier resolution produced no voice route, the writer creates nothing — upstream's first-start migration of supported `tui.json` settings only runs while `cli.json` is absent, and an empty placeholder would strand them. The file appears once a route resolves (or on the next run after an upstream migration).
 - **tui.json clean-up is conditional**: only after a successful cli.json write with a route actually installed, only the writer's own managed entries are removed (the current spec plus the previously managed `@renjfk/opencode-voice`), never unrelated keys or the file itself.
 
+Voice capture submits speech immediately to STT; unlike the editable v1 composer flow, there is no pending transcript to edit before submission. This describes submission timing only, not verified cancellation or optional TTS behaviour.
+
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
 | **local** | Best local Ollama/oMLX model (auto-detected) | whisper-cli (local), oMLX audio STT when available |
