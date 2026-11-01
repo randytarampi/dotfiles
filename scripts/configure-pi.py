@@ -417,13 +417,35 @@ def _copy_vibeguard_config(target, *, dry_run=False, no_backup=False):
         raise
 
 
+def _vibeguard_config_target(mode, agent_dir, project_root=Path(".")):
+    """Return the managed VibeGuard path, respecting upstream lookup order."""
+    override = os.environ.get("PI_VIBEGUARD_CONFIG")
+    if override:
+        logger.info(
+            "PI_VIBEGUARD_CONFIG=%s wins at lookup position 1; skipping managed config write",
+            override,
+        )
+        return None
+    if mode == "global":
+        return Path(agent_dir) / "vibeguard.config.json"
+    project_root = Path(project_root)
+    root_config = project_root / "vibeguard.config.json"
+    if root_config.exists():
+        logger.info(
+            "Project-root %s wins at lookup position 2; preserving it", root_config
+        )
+        return None
+    return project_root / ".pi/vibeguard.config.json"
+
+
 def _ensure_packages(packages, dry_run=False, mode="global"):
     """Ensure all configured packages are installed (idempotent).
 
     Runs `pi list --no-approve` to discover what is already installed, then
     installs only the missing ones. Builtin packages are skipped (they ship with
-    pi-core and have no install step); in dry-run the install is logged, not
-    executed.
+    pi-core and have no install step); existing packages are not refreshed, even
+    when specified with `@latest`. Use Pi's `pi update` command to refresh them.
+    In dry-run the install is logged, not executed.
     """
     if shutil.which("pi") is None:
         logger.warning("`pi` CLI not found; skipping package installation")
@@ -726,6 +748,7 @@ def main():
         if args.mode == "global"
         else Path(".pi/agent")
     )
+    vibeguard_config_path = _vibeguard_config_target(args.mode, out)
     prev_settings = out / "settings.json"
     try:
         settings_snapshot = _settings_snapshot(prev_settings)
@@ -1404,11 +1427,12 @@ def main():
         if path.exists() and not args.no_backup:
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
-    _copy_vibeguard_config(
-        out / "vibeguard.config.json",
-        dry_run=args.dry_run,
-        no_backup=args.no_backup,
-    )
+    if vibeguard_config_path is not None:
+        _copy_vibeguard_config(
+            vibeguard_config_path,
+            dry_run=args.dry_run,
+            no_backup=args.no_backup,
+        )
     # Remove the stub agents/<role>.md (and .bak) files a previous run
     # generated; they shadow the pi-subagents built-ins by name, so a
     # leftover stub would override the real built-in. Only files bearing
