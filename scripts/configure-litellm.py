@@ -33,6 +33,10 @@ from litellm_config import (  # noqa: E402
 import litellm_config  # noqa: E402
 from litellm_client_auth import resolve_client_auth  # noqa: E402
 
+class StrandedClientKeyError(ValueError):
+    """A remote client alias exists but its local secret is unavailable."""
+
+
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 SERVICE_ENV_DEFAULT = "~/.local/share/litellm/service.env"
 _APPLICATION_ROOTS = (Path("/Applications"), Path.home() / "Applications")
@@ -644,7 +648,7 @@ def _handle_duplicate_alias(
             "refusing automatic deletion (manual reconciliation required)",
             alias,
         )
-        raise ValueError(f"stranded LiteLLM client credential: {alias}")
+        raise StrandedClientKeyError(f"stranded LiteLLM client credential: {alias}")
     logger.info(
         "LiteLLM key alias %s already exists; preserving local key state", alias
     )
@@ -752,7 +756,7 @@ def _prepare_existing_remote_key(
         "preserving remote key (manual reconciliation required)",
         alias,
     )
-    raise ValueError(f"stranded LiteLLM client credential: {alias}")
+    raise StrandedClientKeyError(f"stranded LiteLLM client credential: {alias}")
 
 
 def _verify_provisioned_keys(rows, api_base, service_env_path):
@@ -878,6 +882,9 @@ def _provision_app_keys(
         ):
             return False
         return True
+    except StrandedClientKeyError as error:
+        logger.error("LiteLLM app-key provisioning refused: %s", error)
+        return False
     except (OSError, ValueError, TypeError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
         return not strict
