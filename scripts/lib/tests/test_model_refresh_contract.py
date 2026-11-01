@@ -3,6 +3,7 @@
 Run with PYTHONPATH=scripts/lib pytest scripts/lib/tests/test_model_refresh_contract.py -q.
 Live endpoint and installed-client inference remain owner-only acceptance checks.
 """
+
 import json
 from pathlib import Path
 
