@@ -205,18 +205,25 @@ name-based rule:
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
-| orchestrator | `muse-spark-1.3-contributor-free` | high, temp 0.4 |
+| orchestrator | `glm-5.3-flash-free` | high, temp 0.4 |
 | oracle | `big-pickle` | max, temp 0.4 |
-| librarian / explorer / fixer | `nemotron-3.5-lightning-free` | low — / high (fixer), temp 0.2 |
-| designer | `mimo-v2.6-flash-free` | medium, temp 0.3 |
-| observer | `muse-spark-1.3-contributor-free` | low, temp 0.2 |
-| council | `big-pickle` | max (α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free) |
+| librarian / explorer | `nemotron-3.5-lightning-free` | default variant, temp 0.2 |
+| designer | `deepseek-v4.1-flash-free` | medium, temp 0.3 |
+| fixer | `deepseek-v4.1-flash-free` | high, temp 0.2 |
+| observer | `nemotron-3.5-super-vl-free` | low, temp 0.2 |
+| council | `big-pickle` | max (α big-pickle, β glm-5.3-flash-free, γ deepseek-v4.1-flash-free) |
 
-The configured fallback chains for this preset are empty (`[]`). MiMo 2.6
-answered text requests but its image path failed or timed out, so it serves only
-text-oriented designer/council roles. Muse is a Meta **contributor tier**: Meta
-may train on prompts, screenshots and completions sent through it. Avoid
-confidential work on contributor-tier routes (see [docs/OPENCODE.md](OPENCODE.md)).
+The configured fallback chains for this preset are empty (`[]`). The
+new free-model entries are **candidate preferences**, not evidence of
+authenticated inference, free billing or actual tool/image support. The
+dynamic-free resolver requires fresh endpoint-scoped classification and
+capability evidence before adopting them.
+
+Historical probes of MiMo 2.6 image requests failed or timed out; it is no
+longer assigned to designer/council. Muse is a Meta **contributor tier**
+that may train on supplied data; it is no longer selected here. Do not
+send confidential code or screenshots to contributor routes without
+explicit acceptance (see [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -469,7 +476,7 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 
 ## Fallback Chains
 
-Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains. The `omo-slim-openai`/`omo-slim-thirty-dollars` tiers fall back to OpenCode Zen, `omo-slim-opencode-zen-free` falls back to OpenAI paid models, and `free` uses cross-provider fallbacks across OpenCode Zen and Google, one entry per provider per role (invariant 7 in [scripts/verify-slim-invariants.py](../scripts/verify-slim-invariants.py)).
+Each cloud tier defines fallback chains per agent role (orchestrator, oracle, librarian, explorer, fixer, designer). The `anthropic` tier has orchestrator and oracle fallback entries; all `local-*` tiers have **empty fallback chains by default** and rely on their single-provider model hierarchy. The `plus-anthropic` tier has mixed OpenAI + Anthropic fallback chains. The `omo-slim-openai`/`omo-slim-thirty-dollars` tiers fall back to OpenCode Zen, `omo-slim-opencode-zen-free` has empty configured fallback arrays, and `free` uses cross-provider fallbacks across OpenCode Zen and Google, one entry per provider per role (invariant 7 in [scripts/verify-slim-invariants.py](../scripts/verify-slim-invariants.py)).
 
 Local Ollama models are appended to fallback chains by default (unless `--no-local-fallbacks` is passed). Discovered local models are appended **per-role** (not uniformly): oracle gets reasoning models, orchestrator/fixer/designer get code-gen models, librarian/explorer get lightweight models, observer gets vision-capable models. All indexed models matching a role's category are appended (not just the single best model).
 
@@ -634,7 +641,7 @@ The `council` key in each tier's `_tiers` block of `oh-my-opencode-slim.json` de
 - **plus-anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **anthropic**: synthesizer `claude-opus-5-5` (xhigh variant)
 - **omo-slim-openai / omo-slim-thirty-dollars**: synthesizer `gpt-6.1-sol` (high variant; councillors α sol, β astra, γ luna)
-- **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β nemotron-3.5-lightning-free, γ mimo-v2.6-flash-free)
+- **omo-slim-opencode-zen-free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β glm-5.3-flash-free, γ deepseek-v4.1-flash-free)
 - **free**: synthesizer `big-pickle` (max variant; councillors α big-pickle, β gemini-3.8-flash, γ nemotron-3.5-lightning-free)
 
 Councillors are defined per tier under `council.presets` in `oh-my-opencode-slim.json` and applied automatically by `configure-opencode-tier.py`.
