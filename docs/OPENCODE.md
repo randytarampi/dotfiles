@@ -8,10 +8,11 @@ classified as free or included in strict-free fallback chains.
 
 OpenCode is installed/updated via the official install script (latest stable
 v2; binary at `~/.opencode/bin/opencode`, directory first on PATH). Brew and
-winget do not manage OpenCode. The one-time Meridian qualification install at
-the CLI-qualified release (2.0.31) followed by a normal update to latest is
-documented in
-[docs/OPENCODE-V2-MIGRATION-PLAN.md](OPENCODE-V2-MIGRATION-PLAN.md).
+winget do not manage OpenCode. For the one-time Meridian CLI qualification stage, install **OpenCode 2.0.31**
+(not the desktop-bundled 2.2.0 qualification), run `meridian setup --v2`,
+then upgrade to latest v2 only after checking registration and real provider
+routing. Follow [the cutover runbook](OPENCODE-V2-CUTOVER-RUNBOOK.md);
+qualification of the newer host remains an owner-run acceptance gate.
 
 ## Web Service
 
