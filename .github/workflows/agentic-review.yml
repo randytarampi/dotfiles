@@ -462,11 +462,14 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          python3 -m pip install --disable-pip-version-check "litellm[proxy]==1.102.1"
+          python3 -m venv "${RUNNER_TEMP}/review-free-venv"
+          "${RUNNER_TEMP}/review-free-venv/bin/python" -m pip install \
+            --disable-pip-version-check "litellm[proxy]==1.102.1"
           key="$(python3 -c 'import secrets; print("sk-" + secrets.token_urlsafe(36))')"
           printf '::add-mask::%s\n' "${key}"
           export REVIEW_LITELLM_KEY="${key}"
-          nohup env -u RUNNER_TRACKING_ID litellm \
+          nohup env -u RUNNER_TRACKING_ID \
+            "${RUNNER_TEMP}/review-free-venv/bin/litellm" \
             --config "${RUNNER_TEMP}/review-free-litellm.json" \
             --host 127.0.0.1 --port 4907 \
             > "${RUNNER_TEMP}/review-free-litellm.log" 2>&1 &
