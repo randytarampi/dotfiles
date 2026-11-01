@@ -16,7 +16,8 @@ def test_terra_and_upstream_translations():
     assert p["plus"]["orchestrator"]["model"] == "openai/gpt-6.1-terra"
     assert p["plus"]["oracle"]["model"] == "openai/gpt-6.1-sol"
     assert p["omo-slim-openai"]["orchestrator"]["variant"] == "medium"
-    assert p["omo-slim-openai"]["fixer"] == {"model": "openai/gpt-6.1-sol", "variant": "low", "skills": [], "mcps": ["codegraph"]} or (p["omo-slim-openai"]["fixer"]["model"], p["omo-slim-openai"]["fixer"]["variant"]) == ("openai/gpt-6.1-sol", "low")
+    assert p["omo-slim-openai"]["fixer"]["model"] == "openai/gpt-6.1-sol"
+    assert p["omo-slim-openai"]["fixer"]["variant"] == "low"
     assert p["omo-slim-thirty-dollars"]["oracle"]["model"] == "openai/gpt-6-astra"
     forty = p["omo-slim-fourty-dollars"]
     assert forty["orchestrator"]["model"] == "anthropic/claude-opus-5-5"
