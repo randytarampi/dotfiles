@@ -61,7 +61,17 @@ set up. Never put real values in `.env.example`.
 
 The reusable `.github/workflows/agentic-review.yml` accepts the trusted
 `workflow_call` input `inference_provider`: `free` (default), `opencode`,
-`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. Maintainer-authorized `/opencode --pool=mistral`, `/opencode --pool=groq`,\n`/opencode --pool=cloudflare`, `/opencode --pool=nim` or\n`/opencode --pool=opencode` select an OpenCode inference pool without\nnotifying GitHub user accounts. `/opencode` uses the `free` pool, whose\nconfiguration-time preference is Mistral, Cloudflare, Groq, then the existing\nOpenCode Big Pickle when none of those credentials are present. This is\n**not** runtime 429 failover or positive proof of zero-charge entitlement.\nNVIDIA is excluded from the automatic pool. Multiple conflicting selectors\nare rejected. The trusted-ref must be refreshed before new commands go live.\nThe GitHub repository or\norganisation holding the caller workflow must provide the corresponding
+`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. Maintainer-authorized `/opencode --pool=mistral`, `/opencode --pool=groq`,
+`/opencode --pool=cloudflare`, `/opencode --pool=nim` or
+`/opencode --pool=opencode` select an OpenCode inference pool without
+notifying GitHub user accounts. `/opencode` uses the `free` pool, whose
+configuration-time preference is Mistral, Cloudflare, Groq, then the existing
+OpenCode Big Pickle when none of those credentials are present. This is
+**not** runtime 429 failover or positive proof of zero-charge entitlement.
+NVIDIA is excluded from the automatic pool. Multiple conflicting selectors
+are rejected. The trusted-ref must be refreshed before new commands go live.
+The GitHub repository or
+organisation holding the caller workflow must provide the corresponding
 optional secrets in addition to the existing review secrets. The Cloudflare
 account identifier belongs in Actions **variable** `CLOUDFLARE_ACCOUNT_ID`,
 not a secret. NVIDIA's `--pool=nim` option also requires explicit trusted
