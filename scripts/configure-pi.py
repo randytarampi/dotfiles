@@ -35,6 +35,9 @@ from opencode_config import (  # noqa: E402 -- local import follows bootstrap.
 from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap.
     PROVIDER_ENDPOINTS,
     provider_models,
+    provider_base_url,
+    selected_optional_providers,
+    OPTIONAL_INFERENCE_PROVIDERS,
 )
 from tier_resolve import (  # noqa: E402 -- local import follows bootstrap.
     get_model_details,
@@ -322,8 +325,8 @@ def litellm_cloud_aliases(port="4000"):
         )
         # Explicit empty presence per provider (UNKNOWN discipline): the
         # providers exist, nothing is confirmed — never a silent absence.
-        return {provider: {} for provider in ("google", "openrouter", "opencode")}
-    routes = {provider: {} for provider in ("google", "openrouter", "opencode")}
+        return {provider: {} for provider in ("google", "openrouter", "opencode", *OPTIONAL_INFERENCE_PROVIDERS)}
+    routes = {provider: {} for provider in ("google", "openrouter", "opencode", *OPTIONAL_INFERENCE_PROVIDERS)}
     for catalogue_id in available:
         # Pi's provider model id is already the exact LiteLLM wire id. Provider
         # qualification belongs in settings references, not the catalogue.
@@ -335,6 +338,11 @@ def litellm_cloud_aliases(port="4000"):
             routes["openrouter"][identity.removeprefix("openrouter/")] = wire
         elif identity.startswith("opencode/"):
             routes["opencode"][identity.removeprefix("opencode/")] = wire
+        else:
+            for provider in OPTIONAL_INFERENCE_PROVIDERS:
+                if identity.startswith(provider + "/"):
+                    routes[provider][identity[len(provider) + 1 :]] = wire
+                    break
     routes["_available"] = {item: item for item in available}
     return routes
 
@@ -1161,7 +1169,12 @@ def main():
     skipped_providers = []
     skipped_provider_names = []
     emitted_providers = []
+    optional_routes = selected_optional_providers(os.environ)
     for provider, endpoint in PROVIDER_ENDPOINTS.items():
+        if provider in OPTIONAL_INFERENCE_PROVIDERS and (
+            provider not in optional_routes or pi_litellm_proxy
+        ):
+            continue
         if pi_litellm_proxy and provider in ("google", "openrouter"):
             continue
         # Registry entries without an "api"/"allowlist" pair (litellm-only
@@ -1175,7 +1188,7 @@ def main():
             skipped_provider_names.append(provider)
             continue
         providers[provider] = {
-            "baseUrl": endpoint["baseUrl"],
+            "baseUrl": provider_base_url(provider, os.environ),
             "api": endpoint["api"],
             "apiKey": f"${key_env}",
             "models": [model_entry(model_id) for model_id in provider_models(provider)],
