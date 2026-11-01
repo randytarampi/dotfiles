@@ -253,7 +253,7 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(
             data["presets"]["plus"]["designer"]["model"], "openai/gpt-6.1-terra"
         )
-        self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "high")
+        self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "medium")
         self.assertEqual(
             data["_tiers"]["pro-plus"]["fallback"]["orchestrator"],
             ["openai/gpt-6.1-sol"],
