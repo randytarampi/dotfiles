@@ -222,28 +222,49 @@ def _native_permissions(external_dir_permissions, legacy_permission=None):
     return rules
 
 
+_MCP_OAUTH_FIELDS = {
+    "clientId": "client_id",
+    "clientSecret": "client_secret",
+    "callbackPort": "callback_port",
+    "redirectUri": "redirect_uri",
+}
+
+
+def _convert_mcp_server_entry(name, entry):
+    """Normalize one flat v1 map entry into its native v2 server object.
+
+    Directional precedence: a legacy ``enabled`` value (when present) is
+    converted by inversion and wins over any already-native ``disabled``;
+    without legacy ``enabled`` the native ``disabled`` value is preserved
+    (a native disabled server never silently becomes enabled); malformed
+    non-boolean policy values are refused, never coerced.
+    """
+    server = dict(entry) if isinstance(entry, dict) else {}
+    if isinstance(entry, dict) and "enabled" in entry:
+        if not isinstance(entry["enabled"], bool):
+            raise ValueError(f"MCP server {name!r} has non-boolean enabled")
+        server["disabled"] = not entry["enabled"]
+        server.pop("enabled", None)
+    elif "disabled" in server and not isinstance(server["disabled"], bool):
+        raise ValueError(f"MCP server {name!r} has non-boolean disabled")
+    else:
+        server.setdefault("disabled", False)
+    timeout = server.pop("timeout", None)
+    if isinstance(timeout, int):
+        server["timeout"] = {"catalog": timeout, "execution": timeout}
+    for legacy, native in _MCP_OAUTH_FIELDS.items():
+        if legacy in server:
+            server[native] = server.pop(legacy)
+    return server
+
+
 def _native_mcp_config(mcp_config):
     """Convert the merged v1 flat MCP map to the native v2 mcp.servers shape."""
     if isinstance(mcp_config.get("servers"), dict):
         return mcp_config  # Already native v2.
-    oauth_fields = {
-        "clientId": "client_id",
-        "clientSecret": "client_secret",
-        "callbackPort": "callback_port",
-        "redirectUri": "redirect_uri",
-    }
     servers = {}
     for name, entry in mcp_config.items():
-        server = dict(entry) if isinstance(entry, dict) else {}
-        server.pop("enabled", None)
-        server["disabled"] = isinstance(entry, dict) and entry.get("enabled") is False
-        timeout = server.pop("timeout", None)
-        if isinstance(timeout, int):
-            server["timeout"] = {"catalog": timeout, "execution": timeout}
-        for legacy, native in oauth_fields.items():
-            if legacy in server:
-                server[native] = server.pop(legacy)
-        servers[name] = server
+        servers[name] = _convert_mcp_server_entry(name, entry)
     return {"servers": servers}
 
 
