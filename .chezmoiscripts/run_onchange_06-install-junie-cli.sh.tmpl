@@ -16,6 +16,10 @@ source "${LIB_DIR}/env.sh"
 # configs/opencode/oh-my-opencode-slim.json: {{ include "configs/opencode/oh-my-opencode-slim.json" | sha256sum }}
 # scripts/lib/tier_resolve.py: {{ include "scripts/lib/tier_resolve.py" | sha256sum }}
 # configs/junie/model-groups.json: {{ include "configs/junie/model-groups.json" | sha256sum }}
+# configs/opencode/groq-models.json: {{ include "configs/opencode/groq-models.json" | sha256sum }}
+# configs/opencode/mistral-models.json: {{ include "configs/opencode/mistral-models.json" | sha256sum }}
+# configs/opencode/cloudflare-models.json: {{ include "configs/opencode/cloudflare-models.json" | sha256sum }}
+# configs/opencode/nvidia-nim-models.json: {{ include "configs/opencode/nvidia-nim-models.json" | sha256sum }}
 # junie-channel: {{ env "DOTFILES_JUNIE_CHANNEL" | default "release" }}
 # junie-version:{{ env "DOTFILES_JUNIE_VERSION" }}
 # junie-local-model: {{ env "DOTFILES_JUNIE_LOCAL_MODEL" | default "0" }}
