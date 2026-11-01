@@ -72,6 +72,20 @@ def test_meridian_unprobeable_fails_closed_or_skips_when_gate_off(
     assert json.loads(config.read_text()) == initial
 
     config, initial = run_configure_meridian(
+        monkeypatch, tmp_path / "v2-unknown", ("unknown", None), gate="1"
+    )
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "resolve_opencode_host",
+        lambda: ("unknown", None),
+    )
+    with pytest.raises(SystemExit) as error:
+        with mock.patch.object(sys, "argv", ["configure-meridian.py"]):
+            configure_meridian.main()
+    assert error.value.code == 1
+    assert json.loads(config.read_text()) == initial
+
+    config, initial = run_configure_meridian(
         monkeypatch, tmp_path / "off", ("unknown", None), gate="0"
     )
     with mock.patch.object(sys, "argv", ["configure-meridian.py"]):

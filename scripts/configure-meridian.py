@@ -146,12 +146,6 @@ def main():
             sys.exit(1)
         return
 
-    if os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP") == "1":
-        logger.critical(
-            "Meridian setup requires a probed OpenCode host; refusing legacy fallback."
-        )
-        sys.exit(1)
-
     if not os.path.exists(config_path):
         logger.critical(
             f"opencode.json not found at {config_path}\nRun configure-opencode.py first."
