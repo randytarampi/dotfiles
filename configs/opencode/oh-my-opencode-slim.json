@@ -1649,9 +1649,7 @@
         "fixer": [
           "opencode/mimo-v2.6-flash-free"
         ],
-        "observer": [
-          "opencode/nemotron-3.5-super-vl-free"
-        ],
+        "observer": [],
         "council": []
       }
     },
