@@ -61,9 +61,18 @@ set up. Never put real values in `.env.example`.
 
 The reusable `.github/workflows/agentic-review.yml` accepts the trusted
 `workflow_call` input `inference_provider`: `opencode` (default),
-`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. The GitHub repository or
+`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. Maintainer-authorized `/opencode @mistral`, `/opencode @groq`,
+`/opencode @cloudflare`, or `/opencode @nim` comments select the same existing
+OpenCode reviewer (not separate publishing bots). Multiple provider hints
+are rejected. `/opencode` alone keeps the Big Pickle default. The hosted
+review action's trusted-ref must include this code before tags take effect.
+The GitHub repository or
 organisation holding the caller workflow must provide the corresponding
-optional secrets in addition to the existing review secrets; do not inject
+optional secrets in addition to the existing review secrets. The Cloudflare
+account identifier belongs in Actions **variable** `CLOUDFLARE_ACCOUNT_ID`,
+not a secret. NVIDIA's `@nim` option also requires explicit trusted
+`allow_nvidia_review: true` approval and is not enabled by the dispatcher.
+Do not inject
 them into untrusted PR files.
 
 The official OpenCode GitHub App still publishes with OIDC, using its
@@ -117,3 +126,14 @@ credential stores, existing client virtual keys or user-owned profiles.
 - [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
 - [NVIDIA hosted NIM](https://build.nvidia.com/explore)
 - [Slim fallback configuration](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/configuration.md)
+
+## Model-pool strategy (deliberately deferred)
+
+A fused default `best` selection is desirable only after credentialed tool-call,
+licensing, cost and independent-rate-limit evidence for each account/model.
+The action currently has one primary `with.model`, not the local Slim
+orchestrator/fallback engine. A catalogue of names does not provide an ordered
+runtime fallback chain for GitHub reviews. Future work should re-use the existing
+evidence-qualified dynamic-free registry or explicitly configure the host's
+supported fallback plugin, without silently enabling paid/development-only
+capacity. The default remains `opencode/big-pickle` until proven otherwise.
