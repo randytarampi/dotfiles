@@ -15,6 +15,10 @@ LITELLM_ROUTED_PROVIDERS = frozenset(
         "openrouter",
         "opencode",
         "meridian",
+        "groq",
+        "mistral",
+        "cloudflare",
+        "nvidia-nim",
     }
 )
 
