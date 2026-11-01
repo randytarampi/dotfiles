@@ -1,6 +1,11 @@
 """Optional inference boundaries: account binding, strict-free scope and aliases."""
 
 import json
+import os
+import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -131,3 +136,128 @@ def test_review_action_keeps_trusted_model_selection_and_no_push_guards():
     assert "review-no-push/pre-push" in workflow
     assert "anomalyco/opencode/github@" in workflow
     assert "NVIDIA NIM review requires explicit development-use approval" in workflow
+
+
+def _run_review_model_setup(tmp_path, **overrides):
+    """Execute the exact trusted workflow's embedded selector without secrets."""
+    workflow = (ROOT / ".github/workflows/agentic-review.yml").read_text(
+        encoding="utf-8"
+    )
+    marker = "      - name: Configure read-only OpenCode plan agent"
+    fragment = workflow.split(marker, 1)[1].split(
+        "      - name: Prepare native OpenCode Git authentication handoff", 1
+    )[0]
+    match = re.search(
+        r"^          python3 - <<'PY'\n(?P<code>.*?)^          PY$",
+        fragment,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match is not None
+    script = textwrap.dedent(match.group("code"))
+    root = tmp_path
+    root.joinpath("configs/opencode/ci").mkdir(parents=True)
+    root.joinpath("configs/opencode/ci/opencode.json").write_text(
+        (ROOT / "configs/opencode/ci/opencode.json").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    envfile = tmp_path / "github-env"
+    outfile = tmp_path / "github-output"
+    env = {
+        **os.environ,
+        "TRUSTED_DOTFILES": str(root),
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_ENV": str(envfile),
+        "GITHUB_OUTPUT": str(outfile),
+        "REVIEW_INFERENCE_PROVIDER": "free",
+        "REVIEW_ALLOW_NVIDIA": "false",
+        "HAS_MISTRAL_KEY": "false",
+        "HAS_CLOUDFLARE_KEY": "false",
+        "HAS_GROQ_KEY": "false",
+        "HAS_NVIDIA_NIM_KEY": "false",
+        "REVIEW_FREE_MISTRAL_APPROVED": "",
+        "REVIEW_FREE_CLOUDFLARE_APPROVED": "",
+        "REVIEW_FREE_GROQ_APPROVED": "",
+        "CLOUDFLARE_ACCOUNT_ID": "",
+        **overrides,
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+        cwd=tmp_path,
+    )
+    if result.returncode:
+        return result, {}, {}
+    config = json.loads((tmp_path / "opencode-review-config.json").read_text())
+    emitted = dict(
+        line.split("=", 1)
+        for line in outfile.read_text(encoding="utf-8").splitlines()
+    )
+    return result, config, emitted
+
+
+def test_review_free_defaults_to_existing_open_code_without_approved_routes(tmp_path):
+    result, config, output = _run_review_model_setup(
+        tmp_path,
+        HAS_MISTRAL_KEY="true",
+        HAS_CLOUDFLARE_KEY="true",
+        CLOUDFLARE_ACCOUNT_ID="a" * 32,
+    )
+    assert result.returncode == 0, result.stderr
+    assert config["model"] == "opencode/big-pickle"
+    assert output["selected_provider"] == "opencode"
+
+
+def test_review_free_uses_approved_mistral_primary_without_secret_literal(tmp_path):
+    result, config, output = _run_review_model_setup(
+        tmp_path,
+        HAS_MISTRAL_KEY="true",
+        REVIEW_FREE_MISTRAL_APPROVED="true",
+    )
+    assert result.returncode == 0, result.stderr
+    assert config["model"] == "mistral/mistral-small-latest"
+    assert output["selected_provider"] == "mistral"
+    assert config["provider"]["mistral"]["options"]["apiKey"] == (
+        "{env:MISTRAL_API_KEY}"
+    )
+
+
+def test_review_free_uses_account_bound_cloudflare_when_approved(tmp_path):
+    account = "b" * 32
+    result, config, output = _run_review_model_setup(
+        tmp_path,
+        HAS_CLOUDFLARE_KEY="true",
+        CLOUDFLARE_ACCOUNT_ID=account,
+        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
+    )
+    assert result.returncode == 0, result.stderr
+    assert output["selected_provider"] == "cloudflare"
+    assert config["model"].startswith("cloudflare/")
+    assert config["provider"]["cloudflare"]["options"]["baseURL"].endswith(
+        f"/accounts/{account}/ai/v1"
+    )
+
+
+def test_review_nim_is_rejected_without_explicit_approval(tmp_path):
+    result, _, _ = _run_review_model_setup(
+        tmp_path,
+        REVIEW_INFERENCE_PROVIDER="nvidia-nim",
+        HAS_NVIDIA_NIM_KEY="true",
+    )
+    assert result.returncode != 0
+    assert "development-use approval" in result.stderr
+
+
+def test_review_cloudflare_rejects_malformed_account(tmp_path):
+    result, _, _ = _run_review_model_setup(
+        tmp_path,
+        REVIEW_INFERENCE_PROVIDER="cloudflare",
+        HAS_CLOUDFLARE_KEY="true",
+        CLOUDFLARE_ACCOUNT_ID="not-valid",
+    )
+    assert result.returncode != 0
+    assert "Invalid Cloudflare account ID" in result.stderr
