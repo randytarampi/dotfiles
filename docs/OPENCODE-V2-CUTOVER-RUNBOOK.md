@@ -11,8 +11,8 @@ This is an owner-run procedure, not a claim that a live cutover has been tested.
 
 ## Execution and proof
 
-5. Install the OpenCode CLI with the official script using `--version 2.0.31`; resolve the absolute binary path and verify exact version in login shell, non-login execution and service context.
-6. Run `meridian setup --v2 --opencode-bin <resolved-path>` exactly once. Confirm plugin registration, then update OpenCode to the latest stable v2 and exercise a real correctly routed Meridian request on that host.
+5. Install the OpenCode CLI to the qualified release: `scripts/install-opencode-v2.sh --version 2.0.31`; resolve the absolute binary path and verify exact version in login shell, non-login execution and service context.
+6. Run `meridian setup --v2 --opencode-bin <resolved-path>` exactly once. Confirm plugin registration (the generator now preserves this entry across regenerations), then refresh to the latest stable v2 with `scripts/install-opencode-v2.sh --install-latest` and exercise a real correctly routed Meridian request on that latest host. Leave `DOTFILES_RUN_MERIDIAN_SETUP=0` afterwards: deploys keep the registered entry without re-running qualification.
 7. Set `DOTFILES_RUN_MERIDIAN_SETUP=0` in the owner environment after successful one-time registration. This is required so the fail-closed first-time qualification gate does not block later deployments; verify the subsequent deploy still preserves and uses the registration.
 8. Run the generation chain and managed configuration gates. Check native v2 configuration, permissions, MCP state, voice CLI config, DCP, memory opt-in, plugin load/version convergence and user-file preservation.
 9. Re-bootstrap the launchd service with the new absolute binary. Verify authenticated loopback `/api/info` returns the expected version; then verify the external Caddy route, authentication, WebSocket behaviour and unrelated service health.

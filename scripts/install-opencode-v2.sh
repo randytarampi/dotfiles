@@ -2,6 +2,50 @@
 set -euo pipefail
 
 HOME_BIN="$HOME/.opencode/bin/opencode"
+MODE="auto"
+PINNED_VERSION=""
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: install-opencode-v2.sh [--install-latest | --verify | --version X.Y.Z]
+  (default) install-latest only when no verified v2 host is installed; otherwise
+  a verification-only pass (the `opencode upgrade` update lane refreshes latest
+  on its own schedule and re-proves plugin convergence).
+  --install-latest  always run the official installer plus strict post-verify;
+                    never skips because a major-2 binary happens to exist.
+  --verify          read-only: prove a stable v2 CLI or exit 1; never installs.
+  --version X.Y.Z   pinned qualification stage (Meridian): installs that exact
+                    release when different; never accepts a prerelease or a
+                    merely-different version.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --install-latest) MODE="install-latest" ;;
+  --verify) MODE="verify" ;;
+  --version)
+    shift
+    if [[ $# -eq 0 || ! "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      printf '[ERROR] --version requires an exact stable X.Y.Z argument.\n' >&2
+      usage
+      exit 2
+    fi
+    MODE="pinned"
+    PINNED_VERSION="$1"
+    ;;
+  --help | -h)
+    usage
+    exit 0
+    ;;
+  *)
+    printf '[ERROR] Unknown argument: %s\n' "$1" >&2
+    usage
+    exit 2
+    ;;
+  esac
+  shift
+done
 
 if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
   printf '[INFO] DOTFILES_RUN_OPENCODE_TOOLS_SETUP is off; skipping OpenCode host setup.\n' >&2
@@ -9,29 +53,60 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" != "1" ]]; then
 fi
 
 probe_v2() {
-  local selected output
+  # probe_v2 [expected_version] — expected present only in pinned mode.
+  local selected output expected="${2:-}"
   if [[ -x "$HOME_BIN" ]]; then selected="$HOME_BIN"; else selected="$(command -v opencode || true)"; fi
   [[ -n "$selected" && -x "$selected" ]] || return 1
   output="$("$selected" --version 2>&1)" || return 1
-  if ! python3 - "$output" <<'PY'
+  local pyargs=(- "$output")
+  [[ -n "$expected" ]] && pyargs+=("$expected")
+  if ! python3 "${pyargs[@]}" <<'PY'
 import re, sys
-versions = set(re.findall(r"(?<![A-Za-z0-9.+-])v?(\d+\.\d+\.\d+)(?![A-Za-z0-9.+-])", sys.argv[1]))
-raise SystemExit(0 if len(versions) == 1 and versions.pop().split('.', 1)[0] == '2' else 1)
+# argv after the script placeholder: [output, (expected?)] — positional,
+# never index-counted from the leading dash.
+args = sys.argv[1:]
+versions = set(re.findall(r"(?<![A-Za-z0-9.+-])v?(\d+\.\d+\.\d+)(?![A-Za-z0-9.+-])", args[0]))
+if len(versions) != 1:
+    raise SystemExit(1)
+version = versions.pop()
+if version.split('.', 1)[0] != '2':
+    raise SystemExit(1)
+if len(args) > 1 and version != args[1]:
+    raise SystemExit(1)
+raise SystemExit(0)
 PY
   then return 1; fi
   printf '[INFO] OpenCode v2 verified at %s (%s).\n' "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$selected")" "$output" >&2
 }
 
-if probe_v2; then
-  printf '[INFO] Existing OpenCode v2 install is current; verification-only pass.\n' >&2
-  exit 0
-fi
+case "$MODE" in
+verify)
+  if probe_v2; then exit 0; fi
+  printf '[ERROR] --verify: no stable OpenCode v2 CLI could be proved.\n' >&2
+  exit 1
+  ;;
+pinned)
+  if probe_v2 "" "$PINNED_VERSION"; then
+    printf '[INFO] OpenCode %s already installed (pinned qualification stage).\n' "$PINNED_VERSION" >&2
+    exit 0
+  fi
+  ;;
+*) if [[ "$MODE" == "auto" ]] && probe_v2; then
+    printf '[INFO] Existing OpenCode v2 install is current; verification-only pass. Latest-stable refresh belongs to the update lane (opencode upgrade + plugin re-check).\n' >&2
+    exit 0
+  fi
+  ;;
+esac
 
 case "$(uname -s)" in
 Darwin | Linux)
-  curl -fsSL https://opencode.ai/v2/install | bash -s --
+  curl -fsSL https://opencode.ai/v2/install | bash -s -- ${PINNED_VERSION:+--version "$PINNED_VERSION"}
   ;;
 MINGW* | MSYS* | CYGWIN*)
+  if [[ "$MODE" == "pinned" ]]; then
+    printf '[ERROR] Pinned-version installs are not supported through the Windows NSIS channel (no versioned silent install argument is verified); use --install-latest there.\n' >&2
+    exit 2
+  fi
   arch="$(uname -m)"
   case "$arch" in
   AMD64 | x86_64) url="https://opencode.ai/download/latest/windows-x64-nsis" ;;
@@ -64,8 +139,12 @@ MINGW* | MSYS* | CYGWIN*)
   ;;
 esac
 
-if ! probe_v2; then
-  printf '[ERROR] OpenCode installer completed but a successful v2 CLI probe could not be proved.\n' >&2
+if ! probe_v2 "" "$PINNED_VERSION"; then
+  if [[ -n "$PINNED_VERSION" ]]; then
+    printf '[ERROR] Installer ran but the installed v2 CLI does not verify as the pinned version %s.\n' "$PINNED_VERSION" >&2
+  else
+    printf '[ERROR] OpenCode installer completed but a successful v2 CLI probe could not be proved.\n' >&2
+  fi
   exit 1
 fi
 
