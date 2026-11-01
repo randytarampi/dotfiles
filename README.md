@@ -10,6 +10,11 @@ eeeeee eeeee eeeee eeee e  e     eeee eeeee
 
 [@randytarampi](https://github.com/randytarampi)'s [`dotfiles`](https://github.com/randytarampi/dotfiles) managed by [`chezmoi`](https://chezmoi.io/).
 
+
+For opt-in Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM setup (including
+LiteLLM and GitHub review-action settings), see
+[optional inference providers](docs/OPTIONAL_INFERENCE.md).
+
 ## Quick Start
 
 ```bash
