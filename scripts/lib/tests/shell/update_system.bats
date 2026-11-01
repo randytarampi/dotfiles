@@ -63,9 +63,6 @@ NVMSH
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
     PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
-  if [ "$status" -ne 0 ]; then
-    printf 'DIAGP1 status=%s\nDIAGP1 output=%s\n' "$status" "$output" >&3
-  fi
   [ "$status" -eq 0 ]
   calls="$(cat "$BATS_TEST_TMPDIR/calls")"
   [[ "$calls" == *"MANAGED upgrade"* ]]
