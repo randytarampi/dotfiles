@@ -114,3 +114,32 @@ def provider_base_url(provider, environ=None):
         "https://api.cloudflare.com/client/v4/accounts/"
         f"{account}/ai/v1"
     )
+
+
+def selected_optional_providers(environ=None):
+    """Return explicitly selected, credentialed optional provider routes.
+
+    Missing credentials are absent, not a deployment error. A malformed
+    selection or Cloudflare account ID is an explicit configuration error.
+    """
+    import os
+
+    env = os.environ if environ is None else environ
+    selected = str(env.get("DOTFILES_OPTIONAL_INFERENCE_PROVIDERS", "")).strip()
+    if not selected:
+        return {}
+    names = [item.strip() for item in selected.split(",")]
+    if any(name not in OPTIONAL_INFERENCE_PROVIDERS for name in names):
+        raise ValueError("unknown optional inference provider in selection")
+    if len(set(names)) != len(names):
+        raise ValueError("duplicate optional inference provider in selection")
+    result = {}
+    for name in names:
+        spec = PROVIDER_ENDPOINTS[name]
+        if not str(env.get(spec["apiKeyEnv"], "")).strip():
+            continue
+        url = provider_base_url(name, env)
+        if url is None:
+            continue
+        result[name] = url
+    return result
