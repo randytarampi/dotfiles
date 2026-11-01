@@ -60,7 +60,16 @@ litellm_ensure_prisma_client() {
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
   local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL="" LITELLM_LOCAL_MODEL_COST_MAP=""
-  local LITELLM_OPENCODE_KEY="" LITELLM_PI_KEY="" LITELLM_OPENWEBUI_KEY="" LITELLM_JUNIE_KEY=""
+  # Projection of litellm_config.APP_KEYS; parity is enforced by a regression test.
+  local -a managed_client_keys=(
+    LITELLM_OPENCODE_KEY LITELLM_PI_KEY LITELLM_OPENWEBUI_KEY LITELLM_JUNIE_KEY
+    LITELLM_CODEX_KEY LITELLM_CLAUDE_KEY LITELLM_COPILOT_CLI_KEY
+    LITELLM_JETBRAINS_KEY LITELLM_VSCODE_KEY LITELLM_XCODE_KEY
+  )
+  local key
+  for key in "${managed_client_keys[@]}"; do
+    local "$key="
+  done
   local GITHUB_COPILOT_TOKEN_DIR="" GITHUB_COPILOT_ACCESS_TOKEN_FILE="" GITHUB_COPILOT_API_KEY_FILE="" CHATGPT_TOKEN_DIR="" CHATGPT_AUTH_FILE=""
   local config_path
   config_path="$(dirname "$service_env")/config.yaml"
@@ -74,9 +83,12 @@ litellm_service_env_sync() {
       [[ -n "$ref" ]] || continue
       case "$ref" in
       LITELLM_MASTER_KEY | LITELLM_PORT | DISABLE_ADMIN_UI | DATABASE_URL) continue ;;
-      LITELLM_OPENCODE_KEY | LITELLM_PI_KEY | LITELLM_OPENWEBUI_KEY | LITELLM_JUNIE_KEY) continue ;;
-      *) provider_keys+=("$ref") ;;
       esac
+      local managed=0
+      for key in "${managed_client_keys[@]}"; do
+        if [[ "$ref" == "$key" ]]; then managed=1; break; fi
+      done
+      [[ "$managed" == "1" ]] || provider_keys+=("$ref")
     done < <(
       grep -o 'os\.environ/[A-Z][A-Z0-9_]*' "$config_path" 2>/dev/null |
         sed 's|os\.environ/||' | sort -u
@@ -189,7 +201,40 @@ litellm_service_env_sync() {
     printf 'Invalid LiteLLM master key (masked): <set:%s>\n' "${#LITELLM_MASTER_KEY}" >&2
     return 1
   fi
-  tmp="${service_env}.tmp.$$"
+  # A file-backed client key remains canonical when an older synchronizer
+  # dropped its service.env entry. Reject differences rather than rotate a
+  # valid consumer secret or silently replace user-owned material.
+  local client_dir="$(dirname "$service_env")/clients"
+  local client client_file file_value
+  if [[ -L "$client_dir" ]]; then
+    printf 'Unsafe LiteLLM client directory symlink\n' >&2
+    return 1
+  fi
+  for key in "${managed_client_keys[@]}"; do
+    client="${key#LITELLM_}"
+    client="${client%_KEY}"
+    client="$(printf '%s' "$client" | tr '[:upper:]_' '[:lower:]-')"
+    client_file="$client_dir/$client.key"
+    if [[ -L "$client_file" || ( -e "$client_file" && ! -f "$client_file" ) ]]; then
+      printf 'Unsafe LiteLLM client key path: %s\n' "$client" >&2
+      return 1
+    fi
+    if [[ -f "$client_file" ]]; then
+      if [[ ! -r "$client_file" ]]; then
+        printf 'Unreadable LiteLLM client key file: %s\n' "$client" >&2
+        return 1
+      fi
+      file_value="$(<"$client_file")"
+      if [[ -n "$file_value" ]]; then
+        if [[ -n "${!key}" && "${!key}" != "$file_value" ]]; then
+          printf 'LiteLLM client key conflict: %s (service.env vs client file)\n' "$client" >&2
+          return 1
+        fi
+        printf -v "$key" '%s' "$file_value"
+      fi
+    fi
+  done
+  tmp="${service_env}.tmp.$"
   umask 077
   {
     printf 'LITELLM_MASTER_KEY=%q\n' "$LITELLM_MASTER_KEY"
@@ -210,10 +255,9 @@ litellm_service_env_sync() {
       esac
       eval "if [[ -n \"\${${key}-}\" ]]; then printf '${key}=%q\\n' \"\${${key}}\"; fi"
     done
-    [[ -n "${LITELLM_OPENCODE_KEY:-}" ]] && printf 'LITELLM_OPENCODE_KEY=%q\n' "$LITELLM_OPENCODE_KEY"
-    [[ -n "${LITELLM_PI_KEY:-}" ]] && printf 'LITELLM_PI_KEY=%q\n' "$LITELLM_PI_KEY"
-    [[ -n "${LITELLM_OPENWEBUI_KEY:-}" ]] && printf 'LITELLM_OPENWEBUI_KEY=%q\n' "$LITELLM_OPENWEBUI_KEY"
-    [[ -n "${LITELLM_JUNIE_KEY:-}" ]] && printf 'LITELLM_JUNIE_KEY=%q\n' "$LITELLM_JUNIE_KEY"
+    for key in "${managed_client_keys[@]}"; do
+      [[ -n "${!key}" ]] && printf '%s=%q\n' "$key" "${!key}"
+    done
   } >"$tmp"
   chmod 600 "$tmp"
   if [[ -f "$service_env" ]] && cmp -s "$tmp" "$service_env"; then
