@@ -315,6 +315,7 @@ jobs:
           HAS_MISTRAL_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
           HAS_CLOUDFLARE_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
           HAS_NVIDIA_NIM_KEY: ${{ secrets.NVIDIA_NIM_API_KEY != '' }}
+          HAS_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY != '' }}
           REVIEW_FREE_MISTRAL_APPROVED: ${{ vars.REVIEW_FREE_MISTRAL_APPROVED }}
           REVIEW_FREE_CLOUDFLARE_APPROVED: ${{ vars.REVIEW_FREE_CLOUDFLARE_APPROVED }}
           REVIEW_FREE_GROQ_APPROVED: ${{ vars.REVIEW_FREE_GROQ_APPROVED }}
@@ -343,9 +344,10 @@ jobs:
           if requested not in ("free", "opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
               raise SystemExit("Unsupported trusted review inference provider")
           selected = "opencode/big-pickle"
-          # Configuration-time candidate order. These are not a verified
-          # runtime 429 failover chain. The active GitHub action still uses
-          # exactly one primary model per review invocation.
+          # The free pool is evidence-gated by owner Actions variables.
+          # With at least two eligible deployments, LiteLLM's native Router
+          # owns retries/cooldowns and cross-provider failover at request time.
+          free_candidates = []
           if requested == "free":
               for name, available, approved in (
                   ("mistral", "HAS_MISTRAL_KEY", "REVIEW_FREE_MISTRAL_APPROVED"),
@@ -356,9 +358,8 @@ jobs:
                       os.environ.get(available) == "true"
                       and os.environ.get(approved, "").strip().lower() == "true"
                   ):
-                      requested = name
-                      break
-              else:
+                      free_candidates.append(name)
+              if not free_candidates:
                   requested = "opencode"
           if requested == "cloudflare":
               account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
@@ -373,6 +374,60 @@ jobs:
                   )
           if requested == "nvidia-nim" and os.environ.get("REVIEW_ALLOW_NVIDIA") != "true":
               raise SystemExit("NVIDIA NIM review requires explicit development-use approval")
+          if requested == "free":
+              deployments = []
+              for order, name in enumerate(free_candidates, 1):
+                  model, base, key, _ = options[name]
+                  deployments.append({
+                      "model_name": "review-free",
+                      "litellm_params": {
+                          "model": ("nvidia_nim/" if name == "nvidia-nim" else name + "/") + model,
+                          "api_base": base,
+                          "api_key": "os.environ/" + key,
+                          "order": order,
+                      },
+                  })
+              # Big Pickle has an owner-approved free exception. Only add
+              # its OpenAI-compatible transport when its API key exists.
+              if os.environ.get("HAS_OPENCODE_KEY") == "true":
+                  deployments.append({
+                      "model_name": "review-free",
+                      "litellm_params": {
+                          "model": "openai/big-pickle",
+                          "api_base": "https://opencode.ai/zen/v1",
+                          "api_key": "os.environ/OPENCODE_API_KEY",
+                          "order": len(deployments) + 1,
+                      },
+                  })
+              if len(deployments) > 1:
+                  tmp = Path(os.environ["RUNNER_TEMP"])
+                  proxy_config = {
+                      "model_list": deployments,
+                      "router_settings": {
+                          "routing_strategy": "simple-shuffle",
+                          "num_retries": 1,
+                          "allowed_fails": 1,
+                          "cooldown_time": 60,
+                      },
+                      "general_settings": {
+                          "master_key": "os.environ/REVIEW_LITELLM_KEY",
+                      },
+                  }
+                  proxy_path = tmp / "review-free-litellm.json"
+                  proxy_path.write_text(json.dumps(proxy_config) + "\n")
+                  proxy_path.chmod(0o600)
+                  requested = "review-free"
+                  selected = "review-free/review-free"
+                  config.setdefault("provider", {})["review-free"] = {
+                      "npm": "@ai-sdk/openai-compatible",
+                      "options": {
+                          "baseURL": "http://127.0.0.1:4907/v1",
+                          "apiKey": "{env:REVIEW_LITELLM_KEY}",
+                      },
+                      "models": {"review-free": {"name": "Qualified free review pool"}},
+                  }
+              else:
+                  requested = free_candidates[0]
           if requested in options:
               model, base, key, available = options[requested]
               if os.environ.get(available) == "true":
@@ -397,6 +452,40 @@ jobs:
           printf '#!/bin/sh\necho "Review lane must not push" >&2\nexit 1\n' > "${RUNNER_TEMP}/review-no-push/pre-push"
           chmod +x "${RUNNER_TEMP}/review-no-push/pre-push"
           git config --local core.hooksPath "${RUNNER_TEMP}/review-no-push"
+      - name: Start runner-local LiteLLM native free pool
+        if: steps.review_model.outputs.selected_provider == 'review-free'
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -m pip install --disable-pip-version-check "litellm[proxy]==1.102.1"
+          key="$(python3 -c 'import secrets; print("sk-" + secrets.token_urlsafe(36))')"
+          printf '::add-mask::%s\n' "${key}"
+          export REVIEW_LITELLM_KEY="${key}"
+          nohup env -u RUNNER_TRACKING_ID litellm \
+            --config "${RUNNER_TEMP}/review-free-litellm.json" \
+            --host 127.0.0.1 --port 4907 \
+            > "${RUNNER_TEMP}/review-free-litellm.log" 2>&1 &
+          printf '%s\n' "$!" > "${RUNNER_TEMP}/review-free-litellm.pid"
+          healthy=false
+          for _ in $(seq 1 45); do
+            if curl --fail --silent --show-error --max-time 2 \
+              -H "Authorization: Bearer ${key}" \
+              "http://127.0.0.1:4907/v1/models" >/dev/null 2>&1; then
+              healthy=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${healthy}" != true ]]; then
+            echo "Runner-local LiteLLM free pool failed readiness; no paid or unqualified fallback." >&2
+            exit 1
+          fi
+          printf 'REVIEW_LITELLM_KEY=%s\n' "${key}" >> "${GITHUB_ENV}"
       - name: Prepare native OpenCode Git authentication handoff
         # Upstream expects an existing local extraheader, then replaces it
         # with its OIDC-exchanged App token. Checkout's persisted credential
@@ -421,6 +510,12 @@ jobs:
           model: ${{ steps.review_model.outputs.model }}
           agent: plan
           share: "false"
+      - name: Stop runner-local LiteLLM
+        if: always() && steps.review_model.outputs.selected_provider == 'review-free'
+        run: |
+          if [[ -s "${RUNNER_TEMP}/review-free-litellm.pid" ]]; then
+            kill "$(cat "${RUNNER_TEMP}/review-free-litellm.pid")" 2>/dev/null || true
+          fi
       - name: Remove native OpenCode authentication placeholder
         if: always()
         run: git config --local --unset-all http.https://github.com/.extraheader || true
