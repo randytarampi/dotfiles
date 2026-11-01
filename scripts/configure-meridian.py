@@ -63,8 +63,13 @@ def main():
             return
         opencode_bin = shutil.which("opencode")
         if not opencode_bin:
-            logger.critical("Meridian v2 setup failed: opencode binary is not resolvable")
+            logger.critical(
+                "Meridian v2 setup failed: opencode binary is not resolvable"
+            )
             sys.exit(1)
+        # CLI binary qualification only: the desktop 2.2.0 rule applies to the
+        # desktop-bundled binary (passed via --opencode-bin), never to a CLI
+        # on any host platform.
         host_version = opencode_host.host_version_string()
         if not host_version or not meridian_v2_qualification(
             host_version, binary_form="cli"
@@ -76,7 +81,9 @@ def main():
             sys.exit(1)
         meridian_bin = resolve_meridian_binary()
         if not meridian_bin:
-            logger.critical("Meridian v2 setup failed hard: meridian binary is not resolvable")
+            logger.critical(
+                "Meridian v2 setup failed hard: meridian binary is not resolvable"
+            )
             sys.exit(1)
         if args.dry_run:
             logger.info(
@@ -86,7 +93,7 @@ def main():
             )
             return
         try:
-            result = subprocess.run(  # nosec B603 - fixed args, resolved Meridian executable.
+            result = subprocess.run(  # nosec B603 - meridian binary from resolve_meridian_binary(); fixed literal args.
                 [meridian_bin, "setup", "--v2", "--opencode-bin", opencode_bin],
                 check=False,
                 timeout=300,

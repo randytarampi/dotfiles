@@ -27,12 +27,20 @@ _MERIDIAN_QUALIFIED_VERSIONS = {
 }
 
 
-def meridian_v2_qualification(host_version: str) -> bool:
-    import platform
+def meridian_v2_qualification(host_version: str, *, binary_form: str = "cli") -> bool:
+    """Decode Meridian's exact-qualification set for the probed binary form.
 
-    if host_version not in _MERIDIAN_QUALIFIED_VERSIONS:
-        return False
-    if host_version == MERIDIAN_QUALIFIED_OPENCODE_V2[MERIDIAN_DESKTOP_QUALIFIER]:
+    ``binary_form="cli"``: only Meridian's qualified CLI versions count — the
+    desktop 2.2.0 rule does not apply to a CLI binary that happens to run on
+    a Darwin box. ``binary_form="desktop"``: the Darwin-arm64 desktop 2.2.0
+    rule applies (desktop-bundled binaries via --opencode-bin). Unknown
+    forms fail closed like "cli".
+    """
+    if binary_form == "desktop":
+        import platform
+
+        if host_version != MERIDIAN_QUALIFIED_OPENCODE_V2[MERIDIAN_DESKTOP_QUALIFIER]:
+            return False
         return sys.platform == "darwin" and platform.machine() == "arm64"
     return host_version in MERIDIAN_QUALIFIED_OPENCODE_V2["cli"]
 

@@ -190,9 +190,14 @@ return HTML and are not valid health checks. `GET /api/info` returns JSON
 ServerInfo and requires HTTP Basic authentication (username `opencode` by
 default). Health probes require `application/json` and a semantic version.
 Configure `OPENCODE_PASSWORD` (preferred) or `OPENCODE_SERVER_PASSWORD`; never
-print or log these credentials. Caddy forwards `Authorization` to OpenCode.
-The LaunchAgent starts `opencode serve` on `OPENCODE_SERVER_PORT` (default
-4096); `opencode service` manages its registered service state.
+print or log these credentials. Caddy forwards `Authorization` to OpenCode:
+the credential a browser sends is Caddy's basic-auth password, and it must
+equal `OPENCODE_PASSWORD` for the forwarded request to authenticate — keep
+the two in sync and do not treat browser success as independent server
+evidence (doctor probes `127.0.0.1` directly). The LaunchAgent starts
+`opencode serve` on `OPENCODE_SERVER_PORT` (default 4096); launchd owns the
+`com.opencode.web` unit (script 26 writes the plist; configure-all and the
+Makefile bootout/bootstrap/kickstart it).
 
 ### Plannotator
 

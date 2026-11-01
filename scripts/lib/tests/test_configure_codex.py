@@ -389,10 +389,19 @@ def test_opencode_launch_consumer_executes_bridge_before_fake_child(tmp_path, so
         fake.write_text(
             "#!/bin/bash\n"
             'if [[ "${LITELLM_OPENCODE_KEY:-}" == "synthetic-opencode-key" ]]; then has_key=true; else has_key=false; fi\n'
-            'printf \'%s\\n%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" "$4" > "$OPENCODE_RECORD"\n',
+            'printf \'%s\\n%s\\n%s\\n%s\\n\' "$has_key" "$1" "$2" "$3" > "$OPENCODE_RECORD"\n',
             encoding="utf-8",
         )
         fake.chmod(0o755)
+        # The launchd-owner lifecycle must never touch the real user session
+        # from tests: a no-op launchctl keeps bootout/bootstrap inert while
+        # the direct command still exercises the fake.
+        fake_launchctl = fake_bin / "launchctl"
+        fake_launchctl.write_text(
+            '#!/bin/bash\ncase "$1" in print) exit 1;; *) exit 0;; esac\n',
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(0o755)
         command = command.replace("${OPENCODE_BIN}", str(fake)).replace(
             "${OPENCODE_SERVER_PORT:-4096}", "4096"
         )
@@ -428,20 +437,10 @@ def test_opencode_launch_consumer_executes_bridge_before_fake_child(tmp_path, so
             check=False,
         )
         record = tmp_path / "record"
-    assert result.returncode == 0, result.stderr
-    # The variables-path fixture records the direct exec (no service flag);
-    # the web branch replays the deploy template, which now serves through
-    # the managed v2 service (`serve --service`).
-    if source == "variables":
-        expected_argv = ["true", "serve", "--port", "4096"]
-    else:
-        expected_argv = [
-            "true",
-            "serve",
-            "--service",
-            "--port",
-            "4096",
-        ]
+        assert result.returncode == 0, result.stderr
+    # Both paths exec `opencode serve --port <port>`; launchd owns the
+    # com.opencode.web unit, so there is no v2 service flag in the plist.
+    expected_argv = ["true", "serve", "--port", "4096"]
     assert record.read_text().splitlines() == expected_argv
     assert "synthetic-opencode-key" not in result.stdout + result.stderr
 
