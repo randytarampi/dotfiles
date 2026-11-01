@@ -109,14 +109,17 @@ jobs:
 
       - name: Install and verify the pinned OpenCode CLI
         env:
-          OPENCODE_VERSION: "1.18.34"
+          OPENCODE_VERSION: "2.2.5"
         run: |
           set -euo pipefail
-          npm install --global "opencode-ai@${OPENCODE_VERSION}"
+          curl -fsSL https://opencode.ai/v2/install | bash -s -- --version "${OPENCODE_VERSION}"
+          export PATH="$HOME/.opencode/bin:$PATH"
           command -v opencode
           version_output="$(opencode --version)"
-          version_pattern="(^|[^0-9])${OPENCODE_VERSION//./\\.}([^0-9]|$)"
+          escaped_version="${OPENCODE_VERSION//./\\.}"
+          version_pattern="(^|[^0-9])${escaped_version}([^0-9]|$)"
           [[ "${version_output}" =~ ${version_pattern} ]]
+          printf '%s/.opencode/bin\n' "${HOME}" >> "${GITHUB_PATH}"
 
       - name: Generate the requested fix with the OpenCode CLI
         env:

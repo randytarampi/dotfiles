@@ -521,8 +521,9 @@ if ! step_skipped codegraph && [[ "${DOTFILES_RUN_CODEGRAPH_SETUP:-0}" == "1" ]]
       fi
       rm -rf -- "$_codex_home"
       trap - EXIT
-      # Normalize the nested 'mcp.servers' wrapper codegraph CLI 1.6.2 writes
-      # (opencode v1 expects flat top-level 'mcp'; scripts/lib/normalize_mcp_json.py)
+      # Normalize the MCP block to the installed host's expected shape
+      # (native v2 servers wrapper on v2 hosts; flat v1 map on v1 hosts;
+      # scripts/lib/normalize_mcp_json.py)
       python3 "$SCRIPT_DIR/lib/normalize_mcp_json.py" ||
         warn "CodeGraph MCP normalization failed — opencode.json may contain a stale 'mcp.servers' wrapper"
     fi

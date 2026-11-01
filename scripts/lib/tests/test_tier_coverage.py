@@ -174,6 +174,23 @@ def test_inventory_loader_known_and_unknown_shapes(tmp_path):
     assert tier_coverage.load_inventory_from_opencode_json(direct_mode) is None
 
 
+def test_inventory_loader_native_providers_shape(tmp_path):
+    """The doctor row and deploy gate read the native v2 providers key."""
+
+    populated = tmp_path / "native-populated.json"
+    populated.write_text(
+        json.dumps(
+            {"providers": {"litellm": {"models": {"a": {"id": "opencode/big-pickle"}}}}}
+        )
+    )
+    assert tier_coverage.load_inventory_from_opencode_json(populated) == [
+        "opencode/big-pickle"
+    ]
+    direct_mode = tmp_path / "native-direct-mode.json"
+    direct_mode.write_text(json.dumps({"providers": {"anthropic": {}}}))
+    assert tier_coverage.load_inventory_from_opencode_json(direct_mode) is None
+
+
 def test_unresolved_ignores_malformed_inventory_ids():
     """Unqualified owner strings and non-strings cannot crash model matching."""
     slim = {"presets": {"test": {"oracle": {"model": "anthropic/claude-sonnet-5-5"}}}}

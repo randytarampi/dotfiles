@@ -25,6 +25,7 @@ if LIB_DIR not in sys.path:
     sys.path.insert(0, LIB_DIR)
 
 import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
+import opencode_host  # noqa: E402 -- local import follows the bootstrap.
 from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
@@ -178,7 +179,93 @@ def build_local_provider(provider: str, models: list[dict]) -> dict[str, object]
 def register_local_provider(config: dict, provider: str, block: dict | None) -> None:
     """Register a local-engine provider in any generated config branch."""
     if block:
-        config["provider"][provider] = block
+        config["providers"][provider] = block
+
+
+def _native_permissions(external_dir_permissions, legacy_permission=None):
+    """Build the native v2 ordered permissions array.
+
+    v2 evaluates ordered rules with last-match-wins, so the broad
+    external_directory ask-all rule leads and the narrower temp-directory
+    allow rules follow to win the last match (restoring the v1 behaviour of
+    prompting for external paths except the trusted temp dirs). A legacy
+    v1 permission map handed to this helper directly (internal callers and
+    tests) is converted last; the emitter itself no longer constructs one.
+    """
+    actions = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+    rules = [{"action": "external_directory", "resource": "*", "effect": "ask"}]
+    rules.extend(
+        {"action": "external_directory", "resource": resource, "effect": effect}
+        for resource, effect in external_dir_permissions.items()
+    )
+    if isinstance(legacy_permission, dict):
+        for action, resources in legacy_permission.items():
+            if action == "external_directory":
+                continue
+            if isinstance(resources, dict):
+                rules.extend(
+                    {
+                        "action": actions.get(action, action),
+                        "resource": resource,
+                        "effect": effect,
+                    }
+                    for resource, effect in resources.items()
+                )
+            else:
+                rules.append(
+                    {
+                        "action": actions.get(action, action),
+                        "resource": "*",
+                        "effect": resources,
+                    }
+                )
+    return rules
+
+
+_MCP_OAUTH_FIELDS = {
+    "clientId": "client_id",
+    "clientSecret": "client_secret",
+    "callbackPort": "callback_port",
+    "redirectUri": "redirect_uri",
+}
+
+
+def _convert_mcp_server_entry(name, entry):
+    """Normalize one flat v1 map entry into its native v2 server object.
+
+    Directional precedence: a legacy ``enabled`` value (when present) is
+    converted by inversion and wins over any already-native ``disabled``;
+    without legacy ``enabled`` the native ``disabled`` value is preserved
+    (a native disabled server never silently becomes enabled); malformed
+    non-boolean policy values are refused, never coerced.
+    """
+    server = dict(entry) if isinstance(entry, dict) else {}
+    if isinstance(entry, dict) and "enabled" in entry:
+        if not isinstance(entry["enabled"], bool):
+            raise ValueError(f"MCP server {name!r} has non-boolean enabled")
+        server["disabled"] = not entry["enabled"]
+        server.pop("enabled", None)
+    elif "disabled" in server and not isinstance(server["disabled"], bool):
+        raise ValueError(f"MCP server {name!r} has non-boolean disabled")
+    else:
+        server.setdefault("disabled", False)
+    timeout = server.pop("timeout", None)
+    if isinstance(timeout, int):
+        server["timeout"] = {"catalog": timeout, "execution": timeout}
+    for legacy, native in _MCP_OAUTH_FIELDS.items():
+        if legacy in server:
+            server[native] = server.pop(legacy)
+    return server
+
+
+def _native_mcp_config(mcp_config):
+    """Convert the merged v1 flat MCP map to the native v2 mcp.servers shape."""
+    if isinstance(mcp_config.get("servers"), dict):
+        return mcp_config  # Already native v2.
+    servers = {}
+    for name, entry in mcp_config.items():
+        servers[name] = _convert_mcp_server_entry(name, entry)
+    return {"servers": servers}
 
 
 def _apply_routed_model_limits(model_identity, model):
@@ -225,7 +312,7 @@ def apply_litellm_client_gate(config: dict) -> None:
     key_path = Path("~/.local/share/litellm/clients/opencode.key").expanduser()
     if not key_path.is_file() or key_path.is_symlink():
         raise RuntimeError(f"OpenCode LiteLLM key file is unavailable: {key_path}")
-    providers = config.setdefault("provider", {})
+    providers = config.setdefault("providers", {})
     models = {}
     for provider_name, provider in providers.items():
         for model_id, model in (provider.get("models", {}) or {}).items():
@@ -322,7 +409,7 @@ def apply_litellm_client_gate(config: dict) -> None:
         client_key=key_path.resolve(),
         gateway_url=base_url,
     )
-    config["provider"] = {
+    config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
             "npm": "@ai-sdk/openai-compatible",
@@ -387,7 +474,7 @@ def apply_litellm_slim_gate(
     """Route every Slim selection using the gateway inventory built for OpenCode."""
     if not get_litellm_proxy_mode():
         return slim
-    gateway = config.get("provider", {}).get("litellm", {}).get("models", {})
+    gateway = config.get("providers", {}).get("litellm", {}).get("models", {})
     dynamic_selected_refs = {
         value["model"]
         for preset in ("free", "omo-slim-opencode-zen-free")
@@ -687,7 +774,7 @@ def route_dynamic_free_registry(registry, audit, preset, config):
     models = {}
     for alias in sorted(aliases):
         models[alias] = {"id": alias, "name": alias}
-    config["provider"] = {
+    config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
             "npm": "@ai-sdk/openai-compatible",
@@ -918,18 +1005,18 @@ def _register_ollama_cloud_routes(
 ):
     """Register direct cloud identities; local daemon stubs are never rewrites."""
     if combined_models:
-        config["provider"]["ollama"] = {
+        config["providers"]["ollama"] = {
             "models": combined_models,
             "name": "Ollama",
             "npm": "@ai-sdk/openai-compatible",
             "options": {"baseURL": get_ollama_local_base_url()},
         }
     elif local_ollama and preset not in ["plus", "pro"]:
-        config["provider"]["ollama"] = local_ollama
+        config["providers"]["ollama"] = local_ollama
 
     direct_key = os.environ.get("OLLAMA_API_KEY", "").strip()
     if direct_cloud_models and direct_key:
-        config["provider"]["ollama-cloud"] = {"models": direct_cloud_models}
+        config["providers"]["ollama-cloud"] = {"models": direct_cloud_models}
         return
 
     config["disabled_providers"].append("ollama-cloud")
@@ -963,6 +1050,12 @@ def main():
     parser.add_argument("--mode", default="global", choices=["global", "project"])
     add_skip_arg(parser, ["mcps", "acp-agents", "tier", "voice", "dcp"])
     args = parser.parse_args()
+    # One-way migration gate: native v2 configuration is only written for
+    # a compatible host. A v1 (or unprobeable) host keeps its last honest
+    # v1-shaped config; nothing is written this run.
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    if not opencode_host.native_emission_decision(host_state, host_major, logger):
+        return
     explicit_preset = args.preset
     source_root = Path(SCRIPT_DIR).resolve().parent
     logger.info("config source: %s/configs", source_root)
@@ -1336,29 +1429,23 @@ def main():
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
-            "provider": {},
-            "plugin": [],
-            "agent": {},
-            # Allow access to cross-platform temp directories without
-            # prompting. Project configs must be self-sufficient (same
-            # rationale as disabled_providers reset below).
-            "permission": {
-                "external_directory": _external_dir_permissions,
-            },
+            "providers": {},
+            "plugins": [],
+            "agents": {},
             # Always reset; project presets must not inherit a global tier's
             # disabled_providers (e.g. global `pro` disables anthropic).
             "disabled_providers": [],
         }
 
         if "openai" in needed_providers and openai_models:
-            config["provider"]["openai"] = {
+            config["providers"]["openai"] = {
                 "models": {
                     mid: build_model_entry(mid, models_dev_data, "openai")
                     for mid in openai_models
                 }
             }
         if "anthropic" in needed_providers and anthropic_models:
-            config["provider"]["anthropic"] = {
+            config["providers"]["anthropic"] = {
                 "models": {
                     mid: build_model_entry(mid, models_dev_data, "anthropic")
                     for mid in anthropic_models
@@ -1367,18 +1454,18 @@ def main():
         # Project cloud identities use the direct cloud provider; local daemon
         # stubs are never substituted for canonical IDs.
         if "ollama-cloud" in needed_providers and ollama_cloud_models:
-            config["provider"]["ollama-cloud"] = {
+            config["providers"]["ollama-cloud"] = {
                 "models": {
                     mid: build_model_entry(mid, models_dev_data, "ollama-cloud")
                     for mid in ollama_cloud_models
                 }
             }
         if "ollama" in needed_providers and local_ollama:
-            config["provider"]["ollama"] = local_ollama
+            config["providers"]["ollama"] = local_ollama
         for provider, block in local_engine_providers.items():
             register_local_provider(config, provider, block)
         if "opencode" in needed_providers and opencode_models:
-            config["provider"]["opencode"] = {
+            config["providers"]["opencode"] = {
                 "models": {
                     mid: build_model_entry(mid, models_dev_data, "opencode")
                     for mid in opencode_models
@@ -1393,7 +1480,7 @@ def main():
                 },
             }
         if "github-copilot" in needed_providers and github_copilot_models:
-            config["provider"]["github-copilot"] = {
+            config["providers"]["github-copilot"] = {
                 "models": {
                     mid: build_model_entry(mid, models_dev_data, "github-copilot")
                     for mid in github_copilot_models
@@ -1412,7 +1499,7 @@ def main():
             for provider, model_ids in dynamic_models.items():
                 endpoint = PROVIDER_ENDPOINTS.get(provider)
                 if endpoint:
-                    config["provider"][provider] = {
+                    config["providers"][provider] = {
                         "models": {
                             model_id: build_model_entry(
                                 model_id, models_dev_data, provider
@@ -1426,24 +1513,24 @@ def main():
                     }
 
         if meridian_plugin_path:
-            config["plugin"].append(meridian_plugin_path)
+            config["plugins"].append(meridian_plugin_path)
 
         # Mirror oh-my-opencode-slim PR #520: disable the full OpenCode
         # built-in agent set replaced by OMOS (build, explore, general, plan).
         # Preserve any existing agent entries instead of wholesale-replacing.
         for _agent_name in ("build", "explore", "general", "plan"):
-            _existing = config["agent"].get(_agent_name)
-            config["agent"][_agent_name] = {
+            _existing = config["agents"].get(_agent_name)
+            config["agents"][_agent_name] = {
                 **(_existing if isinstance(_existing, dict) else {}),
-                "disable": True,
+                "disabled": True,
             }
 
-        if not config["plugin"]:
-            del config["plugin"]
+        if not config["plugins"]:
+            del config["plugins"]
         if not config["mcp"]:
             del config["mcp"]
-        if not config["provider"]:
-            del config["provider"]
+        if not config["providers"]:
+            del config["providers"]
         # Note: disabled_providers is intentionally retained even when empty,
         # so it overrides (clears) any inherited global disabled_providers.
 
@@ -1461,15 +1548,14 @@ def main():
         config = {
             "$schema": "https://opencode.ai/config.json",
             "mcp": mcp_config,
-            "lsp": True,
             "compaction": {"auto": False},
-            "provider": {},
-            "plugin": [
+            "providers": {},
+            "plugins": [
                 configured_plugins[0],
                 "@tarquinen/opencode-dcp@latest",
-                [
-                    plannotator,
-                    {
+                {
+                    "package": plannotator,
+                    "options": {
                         "workflow": "plan-agent",
                         "planningAgents": [
                             "orchestrator",
@@ -1482,17 +1568,14 @@ def main():
                             "opencode",
                         ],
                     },
-                ],
+                },
                 *configured_plugins[2:],
             ],
-            "agent": {
-                "build": {"disable": True},
-                "explore": {"disable": True},
-                "general": {"disable": True},
-                "plan": {"disable": True},
-            },
-            "permission": {
-                "external_directory": _external_dir_permissions,
+            "agents": {
+                "build": {"disabled": True},
+                "explore": {"disabled": True},
+                "general": {"disabled": True},
+                "plan": {"disabled": True},
             },
             "disabled_providers": [
                 "google-vertex-anthropic",
@@ -1503,19 +1586,19 @@ def main():
 
         if args.preset.startswith("local"):
             if local_ollama:
-                config["provider"]["ollama"] = local_ollama
+                config["providers"]["ollama"] = local_ollama
 
             config["disabled_providers"].extend(["openai", "anthropic", "ollama-cloud"])
         elif args.preset in ("omo-slim-openai", "omo-slim-thirty-dollars"):
             if openai_models:
-                config["provider"]["openai"] = {
+                config["providers"]["openai"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "openai")
                         for mid in openai_models
                     }
                 }
             if opencode_models:
-                config["provider"]["opencode"] = {
+                config["providers"]["opencode"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "opencode")
                         for mid in opencode_models
@@ -1530,7 +1613,7 @@ def main():
                     },
                 }
             if args.preset == "omo-slim-thirty-dollars" and github_copilot_models:
-                config["provider"]["github-copilot"] = {
+                config["providers"]["github-copilot"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "github-copilot")
                         for mid in github_copilot_models
@@ -1550,7 +1633,7 @@ def main():
             for provider, model_ids in dynamic_models.items():
                 endpoint = PROVIDER_ENDPOINTS.get(provider)
                 if endpoint:
-                    config["provider"][provider] = {
+                    config["providers"][provider] = {
                         "models": {
                             model_id: build_model_entry(
                                 model_id, models_dev_data, provider
@@ -1578,14 +1661,14 @@ def main():
             )
         elif args.preset == "omo-slim-opencode-zen-free":
             if "openai" in global_needed_providers and openai_models:
-                config["provider"]["openai"] = {
+                config["providers"]["openai"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "openai")
                         for mid in openai_models
                     }
                 }
             if opencode_models:
-                config["provider"]["opencode"] = {
+                config["providers"]["opencode"] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, "opencode")
                         for mid in opencode_models
@@ -1621,7 +1704,7 @@ def main():
                         provider,
                     )
                     continue
-                config["provider"][provider] = {
+                config["providers"][provider] = {
                     "models": {
                         mid: build_model_entry(mid, models_dev_data, provider)
                         for mid in models
@@ -1645,7 +1728,7 @@ def main():
                     mid: build_model_entry(mid, models_dev_data, "anthropic")
                     for mid in anthropic_models
                 }
-                config["provider"]["anthropic"] = {"models": enriched_anthropic}
+                config["providers"]["anthropic"] = {"models": enriched_anthropic}
             config["disabled_providers"].extend(["openai", "ollama-cloud", "ollama"])
         elif args.preset in ("plus-anthropic", "omo-slim-forty-dollars"):
             if openai_models:
@@ -1653,13 +1736,13 @@ def main():
                     mid: build_model_entry(mid, models_dev_data, "openai")
                     for mid in openai_models
                 }
-                config["provider"]["openai"] = {"models": enriched_openai}
+                config["providers"]["openai"] = {"models": enriched_openai}
             if include_anthropic and anthropic_models:
                 enriched_anthropic = {
                     mid: build_model_entry(mid, models_dev_data, "anthropic")
                     for mid in anthropic_models
                 }
-                config["provider"]["anthropic"] = {"models": enriched_anthropic}
+                config["providers"]["anthropic"] = {"models": enriched_anthropic}
             config["disabled_providers"].extend(["ollama-cloud", "ollama"])
         else:
             if openai_models:
@@ -1667,7 +1750,7 @@ def main():
                     mid: build_model_entry(mid, models_dev_data, "openai")
                     for mid in openai_models
                 }
-                config["provider"]["openai"] = {"models": enriched_openai}
+                config["providers"]["openai"] = {"models": enriched_openai}
             if ollama_cloud_models and args.preset != "plus":
                 combined_models, direct_cloud_models = _build_ollama_cloud_model_maps(
                     ollama_cloud_models,
@@ -1684,19 +1767,19 @@ def main():
                 )
             elif local_ollama and args.preset not in ["plus", "pro"]:
                 # No cloud models at all; local-only provider
-                config["provider"]["ollama"] = local_ollama
+                config["providers"]["ollama"] = local_ollama
             if include_anthropic and anthropic_models:
                 enriched_anthropic = {
                     mid: build_model_entry(mid, models_dev_data, "anthropic")
                     for mid in anthropic_models
                 }
-                config["provider"]["anthropic"] = {"models": enriched_anthropic}
+                config["providers"]["anthropic"] = {"models": enriched_anthropic}
             if args.preset == "pro":
-                config["provider"].pop("openai", None)
-                config["provider"].pop("anthropic", None)
+                config["providers"].pop("openai", None)
+                config["providers"].pop("anthropic", None)
                 config["disabled_providers"].extend(["openai", "anthropic", "ollama"])
             elif args.preset == "plus":
-                config["provider"].pop("anthropic", None)
+                config["providers"].pop("anthropic", None)
                 config["disabled_providers"].extend(
                     ["anthropic", "ollama-cloud", "ollama"]
                 )
@@ -1707,7 +1790,7 @@ def main():
             register_local_provider(config, provider, block)
 
         if meridian_plugin_path:
-            config["plugin"].append(meridian_plugin_path)
+            config["plugins"].append(meridian_plugin_path)
 
         if not config["mcp"]:
             del config["mcp"]
@@ -1738,13 +1821,20 @@ def main():
             dynamic_registry, dynamic_audit, args.preset, config
         )
 
-    server_config = build_opencode_server_config()
-    if server_config:
-        existing_server = config.get("server")
-        if isinstance(existing_server, dict):
-            existing_server.update(server_config)
-        else:
-            config["server"] = server_config
+    # Native v2 emission: provider entries intentionally stay in the
+    # officially supported V1 format (v2 normalizes supported V1 fields
+    # silently; per-entry formats must not mix, so provider/model envelopes
+    # convert only after machine-level validation). Native keys converted
+    # here: ordered permissions (last-match-wins — the external_directory
+    # ask-all rule leads, temp-directory allows follow), mcp.servers, and
+    # v2 plugin object entries. v2-ignored fields are dropped.
+    config["permissions"] = _native_permissions(
+        _external_dir_permissions, config.pop("permissions", None)
+    )
+    if config.get("mcp"):
+        config["mcp"] = _native_mcp_config(config["mcp"])
+    config.pop("server", None)
+    config.pop("logLevel", None)
 
     # Prepare both managed outputs before either one is installed.
     output_path = os.path.join(config_dir_path, "opencode.json")

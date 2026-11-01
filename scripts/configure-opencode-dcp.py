@@ -4,7 +4,7 @@ OpenCode DCP TUI Plugin Configurator.
 
 Generates/merges the DCP entry into ~/.config/opencode/tui.json so the /dcp
 TUI panel (DCP v3.1.13+) is loaded. Core compression still loads via
-opencode.json's plugin array — this script only owns the DCP entry in tui.json.
+opencode.json's plugins array — this script only owns the DCP entry in tui.json.
 
 tui.json is a SHARED file: each TUI plugin has its own configure-opencode-*.py
 that defensively merges only its own entry. This script does NOT touch voice
@@ -142,7 +142,7 @@ def main():
         "  • @tarquinen/opencode-dcp@latest (string form, /dcp panel)",
         "",
         "tui.json is a shared file — other TUI plugins (e.g. voice) are preserved.",
-        "Core compression still loads via opencode.json plugin array (unchanged).",
+        "Core compression still loads via opencode.json plugins array (unchanged).",
     ]
     logger.info("\n".join(summary_lines))
 

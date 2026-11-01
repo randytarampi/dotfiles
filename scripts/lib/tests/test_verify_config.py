@@ -462,6 +462,63 @@ def test_opencode_compaction_is_required_when_gate_runs(tmp_path, monkeypatch):
     assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
 
 
+def test_external_directory_ask_rule_must_lead_native_permissions(
+    tmp_path, monkeypatch
+):
+    opencode_dir = tmp_path / ".config" / "opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "dcp.jsonc").write_text('{"compress": {}}', encoding="utf-8")
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+
+    managed = opencode_dir / "opencode.json"
+    managed.write_text(
+        json.dumps(
+            {
+                "compaction": {"auto": False},
+                "permissions": [
+                    {"action": "external_directory", "resource": "*", "effect": "ask"},
+                    {
+                        "action": "external_directory",
+                        "resource": "/tmp/**",
+                        "effect": "allow",
+                    },
+                ],
+            }
+        )
+    )
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
+
+    managed.write_text(
+        json.dumps(
+            {
+                "compaction": {"auto": False},
+                # Trailing ask rule loses the last match: blocked by doctor.
+                "permissions": [
+                    {
+                        "action": "external_directory",
+                        "resource": "/tmp/**",
+                        "effect": "allow",
+                    },
+                    {"action": "external_directory", "resource": "*", "effect": "ask"},
+                ],
+            }
+        )
+    )
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
+
+    # Legacy v1 file (permission map) predates the cutover: not checked.
+    managed.write_text(
+        json.dumps(
+            {
+                "compaction": {"auto": False},
+                "permission": {"bash": {"git push": "ask"}},
+            }
+        )
+    )
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
+
+
 def test_adopted_opencode_memory_config_is_not_an_orphan(tmp_path, monkeypatch):
     opencode_dir = tmp_path / ".config" / "opencode"
     opencode_dir.mkdir(parents=True)
@@ -499,6 +556,24 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
 """
+
+
+def test_meridian_registration_present_accepts_v1_and_v2_shapes():
+    plugin_path = "x/@rynfar/meridian/plugin/meridian.ts"
+    assert VERIFY_CONFIG.meridian_registration_present({"plugin": [plugin_path]})
+    assert VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": [{"package": plugin_path}]}
+    )
+    assert VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": [{"package": plugin_path, "options": {}}]}
+    )
+    # A non-plugin entry must never satisfy the registration check.
+    assert not VERIFY_CONFIG.meridian_registration_present(
+        {"plugins": ["@some/other-plugin"]}
+    )
+    assert not VERIFY_CONFIG.meridian_registration_present({"permission": []})
+    assert not VERIFY_CONFIG.meridian_registration_present({"plugin": "not-a-list"})
+    assert not VERIFY_CONFIG.meridian_registration_present(None)
 
 
 def _litellm_env(**overrides):

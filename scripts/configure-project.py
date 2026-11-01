@@ -13,7 +13,8 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(SCRIPT_DIR, "lib")
 sys.path.insert(0, LIB_DIR)
 
-import logger
+import logger  # noqa: E402  # sys.path bootstrap above is intentional.
+import opencode_host  # noqa: E402
 from env import load_env
 from preset_migration import migrate_preset_value
 from skills_manifest import CANONICAL_STORE, load_manifest, symlink_skill_to_targets
@@ -211,6 +212,13 @@ def configure_skills(root, profiles, extras, skipped):
 
     opencode_path = Path(root) / "opencode.json"
     config_paths = [opencode_path, Path(root) / ".opencode" / "opencode.json"]
+    if not skipped:
+        return
+    # Skill deny rules follow the installed host: a v2 (or not-yet-installed)
+    # host gets native ordered rules; a v1 host keeps the legacy permission
+    # map, which v2 also normalizes if it arrives late.
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    native_permission_rules = host_state == "absent" or host_major == 2
     if skipped and not any(path.exists() for path in config_paths):
         config_paths = [config_paths[-1]]
         config_paths[0].parent.mkdir(parents=True, exist_ok=True)
@@ -220,10 +228,33 @@ def configure_skills(root, profiles, extras, skipped):
             continue
         with config_path.open(encoding="utf-8") as handle:
             config = json.load(handle)
-        permissions = config.setdefault("permission", {})
-        skill_permissions = permissions.setdefault("skill", {})
-        for name in skipped:
-            skill_permissions[name] = "deny"
+        if native_permission_rules:
+            permissions = config.setdefault("permissions", [])
+            if isinstance(permissions, list):
+                existing = {
+                    (rule.get("resource"), rule.get("effect"))
+                    for rule in permissions
+                    if isinstance(rule, dict) and rule.get("action") == "skill"
+                }
+                # Retain user rules: generator ownership cannot be inferred safely.
+                for name in skipped:
+                    item = (name, "deny")
+                    if item not in existing:
+                        permissions.append(
+                            {"action": "skill", "resource": name, "effect": "deny"}
+                        )
+                        existing.add(item)
+                skill_permissions = None
+            else:
+                skill_permissions = permissions.setdefault("skill", {})
+            if skill_permissions is not None:
+                for name in skipped:
+                    skill_permissions[name] = "deny"
+        else:
+            permissions = config.setdefault("permission", {})
+            skill_permissions = permissions.setdefault("skill", {})
+            for name in skipped:
+                skill_permissions[name] = "deny"
         with config_path.open("w", encoding="utf-8") as handle:
             json.dump(config, handle, indent=2)
             handle.write("\n")
@@ -314,7 +345,11 @@ def main():
     else:
         os.makedirs(opencode_dir, exist_ok=True)
 
-    if "opencode" in steps:
+    project_host_state, project_host_major = opencode_host.resolve_opencode_host()
+    project_host_supported = project_host_state == "absent" or (
+        project_host_state == "known" and project_host_major == 2
+    )
+    if "opencode" in steps and project_host_supported:
         if not project_opencode_overrides_global(args):
             global_tier = _global_tier() or "unknown"
             if args.dry_run:
@@ -361,6 +396,12 @@ def main():
                     )
                 shutil.copy(generated, os.path.join(root, "opencode.json"))
                 shutil.rmtree(temp, ignore_errors=True)
+    elif "opencode" in steps:
+        logger.warning(
+            "Skipping project OpenCode generation: unsupported host state %s (major %s); unrelated project steps will continue",
+            project_host_state,
+            project_host_major,
+        )
     if "tier" in steps:
         env = child_env.copy()
         env["OPENCODE_DIR"] = opencode_dir

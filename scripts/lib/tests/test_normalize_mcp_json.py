@@ -6,6 +6,16 @@ from pathlib import Path
 import pytest
 
 import normalize_mcp_json
+import opencode_host
+
+
+@pytest.fixture(autouse=True)
+def legacy_v1_host(monkeypatch):
+    """Existing flattening regression tests pin a v1 host; native-direction
+    tests override to v2 in their body (later monkeypatch wins)."""
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 1)
+    )
 
 
 @pytest.mark.parametrize(
@@ -143,3 +153,137 @@ def test_write_failures_preserve_original_and_remove_temporary_file(
     assert normalize_mcp_json.normalize(str(path)) is False
     assert path.read_text() == original
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_native_direction_promotes_flat_entries_into_wrapper(tmp_path, monkeypatch):
+    """On a v2 host the nested mcp.servers wrapper is the managed shape: flat
+    legacy entries are promoted with enabled inverted to disabled and all
+    fields (including v2 timeout objects and snake_case oauth members)
+    survive verbatim."""
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+    path = tmp_path / "opencode.json"
+    path.write_text(
+        json.dumps(
+            {
+                "model": "litellm/x",
+                "mcp": {
+                    "sentry": {
+                        "type": "remote",
+                        "url": "https://sentry",
+                        "enabled": True,
+                        "client_id": "abc",
+                    }
+                },
+            }
+        )
+    )
+    assert normalize_mcp_json.normalize(str(path)) is True
+    assert json.loads(path.read_text()) == {
+        "model": "litellm/x",
+        "mcp": {
+            "servers": {
+                "sentry": {
+                    "type": "remote",
+                    "url": "https://sentry",
+                    "disabled": False,
+                    "client_id": "abc",
+                }
+            }
+        },
+    }
+    assert normalize_mcp_json.normalize(str(path)) is False
+
+
+@pytest.mark.parametrize(
+    "entry,expected",
+    [
+        ({"type": "local", "disabled": True}, {"type": "local", "disabled": True}),
+        (
+            {"type": "local", "enabled": False, "disabled": False},
+            {"type": "local", "disabled": True},
+        ),
+        (
+            {"type": "local", "enabled": True, "disabled": True},
+            {"type": "local", "disabled": False},
+        ),
+    ],
+)
+def test_native_precedence_preserves_or_inverts_policy(
+    tmp_path, monkeypatch, entry, expected
+):
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+    path = tmp_path / "opencode.json"
+    path.write_text(json.dumps({"mcp": {"server": entry}}))
+    assert normalize_mcp_json.normalize(str(path)) is True
+    assert json.loads(path.read_text())["mcp"]["servers"]["server"] == expected
+
+
+@pytest.mark.parametrize("field", ["enabled", "disabled"])
+def test_native_non_boolean_policy_refuses_rewrite(tmp_path, monkeypatch, field):
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+    path = tmp_path / "opencode.json"
+    original = json.dumps({"mcp": {"server": {"type": "local", field: "false"}}})
+    path.write_text(original)
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert path.read_text() == original
+
+
+def test_native_direction_leaves_wrapper_untouched(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+    path = tmp_path / "opencode.json"
+    native = json.dumps(
+        {
+            "mcp": {
+                "servers": {
+                    "codegraph": {
+                        "type": "local",
+                        "command": ["codegraph"],
+                        "disabled": False,
+                        "timeout": {"catalog": 30, "execution": 90},
+                    }
+                }
+            }
+        }
+    )
+    path.write_text(native)
+    assert normalize_mcp_json.normalize(str(path)) is False
+    assert path.read_text() == native
+
+
+def test_native_direction_is_idempotent_for_v2_host_with_flat_and_wrapper(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 2)
+    )
+    path = tmp_path / "opencode.json"
+    path.write_text(
+        json.dumps(
+            {
+                "mcp": {
+                    "legacy": {"type": "local", "command": ["x"], "enabled": False},
+                    "servers": {
+                        "codegraph": {"type": "local", "command": ["codegraph"]}
+                    },
+                }
+            }
+        )
+    )
+    assert normalize_mcp_json.normalize(str(path)) is True
+    assert json.loads(path.read_text()) == {
+        "mcp": {
+            "servers": {
+                "codegraph": {"type": "local", "command": ["codegraph"]},
+                "legacy": {"type": "local", "command": ["x"], "disabled": True},
+            }
+        }
+    }
+    assert normalize_mcp_json.normalize(str(path)) is False

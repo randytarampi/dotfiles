@@ -15,6 +15,7 @@ if str(LIB_DIR) not in sys.path:
 
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
+    configured_plugin_specs,
     load_plugin_manifest,
 )
 
@@ -72,19 +73,66 @@ def parse_install_plugins(path, manifest_path=MANIFEST):
     return [specs[0]] + literals + specs[1:]
 
 
-def _plugin_value(value):
-    if isinstance(value, ast.Constant) and isinstance(value.value, str):
-        return value.value
-    if isinstance(value, (ast.List, ast.Tuple)) and value.elts:
-        return _plugin_value(value.elts[0])
+def _evaluate_plugin_list(node, environment):
+    result = []
+    for item in node.elts:
+        if isinstance(item, ast.Starred):
+            result.extend(_evaluate_expression(item.value, environment))
+        else:
+            value = _evaluate_expression(item, environment)
+            if isinstance(value, list):
+                # A v1 [pkg, options] tuple normalizes to its package spec.
+                if value[0] is not None:
+                    result.append(value[0])
+            elif value is not None:
+                result.append(value)
+    return result
+
+
+def _evaluate_subscript(node, environment):
+    value = _evaluate_expression(node.value, environment)
+    if isinstance(node.slice, ast.Slice):
+        lower = node.slice.lower.value if node.slice.lower else None
+        upper = node.slice.upper.value if node.slice.upper else None
+        return value[lower:upper]
+    return value[node.slice.value]
+
+
+def _evaluate_package_dict(node, environment):
+    # A v2 {package, options} plugin object normalizes to its package
+    # spec, matching the v1 tuple handling above.
+    for key, value in zip(node.keys, node.values):
+        if isinstance(key, ast.Constant) and key.value == "package":
+            return _evaluate_expression(value, environment)
     return None
+
+
+def _evaluate_expression(node, environment):
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        return environment[node.id]
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id == "active_plugin_specs":
+            return active_plugin_specs()
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _evaluate_expression(node.left, environment) + _evaluate_expression(
+            node.right, environment
+        )
+    if isinstance(node, ast.Subscript):
+        return _evaluate_subscript(node, environment)
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return _evaluate_plugin_list(node, environment)
+    if isinstance(node, ast.Dict):
+        return _evaluate_package_dict(node, environment)
+    raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
 
 
 def parse_config_plugins(path):
     tree = ast.parse(Path(path).read_text(encoding="utf-8"), filename=str(path))
-    manifest_plugins = active_plugin_specs()
+    manifest_plugins = configured_plugin_specs()
     environment = {
-        "configured_plugins": manifest_plugins,
+        "configured_plugins": active_plugin_specs(),
         "plannotator": next(
             spec
             for spec in manifest_plugins
@@ -95,21 +143,16 @@ def parse_config_plugins(path):
         if not isinstance(node, ast.Dict):
             continue
         for key, value in zip(node.keys, node.values):
-            if isinstance(key, ast.Constant) and key.value == "plugin":
+            if isinstance(key, ast.Constant) and key.value == "plugins":
                 if not isinstance(value, ast.List):
-                    raise ValueError("config plugin entry is not a list")
-                # The global config is the only plugin list with lsp=True;
+                    raise ValueError("config plugins entry is not a list")
+                plugins = _evaluate_plugin_list(value, environment)
+                # The global config is the only plugin list with entries; the
                 # project mode intentionally emits an empty list.
-                if not any(
-                    isinstance(key, ast.Constant)
-                    and key.value == "lsp"
-                    and isinstance(val, ast.Constant)
-                    and val.value is True
-                    for key, val in zip(node.keys, node.values)
-                ):
+                if not plugins:
                     continue
-                return _evaluate_plugin_list(value, environment)
-    raise ValueError('config generator contains no "plugin" entry')
+                return plugins
+    raise ValueError('config generator contains no "plugins" entry')
 
 
 def _config_consumes_manifest(path=CONFIG_SCRIPT):
@@ -134,36 +177,6 @@ def _config_consumes_manifest(path=CONFIG_SCRIPT):
         and node.value.func.id in imported_names
         for node in ast.walk(tree)
     )
-
-
-def _evaluate_plugin_list(node, environment):
-    result = []
-    for item in node.elts:
-        if isinstance(item, ast.Starred):
-            result.extend(_evaluate_expression(item.value, environment))
-        else:
-            value = _evaluate_expression(item, environment)
-            result.append(value[0] if isinstance(value, list) else value)
-    return result
-
-
-def _evaluate_expression(node, environment):
-    if isinstance(node, ast.Constant):
-        return node.value
-    if isinstance(node, ast.Name):
-        return environment[node.id]
-    if isinstance(node, ast.Subscript):
-        value = _evaluate_expression(node.value, environment)
-        if isinstance(node.slice, ast.Slice):
-            lower = node.slice.lower.value if node.slice.lower else None
-            upper = node.slice.upper.value if node.slice.upper else None
-            return value[lower:upper]
-        return value[node.slice.value]
-    if isinstance(node, (ast.List, ast.Tuple)):
-        return _evaluate_plugin_list(node, environment)
-    if isinstance(node, ast.Dict):
-        return None
-    raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
 
 
 def plugin_name_version(spec):

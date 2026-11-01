@@ -73,6 +73,12 @@ def active_plugin_specs(path=MANIFEST_PATH, environ=None):
     ]
 
 
+def configured_plugin_specs(path=MANIFEST_PATH, environ=None):
+    """Return plugin specs in the order emitted in native OpenCode config."""
+    plugins = active_plugin_specs(path, environ)
+    return plugins
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)

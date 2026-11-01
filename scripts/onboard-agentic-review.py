@@ -79,14 +79,15 @@ Dispatcher:
   reusable-workflow pin and Copilot setup default. Re-onboarding is only needed
   when trigger events or permissions change, or when advancing the trusted SHA.
 Fix lane:
-  agentic-review-fix.yml is intentionally dotfiles-only and is not distributed
-  to downstream repositories. It requires owner authentication and the
-  agentic-review-fix environment approval before publishing a draft PR. Its
-  base_sha must be an existing 40-hex commit, and allowed_paths must list every
-  exact file permitted to change (one path per line); each run publishes a
-  unique agentic-review-bot/<run-id> branch. The generator installs and verifies
-  the pinned OpenCode CLI (opencode-ai@1.18.34); reruns use an exact-ref
-  force-with-lease guarded by the previously observed remote tip.
+    agentic-review-fix.yml is intentionally dotfiles-only and is not distributed
+    to downstream repositories. It requires owner authentication and the
+    agentic-review-fix environment approval before publishing a draft PR. Its
+    base_sha must be an existing 40-hex commit, and allowed_paths must list
+    every exact file permitted to change (one path per line); each run
+    publishes a unique agentic-review-bot/<run-id> branch. The generator
+    installs and verifies the pinned OpenCode v2 CLI (official install script
+    --version 2.2.5); reruns use an exact-ref force-with-lease guarded by
+    the previously observed remote tip.
 Usage:
   Mention plus text requests an ad-hoc task; review labels request the standard review.
   Supported mentions: /oc, /opencode, @oc, @opencode, @junie-agent, @junie,

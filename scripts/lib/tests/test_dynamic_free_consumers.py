@@ -14,6 +14,7 @@ sys.path.insert(0, str(LIB))
 from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
 from free_route_manifest import build_manifest  # noqa: E402
 from free_preset_runtime import load_gateway_free_evidence  # noqa: E402
+import opencode_host  # noqa: E402 -- shared emitter-host seam
 
 NOW = datetime(2026, 10, 30, tzinfo=timezone.utc)
 PRESETS = ("free", "omo-slim-opencode-zen-free")
@@ -453,16 +454,36 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
     configure_opencode.main.__wrapped__()
 
     output = json.loads(config_path.read_text())
+    # Native v2 shape contract, asserted on real emitter output: no legacy
+    # top-level key may survive, and the external-directory ask rule must
+    # lead the ordered permissions array so the narrower allows can win the
+    # last match.
+    assert not {"provider", "plugin", "agent", "permission"} & set(output)
+    permissions = output["permissions"]
+    assert permissions[0] == {
+        "action": "external_directory",
+        "resource": "*",
+        "effect": "ask",
+    }
     if mode == "global":
-        assert output["mcp"]["custom"] == {"keep": True}
+        assert output["mcp"]["servers"]["custom"] == {
+            "keep": True,
+            "disabled": False,
+        }
+        assert any(
+            rule.get("action") == "external_directory"
+            and rule.get("effect") in ("allow", "ask")
+            and rule.get("resource") != "*"
+            for rule in permissions
+        )
     else:
         assert "mcp" not in output
     if proxy:
-        assert output["provider"]["litellm"]["models"][alias]
+        assert output["providers"]["litellm"]["models"][alias]
         assert calls == [([preset], "1")]
         assert materialized["presets"][preset]["orchestrator"]["model"] == alias
     else:
-        models = output["provider"]["opencode"]["models"]
+        models = output["providers"]["opencode"]["models"]
         assert calls == [([preset], None)]
         assert "big-pickle" in models
     if mode == "global":
@@ -489,7 +510,7 @@ def test_opencode_main_resolves_dynamic_preset_and_materializes_provider(
         installed = json.loads(slim_path.read_text())
         selected = installed["presets"][preset]
         assert installed["council"]["default_preset"] == preset
-        models = output["provider"]["opencode"]["models"]
+        models = output["providers"]["opencode"]["models"]
         for role in selected.values():
             ref = role.get("model") if isinstance(role, dict) else None
             if isinstance(ref, str) and ref.startswith("opencode/"):
@@ -1242,3 +1263,22 @@ def test_unknown_dynamic_route_fails_before_consumer_writes(
         if p.is_file()
     }
     assert after == before
+
+
+def test_emitter_skips_native_write_on_v1_host(tmp_path, monkeypatch):
+    """The one-way migration gate must never hand native v2 config to a v1
+    host: main() returns before any write and the existing v1 file survives
+    byte-identical."""
+    opencode_dir = tmp_path / "config"
+    opencode_dir.mkdir()
+    sentinel = '{"model": "v1-era"}'
+    opencode_path = opencode_dir / "opencode.json"
+    opencode_path.write_text(sentinel)
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 1)
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("OPENCODE_DIR", str(opencode_dir))
+    monkeypatch.setattr(sys, "argv", ["configure-opencode.py", "--mode", "project"])
+    configure_opencode.main.__wrapped__()
+    assert opencode_path.read_text() == sentinel

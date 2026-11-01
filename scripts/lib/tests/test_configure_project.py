@@ -16,6 +16,96 @@ assert PROJECT_SPEC is not None and PROJECT_SPEC.loader is not None
 configure_project = importlib.util.module_from_spec(PROJECT_SPEC)
 PROJECT_SPEC.loader.exec_module(configure_project)
 
+
+def test_configure_skills_writes_native_skill_deny_rules(tmp_path):
+    """Skipped skills become ordered v2 rules with action "skill" and the
+    skill name as resource, replacing previous skill rules only."""
+    opencode_dir = tmp_path / ".opencode"
+    opencode_dir.mkdir()
+    config_path = opencode_dir / "opencode.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "model": "project-model",
+                "permissions": [
+                    {"action": "edit", "resource": "src/**", "effect": "ask"},
+                    {"action": "skill", "resource": "stale", "effect": "deny"},
+                ],
+            }
+        )
+    )
+    configure_project.configure_skills(tmp_path, [], [], ["one", "two"])
+    config = json.loads(config_path.read_text())
+    deny_rules = [
+        rule for rule in config["permissions"] if rule.get("action") == "skill"
+    ]
+    assert deny_rules == [
+        {"action": "skill", "resource": "stale", "effect": "deny"},
+        {"action": "skill", "resource": "one", "effect": "deny"},
+        {"action": "skill", "resource": "two", "effect": "deny"},
+    ]
+    preserved = [
+        rule for rule in config["permissions"] if rule.get("action") != "skill"
+    ]
+    assert preserved == [{"action": "edit", "resource": "src/**", "effect": "ask"}]
+
+
+def test_configure_skills_keeps_legacy_map_on_v1_host(tmp_path, monkeypatch):
+    """A v1 host cannot read ordered rule arrays; skill denies must stay in
+    the legacy permission map (v2 normalizes it silently if it arrives
+    late)."""
+    import opencode_host
+
+    monkeypatch.setattr(
+        opencode_host, "resolve_opencode_host", lambda binary="opencode": ("known", 1)
+    )
+    opencode_dir = tmp_path / ".opencode"
+    opencode_dir.mkdir()
+    config_path = opencode_dir / "opencode.json"
+    config_path.write_text(json.dumps({"model": "project-model"}))
+    configure_project.configure_skills(tmp_path, [], [], ["one"])
+    config = json.loads(config_path.read_text())
+    assert config["permission"]["skill"]["one"] == "deny"
+    assert "permissions" not in config
+    assert config["model"] == "project-model"
+
+
+def test_project_orchestration_explicitly_skips_v1_opencode_and_runs_other_steps(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "project"
+    root.mkdir()
+    calls = []
+    monkeypatch.setattr(
+        configure_project.opencode_host,
+        "resolve_opencode_host",
+        lambda: ("known", 1),
+    )
+    monkeypatch.setattr(
+        configure_project, "run", lambda command, cwd, env=None: calls.append(command)
+    )
+    monkeypatch.setattr(
+        configure_project.sys,
+        "argv",
+        [
+            "configure-project.py",
+            "--steps",
+            "opencode,junie",
+            "--preset",
+            "anthropic",
+            "--workspace-root",
+            str(root),
+        ],
+    )
+    with mock.patch.object(configure_project.logger, "warning") as warning:
+        configure_project.main()
+    assert len(calls) == 1 and "configure-jetbrains-ai.py" in calls[0][1]
+    warning.assert_called_once()
+    assert warning.call_args.args[1:] == ("known", 1)
+    assert "unsupported host state %s (major %s)" in warning.call_args.args[0]
+    assert not (root / "opencode.json").exists()
+
+
 TIER_SPEC = importlib.util.spec_from_file_location(
     "configure_opencode_tier",
     os.path.join(TESTS_DIR, "..", "..", "configure-opencode-tier.py"),
@@ -161,13 +251,13 @@ class TierEffectiveConfigTests(unittest.TestCase):
             opencode_dir = Path(project) / ".opencode"
             opencode_dir.mkdir()
             (opencode_dir / "opencode.json").write_text(
-                json.dumps({"provider": {"litellm": {"options": {"timeout": 30}}}})
+                json.dumps({"providers": {"litellm": {"options": {"timeout": 30}}}})
             )
             (Path(project) / "opencode.json").write_text(
                 json.dumps(
                     {
                         "model": "project-model",
-                        "provider": {"litellm": {"options": {"timeout": 20}}},
+                        "providers": {"litellm": {"options": {"timeout": 20}}},
                     }
                 )
             )
@@ -177,7 +267,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                 json.dumps(
                     {
                         "model": "global-model",
-                        "provider": {
+                        "providers": {
                             "litellm": {
                                 "models": {"test": {"id": "openai/test"}},
                                 "options": {
@@ -197,7 +287,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                     ),
                     {
                         "model": "project-model",
-                        "provider": {
+                        "providers": {
                             "litellm": {
                                 "models": {"test": {"id": "openai/test"}},
                                 "options": {
@@ -222,7 +312,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
             global_dir = Path(home) / ".config" / "opencode"
             global_dir.mkdir(parents=True)
             (global_dir / "opencode.json").write_text(
-                '{"model": "global-model", "provider": {"litellm": {}}}\n',
+                '{"model": "global-model", "providers": {"litellm": {}}}\n',
                 encoding="utf-8",
             )
 
@@ -231,7 +321,7 @@ class TierEffectiveConfigTests(unittest.TestCase):
                     configure_opencode_tier.load_effective_opencode_config(
                         str(opencode_dir)
                     ),
-                    {"model": "project-model", "provider": {"litellm": {}}},
+                    {"model": "project-model", "providers": {"litellm": {}}},
                 )
 
     def test_uses_global_config_when_project_has_no_consumer_config(self):
