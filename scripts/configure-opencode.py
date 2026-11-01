@@ -85,6 +85,8 @@ from provider_endpoints import (  # noqa: E402 -- local import follows bootstrap
     POOLSIDE_ROUTED_OUTPUT,
     conservative_limit,
     PROVIDER_ENDPOINTS,
+    provider_models,
+    selected_optional_providers,
 )
 from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
 from free_preset_runtime import prepare_dynamic_free_registry  # noqa: E402
@@ -1709,6 +1711,27 @@ def main():
 
         if not config["mcp"]:
             del config["mcp"]
+
+    # Optional direct inference pools are deliberately disabled in gateway
+    # mode. Gateway aliases are independently qualified by the LiteLLM
+    # catalogue; direct configuration must not silently bypass that choice.
+    if not get_litellm_proxy_mode():
+        optional_routes = selected_optional_providers(os.environ)
+        for provider, base_url in optional_routes.items():
+            if args.mode == "project" and provider not in needed_providers:
+                continue
+            spec = PROVIDER_ENDPOINTS[provider]
+            config.setdefault("provider", {})[provider] = {
+                "npm": "@ai-sdk/openai-compatible",
+                "options": {
+                    "baseURL": base_url,
+                    "apiKey": "{env:" + spec["apiKeyEnv"] + "}",
+                },
+                "models": {
+                    mid: build_model_entry(mid, models_dev_data, provider)
+                    for mid in provider_models(provider)
+                },
+            }
 
     if dynamic_registry is not None and get_litellm_proxy_mode():
         dynamic_registry = route_dynamic_free_registry(
