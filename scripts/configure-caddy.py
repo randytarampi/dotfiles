@@ -292,6 +292,7 @@ def build_opencode_site_block(
         [
             f"  reverse_proxy 127.0.0.1:{opencode_port} {{",
             "    flush_interval -1",
+            "    header_up Authorization {http.request.header.Authorization}",
         ]
     )
     if include_forward_headers:
