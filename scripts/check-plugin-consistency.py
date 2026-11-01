@@ -63,15 +63,16 @@ def parse_install_plugins(path, manifest_path=MANIFEST):
             "install template manifest exclusion condition changed: "
             f"{actual_guard!r}"
         )
-    # Evaluate the literal PLUGINS array and the manifest-backed append loop.
-    block = text.split("PLUGINS=(", 1)[1].split(")", 1)[0]
-    literals = []
-    for line in block.splitlines():
-        value = line.strip().strip('"')
-        if value.startswith("@") or value.startswith("opencode-"):
-            literals.append(value)
-    specs = active_plugin_specs(manifest_path)
-    return specs
+    # The template's PLUGINS array starts empty and must be mutated only by
+    # the guarded manifest-driven loop above: any other PLUGINS+= site would
+    # let an extra install bypass the manifest (decisive against overrides).
+    append_sites = [line for line in text.splitlines() if "PLUGINS+=(" in line]
+    if len(append_sites) != 1 or append_sites[0].strip() != expected_guard:
+        raise ValueError(
+            "install template PLUGINS array deviates from the guarded "
+            "manifest-driven loop (unauthorized PLUGINS append)"
+        )
+    return active_plugin_specs(manifest_path)
 
 
 def parse_install_cli_plugins(path, manifest_path=MANIFEST):
@@ -83,32 +84,56 @@ def parse_install_cli_plugins(path, manifest_path=MANIFEST):
         raise ValueError("install template does not consume CLI plugin manifest")
     if 'opencode plugin add "${plugin}"' not in text:
         raise ValueError("install template does not add CLI plugins")
-    specs = cli_plugin_specs(manifest_path)
-    for spec in specs:
-        if spec not in text and not re.search(
-            r"for plugin in \"\$\{CLI_PLUGIN_SPECS\[@\]\}\"", text
-        ):
-            raise ValueError(f"install template omits CLI plugin: {spec}")
-    return specs
+    cli_sites = [line for line in text.splitlines() if "CLI_PLUGIN_SPECS+=(" in line]
+    if len(cli_sites) != 1 or cli_sites[0].strip() != 'CLI_PLUGIN_SPECS+=("$plugin")':
+        raise ValueError(
+            "install template CLI_PLUGIN_SPECS array deviates from the "
+            "manifest-driven loop (unauthorized CLI append)"
+        )
+    return cli_plugin_specs(manifest_path)
+
+
+def parse_voice_writer_source(path):
+    """Assert the voice writer's cli.json registration is manifest-driven."""
+    source = Path(path).read_text(encoding="utf-8")
+    if "from opencode_plugins import" not in source or (
+        "active_cli_plugin_specs" not in source
+    ):
+        raise ValueError("voice writer does not consume the cli_plugins manifest")
+    if "voice_specs = active_cli_plugin_specs()" not in source:
+        raise ValueError("voice writer does not resolve its spec from the manifest")
+    if "voice_specs[0]" not in source:
+        raise ValueError("voice writer does not use the resolved manifest spec")
+    return True
 
 
 def check_cli_plugin_consistency(
     manifest_path=MANIFEST, install_path=INSTALL_SCRIPT, voice_path=None
 ):
     expected = cli_plugin_specs(manifest_path)
+    if voice_path is None:
+        voice_path = (
+            INSTALL_SCRIPT.parents[1] / "scripts" / "configure-opencode-voice.py"
+        )
+    parse_voice_writer_source(voice_path)
     if parse_install_cli_plugins(install_path, manifest_path) != expected:
         print("ERROR: install template CLI plugins differ from manifest")
         return 1
-    # The voice-writer agreement counterpart lands with the voice writer in Lane B.
     return 0
+
+
+FORBIDDEN_SPEC_PREFIXES = (
+    # Retired v1-era packages (one-way migration): the original TokenScope,
+    # the original npm-line VibeGuard, and the removed Quota surfaces.
+    "@ramtinj95/opencode-tokenscope@",
+    "opencode-vibeguard@",
+    "@slkiser/opencode-quota",
+)
 
 
 def validate_forbidden_specs(manifest_path=MANIFEST):
     manifest_text = Path(manifest_path).read_text(encoding="utf-8")
-    for forbidden in (
-        "@ramtinj95/opencode-tokenscope@",
-        "opencode-vibeguard@",
-    ):
+    for forbidden in FORBIDDEN_SPEC_PREFIXES:
         if forbidden in manifest_text:
             raise ValueError(f"forbidden legacy plugin spec found: {forbidden}")
 
@@ -197,6 +222,31 @@ def _evaluate_expression(node, environment):
         return _evaluate_plugin_list(node, environment)
     if isinstance(node, ast.Dict):
         return _evaluate_package_dict(node, environment)
+    # The emitter derives the plugins array with a list comprehension whose
+    # element is a conditional ({package, options} object for plannotator,
+    # else the manifest spec). Support exactly that shape.
+    if isinstance(node, ast.IfExp):
+        if _evaluate_expression(node.test, environment):
+            return _evaluate_expression(node.body, environment)
+        return _evaluate_expression(node.orelse, environment)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        receiver = _evaluate_expression(node.func.value, environment)
+        if (
+            node.func.attr == "startswith"
+            and isinstance(receiver, str)
+            and len(node.args) == 1
+        ):
+            return receiver.startswith(_evaluate_expression(node.args[0], environment))
+    if isinstance(node, ast.ListComp) and len(node.generators) == 1:
+        (generator,) = node.generators
+        if not isinstance(generator.target, ast.Name) or generator.ifs:
+            raise ValueError("unsupported plugin comprehension")
+        result = []
+        for item in _evaluate_expression(generator.iter, environment):
+            scope = dict(environment)
+            scope[generator.target.id] = item
+            result.append(_evaluate_expression(node.elt, scope))
+        return result
     raise ValueError(f"unsupported plugin expression: {ast.dump(node)}")
 
 
@@ -220,12 +270,6 @@ def parse_config_plugins(path):
                 if not isinstance(value, ast.List):
                     raise ValueError("config plugins entry is not a list")
                 plugins = _evaluate_plugin_list(value, environment)
-                if (
-                    '"@tarquinen/opencode-dcp@latest"' in source
-                    and '"@tarquinen/opencode-dcp@latest",\n                configured_plugins[0]'
-                    not in source
-                ):
-                    plugins = list(dict.fromkeys(plugins))
                 # The global config is the only plugin list with entries; the
                 # project mode intentionally emits an empty list.
                 if not plugins:
@@ -314,6 +358,9 @@ def check_consistency(
         exit_code = 1
     if any(spec.startswith("opencode-vibeguard@") for spec in expected):
         print("ERROR: forbidden legacy VibeGuard plugin spec found")
+        exit_code = 1
+    if any(spec.startswith("@slkiser/opencode-quota") for spec in expected):
+        print("ERROR: forbidden retired Quota plugin spec found")
         exit_code = 1
     return exit_code
 
