@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import os
 import string
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -95,6 +96,13 @@ def expand_path(path_value: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(path_value)))
 
 
+def valid_tcp_port(port_value: str) -> bool:
+    """Strict TCP port syntax (digits only, 1-65535) without trusting the value."""
+    if not isinstance(port_value, str) or not re.fullmatch(r"\d+", port_value):
+        return False
+    return 1 <= int(port_value) <= 65535
+
+
 def parse_auth_conf(auth_path: Path) -> list[tuple[str, str]]:
     users: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -179,7 +187,9 @@ def build_route_block(
         if not engine or not route:
             continue
         default_port = engine["default_port"]
-        port = os.environ.get(engine["port_env"], default_port).strip() or default_port
+        port = (
+            os.environ.get(engine["port_env"]) or default_port
+        ).strip() or default_port
         route_path, _ = local_caddy_target(provider)
         status_block = (
             [
@@ -279,6 +289,16 @@ def build_opencode_site_block(
     lan_only: bool = False,
     include_forward_headers: bool = False,
 ) -> str:
+    if not valid_tcp_port(opencode_port):
+        raise ValueError("OpenCode server port must be an integer from 1 to 65535")
+    if auth_block and "basic_auth @not_omlx" in auth_block:
+        auth_block = auth_block.replace("basic_auth @not_omlx", "basic_auth", 1)
+    if auth_block and not any(
+        user == "opencode" for user, _ in parse_auth_conf_entries(auth_block)
+    ):
+        raise ValueError(
+            "OpenCode external routes require a Caddy basic-auth user named 'opencode'."
+        )
     lines = [f"{site_label} {{", f"  bind {bind_ip}", f"  {tls_line}", ""]
     if lan_only:
         lines.extend(
@@ -306,6 +326,15 @@ def build_opencode_site_block(
     return "\n".join(lines)
 
 
+def parse_auth_conf_entries(auth_block: str) -> list[tuple[str, str]]:
+    users = []
+    for line in auth_block.splitlines():
+        tokens = line.strip().split()
+        if len(tokens) == 2 and tokens[0] != "basic_auth":
+            users.append((tokens[0], tokens[1]))
+    return users
+
+
 def build_opencode_site_blocks(
     domains: list[str],
     access_mode: str,
@@ -317,6 +346,15 @@ def build_opencode_site_blocks(
     opencode_port: str,
     https_port: str,
 ) -> list[str]:
+    if not valid_tcp_port(opencode_port):
+        raise ValueError("OpenCode server port must be an integer from 1 to 65535")
+    if access_mode in {"lan", "public"} and not (
+        os.environ.get("OPENCODE_PASSWORD")
+        or os.environ.get("OPENCODE_SERVER_PASSWORD")
+    ):
+        raise ValueError(
+            "OpenCode external routes require OPENCODE_PASSWORD (or its legacy fallback) in the environment."
+        )
     blocks: list[str] = []
     if access_mode == "localhost":
         blocks.append(
@@ -660,6 +698,9 @@ def main() -> None:
 
     bind_ip = os.environ.get("CADDY_BIND_IP", "").strip() or get_bind_ip()
     opencode_port = os.environ.get("OPENCODE_SERVER_PORT", "4096").strip() or "4096"
+    if not valid_tcp_port(opencode_port):
+        logger.critical("OPENCODE_SERVER_PORT must be an integer from 1 to 65535")
+        raise SystemExit(1)
     openwebui_port = os.environ.get("OPENWEBUI_PORT", "8080").strip() or "8080"
     https_port = os.environ.get("CADDY_HTTPS_PORT", "443").strip() or "443"
     plannotator_portal_dir = str(

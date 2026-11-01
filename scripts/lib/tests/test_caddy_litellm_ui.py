@@ -61,6 +61,43 @@ def test_litellm_site_blocks_are_ui_only_and_auth_matcher_is_local():
         assert "/sso/key/generate" not in block
 
 
+def test_opencode_auth_identity_is_required_only_for_external_routes(monkeypatch):
+    caddy = load_script("configure-caddy")
+    monkeypatch.setenv("OPENCODE_PASSWORD", "synthetic-password")
+    auth = caddy.build_auth_block([("alice", "$2a$hashed")])
+    with pytest.raises(ValueError, match="user named 'opencode'"):
+        caddy.build_opencode_site_block(
+            "https://opencode.example", "0.0.0.0", "tls internal", auth, "4096"
+        )
+    assert "reverse_proxy 127.0.0.1:4096" in caddy.build_opencode_site_block(
+        "https://opencode.localhost", "127.0.0.1", "tls internal", "", "4096"
+    )
+    valid = caddy.build_auth_block([("opencode", "$2a$hashed"), ("alice", "$other")])
+    external = caddy.build_opencode_site_block(
+        "https://opencode.example", "0.0.0.0", "tls internal", valid, "4096"
+    )
+    assert "$2a$hashed" in external
+    assert "plaintext" not in external
+
+
+def test_opencode_external_routes_require_server_password(monkeypatch):
+    caddy = load_script("configure-caddy")
+    monkeypatch.delenv("OPENCODE_PASSWORD", raising=False)
+    monkeypatch.delenv("OPENCODE_SERVER_PASSWORD", raising=False)
+    with pytest.raises(ValueError, match="OPENCODE_PASSWORD"):
+        caddy.build_opencode_site_blocks(
+            ["example.com"],
+            "public",
+            "",
+            "0.0.0.0",
+            "/cert",
+            "/key",
+            "tls internal",
+            "4096",
+            "443",
+        )
+
+
 @pytest.mark.parametrize(
     "access_mode,exposed,expected",
     [

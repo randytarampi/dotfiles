@@ -26,8 +26,12 @@ opencode_service_bootstrap() {
 
 opencode_service_wait_healthy() {
   local port="${1:-${OPENCODE_SERVER_PORT:-4096}}" attempt outcome=0
-  if ! [[ "${port}" =~ ^[0-9]+$ ]]; then
-    printf 'OpenCode web health probe failed: invalid port value (must be digits)\n' >&2
+  if ! [[ "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+    printf 'OpenCode web health probe failed: invalid port value (must be 1–65535)\n' >&2
+    return 1
+  fi
+  if [[ -z "${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}" ]]; then
+    printf 'OpenCode web health probe failed: no server password is configured\n' >&2
     return 1
   fi
   for attempt in {1..15}; do
@@ -37,10 +41,6 @@ opencode_service_wait_healthy() {
       >/dev/null 2>&1 || outcome=$?
     if [[ "$outcome" -eq 0 ]]; then
       printf 'OpenCode web HTTP health ready (/api/info, attempt %s)\n' "$attempt"
-      return 0
-    fi
-    if [[ "$outcome" -eq 2 ]]; then
-      printf 'OpenCode web health probe UNKNOWN: no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured (verification comes from doctor)\n' >&2
       return 0
     fi
     sleep 2
