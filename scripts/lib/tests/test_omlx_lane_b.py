@@ -253,8 +253,50 @@ def test_voice_main_keeps_unresolved_marker_without_existing_entry(
         voice, "get_voice_config", lambda *args, **kwargs: {"_voice_unresolved": True}
     )
     assert voice.main() is None
+    # Routeless + cli.json absent: the file must NOT be created, so the
+    # upstream tui.json->cli.json migration stays available on first start.
+    assert not (config_dir / "cli.json").exists()
+    tui = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    assert tui["plugin"] == []
+
+
+def test_voice_main_preserves_unknown_options_on_resolution(monkeypatch, tmp_path):
+    """User-set option keys (sttAutoSubmit etc.) survive a fresh resolution."""
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / "user-options"
+    config_dir.mkdir()
+    (config_dir / "cli.json").write_text(
+        json.dumps(
+            [
+                {
+                    "package": "@bojackduy/opencode-voice@latest",
+                    "options": {
+                        "endpoint": "http://previous/v1",
+                        "model": "previous",
+                        "sttAutoSubmit": True,
+                        "ttsVoice": "vivian",
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "pro", "--no-backup"])
+    monkeypatch.setattr(
+        voice,
+        "get_voice_config",
+        lambda *a, **k: {"endpoint": "http://resolved/v1", "model": "resolved"},
+    )
+    assert voice.main() is None
     cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
-    assert cli == []
+    entries = [p for p in cli if isinstance(p, dict)]
+    assert len(entries) == 1
+    options = entries[0]["options"]
+    assert options["endpoint"] == "http://resolved/v1"
+    assert options["model"] == "resolved"
+    assert options["sttAutoSubmit"] is True
+    assert options["ttsVoice"] == "vivian"
 
 
 def test_voice_dry_run_never_prints_foreign_plugin_values(
@@ -442,7 +484,12 @@ def test_voice_config_only_tier_matrix_main_contract(
     )
     monkeypatch.setattr(sys, "argv", ["voice", "--preset", tier, "--no-backup"])
     assert voice.main() is None
-    cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
+    # A routeless outcome with cli.json absent creates nothing (the upstream
+    # migration window must stay available).
+    if (config_dir / "cli.json").exists():
+        cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
+    else:
+        cli = []
     voice_entries = [
         p
         for p in cli
@@ -516,9 +563,9 @@ def test_voice_gateway_tier_fails_closed(failure, monkeypatch, tmp_path):
     )
     monkeypatch.setattr(sys, "argv", ["voice", "--preset", "plus", "--no-backup"])
     voice.main()
-    # A failed-close resolution installs no voice route in cli.json.
-    cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
-    assert [p for p in cli if isinstance(p, dict)] == []
+    # Failed-close resolution with cli.json absent: no file is created, so
+    # the upstream migration window stays open and no route is registered.
+    assert not (config_dir / "cli.json").exists()
     state = voice._load_voice_state(str(config_dir))
     record = state["selections"]["cleanup_llm"]
     assert record["transport"] == "unavailable"
