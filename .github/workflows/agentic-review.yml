@@ -502,6 +502,10 @@ jobs:
         # The action installs its own CLI, which can move independently.
         uses: anomalyco/opencode/github@77fc88c8ade8e5a620ebbe1197f3a572d29ae91a
         env:
+          # The checked-out PR is untrusted: its opencode.json and .opencode/
+          # plugins must not override the trusted read-only plan config or
+          # execute with model and GitHub App credentials.
+          OPENCODE_DISABLE_PROJECT_CONFIG: "true"
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
