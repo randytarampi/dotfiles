@@ -204,7 +204,8 @@ litellm_service_env_sync() {
   # A file-backed client key remains canonical when an older synchronizer
   # dropped its service.env entry. Reject differences rather than rotate a
   # valid consumer secret or silently replace user-owned material.
-  local client_dir="$(dirname "$service_env")/clients"
+  local client_dir
+  client_dir="$(dirname "$service_env")/clients"
   local client client_file file_value
   if [[ -L "$client_dir" ]]; then
     printf 'Unsafe LiteLLM client directory symlink\n' >&2
