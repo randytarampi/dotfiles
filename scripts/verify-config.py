@@ -32,6 +32,9 @@ from model_catalogues import _configured_litellm_port
 import litellm_config
 from litellm_config import APP_KEYS
 import tier_coverage
+import opencode_web
+import opencode_host
+from meridian_path import meridian_v2_qualification
 
 HOME = Path.home()
 OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
@@ -1711,6 +1714,38 @@ def main():
             )
             exit_code = 1
 
+        host_state, host_major = opencode_host.resolve_opencode_host()
+        if not (host_state == "known" and host_major == 2):
+            reported = (
+                f"{host_state} (major {host_major})"
+                if host_state == "known"
+                else host_state
+            )
+            print(
+                f"  \u2298 OpenCode web health: host is not a verified OpenCode v2 "
+                f"binary ({reported}) — health evidence expected after cutover"
+            )
+        else:
+            password_name = opencode_web.server_password_env_chain()
+            if not password_name:
+                print(
+                    "  \u2298 OpenCode web health: UNKNOWN "
+                    "(no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured)"
+                )
+            else:
+                port = os.environ.get("OPENCODE_SERVER_PORT", "4096")
+                outcome, info = opencode_web.request_server_info(
+                    f"http://127.0.0.1:{port}", os.environ[password_name]
+                )
+                if outcome == "ok":
+                    print(
+                        f"  \u2713 OpenCode web health: /api/info version "
+                        f"{info['version']}"
+                    )
+                else:
+                    print(f"  \u2717 OpenCode web health: {info}")
+                    exit_code = 1
+
         if opencode_config is not None:
             server = opencode_config.get("server", {})
             if isinstance(server, dict) and "cors" in server:
@@ -2435,6 +2470,13 @@ def main():
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    if host_state == "known" and host_major == 2:
+        host_version = opencode_host.host_version_string() or "unknown"
+        if meridian_gate and not meridian_v2_qualification(host_version):
+            print(
+                f"  \u26a0 Meridian host qualification: {host_version} not in upstream qualified set (2.2.0 desktop darwin-arm64 / 2.0.16-31 CLI)"
+            )
     if meridian_gate:
         if opencode_json.exists():
             if opencode_config is not None and meridian_registration_present(
