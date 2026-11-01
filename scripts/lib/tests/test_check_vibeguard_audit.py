@@ -1,4 +1,6 @@
 import importlib.util
+
+import pytest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,26 +11,23 @@ SPEC.loader.exec_module(MODULE)
 
 
 def test_help_exits_zero(capsys):
-    try:
+    with pytest.raises(SystemExit) as helper:
         MODULE.main(["--help"])
-    except SystemExit as error:
-        assert error.code == 0
+    assert helper.value.code == 0
     assert "read-only" in capsys.readouterr().out
 
 
 def test_fix_is_rejected(capsys):
-    try:
+    with pytest.raises(SystemExit) as rejected:
         MODULE.main(["--fix"])
-    except SystemExit as error:
-        assert error.code == 2
+    assert rejected.value.code == 2
     assert "read-only" in capsys.readouterr().err
 
 
 def test_setup_is_rejected(capsys):
-    try:
+    with pytest.raises(SystemExit) as rejected:
         MODULE.main(["setup"])
-    except SystemExit as error:
-        assert error.code == 2
+    assert rejected.value.code == 2
 
 
 def test_read_only_arguments_build_pinned_command():
@@ -57,7 +56,6 @@ def test_read_only_arguments_build_pinned_command():
 
 
 def test_unknown_flag_is_usage_error(capsys):
-    try:
+    with pytest.raises(SystemExit) as unknown:
         MODULE.main(["--unknown"])
-    except SystemExit as error:
-        assert error.code == 2
+    assert unknown.value.code == 2
