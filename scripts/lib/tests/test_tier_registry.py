@@ -215,26 +215,33 @@ class TierRegistryTests(unittest.TestCase):
 
     def test_openai_primary_generation_mapping(self):
         data = registry()
-        for tier in ("plus", "omo-slim-openai", "omo-slim-thirty-dollars"):
+        expected = {
+            "plus": ("openai/gpt-6.1-terra", "openai/gpt-6.1-sol"),
+            "omo-slim-openai": ("openai/gpt-6.1-sol", "openai/gpt-6.1-sol"),
+            "omo-slim-thirty-dollars": (
+                "openai/gpt-6.1-sol",
+                "openai/gpt-6-astra",
+            ),
+        }
+        for tier, (orchestrator, oracle) in expected.items():
             self.assertEqual(
-                data["presets"][tier]["orchestrator"]["model"], "openai/gpt-6.1-sol"
+                data["presets"][tier]["orchestrator"]["model"], orchestrator
             )
-            self.assertEqual(
-                data["presets"][tier]["oracle"]["model"], "openai/gpt-6.1-sol"
-            )
+            self.assertEqual(data["presets"][tier]["oracle"]["model"], oracle)
             self.assertEqual(
                 data["presets"][tier]["librarian"]["model"], "openai/gpt-6-luna"
             )
         self.assertEqual(
-            data["council"]["presets"]["plus"]["alpha"]["model"], "openai/gpt-6.1-sol"
+            data["council"]["presets"]["plus"]["alpha"]["model"],
+            "openai/gpt-6.1-terra",
         )
         self.assertEqual(
             data["presets"]["pro-plus"]["designer"]["model"], "openai/gpt-6-luna"
         )
         self.assertEqual(
-            data["presets"]["plus"]["designer"]["model"], "openai/gpt-6-luna"
+            data["presets"]["plus"]["designer"]["model"], "openai/gpt-6.1-terra"
         )
-        self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "high")
+        self.assertEqual(data["presets"]["plus"]["orchestrator"]["variant"], "medium")
         self.assertEqual(
             data["_tiers"]["pro-plus"]["fallback"]["orchestrator"],
             ["openai/gpt-6.1-sol"],
@@ -257,15 +264,13 @@ class TierRegistryTests(unittest.TestCase):
                 ["opencode/big-pickle"],
             )
             self.assertEqual(
-                data["council"]["presets"][tier]["beta"]["model"], "openai/gpt-6-astra"
+                data["council"]["presets"][tier]["beta"]["model"],
+                "openai/gpt-6-astra",
             )
             self.assertEqual(
                 data["_tiers"][tier]["council"]["presets"][tier]["beta"]["model"],
                 "openai/gpt-6-astra",
             )
-        # Owner ruling 2026-10-27: zen-free is strict too — its paid fallback
-        # chains were removed, so the orchestrator no longer falls back to
-        # openai/gpt-6.1-sol.
         self.assertEqual(
             data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["orchestrator"],
             [],
@@ -299,28 +304,25 @@ class TierRegistryTests(unittest.TestCase):
         self.assertNotIn("meridian-opus", groups)
         self.assertEqual(groups["anthropic-opus"]["primaryModel"], "claude-opus-5-5")
 
-    def test_zen_free_uses_current_multimodal_orchestrator_with_observer(self):
+    def test_zen_free_candidate_models_and_strict_fallbacks(self):
         data = registry()
         preset = data["presets"]["omo-slim-opencode-zen-free"]
+        self.assertEqual(preset["orchestrator"]["model"], "opencode/glm-5.3-flash-free")
         self.assertEqual(
-            preset["orchestrator"]["model"],
-            "opencode/muse-spark-1.3-contributor-free",
+            preset["observer"]["model"], "opencode/nemotron-3.5-super-vl-free"
         )
-        self.assertEqual(
-            preset["observer"]["model"], "opencode/muse-spark-1.3-contributor-free"
-        )
-        self.assertEqual(preset["designer"]["model"], "opencode/mimo-v2.6-flash-free")
-        self.assertEqual(
-            data["_tiers"]["omo-slim-opencode-zen-free"]["council"]["presets"][
-                "omo-slim-opencode-zen-free"
-            ]["gamma"]["model"],
-            "opencode/mimo-v2.6-flash-free",
-        )
-        # Owner ruling 2026-10-27: zen-free is strict too — the observer's paid
-        # fallback to openai/gpt-5.6-luna was removed.
-        self.assertEqual(
-            data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"]["observer"],
-            [],
+        self.assertEqual(preset["designer"]["model"], "opencode/deepseek-v4.1-flash-free")
+        self.assertEqual(preset["fixer"]["model"], "opencode/deepseek-v4.1-flash-free")
+        council = data["_tiers"]["omo-slim-opencode-zen-free"]["council"]["presets"][
+            "omo-slim-opencode-zen-free"
+        ]
+        self.assertEqual(council["beta"]["model"], "opencode/glm-5.3-flash-free")
+        self.assertEqual(council["gamma"]["model"], "opencode/deepseek-v4.1-flash-free")
+        self.assertTrue(
+            all(
+                not chain
+                for chain in data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"].values()
+            )
         )
 
     def test_catalogue_audit_keeps_free_observer_images_off_contributor_models(self):
