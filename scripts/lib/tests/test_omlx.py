@@ -1321,7 +1321,7 @@ def _run_opencode_main(
         (project / "opencode.json").write_text('{"model":"existing/model"}\n')
     config_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
-    config_path.write_bytes(b"{\"model\": \"opencode prior\", \"modelID\": \"prior\"}\n")
+    config_path.write_bytes(b'{"model": "opencode prior", "modelID": "prior"}\n')
     slim_path.write_text(json.dumps({"roles": {"prior": {"model": "openai/prior"}}}))
     scripts = tmp_path / "scripts"
     configs = scripts.parent / "configs"
@@ -1604,7 +1604,9 @@ def test_opencode_main_project_writes_candidate_and_dry_run_is_read_only(
     config_path, _ = _run_opencode_main(
         monkeypatch, tmp_path, mode="project", extra_args=("--dry-run",)
     )
-    assert config_path.read_bytes() == b'{"model": "opencode prior", "modelID": "prior"}\n'
+    assert (
+        config_path.read_bytes() == b'{"model": "opencode prior", "modelID": "prior"}\n'
+    )
     config_path, _ = _run_opencode_main(monkeypatch, tmp_path / "write", mode="project")
     written = json.loads(config_path.read_text())
     assert written["$schema"] == "https://opencode.ai/config.json"
@@ -1659,7 +1661,9 @@ def test_opencode_main_project_validation_failure_preserves_bytes(
     with pytest.raises(SystemExit) as error:
         _run_opencode_main(monkeypatch, tmp_path, mode="project", fail_validation=True)
     assert error.value.code == 1
-    assert config_path.read_bytes() == b'{"model": "opencode prior", "modelID": "prior"}\n'
+    assert (
+        config_path.read_bytes() == b'{"model": "opencode prior", "modelID": "prior"}\n'
+    )
 
 
 def test_opencode_main_global_installs_final_routed_slim(monkeypatch, tmp_path):
@@ -1829,7 +1833,7 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
     config_dir.mkdir(parents=True)
     opencode_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
-    opencode_path.write_bytes(b"{\"model\": \"opencode sentinel\"}\n")
+    opencode_path.write_bytes(b'{"model": "opencode sentinel"}\n')
     slim_path.write_bytes(b"slim sentinel\n")
     scripts = tmp_path / "scripts"
     (tmp_path / "configs/opencode").mkdir(parents=True)
@@ -1885,7 +1889,7 @@ def test_opencode_main_global_tier_failure_preserves_both_outputs(
     script.main = script.main.__wrapped__
     with pytest.raises(SystemExit):
         script.main()
-    assert opencode_path.read_bytes() == b"{\"model\": \"opencode sentinel\"}\n"
+    assert opencode_path.read_bytes() == b'{"model": "opencode sentinel"}\n'
     assert slim_path.read_bytes() == b"slim sentinel\n"
 
 
@@ -1905,7 +1909,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     config_dir.mkdir(parents=True)
     opencode_path = config_dir / "opencode.json"
     slim_path = config_dir / "oh-my-opencode-slim.json"
-    opencode_path.write_bytes(b"{\"model\": \"opencode sentinel\"}\n")
+    opencode_path.write_bytes(b'{"model": "opencode sentinel"}\n')
     if prior_slim is not None:
         slim_path.write_bytes(prior_slim)
     scripts = tmp_path / "scripts"
@@ -1986,7 +1990,7 @@ def test_opencode_main_slim_write_failure_restores_prior_pair(
     critical = [record for record in caplog.records if record.levelname == "CRITICAL"]
     assert len(critical) == 1
     assert "simulated opencode failure" in critical[0].message
-    assert opencode_path.read_bytes() == b"{\"model\": \"opencode sentinel\"}\n"
+    assert opencode_path.read_bytes() == b'{"model": "opencode sentinel"}\n'
     if recovery_fails:
         assert "simulated recovery failure" in critical[0].message
         assert slim_path.read_bytes() == b'{"model": "stub-slim-target"}'
