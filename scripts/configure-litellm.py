@@ -33,6 +33,7 @@ from litellm_config import (  # noqa: E402
 import litellm_config  # noqa: E402
 from litellm_client_auth import resolve_client_auth  # noqa: E402
 
+
 class StrandedClientKeyError(ValueError):
     """A remote client alias exists but its local secret is unavailable."""
 
