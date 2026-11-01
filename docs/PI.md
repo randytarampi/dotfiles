@@ -71,8 +71,27 @@ remains built-in Pi configuration; the installed adapter package provides no
 documented project-level adapter-file equivalent.
 
 Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`,
-and the repo's configured `rpiv-*` extensions. Skills are linked into
+the repo's configured `rpiv-*` extensions, and `@xzzpig/pi-vibeguard`. Skills are linked into
 `~/.pi/agent/skills` by the shared reconciler.
+
+### VibeGuard
+
+Pi installs the upstream extension using `pi install npm:@xzzpig/pi-vibeguard`.
+Its README describes pre-provider redaction as “Replaces configured sensitive
+strings with placeholders before requests are sent to the LLM provider,” then
+restoration in model output and before tool execution. The provider is intended
+not to see plaintext secrets; runtime verification is reserved for the
+machine-phase.
+
+The managed config is `~/.pi/agent/vibeguard.config.json`, copied from
+`configs/pi/vibeguard.config.json` by `configure-pi.py`. It contains audited
+regex and built-in shapes, not raw secrets; `patterns.keywords` stays empty to
+avoid duplicating secret values outside `~/.env`. The extension documents the
+`/vibeguard:*` TUI command family.
+
+VibeGuard's `__VG_` placeholder family aligns with OpenCode's VibeGuard plugin,
+but this does not establish interchangeability with
+`@taehwandev/vibeguard`'s separate `rulesPath` format.
 
 ### Skill collision status
 
