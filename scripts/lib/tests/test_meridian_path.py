@@ -79,13 +79,45 @@ def test_meridian_unprobeable_fails_closed_or_skips_when_gate_off(
     assert json.loads(config.read_text()) == initial
 
 
-def test_meridian_v2_qualification_exact_membership():
-    assert meridian_path.meridian_v2_qualification("2.2.0")
-    assert meridian_path.meridian_v2_qualification("2.0.16")
-    assert meridian_path.meridian_v2_qualification("2.0.21")
-    assert meridian_path.meridian_v2_qualification("2.0.31")
-    assert not meridian_path.meridian_v2_qualification("2.2.5")
-    assert not meridian_path.meridian_v2_qualification("unknown")
+def test_meridian_v2_qualification_exact_membership(monkeypatch):
+    # Hermetic: the desktop rule is explicitly darwin-arm64; the CLI rule is
+    # platform-independent. Force the platform so CI (ubuntu) sees the same
+    # matrix as macOS.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    import platform as _platform
+
+    monkeypatch.setattr(_platform, "machine", lambda: "arm64")
+    # CLI form: only the qualified CLI versions count, regardless of host
+    # platform.
+    assert meridian_path.meridian_v2_qualification("2.0.16") is True
+    assert meridian_path.meridian_v2_qualification("2.0.21") is True
+    assert meridian_path.meridian_v2_qualification("2.0.31") is True
+    assert meridian_path.meridian_v2_qualification("2.2.0") is False
+    assert meridian_path.meridian_v2_qualification("2.2.5") is False
+    assert meridian_path.meridian_v2_qualification("unknown") is False
+    # Desktop form: the darwin-arm64 2.2.0 rule applies only there.
+    assert (
+        meridian_path.meridian_v2_qualification("2.2.0", binary_form="desktop") is True
+    )
+    assert (
+        meridian_path.meridian_v2_qualification("2.0.21", binary_form="desktop")
+        is False
+    )
+
+
+def test_meridian_v2_qualification_is_platform_hermetic(monkeypatch):
+    # Regression guard for CI: a linux runner must see 2.2.0 as
+    # unqualified for both forms while 2.0.21 stays qualified for the CLI.
+    monkeypatch.setattr(sys, "platform", "linux")
+    import platform as _platform
+
+    monkeypatch.setattr(_platform, "machine", lambda: "x86_64")
+    assert meridian_path.meridian_v2_qualification("2.0.21") is True
+    assert meridian_path.meridian_v2_qualification("2.2.0") is False
+    # The darwin-arm64 desktop rule needs darwin+arm64: linux stays False.
+    assert (
+        meridian_path.meridian_v2_qualification("2.2.0", binary_form="desktop") is False
+    )
 
 
 def make_root(tmp_path, relative):

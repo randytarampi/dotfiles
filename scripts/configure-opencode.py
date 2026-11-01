@@ -1341,12 +1341,18 @@ def main():
 
     # include_anthropic governs the anthropic provider block in global mode.
     # Project mode derives providers from the preset instead (see below).
-    include_anthropic = args.preset in [
-        "pro-plus-anthropic",
-        "plus-anthropic",
-        "omo-slim-forty-dollars",
-        "anthropic",
-    ]
+    # Meridian-configured machines keep the Anthropic coverage regardless of
+    # preset (the v1 flow keyed this off MERIDIAN_PLUGIN_PATH).
+    include_anthropic = (
+        args.preset
+        in [
+            "pro-plus-anthropic",
+            "plus-anthropic",
+            "omo-slim-forty-dollars",
+            "anthropic",
+        ]
+        or is_meridian_configured()
+    )
 
     # Allow access to cross-platform temp directories (/tmp, macOS
     # $TMPDIR, Windows %TEMP%) without prompting. These are used by

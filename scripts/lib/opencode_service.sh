@@ -1,27 +1,46 @@
 #!/usr/bin/env bash
 
-# Shared OpenCode v2 service lifecycle, plus LaunchAgent compatibility helpers.
+# Shared OpenCode web LaunchAgent lifecycle. launchd is the sole owner of the
+# com.opencode.web unit (plist written by script 26; configure-all.sh and the
+# Makefile bootout/bootstrap/kickstart the same label). The HTTP probe is the
+# v2 /api/info contract from scripts/lib/opencode_web.py.
 
 opencode_service_stop() {
-  opencode service stop
+  launchctl bootout "$1/com.opencode.web" >/dev/null 2>&1 || true
 }
 
 opencode_service_bootstrap() {
-  local domain="$1" plist="$2" port="${3:-${OPENCODE_SERVER_PORT:-4096}}"
-  : "$domain" "$plist"
-  opencode service set port "$port" || return 1
-  opencode service restart
+  local domain="$1" plist="$2" output="" attempt
+  for attempt in 1 2 3; do
+    opencode_service_stop "$domain"
+    sleep 2
+    if output="$(launchctl bootstrap "$domain" "$plist" 2>&1)" &&
+      launchctl print "$domain/com.opencode.web" >/dev/null 2>&1; then
+      printf 'OpenCode web LaunchAgent loaded (attempt %s)\n' "$attempt"
+      return 0
+    fi
+  done
+  printf 'OpenCode web LaunchAgent failed after 3 bootstrap attempts: %s\n' "$output" >&2
+  return 1
 }
 
 opencode_service_wait_healthy() {
-  local port="${1:-${OPENCODE_SERVER_PORT:-4096}}" attempt password="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}"
-  if [[ -z "$password" ]]; then
-    printf 'OpenCode web health probe skipped: no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured (service start itself succeeded)\n' >&2
-    return 0
+  local port="${1:-${OPENCODE_SERVER_PORT:-4096}}" attempt outcome=0
+  if ! [[ "${port}" =~ ^[0-9]+$ ]]; then
+    printf 'OpenCode web health probe failed: invalid port value (must be digits)\n' >&2
+    return 1
   fi
   for attempt in {1..15}; do
-    if python3 "$(dirname "${BASH_SOURCE[0]}")/opencode_web.py" "$port" "$password" >/dev/null 2>&1; then
-      printf 'OpenCode web HTTP health ready (attempt %s)\n' "$attempt"
+    outcome=0
+    OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}" \
+      python3 "$(dirname "${BASH_SOURCE[0]}")/opencode_web.py" "$port" \
+      >/dev/null 2>&1 || outcome=$?
+    if [[ "$outcome" -eq 0 ]]; then
+      printf 'OpenCode web HTTP health ready (/api/info, attempt %s)\n' "$attempt"
+      return 0
+    fi
+    if [[ "$outcome" -eq 2 ]]; then
+      printf 'OpenCode web health probe UNKNOWN: no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured (verification comes from doctor)\n' >&2
       return 0
     fi
     sleep 2
@@ -32,12 +51,6 @@ opencode_service_wait_healthy() {
 
 opencode_service_start() {
   local domain="$1" plist="$2" port="${3:-${OPENCODE_SERVER_PORT:-4096}}"
-  : "$domain" "$plist"
-  opencode service set port "$port" || return 1
-  opencode service restart || return 1
+  opencode_service_bootstrap "$domain" "$plist" || return 1
   opencode_service_wait_healthy "$port"
-}
-
-opencode_service_status() {
-  opencode service status
 }

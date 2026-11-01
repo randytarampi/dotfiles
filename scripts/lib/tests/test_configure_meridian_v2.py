@@ -2,6 +2,8 @@ import importlib.util
 import json
 import sys
 
+import pytest
+
 SCRIPT = "scripts/configure-meridian.py"
 spec = importlib.util.spec_from_file_location("configure_meridian", SCRIPT)
 assert spec is not None and spec.loader is not None
@@ -44,7 +46,11 @@ def test_v2_setup_invokes_meridian_with_resolved_binary(tmp_path, monkeypatch):
     assert not (tmp_path / "opencode.json").exists()
 
 
-def test_unqualified_v2_skips_without_touching_config(tmp_path, monkeypatch, caplog):
+def test_unqualified_v2_hard_fails_without_touching_config(
+    tmp_path, monkeypatch, caplog
+):
+    """Fail-closed per the migration plan: an unqualified OpenCode CLI stops
+    deployment rather than degrading to warn-and-continue."""
     config = tmp_path / "opencode.json"
     config.write_text(json.dumps({"unchanged": True}))
     original = config.read_bytes()
@@ -61,9 +67,29 @@ def test_unqualified_v2_skips_without_touching_config(tmp_path, monkeypatch, cap
         lambda _binary="opencode": "2.2.5",
     )
     monkeypatch.setattr(sys, "argv", [SCRIPT])
-    configure_meridian.main()
+    with pytest.raises(SystemExit) as excinfo:
+        configure_meridian.main()
+    assert excinfo.value.code == 1
     assert config.read_bytes() == original
     assert "2.2.5" in caplog.text
+    assert "failed hard" in caplog.text
+
+
+def test_gate_off_v2_flow_skips_without_setup(tmp_path, monkeypatch, caplog):
+    config = tmp_path / "opencode.json"
+    config.write_text(json.dumps({"unchanged": True}))
+    original = config.read_bytes()
+    monkeypatch.delenv("DOTFILES_RUN_MERIDIAN_SETUP", raising=False)
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "resolve_opencode_host",
+        lambda: ("known", 2),
+    )
+    monkeypatch.setattr(sys, "argv", [SCRIPT])
+    configure_meridian.main()
+    assert config.read_bytes() == original
+    assert "skipping Meridian v2 setup" in caplog.text
 
 
 def test_v1_keeps_legacy_plugin_path_flow(tmp_path, monkeypatch):

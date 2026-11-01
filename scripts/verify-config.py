@@ -1727,6 +1727,7 @@ def main():
             )
         else:
             password_name = opencode_web.server_password_env_chain()
+            expected_version = opencode_host.host_version_string()
             if not password_name:
                 print(
                     "  \u2298 OpenCode web health: UNKNOWN "
@@ -1735,7 +1736,9 @@ def main():
             else:
                 port = os.environ.get("OPENCODE_SERVER_PORT", "4096")
                 outcome, info = opencode_web.request_server_info(
-                    f"http://127.0.0.1:{port}", os.environ[password_name]
+                    f"http://127.0.0.1:{port}",
+                    os.environ[password_name],
+                    expected_version=expected_version,
                 )
                 if outcome == "ok":
                     print(
@@ -1746,19 +1749,10 @@ def main():
                     print(f"  \u2717 OpenCode web health: {info}")
                     exit_code = 1
 
-        if opencode_config is not None:
-            server = opencode_config.get("server", {})
-            if isinstance(server, dict) and "cors" in server:
-                print("  \u2713 OpenCode web server: cors configured in opencode.json")
-            else:
-                print("  \u2717 OpenCode web server: missing cors in opencode.json")
-                exit_code = 1
-        elif opencode_json.exists():
-            print("  \u2717 OpenCode web server: could not parse opencode.json")
-            exit_code = 1
-        else:
-            print("  \u2717 OpenCode web server: opencode.json not found")
-            exit_code = 1
+        # v2 note: the emitter no longer writes opencode.json server.cors
+        # (v2 ignores the key; service flags live on the deployed command
+        # line, asserted above). Legacy cors keys in existing files are
+        # tolerated, never required.
     else:
         print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
 
@@ -2473,9 +2467,11 @@ def main():
     host_state, host_major = opencode_host.resolve_opencode_host()
     if host_state == "known" and host_major == 2:
         host_version = opencode_host.host_version_string() or "unknown"
-        if meridian_gate and not meridian_v2_qualification(host_version):
+        if meridian_gate and not meridian_v2_qualification(
+            host_version, binary_form="cli"
+        ):
             print(
-                f"  \u26a0 Meridian host qualification: {host_version} not in upstream qualified set (2.2.0 desktop darwin-arm64 / 2.0.16-31 CLI)"
+                f"  \u26a0 Meridian host qualification: CLI {host_version} not in upstream qualified set (2.0.16, 2.0.21, 2.0.31)"
             )
     if meridian_gate:
         if opencode_json.exists():

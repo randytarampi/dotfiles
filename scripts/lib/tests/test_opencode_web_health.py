@@ -1,8 +1,11 @@
 import base64
 import json
+import runpy
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
+
+import pytest
 
 import opencode_web
 
@@ -89,3 +92,40 @@ def test_version_mismatch_is_reported():
         assert opencode_web.request_server_info(
             url, "secret", expected_version="2.2.4"
         ) == ("fail", "version-mismatch:2.2.5")
+
+
+def test_cli_env_mode_and_port_validation(monkeypatch):
+    """__main__ honours the env password chain (secrets never in argv),
+    exits 2 on unknown (no credential) and 1 on an invalid port."""
+    module_argv = [str(opencode_web.__file__), "4096"]
+    monkeypatch.delenv("OPENCODE_PASSWORD", raising=False)
+    monkeypatch.delenv("OPENCODE_SERVER_PASSWORD", raising=False)
+    monkeypatch.setattr(opencode_web.sys, "argv", module_argv)
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
+    assert excinfo.value.code == 2
+
+    monkeypatch.setattr(
+        opencode_web.sys, "argv", [str(opencode_web.__file__), "not-a-port"]
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
+    assert excinfo.value.code == 1
+
+    # Success case: real probe against the local stub server, secrets via
+    # env only (argv stays password-free).
+    with _Server() as stub_url:
+        port = stub_url.rsplit(":", 1)[1]
+        subprocess_result = __import__("subprocess").run(
+            [__import__("sys").executable, str(opencode_web.__file__), port],
+            env={
+                **__import__("os").environ,
+                "PYTHONPATH": str(opencode_web.__file__).rsplit("/scripts/lib/", 1)[0]
+                + "/scripts/lib",
+                "OPENCODE_PASSWORD": "secret",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert subprocess_result.returncode == 0, subprocess_result.stderr
