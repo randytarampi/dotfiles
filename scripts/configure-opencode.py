@@ -2,7 +2,7 @@
 """
 Configure OpenCode Helper.
 Constructs the opencode.json configuration based on presets, mode, local Ollama, and templates.
-Also generates tui.json for the voice plugin via configure-opencode-voice.py.
+Also registers the voice plugin in cli.json (v2 TUI-client home) via configure-opencode-voice.py.
 """
 
 from __future__ import annotations
@@ -1400,11 +1400,6 @@ def main():
             "0",
             plugin,
         )
-    plannotator = next(
-        plugin
-        for plugin in configured_plugins
-        if plugin.startswith("@plannotator/opencode")
-    )
 
     if args.mode == "project":
         # Project configs must be self-sufficient: emit every provider the
@@ -1553,24 +1548,31 @@ def main():
             "providers": {},
             "plugins": [
                 configured_plugins[0],
-                configured_plugins[1],
-                {
-                    "package": plannotator,
-                    "options": {
-                        "workflow": "plan-agent",
-                        "planningAgents": [
-                            "orchestrator",
-                            "council",
-                            "claude",
-                            "codex",
-                            "gemini",
-                            "junie",
-                            "copilot",
-                            "opencode",
-                        ],
-                    },
-                },
-                *configured_plugins[3:],
+                # Manifest order drives the array; the plannotator entry is
+                # the one spec emitted as a {package, options} object.
+                *[
+                    (
+                        {
+                            "package": plugin_spec,
+                            "options": {
+                                "workflow": "plan-agent",
+                                "planningAgents": [
+                                    "orchestrator",
+                                    "council",
+                                    "claude",
+                                    "codex",
+                                    "gemini",
+                                    "junie",
+                                    "copilot",
+                                    "opencode",
+                                ],
+                            },
+                        }
+                        if plugin_spec.startswith("@plannotator/opencode")
+                        else plugin_spec
+                    )
+                    for plugin_spec in configured_plugins[1:]
+                ],
             ],
             "agents": {
                 "build": {"disabled": True},
@@ -2055,7 +2057,7 @@ def main():
         logger.error(f"Failed to set active tier: {e}")
         failures += 1
 
-    # 5. Configure voice plugin (tui.json)
+    # 5. Configure voice plugin (cli.json)
     if "voice" in skipped:
         logger.info("Skipping voice plugin configuration")
     else:
@@ -2081,7 +2083,7 @@ def main():
         logger.error(f"Failed to configure voice plugin: {e}")
         failures += 1
 
-    # 5b. Configure DCP TUI plugin (tui.json)
+    # 5b. DCP: remove obsolete tui.json registration (manifest owns v2 loading)
     if "dcp" in skipped:
         logger.info("Skipping DCP TUI plugin configuration")
     else:
@@ -2110,7 +2112,7 @@ def main():
         f"  • oh-my-opencode-slim.json (all presets, active: {args.preset})",
         "  • vibeguard.config.json (sensitive-string redaction)",
         "  • acp-agents.json (ACP-capable agent wrappers — see ~/.config/opencode/oh-my-opencode-slim.json)",
-        "  • tui.json (voice + DCP TUI plugin config)",
+        "  • cli.json (voice TUI-client plugin config)",
         "",
         "To switch tiers:",
         "     configure-opencode-tier.py --preset pro",

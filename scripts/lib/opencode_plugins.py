@@ -49,6 +49,15 @@ def load_plugin_manifest(path=MANIFEST_PATH):
         raise ValueError(
             "OpenCode plugin manifest contains duplicate cli_plugins packages"
         )
+    overlap = set(plugins) & set(cli_specs)
+    if overlap:
+        # A TUI-capable plugin must never be co-registered: plugins in
+        # opencode.json auto-load in the TUI, and cli.json duplicates would
+        # double-load them (docs/OPENCODE.md).
+        raise ValueError(
+            "OpenCode plugin manifest must not repeat a package across plugins "
+            f"and cli_plugins: {sorted(overlap)}"
+        )
     if any(not is_pinned_spec(item) for item in [*plugins, *cli_specs]):
         raise ValueError(
             "OpenCode plugin manifest entries must be pinned package@version specs"
@@ -73,15 +82,16 @@ def is_pinned_spec(spec: str) -> bool:
         return bool(
             re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[A-Za-z0-9]+", spec)
         )
-    if re.fullmatch(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", spec):
-        return True
     if "@" not in spec:
         return False
     version = spec.rsplit("@", 1)[1]
     if version == "latest":
-        # Floating tracking alias: OpenCode installs an "<name>@latest" cache
-        # entry and resolves the newest release at install time (probed on
-        # opencode 1.18.34). Allowed deliberately; see CONVENTIONS.md.
+        # Floating tracking alias: OpenCode resolves the newest release at
+        # install/update time; re-resolve only changes by running the gated
+        # `opencode plugin update` (probed on the v2.2.5 CLI, 2026-10-31:
+        # `plugin add` dedupes and does NOT refresh an existing resolution,
+        # `plugin check` prints resolved concrete versions). Allowed
+        # deliberately; see CONVENTIONS.md.
         return True
     return bool(
         re.fullmatch(
