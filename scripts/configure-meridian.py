@@ -29,6 +29,33 @@ from meridian_path import (  # noqa: E402
 import opencode_host  # noqa: E402
 
 
+def reconcile_sdk_features(path, *, dry_run=False, no_backup=False):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            sdk_features = json.load(f)
+        if not isinstance(sdk_features, dict):
+            raise ValueError("sdk-features.json must contain a JSON object")
+    else:
+        sdk_features = {}
+    opencode_features = sdk_features.get("opencode", {})
+    if not isinstance(opencode_features, dict):
+        raise ValueError("sdk-features.json opencode entry must be an object")
+    desired = dict(sdk_features)
+    desired["opencode"] = dict(opencode_features)
+    desired["opencode"].update({"codeSystemPrompt": False, "clientSystemPrompt": True})
+    content = json.dumps(desired, indent=2) + "\n"
+    existing_content = None
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            existing_content = f.read()
+    if not dry_run and content != existing_content:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and not no_backup:
+            backup_file(path, enabled=True)
+        write_text_file(path, content, backup=False)
+    return content
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cleanly appends the Meridian plugin path to the OpenCode configuration."
@@ -107,7 +134,23 @@ def main():
             )
             sys.exit(result.returncode)
         logger.info("Meridian v2 setup completed")
+        sdk_features_path = os.path.join(
+            os.path.expanduser("~"), ".config", "meridian", "sdk-features.json"
+        )
+        try:
+            reconcile_sdk_features(
+                sdk_features_path, dry_run=args.dry_run, no_backup=args.no_backup
+            )
+        except Exception as e:
+            logger.critical("Failed to update sdk-features.json: %s", e)
+            sys.exit(1)
         return
+
+    if os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP") == "1":
+        logger.critical(
+            "Meridian setup requires a probed OpenCode host; refusing legacy fallback."
+        )
+        sys.exit(1)
 
     if not os.path.exists(config_path):
         logger.critical(
@@ -180,38 +223,12 @@ def main():
     meridian_config_dir = os.path.expanduser("~/.config/meridian")
     sdk_features_path = os.path.join(meridian_config_dir, "sdk-features.json")
     try:
-        if os.path.exists(sdk_features_path):
-            with open(sdk_features_path, "r", encoding="utf-8") as f:
-                sdk_features = json.load(f)
-        else:
-            sdk_features = {}
-
-        if not isinstance(sdk_features, dict):
-            sdk_features = {}
-
-        opencode_features = sdk_features.get("opencode", {})
-        if not isinstance(opencode_features, dict):
-            opencode_features = {}
-        opencode_features.update(
-            {
-                "codeSystemPrompt": False,
-                "clientSystemPrompt": True,
-            }
+        reconcile_sdk_features(
+            sdk_features_path, dry_run=args.dry_run, no_backup=args.no_backup
         )
-        sdk_features["opencode"] = opencode_features
-        sdk_features_content = json.dumps(sdk_features, indent=2) + "\n"
-
         if args.dry_run:
             logger.info(f"Would write sdk-features.json to {sdk_features_path}")
         else:
-            os.makedirs(meridian_config_dir, exist_ok=True)
-            if os.path.exists(sdk_features_path) and not args.no_backup:
-                backup_path = backup_file(sdk_features_path, enabled=True)
-                if backup_path:
-                    logger.info(
-                        f"Backed up existing sdk-features.json to {backup_path}"
-                    )
-            write_text_file(sdk_features_path, sdk_features_content, backup=False)
             logger.info(f"sdk-features.json written to {sdk_features_path}")
     except Exception as e:
         logger.critical(f"Failed to update sdk-features.json: {e}")
