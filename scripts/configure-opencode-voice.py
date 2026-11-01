@@ -1367,6 +1367,7 @@ def main():
     voice_status_marker = voice_config.pop("_voice_status", None)
 
     output_path = os.path.join(config_dir_path, "cli.json")
+    cli_existed = os.path.exists(output_path)
     cli_root = []
     cli_root_form = "array"
     if os.path.exists(output_path):
@@ -1438,10 +1439,27 @@ def main():
         except (OSError, json.JSONDecodeError, ValueError) as error:
             logger.debug("No usable legacy tui.json voice route: %s", error)
     entry_options = {
-        key: value
-        for key, value in voice_config.items()
-        if key
-        in {"endpoint", "model", "apiKeyEnv", "sttEndpoint", "sttModel", "sttApiKeyEnv"}
+        # Tier-derived keys win; unknown user-set option keys (e.g.
+        # sttAutoSubmit, ttsVoice) survive every rewrite of the entry.
+        **(
+            existing_voice.get("options", {})
+            if isinstance(existing_voice, dict)
+            and isinstance(existing_voice.get("options", {}), dict)
+            else {}
+        ),
+        **{
+            key: value
+            for key, value in voice_config.items()
+            if key
+            in {
+                "endpoint",
+                "model",
+                "apiKeyEnv",
+                "sttEndpoint",
+                "sttModel",
+                "sttApiKeyEnv",
+            }
+        },
     }
     existing_options = (
         existing_voice.get("options", {}) if isinstance(existing_voice, dict) else {}
@@ -1451,6 +1469,8 @@ def main():
         not (voice_config.get("endpoint") and voice_config.get("model"))
         and existing_voice is not None
     ):
+        # Tier resolution delivered no LLM route: keep the existing cli.json
+        # entry as-is instead of rebuilding it into an empty route.
         filtered_plugins.append(existing_voice)
         route_installed = True
     elif not (voice_config.get("endpoint") and voice_config.get("model")) and (
@@ -1464,9 +1484,6 @@ def main():
         route_installed = True
     elif unresolved:
         if existing_voice is not None:
-            for key in ("endpoint", "model", "apiKeyEnv"):
-                if key in existing_options:
-                    entry_options[key] = existing_options[key]
             filtered_plugins.append(
                 {"package": voice_plugin_spec, "options": entry_options}
             )
@@ -1509,27 +1526,33 @@ def main():
         print(f"Preserved plugin names: {', '.join(preserved_names) or 'none'}")
         return
 
-    # Write cli.json
-    os.makedirs(config_dir_path, exist_ok=True)
-    output_path = os.path.join(config_dir_path, "cli.json")
+    # Write cli.json — but never create it when there is no route to install:
+    # upstream migrates supported global tui.json settings into cli.json on
+    # the first v2 TUI start ONLY while cli.json is absent, so creating an
+    # empty cli.json would strand those settings (docs/VOICE.md).
+    if not cli_existed and not route_installed:
+        logger.info(
+            "cli.json not created: no voice route resolved; the upstream "
+            "tui.json migration stays available"
+        )
+    else:
+        # Backup existing config
+        if os.path.exists(output_path) and not args.no_backup:
+            backup_path = backup_file(output_path, enabled=True)
+            if backup_path:
+                logger.info(f"Backed up existing cli.json to {backup_path}")
 
-    # Backup existing config
-    if os.path.exists(output_path) and not args.no_backup:
-        backup_path = backup_file(output_path, enabled=True)
-        if backup_path:
-            logger.info(f"Backed up existing cli.json to {backup_path}")
-
-    try:
-        if cli_root_form == "object":
-            cli_root["plugins"] = filtered_plugins
-            cli_payload = json.dumps(cli_root, indent=2) + "\n"
-        else:
-            cli_payload = json.dumps(filtered_plugins, indent=2) + "\n"
-        _atomic_private_write(output_path, cli_payload)
-        logger.info(f"cli.json written to {output_path}")
-    except Exception as e:
-        logger.critical(f"Failed to write cli.json: {e}")
-        sys.exit(1)
+        try:
+            if cli_root_form == "object":
+                cli_root["plugins"] = filtered_plugins
+                cli_payload = json.dumps(cli_root, indent=2) + "\n"
+            else:
+                cli_payload = json.dumps(filtered_plugins, indent=2) + "\n"
+            _atomic_private_write(output_path, cli_payload)
+            logger.info(f"cli.json written to {output_path}")
+        except Exception as e:
+            logger.critical(f"Failed to write cli.json: {e}")
+            sys.exit(1)
 
     tui_path = os.path.join(config_dir_path, "tui.json")
     if route_installed and os.path.exists(tui_path):

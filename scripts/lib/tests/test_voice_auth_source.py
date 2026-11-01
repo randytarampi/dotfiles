@@ -295,8 +295,9 @@ def test_main_installs_no_plugin_entry_without_resolved_route(
 
     voice.main()
 
-    cli = json.loads((tmp_path / "cli.json").read_text())
-    assert not [entry for entry in cli if "voice" in str(entry).lower()]
+    # Routeless resolution with cli.json absent: no file is created (the
+    # upstream tui.json migration window must stay available).
+    assert not (tmp_path / "cli.json").exists()
     assert "Voice outcome: unresolved; no plugin route installed" in caplog.text
 
 
