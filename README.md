@@ -506,7 +506,7 @@ Packages available on both platforms by category:
 | Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
 | Ollama | `ollama-app` (cask) | `Ollama.Ollama` |
 | oMLX | `jundot/omlx/omlx` (Apple Silicon/macOS only) | — |
-| OpenCode | `opencode-desktop` (cask) / `anomalyco/tap/opencode` | `SST.OpenCodeDesktop` / `SST.opencode` |
+| OpenCode | official install script (latest stable v2; `~/.opencode/bin`) | official install script (PowerShell) / install script |
 | Codex | `codex` (cask) | `OpenAI.Codex` |
 | VS Code | `visual-studio-code` (cask) | `Microsoft.VisualStudioCode` |
 | Slack | `slack` (cask) | `SlackTechnologies.Slack` |
