@@ -1,5 +1,12 @@
 # Agent Tool Capability Matrix
 
+
+Optional inference: OpenCode, Pi, Junie and LiteLLM support explicitly
+credentialed Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM routes;
+GitHub's OpenCode review workflow provides trusted single-model selection
+with the existing Big Pickle default. This does not imply that other tools
+have runtime 429 fallback. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+
 This matrix records the supported integration surface for each agent. “Native”
 means the tool consumes the configuration directly; “adapter” means an ACP
 bridge or compatibility layer is used.
