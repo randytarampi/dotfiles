@@ -60,17 +60,11 @@ set up. Never put real values in `.env.example`.
 ## OpenCode GitHub review action
 
 The reusable `.github/workflows/agentic-review.yml` accepts the trusted
-`workflow_call` input `inference_provider`: `opencode` (default),
-`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. Maintainer-authorized `/opencode @mistral`, `/opencode @groq`,
-`/opencode @cloudflare`, or `/opencode @nim` comments select the same existing
-OpenCode reviewer (not separate publishing bots). Multiple provider hints
-are rejected. `/opencode` alone keeps the Big Pickle default. The hosted
-review action's trusted-ref must include this code before tags take effect.
-The GitHub repository or
-organisation holding the caller workflow must provide the corresponding
+`workflow_call` input `inference_provider`: `free` (default), `opencode`,
+`groq`, `mistral`, `cloudflare`, or `nvidia-nim`. Maintainer-authorized `/opencode --pool=mistral`, `/opencode --pool=groq`,\n`/opencode --pool=cloudflare`, `/opencode --pool=nim` or\n`/opencode --pool=opencode` select an OpenCode inference pool without\nnotifying GitHub user accounts. `/opencode` uses the `free` pool, whose\nconfiguration-time preference is Mistral, Cloudflare, Groq, then the existing\nOpenCode Big Pickle when none of those credentials are present. This is\n**not** runtime 429 failover or positive proof of zero-charge entitlement.\nNVIDIA is excluded from the automatic pool. Multiple conflicting selectors\nare rejected. The trusted-ref must be refreshed before new commands go live.\nThe GitHub repository or\norganisation holding the caller workflow must provide the corresponding
 optional secrets in addition to the existing review secrets. The Cloudflare
 account identifier belongs in Actions **variable** `CLOUDFLARE_ACCOUNT_ID`,
-not a secret. NVIDIA's `@nim` option also requires explicit trusted
+not a secret. NVIDIA's `--pool=nim` option also requires explicit trusted
 `allow_nvidia_review: true` approval and is not enabled by the dispatcher.
 Do not inject
 them into untrusted PR files.
@@ -129,11 +123,11 @@ credential stores, existing client virtual keys or user-owned profiles.
 
 ## Model-pool strategy (deliberately deferred)
 
-A fused default `best` selection is desirable only after credentialed tool-call,
+A fully verified default `free` pool remains an extension after credentialed tool-call,
 licensing, cost and independent-rate-limit evidence for each account/model.
 The action currently has one primary `with.model`, not the local Slim
 orchestrator/fallback engine. A catalogue of names does not provide an ordered
 runtime fallback chain for GitHub reviews. Future work should re-use the existing
 evidence-qualified dynamic-free registry or explicitly configure the host's
 supported fallback plugin, without silently enabling paid/development-only
-capacity. The default remains `opencode/big-pickle` until proven otherwise.
+capacity. The fallback when no preferred provider is configured remains `opencode/big-pickle`.
