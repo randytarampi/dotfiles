@@ -1283,9 +1283,28 @@ def check_opencode_orphan_files():
 
     if cli_path.exists():
         try:
-            cli_config = json.loads(cli_path.read_text(encoding="utf-8"))
-            if not isinstance(cli_config, list):
-                raise ValueError("cli.json root must be an array")
+            cli_root = json.loads(cli_path.read_text(encoding="utf-8"))
+            # Upstream v2 consumes both roots (probe-verified 2026-10-31): an
+            # ordered entry array and a {"plugins": [...]} object form.
+            if isinstance(cli_root, list):
+                cli_entries = cli_root
+            elif isinstance(cli_root, dict) and isinstance(
+                cli_root.get("plugins", []), list
+            ):
+                cli_entries = cli_root["plugins"]
+            else:
+                raise ValueError(
+                    "cli.json root must be an array or a {plugins: [...]} object"
+                )
+            for entry in cli_entries:
+                spec = entry.get("package", "") if isinstance(entry, dict) else entry
+                if isinstance(spec, str) and spec.startswith(
+                    ("@slkiser/opencode-quota", "quota")
+                ):
+                    print(
+                        "  \u26a0 OpenCode cli.json: retired quota plugin "
+                        "still registered (remove during cutover)"
+                    )
         except (json.JSONDecodeError, OSError, ValueError) as error:
             print(f"  \u2717 OpenCode cli.json: could not parse {cli_path}: {error}")
             exit_code = 1

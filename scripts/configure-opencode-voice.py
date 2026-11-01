@@ -1367,16 +1367,31 @@ def main():
     voice_status_marker = voice_config.pop("_voice_status", None)
 
     output_path = os.path.join(config_dir_path, "cli.json")
-    cli_config = []
+    cli_root = []
+    cli_root_form = "array"
     if os.path.exists(output_path):
         try:
             with open(output_path, "r", encoding="utf-8") as config_file:
-                cli_config = json.load(config_file)
-            if not isinstance(cli_config, list):
-                raise ValueError("cli.json root must be an array")
+                cli_root = json.load(config_file)
+            # Upstream v2 consumes both roots (probe-verified 2026-10-31):
+            # an ordered entry array and a {"plugins": [...]} object form.
+            if isinstance(cli_root, list):
+                cli_config = cli_root
+                cli_root_form = "array"
+            elif isinstance(cli_root, dict) and isinstance(
+                cli_root.get("plugins", []), list
+            ):
+                cli_config = cli_root["plugins"]
+                cli_root_form = "object"
+            else:
+                raise ValueError(
+                    "cli.json root must be an array or a {plugins: [...]} object"
+                )
         except (OSError, json.JSONDecodeError, ValueError) as error:
             logger.critical(f"Could not read existing cli.json safely: {error}")
             return 1
+    else:
+        cli_config = []
     filtered_plugins = [
         entry for entry in cli_config if not _voice_entry_matches(entry)
     ]
@@ -1505,9 +1520,12 @@ def main():
             logger.info(f"Backed up existing cli.json to {backup_path}")
 
     try:
-        _atomic_private_write(
-            output_path, json.dumps(filtered_plugins, indent=2) + "\n"
-        )
+        if cli_root_form == "object":
+            cli_root["plugins"] = filtered_plugins
+            cli_payload = json.dumps(cli_root, indent=2) + "\n"
+        else:
+            cli_payload = json.dumps(filtered_plugins, indent=2) + "\n"
+        _atomic_private_write(output_path, cli_payload)
         logger.info(f"cli.json written to {output_path}")
     except Exception as e:
         logger.critical(f"Failed to write cli.json: {e}")
