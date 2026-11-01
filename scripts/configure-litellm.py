@@ -639,10 +639,12 @@ def _handle_duplicate_alias(
     )
     materialized = _key_file_materialized(client_key_path, env_name, service_env_path)
     if record and not materialized and not client_key_path.is_symlink():
-        key = _recover_stranded_app_key(api_base, master_key, alias, record)
-        if key:
-            found[env_name] = key
-        return
+        logger.error(
+            "LiteLLM client %s exists remotely but has no local key; "
+            "refusing automatic deletion (manual reconciliation required)",
+            alias,
+        )
+        raise ValueError(f"stranded LiteLLM client credential: {alias}")
     logger.info(
         "LiteLLM key alias %s already exists; preserving local key state", alias
     )
@@ -745,9 +747,12 @@ def _prepare_existing_remote_key(
             dry_run=dry_run,
         )
         return
-    key = _recover_stranded_app_key(api_base, master_key, alias, remote)
-    if key:
-        found[env_name] = key
+    logger.error(
+        "LiteLLM client %s has a gateway alias but no local credential; "
+        "preserving remote key (manual reconciliation required)",
+        alias,
+    )
+    raise ValueError(f"stranded LiteLLM client credential: {alias}")
 
 
 def _verify_provisioned_keys(rows, api_base, service_env_path):
@@ -876,27 +881,6 @@ def _provision_app_keys(
     except (OSError, ValueError, TypeError) as error:
         logger.warning("LiteLLM app-key provisioning deferred: %s", error)
         return not strict
-
-
-def _recover_stranded_app_key(api_base, master_key, alias, record):
-    """Delete and regenerate only an alias whose local key material is absent."""
-    token_hash = record.get("token") or record.get("token_id")
-    if not isinstance(token_hash, str) or not token_hash:
-        logger.warning(
-            "Cannot recover stranded LiteLLM alias %s: token hash unavailable", alias
-        )
-        return None
-    _request_json(f"{api_base}/key/delete", "POST", master_key, {"keys": [token_hash]})
-    generated = _request_json(
-        f"{api_base}/key/generate",
-        "POST",
-        master_key,
-        {"key_alias": alias, "duration": None},
-    )
-    key = generated.get("key") if isinstance(generated, dict) else None
-    if key:
-        logger.info("recovered stranded alias %s: deleted + regenerated", alias)
-    return key
 
 
 def main():
