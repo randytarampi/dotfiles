@@ -1252,7 +1252,7 @@ def test_caddy_omlx_route_is_gated(monkeypatch):
 def test_caddy_auth_matcher_is_defined_in_each_site_block(monkeypatch):
     caddy = load_script("configure-caddy.py")
     monkeypatch.setenv("OMLX_API_KEY", "secret")
-    auth = caddy.build_auth_block([("user", "hashed-password")]).replace(
+    auth = caddy.build_auth_block([("opencode", "hashed-password")]).replace(
         "basic_auth {", "basic_auth @not_omlx {", 1
     )
     blocks = [
@@ -1267,6 +1267,9 @@ def test_caddy_auth_matcher_is_defined_in_each_site_block(monkeypatch):
     assert len(blocks) == 2
     for block in blocks:
         lines = block.splitlines()
+        if "opencode.example.com" in block:
+            assert "  basic_auth {" in lines
+            continue
         auth_index = next(
             index
             for index, line in enumerate(lines)

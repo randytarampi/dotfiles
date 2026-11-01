@@ -26,15 +26,17 @@ import re
 import shutil
 import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-resolved binary.
 
-_VERSION_RE = re.compile(r"(?:^|\s)v?(\d+)\.\d+")
+_VERSION_RE = re.compile(r"(?<![A-Za-z0-9.+-])v?(\d+\.\d+\.\d+)(?![A-Za-z0-9.+-])")
 
 
-def _probe_host(binary: str) -> tuple[str, int | None]:
-    """Implementation of :func:`resolve_opencode_host`; tests target this
-    directly so the public name stays a patchable seam."""
+def _probe_host(binary: str) -> tuple[str, int | None, str | None]:
+    """Implementation of the host probe; public names stay patchable seams.
+
+    Returns (state, major, version-string) where the version string is the
+    exact matched stable ``X.Y.Z`` token, when found."""
     resolved = shutil.which(binary)
     if resolved is None:
-        return ("absent", None)
+        return ("absent", None, None)
     try:
         probe = subprocess.run(  # nosec B603 - absolute binary from shutil.which; literal args.
             [resolved, "--version"],
@@ -43,19 +45,30 @@ def _probe_host(binary: str) -> tuple[str, int | None]:
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError):
-        return ("unknown", None)
+        return ("unknown", None, None)
+    if probe.returncode != 0:
+        return ("unknown", None, f"probe exited {probe.returncode}")
+    versions = set()
     for stream in (probe.stdout or "", probe.stderr or ""):
-        match = _VERSION_RE.search(stream)
-        if match:
-            return ("known", int(match.group(1)))
-    return ("unknown", None)
+        versions.update(match.group(1) for match in _VERSION_RE.finditer(stream))
+    if len(versions) == 1:
+        version = versions.pop()
+        return ("known", int(version.split(".", 1)[0]), version)
+    return ("unknown", None, None)
 
 
 def resolve_opencode_host(binary: str = "opencode") -> tuple[str, int | None]:
     """Return (state, major): ("absent", None), ("unknown", None) or
     ("known", <major>). Tests monkeypatch this seam; see conftest's
     autouse ``assume_v2_opencode_host`` fixture."""
-    return _probe_host(binary)
+    state, major, _version = _probe_host(binary)
+    return (state, major)
+
+
+def host_version_string(binary: str = "opencode") -> str | None:
+    """Return the probed host's exact version token (``X.Y.Z``) or None."""
+    _state, _major, version = _probe_host(binary)
+    return version
 
 
 def native_emission_decision(state: str, major: int | None, logger=None) -> bool:

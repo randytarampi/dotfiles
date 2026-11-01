@@ -4,10 +4,9 @@ import unittest
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
-# v1 baseline; the plugin-update gate line was added in the OpenCode v2
-# migration (intentional, reviewed change), so the baseline advances with it.
+# Baseline includes the reviewed OpenCode password precedence documentation.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "cb1b75814e9854b5793efaccb6e4bfbd257f662a6a3d76b7a9faa48d149477b3"
+    "ae204a657865e8c93e36dbbe0a93d171bb3e3d4e9a145c02c9fdf7d5b5eaad42"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

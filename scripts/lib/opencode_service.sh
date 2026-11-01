@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-# Shared OpenCode web LaunchAgent lifecycle. Handles launchd's asynchronous
-# bootout/bootstrap race and keeps loaded and HTTP-ready as separate phases.
+# Shared OpenCode web LaunchAgent lifecycle. launchd is the sole owner of the
+# com.opencode.web unit (plist written by script 26; configure-all.sh and the
+# Makefile bootout/bootstrap/kickstart the same label). The HTTP probe is the
+# v2 /api/info contract from scripts/lib/opencode_web.py.
 
 opencode_service_stop() {
-  local domain="$1"
-  launchctl bootout "$domain/com.opencode.web" >/dev/null 2>&1 || true
+  launchctl bootout "$1/com.opencode.web" >/dev/null 2>&1 || true
 }
 
 opencode_service_bootstrap() {
@@ -24,10 +25,22 @@ opencode_service_bootstrap() {
 }
 
 opencode_service_wait_healthy() {
-  local port="${1:-${OPENCODE_SERVER_PORT:-4096}}" attempt
+  local port="${1:-${OPENCODE_SERVER_PORT:-4096}}" attempt outcome=0
+  if ! [[ "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+    printf 'OpenCode web health probe failed: invalid port value (must be 1–65535)\n' >&2
+    return 1
+  fi
+  if [[ -z "${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}" ]]; then
+    printf 'OpenCode web health probe failed: no server password is configured\n' >&2
+    return 1
+  fi
   for attempt in {1..15}; do
-    if curl -fsS --max-time 3 "http://127.0.0.1:${port}/global/health" >/dev/null 2>&1; then
-      printf 'OpenCode web HTTP health ready (attempt %s)\n' "$attempt"
+    outcome=0
+    OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}" \
+      python3 "$(dirname "${BASH_SOURCE[0]}")/opencode_web.py" "$port" \
+      >/dev/null 2>&1 || outcome=$?
+    if [[ "$outcome" -eq 0 ]]; then
+      printf 'OpenCode web HTTP health ready (/api/info, attempt %s)\n' "$attempt"
       return 0
     fi
     sleep 2

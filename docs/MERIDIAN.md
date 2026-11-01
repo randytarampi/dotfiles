@@ -8,6 +8,10 @@ For Mozart router config (a separate component), see [MOZART.md](MOZART.md).
 
 Meridian persists per-adapter SDK feature toggles in `~/.config/meridian/sdk-features.json`. The OpenCode adapter is configured with:
 
+After successful `meridian setup --v2`, the repository reconciles these two
+OpenCode values while preserving unrelated keys; the setup binary's ownership
+of this policy is not established here.
+
 ```json
 {
   "opencode": {
@@ -71,7 +75,7 @@ Verify alignment by checking:
 
 ## Configuration Scripts
 
-- `scripts/configure-meridian.py` — appends Meridian plugin path to `opencode.json` plugin array. Also manages `~/.config/meridian/sdk-features.json` (ensures `opencode.codeSystemPrompt=false`, preserving other adapter settings).
+- `scripts/configure-meridian.py` — on legacy hosts, appends the Meridian plugin path; on v2 hosts it runs the gated upstream `meridian setup --v2 --opencode-bin <resolved>` once after exact CLI qualification. The repo then reconciles `~/.config/meridian/sdk-features.json` after successful setup, preserving unrelated adapter settings. A present-but-unprobeable host fails closed when setup is requested. The planned machine cutover is install qualified OpenCode 2.2.0, run `meridian setup --v2` once, then upgrade OpenCode normally; this repo-side qualification gate remains.
 - `scripts/configure-codex.py` — adds Meridian as an available provider in `~/.codex/config.toml` (base_url, wire_api, env_key). Codex defaults to OpenAI; switch to Meridian with `codex -c model_provider=meridian -m <model>`. Preserves existing runtime settings.
 - `scripts/meridian-launch.sh` — launches Meridian proxy, unsets `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`.
 - `.chezmoiscripts/run_onchange_11-install-meridian-launchd.sh.tmpl` — installs launchd plist for Meridian.

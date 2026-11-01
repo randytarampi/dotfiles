@@ -32,6 +32,9 @@ from model_catalogues import _configured_litellm_port
 import litellm_config
 from litellm_config import APP_KEYS
 import tier_coverage
+import opencode_web
+import opencode_host
+from meridian_path import meridian_v2_qualification
 
 HOME = Path.home()
 OMLX_AUDIO_UPLOAD_SIZE_PATTERN = re.compile(
@@ -1711,19 +1714,51 @@ def main():
             )
             exit_code = 1
 
-        if opencode_config is not None:
-            server = opencode_config.get("server", {})
-            if isinstance(server, dict) and "cors" in server:
-                print("  \u2713 OpenCode web server: cors configured in opencode.json")
-            else:
-                print("  \u2717 OpenCode web server: missing cors in opencode.json")
-                exit_code = 1
-        elif opencode_json.exists():
-            print("  \u2717 OpenCode web server: could not parse opencode.json")
-            exit_code = 1
+        host_state, host_major = opencode_host.resolve_opencode_host()
+        if not (host_state == "known" and host_major == 2):
+            reported = (
+                f"{host_state} (major {host_major})"
+                if host_state == "known"
+                else host_state
+            )
+            print(
+                f"  \u2298 OpenCode web health: host is not a verified OpenCode v2 "
+                f"binary ({reported}) — health evidence expected after cutover"
+            )
         else:
-            print("  \u2717 OpenCode web server: opencode.json not found")
-            exit_code = 1
+            password_name = opencode_web.server_password_env_chain()
+            expected_version = opencode_host.host_version_string()
+            if not password_name:
+                print(
+                    "  \u2298 OpenCode web health: UNKNOWN "
+                    "(no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured)"
+                )
+            else:
+                port = opencode_web._validated_port(
+                    os.environ.get("OPENCODE_SERVER_PORT", "4096")
+                )
+                if port is None:
+                    print("  \u2717 OpenCode web health: invalid OPENCODE_SERVER_PORT")
+                    exit_code = 1
+                else:
+                    outcome, info = opencode_web.request_server_info(
+                        f"http://127.0.0.1:{port}",
+                        os.environ[password_name],
+                        expected_version=expected_version,
+                    )
+                    if outcome == "ok":
+                        print(
+                            f"  \u2713 OpenCode web health: /api/info version "
+                            f"{info['version']}"
+                        )
+                    else:
+                        print(f"  \u2717 OpenCode web health: {info}")
+                        exit_code = 1
+
+        # v2 note: the emitter no longer writes opencode.json server.cors
+        # (v2 ignores the key; service flags live on the deployed command
+        # line, asserted above). Legacy cors keys in existing files are
+        # tolerated, never required.
     else:
         print("  \u2298 OpenCode web (gate DOTFILES_RUN_OPENCODE_WEB_SETUP=0, skipped)")
 
@@ -2029,10 +2064,15 @@ def main():
             (computer_plist, "cptr LaunchAgent"),
         ):
             if not path.exists():
-                print(f"  \u2717 {label}: MISSING {path}")
+                # The label identifies the component; the doctor never logs
+                # the service-env file path (it is a credential-bearing file).
+                if path == computer_env:
+                    print(f"  \u2717 {label}: MISSING (under {computer_root})")
+                else:
+                    print(f"  \u2717 {label}: MISSING {path}")
                 exit_code = 1
         if not (computer_venv.is_file() and os.access(computer_venv, os.X_OK)):
-            print(f"  \u2717 cptr executable: not executable {computer_venv}")
+            print(f"  \u2717 cptr executable: not executable (under {computer_root})")
             exit_code = 1
         if computer_data.exists() and (computer_data.stat().st_mode & 0o777) != 0o700:
             print("  \u2717 cptr data directory: expected mode 0o700")
@@ -2435,6 +2475,15 @@ def main():
 
     # Optional Meridian plugin check (only enforced when enabled)
     meridian_gate = os.environ.get("DOTFILES_RUN_MERIDIAN_SETUP", "0") == "1"
+    host_state, host_major = opencode_host.resolve_opencode_host()
+    if host_state == "known" and host_major == 2:
+        host_version = opencode_host.host_version_string() or "unknown"
+        if meridian_gate and not meridian_v2_qualification(
+            host_version, binary_form="cli"
+        ):
+            print(
+                f"  \u26a0 Meridian host qualification: CLI {host_version} not in upstream qualified set (2.0.16, 2.0.21, 2.0.31)"
+            )
     if meridian_gate:
         if opencode_json.exists():
             if opencode_config is not None and meridian_registration_present(

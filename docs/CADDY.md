@@ -24,7 +24,7 @@ It is the front door for:
 
 ### Optional services
 
-5. **OpenCode web** — `opencode web` behind Caddy.
+5. **OpenCode web** — launchd-owned `opencode serve --port` behind Caddy.
 6. **Plannotator paste** — encrypted paste backend behind Caddy; portal is static.
 
 ```mermaid
@@ -142,7 +142,7 @@ manually if you prefer to manage Keychain trust yourself.
 | Ollama | `/ollama/*` | `http://127.0.0.1:11434` | Read-only proxy; write endpoints are blocked. |
 | oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative, write, and non-local `/v1/models/status` endpoints are blocked. With `OMLX_API_KEY`, the Bearer key is the route's auth layer instead of basic auth. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
-| OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; Caddy `basic_auth` is the only external auth layer. |
+| OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; OpenCode v2 Basic auth is forwarded to the upstream. |
 | Open WebUI | `chat.<domain>` | `http://127.0.0.1:8080` | Dedicated host (not a path prefix); LAN allowlist only, **no Caddy `basic_auth`** — Open WebUI's own session auth is the application layer (both Caddy basic auth and app Bearer use the `Authorization` header). Gated by `DOTFILES_RUN_OPENWEBUI_SETUP=1`; public exposure requires the explicit opt-in `DOTFILES_OPENWEBUI_PUBLIC=1` (default 0). |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |
 | Plannotator portal | `/` | static files | Static share portal; no backend control plane exposed. |
@@ -185,16 +185,29 @@ The Route 53 zone ID, record names, and TTL now live in
 
 ### OpenCode web
 
-OpenCode binds to `127.0.0.1` only, so the web service is reachable locally
-without credentials. The TUI also connects directly to localhost and does not
-need OpenCode-level auth.
+OpenCode external Caddy routes require a Caddy auth entry named `opencode`;
+other sites may retain additional users. Caddy stores only the generated hash.
+Provision the same plaintext password separately as `OPENCODE_PASSWORD` in
+`~/.env`, which launchd passes to OpenCode; Caddy forwards the browser's
+`Authorization` header, so the two password values must match. The hash cannot
+be used as the backend password. Localhost routes remain unauthenticated by
+the generated Caddy config; backend localhost auth behaviour is **UNKNOWN**
+until checked against the deployed binary.
 
-Caddy's `basic_auth` from `~/.config/caddy/caddy-auth.conf` is the sole auth
-boundary for external access to `/opencode/*`.
-
-The generated `opencode.json` contains the `server` block used by `opencode web`
-(`port`, `hostname`, and `cors`). When `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`, the
-LaunchAgent keeps that server running so Caddy can proxy `/opencode/*` to it.
+OpenCode v2 serves the GUI as an SPA catch-all; `/health` and `/global/health`
+return HTML and are not valid health checks. `GET /api/info` returns JSON
+ServerInfo and requires HTTP Basic authentication (username `opencode` by
+default). Health probes require `application/json` and a semantic version.
+Configure canonical `OPENCODE_PASSWORD` (legacy fallback
+`OPENCODE_SERVER_PASSWORD` remains accepted); never print or log these
+credentials. Caddy forwards `Authorization` to OpenCode:
+the credential a browser sends is Caddy's basic-auth password, and it must
+equal `OPENCODE_PASSWORD` for the forwarded request to authenticate — keep
+the two in sync and do not treat browser success as independent server
+evidence (doctor probes `127.0.0.1` directly). The LaunchAgent starts
+`opencode serve` on `OPENCODE_SERVER_PORT` (default 4096); launchd owns the
+`com.opencode.web` unit (script 26 writes the plist; configure-all and the
+Makefile bootout/bootstrap/kickstart it).
 
 ### Plannotator
 
