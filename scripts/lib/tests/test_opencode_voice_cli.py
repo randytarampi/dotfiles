@@ -27,7 +27,10 @@ def test_voice_writer_cli_registration_matches_manifest():
     assert '"options": entry_options' in source_text
     manifest = _load("opencode_plugins_for_voice", ROOT / "lib" / "opencode_plugins.py")
     specs = manifest.active_cli_plugin_specs()
-    assert specs == ["@bojackduy/opencode-voice@latest"]
+    # Membership (not count): a future gated CLI/TUI companion can join
+    # without rewriting this contract; each entry must be unique.
+    assert specs == sorted(set(specs))
+    assert "@bojackduy/opencode-voice@latest" in specs
     assert "active_cli_plugin_specs()" in source
     assert 'os.path.join(config_dir_path, "cli.json")' in source
 
@@ -149,6 +152,10 @@ def test_dcp_main_only_removes_stale_registration(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
     monkeypatch.setattr(module, "load_env", lambda *_: False)
     monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    # The removal is conditional: opencode.json must register DCP first.
+    (tmp_path / "opencode.json").write_text(
+        '{"plugins": ["@tarquinen/opencode-dcp@latest"]}'
+    )
     source = {"plugin": ["@tarquinen/opencode-dcp@latest", "other"], "user": 1}
     (tmp_path / "tui.json").write_text(json.dumps(source))
     assert module.main() is None
@@ -157,6 +164,19 @@ def test_dcp_main_only_removes_stale_registration(tmp_path, monkeypatch):
         "user": 1,
     }
     assert not (tmp_path / "cli.json").exists()
+
+
+def test_dcp_main_keeps_tui_entry_when_manifest_missing(tmp_path, monkeypatch):
+    """Without the manifest registration the tui.json entry stays: the
+    replacement is not working yet (standalone-run safety)."""
+    module = _load("dcp_reconcile", ROOT / "configure-opencode-dcp.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module.sys, "argv", ["dcp", "--no-backup"])
+    source = {"plugin": ["@tarquinen/opencode-dcp@latest", "other"], "user": 1}
+    (tmp_path / "tui.json").write_text(json.dumps(source))
+    assert module.main() is None
+    assert json.loads((tmp_path / "tui.json").read_text()) == source
 
 
 def test_verify_cli_json_parseable_or_absent(tmp_path, monkeypatch, capsys):

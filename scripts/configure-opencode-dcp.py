@@ -93,6 +93,39 @@ def main():
             existing_plugins = []
             existing_config = {}
 
+    # Only remove the tui.json entry when the v2 replacement is actually in
+    # place: opencode.json's plugins array must register DCP. A standalone
+    # run against a config that lacks the manifest registration must not
+    # strip DCP's only registration.
+    replacement_registered = False
+    opencode_json = os.path.join(config_dir_path, "opencode.json")
+    try:
+        with open(opencode_json, encoding="utf-8") as handle:
+            oc_config = json.load(handle)
+        oc_plugins = oc_config.get("plugins", []) if isinstance(oc_config, dict) else []
+        if isinstance(oc_plugins, list):
+            replacement_registered = any(is_dcp_entry(entry) for entry in oc_plugins)
+        if not replacement_registered:
+            oc_plugins = (
+                oc_config.get("plugin", []) if isinstance(oc_config, dict) else []
+            )
+            if isinstance(oc_plugins, list):
+                replacement_registered = any(
+                    is_dcp_entry(entry) for entry in oc_plugins
+                )
+    except (OSError, json.JSONDecodeError) as error:
+        logger.warning(
+            "Could not confirm DCP registration in opencode.json (%s); "
+            "keeping the tui.json DCP entry in place",
+            error,
+        )
+    if not replacement_registered:
+        logger.warning(
+            "DCP is not registered in opencode.json's plugins array; "
+            "not removing the tui.json DCP entry (replacement not working)"
+        )
+        return
+
     filtered_plugins = [entry for entry in existing_plugins if not is_dcp_entry(entry)]
     tui_config = existing_config or {}
     changed = filtered_plugins != existing_plugins
