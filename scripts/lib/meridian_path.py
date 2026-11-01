@@ -7,11 +7,34 @@ import os
 import re
 import shutil
 import subprocess  # nosec B404 - npm root invocation uses fixed arguments.
+import sys
 from pathlib import Path
 
 import logger
 
 PLUGIN_SUFFIX = Path("@rynfar/meridian/plugin/meridian.ts")
+
+# Meridian docs/agents.md, verified 2026-11-01. Desktop qualification is
+# specifically Darwin arm64; CLI versions are a separate exact set.
+MERIDIAN_DESKTOP_QUALIFIER = "desktop darwin-arm64"
+MERIDIAN_QUALIFIED_OPENCODE_V2 = {
+    MERIDIAN_DESKTOP_QUALIFIER: "2.2.0",
+    "cli": ("2.0.16", "2.0.21", "2.0.31"),
+}
+_MERIDIAN_QUALIFIED_VERSIONS = {
+    MERIDIAN_QUALIFIED_OPENCODE_V2[MERIDIAN_DESKTOP_QUALIFIER],
+    *MERIDIAN_QUALIFIED_OPENCODE_V2["cli"],
+}
+
+
+def meridian_v2_qualification(host_version: str) -> bool:
+    import platform
+
+    if host_version not in _MERIDIAN_QUALIFIED_VERSIONS:
+        return False
+    if host_version == MERIDIAN_QUALIFIED_OPENCODE_V2[MERIDIAN_DESKTOP_QUALIFIER]:
+        return sys.platform == "darwin" and platform.machine() == "arm64"
+    return host_version in MERIDIAN_QUALIFIED_OPENCODE_V2["cli"]
 
 
 def _version_key(path: Path) -> tuple[int, ...]:
