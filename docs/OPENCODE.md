@@ -7,9 +7,11 @@ classified as free or included in strict-free fallback chains.
 
 ## Web Service
 
-The LaunchAgent runs OpenCode v2 with `opencode serve`; its managed lifecycle is
-available through `opencode service start|stop|status` and its registry stores
-the service URL and password file. The web GUI is an SPA catch-all, so legacy
+The LaunchAgent runs OpenCode v2 with `opencode serve --port`; launchd owns the
+service lifecycle. `make opencode-start`, `make opencode-stop` and
+`make opencode-restart` operate that LaunchAgent. Configure-all generates its
+plist configuration; no `opencode service` management command or `--service`
+flag is relied on. The web GUI is an SPA catch-all, so legacy
 `/health` paths returning HTML are not health evidence. Use authenticated
 `GET /api/info` (HTTP Basic, default username `opencode`, JSON ServerInfo).
 Set `OPENCODE_PASSWORD` or, as fallback, `OPENCODE_SERVER_PASSWORD`; never log

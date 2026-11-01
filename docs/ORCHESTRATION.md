@@ -18,6 +18,10 @@ The dotfiles repo uses a three-layer architecture to manage machine configuratio
 with project-scoped configuration as the project-facing extension of Layer 3.
 `make deploy` is the single command that reconciles a machine — it runs `chezmoi apply`
 (templates + scripts) followed by `configure-all.sh` (AI tool config generators).
+The OpenCode web LaunchAgent is generated and owned by that flow; its process
+entry point is `opencode serve --port`, and its start/stop/restart targets are
+the explicit `make opencode-start`, `make opencode-stop` and
+`make opencode-restart` commands (not `opencode service` subcommands).
 
 ## Three-Layer Architecture
 
@@ -300,7 +304,7 @@ stamped block and must be fixed separately by each repository maintainer.
 | 23 | install-acme | run_onchange | acme.sh install + renewal hook | `DOTFILES_RUN_CADDY_SETUP` |
 | 24 | install-caddy | run_onchange | Caddy install + Caddyfile generation | `DOTFILES_RUN_CADDY_SETUP` |
 | 25 | install-plannotator | run_onchange | Plannotator paste install + LaunchAgent | `DOTFILES_RUN_CADDY_SETUP` |
-| 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent (`opencode serve --service`; /api/info health) | `DOTFILES_RUN_OPENCODE_WEB_SETUP` |
+| 26 | install-opencode-web | run_onchange | OpenCode web LaunchAgent (`opencode serve --port`; /api/info health) | `DOTFILES_RUN_OPENCODE_WEB_SETUP` |
 | 27 | configure-ollama-daemon | run_onchange | Ollama daemon env config | `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` |
 | 28 | configure-skills | run_onchange | Skills distribution to agent dirs | `DOTFILES_RUN_SKILLS_SETUP` |
 | 29 | configure-omlx | run_onchange | oMLX nested settings generation, Metal wired-limit tuning, and service startup | `DOTFILES_RUN_OMLX_SETUP` |
