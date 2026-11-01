@@ -2375,11 +2375,8 @@ def test_app_key_hash_alignment_times_out(tmp_path, monkeypatch):
         CONFIGURE._align_client_token_hash("openwebui", "h", "old", service)
 
 
-def test_app_key_provisioning_treats_400_generate_as_alias_exists(
-    tmp_path, monkeypatch
-):
-    """Proxy versions where /key/list hides key_alias: a 400 on generate
-    means the alias already exists — provisioning stays idempotent."""
+def test_app_key_provisioning_refuses_ambiguous_400_generate(tmp_path, monkeypatch):
+    """A 400 with no local credential must never be mistaken for success."""
     generate_attempts = []
 
     def fake_request(url, method, master_key, payload=None, timeout=5):
@@ -2395,21 +2392,11 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     path = tmp_path / "service.env"
     path.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
 
-    CONFIGURE.provision_app_keys(
+    assert not CONFIGURE.provision_app_keys(
         "master", path, "http://127.0.0.1:4000", enforce_registry_gates=False
     )
-
-    # Credentials can be provisioned for supported or explicitly provision-only
-    # clients; app-specific transport qualification remains separate.
-    registry = {row["client"]: row for row in CONFIGURE.CLIENT_REGISTRY}
-    expected_clients = [
-        c
-        for c in CONFIGURE.APP_KEYS
-        if "OpenAI-compatible" in registry[c]["transports"]
-        or c in {"claude", "jetbrains", "vscode", "xcode"}
-    ]
-    assert len(generate_attempts) == len(expected_clients)
-    # A 400 is not persisted as a key; the service env keeps its prior state.
+    assert generate_attempts == ["opencode"]
+    # The gateway may have a hidden alias, but no key is recovered or revoked.
     assert not any(
         name in path.read_text(encoding="utf-8") for name in CONFIGURE.APP_KEYS.values()
     )
@@ -3293,7 +3280,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
     clients = root / "clients"
-    clients.mkdir(parents=True)
+    clients.mkdir(parents=True, mode=0o700)
     env_path = root / "service.env"
     (tmp_path / ".env").write_text(
         "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
@@ -3350,7 +3337,7 @@ def test_litellm_env_sync_refuses_unsafe_client_file_without_writing(tmp_path, u
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
     clients = root / "clients"
-    clients.mkdir(parents=True)
+    clients.mkdir(parents=True, mode=0o700)
     env_path = root / "service.env"
     env_path.write_text(
         "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n"

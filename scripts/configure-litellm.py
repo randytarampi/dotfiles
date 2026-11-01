@@ -641,20 +641,11 @@ def _preflight_refusal(auth, remote, refusal):
 def _handle_duplicate_alias(
     alias, env_name, client_key_path, service_env_path, api_base, master_key, found
 ):
-    listing = _request_json(
-        f"{api_base}/key/list?return_full_object=true", "GET", master_key
-    )
-    retry_records = listing.get("keys", []) if isinstance(listing, dict) else []
-    record = next(
-        (
-            item
-            for item in retry_records
-            if isinstance(item, dict) and item.get("key_alias") == alias
-        ),
-        None,
-    )
+    # A 400 does not prove an alias exists: the listing may lag, or the
+    # gateway may have rejected generation for a different reason. Without
+    # local material, never turn the ambiguous response into success.
     materialized = _key_file_materialized(client_key_path, env_name, service_env_path)
-    if record and not materialized and not client_key_path.is_symlink():
+    if not materialized:
         logger.error(
             "LiteLLM client %s exists remotely but has no local key; "
             "refusing automatic deletion (manual reconciliation required)",
@@ -880,15 +871,21 @@ def _provision_app_keys(
         if provisioning_rows is None:
             return False
         found = {}
-        for row, auth, remote in preflight:
-            prepared, mismatch = _prepare_app_key(
-                row, auth, remote, service_env_path, api_base, master_key, dry_run
+        try:
+            for row, auth, remote in preflight:
+                prepared, mismatch = _prepare_app_key(
+                    row, auth, remote, service_env_path, api_base, master_key, dry_run
+                )
+                found.update(prepared)
+                if mismatch:
+                    return False
+        finally:
+            # Remote key generation is irreversible without its plaintext.
+            # Preserve successful earlier results even when a later row fails.
+            _persist_generated_app_keys(found, provisioning_rows, service_env_path)
+            _write_provisioned_client_keys(
+                provisioning_rows, service_env_path, dry_run
             )
-            if mismatch:
-                return False
-            found.update(prepared)
-        _persist_generated_app_keys(found, provisioning_rows, service_env_path)
-        _write_provisioned_client_keys(provisioning_rows, service_env_path, dry_run)
         if strict and not _verify_provisioned_keys(
             provisioning_rows, api_base, service_env_path
         ):
@@ -980,8 +977,11 @@ def main():
         master_key = os.environ.get("LITELLM_MASTER_KEY", "").strip()
         if not master_key:
             master_key = _service_env_value("LITELLM_MASTER_KEY", service_env_path)
-        provision_app_keys(master_key, service_env_path, dry_run=args.dry_run)
-        return 0
+        return (
+            0
+            if provision_app_keys(master_key, service_env_path, dry_run=args.dry_run)
+            else 1
+        )
     except LiveCatalogueError as error:
         logger.error(
             "LiteLLM live catalogue enumeration failed; keeping existing config: %s",
