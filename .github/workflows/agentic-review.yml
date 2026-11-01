@@ -404,7 +404,7 @@ jobs:
           GROQ_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
           MISTRAL_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
           CLOUDFLARE_API_TOKEN: ${{ steps.review_model.outputs.selected_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
-          NVIDIA_NIM_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'nvidia-nim' && inputs.allow_nvidia_review && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
+          NVIDIA_NIM_API_KEY: ${{ steps.review_model.outputs.selected_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
         with:
           model: ${{ steps.review_model.outputs.model }}
           agent: plan
