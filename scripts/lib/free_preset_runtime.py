@@ -150,6 +150,7 @@ def load_gateway_free_evidence(environ, consumer="opencode"):
         "trusted_endpoints": {
             endpoint["baseUrl"].rstrip("/"): provider
             for provider, endpoint in PROVIDER_ENDPOINTS.items()
+            if isinstance(endpoint.get("baseUrl"), str) and endpoint["baseUrl"]
         },
         "trusted_native": _trusted_native(routes),
     }
