@@ -212,21 +212,27 @@ jobs:
           if [[ -n "${EVENT_JSON}" ]] && jq -e '.comment != null' >/dev/null <<<"${EVENT_JSON}"; then
             body="$(jq -r '.comment.body // ""' <<<"${EVENT_JSON}")"
             if [[ ",${agents}," == *,opencode,* ]]; then
-              matches="$(printf '%s\n' "${body}" | grep -Eo '(^|[[:space:]])--pool=(free|opencode|groq|mistral|cloudflare|nim|nvidia-nim)([[:space:]]|$)' | sed -E 's/^[[:space:]]*--pool=//; s/[[:space:]]*$//' | sort -u || true)"
-              count="$(printf '%s\n' "${matches}" | grep -c . || true)"
-              if [[ "${count}" -gt 1 ]]; then
+              raw="$(printf '%s\n' "${body}" | grep -Eo '(^|[[:space:]])--pool=[^[:space:]]+' | sed -E 's/^[[:space:]]*--pool=//' | sort -u || true)"
+              matches=""
+              while IFS= read -r requested_pool; do
+                [[ -z "${requested_pool}" ]] && continue
+                case "${requested_pool}" in
+                  free|opencode|groq|mistral|cloudflare|nim|nvidia-nim)
+                    matches+="${matches:+,}${requested_pool}"
+                    ;;
+                  *)
+                    echo "Unsupported OpenCode review pool selector" >&2
+                    exit 1
+                    ;;
+                esac
+              done <<< "${raw}"
+              if [[ "${matches}" == *,* ]]; then
                 echo "Ambiguous OpenCode review pool selectors" >&2
                 exit 1
               fi
-              if [[ "${count}" -eq 1 ]]; then
+              if [[ -n "${matches}" ]]; then
                 provider="${matches}"
                 [[ "${provider}" == nim ]] && provider=nvidia-nim
-              fi
-              # Reject unknown --pool values rather than silently invoking a
-              # different model; never expand URLs or shell expressions.
-              if [[ "${body}" == *--pool=* && "${count}" -eq 0 ]]; then
-                echo "Unsupported OpenCode review pool selector" >&2
-                exit 1
               fi
             fi
           fi
