@@ -86,7 +86,10 @@ litellm_service_env_sync() {
       esac
       local managed=0
       for key in "${managed_client_keys[@]}"; do
-        if [[ "$ref" == "$key" ]]; then managed=1; break; fi
+        if [[ "$ref" == "$key" ]]; then
+          managed=1
+          break
+        fi
       done
       [[ "$managed" == "1" ]] || provider_keys+=("$ref")
     done < <(
@@ -216,7 +219,7 @@ litellm_service_env_sync() {
     client="${client%_KEY}"
     client="$(printf '%s' "$client" | tr '[:upper:]_' '[:lower:]-')"
     client_file="$client_dir/$client.key"
-    if [[ -L "$client_file" || ( -e "$client_file" && ! -f "$client_file" ) ]]; then
+    if [[ -L "$client_file" || (-e "$client_file" && ! -f "$client_file") ]]; then
       printf 'Unsafe LiteLLM client key path: %s\n' "$client" >&2
       return 1
     fi
