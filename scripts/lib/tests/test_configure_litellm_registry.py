@@ -782,7 +782,11 @@ def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tm
     client_path.write_text("existing-key", encoding="utf-8")
     os.chmod(client_path, 0o600)
     service = tmp_path / "service.env"
-    service.write_text("LITELLM_OPENCODE_KEY='existing-key'\n", encoding="utf-8")
+    service.write_text(
+        "LITELLM_OPENCODE_KEY='existing-key'\n"
+        "LITELLM_PI_KEY='existing-pi-key'\n",
+        encoding="utf-8",
+    )
     records = ["opencode", "pi"]
     original_request = configure_litellm._request_json
 
@@ -794,6 +798,8 @@ def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tm
     monkeypatch.setattr(configure_litellm, "_request_json", existing_aliases)
     assert configure_litellm.provision_app_keys("master", service)
     before = client_path.read_bytes()
+    pi_path = tmp_path / "clients/pi.key"
+    assert pi_path.read_text(encoding="utf-8") == "existing-pi-key"
     assert configure_litellm.provision_app_keys("master", service)
     generated = [call for call in calls if call[0].endswith("/key/generate")]
     assert sum(call[2]["key_alias"] == "opencode" for call in generated) == 0
