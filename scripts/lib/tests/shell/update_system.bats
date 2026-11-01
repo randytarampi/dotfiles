@@ -82,6 +82,9 @@ NVMSH
     DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
     PATH="$BATS_TEST_TMPDIR/stubbin:/opt/homebrew/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
+  if [ "$status" -ne 0 ]; then
+    printf 'DIAGP2 status=%s\nDIAGP2 output=%s\n' "$status" "$output" >&3
+  fi
   [ "$status" -eq 0 ]
   calls="$(cat "$BATS_TEST_TMPDIR/calls")"
   [[ "$calls" == *"MANAGED plugin check"* ]]
