@@ -1,11 +1,82 @@
 import os
+import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
+
+import pytest
 
 import meridian_path
 
 PLUGIN = Path("@rynfar/meridian/plugin/meridian.ts")
+ROOT = Path(__file__).resolve().parents[3]
+MERIDIAN_SPEC = importlib.util.spec_from_file_location(
+    "configure_meridian_test", ROOT / "scripts/configure-meridian.py"
+)
+assert MERIDIAN_SPEC and MERIDIAN_SPEC.loader
+configure_meridian = importlib.util.module_from_spec(MERIDIAN_SPEC)
+MERIDIAN_SPEC.loader.exec_module(configure_meridian)
+
+
+def run_configure_meridian(monkeypatch, tmp_path, host, gate="1"):
+    home = tmp_path / "home"
+    config_dir = home / ".config/opencode"
+    config_dir.mkdir(parents=True)
+    config = config_dir / "opencode.json"
+    initial = {"plugin": ["user-plugin"]}
+    config.write_text(json.dumps(initial))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setenv("DOTFILES_RUN_MERIDIAN_SETUP", gate)
+    monkeypatch.setattr(
+        configure_meridian.opencode_host,
+        "resolve_opencode_host",
+        lambda: host,
+    )
+    monkeypatch.setattr(
+        configure_meridian, "resolve_meridian_plugin_path", lambda: "/meridian.ts"
+    )
+    monkeypatch.setattr(
+        configure_meridian.urllib.request,
+        "urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(OSError()),
+    )
+    return config, initial
+
+
+def test_meridian_v1_preserves_legacy_plugin_key_and_is_idempotent(
+    monkeypatch, tmp_path
+):
+    config, initial = run_configure_meridian(monkeypatch, tmp_path, ("known", 1))
+    del initial  # helper's contract: pre-existing entries preserved verbatim
+    with mock.patch.object(sys, "argv", ["configure-meridian.py"]):
+        configure_meridian.main()
+    result = json.loads(config.read_text())
+    assert result["plugin"] == ["user-plugin", "/meridian.ts"]
+    assert "plugins" not in result
+    with mock.patch.object(sys, "argv", ["configure-meridian.py"]):
+        configure_meridian.main()
+    assert json.loads(config.read_text()) == result
+
+
+def test_meridian_unprobeable_fails_closed_or_skips_when_gate_off(
+    monkeypatch, tmp_path
+):
+    config, initial = run_configure_meridian(monkeypatch, tmp_path, ("unknown", None))
+    with pytest.raises(SystemExit) as error:
+        with mock.patch.object(sys, "argv", ["configure-meridian.py"]):
+            configure_meridian.main()
+    assert error.value.code == 1
+    assert json.loads(config.read_text()) == initial
+
+    config, initial = run_configure_meridian(
+        monkeypatch, tmp_path / "off", ("unknown", None), gate="0"
+    )
+    with mock.patch.object(sys, "argv", ["configure-meridian.py"]):
+        configure_meridian.main()
+    assert json.loads(config.read_text()) == initial
 
 
 def make_root(tmp_path, relative):
