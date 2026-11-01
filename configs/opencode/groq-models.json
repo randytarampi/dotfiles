@@ -1,0 +1,10 @@
+{
+  "models": {
+    "openai/gpt-oss-120b": {
+      "name": "GPT-OSS 120B (Groq)"
+    },
+    "openai/gpt-oss-20b": {
+      "name": "GPT-OSS 20B (Groq)"
+    }
+  }
+}
