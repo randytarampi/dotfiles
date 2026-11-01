@@ -1734,20 +1734,26 @@ def main():
                     "(no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured)"
                 )
             else:
-                port = os.environ.get("OPENCODE_SERVER_PORT", "4096")
-                outcome, info = opencode_web.request_server_info(
-                    f"http://127.0.0.1:{port}",
-                    os.environ[password_name],
-                    expected_version=expected_version,
+                port = opencode_web._validated_port(
+                    os.environ.get("OPENCODE_SERVER_PORT", "4096")
                 )
-                if outcome == "ok":
-                    print(
-                        f"  \u2713 OpenCode web health: /api/info version "
-                        f"{info['version']}"
-                    )
-                else:
-                    print(f"  \u2717 OpenCode web health: {info}")
+                if port is None:
+                    print("  \u2717 OpenCode web health: invalid OPENCODE_SERVER_PORT")
                     exit_code = 1
+                else:
+                    outcome, info = opencode_web.request_server_info(
+                        f"http://127.0.0.1:{port}",
+                        os.environ[password_name],
+                        expected_version=expected_version,
+                    )
+                    if outcome == "ok":
+                        print(
+                            f"  \u2713 OpenCode web health: /api/info version "
+                            f"{info['version']}"
+                        )
+                    else:
+                        print(f"  \u2717 OpenCode web health: {info}")
+                        exit_code = 1
 
         # v2 note: the emitter no longer writes opencode.json server.cors
         # (v2 ignores the key; service flags live on the deployed command

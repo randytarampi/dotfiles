@@ -66,28 +66,29 @@ def request_server_info(
 def _validated_port(port_value: str) -> Optional[int]:
     """Fail closed on non-numeric ports (an evil value could inject a
     userinfo@host component into the constructed URL)."""
-    if not port_value or not port_value.isdigit():
+    if not isinstance(port_value, str) or not re.fullmatch(r"\d+", port_value):
         return None
-    return int(port_value)
+    port = int(port_value)
+    if port_value != str(port):
+        return None
+    return port if 1 <= port <= 65535 else None
 
 
 if __name__ == "__main__":
-    # Arguments: <port> [password]. The password may be omitted to read the
-    # committed OPENCODE_PASSWORD -> OPENCODE_SERVER_PASSWORD chain from the
-    # environment instead — secrets never reach argv.
+    # The password is read only from the environment; never accept secrets in argv.
     port_value = sys.argv[1] if len(sys.argv) > 1 else ""
     port = _validated_port(port_value)
     if port is None:
         print("opencode_web: invalid or missing port", file=sys.stderr)
         sys.exit(1)
-    password = sys.argv[2] if len(sys.argv) > 2 else None
-    if password is None:
-        password_name = server_password_env_chain()
-        if not password_name:
-            # Distinct "unknown" exit: no credential configured (never a
-            # health verdict).
-            sys.exit(2)
-        password = os.environ[password_name]
+    if len(sys.argv) > 2:
+        print("opencode_web: password arguments are not accepted", file=sys.stderr)
+        sys.exit(1)
+    password_name = server_password_env_chain()
+    if not password_name:
+        # Distinct "unknown" exit: no credential configured (never a verdict).
+        sys.exit(2)
+    password = os.environ[password_name]
     result, detail = request_server_info("http://127.0.0.1:{}".format(port), password)
     if result != "ok":
         sys.exit(1)

@@ -105,8 +105,34 @@ def test_cli_env_mode_and_port_validation(monkeypatch):
         runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
     assert excinfo.value.code == 2
 
+    monkeypatch.setenv("OPENCODE_PASSWORD", "secret")
+    monkeypatch.setattr(
+        opencode_web.sys, "argv", [str(opencode_web.__file__), "4096@attacker"]
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
+    assert excinfo.value.code == 1
+
     monkeypatch.setattr(
         opencode_web.sys, "argv", [str(opencode_web.__file__), "not-a-port"]
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
+    assert excinfo.value.code == 1
+
+    monkeypatch.setattr(
+        opencode_web.sys,
+        "argv",
+        [str(opencode_web.__file__), "4096", "secret-in-argv"],
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
+    assert excinfo.value.code == 1
+
+    monkeypatch.setattr(
+        opencode_web.sys,
+        "argv",
+        [str(opencode_web.__file__), "4096", "secret-in-argv"],
     )
     with pytest.raises(SystemExit) as excinfo:
         runpy.run_module("opencode_web", run_name="__main__", alter_sys=True)
@@ -129,3 +155,16 @@ def test_cli_env_mode_and_port_validation(monkeypatch):
             check=False,
         )
     assert subprocess_result.returncode == 0, subprocess_result.stderr
+
+
+@pytest.mark.parametrize(
+    "value", ["4096@attacker", "0", "65536", " 4096", "4096\n", "٤٠٩٦"]
+)
+def test_strict_port_parser(value):
+    assert opencode_web._validated_port(value) is None
+
+
+def test_valid_port_bounds():
+    assert opencode_web._validated_port("1") == 1
+    assert opencode_web._validated_port("65535") == 65535
+    assert opencode_web._validated_port("01") is None

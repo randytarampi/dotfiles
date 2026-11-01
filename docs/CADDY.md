@@ -24,7 +24,7 @@ It is the front door for:
 
 ### Optional services
 
-5. **OpenCode web** — `opencode web` behind Caddy.
+5. **OpenCode web** — launchd-owned `opencode serve --port` behind Caddy.
 6. **Plannotator paste** — encrypted paste backend behind Caddy; portal is static.
 
 ```mermaid
@@ -185,12 +185,22 @@ The Route 53 zone ID, record names, and TTL now live in
 
 ### OpenCode web
 
+OpenCode external Caddy routes require a Caddy auth entry named `opencode`;
+other sites may retain additional users. Caddy stores only the generated hash.
+Provision the same plaintext password separately as `OPENCODE_PASSWORD` in
+`~/.env`, which launchd passes to OpenCode; Caddy forwards the browser's
+`Authorization` header, so the two password values must match. The hash cannot
+be used as the backend password. Localhost routes remain unauthenticated by
+the generated Caddy config; backend localhost auth behaviour is **UNKNOWN**
+until checked against the deployed binary.
+
 OpenCode v2 serves the GUI as an SPA catch-all; `/health` and `/global/health`
 return HTML and are not valid health checks. `GET /api/info` returns JSON
 ServerInfo and requires HTTP Basic authentication (username `opencode` by
 default). Health probes require `application/json` and a semantic version.
-Configure `OPENCODE_PASSWORD` (preferred) or `OPENCODE_SERVER_PASSWORD`; never
-print or log these credentials. Caddy forwards `Authorization` to OpenCode:
+Configure canonical `OPENCODE_PASSWORD` (legacy fallback
+`OPENCODE_SERVER_PASSWORD` remains accepted); never print or log these
+credentials. Caddy forwards `Authorization` to OpenCode:
 the credential a browser sends is Caddy's basic-auth password, and it must
 equal `OPENCODE_PASSWORD` for the forwarded request to authenticate — keep
 the two in sync and do not treat browser success as independent server
