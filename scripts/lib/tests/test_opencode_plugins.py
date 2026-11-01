@@ -32,13 +32,10 @@ def test_manifest_matches_config_and_install_template():
     full_manifest = checker.load_manifest()["plugins"]
     assert "opencode-mem@latest" in full_manifest
     loader = load_pinned_spec_loader()
-    assert not any(
-        "opencode-quota" in spec for spec in full_manifest
-    ), "opencode-quota must not be re-added to the canonical manifest"
     assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
+    assert full_manifest[1] == "@tarquinen/opencode-dcp@latest"
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
-    assert checker.parse_config_plugins(checker.CONFIG_SCRIPT) == expected
+    expected = [manifest[0], *manifest[1:]]
     assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
 
 
@@ -56,7 +53,7 @@ def test_gated_plugins_are_excluded_until_explicitly_enabled(monkeypatch):
 def test_missing_extra_and_mismatch_failures(field):
     checker = load_checker()
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
+    expected = manifest
     # trufflehog:ignore - synthetic package spec used only to test mismatch handling.
     actual = expected[:-1] + ["unexpected@9.9.9"]
     kwargs = {"install_plugins": expected, "config_plugins": expected}
@@ -67,39 +64,32 @@ def test_missing_extra_and_mismatch_failures(field):
 @pytest.mark.parametrize(
     "filename, parser, replacement",
     [
+        # The manifest drives DCP placement; removing the dedicated first
+        # entry from the emitter's list is detected against the manifest.
         (
-            ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl",
-            "install",
-            '"@tarquinen/opencode-dcp@drift"',
+            "scripts/configure-opencode.py",
+            "config",
+            "configured_plugins[0],",
         ),
-        ("scripts/configure-opencode.py", "config", '"@tarquinen/opencode-dcp@drift"'),
     ],
 )
 def test_real_consumer_drift_is_detected(tmp_path, filename, parser, replacement):
     checker = load_checker()
     source = ROOT / filename
     mutated = tmp_path / source.name
+    text = source.read_text(encoding="utf-8")
     mutated.write_text(
-        source.read_text(encoding="utf-8").replace(
-            '"@tarquinen/opencode-dcp@latest"', replacement, 1
+        text.replace(
+            '            "plugins": [\n                configured_plugins[0],\n',
+            '            "plugins": [\n',
+            1,
         ),
         encoding="utf-8",
     )
+    assert mutated.read_text(encoding="utf-8") != text  # mutation must apply
     manifest = checker.active_plugin_specs()
-    expected = [manifest[0], "@tarquinen/opencode-dcp@latest", *manifest[1:]]
-    actual = (
-        checker.parse_install_plugins(mutated)
-        if parser == "install"
-        else checker.parse_config_plugins(mutated)
-    )
-    assert (
-        checker.check_consistency(
-            checker.active_plugin_specs(),
-            actual if parser == "install" else expected,
-            actual if parser == "config" else expected,
-        )
-        == 1
-    )
+    actual = checker.parse_config_plugins(mutated)
+    assert actual != manifest
 
 
 def test_install_exclusion_condition_mutation_fails(tmp_path):
@@ -110,8 +100,53 @@ def test_install_exclusion_condition_mutation_fails(tmp_path):
         '[[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")',
         '[[ "$plugin" == "$OH_MY_PLUGIN" || "$plugin" == "opencode-mem@latest" ]] || PLUGINS+=("$plugin")',  # trufflehog:ignore
     )
+    assert text != source.read_text(encoding="utf-8")  # mutation must apply
     mutated.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match="exclusion condition changed"):
+        checker.parse_install_plugins(mutated)
+
+
+# trufflehog:ignore - retired plugin spec, not a credential.
+def test_quota_readd_fails_forbidden_spec_and_consistency(tmp_path):
+    """The manifest must never carry the retired Quota plugin again; both the
+    manifest scan and the consistency contract reject it (PR A invariant)."""
+    checker = load_checker()
+    manifest_path = ROOT / "configs/opencode/opencode-plugins.json"
+    original = manifest_path.read_text(encoding="utf-8")
+    mutated = tmp_path / manifest_path.name
+    mutated.write_text(
+        original.replace(
+            '"@tarquinen/opencode-dcp@latest",',
+            '"@tarquinen/opencode-dcp@latest",\n    "@slkiser/opencode-quota@latest",',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert mutated.read_text(encoding="utf-8") != original  # mutation must apply
+    specs_with_quota = ["@slkiser/opencode-quota@latest"]
+    assert (
+        checker.check_consistency(specs_with_quota, specs_with_quota, specs_with_quota)
+        == 1
+    )
+    with pytest.raises(ValueError, match="forbidden legacy plugin spec"):
+        checker.validate_forbidden_specs(mutated)
+
+
+# trufflehog:ignore - install-drift mutation probe, not a credential.
+def test_install_plugins_unauthorized_append_mutation_fails(tmp_path):
+    """A literal PLUGINS append outside the guarded loop must be rejected."""
+    checker = load_checker()
+    source = ROOT / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
+    text = source.read_text(encoding="utf-8")
+    mutated_text = text.replace(
+        'if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then',
+        'PLUGINS+=("opencode-mem@latest")\nif [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then',
+        1,
+    )
+    assert mutated_text != text  # mutation must apply
+    mutated = tmp_path / source.name
+    mutated.write_text(mutated_text, encoding="utf-8")
+    with pytest.raises(ValueError, match="unauthorized PLUGINS append"):
         checker.parse_install_plugins(mutated)
 
 
@@ -119,20 +154,20 @@ def test_consumer_order_mutation_fails(tmp_path):
     checker = load_checker()
     source = ROOT / "scripts/configure-opencode.py"
     mutated = tmp_path / source.name
+    # Moving a spec before the dedicated first entry is an order violation:
+    # mutating the comprehension slice to walk the whole manifest duplicates
+    # oh-my-opencode-slim ahead of the dedicated entry.
     text = source.read_text(encoding="utf-8").replace(
-        'configured_plugins[0],\n                "@tarquinen/opencode-dcp@latest",',
-        '"@tarquinen/opencode-dcp@latest",\n                configured_plugins[0],',
+        "for plugin_spec in configured_plugins[1:]",
+        "for plugin_spec in configured_plugins",
         1,
     )
+    assert text != source.read_text(encoding="utf-8")  # mutation must apply
     mutated.write_text(text, encoding="utf-8")
     expected = checker.active_plugin_specs()
     actual = checker.parse_config_plugins(mutated)
-    assert (
-        checker.check_consistency(
-            expected, checker.parse_install_plugins(checker.INSTALL_SCRIPT), actual
-        )
-        == 1
-    )
+    assert len(actual) != len(expected) or actual[0] != expected[0]
+    assert checker.check_consistency(expected, expected, actual) == 1
 
 
 def test_commented_manifest_import_fails_ast_consumer_check(tmp_path):
@@ -149,7 +184,7 @@ def test_commented_manifest_import_fails_ast_consumer_check(tmp_path):
 def test_presence_is_opt_in(tmp_path):
     checker = load_checker()
     manifest_specs = checker.active_plugin_specs()
-    specs = [manifest_specs[0], "@tarquinen/opencode-dcp@latest", *manifest_specs[1:]]
+    specs = manifest_specs
     assert checker.check_consistency(manifest_specs, specs, specs) == 0
     assert (
         checker.check_consistency(
@@ -190,7 +225,8 @@ def test_native_config_shape_contract():
     assert '"mcp.servers"' not in source  # runtime wrapper, not a static literal
     assert "def _native_mcp_config" in source
     assert '"plugins": [' in source
-    assert '"package": plannotator' in source  # v2 {package, options} object form
+    assert '"package": plugin_spec' in source  # v2 {package, options} object form
+    assert '"@tarquinen/opencode-dcp@latest"' not in source  # manifest-owned
     assert '"agents": {' in source  # native v2 agents key
     assert '"providers": {}' in source  # native v2 providers key
     assert '"lsp"' not in source
@@ -227,3 +263,37 @@ def test_latest_alias_dir_check_skips_package_json_fallback(tmp_path):
     assert not checker.is_plugin_installed(
         "oh-my-opencode-slim@latest", tmp_path / "absent"
     )
+
+
+def test_cli_plugins_manifest_and_installer_agree():
+    checker = load_checker()
+    assert checker.check_cli_plugin_consistency() == 0
+
+
+def test_git_spec_validation():
+    loader = load_pinned_spec_loader()
+    assert loader.is_pinned_spec(
+        "github:AxeForce/opencode-vibeguard-v2#934823e5500f6af8270a45ba2d2f245bc6e4faa4"
+    )
+    assert not loader.is_pinned_spec("github:AxeForce/repo#bad-ref!")
+    assert not loader.is_pinned_spec("github:owner/repo/sub#abc123")
+
+
+def test_replacement_plugins_are_present():
+    plugins = load_checker().load_manifest()["plugins"]
+    assert "@cheesecodestudio/opencode-tokenscope-v2@latest" in plugins
+    assert any(
+        item.startswith("github:AxeForce/opencode-vibeguard-v2#") for item in plugins
+    )
+
+
+def test_original_tokenscope_and_vibeguard_are_absent():
+    manifest_text = (ROOT / "configs/opencode/opencode-plugins.json").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "@ramtinj95/opencode-tokenscope@" not in manifest_text
+    ), "forbidden legacy TokenScope plugin spec found"
+    assert (
+        "opencode-vibeguard@" not in manifest_text
+    ), "forbidden legacy VibeGuard plugin spec found"

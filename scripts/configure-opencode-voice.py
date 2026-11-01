@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 """
 OpenCode Voice Plugin Configurator.
 
-Generates ~/.config/opencode/tui.json with tier-aware voice plugin configuration.
+Generates ~/.config/opencode/cli.json with tier-aware voice plugin configuration.
+Cleans its managed voice entries from tui.json after a successful cli.json write.
 Supports:
   - Local Ollama LLM + whisper-cli STT (pro, local, pro-plus fallback)
   - Ollama Cloud LLM + whisper-cli STT (pro, pro-plus)
@@ -28,9 +28,13 @@ Environment variables:
   DOTFILES_PIPER_VOICE       - Piper voice name (default: en_US-lessac-high)
 """
 
+from __future__ import annotations
+
 import sys
 import json
 import argparse
+import stat
+import tempfile
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -87,6 +91,71 @@ from selected_service import (  # noqa: E402
 from litellm_client_auth import (  # noqa: E402 -- scripts/lib bootstrap ordering.
     resolve_client_auth,
 )
+from opencode_plugins import (  # noqa: E402 -- scripts/lib bootstrap ordering.
+    active_cli_plugin_specs,
+)
+
+VOICE_PLUGIN_KEY = "@bojackduy/opencode-voice"
+# The previously managed v1-era voice package: its stale tui.json entries are
+# also ours to clean after the cli.json replacement works.
+LEGACY_VOICE_PLUGIN_KEY = "@renjfk/opencode-voice"
+
+
+def _spec_matches_key(value, key):
+    if not isinstance(value, str):
+        return False
+    return value == key or value.startswith(key + "@")
+
+
+def _voice_entry_matches(entry):
+    """Match the voice writer's own cli.json entries (current spec only)."""
+    value = entry.get("package") if isinstance(entry, dict) else entry
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    if not isinstance(value, str):
+        return False
+    if value.startswith("-") and _spec_matches_key(value[1:], VOICE_PLUGIN_KEY):
+        return True
+    if value.startswith("*") or value.startswith("-") and value[1:].endswith(".*"):
+        return False
+    if value.startswith("-"):
+        return False
+    if value == "*" or value.endswith(".*"):
+        return False
+    return _spec_matches_key(value, VOICE_PLUGIN_KEY)
+
+
+def _voice_tui_entry_matches(entry):
+    """Match voice entries in tui.json: the current spec plus the package this
+    writer managed before the v2 cli.json transition."""
+    value = entry.get("package") if isinstance(entry, dict) else entry
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    if not isinstance(value, str):
+        return False
+    value = value.removeprefix("-")
+    return _spec_matches_key(value, VOICE_PLUGIN_KEY) or _spec_matches_key(
+        value, LEGACY_VOICE_PLUGIN_KEY
+    )
+
+
+def _atomic_private_write(path, content):
+    directory = os.path.dirname(path)
+    fd, temporary = tempfile.mkstemp(dir=directory, prefix=".cli.json.")
+    try:
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
 
 _ENV_CREDENTIAL_INSTRUCTION_LITERAL = (
     "voice plugin reads LITELLM_OPENCODE_KEY from the environment "
@@ -1230,8 +1299,13 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
 
 
 def main():
+    voice_specs = active_cli_plugin_specs()
+    if len(voice_specs) != 1:
+        logger.critical("Expected exactly one active voice CLI plugin spec")
+        return 1
+    voice_plugin_spec = voice_specs[0]
     parser = argparse.ArgumentParser(
-        description="Configure OpenCode voice plugin (tui.json) based on active tier."
+        description="Configure OpenCode voice plugin (cli.json) based on active tier."
     )
     available_tiers = get_available_tiers()
     add_model_override_args(parser)
@@ -1260,7 +1334,7 @@ def main():
     parser.add_argument(
         "--no-backup",
         action="store_true",
-        help="Skip backup of existing tui.json",
+        help="Skip backup of existing cli.json",
     )
     add_min_reasoning_embedding_arg(parser)
     args = parser.parse_args()
@@ -1298,61 +1372,165 @@ def main():
     unresolved = voice_config.pop("_voice_unresolved", False)
     voice_status_marker = voice_config.pop("_voice_status", None)
 
-    output_path = os.path.join(config_dir_path, "tui.json")
-    tui_config = {"plugin": []}
+    output_path = os.path.join(config_dir_path, "cli.json")
+    cli_existed = os.path.exists(output_path)
+    cli_root = []
+    cli_root_form = "array"
     if os.path.exists(output_path):
         try:
             with open(output_path, "r", encoding="utf-8") as config_file:
-                tui_config = json.load(config_file)
-            if not isinstance(tui_config, dict):
-                raise ValueError("tui.json root must be an object")
-        except (OSError, json.JSONDecodeError, ValueError) as error:
-            logger.critical(f"Could not read existing tui.json safely: {error}")
+                cli_root = json.load(config_file)
+            # Upstream v2 consumes both roots (probe-verified 2026-10-31):
+            # an ordered entry array and a {"plugins": [...]} object form.
+            if isinstance(cli_root, list):
+                cli_config = cli_root
+                cli_root_form = "array"
+            elif isinstance(cli_root, dict) and isinstance(
+                cli_root.get("plugins", []), list
+            ):
+                cli_config = cli_root.get("plugins", [])
+                cli_root_form = "object"
+            else:
+                raise ValueError(
+                    "cli.json root must be an array or a {plugins: [...]} object"
+                )
+        except (OSError, ValueError) as error:
+            logger.critical(f"Could not read existing cli.json safely: {error}")
             return 1
-    existing_plugins = tui_config.get("plugin", [])
-    if not isinstance(existing_plugins, list):
-        logger.critical(
-            "Could not merge voice plugin: tui.json 'plugin' must be a list"
-        )
-        return 1
+    else:
+        cli_config = []
     filtered_plugins = [
         entry
-        for entry in existing_plugins
-        if not (
-            isinstance(entry, list) and entry and entry[0] == "@renjfk/opencode-voice"
+        for entry in cli_config
+        if not _voice_entry_matches(entry)
+        or (
+            isinstance(entry, str)
+            and entry.startswith("-")
+            and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
         )
     ]
     existing_voice = next(
-        (
-            entry
-            for entry in existing_plugins
-            if isinstance(entry, list)
-            and entry
-            and entry[0] == "@renjfk/opencode-voice"
-        ),
+        (entry for entry in cli_config if _voice_entry_matches(entry)),
         None,
     )
-    if (
+    voice_disabled = any(
+        isinstance(entry, str)
+        and entry.startswith("-")
+        and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
+        for entry in cli_config
+    )
+    # When cli.json has no voice entry yet, the previously managed tui.json
+    # route seeds the v2 entry: the package maps onto the current manifest
+    # spec and its options are preserved verbatim.
+    legacy_options = None
+    if existing_voice is None:
+        try:
+            with open(
+                os.path.join(config_dir_path, "tui.json"), encoding="utf-8"
+            ) as tui_file:
+                legacy_tui = json.load(tui_file)
+            if isinstance(legacy_tui, dict) and isinstance(
+                legacy_tui.get("plugin", []), list
+            ):
+                legacy_entry = next(
+                    (
+                        entry
+                        for entry in legacy_tui["plugin"]
+                        if _voice_tui_entry_matches(entry)
+                    ),
+                    None,
+                )
+                if legacy_entry is not None:
+                    if isinstance(legacy_entry, dict):
+                        legacy_options = legacy_entry.get("options")
+                    elif (
+                        isinstance(legacy_entry, (list, tuple))
+                        and len(legacy_entry) > 1
+                    ):
+                        legacy_options = legacy_entry[1]
+                    if isinstance(legacy_options, str):
+                        try:
+                            legacy_options = json.loads(legacy_options)
+                        except json.JSONDecodeError:
+                            legacy_options = None
+                    if not isinstance(legacy_options, dict):
+                        legacy_options = None
+        except (OSError, ValueError) as error:
+            logger.debug("No usable legacy tui.json voice route: %s", error)
+    managed_keys = {
+        "endpoint",
+        "model",
+        "apiKeyEnv",
+        "sttEndpoint",
+        "sttModel",
+        "sttApiKeyEnv",
+    }
+    user_options = {}
+    if isinstance(existing_voice, dict) and isinstance(
+        existing_voice.get("options"), dict
+    ):
+        user_options.update(
+            {
+                key: value
+                for key, value in existing_voice["options"].items()
+                if key not in managed_keys
+            }
+        )
+    if isinstance(legacy_options, dict):
+        user_options.update(
+            {
+                key: value
+                for key, value in legacy_options.items()
+                if key not in managed_keys
+            }
+        )
+    entry_options = {
+        # Tier-derived keys win; unknown user-set option keys (e.g.
+        # sttAutoSubmit, ttsVoice) survive every rewrite of the entry.
+        **(user_options),
+        **{key: value for key, value in voice_config.items() if key in managed_keys},
+    }
+    existing_options = (
+        existing_voice.get("options", {}) if isinstance(existing_voice, dict) else {}
+    )
+    route_installed = False
+    if voice_disabled:
+        route_installed = False
+    elif (
         not (voice_config.get("endpoint") and voice_config.get("model"))
         and existing_voice is not None
     ):
+        # Tier resolution delivered no LLM route: keep the existing cli.json
+        # entry as-is instead of rebuilding it into an empty route.
         filtered_plugins.append(existing_voice)
-    elif unresolved:
-        existing_options = (
-            existing_voice[1]
-            if existing_voice is not None
-            and len(existing_voice) > 1
-            and isinstance(existing_voice[1], dict)
-            else {}
+        route_installed = True
+    elif (
+        not voice_disabled
+        and not (voice_config.get("endpoint") and voice_config.get("model"))
+        and legacy_options is not None
+    ):
+        # The legacy v1 route's working selection maps onto the current
+        # manifest spec, options preserved verbatim.
+        filtered_plugins.append(
+            {"package": voice_plugin_spec, "options": legacy_options}
         )
+        route_installed = True
+    elif unresolved and not voice_disabled:
         if existing_voice is not None:
-            for key in ("endpoint", "model", "apiKeyEnv", "ttsVoice"):
-                if key in existing_options:
-                    voice_config[key] = existing_options[key]
-            filtered_plugins.append(existing_voice)
-    elif voice_config.get("endpoint") and voice_config.get("model"):
-        filtered_plugins.append(["@renjfk/opencode-voice", voice_config])
-    tui_config["plugin"] = filtered_plugins
+            filtered_plugins.append(
+                {"package": voice_plugin_spec, "options": entry_options}
+            )
+            route_installed = True
+        # Unresolved without anything preserved: do not register a route.
+    elif (
+        not voice_disabled
+        and voice_config.get("endpoint")
+        and voice_config.get("model")
+    ):
+        filtered_plugins.append(
+            {"package": voice_plugin_spec, "options": entry_options}
+        )
+        route_installed = True
 
     # Dry-run mode
     if args.dry_run:
@@ -1362,50 +1540,82 @@ def main():
         print()
         if unresolved:
             print("Voice outcome: unresolved; existing selection preserved")
-        elif not existing_voice or existing_voice != [
-            "@renjfk/opencode-voice",
-            voice_config,
-        ]:
-            print(json.dumps(["@renjfk/opencode-voice", voice_config], indent=2))
+        elif not existing_voice or existing_voice != {
+            "package": voice_plugin_spec,
+            "options": entry_options,
+        }:
+            print(
+                json.dumps(
+                    {"package": voice_plugin_spec, "options": entry_options}, indent=2
+                )
+            )
         changed_names = sorted(
             key
-            for key in voice_config
-            if not existing_voice
-            or len(existing_voice) < 2
-            or not isinstance(existing_voice[1], dict)
-            or existing_voice[1].get(key) != voice_config[key]
+            for key in entry_options
+            if not existing_voice or existing_options.get(key) != entry_options[key]
         )
         print(f"Changed setting names: {', '.join(changed_names) or 'none'}")
         preserved_names = [
-            str(entry[0])
-            for entry in existing_plugins
-            if isinstance(entry, list)
-            and entry
-            and entry[0] != "@renjfk/opencode-voice"
+            str(entry.get("package", "")) if isinstance(entry, dict) else str(entry)
+            for entry in cli_config
+            if not _voice_entry_matches(entry)
         ]
         print(f"Preserved plugin names: {', '.join(preserved_names) or 'none'}")
         return
 
-    # Write tui.json
-    os.makedirs(config_dir_path, exist_ok=True)
-    output_path = os.path.join(config_dir_path, "tui.json")
-
-    # Backup existing config
-    if os.path.exists(output_path) and not args.no_backup:
-        backup_path = backup_file(output_path, enabled=True)
-        if backup_path:
-            logger.info(f"Backed up existing tui.json to {backup_path}")
-
-    try:
-        write_text_file(
-            output_path,
-            json.dumps(tui_config, indent=2) + "\n",
-            backup=False,
+    # Write cli.json — but never create it when there is no route to install:
+    # upstream migrates supported global tui.json settings into cli.json on
+    # the first v2 TUI start ONLY while cli.json is absent, so creating an
+    # empty cli.json would strand those settings (docs/VOICE.md).
+    if not cli_existed and not route_installed:
+        logger.info(
+            "cli.json not created: no voice route resolved; the upstream "
+            "tui.json migration stays available"
         )
-        logger.info(f"tui.json written to {output_path}")
-    except Exception as e:
-        logger.critical(f"Failed to write tui.json: {e}")
-        sys.exit(1)
+    else:
+        # Backup existing config
+        if os.path.exists(output_path) and not args.no_backup:
+            backup_path = backup_file(output_path, enabled=True)
+            if backup_path:
+                logger.info(f"Backed up existing cli.json to {backup_path}")
+
+        try:
+            if cli_root_form == "object":
+                cli_root["plugins"] = filtered_plugins
+                cli_payload = json.dumps(cli_root, indent=2) + "\n"
+            else:
+                cli_payload = json.dumps(filtered_plugins, indent=2) + "\n"
+            _atomic_private_write(output_path, cli_payload)
+            logger.info(f"cli.json written to {output_path}")
+        except Exception as e:
+            logger.critical(f"Failed to write cli.json: {e}")
+            sys.exit(1)
+
+    tui_path = os.path.join(config_dir_path, "tui.json")
+    if route_installed and os.path.exists(tui_path):
+        try:
+            with open(tui_path, encoding="utf-8") as tui_file:
+                tui_config = json.load(tui_file)
+            if isinstance(tui_config, dict) and isinstance(
+                tui_config.get("plugin", []), list
+            ):
+                tui_plugins = tui_config.get("plugin", [])
+                remaining = [
+                    entry
+                    for entry in tui_plugins
+                    if not _voice_tui_entry_matches(entry)
+                ]
+                if remaining != tui_plugins:
+                    tui_config["plugin"] = remaining
+                    if not args.no_backup:
+                        backup_file(tui_path, enabled=True)
+                    write_text_file(
+                        tui_path, json.dumps(tui_config, indent=2) + "\n", backup=False
+                    )
+        except (OSError, ValueError) as error:
+            logger.warning(
+                "Could not remove managed voice entry from tui.json: %s", error
+            )
 
     if voice_state:
         _save_voice_state(config_dir_path, voice_state)
@@ -1478,4 +1688,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)

@@ -14,8 +14,8 @@ MANIFEST_PATH = (
 def load_plugin_manifest(path=MANIFEST_PATH):
     with Path(path).open(encoding="utf-8") as handle:
         manifest = json.load(handle)
-    if manifest.get("version") != 1:
-        raise ValueError("OpenCode plugin manifest version must be 1")
+    if manifest.get("version") != 2:
+        raise ValueError("OpenCode plugin manifest version must be 2")
     if not isinstance(manifest.get("excluded"), dict):
         raise ValueError("OpenCode plugin manifest must contain an excluded map")
     plugins = manifest.get("plugins")
@@ -34,7 +34,31 @@ def load_plugin_manifest(path=MANIFEST_PATH):
         not re.fullmatch(r"DOTFILES_RUN_[A-Z0-9_]+", gate) for gate in gated.values()
     ):
         raise ValueError("OpenCode plugin manifest gate names are invalid")
-    if any(not is_pinned_spec(item) for item in plugins):
+    cli_plugins = manifest.get("cli_plugins")
+    if not isinstance(cli_plugins, list) or not all(
+        isinstance(item, dict)
+        and set(item) == {"package"}
+        and isinstance(item["package"], str)
+        for item in cli_plugins
+    ):
+        raise ValueError(
+            "OpenCode plugin manifest cli_plugins must contain package-only objects"
+        )
+    cli_specs = [item["package"] for item in cli_plugins]
+    if len(set(cli_specs)) != len(cli_specs):
+        raise ValueError(
+            "OpenCode plugin manifest contains duplicate cli_plugins packages"
+        )
+    overlap = set(plugins) & set(cli_specs)
+    if overlap:
+        # A TUI-capable plugin must never be co-registered: plugins in
+        # opencode.json auto-load in the TUI, and cli.json duplicates would
+        # double-load them (docs/OPENCODE.md).
+        raise ValueError(
+            "OpenCode plugin manifest must not repeat a package across plugins "
+            f"and cli_plugins: {sorted(overlap)}"
+        )
+    if any(not is_pinned_spec(item) for item in [*plugins, *cli_specs]):
         raise ValueError(
             "OpenCode plugin manifest entries must be pinned package@version specs"
         )
@@ -45,14 +69,29 @@ def plugin_specs(path=MANIFEST_PATH):
     return load_plugin_manifest(path)["plugins"]
 
 
+def cli_plugin_specs(path=MANIFEST_PATH):
+    return [item["package"] for item in load_plugin_manifest(path)["cli_plugins"]]
+
+
+def active_cli_plugin_specs(path=MANIFEST_PATH, _environ=None):
+    return cli_plugin_specs(path)
+
+
 def is_pinned_spec(spec: str) -> bool:
+    if spec.startswith("github:"):
+        # Owner/repo (a single "/"), then "#" + a nonempty alphanumeric ref
+        # (floating branch like "main" or an immutable commit SHA).
+        return bool(re.fullmatch(r"github:[^/#]+/[^/#]+#[A-Za-z0-9]+", spec))
     if "@" not in spec:
         return False
     version = spec.rsplit("@", 1)[1]
     if version == "latest":
-        # Floating tracking alias: OpenCode installs an "<name>@latest" cache
-        # entry and resolves the newest release at install time (probed on
-        # opencode 1.18.34). Allowed deliberately; see CONVENTIONS.md.
+        # Floating tracking alias: OpenCode resolves the newest release at
+        # install/update time; re-resolve only changes by running the gated
+        # `opencode plugin update` (probed on the v2.2.5 CLI, 2026-10-31:
+        # `plugin add` dedupes and does NOT refresh an existing resolution,
+        # `plugin check` prints resolved concrete versions). Allowed
+        # deliberately; see CONVENTIONS.md.
         return True
     return bool(
         re.fullmatch(

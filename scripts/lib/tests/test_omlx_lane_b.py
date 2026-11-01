@@ -223,14 +223,21 @@ def test_voice_main_preserves_llm_fields_when_unresolved_with_stt(
         lambda _provider, _kind: ("http://127.0.0.1:11427/v1", "OMLX_API_KEY"),
     )
     assert voice.main() is None
-    written = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
-    entry = written["plugin"][0][1]
+    # The preserved legacy route maps onto the current manifest spec in
+    # cli.json with verbatim options; the managed tui.json entry is cleaned.
+    cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
+    entry_holder = [p for p in cli if isinstance(p, dict)]
+    assert len(entry_holder) == 1
+    entry = entry_holder[0]["options"]
+    assert entry_holder[0]["package"].startswith("@bojackduy/opencode-voice")
     assert entry["endpoint"] == original["endpoint"]
     assert entry["model"] == original["model"]
     assert entry["apiKeyEnv"] == original["apiKeyEnv"]
     assert entry["ttsVoice"] == original["ttsVoice"]
     assert entry["sttEndpoint"] == original["sttEndpoint"]
     assert entry["sttModel"] == original["sttModel"]
+    tui = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    assert tui["plugin"] == []
 
 
 def test_voice_main_keeps_unresolved_marker_without_existing_entry(
@@ -246,8 +253,50 @@ def test_voice_main_keeps_unresolved_marker_without_existing_entry(
         voice, "get_voice_config", lambda *args, **kwargs: {"_voice_unresolved": True}
     )
     assert voice.main() is None
-    written = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
-    assert written["plugin"] == []
+    # Routeless + cli.json absent: the file must NOT be created, so the
+    # upstream tui.json->cli.json migration stays available on first start.
+    assert not (config_dir / "cli.json").exists()
+    tui = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
+    assert tui["plugin"] == []
+
+
+def test_voice_main_preserves_unknown_options_on_resolution(monkeypatch, tmp_path):
+    """User-set option keys (sttAutoSubmit etc.) survive a fresh resolution."""
+    voice = load_script("configure-opencode-voice.py")
+    config_dir = tmp_path / "user-options"
+    config_dir.mkdir()
+    (config_dir / "cli.json").write_text(
+        json.dumps(
+            [
+                {
+                    "package": "@bojackduy/opencode-voice@latest",
+                    "options": {
+                        "endpoint": "http://previous/v1",
+                        "model": "previous",
+                        "sttAutoSubmit": True,
+                        "ttsVoice": "vivian",
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCODE_DIR", str(config_dir))
+    monkeypatch.setattr(sys, "argv", ["voice", "--preset", "pro", "--no-backup"])
+    monkeypatch.setattr(
+        voice,
+        "get_voice_config",
+        lambda *a, **k: {"endpoint": "http://resolved/v1", "model": "resolved"},
+    )
+    assert voice.main() is None
+    cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
+    entries = [p for p in cli if isinstance(p, dict)]
+    assert len(entries) == 1
+    options = entries[0]["options"]
+    assert options["endpoint"] == "http://resolved/v1"
+    assert options["model"] == "resolved"
+    assert options["sttAutoSubmit"] is True
+    assert options["ttsVoice"] == "vivian"
 
 
 def test_voice_dry_run_never_prints_foreign_plugin_values(
@@ -303,13 +352,24 @@ def test_voice_main_writes_resolved_llm_without_audio_state(
     assert voice.main() is None
 
     assert resolver.call_args.kwargs == {"state": prior_state}
-    assert json.loads((tmp_path / "tui.json").read_text())["plugin"] == [
-        other,
-        [
-            "@renjfk/opencode-voice",
-            {"endpoint": "http://resolved/v1", "model": "resolved"},
-        ],
+    # The resolved route lands in cli.json as the manifest-spec object; the
+    # managed legacy tui entry is cleaned and foreign entries preserved.
+    cli = json.loads((tmp_path / "cli.json").read_text(encoding="utf-8"))
+    voice_entries = [
+        p
+        for p in cli
+        if isinstance(p, dict)
+        and p.get("package", "").startswith("@bojackduy/opencode-voice")
     ]
+    assert voice_entries == [
+        {
+            "package": "@bojackduy/opencode-voice@latest",
+            "options": {"endpoint": "http://resolved/v1", "model": "resolved"},
+        },
+    ]
+    assert [p for p in cli if isinstance(p, dict)] == voice_entries
+    tui = json.loads((tmp_path / "tui.json").read_text(encoding="utf-8"))
+    assert tui["plugin"] == [other]
 
 
 def test_voice_main_persists_transport_without_audio_selections(monkeypatch, tmp_path):
@@ -334,8 +394,9 @@ def test_voice_main_persists_transport_without_audio_selections(monkeypatch, tmp
     assert state["sttTransport"] == "openai"
     assert state["sttTransportReason"] == "explicit --stt-transport openai"
     assert "cleanup_llm" in state["selections"]
-    options = json.loads((tmp_path / "tui.json").read_text())["plugin"][0][1]
-    assert options["model"] == "gemma4:31b"
+    options = json.loads((tmp_path / "cli.json").read_text(encoding="utf-8"))[0]
+    assert isinstance(options, dict)
+    assert options["options"]["model"] == "gemma4:31b"
 
 
 @pytest.mark.parametrize(
@@ -423,12 +484,22 @@ def test_voice_config_only_tier_matrix_main_contract(
     )
     monkeypatch.setattr(sys, "argv", ["voice", "--preset", tier, "--no-backup"])
     assert voice.main() is None
-    tui = json.loads((config_dir / "tui.json").read_text(encoding="utf-8"))
-    voice_entries = [p for p in tui["plugin"] if p[0] == "@renjfk/opencode-voice"]
+    # A routeless outcome with cli.json absent creates nothing (the upstream
+    # migration window must stay available).
+    if (config_dir / "cli.json").exists():
+        cli = json.loads((config_dir / "cli.json").read_text(encoding="utf-8"))
+    else:
+        cli = []
+    voice_entries = [
+        p
+        for p in cli
+        if isinstance(p, dict)
+        and p.get("package", "").startswith("@bojackduy/opencode-voice")
+    ]
     if tier.startswith("local"):
         assert len(voice_entries) == int(existing)
         if existing:
-            assert voice_entries[0][1]["model"] == "old-model"
+            assert voice_entries[0]["options"]["model"] == "old-model"
         assert "unresolved" in caplog.text
         assert (
             "installed local model; config-only, runtime unverified" not in caplog.text
@@ -440,7 +511,7 @@ def test_voice_config_only_tier_matrix_main_contract(
             assert not (config_dir / "opencode-voice.json").exists()
         return
     assert len(voice_entries) == 1
-    options = voice_entries[0][1]
+    options = voice_entries[0]["options"]
     if tier not in ("local", "local-solo", "pro"):
         assert options["endpoint"] == (
             f"http://127.0.0.1:{voice._configured_litellm_port() or 4000}/v1"
@@ -492,7 +563,9 @@ def test_voice_gateway_tier_fails_closed(failure, monkeypatch, tmp_path):
     )
     monkeypatch.setattr(sys, "argv", ["voice", "--preset", "plus", "--no-backup"])
     voice.main()
-    assert json.loads((config_dir / "tui.json").read_text())["plugin"] == []
+    # Failed-close resolution with cli.json absent: no file is created, so
+    # the upstream migration window stays open and no route is registered.
+    assert not (config_dir / "cli.json").exists()
     state = voice._load_voice_state(str(config_dir))
     record = state["selections"]["cleanup_llm"]
     assert record["transport"] == "unavailable"
@@ -776,12 +849,19 @@ def test_voice_consumer_config_contains_only_supported_fields():
 
 def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tmp_path):
     voice = load_script("configure-opencode-voice.py")
-    existing = [
-        "@renjfk/opencode-voice",
-        {"endpoint": "https://old", "model": "old-model"},
-    ]
+    # The legacy v1 route lives in tui.json; its options must survive the v2
+    # transition instead of being replaced by an unknown route.
+    existing_options = {"endpoint": "https://old", "model": "old-model"}
     (tmp_path / "tui.json").write_text(
-        json.dumps({"plugin": [existing]}), encoding="utf-8"
+        json.dumps(
+            {
+                "plugin": [
+                    ["@renjfk/opencode-voice", existing_options],
+                    ["unrelated", {}],
+                ]
+            }
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
     monkeypatch.setattr(
@@ -798,8 +878,19 @@ def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tm
     )
     monkeypatch.setattr(voice, "_render_locator", lambda locator: None)
     voice.main()
-    written = json.loads((tmp_path / "tui.json").read_text(encoding="utf-8"))
-    assert written["plugin"] == [existing]
+    written = json.loads((tmp_path / "cli.json").read_text(encoding="utf-8"))
+    voice_entries = [
+        p
+        for p in written
+        if isinstance(p, dict)
+        and p.get("package", "").startswith("@bojackduy/opencode-voice")
+    ]
+    assert len(voice_entries) == 1
+    assert voice_entries[0]["options"] == existing_options
+    # Unrelated cli/tui entries are preserved exactly.
+    tui = json.loads((tmp_path / "tui.json").read_text(encoding="utf-8"))
+    assert tui["plugin"] == [["unrelated", {}]]
+    assert [p for p in written if isinstance(p, dict)] == voice_entries
 
 
 @pytest.mark.parametrize(

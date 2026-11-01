@@ -1276,9 +1276,75 @@ def check_opencode_orphan_files():
 
     opencode_dir = HOME / ".config/opencode"
     managed_config_path = opencode_dir / "opencode.json"
+    cli_path = opencode_dir / "cli.json"
     dcp_json_path = opencode_dir / "dcp.json"
     dcp_config_path = opencode_dir / "dcp.jsonc"
     exit_code = 0
+
+    if cli_path.exists():
+        try:
+            cli_root = json.loads(cli_path.read_text(encoding="utf-8"))
+            # Upstream v2 consumes both roots (probe-verified 2026-10-31): an
+            # ordered entry array and a {"plugins": [...]} object form.
+            if isinstance(cli_root, list):
+                cli_entries = cli_root
+            elif isinstance(cli_root, dict) and isinstance(
+                cli_root.get("plugins", []), list
+            ):
+                cli_entries = cli_root["plugins"]
+            else:
+                raise ValueError(
+                    "cli.json root must be an array or a {plugins: [...]} object"
+                )
+            for entry in cli_entries:
+                spec = entry.get("package", "") if isinstance(entry, dict) else entry
+                if isinstance(spec, str) and spec.startswith(
+                    ("@slkiser/opencode-quota", "quota")
+                ):
+                    print(
+                        "  \u26a0 OpenCode cli.json: retired quota plugin "
+                        "still registered (remove during cutover)"
+                    )
+        except (OSError, ValueError) as error:
+            print(f"  \u2717 OpenCode cli.json: could not parse {cli_path}: {error}")
+            exit_code = 1
+
+    # Transitional co-registration: managed TUI-capable plugins (DCP, memory)
+    # and the TUI-client-only voice plugin must not linger in tui.json once
+    # their v2 homes carry them. The writers clean tui.json on their next
+    # run; doctor surfaces leftover registrations without failing the run.
+    tui_path = opencode_dir / "tui.json"
+    if tui_path.exists():
+        try:
+            tui_root = json.loads(tui_path.read_text(encoding="utf-8"))
+            tui_entries = (
+                tui_root.get("plugin", []) if isinstance(tui_root, dict) else []
+            )
+            if isinstance(tui_entries, list):
+                managed_tui_prefixes = (
+                    "@bojackduy/opencode-voice",
+                    "@tarquinen/opencode-dcp",
+                )
+                lingering = {
+                    spec
+                    for entry in tui_entries
+                    if isinstance(entry, (dict, str))
+                    for spec in (
+                        (
+                            entry.get("package", "")
+                            if isinstance(entry, dict)
+                            else entry
+                        ),
+                    )
+                    if isinstance(spec, str) and spec.startswith(managed_tui_prefixes)
+                }
+                if lingering:
+                    print(
+                        "  \u26a0 OpenCode tui.json: managed plugin entries pending "
+                        f"clean-up: {sorted(lingering)}"
+                    )
+        except (json.JSONDecodeError, OSError):
+            pass
 
     if dcp_json_path.exists() and dcp_config_path.exists():
         print(

@@ -4,8 +4,10 @@ import unittest
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
+# v1 baseline; the plugin-update gate line was added in the OpenCode v2
+# migration (intentional, reviewed change), so the baseline advances with it.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "b22b5b068d6665ae7ddd4af9443322cceee31e63c6d08b1cc2bfcf70f28efe59"
+    "cb1b75814e9854b5793efaccb6e4bfbd257f662a6a3d76b7a9faa48d149477b3"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

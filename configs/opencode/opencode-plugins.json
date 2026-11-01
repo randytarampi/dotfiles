@@ -1,18 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": 1,
+  "version": 2,
   "plugins": [
     "oh-my-opencode-slim@latest",
+    "@tarquinen/opencode-dcp@latest",
     "@plannotator/opencode@latest",
-    "opencode-vibeguard@latest",
-    "@ramtinj95/opencode-tokenscope@latest",
+    "github:AxeForce/opencode-vibeguard-v2#main",
+    "@cheesecodestudio/opencode-tokenscope-v2@latest",
     "opencode-mem@latest"
+  ],
+  "cli_plugins": [
+    {"package": "@bojackduy/opencode-voice@latest"}
   ],
   "gated": {
     "opencode-mem@latest": "DOTFILES_RUN_OPENCODE_MEMORY_SETUP"
   },
-  "excluded": {
-    "@tarquinen/opencode-dcp": "TUI-owned; configure-opencode-dcp.py writes tui.json.",
-    "@renjfk/opencode-voice": "TUI-owned; configure-opencode-voice.py writes tui.json."
-  }
+  "excluded": {}
 }

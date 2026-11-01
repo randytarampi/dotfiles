@@ -295,10 +295,9 @@ def test_main_installs_no_plugin_entry_without_resolved_route(
 
     voice.main()
 
-    tui = json.loads((tmp_path / "tui.json").read_text())
-    assert not [
-        entry for entry in tui["plugin"] if entry[0] == "@renjfk/opencode-voice"
-    ]
+    # Routeless resolution with cli.json absent: no file is created (the
+    # upstream tui.json migration window must stay available).
+    assert not (tmp_path / "cli.json").exists()
     assert "Voice outcome: unresolved; no plugin route installed" in caplog.text
 
 

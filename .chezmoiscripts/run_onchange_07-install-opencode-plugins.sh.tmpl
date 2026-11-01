@@ -2,6 +2,8 @@
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_UPDATE_SYSTEM_SETUP" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
@@ -23,15 +25,47 @@ fi
 
 info "Installing opencode plugins..."
 
+# add/@latest is deduplicated by OpenCode; ordinary make deploy does not
+# refresh packages. Refresh is explicit in the managed update-system workflow.
+parse_plugin_check() {
+  local spec="$1" output="$2" expected_version="$3" current_only="${4:-0}" parsed
+  parsed="$(printf '%s\n' "$output" | python3 -c '
+import re, sys
+spec, expected, current_only = sys.argv[1:]
+name = spec.rsplit("@", 1)[0]
+if name.startswith("github:"):
+    name = name.split("#", 1)[0].rsplit("/", 1)[-1]
+matches = []
+for line in sys.stdin:
+    match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\s+\((current|latest|check failed)\)\s*", line.rstrip("\n"))
+    if match and match.group(1) == name:
+        matches.append((match.group(2), match.group(3)))
+if len(matches) != 1:
+    print("ERROR: expected exactly one version/status line for " + name, file=sys.stderr)
+    sys.exit(2)
+version, status = matches[0]
+if status == "check failed":
+    print("ERROR: plugin check reported failure for " + name, file=sys.stderr)
+    sys.exit(2)
+if expected and version != expected:
+    print("ERROR: resolved version changed for " + name + ": expected " + expected + ", got " + version, file=sys.stderr)
+    sys.exit(2)
+if status != "current" and not (status == "latest" and current_only != "1"):
+    print("ERROR: plugin is not current for " + name + ": " + status, file=sys.stderr)
+    sys.exit(2)
+print(version)
+' "$spec" "$expected_version" "$current_only")" || return 1
+  printf '%s\n' "$parsed"
+}
+
 HOST_STATE="absent"
 HOST_MAJOR=""
 if command -v opencode >/dev/null 2>&1; then
   HOST_INFO="$(PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -c 'import opencode_host; print(" ".join(str(x) if x is not None else "" for x in opencode_host.resolve_opencode_host()))' 2>/dev/null || true)"
-  HOST_STATE="${HOST_INFO%% *}"
-  HOST_MAJOR="${HOST_INFO#* }"
+  read -r HOST_STATE HOST_MAJOR <<<"${HOST_INFO}"
 fi
 if [[ "${HOST_STATE}" != "known" || "${HOST_MAJOR}" != "2" ]]; then
-  warn "OpenCode host is ${HOST_STATE}${HOST_MAJOR:+ (major ${HOST_MAJOR})}; skipping v2 plugin commands."
+  warn "OpenCode host is ${HOST_STATE:-unknown}${HOST_MAJOR:+ (major ${HOST_MAJOR})}; skipping v2 plugin commands."
   # OMO Slim uses its own installer and is intentionally retained on v1.
   PLUGIN_MANIFEST="{{ .chezmoi.sourceDir }}/configs/opencode/opencode-plugins.json"
   PLUGIN_SPECS=()
@@ -51,8 +85,7 @@ PY
   exit 0
 fi
 
-# Read the checked-in manifest. DCP and voice are TUI-owned and deliberately
-# absent from the canonical manifest; their configure scripts own tui.json.
+# Read the checked-in manifest; the voice writer owns cli.json registration.
 PLUGIN_MANIFEST="{{ .chezmoi.sourceDir }}/configs/opencode/opencode-plugins.json"
 PLUGIN_SPECS=()
 while IFS= read -r plugin; do
@@ -73,26 +106,30 @@ fi
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
 # --background-subagents=yes enables background subagents during install
 # Pipe 'n' to skip the "Star the repo on GitHub?" prompt
+# OMO-Slim is the orchestrator (first manifest entry): a failed install is a
+# hard failure (missing required plugin), not a "may already be installed".
 info "Installing oh-my-opencode-slim..."
 OH_MY_PLUGIN="${PLUGIN_SPECS[0]}"
+PLUGIN_INSTALL_FAILED=0
 if command -v bun &>/dev/null; then
-  echo n | bunx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  OMO_INSTALLER=(bunx)
 else
-  echo n | npx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  OMO_INSTALLER=(npx)
 fi
-ok "oh-my-opencode-slim installed"
-
-# Plugin definitions matching ~/.config/opencode/opencode.json. The dedicated
+if echo n | "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null; then
+  ok "oh-my-opencode-slim installed"
+else
+  warn "oh-my-opencode-slim install failed"
+  PLUGIN_INSTALL_FAILED=1
+fi
 # oh-my installer above is the first manifest entry and is not an opencode plugin.
 # opencode plugin add <module> — installs the plugin in OpenCode v2
 PLUGINS=(
-  "@tarquinen/opencode-dcp@latest"
 )
 for plugin in "${PLUGIN_SPECS[@]}"; do
   [[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")
 done
 
-PLUGIN_INSTALL_FAILED=0
 for plugin in "${PLUGINS[@]}"; do
   if opencode plugin add "${plugin}" 2>/dev/null; then
     ok "opencode plugin: ${plugin}"
@@ -103,6 +140,82 @@ for plugin in "${PLUGINS[@]}"; do
 done
 if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
   die "One or more OpenCode plugins failed to install"
+fi
+
+CLI_PLUGIN_SPECS=()
+while IFS= read -r plugin; do
+  CLI_PLUGIN_SPECS+=("$plugin")
+done < <(
+  PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 - "$PLUGIN_MANIFEST" <<'PY'
+import sys
+from opencode_plugins import cli_plugin_specs
+for plugin in cli_plugin_specs(sys.argv[1]):
+    print(plugin)
+PY
+)
+
+for plugin in "${CLI_PLUGIN_SPECS[@]}"; do
+  if opencode plugin add "${plugin}" 2>/dev/null; then
+    ok "opencode CLI plugin: ${plugin}"
+  else
+    warn "opencode CLI plugin ${plugin} failed"
+    PLUGIN_INSTALL_FAILED=1
+  fi
+done
+if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
+  die "One or more OpenCode CLI plugins failed to install"
+fi
+
+PLUGIN_RESOLVED_VERSIONS=()
+for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
+  if output="$(opencode plugin check "${plugin}" 2>&1)"; then
+    if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "")"; then
+      PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
+      info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
+    else
+      warn "OpenCode plugin check ${plugin} parser failed: ${output}"
+      PLUGIN_INSTALL_FAILED=1
+    fi
+  else
+    warn "OpenCode plugin check ${plugin} (check failed): ${output}"
+    PLUGIN_INSTALL_FAILED=1
+  fi
+done
+if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
+  die "One or more OpenCode plugin version checks failed"
+fi
+
+if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
+  PLUGIN_UPDATE_FAILED=0
+  for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
+    if output="$(opencode plugin update "${plugin}" 2>&1)"; then
+      info "OpenCode plugin update ${plugin}: ${output}"
+      expected_version=""
+      for resolved in "${PLUGIN_RESOLVED_VERSIONS[@]}"; do
+        if [[ "${resolved%%=*}" == "${plugin}" ]]; then
+          expected_version="${resolved#*=}"
+          break
+        fi
+      done
+      if recheck="$(opencode plugin check "${plugin}" 2>&1)"; then
+        if ! resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "${expected_version}" 1)"; then
+          warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
+          PLUGIN_UPDATE_FAILED=1
+        else
+          info "OpenCode plugin recheck ${plugin}: ${recheck}"
+        fi
+      else
+        warn "OpenCode plugin recheck ${plugin} failed after update"
+        PLUGIN_UPDATE_FAILED=1
+      fi
+    else
+      warn "OpenCode plugin update ${plugin} failed: ${output}"
+      PLUGIN_UPDATE_FAILED=1
+    fi
+  done
+  if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then
+    die "One or more OpenCode plugin updates failed"
+  fi
 fi
 
 # The meridian plugin is installed globally via npm and referenced by local path.

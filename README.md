@@ -150,7 +150,7 @@ make migrate             # Apply migration + append missing template keys to ~/.
 chezmoi edit ~/.bashrc  # Edit a managed dotfile
 scripts/configure-opencode-tier.py --preset pro-plus   # Switch AI model tier
 scripts/configure-all.sh [options]            # --preset, --mode, --skip, --local-fallback-*, --min-reasoning-embedding
-scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (tui.json)
+scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (cli.json)
 scripts/configure-mcps.py                  # Regenerate MCP configs
 scripts/configure-opencode.py       # Regenerate OpenCode config
 scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
@@ -362,7 +362,7 @@ See [docs/LITELLM.md](docs/LITELLM.md) for the full environment contract.
     ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
     ├── configure-opencode.py      # Write OpenCode config (local ollama default)
     ├── configure-opencode-tier.py # Switch active preset tier (--preset required)
-    ├── configure-opencode-voice.py # Write voice plugin config (tui.json, tier-aware)
+    ├── configure-opencode-voice.py # Write voice plugin config (cli.json, tier-aware)
     ├── get-tools.py               # Get MCP tool registry keys
     ├── install-acp-adapters.py    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
     ├── install-nvm-lts.sh         # Reinstall all LTS node versions
@@ -588,13 +588,13 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
-**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. Requires DCP in `tui.json` (written by `scripts/configure-opencode-dcp.py`). Core compression still loads from `opencode.json`. See [docs/DCP.md](docs/DCP.md).
+**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. On OpenCode v2 the panel loads from the `opencode.json` plugins manifest (registration owned by the manifest; `scripts/configure-opencode-dcp.py` only removes stale `tui.json` entries, conditionally on the registration being present). Core compression loads from the same `opencode.json`. See `docs/DCP.md`.
 
 ### Voice Plugin (opencode-voice)
 
-OpenCode voice support via [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
+OpenCode voice support via [`@bojackduy/opencode-voice`](https://github.com/bojackduy/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
 
-**Configuration:** `~/.config/opencode/tui.json` (written by `configure-opencode-voice.py`, tier-aware)
+**Configuration:** `~/.config/opencode/cli.json` as a `{package, options}` entry (written by `configure-opencode-voice.py`, tier-aware; unrelated entries preserved)
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
@@ -638,19 +638,22 @@ Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer
 
 ### Plannotator
 
-Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode@0.27.21`) is already configured in global `opencode.json` from `configs/opencode/opencode-plugins.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
+Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode`) is already configured in global `opencode.json` from `configs/opencode/opencode-plugins.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
 
-The canonical pinned OpenCode plugin set is maintained in
-`configs/opencode/opencode-plugins.json`: `oh-my-opencode-slim@3.0.1`,
-`@plannotator/opencode@0.27.21`, `opencode-vibeguard@0.1.0`,
-`@ramtinj95/opencode-tokenscope@1.8.1`, and `opencode-mem@2.26.0`. DCP has a separate dual core/TUI ownership contract;
-voice is TUI-owned.
+The canonical plugin set is maintained in `configs/opencode/opencode-plugins.json`
+(manifest version 2): the ordered `plugins` array for `opencode.json`
+(`oh-my-opencode-slim@latest` dedicated first entry, `@tarquinen/opencode-dcp@latest`,
+`@plannotator/opencode`, `github:AxeForce/opencode-vibeguard-v2#934823e5` (pinned
+dual-runtime secrets redaction), `@cheesecodestudio/opencode-tokenscope-v2@latest`,
+opt-in `opencode-mem@latest`) and a `cli_plugins` array for global TUI-client-only
+plugins (`@bojackduy/opencode-voice@latest` → `cli.json`). All plugins track
+`@latest` except the pinned VibeGuard Git source.
 
 ### OpenCode Mem
 
 Persistent project/user memory with vector search.
 
-- OpenCode plugin: `opencode-mem@2.26.0` (opt-in via `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`; managed `~/.config/opencode/opencode-mem.jsonc`)
+- OpenCode plugin: `opencode-mem@latest` (opt-in via `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`; managed `~/.config/opencode/opencode-mem.jsonc`; 2.39.0 ships v2 + TUI exports)
 - Upstream: https://github.com/tickernelz/opencode-mem
 
 ### Junie CLI
