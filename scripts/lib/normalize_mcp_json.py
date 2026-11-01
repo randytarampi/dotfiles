@@ -107,6 +107,35 @@ def normalize(path: str = OPENCODE_CONFIG_PATH) -> bool:
     return normalized
 
 
+def _entry_policy_fields(entry):
+    """Validate the entry's boolean policy fields; returns (enabled, disabled)
+    with None for absent members, or the whole-tuple None when a present
+    value is malformed (the caller refuses the rewrite)."""
+    enabled = entry.get("enabled") if isinstance(entry, dict) else None
+    disabled = entry.get("disabled") if isinstance(entry, dict) else None
+    if "enabled" in entry and not isinstance(enabled, bool):
+        return None
+    if "disabled" in entry and not isinstance(disabled, bool):
+        return None
+    return (enabled, disabled)
+
+
+def _flat_native_server(entry):
+    """Validate one flat source entry for native promotion.
+
+    Returns the native ``disabled`` policy (bool) or None to refuse rewrite.
+    Legacy ``enabled`` (present) wins by inversion; otherwise a native
+    ``disabled`` value is preserved verbatim (a native disabled server never
+    silently becomes enabled)."""
+    policies = _entry_policy_fields(entry)
+    if policies is None:
+        return None
+    enabled, disabled = policies
+    if enabled is not None:
+        return not enabled
+    return disabled if disabled is not None else False
+
+
 def _normalize_native(mcp):
     """Ensure the native v2 mcp.servers wrapper survives codegraph writes.
 
@@ -121,16 +150,17 @@ def _normalize_native(mcp):
         servers = {}
     changed = False
     for name, entry in list(mcp.items()):
-        if name == "servers" or not isinstance(entry, dict):
+        if name == "servers":
             continue
         nested = servers.get(name)
         if isinstance(nested, dict):
             continue  # nested registry/emitter entry wins
-        if entry.get("type") not in ("local", "remote"):
+        disabled = _flat_native_server(entry)
+        if disabled is None:
             return False
         cleaned = dict(entry)
-        enabled = cleaned.pop("enabled", None)
-        cleaned["disabled"] = enabled is False
+        cleaned["disabled"] = disabled
+        cleaned.pop("enabled", None)
         servers[name] = cleaned
         del mcp[name]
         changed = True
@@ -138,6 +168,23 @@ def _normalize_native(mcp):
         mcp["servers"] = servers
         changed = True
     return True if changed else False
+
+
+def _promoted_v1_server(entry):
+    """Validate one nested entry for v1 promotion; None refuses rewrite."""
+    if not isinstance(entry, dict) or entry.get("type") not in ("local", "remote"):
+        return None
+    policies = _entry_policy_fields(entry)
+    if policies is None:
+        return None
+    enabled, disabled = policies
+    cleaned = {k: v for k, v in entry.items() if k in V1_ALLOWED_FIELDS}
+    if enabled is not None:
+        cleaned["enabled"] = enabled
+    else:
+        disabled = disabled if disabled is not None else False
+        cleaned["enabled"] = not disabled
+    return cleaned
 
 
 def _normalize_v1(mcp):
@@ -151,11 +198,9 @@ def _normalize_v1(mcp):
     for name, entry in servers.items():
         if name in mcp:
             continue  # flat registry-authored entry wins
-        if not isinstance(entry, dict) or entry.get("type") not in ("local", "remote"):
+        cleaned = _promoted_v1_server(entry)
+        if cleaned is None:
             return None
-        disabled = entry.get("disabled", False)
-        cleaned = {k: v for k, v in entry.items() if k in V1_ALLOWED_FIELDS}
-        cleaned["enabled"] = False if disabled else cleaned.get("enabled", True)
         promoted[name] = cleaned
 
     mcp.pop("servers")
