@@ -1279,6 +1279,7 @@ def main():
     include_anthropic = args.preset in [
         "pro-plus-anthropic",
         "plus-anthropic",
+        "omo-slim-fourty-dollars",
         "anthropic",
     ] or bool(meridian_plugin_path)
 
@@ -1644,7 +1645,7 @@ def main():
                 }
                 config["provider"]["anthropic"] = {"models": enriched_anthropic}
             config["disabled_providers"].extend(["openai", "ollama-cloud", "ollama"])
-        elif args.preset == "plus-anthropic":
+        elif args.preset in ("plus-anthropic", "omo-slim-fourty-dollars"):
             if openai_models:
                 enriched_openai = {
                     mid: build_model_entry(mid, models_dev_data, "openai")
