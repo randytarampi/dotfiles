@@ -264,6 +264,18 @@ refer to a removed section; the generator does not repair these references.
 | Visual Studio Code | `LITELLM_VSCODE_KEY` | `vscode.key` |
 | Xcode | `LITELLM_XCODE_KEY` | `xcode.key` |
 
+`service.env` is reconciled before and after config generation. The synchronizer
+retains every managed client credential across both passes and can restore a
+missing environment entry from the canonical non-symlink
+`~/.local/share/litellm/clients/<client>.key`. It refuses mismatches or
+unsafe client-file paths without replacing the credential. A remote key alias
+with no usable local secret is **stranded**: deployment fails closed rather
+than automatically calling `/key/delete`. Inspect local files and the
+gateway's alias/hash metadata, then deliberately reissue only affected
+credentials with their user, team, budget and model restrictions preserved.
+The Admin UI cannot reveal a previously issued plaintext key; no Enterprise
+rotation endpoint is needed for a separately approved replacement workflow.
+
 JetBrains Toolbox, Visual Studio Code and Xcode keys are provisioned only
 when the matching macOS app bundle identifier is verified and all three gates
 are enabled: `DOTFILES_RUN_LITELLM_SETUP=1`,
