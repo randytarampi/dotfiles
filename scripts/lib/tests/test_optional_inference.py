@@ -174,9 +174,7 @@ def _run_review_model_setup(tmp_path, **overrides):
         "HAS_CLOUDFLARE_KEY": "false",
         "HAS_GROQ_KEY": "false",
         "HAS_NVIDIA_NIM_KEY": "false",
-        "REVIEW_FREE_MISTRAL_APPROVED": "",
-        "REVIEW_FREE_CLOUDFLARE_APPROVED": "",
-        "REVIEW_FREE_GROQ_APPROVED": "",
+        "HAS_OPENCODE_KEY": "false",
         "CLOUDFLARE_ACCOUNT_ID": "",
         **overrides,
     }
@@ -197,24 +195,18 @@ def _run_review_model_setup(tmp_path, **overrides):
     return result, config, emitted
 
 
-def test_review_free_defaults_to_existing_open_code_without_approved_routes(tmp_path):
-    result, config, output = _run_review_model_setup(
-        tmp_path,
-        HAS_MISTRAL_KEY="true",
-        HAS_CLOUDFLARE_KEY="true",
-        CLOUDFLARE_ACCOUNT_ID="a" * 32,
-    )
+def test_review_free_defaults_to_existing_open_code_without_provider_keys(tmp_path):
+    result, config, output = _run_review_model_setup(tmp_path)
     assert result.returncode == 0, result.stderr
     assert config["model"] == "opencode/big-pickle"
     assert output["selected_provider"] == "opencode"
 
 
-def test_review_free_uses_approved_mistral_primary_without_secret_literal(tmp_path):
+def test_review_free_uses_credentialed_mistral_primary_without_secret_literal(tmp_path):
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-        REVIEW_FREE_MISTRAL_APPROVED="true",
-    )
+            )
     assert result.returncode == 0, result.stderr
     assert config["model"] == "mistral/mistral-small-latest"
     assert output["selected_provider"] == "mistral"
@@ -223,14 +215,13 @@ def test_review_free_uses_approved_mistral_primary_without_secret_literal(tmp_pa
     )
 
 
-def test_review_free_uses_account_bound_cloudflare_when_approved(tmp_path):
+def test_review_free_uses_account_bound_cloudflare_with_key(tmp_path):
     account = "b" * 32
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_CLOUDFLARE_KEY="true",
         CLOUDFLARE_ACCOUNT_ID=account,
-        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
-    )
+            )
     assert result.returncode == 0, result.stderr
     assert output["selected_provider"] == "cloudflare"
     assert config["model"].startswith("cloudflare/")
@@ -264,10 +255,8 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-        REVIEW_FREE_MISTRAL_APPROVED="true",
-        HAS_GROQ_KEY="true",
-        REVIEW_FREE_GROQ_APPROVED="true",
-        HAS_NVIDIA_NIM_KEY="true",
+            HAS_GROQ_KEY="true",
+                HAS_NVIDIA_NIM_KEY="true",
         HAS_OPENCODE_KEY="true",
     )
     assert result.returncode == 0, result.stderr
@@ -298,14 +287,12 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     assert not any("nvidia" in str(row) for row in deployments)
 
 
-def test_review_free_router_includes_approved_cloudflare_with_account_url(tmp_path):
+def test_review_free_router_includes_credentialed_cloudflare_with_account_url(tmp_path):
     account = "c" * 32
     result, config, output = _run_review_model_setup(
         tmp_path,
         HAS_MISTRAL_KEY="true",
-        REVIEW_FREE_MISTRAL_APPROVED="true",
-        HAS_CLOUDFLARE_KEY="true",
-        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
+            HAS_CLOUDFLARE_KEY="true",
         CLOUDFLARE_ACCOUNT_ID=account,
     )
     assert result.returncode == 0, result.stderr
@@ -323,7 +310,6 @@ def test_review_free_invalid_cloudflare_account_fails_closed(tmp_path):
     result, _, _ = _run_review_model_setup(
         tmp_path,
         HAS_CLOUDFLARE_KEY="true",
-        REVIEW_FREE_CLOUDFLARE_APPROVED="true",
         CLOUDFLARE_ACCOUNT_ID="invalid",
     )
     assert result.returncode != 0
