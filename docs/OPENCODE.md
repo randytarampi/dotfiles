@@ -1,9 +1,17 @@
 # OpenCode
 
-
 Optional credentialed direct inference providers are described in
 [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md). They are not automatically
 classified as free or included in strict-free fallback chains.
+
+## Host Install (v2)
+
+OpenCode is installed/updated via the official install script (latest stable
+v2; binary at `~/.opencode/bin/opencode`, directory first on PATH). Brew and
+winget do not manage OpenCode. The one-time Meridian qualification install at
+the CLI-qualified release (2.0.31) followed by a normal update to latest is
+documented in
+[docs/OPENCODE-V2-MIGRATION-PLAN.md](OPENCODE-V2-MIGRATION-PLAN.md).
 
 ## Web Service
 

@@ -6,8 +6,7 @@
 # --- Cloud / sync / AI ---
 # Cross-ref: cask 'ollama-app'
 Ollama.Ollama
-# Cross-ref: cask 'opencode-desktop'
-SST.OpenCodeDesktop
+# OpenCode: official install script owns the channel; no v2 winget package exists.
 # Cross-ref: cask 'google-drive'
 Google.GoogleDrive
 # Cross-ref: cask 'cyberduck'
