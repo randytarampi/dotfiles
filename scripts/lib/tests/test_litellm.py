@@ -3441,9 +3441,7 @@ def test_litellm_env_sync_rejects_dangling_client_directory(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"
     root.mkdir()
-    (root / "clients").symlink_to(
-        root / "missing-clients", target_is_directory=True
-    )
+    (root / "clients").symlink_to(root / "missing-clients", target_is_directory=True)
     service_env = root / "service.env"
     service_env.write_text(
         "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
