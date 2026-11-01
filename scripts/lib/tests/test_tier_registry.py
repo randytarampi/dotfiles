@@ -125,6 +125,7 @@ class TierRegistryTests(unittest.TestCase):
         tiers = set(configure_pi.get_available_tiers())
         self.assertIn("omo-slim-openai", tiers)
         self.assertIn("omo-slim-thirty-dollars", tiers)
+        self.assertIn("omo-slim-fourty-dollars", tiers)
         self.assertIn("omo-slim-opencode-zen-free", tiers)
 
     def test_voice_mapping_for_remote_presets_admits_config_only_routes(self):
@@ -144,10 +145,14 @@ class TierRegistryTests(unittest.TestCase):
             for tier in (
                 "omo-slim-openai",
                 "omo-slim-thirty-dollars",
+                "omo-slim-fourty-dollars",
                 "omo-slim-opencode-zen-free",
             ):
                 config = configure_voice.get_voice_config(tier)
                 self.assertIn("model", config)
+                if tier == "omo-slim-fourty-dollars":
+                    self.assertEqual(config["model"], "gpt-6-luna")
+                    self.assertNotIn("ollama", config["endpoint"])
                 sidecar = config.get("_voice_state", {})
                 record = sidecar.get("selections", {}).get("cleanup_llm", {})
                 self.assertEqual(record.get("qualification"), "unknown")
@@ -204,7 +209,7 @@ class TierRegistryTests(unittest.TestCase):
         data = registry()
         aliases = set(tier_registry.DEPRECATED_TIER_ALIASES)
         readme = (Path(__file__).resolve().parents[3] / "README.md").read_text()
-        self.assertIn("Fourteen presets", readme)
+        self.assertIn(f"{len(data['presets'])} presets", readme)
         self.assertEqual(aliases, {"local-pro", "local-mini", "local-nano"})
         self.assertTrue(aliases.isdisjoint(data["presets"]))
         self.assertTrue(aliases.isdisjoint(data["_tiers"]))
