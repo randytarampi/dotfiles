@@ -349,19 +349,19 @@ Council agent is defined inside each preset's agent list; alpha `claude-fable-5-
 
 ### Plus Tier (`plus`)
 
-OpenAI-only preset with gpt-6.1-sol as orchestrator, oracle and council anchor:
+OpenAI-only preset with Terra orchestration and design, and Sol oracle and council synthesis:
 
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `openai/gpt-6.1-terra` | medium |
 | oracle | `openai/gpt-6.1-sol` | high |
 | librarian / explorer | `openai/gpt-6-luna` | low |
-| designer | `openai/gpt-6-luna` | medium |
+| designer | `openai/gpt-6.1-terra` | medium |
 | fixer | `openai/gpt-6-luna` | medium |
-| observer | `openai/gpt-6-luna` | low |
-| council | `openai/gpt-6.1-sol` | high (α sol, β gpt-5.6-sol, γ luna) |
+| observer | `openai/gpt-6.1-terra` | low |
+| council | `openai/gpt-6.1-sol` | high (α terra, β sol, γ astra) |
 
-The orchestrator and oracle fall back to `openai/gpt-6-astra`; the remaining fallback chains are defined per role in `oh-my-opencode-slim.json`.
+The orchestrator falls back to `openai/gpt-6.1-sol`; the oracle retains `openai/gpt-6-astra`. Designer and observer fall back to `openai/gpt-6-luna`. Other chains are defined per role in `oh-my-opencode-slim.json`.
 
 Local-tier variants follow the repo-wide variant policy (TIERS.md:479-490), calibrated 2026-09-12; oracle/council retain max. Local Qwen3.8 reasoning remains enabled (mandatory for Qwen3.8 — JetBrains evidence, [blog.jetbrains.com/junie/2026/08/qwen-for-junie/](https://blog.jetbrains.com/junie/2026/08/qwen-for-junie/)).
 
