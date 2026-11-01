@@ -232,6 +232,25 @@ def _convert_mcp_server_entry(name, entry):
 OPENCODE_CONFIG_FILE_NAME = "opencode.json"
 
 
+def _meridian_entry_matches(value: object) -> bool:
+    """Match the precise Meridian plugin entry forms (not substring soup):
+    the bare scoped package name; a scoped-package version alias; a plugin
+    path whose segments contain the @rynfar/meridian package directory and
+    end in the plugin's entry module; and the same three forms as owner
+    disable directives (a `-` prefix).
+    """
+    if not isinstance(value, str):
+        return False
+    directive = value.startswith("-")
+    body = value[1:] if directive else value
+    if body in ("@rynfar/meridian",) or body.startswith("@rynfar/meridian@"):
+        return True
+    return (
+        "/@rynfar/meridian/" in body
+        and (body.endswith("meridian.ts") or body.endswith("meridian.mjs"))
+    ) or body.rstrip("/") == "@rynfar/meridian"
+
+
 def meridian_preserved_entries(config_dir_path):
     """Return Meridian plugin entries from the on-disk config worth
     preserving across regeneration.
@@ -261,7 +280,7 @@ def meridian_preserved_entries(config_dir_path):
             value = entry.get("package", "")
         else:
             value = None
-        if isinstance(value, str) and "@rynfar/meridian" in value:
+        if _meridian_entry_matches(value):
             entries.append(entry)
     return entries
 
@@ -1086,6 +1105,37 @@ def main():
         config_dir_path = os.path.abspath(os.path.expanduser(opencode_dir))
     else:
         config_dir_path = os.path.join(os.path.expanduser("~"), ".config", "opencode")
+
+    # Fail closed on an unreadable existing managed config: a wholesale
+    # regeneration would silently lose every entry it cannot parse —
+    # including an upstream-registered Meridian plugin. Quarantine a private
+    # copy of the unreadable file and stop; recovery is by inspection, never
+    # by overwrite.
+    _existing_managed_config = os.path.join(config_dir_path, OPENCODE_CONFIG_FILE_NAME)
+    if args.mode == "global" and os.path.exists(_existing_managed_config):
+        try:
+            with open(_existing_managed_config, encoding="utf-8") as _existing_file:
+                json.load(_existing_file)
+        except (OSError, json.JSONDecodeError) as _unreadable:
+            import time as _time
+
+            _quarantine = os.path.join(
+                config_dir_path,
+                f"{OPENCODE_CONFIG_FILE_NAME}.unreadable-{int(_time.time())}",
+            )
+            try:
+                shutil.copy2(_existing_managed_config, _quarantine)
+                os.chmod(_quarantine, 0o600)
+                _note = f"; quarantined to {_quarantine} (0600)"
+            except OSError:
+                _note = (
+                    "; quarantine copy FAILED — nothing was changed except this message"
+                )
+            logger.critical(
+                f"Existing {_existing_managed_config} is unreadable ({_unreadable}) — "
+                f"refusing to overwrite user-owned config{_note}; resolve or remove the file and re-run."
+            )
+            sys.exit(1)
 
     # Load .env before validating selections so file-provided values cannot bypass the guard.
     env_path = os.path.join(config_dir_path, ".env")

@@ -28,3 +28,11 @@ KNOWN-UNVALIDATED. The selected channel is the official desktop NSIS installer, 
 - NO-GO for missing/wrong v2 binary, required Meridian route unqualified or failing, secret egress, lost memory, widened permissions, incorrect Caddy authentication, false health, plugin failures or inconsistent second deploy.
 - Stop or disable the affected exposure/consumer, preserve diagnostics and the verified snapshot, and fix forward. Do not silently restore v1, destroy originals, rotate credentials without cause or claim usability while a critical route is broken.
 - Mark unperformed host-specific checks UNKNOWN with an accountable owner and follow-up. No fabricated evidence or secret-bearing logs in reports.
+
+Known residual on the plugin checks: the version-check parser matches the
+binary's printed plugin name against the spec-derived forms (scoped, unscoped
+and Git repo-derived). The Git-source name mapping derives from the repo name;
+if the real binary prints a different resolved package identity for the
+`github:AxeForce/opencode-vibeguard-v2#main` spec, the check fails closed with
+the printed line in the log — record that line and extend the mapping from the
+resolved identity; never loosen the exactly-one-match rule.
