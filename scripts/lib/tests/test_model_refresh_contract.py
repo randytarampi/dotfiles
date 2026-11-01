@@ -25,7 +25,7 @@ def test_terra_and_upstream_translations():
     assert p["omo-slim-openai"]["fixer"]["model"] == "openai/gpt-6.1-sol"
     assert p["omo-slim-openai"]["fixer"]["variant"] == "low"
     assert p["omo-slim-thirty-dollars"]["oracle"]["model"] == "openai/gpt-6-astra"
-    forty = p["omo-slim-fourty-dollars"]
+    forty = p["omo-slim-forty-dollars"]
     assert forty["orchestrator"]["model"] == "anthropic/claude-opus-5-5"
     assert forty["oracle"]["model"] == "openai/gpt-6-astra"
     assert forty["fixer"]["model"] == "openai/gpt-6.1-sol"
