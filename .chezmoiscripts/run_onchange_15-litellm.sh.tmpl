@@ -23,6 +23,10 @@ source "$LIB_DIR/litellm_service.sh"
 # scripts/lib/free_route_catalogues.py: {{ include "scripts/lib/free_route_catalogues.py" | sha256sum }}
 # scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # configs/litellm/model-rates.json: {{ include "configs/litellm/model-rates.json" | sha256sum }}
+# configs/opencode/groq-models.json: {{ include "configs/opencode/groq-models.json" | sha256sum }}
+# configs/opencode/mistral-models.json: {{ include "configs/opencode/mistral-models.json" | sha256sum }}
+# configs/opencode/cloudflare-models.json: {{ include "configs/opencode/cloudflare-models.json" | sha256sum }}
+# configs/opencode/nvidia-nim-models.json: {{ include "configs/opencode/nvidia-nim-models.json" | sha256sum }}
 # scripts/lib/litellm_routing.py: {{ include "scripts/lib/litellm_routing.py" | sha256sum }}
 # scripts/lib/litellm_service.sh: {{ include "scripts/lib/litellm_service.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_LITELLM_SETUP" | default "0" }}:{{ env "DOTFILES_USE_LITELLM_PROXY" | default "0" }}:{{ env "DOTFILES_LITELLM_OAUTH_PROVIDERS" | default "0" }}:{{ env "DOTFILES_RUN_JUNIE_CLI_SETUP" | default "0" }}:{{ env "DOTFILES_LITELLM_VERSION" | default "1.106.6" }}:{{ env "LITELLM_PORT" | default "4000" }}
