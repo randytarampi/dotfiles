@@ -102,3 +102,22 @@ def test_resolver_empty_when_nothing_exists(tmp_path, monkeypatch):
     assert proc.returncode == 0
     assert proc.stdout.strip() == ""
     assert opencode_host.host_binary() is None
+
+
+def test_windows_nsis_candidates_are_resolved(monkeypatch, tmp_path):
+    """On Windows the verified NSIS channel's app dirs are the managed
+    binary home; resolution binds the CLI across processes."""
+    nsis = tmp_path / "LocalAppData" / "Programs" / "opencode"
+    nsis.mkdir(parents=True)
+    exe = nsis / "opencode.exe"
+    exe.write_text("#!/bin/sh\n")
+    exe.chmod(0o755)
+    import platform as platform_module
+
+    monkeypatch.setattr(platform_module, "system", lambda: "Windows")
+    monkeypatch.setattr(opencode_host.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(opencode_host.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    monkeypatch.delenv("OPENCODE_MANAGED_BIN", raising=False)
+    assert opencode_host.host_binary() == str(exe)
