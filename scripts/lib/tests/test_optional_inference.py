@@ -157,9 +157,7 @@ def _run_review_model_setup(tmp_path, **overrides):
     root = tmp_path
     root.joinpath("configs/opencode/ci").mkdir(parents=True)
     root.joinpath("configs/opencode/ci/opencode.json").write_text(
-        (ROOT / "configs/opencode/ci/opencode.json").read_text(
-            encoding="utf-8"
-        ),
+        (ROOT / "configs/opencode/ci/opencode.json").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     envfile = tmp_path / "github-env"
@@ -194,8 +192,7 @@ def _run_review_model_setup(tmp_path, **overrides):
         return result, {}, {}
     config = json.loads((tmp_path / "opencode-review-config.json").read_text())
     emitted = dict(
-        line.split("=", 1)
-        for line in outfile.read_text(encoding="utf-8").splitlines()
+        line.split("=", 1) for line in outfile.read_text(encoding="utf-8").splitlines()
     )
     return result, config, emitted
 
