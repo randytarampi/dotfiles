@@ -2403,6 +2403,76 @@ def test_app_key_provisioning_refuses_ambiguous_400_generate(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("strict", [False, True])
+def test_app_key_provisioning_persists_earlier_key_after_later_error(
+    tmp_path, monkeypatch
+):
+    generated = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=30):
+        if "/key/list" in url:
+            return {"keys": []}
+        if url.endswith("/key/generate"):
+            alias = payload["key_alias"]
+            generated.append(alias)
+            if alias == "pi":
+                raise urllib.error.HTTPError(
+                    url, 503, "Service Unavailable", None, None
+                )
+            return {"key": f"sk-generated-{alias}"}
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_MASTER_KEY='master'\n", encoding="utf-8")
+
+    CONFIGURE.provision_app_keys(
+        "master",
+        service_env,
+        "http://127.0.0.1:4000",
+        enforce_registry_gates=False,
+    )
+
+    assert generated[:2] == ["opencode", "pi"]
+    assert "LITELLM_OPENCODE_KEY=sk-generated-opencode" in service_env.read_text()
+    assert (tmp_path / "clients/opencode.key").read_text() == "sk-generated-opencode"
+    assert not (tmp_path / "clients/pi.key").exists()
+
+
+@pytest.mark.parametrize("unsafe_mode", [0o644, 0o666])
+def test_litellm_env_sync_refuses_world_readable_canonical_key(
+    tmp_path, unsafe_mode
+):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    clients = root / "clients"
+    clients.mkdir(parents=True, mode=0o700)
+    key_file = clients / "opencode.key"
+    key_file.write_text("sk-sensitive", encoding="utf-8")
+    key_file.chmod(unsafe_mode)
+    env_path = root / "service.env"
+    env_path.write_text(
+        "LITELLM_MASTER_KEY='sk-test-master-key-0123456789'\n",
+        encoding="utf-8",
+    )
+    before = env_path.read_bytes()
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(helper))}; "
+            f"litellm_service_env_sync {shlex.quote(str(env_path))}",
+        ],
+        env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "permissions" in result.stderr
+    assert "sk-sensitive" not in result.stderr
+    assert env_path.read_bytes() == before
+    assert key_file.stat().st_mode & 0o777 == unsafe_mode
+
+
 def test_app_key_provisioning_refuses_stranded_alias_without_remote_mutation(
     tmp_path, monkeypatch, strict
 ):
