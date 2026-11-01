@@ -73,16 +73,22 @@ fi
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
 # --background-subagents=yes enables background subagents during install
 # Pipe 'n' to skip the "Star the repo on GitHub?" prompt
+# OMO-Slim is the orchestrator (first manifest entry): a failed install is a
+# hard failure (missing required plugin), not a "may already be installed".
 info "Installing oh-my-opencode-slim..."
 OH_MY_PLUGIN="${PLUGIN_SPECS[0]}"
+PLUGIN_INSTALL_FAILED=0
 if command -v bun &>/dev/null; then
-  echo n | bunx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  OMO_INSTALLER=(bunx)
 else
-  echo n | npx "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null || warn "oh-my-opencode-slim install failed (may already be installed)"
+  OMO_INSTALLER=(npx)
 fi
-ok "oh-my-opencode-slim installed"
-
-# Plugin definitions matching ~/.config/opencode/opencode.json. The dedicated
+if echo n | "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null; then
+  ok "oh-my-opencode-slim installed"
+else
+  warn "oh-my-opencode-slim install failed"
+  PLUGIN_INSTALL_FAILED=1
+fi
 # oh-my installer above is the first manifest entry and is not an opencode plugin.
 # opencode plugin add <module> — installs the plugin in OpenCode v2
 PLUGINS=(
@@ -116,7 +122,6 @@ for plugin in cli_plugin_specs(sys.argv[1]):
 PY
 )
 
-PLUGIN_INSTALL_FAILED=0
 for plugin in "${CLI_PLUGIN_SPECS[@]}"; do
   if opencode plugin add "${plugin}" 2>/dev/null; then
     ok "opencode CLI plugin: ${plugin}"
@@ -129,19 +134,42 @@ if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
   die "One or more OpenCode CLI plugins failed to install"
 fi
 
+# Log the concrete resolved version per spec. `opencode plugin check` prints
+# e.g. "opencode-dcp 3.2.0 (current)"; the version token is the resolved
+# concrete version for a floating @latest alias (probed on the v2.2.5 CLI).
 for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
   if output="$(opencode plugin check "${plugin}" 2>&1)"; then
-    info "OpenCode plugin check ${plugin}: ${output}"
+    resolved_version="$(printf '%s\n' "${output}" | grep -E '\((current|check failed)\)' | tail -n 1 | awk '{print $2}')"
+    info "OpenCode plugin check ${plugin}: resolved=${resolved_version:-UNKNOWN}; ${output}"
+    if [[ -z "${resolved_version}" ]]; then
+      warn "OpenCode plugin check ${plugin} printed no concrete resolved version"
+      PLUGIN_INSTALL_FAILED=1
+    fi
   else
     warn "OpenCode plugin check ${plugin} (check failed): ${output}"
   fi
 done
+if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
+  die "One or more OpenCode plugin version checks failed"
+fi
 
 if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
   PLUGIN_UPDATE_FAILED=0
   for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
     if output="$(opencode plugin update "${plugin}" 2>&1)"; then
       info "OpenCode plugin update ${plugin}: ${output}"
+      # Refresh must actually converge: re-check and require (current).
+      if recheck="$(opencode plugin check "${plugin}" 2>&1)"; then
+        if [[ "${recheck}" != *"current"* ]]; then
+          warn "OpenCode plugin ${plugin} did not converge to (current) after update: ${recheck}"
+          PLUGIN_UPDATE_FAILED=1
+        else
+          info "OpenCode plugin recheck ${plugin}: ${recheck}"
+        fi
+      else
+        warn "OpenCode plugin recheck ${plugin} failed after update"
+        PLUGIN_UPDATE_FAILED=1
+      fi
     else
       warn "OpenCode plugin update ${plugin} failed: ${output}"
       PLUGIN_UPDATE_FAILED=1
