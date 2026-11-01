@@ -361,7 +361,7 @@ jobs:
                       free_candidates.append(name)
               if not free_candidates:
                   requested = "opencode"
-          if requested == "cloudflare":
+          if requested == "cloudflare" or "cloudflare" in free_candidates:
               account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
               if os.environ.get("HAS_CLOUDFLARE_KEY") == "true" and not re.fullmatch(r"[0-9a-fA-F]{32}", account):
                   raise SystemExit("Invalid Cloudflare account ID")
