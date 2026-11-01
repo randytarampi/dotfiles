@@ -6,7 +6,7 @@ Use this playbook when adding or changing models, switching tiers, or updating p
 
 ## November 2026 model-refresh validation
 
-The upstream `openai`, `$30`, and `$40` preset references are compared against `docs/presets/` in `alvinunreal/oh-my-opencode-slim`; this repository retains its own observer, librarian, three-seat council, credential and fallback contracts. The `$40` adaptation is deliberately named `omo-slim-fourty-dollars`, with the requested spelling. No OpenAI or Anthropic consumer subscription implies API entitlement.
+The upstream `openai`, `$30`, and `$40` preset references are compared against `docs/presets/` in `alvinunreal/oh-my-opencode-slim`; this repository retains its own observer, librarian, three-seat council, credential and fallback contracts. The `$40` adaptation is deliberately named `omo-slim-forty-dollars`, with the requested spelling. No OpenAI or Anthropic consumer subscription implies API entitlement.
 
 The static free-model entries introduced in November are *preferences only*: use the existing fresh-evidence resolver, exact upstream host, price provenance, tool/image capability and expiry checks. Do not interpret screenshots, model listings or HTTP 200 on `/models` as successful inference. An unqualified replacement must remain unavailable; never silently substitute paid or contributor-tier routes. Ollama Cloud MiMo and Kimi Junie groups likewise need authenticated primary and faster probes, including gateway twins.
 
