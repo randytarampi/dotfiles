@@ -27,6 +27,10 @@ from model_catalogues import (  # noqa: E402 -- scripts/lib bootstrap.
     MODEL_CATALOGUE_TIMEOUT,
     open_same_origin,
 )
+from provider_endpoints import (  # noqa: E402 -- scripts/lib bootstrap.
+    selected_optional_providers,
+    OPTIONAL_INFERENCE_PROVIDERS,
+)
 from litellm_aliases import (  # noqa: E402 -- scripts/lib bootstrap.
     LITELLM_ROUTED_PROVIDERS,
 )
@@ -341,7 +345,10 @@ def provider_key_available(key_env: str) -> bool:
 
 def build_provider_configs(cfg: dict, junie_key: str = "") -> dict:
     provider_configs = {}
+    optional = selected_optional_providers(os.environ)
     for name, definition in cfg.get("providers", {}).items():
+        if name in OPTIONAL_INFERENCE_PROVIDERS and name not in optional:
+            continue
         key_env = definition.get("apiKeyEnv", "")
         if name == "litellm":
             has_key = bool(junie_key)
@@ -390,6 +397,8 @@ def build_provider_configs(cfg: dict, junie_key: str = "") -> dict:
                 "LiteLLM Junie profile unavailable: private key or safe loopback endpoint missing"
             )
             continue
+        if name == "cloudflare":
+            base_url = optional["cloudflare"]
         base_url = normalize_endpoint(base_url, definition.get("apiType", ""))
         provider_config = {
             "baseUrl": base_url,
@@ -987,6 +996,14 @@ def main():
     providers = build_provider_configs(cfg, junie_key)
     use_litellm = litellm_gate and bool(junie_key) and "litellm" in providers
     groups = select_model_groups(cfg.get("groups", {}), use_litellm)
+    if not use_litellm:
+        available_optional = set(selected_optional_providers(os.environ))
+        groups = {
+            name: group
+            for name, group in groups.items()
+            if group.get("provider") not in OPTIONAL_INFERENCE_PROVIDERS
+            or group["provider"] in available_optional
+        }
     if litellm_gate and not use_litellm:
         groups = {
             name: group
