@@ -5,7 +5,7 @@
     "oh-my-opencode-slim@latest",
     "@tarquinen/opencode-dcp@latest",
     "@plannotator/opencode@latest",
-    "github:AxeForce/opencode-vibeguard-v2#934823e5500f6af8270a45ba2d2f245bc6e4faa4",
+    "github:AxeForce/opencode-vibeguard-v2#main",
     "@cheesecodestudio/opencode-tokenscope-v2@latest",
     "opencode-mem@latest"
   ],

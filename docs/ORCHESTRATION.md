@@ -384,6 +384,8 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper.cpp, sox, piper-tts, models) |
 | `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE` | 0 | Script 07 opt-in refresh: runs `opencode plugin update` per installed spec in addition to the default non-mutating `opencode plugin check` (check runs always and fails closed when it cannot resolve a concrete version) |
 
+The explicit `scripts/update-system.sh` flow refreshes OpenCode plugins immediately after a successful OpenCode CLI upgrade. Ordinary config regeneration checks installed versions but does not refresh them; the manual `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1` gate also requests a refresh. The gated `opencode-mem` plugin remains excluded unless `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`. Per owner decision D2 (2026-11-01), VibeGuard follows floating Git `#main`; this has no audited-pin guarantee and may change without a reviewed immutable commit.
+
 ## Dependency Ordering
 
 ```mermaid
