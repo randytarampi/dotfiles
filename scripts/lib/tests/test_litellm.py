@@ -2400,44 +2400,50 @@ def test_app_key_provisioning_treats_400_generate_as_alias_exists(
     )
 
 
-def test_app_key_provisioning_recovers_stranded_alias_and_materializes_key(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("strict", [False, True])
+def test_app_key_provisioning_refuses_stranded_alias_without_remote_mutation(
+    tmp_path, monkeypatch, strict
 ):
     requests = []
 
     def fake_request(url, method, master_key, payload=None, timeout=30):
-        requests.append((url, method, payload, timeout))
-        if "/health/" in url:
-            return {"status": "healthy"}
+        requests.append((url, method, payload))
         if "/key/list" in url:
             return {"keys": [{"key_alias": "openwebui", "token": "hash-openwebui"}]}
-        if url.endswith("/key/delete"):
-            assert payload == {"keys": ["hash-openwebui"]}
-            return {"deleted_keys": 1}
-        if url.endswith("/key/generate"):
-            return {"key": "sk-regenerated-openwebui"}
-        return {"keys": []}
+        return {"status": "healthy"}
 
     monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
     service_env = tmp_path / "service.env"
-    service_env.write_text("LITELLM_MASTER_KEY='master'\n")
-    CONFIGURE.provision_app_keys(
-        "master", service_env, "http://127.0.0.1:4000", enforce_registry_gates=False
+    service_env.write_text("LITELLM_MASTER_KEY='master'\\n")
+    before = service_env.read_bytes()
+    assert not CONFIGURE.provision_app_keys(
+        "master", service_env, "http://127.0.0.1:4000",
+        strict=strict, enforce_registry_gates=False,
     )
-    recovery_calls = [
-        url.removeprefix("http://127.0.0.1:4000")
-        for url, method, payload, _timeout in requests
-        if method == "POST"
-        and (
-            payload.get("keys") == ["hash-openwebui"]
-            or payload.get("key_alias") == "openwebui"
-        )
-    ]
-    assert recovery_calls == ["/key/delete", "/key/generate"]
-    client_key = tmp_path / "clients/openwebui.key"
-    assert client_key.read_text() == "sk-regenerated-openwebui"
-    assert client_key.stat().st_mode & 0o777 == 0o600
-    assert all(timeout == 30 for *_, timeout in requests)
+    assert not any(method == "POST" for _, method, _ in requests)
+    assert service_env.read_bytes() == before
+    assert not (tmp_path / "clients/openwebui.key").exists()
+
+
+def test_app_key_duplicate_alias_race_refuses_to_delete(tmp_path, monkeypatch):
+    requests = []
+
+    def fake_request(url, method, master_key, payload=None, timeout=30):
+        requests.append((url, method, payload))
+        if "/key/list" in url:
+            return {"keys": [{"key_alias": "openwebui", "token": "hash"}]} if len(requests) > 2 else {"keys": []}
+        if url.endswith("/key/generate"):
+            raise urllib.error.HTTPError(url, 400, "alias exists", None, None)
+        return {"status": "healthy"}
+
+    monkeypatch.setattr(CONFIGURE, "_request_json", fake_request)
+    service_env = tmp_path / "service.env"
+    service_env.write_text("LITELLM_MASTER_KEY='master'\\n")
+    assert not CONFIGURE.provision_app_keys(
+        "master", service_env, "http://127.0.0.1:4000",
+        strict=True, enforce_registry_gates=False,
+    )
+    assert not any(url.endswith("/key/delete") for url, _, _ in requests)
 
 
 def test_app_key_provisioning_never_deletes_alias_with_local_key(tmp_path, monkeypatch):
