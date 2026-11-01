@@ -13,7 +13,6 @@ from provider_endpoints import (
     selected_optional_providers,
 )
 
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -39,9 +38,7 @@ def test_optional_providers_ignore_missing_credentials_without_poisoning_others(
 )
 def test_optional_provider_gate_rejects_ambiguous_selectors(selector):
     with pytest.raises(ValueError):
-        selected_optional_providers(
-            {"DOTFILES_OPTIONAL_INFERENCE_PROVIDERS": selector}
-        )
+        selected_optional_providers({"DOTFILES_OPTIONAL_INFERENCE_PROVIDERS": selector})
 
 
 def test_cloudflare_endpoint_is_account_bound_and_constant_origin():
@@ -53,8 +50,7 @@ def test_cloudflare_endpoint_is_account_bound_and_constant_origin():
     }
     assert selected_optional_providers(env) == {
         "cloudflare": (
-            "https://api.cloudflare.com/client/v4/accounts/"
-            f"{account}/ai/v1"
+            "https://api.cloudflare.com/client/v4/accounts/" f"{account}/ai/v1"
         )
     }
     assert provider_base_url("cloudflare", env).startswith(
