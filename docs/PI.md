@@ -71,8 +71,34 @@ remains built-in Pi configuration; the installed adapter package provides no
 documented project-level adapter-file equivalent.
 
 Packages include `pi-web-access`, `pi-subagents`, `@plannotator/pi-extension`,
-and the repo's configured `rpiv-*` extensions. Skills are linked into
+the repo's configured `rpiv-*` extensions, and `@xzzpig/pi-vibeguard`. Skills are linked into
 `~/.pi/agent/skills` by the shared reconciler.
+
+### VibeGuard
+
+Pi installs the upstream extension using `pi install npm:@xzzpig/pi-vibeguard`.
+Its README describes pre-provider redaction as “Replaces configured sensitive
+strings with placeholders before requests are sent to the LLM provider,” then
+restoration in model output and before tool execution. The provider is intended
+not to see plaintext secrets; runtime verification is reserved for the
+machine-phase.
+
+The managed global config is `~/.pi/agent/vibeguard.config.json`, copied from
+`configs/pi/vibeguard.config.json` by `configure-pi.py`. Project mode writes
+`.pi/vibeguard.config.json` (not `.pi/agent/`); a project-root
+`vibeguard.config.json` takes precedence and is preserved. The extension's
+`PI_VIBEGUARD_CONFIG` environment override takes precedence over both managed
+locations, in which case the writer skips its VibeGuard config copy. Verify the
+effective file using the lookup order documented by the extension. Each managed
+copy uses a private atomic write and backs up an existing target unless
+`--no-backup` is selected. The config contains audited
+regex and built-in shapes, not raw secrets; `patterns.keywords` stays empty to
+avoid duplicating secret values outside `~/.env`. The extension documents the
+`/vibeguard:*` TUI command family.
+
+VibeGuard's `__VG_` placeholder family aligns with OpenCode's VibeGuard plugin,
+but this does not establish interchangeability with
+`@taehwandev/vibeguard`'s separate `rulesPath` format.
 
 ### Skill collision status
 
@@ -85,8 +111,9 @@ those descriptions are therefore limitations rather than repo changes.
 
 ### Package decisions
 
-`pi-edit-session-in-place` is the only optional Pi package approved for this
-configuration. The rewind hook is not enabled. The following packages are
+`@xzzpig/pi-vibeguard` is approved baseline security parity, not an optional UI
+extension. `pi-edit-session-in-place` is the optional UI package. The rewind
+hook is not enabled. The following packages are
 explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`,
 `pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and
 `pi-model-switch`.
@@ -96,6 +123,10 @@ pi
 DOTFILES_RUN_PI_SETUP=1 make configure
 make verify
 ```
+
+The managed package reconciler installs missing packages only; it does not
+refresh an already installed `@latest` package. To update installed Pi packages,
+run Pi's `pi update` command explicitly, then rerun configuration as needed.
 
 Installation runs in phase 10 and configuration in phase 18, after OpenCode.
 Both are opt-in through `DOTFILES_RUN_PI_SETUP=1`.

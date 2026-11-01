@@ -16,8 +16,8 @@ bridge or compatibility layer is used.
 | opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (17) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
 | codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
 | hermes | Inspected custom-provider schema; opt-in LiteLLM scaffold only | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not qualified | not assessed | not assessed |
-| junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
-| pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin |
+| junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes; no verified redaction hooks (UNKNOWN) | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
+| pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin; VibeGuard baseline redaction, optional UI extension |
 | cortex | Snowflake Cortex only | native Cortex MCP (`cortex mcp add`) | native `cortex acp serve` | yes, `~/.snowflake/cortex/skills` | no | yes, `~/.snowflake/cortex/AGENTS.md` | no | N/A | no local opt-out | none | env-vars |
 | claude | Anthropic and compatible `ANTHROPIC_BASE_URL` endpoints | native Claude configuration | `claude-agent-acp` adapter | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | `@claude--local` | env var | stt-only | env-vars |
 | Claude Desktop | Anthropic or explicitly applied third-party gateway (Chat/Cowork/Code) | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
@@ -67,6 +67,10 @@ tracked separately; this is not the Claude CLI environment-variable route.
 | Ollama via Vulkan | Planned; serving and discovery verification only. Not benchmarked. |
 
 ## Configuration notes
+
+- The opt-in VibeGuard scanner pilot is exposed as `make vibeguard-audit`; its
+  wrapper pins the scanner and rejects mutating flags. It is separate from
+  request-time redaction and does not replace it.
 
 - Providers use each tool's native environment/config format. The OpenCode tier
   registry is reused by Pi, Junie, and local fallback generation where useful.

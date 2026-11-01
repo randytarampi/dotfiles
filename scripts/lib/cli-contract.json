@@ -1012,6 +1012,14 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/check-vibeguard-audit.py",
+      "capabilities": ["public"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--full", "--changed-only", "--strict"],
+      "positional_operand": "target and audit-mode extras",
+      "child_scripts": []
+    },
+    {
       "path": "scripts/cleanup-project.py",
       "capabilities": [
         "public",
