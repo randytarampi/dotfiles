@@ -2,6 +2,14 @@
 > LiteLLM gateway configuration, keys, and environment contract.
 > See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
 
+
+Four optional providers (Groq, Mistral, Cloudflare Workers AI and NVIDIA
+NIM) may be enabled with `DOTFILES_OPTIONAL_INFERENCE_PROVIDERS`. Their
+curated aliases are **full-scope only** until recurring-zero-charge
+entitlement is positively verified; the default `free` scope stays strict.
+Cloudflare uses a validated account-specific URL. See
+[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+
 ## Standalone Claude CLI
 
 `scripts/claude-litellm` is an explicit standalone launcher; it does not
