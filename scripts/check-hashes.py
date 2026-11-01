@@ -44,6 +44,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/lib/poetry_readiness.py",  # Makefile-only helper; not deployed config input
     "scripts/check-model-drift.py",  # Makefile-only verification tool
+    "scripts/check-vibeguard-audit.py",  # Opt-in manual audit pilot; never a deployed config input
     "scripts/litellm-costs.py",  # Makefile-only verification tool
     "scripts/lib/litellm_cost.py",  # Library of the costs CLI; not deployed config input
     "scripts/litellm-oauth.py",  # Interactive one-time OAuth bootstrap; mutates ~/.config/litellm caches, not deployed config
