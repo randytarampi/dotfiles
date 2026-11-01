@@ -316,9 +316,6 @@ jobs:
           HAS_CLOUDFLARE_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
           HAS_NVIDIA_NIM_KEY: ${{ secrets.NVIDIA_NIM_API_KEY != '' }}
           HAS_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY != '' }}
-          REVIEW_FREE_MISTRAL_APPROVED: ${{ vars.REVIEW_FREE_MISTRAL_APPROVED }}
-          REVIEW_FREE_CLOUDFLARE_APPROVED: ${{ vars.REVIEW_FREE_CLOUDFLARE_APPROVED }}
-          REVIEW_FREE_GROQ_APPROVED: ${{ vars.REVIEW_FREE_GROQ_APPROVED }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
@@ -344,20 +341,19 @@ jobs:
           if requested not in ("free", "opencode", "groq", "mistral", "cloudflare", "nvidia-nim"):
               raise SystemExit("Unsupported trusted review inference provider")
           selected = "opencode/big-pickle"
-          # The free pool is evidence-gated by owner Actions variables.
-          # With at least two eligible deployments, LiteLLM's native Router
-          # owns retries/cooldowns and cross-provider failover at request time.
+          # Include available provider keys without a separate owner-approval
+          # variable. Credential presence is not proof of zero-cost entitlement:
+          # provider billing and quota are governed by each account.
+          # With two or more deployments, LiteLLM owns native rate-limit
+          # retries, cooldowns, and cross-provider failover.
           free_candidates = []
           if requested == "free":
-              for name, available, approved in (
-                  ("mistral", "HAS_MISTRAL_KEY", "REVIEW_FREE_MISTRAL_APPROVED"),
-                  ("cloudflare", "HAS_CLOUDFLARE_KEY", "REVIEW_FREE_CLOUDFLARE_APPROVED"),
-                  ("groq", "HAS_GROQ_KEY", "REVIEW_FREE_GROQ_APPROVED"),
+              for name, available in (
+                  ("mistral", "HAS_MISTRAL_KEY"),
+                  ("cloudflare", "HAS_CLOUDFLARE_KEY"),
+                  ("groq", "HAS_GROQ_KEY"),
               ):
-                  if (
-                      os.environ.get(available) == "true"
-                      and os.environ.get(approved, "").strip().lower() == "true"
-                  ):
+                  if os.environ.get(available) == "true":
                       free_candidates.append(name)
               if not free_candidates:
                   requested = "opencode"
