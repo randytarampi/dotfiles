@@ -1,5 +1,11 @@
 # Pi Coding Agent
 
+
+Pi supports the optional Groq, Mistral, Cloudflare Workers AI and NVIDIA
+NIM direct provider pool when enabled and credentialed, or advertised
+LiteLLM aliases in proxy mode. Missing credentials omit the optional model
+families. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+
 Pi is earendil-works' terminal coding-agent harness: multi-provider,
 extensible, and configured from the shared OpenCode tier registry.
 
