@@ -76,8 +76,6 @@ on:
         required: false
       CLOUDFLARE_API_TOKEN:
         required: false
-      CLOUDFLARE_ACCOUNT_ID:
-        required: false
       NVIDIA_NIM_API_KEY:
         required: false
       JUNIE_APP_ID:
@@ -105,6 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       agents: ${{ steps.parse.outputs.agents }}
+      inference_provider: ${{ steps.parse.outputs.inference_provider }}
       prompt: ${{ steps.parse.outputs.prompt }}
       pr_number: ${{ steps.parse.outputs.pr_number }}
       tokens: ${{ steps.parse.outputs.tokens }}
@@ -117,6 +116,7 @@ jobs:
           INPUT_PROMPT: ${{ inputs.prompt }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_TOKENS: ${{ inputs.trigger_tokens }}
+          DEFAULT_INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
         run: |
           set -euo pipefail
           if [[ -n "${EVENT_JSON}" ]]; then
@@ -206,8 +206,27 @@ jobs:
               done
             fi
           fi
+          # Provider hints are accepted only for already-authorized review
+          # comments; untrusted PR content cannot select a secret-bearing route.
+          provider="${DEFAULT_INFERENCE_PROVIDER}"
+          if [[ -n "${EVENT_JSON}" ]] && jq -e '.comment != null' >/dev/null <<<"${EVENT_JSON}"; then
+            body="$(jq -r '.comment.body // ""' <<<"${EVENT_JSON}")"
+            if [[ "${agents}" == *opencode* ]]; then
+              matches="$(printf '%s\n' "${body}" | grep -Eo '(^|[[:space:]])@(groq|mistral|cloudflare|nim)([[:space:],]|$)' | sed -E 's/^[[:space:]]*@//; s/[[:space:],]*$//' | sort -u || true)"
+              count="$(printf '%s\n' "${matches}" | grep -c . || true)"
+              if [[ "${count}" -gt 1 ]]; then
+                echo "Ambiguous OpenCode review provider tags" >&2
+                exit 1
+              fi
+              if [[ "${count}" -eq 1 ]]; then
+                provider="${matches}"
+                [[ "${provider}" == nim ]] && provider=nvidia-nim
+              fi
+            fi
+          fi
           delim="PROMPT_$(openssl rand -hex 8 2>/dev/null || echo "${RANDOM}${RANDOM}")"
           {
+            printf 'inference_provider=%s\n' "${provider}"
             printf 'agents=%s\n' "${agents}"
             printf 'pr_number=%s\n' "${pr_number}"
             printf 'tokens=%s\n' "${tokens}"
@@ -278,13 +297,13 @@ jobs:
       - name: Configure read-only OpenCode plan agent
         id: review_model
         env:
-          REVIEW_INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
+          REVIEW_INFERENCE_PROVIDER: ${{ needs.parse.outputs.inference_provider }}
           REVIEW_ALLOW_NVIDIA: ${{ inputs.allow_nvidia_review }}
           HAS_GROQ_KEY: ${{ secrets.GROQ_API_KEY != '' }}
           HAS_MISTRAL_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
           HAS_CLOUDFLARE_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
           HAS_NVIDIA_NIM_KEY: ${{ secrets.NVIDIA_NIM_API_KEY != '' }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -361,10 +380,10 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GROQ_API_KEY: ${{ inputs.inference_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
-          MISTRAL_API_KEY: ${{ inputs.inference_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
-          CLOUDFLARE_API_TOKEN: ${{ inputs.inference_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
-          NVIDIA_NIM_API_KEY: ${{ inputs.inference_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
+          GROQ_API_KEY: ${{ needs.parse.outputs.inference_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
+          MISTRAL_API_KEY: ${{ needs.parse.outputs.inference_provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ needs.parse.outputs.inference_provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          NVIDIA_NIM_API_KEY: ${{ needs.parse.outputs.inference_provider == 'nvidia-nim' && inputs.allow_nvidia_review && secrets.NVIDIA_NIM_API_KEY || '' }}
         with:
           model: ${{ steps.review_model.outputs.model }}
           agent: plan
