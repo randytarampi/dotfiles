@@ -22,6 +22,8 @@ Tests override ``resolve_opencode_host`` (see conftest's autouse fixture).
 
 from __future__ import annotations
 
+import os
+import platform
 import re
 import shutil
 import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-resolved binary.
@@ -29,17 +31,35 @@ import subprocess  # nosec B404 - fixed "--version" probe of a shutil.which-reso
 _VERSION_RE = re.compile(r"(?<![A-Za-z0-9.+-])v?(\d+\.\d+\.\d+)(?![A-Za-z0-9.+-])")
 
 
+def _windows_nsis_candidates(binary: str) -> list[str]:
+    """Official-NSIS install locations of the Windows CLI binary."""
+    if platform.system() != "Windows":
+        return []
+    local = os.environ.get("LOCALAPPDATA", "")
+    program_files = os.environ.get("ProgramFiles", "")
+    win_bin = f"{binary}.exe" if not binary.endswith(".exe") else binary
+    return [
+        p
+        for p in (
+            os.path.join(local, "Programs", "opencode", win_bin) if local else "",
+            os.path.join(local, "Programs", "OpenCode", win_bin) if local else "",
+            os.path.join(program_files, "OpenCode", win_bin) if program_files else "",
+        )
+        if p
+    ]
+
+
 def host_binary(binary: str = "opencode") -> str | None:
     """Canonical managed-executable resolution.
 
     Precedence mirrors scripts/lib/opencode_bin.sh: an explicit
     OPENCODE_MANAGED_BIN override wins; then the managed install directory
-    ($HOME/.opencode/bin/<name> — the official v2 installer's destination);
-    then the PATH fallback. Non-login consumers (chezmoi children, launchd
+    ($HOME/.opencode/bin/<name> — the official v2 installer's destination on
+    macOS/Linux, and the verified NSIS app dirs on Windows); then the PATH
+    fallback. Non-login consumers (chezmoi children, launchd
     jobs, doctor runs) must never have a stale PATH v1 shadow a managed v2
     binary.
     """
-    import os
 
     env_override = os.environ.get("OPENCODE_MANAGED_BIN")
     candidates = []
@@ -47,6 +67,7 @@ def host_binary(binary: str = "opencode") -> str | None:
         candidates.append(env_override)
     managed = os.path.join(os.path.expanduser("~"), ".opencode", "bin", binary)
     candidates.append(managed)
+    candidates.extend(_windows_nsis_candidates(binary))
     resolved = shutil.which(binary)
     if resolved:
         candidates.append(resolved)
