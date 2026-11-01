@@ -311,7 +311,9 @@ class TierRegistryTests(unittest.TestCase):
         self.assertEqual(
             preset["observer"]["model"], "opencode/nemotron-3.5-super-vl-free"
         )
-        self.assertEqual(preset["designer"]["model"], "opencode/deepseek-v4.1-flash-free")
+        self.assertEqual(
+            preset["designer"]["model"], "opencode/deepseek-v4.1-flash-free"
+        )
         self.assertEqual(preset["fixer"]["model"], "opencode/deepseek-v4.1-flash-free")
         council = data["_tiers"]["omo-slim-opencode-zen-free"]["council"]["presets"][
             "omo-slim-opencode-zen-free"
@@ -321,7 +323,9 @@ class TierRegistryTests(unittest.TestCase):
         self.assertTrue(
             all(
                 not chain
-                for chain in data["_tiers"]["omo-slim-opencode-zen-free"]["fallback"].values()
+                for chain in data["_tiers"]["omo-slim-opencode-zen-free"][
+                    "fallback"
+                ].values()
             )
         )
 
