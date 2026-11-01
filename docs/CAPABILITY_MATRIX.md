@@ -6,7 +6,7 @@ bridge or compatibility layer is used.
 
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (14) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
+| opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (17) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
 | codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
 | hermes | Inspected custom-provider schema; opt-in LiteLLM scaffold only | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not qualified | not assessed | not assessed |
 | junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
@@ -29,7 +29,7 @@ tracked separately; this is not the Claude CLI environment-variable route.
 
 ## Tier families and service lanes
 
-- The registry contains 14 tiers: three local resolution profiles
+- The registry contains 17 tiers: three local resolution profiles
   (`local-quiet`, `local`, `local-loud`) plus standalone `local-solo`; see
   [TIERS.md](TIERS.md) for the canonical table. The verifier derives the count
   from the registry.
