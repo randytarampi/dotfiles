@@ -316,9 +316,7 @@ def test_review_free_router_includes_approved_cloudflare_with_account_url(tmp_pa
     )["model_list"]
     assert len(rows) == 2
     assert rows[1]["litellm_params"]["model"].startswith("cloudflare/")
-    assert rows[1]["litellm_params"]["api_base"].endswith(
-        f"/accounts/{account}/ai/v1"
-    )
+    assert rows[1]["litellm_params"]["api_base"].endswith(f"/accounts/{account}/ai/v1")
 
 
 def test_review_free_invalid_cloudflare_account_fails_closed(tmp_path):
