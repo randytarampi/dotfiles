@@ -88,7 +88,6 @@ def test_real_consumer_drift_is_detected(tmp_path, filename, parser, replacement
     )
     assert mutated.read_text(encoding="utf-8") != text  # mutation must apply
     manifest = checker.active_plugin_specs()
-    expected = manifest
     actual = checker.parse_config_plugins(mutated)
     assert actual != manifest
 
