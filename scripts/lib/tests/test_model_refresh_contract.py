@@ -18,6 +18,8 @@ def test_terra_and_upstream_translations():
     slim = load("configs/opencode/oh-my-opencode-slim.json")
     p = slim["presets"]
     assert p["plus"]["orchestrator"]["model"] == "openai/gpt-6.1-terra"
+    assert p["plus"]["orchestrator"]["variant"] == "high"
+    assert p["plus-anthropic"]["orchestrator"]["variant"] == "high"
     assert p["plus"]["oracle"]["model"] == "openai/gpt-6.1-sol"
     assert p["omo-slim-openai"]["orchestrator"]["variant"] == "medium"
     assert p["omo-slim-openai"]["fixer"]["model"] == "openai/gpt-6.1-sol"
