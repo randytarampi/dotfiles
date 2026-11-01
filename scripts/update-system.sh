@@ -155,17 +155,21 @@ else
   skipped_lanes+=("pi")
 fi
 
-if command -v opencode >/dev/null 2>&1; then
-  run_update "opencode" opencode upgrade
-  if [[ "$failures" -eq 0 ]]; then
-    if ! DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
-      chezmoi execute-template --source "$(dirname "$SCRIPT_DIR")" \
-      <"$SCRIPT_DIR/../.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl" | bash; then
-      failures=$((failures + 1))
-      failed_lanes+=("opencode plugins")
-    else
-      ran_lanes+=("opencode plugins")
-    fi
+if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" == "1" ]]; then
+  if ! "$SCRIPT_DIR/install-opencode-v2.sh"; then
+    failures=$((failures + 1))
+    failed_lanes+=("opencode install/verify")
+  elif ! opencode upgrade; then
+    failures=$((failures + 1))
+    failed_lanes+=("opencode upgrade")
+  elif ! DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
+    chezmoi execute-template --source "$(dirname "$SCRIPT_DIR")" \
+    <"$SCRIPT_DIR/../.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl" | bash; then
+    failures=$((failures + 1))
+    failed_lanes+=("opencode plugins")
+  else
+    ran_lanes+=("opencode")
+    ran_lanes+=("opencode plugins")
   fi
 else
   skipped_lanes+=("opencode")

@@ -105,3 +105,6 @@ if command -v jenv &>/dev/null; then
   # shellcheck disable=SC2155
   export JAVA_HOME="$(jenv prefix)/"
 fi
+
+# OpenCode's managed v2 install must win over package-manager leftovers.
+export PATH="$HOME/.opencode/bin${PATH+:$PATH}"

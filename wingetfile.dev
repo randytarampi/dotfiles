@@ -33,3 +33,4 @@ koalaman.shellcheck
 mvdan.shfmt
 # Cross-ref: brew 'stripe-cli'
 Stripe.StripeCli
+# OpenCode is provisioned via the official Windows NSIS desktop installers (x64 / aarch64), not winget.

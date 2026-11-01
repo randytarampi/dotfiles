@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
+# scripts/install-opencode-v2.sh: {{ include "scripts/install-opencode-v2.sh" | sha256sum }}
+# dot_dotfiles/shell/paths.sh: {{ include "dot_dotfiles/shell/paths.sh" | sha256sum }}
+# scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
+
+bash "{{ .chezmoi.sourceDir }}/scripts/install-opencode-v2.sh"
