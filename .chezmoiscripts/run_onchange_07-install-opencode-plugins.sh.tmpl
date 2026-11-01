@@ -3,6 +3,7 @@ set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_TOOLS_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_VOICE_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_UPDATE_SYSTEM_SETUP" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
@@ -97,7 +98,6 @@ for plugin in "${PLUGIN_SPECS[@]}"; do
   [[ "$plugin" == "$OH_MY_PLUGIN" ]] || PLUGINS+=("$plugin")
 done
 
-PLUGIN_INSTALL_FAILED=0
 for plugin in "${PLUGINS[@]}"; do
   if opencode plugin add "${plugin}" 2>/dev/null; then
     ok "opencode plugin: ${plugin}"
@@ -139,7 +139,7 @@ fi
 # concrete version for a floating @latest alias (probed on the v2.2.5 CLI).
 for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
   if output="$(opencode plugin check "${plugin}" 2>&1)"; then
-    resolved_version="$(printf '%s\n' "${output}" | grep -E '\((current|check failed)\)' | tail -n 1 | awk '{print $2}')"
+    resolved_version="$(printf '%s\n' "${output}" | python3 -c 'import re,sys; text=sys.stdin.read(); matches=re.findall(r"(?:^|\s)([^\s()]+)\s+([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)\s+\((?:current|latest)\)(?=$|\s)", text, re.M); print(matches[-1][1] if matches else "")')"
     info "OpenCode plugin check ${plugin}: resolved=${resolved_version:-UNKNOWN}; ${output}"
     if [[ -z "${resolved_version}" ]]; then
       warn "OpenCode plugin check ${plugin} printed no concrete resolved version"
@@ -147,6 +147,7 @@ for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
     fi
   else
     warn "OpenCode plugin check ${plugin} (check failed): ${output}"
+    PLUGIN_INSTALL_FAILED=1
   fi
 done
 if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
@@ -160,7 +161,7 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
       info "OpenCode plugin update ${plugin}: ${output}"
       # Refresh must actually converge: re-check and require (current).
       if recheck="$(opencode plugin check "${plugin}" 2>&1)"; then
-        if [[ "${recheck}" != *"current"* ]]; then
+        if ! printf '%s\n' "${recheck}" | python3 -c 'import re,sys; sys.exit(0 if re.search(r"\([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)? (?:current|latest)\)", sys.stdin.read()) else 1)'; then
           warn "OpenCode plugin ${plugin} did not converge to (current) after update: ${recheck}"
           PLUGIN_UPDATE_FAILED=1
         else
