@@ -4,6 +4,7 @@
 import argparse, copy, json, os, shlex, shutil, subprocess, sys
 from pathlib import Path
 import stat
+import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
@@ -63,6 +64,7 @@ _BUILTIN_PACKAGES = frozenset()
 
 ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
+VIBEGUARD_CONFIG = ROOT / "configs/pi/vibeguard.config.json"
 # Map OMO-Slim preset roles to the matching pi-subagents built-in. The six
 # built-ins (scout, researcher, worker, reviewer, oracle, delegate) already
 # carry the prompt, tools, and thinking; we only pin their model via
@@ -385,6 +387,34 @@ def _install_package(pkg, dry_run, mode):
         logger.warning("Failed to install %s: %s", source, result.stderr.strip())
     else:
         logger.info("Installed package: %s", source)
+
+
+def _copy_vibeguard_config(target, *, dry_run=False, no_backup=False):
+    target = Path(target)
+    if dry_run:
+        logger.info("Would copy %s to %s", VIBEGUARD_CONFIG, target)
+        return
+    if target.exists() and not no_backup:
+        backup_file(str(target), enabled=True)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(VIBEGUARD_CONFIG.read_bytes())
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _ensure_packages(packages, dry_run=False, mode="global"):
@@ -1114,6 +1144,7 @@ def main():
             "npm:@juicesharp/rpiv-ask-user-question",
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
+            "npm:@xzzpig/pi-vibeguard",
             "npm:pi-edit-session-in-place",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
@@ -1373,6 +1404,11 @@ def main():
         if path.exists() and not args.no_backup:
             backup_file(str(path), enabled=True)
         write_text_file(str(path), text, backup=False)
+    _copy_vibeguard_config(
+        out / "vibeguard.config.json",
+        dry_run=args.dry_run,
+        no_backup=args.no_backup,
+    )
     # Remove the stub agents/<role>.md (and .bak) files a previous run
     # generated; they shadow the pi-subagents built-ins by name, so a
     # leftover stub would override the real built-in. Only files bearing
