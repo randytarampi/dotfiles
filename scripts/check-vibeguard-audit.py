@@ -6,7 +6,7 @@ that exact pin only after reviewing and validating a newer upstream release.
 """
 
 import argparse
-import subprocess
+import subprocess  # nosec B404 - pinned-package audit wrapper; fixed argv surface.
 import sys
 from pathlib import Path
 
@@ -72,7 +72,7 @@ def main(argv=None):
     target = args.target
     if target is None:
         try:
-            root = subprocess.run(
+            root = subprocess.run(  # nosec B603, B607 - literal argv resolved from PATH; read-only helper.
                 ["git", "rev-parse", "--show-toplevel"],
                 check=True,
                 capture_output=True,
@@ -81,7 +81,7 @@ def main(argv=None):
             target = root or str(Path.cwd())
         except (OSError, subprocess.CalledProcessError):
             target = str(Path.cwd())
-    return subprocess.run(
+    return subprocess.run(  # nosec B603, B607 - literal npx argv; args validated before parse and by contract.
         build_command(target, args.full, args.changed_only, args.strict)
     ).returncode
 

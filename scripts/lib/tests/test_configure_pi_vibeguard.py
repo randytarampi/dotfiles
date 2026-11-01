@@ -1,10 +1,6 @@
 import importlib.util
 import json
-import os
-import sys
 from pathlib import Path
-
-import pytest
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parents[2]
