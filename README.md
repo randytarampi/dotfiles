@@ -588,7 +588,7 @@ Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to om
 
 No per-model config needed — the plugin reads context windows from provider configs.
 
-**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. On OpenCode v2 the panel loads from the `opencode.json` plugins manifest (registered by `scripts/configure-opencode-dcp.py` removals only; see `docs/DCP.md`). Core compression loads from the same `opencode.json`.
+**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. On OpenCode v2 the panel loads from the `opencode.json` plugins manifest (registration owned by the manifest; `scripts/configure-opencode-dcp.py` only removes stale `tui.json` entries, conditionally on the registration being present). Core compression loads from the same `opencode.json`. See `docs/DCP.md`.
 
 ### Voice Plugin (opencode-voice)
 

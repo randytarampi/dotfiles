@@ -17,7 +17,12 @@ OpenCode voice support is provided by [`@bojackduy/opencode-voice`](https://gith
 
 ## Voice Config Generation
 
-`scripts/configure-opencode-voice.py` writes `~/.config/opencode/cli.json` with a tier-aware voice plugin entry of the form `{"package": "@bojackduy/opencode-voice@latest", "options": {…}}`. It merges with any pre-existing `cli.json` (including entries upstream migrates from `tui.json`), preserves every unrelated entry, and — only after a successful write — removes the voice entries it previously managed from `tui.json` (keeping unrelated keys). It is called automatically by `configure-opencode.py` after tier switching.
+`scripts/configure-opencode-voice.py` writes `~/.config/opencode/cli.json` with a tier-aware voice plugin entry of the form `{"package": "@bojackduy/opencode-voice@latest", "options": {…}}`. It merges with any pre-existing `cli.json` (including entries upstream migrates from `tui.json`, and both the entry-array and the `{plugins: [...]}` object root upstream consumes), preserves every unrelated entry, and preserves unknown option keys the user set (e.g. `sttAutoSubmit`, `ttsVoice`). It is called automatically by `configure-opencode.py` after tier switching.
+
+Two transition guarantees:
+
+- **Creation is deferred**: when `cli.json` does not exist yet and the tier resolution produced no voice route, the writer creates nothing — upstream's first-start migration of supported `tui.json` settings only runs while `cli.json` is absent, and an empty placeholder would strand them. The file appears once a route resolves (or on the next run after an upstream migration).
+- **tui.json clean-up is conditional**: only after a successful cli.json write with a route actually installed, only the writer's own managed entries are removed (the current spec plus the previously managed `@renjfk/opencode-voice`), never unrelated keys or the file itself.
 
 | Tier | Voice LLM | STT Backend |
 |------|-----------|-------------|
