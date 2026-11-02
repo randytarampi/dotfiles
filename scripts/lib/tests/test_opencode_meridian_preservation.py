@@ -85,6 +85,26 @@ def test_directive_and_package_forms_match(tmp_path):
     assert configure_opencode.meridian_preserved_entries(str(tmp_path)) == forms
 
 
+def test_preserves_meridian_setup_v2_cli_path(tmp_path):
+    # Recorded on the 2026-11-02 v2 cutover: `meridian setup --v2` registers
+    # the dist entry "…/@rynfar/meridian/dist/meridian-v2", which is not an
+    # entry-module (.ts/.mjs) path. The one-time registration must survive
+    # regeneration.
+    entry = "/opt/homebrew/lib/node_modules/@rynfar/meridian/dist/meridian-v2"
+    (tmp_path / "opencode.json").write_text(json.dumps({"plugins": [entry]}))
+    assert configure_opencode.meridian_preserved_entries(str(tmp_path)) == [entry]
+
+
+def test_v2_cli_path_lookalikes_still_rejected(tmp_path):
+    lookalikes = [
+        "/opt/homebrew/lib/node_modules/@rynfar/meridian/dist/meridian-v3",
+        "/opt/homebrew/lib/node_modules/@rynfar/meridian/dist/other",
+        "/opt/homebrew/lib/node_modules/@rynfar/meridian-extra/dist/meridian-v2",
+    ]
+    (tmp_path / "opencode.json").write_text(json.dumps({"plugins": lookalikes}))
+    assert configure_opencode.meridian_preserved_entries(str(tmp_path)) == []
+
+
 def _seed_registry(tmp_path, monkeypatch):
     home = tmp_path / "home"
     config_dir = home / ".config/opencode"
