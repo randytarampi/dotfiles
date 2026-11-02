@@ -212,11 +212,11 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
         fi
       done
       if recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)"; then
-        if ! resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "${expected_version}" 1)"; then
+        if ! resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1)"; then
           warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
           PLUGIN_UPDATE_FAILED=1
         else
-          info "OpenCode plugin recheck ${plugin}: ${recheck}"
+          info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}; ${recheck}"
         fi
       else
         warn "OpenCode plugin recheck ${plugin} failed after update"
