@@ -1726,34 +1726,30 @@ def main():
                 f"binary ({reported}) — health evidence expected after cutover"
             )
         else:
-            password_name = opencode_web.server_password_env_chain()
             expected_version = opencode_host.host_version_string()
-            if not password_name:
-                print(
-                    "  \u2298 OpenCode web health: UNKNOWN "
-                    "(no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured)"
-                )
+            port = opencode_web._validated_port(
+                os.environ.get("OPENCODE_SERVER_PORT", "4096")
+            )
+            if port is None:
+                print("  \u2717 OpenCode web health: invalid OPENCODE_SERVER_PORT")
+                exit_code = 1
             else:
-                port = opencode_web._validated_port(
-                    os.environ.get("OPENCODE_SERVER_PORT", "4096")
+                # The credential is resolved inside opencode_web from its env
+                # chain; the doctor never holds the password value, so the
+                # failure text cannot carry password-derived data.
+                outcome, info = opencode_web.request_server_info_configured(
+                    f"http://127.0.0.1:{port}", expected_version=expected_version
                 )
-                if port is None:
-                    print("  \u2717 OpenCode web health: invalid OPENCODE_SERVER_PORT")
-                    exit_code = 1
-                else:
-                    outcome, info = opencode_web.request_server_info(
-                        f"http://127.0.0.1:{port}",
-                        os.environ[password_name],
-                        expected_version=expected_version,
+                if outcome == "ok":
+                    print(
+                        f"  \u2713 OpenCode web health: /api/info version "
+                        f"{info['version']}"
                     )
-                    if outcome == "ok":
-                        print(
-                            f"  \u2713 OpenCode web health: /api/info version "
-                            f"{info['version']}"
-                        )
-                    else:
-                        print(f"  \u2717 OpenCode web health: {info}")
-                        exit_code = 1
+                elif outcome == "unknown":
+                    print(f"  \u2298 OpenCode web health: UNKNOWN ({info})")
+                else:
+                    print(f"  \u2717 OpenCode web health: {info}")
+                    exit_code = 1
 
         # v2 note: the emitter no longer writes opencode.json server.cors
         # (v2 ignores the key; service flags live on the deployed command
