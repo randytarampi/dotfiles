@@ -20,6 +20,26 @@ def server_password_env_chain():
     return None
 
 
+def request_server_info_configured(
+    base_url, timeout=3, expected_version: Optional[str] = None
+):
+    """Authenticated /api/info probe that resolves its own credential.
+
+    The password is resolved from the managed env chain inside this module
+    (OPENCODE_PASSWORD > OPENCODE_SERVER_PASSWORD) so callers never hold the
+    credential value; that keeps the doctor's failure text free of any
+    password-derived data flow. Returns ("ok", info_dict) or ("unknown"|"fail",
+    static detail string); credentials never appear in errors.
+    """
+    password_name = server_password_env_chain()
+    if not password_name:
+        return "unknown", "no OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD configured"
+    password = os.environ[password_name]
+    return request_server_info(
+        base_url, password, timeout=timeout, expected_version=expected_version
+    )
+
+
 def request_server_info(
     base_url,
     password,
