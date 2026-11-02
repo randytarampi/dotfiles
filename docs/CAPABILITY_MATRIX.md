@@ -14,16 +14,16 @@ bridge or compatibility layer is used.
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | opencode | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, OpenCode Zen, GitHub Copilot, Meridian | native OpenCode config; global registry template | native `opencode acp` | yes, `~/.config/opencode/skills` | yes, registry-derived tiers (17) | yes | yes | native tiers incl. `local-solo` | not collected | full (STT+TTS) | env-vars |
-| codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | `@codex--local` | env var + config | none | env-vars |
+| codex | OpenAI, Ollama and oMLX via `config.toml` profiles | TOML adapter from global registry | `codex-acp` adapter | yes, `~/.codex/skills` | pool-driven local profile | yes | yes, through provider URL/profile | Native local model profiles (no ACP variant) | env var + config | none | env-vars |
 | hermes | Inspected custom-provider schema; opt-in LiteLLM scaffold only | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not qualified | not assessed | not assessed |
-| junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes; no verified redaction hooks (UNKNOWN) | no direct Meridian integration | `@junie--local` | IDE setting | none | env-vars |
-| pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | `@pi--local` | env var + config | stt-only | plugin; VibeGuard baseline redaction, optional UI extension |
+| junie | JetBrains/cloud, OpenAI, Meridian, Ollama, oMLX | native shared `~/.ai/mcp/mcp.json` | `junie --acp true` | yes, `~/.ai/skills` (`~/.junie` symlink) | model groups | yes; no verified redaction hooks (UNKNOWN) | no direct Meridian integration | Native local model groups (no ACP variant) | IDE setting | none | env-vars |
+| pi | OpenAI, Anthropic, Ollama/oMLX/Ollama Cloud, Meridian | adapter-owned `~/.pi/agent/mcp-adapter.json` via `pi-mcp-adapter` | `pi-acp` | yes, `~/.pi/agent/skills` | subagents | yes, `~/.pi/agent/AGENTS.md` | yes, as a `models.json` provider | Pi tier-resolved local providers (no ACP variant) | env var + config | stt-only | plugin; VibeGuard baseline redaction, optional UI extension |
 | cortex | Snowflake Cortex only | native Cortex MCP (`cortex mcp add`) | native `cortex acp serve` | yes, `~/.snowflake/cortex/skills` | no | yes, `~/.snowflake/cortex/AGENTS.md` | no | N/A | no local opt-out | none | env-vars |
-| claude | Anthropic and compatible `ANTHROPIC_BASE_URL` endpoints | native Claude configuration | `claude-agent-acp` adapter | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | `@claude--local` | env var | stt-only | env-vars |
+| claude | Anthropic and compatible `ANTHROPIC_BASE_URL` endpoints | native Claude configuration | `claude-agent-acp` adapter | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | Native CLI endpoint overrides (no ACP variant) | env var | stt-only | env-vars |
 | Claude Desktop | Anthropic or explicitly applied third-party gateway (Chat/Cowork/Code) | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
-| Claude CLI | Anthropic-compatible endpoints; standalone LiteLLM CLI wrapper | native Claude configuration | `claude-agent-acp` adapter (separate from standalone CLI wrapper) | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | `@claude--local` | env var | stt-only | env-vars |
+| Claude CLI | Anthropic-compatible endpoints; standalone LiteLLM CLI wrapper | native Claude configuration | `claude-agent-acp` adapter (separate from standalone CLI wrapper) | yes, `~/.claude/skills` | settings | yes | via environment/provider URL | Native CLI endpoint overrides (no ACP variant) | env var | stt-only | env-vars |
 | copilot | GitHub Copilot / environment-configured providers; opt-in LiteLLM CLI launcher (live request UNKNOWN) | native/config varies by CLI | Copilot ACP adapter | yes, `~/.copilot/skills` | no | yes | no | UNSUPPORTED | no local opt-out | none | env-vars |
-| gemini | Google Gemini / environment-configured providers | native/config varies by CLI | `gemini --acp` adapter | yes, `~/.gemini/skills` | no | yes | no | `@gemini--local` (experimental) | env var | none | env-vars |
+| gemini | Google Gemini / environment-configured providers | native/config varies by CLI | `gemini --acp` adapter | yes, `~/.gemini/skills` | no | yes | no | No repo-managed local fallback; native local support UNKNOWN | env var | none | env-vars |
 | cursor | Cursor-configured providers | native `~/.cursor/mcp.json` | `cursor-agent acp` | yes, `~/.cursor/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 | cline | Cline-configured providers | native/config varies by extension | `cline --acp` | yes, shared skill distribution | no | yes | no | N/A | env var (Cline OTel) | none | env-vars |
 | agy | Antigravity-configured providers | native `~/.gemini/config/mcp_config.json` | native `agy-acp` bridge | yes, `~/.gemini/antigravity-cli/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
@@ -77,8 +77,10 @@ tracked separately; this is not the Claude CLI environment-variable route.
 - `configs/mcp/global-mcps.json` contains templates for the eleven registry
   targets. The Pi template is present in each target; Cortex MCP remains
   deliberately native and is not merged into the global registry.
-- `scripts/configure-acp-agents.py` detects commands with `shutil.which`. Local
-  entries are generated only for tools with a supported local fallback.
+- `scripts/configure-acp-agents.py` detects installed ACP commands with
+  `shutil.which` and generates ordinary wrappers only. It does **not** emit
+  `--local` ACP variants. Local model selection remains with each supported
+  native client/provider/profile; Gemini has no repo-managed local fallback.
 - `scripts/configure-skills.py` reconciles the canonical store into all target
   directories, including Pi, Cortex, Antigravity, and Junie's resolved `~/.ai`.
 - Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through

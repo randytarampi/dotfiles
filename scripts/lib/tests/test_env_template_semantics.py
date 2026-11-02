@@ -4,10 +4,11 @@ import unittest
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
-# Baseline includes the reviewed OpenCode password precedence documentation
-# and the web health probe requirement recorded on the 2026-11-02 v2 cutover.
+# Baseline also accounts for deliberate removal of obsolete --local ACP
+# sample assignments; maintain order-sensitive protection for all remaining
+# environment keys and defaults.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "9336c83687c3664d2dc6b0a7aa3cb4b1c05a14f9e3549c53f34bfc13d5f8a9a1"
+    "18cb50f9bc40e9487643bb346014f42d4957019fe891bf7f55822bfb43936198"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import sys
-from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -20,20 +19,12 @@ DEFAULT_OUTPUT_PATH = os.path.join(REPO_ROOT, "configs", "opencode", "acp-agents
 
 import logger
 from cli_helpers import add_common_args
-from constants import get_ollama_local_base_url
-from discover_models import list_local_ollama_models
 from env import load_env
-from local_engines import (
-    active_engine_pools,
-    local_endpoint_for,
-    resolve_engine,
-    resolve_local_winner,
-)
 
 # Internal-only metadata keys that must not leak into the generated
 # acp-agents.json / oh-my-opencode-slim.json — OpenCode's schema rejects
 # unrecognized keys.
-_INTERNAL_KEYS = frozenset({"local_fallback", "experimental"})
+_INTERNAL_KEYS = frozenset({"experimental"})
 
 
 def _strip_internal(entry):
@@ -42,9 +33,6 @@ def _strip_internal(entry):
 
 
 ACP_AGENTS = {
-    # Local fallbacks are intentionally limited: Copilot has no native Ollama
-    # provider; OpenCode has native tier switching; Cortex and Antigravity are
-    # cloud-only; Cursor and Cline are IDE-integrated.
     "opencode": {
         "command": "opencode",
         "args": ["acp"],
@@ -56,7 +44,6 @@ ACP_AGENTS = {
         "command": "gemini",
         "args": ["--acp"],
         "description": "Gemini CLI — Google's coding agent",
-        "local_fallback": True,
         "experimental": True,
     },
     "antigravity": {
@@ -68,19 +55,16 @@ ACP_AGENTS = {
         "command": "claude-agent-acp",
         "args": [],
         "description": "Claude Code via ACP adapter",
-        "local_fallback": True,
     },
     "codex": {
         "command": "codex-acp",
         "args": [],
         "description": "Codex CLI via ACP adapter",
-        "local_fallback": True,
     },
     "junie": {
         "command": "junie",
         "args": ["--acp", "true"],
         "description": "JetBrains Junie CLI",
-        "local_fallback": True,
     },
     "cursor": {
         "command": "cursor-agent",
@@ -103,7 +87,6 @@ ACP_AGENTS = {
         "args": ["-y", "pi-acp"],
         "description": "Pi coding agent (via pi-acp bridge)",
         "env": {"PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true"},
-        "local_fallback": True,
     },
     "cortex": {
         "command": "cortex",
@@ -112,180 +95,6 @@ ACP_AGENTS = {
         "env": {"SNOWFLAKE_HOME": "${SNOWFLAKE_HOME}"},
     },
 }
-
-
-def local_model():
-    """Resolve the best chat-capable model from the combined local pool.
-
-    The winner powers the openai-compatible local agents (codex, pi, junie,
-    gemini); claude--local gates itself on Anthropic-protocol support inside
-    build_local_agents, so resolution here uses the openai protocol and
-    never discards the pool winner just because it cannot serve Anthropic.
-    """
-    models = [model for pool in active_engine_pools().values() for model in pool]
-    model = resolve_local_winner(models, "openai")
-    if not model:
-        logger.warning(
-            "No local model available for ACP agent fallback; using sentinel"
-        )
-        model = ""
-    return model
-
-
-def _model_parts(model_ref):
-    return model_ref.split("/", 1) if "/" in model_ref else ("ollama", model_ref)
-
-
-def active_pi_tier():
-    """Return the configured Pi tier, falling back to the OpenCode tier."""
-    return (
-        os.environ.get("DOTFILES_PI_TIER")
-        or os.environ.get("DOTFILES_OPENCODE_TIER")
-        or ""
-    )
-
-
-def write_local_junie_config(model_ref, dry_run):
-    path = Path("~/.junie-local/model-groups.json").expanduser()
-    provider, model = _model_parts(model_ref)
-    endpoint = local_endpoint_for(provider, "openai")
-    if endpoint is None:
-        provider = "ollama"
-        model = _model_parts(model_ref)[1]
-        endpoint = local_endpoint_for(provider, "openai")
-    base_url, api_key_env = endpoint
-    provider_config = {
-        "baseUrl": base_url + "/chat/completions",
-        "apiType": "OpenAICompletion",
-    }
-    if api_key_env and os.environ.get(api_key_env, "").strip():
-        provider_config["apiKeyEnv"] = api_key_env
-    config = {
-        "providers": {provider: provider_config},
-        "groups": {
-            "local-solo": {
-                "provider": provider,
-                "primaryModel": model,
-                "fasterModel": model,
-            }
-        },
-    }
-    if dry_run:
-        logger.info(f"Would write local Junie model groups to {path}")
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-
-
-def write_local_codex_config(model_ref, dry_run):
-    path = Path("~/.codex-local/config.toml").expanduser()
-    provider, model = _model_parts(model_ref)
-    engine = resolve_engine(provider)
-    endpoint = local_endpoint_for(provider, "openai")
-    if engine is None or endpoint is None:
-        provider = "ollama"
-        model = _model_parts(model_ref)[1]
-        engine = resolve_engine(provider)
-        endpoint = local_endpoint_for(provider, "openai")
-    base_url, api_key_env = endpoint
-    profile_provider = engine["profile_provider"]
-    if engine["provider_config"]:
-        provider_block = (
-            f'[model_providers.{profile_provider}]\nname = "{provider.title()} Local"\n'
-            f'base_url = "{base_url}"\nwire_api = "responses"\n'
-        )
-        if api_key_env and os.environ.get(api_key_env, "").strip():
-            provider_block += f'env_key = "{api_key_env}"\n'
-    else:
-        provider_block = ""
-    content = (
-        provider_block
-        + "\n[profiles.local]\n"
-        + f'model = "{model}"\nmodel_provider = "{profile_provider}"\n'
-    )
-    if dry_run:
-        logger.info(f"Would write local Codex config to {path}")
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def build_local_agents(model_ref):
-    provider, model = _model_parts(model_ref)
-    engine = resolve_engine(provider)
-    anthropic_endpoint = local_endpoint_for(provider, "anthropic")
-    if anthropic_endpoint and engine:
-        base_url, api_key_env = anthropic_endpoint
-        claude_env = {
-            "ANTHROPIC_BASE_URL": base_url,
-            "ANTHROPIC_AUTH_TOKEN": (
-                "${%s}" % api_key_env
-                if api_key_env and os.environ.get(api_key_env, "").strip()
-                else "local"
-            ),
-        }
-    else:
-        # Ollama exposes no Anthropic-compatible /v1/messages surface, so
-        # pointing claude--local at the Ollama base URL guarantees a silent
-        # runtime failure. Omit the agent instead; the fleet-wide Claude
-        # Code entry still runs on cloud providers.
-        logger.info(
-            "Skipping claude--local: local engine %r cannot serve the Anthropic "
-            "protocol (no /v1/messages surface)",
-            provider,
-        )
-        claude_env = None
-    agents = {}
-    if engine and engine.get("gemini_support"):
-        agents["gemini--local"] = {
-            "command": "gemini",
-            "args": [],
-            "description": "Gemini CLI (local Ollama fallback) - EXPERIMENTAL",
-            "experimental": True,
-            "local_fallback": True,
-            "env": {"OLLAMA_LOCAL_MODEL": model},
-        }
-    else:
-        logger.info(
-            "Skipping gemini--local: winning local engine is not Gemini-compatible"
-        )
-    if claude_env is not None:
-        agents["claude--local"] = {
-            "command": "claude-agent-acp",
-            "args": ["--model", model],
-            "description": "Claude Code (combined local pool fallback)",
-            "local_fallback": True,
-            "env": claude_env,
-        }
-    agents.update(
-        {
-            "codex--local": {
-                "command": "codex-acp",
-                "args": ["--profile", "local", "--model", model],
-                "description": "Codex CLI (combined local pool fallback)",
-                "local_fallback": True,
-                "env": {"CODEX_HOME": "${HOME}/.codex-local"},
-            },
-            "junie--local": {
-                "command": "junie",
-                "args": ["--acp", "true"],
-                "description": "Junie (local Ollama fallback)",
-                "local_fallback": True,
-                "env": {"JUNIE_MODEL_GROUPS": "${HOME}/.junie-local/model-groups.json"},
-            },
-            "pi--local": {
-                "command": "npx",
-                "args": ["-y", "pi-acp"],
-                "description": "Pi coding agent (local Ollama fallback)",
-                "local_fallback": True,
-                "env": {
-                    "PI_CODING_AGENT_DIR": "${HOME}/.pi-local/agent",
-                    "PI_ACP_ENABLE_EMBEDDED_CONTEXT": "true",
-                },
-            },
-        }
-    )
-    return agents
 
 
 def main():
@@ -311,8 +120,8 @@ def main():
     )
     args = parser.parse_args()
 
-    # Load ~/.env so standalone runs see gate/endpoint vars (OMLX_* etc.);
-    # inside make deploy the parent environment already carries them.
+    # Load ~/.env for standalone runs; during make deploy the parent
+    # environment already carries consumer gate and endpoint variables.
     load_env()
 
     try:
@@ -321,9 +130,6 @@ def main():
         requested_agents = {
             name.strip() for name in (args.agents or "").split(",") if name.strip()
         }
-        model = local_model()
-        active_tier = active_pi_tier()
-        local_entries = build_local_agents(model) if model else {}
         for name, entry in ACP_AGENTS.items():
             include_base = not requested_agents or name in requested_agents
             if include_base and shutil.which(entry["command"]):
@@ -337,37 +143,6 @@ def main():
                 logger.info(
                     f"Skipping ACP agent: {name} ({entry['command']}) not found"
                 )
-
-            local_name = f"{name}--local"
-            local_entry = local_entries.get(local_name)
-            if (
-                entry.get("local_fallback")
-                and local_entry
-                and (not requested_agents or local_name in requested_agents)
-            ):
-                if local_name == "pi--local" and active_tier.startswith("local-"):
-                    logger.info(
-                        "Skipping ACP agent: pi--local (active tier is local-*; "
-                        "@pi already provides local models)"
-                    )
-                    continue
-                if shutil.which(local_entry["command"]):
-                    logger.info(
-                        f"Detected ACP agent: {local_name} ({local_entry['command']})"
-                    )
-                    local_entry = _strip_internal(local_entry)
-                    local_entry["permissionMode"] = "ask"
-                    local_entry["timeoutMs"] = 900000
-                    detected_agents[local_name] = local_entry
-                    detected_names.append(local_name)
-                else:
-                    logger.info(
-                        f"Skipping ACP agent: {local_name} ({local_entry['command']}) not found"
-                    )
-
-        if any(name in detected_agents for name in ("junie--local", "codex--local")):
-            write_local_junie_config(model, args.dry_run)
-            write_local_codex_config(model, args.dry_run)
 
         output_path = os.path.abspath(os.path.expanduser(args.output))
         output_dir = os.path.dirname(output_path) or "."

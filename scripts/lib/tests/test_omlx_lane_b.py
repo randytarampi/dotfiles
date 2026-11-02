@@ -1302,51 +1302,68 @@ def test_codex_local_profile_follows_pool_winner_engine(monkeypatch):
     assert 'model_provider = "ollama"' in ollama
 
 
-def test_acp_local_agent_follows_pool_winner_engine(monkeypatch):
+def test_acp_generator_retires_local_wrappers_and_preserves_base_agents(
+    tmp_path, monkeypatch
+):
     acp = load_script("configure-acp-agents.py")
-    monkeypatch.setenv("OMLX_BASE_URL", "http://127.0.0.1:8123")
-    monkeypatch.setattr(local_engines, "engine_gate_active", lambda p: True)
-    agents = acp.build_local_agents("omlx/chat")
-    assert agents["claude--local"]["env"]["ANTHROPIC_BASE_URL"].endswith("/v1")
-    assert agents["codex--local"]["args"][:2] == ["--profile", "local"]
-    assert not any(name.endswith("--omlx") for name in agents)
-    # Ollama cannot serve Anthropic (/v1/messages): claude--local omits
-    # itself instead of pointing at a broken endpoint; the rest survive.
-    ollama_agents = acp.build_local_agents("ollama-model")
-    assert "claude--local" not in ollama_agents
-    assert "codex--local" in ollama_agents
-    assert "pi--local" in ollama_agents
-
-
-def test_acp_main_emits_pool_driven_local_agents(tmp_path, monkeypatch):
-    acp = load_script("configure-acp-agents.py")
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    monkeypatch.delenv("OMLX_API_KEY", raising=False)
     output = tmp_path / "acp-agents.json"
-    output.write_text(json.dumps({"acpAgents": {"claude--omlx": {}}}))
-    with (
-        patch.object(acp, "local_model", return_value="omlx/omlx-chat"),
-        patch.object(acp, "active_pi_tier", return_value="pro"),
-        patch.object(acp.shutil, "which", return_value="/usr/bin/fake"),
-        patch.object(acp, "write_local_junie_config"),
-        patch.object(acp, "write_local_codex_config"),
-        patch.object(
-            sys,
-            "argv",
-            [
-                "configure-acp-agents.py",
-                "--output",
-                str(output),
-                "--agents",
-                "claude--local,codex--local",
-            ],
-        ),
-    ):
-        acp.main()
-    agents = json.loads(output.read_text())["acpAgents"]
-    assert "claude--local" in agents
-    assert "codex--local" in agents
-    assert not any(name.endswith("--omlx") for name in agents)
+    slim = tmp_path / "oh-my-opencode-slim.json"
+    output.write_text(json.dumps({"acpAgents": {"pi--local": {}}}))
+    slim.write_text(
+        json.dumps({"preset": "pro-plus", "acpAgents": {"codex--local": {}}})
+    )
+    monkeypatch.setattr(acp, "load_env", lambda: None)
+    monkeypatch.setattr(acp.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-acp-agents.py",
+            "--output",
+            str(output),
+            "--slim-file",
+            str(slim),
+            "--agents",
+            "claude,pi,codex--local,gemini--local",
+        ],
+    )
+    acp.main()
+    expected = {"claude", "pi"}
+    generated = json.loads(output.read_text())["acpAgents"]
+    merged = json.loads(slim.read_text())
+    assert set(generated) == expected
+    assert set(merged["acpAgents"]) == expected
+    assert merged["preset"] == "pro-plus"
+    assert not any(name.endswith("--local") for name in generated)
+
+
+def test_acp_generator_retired_only_request_clears_stale_registry(
+    tmp_path, monkeypatch
+):
+    """Obsolete aliases must not survive even if all requested names are retired."""
+    acp = load_script("configure-acp-agents.py")
+    output = tmp_path / "acp-agents.json"
+    output.write_text(
+        json.dumps({"acpAgents": {"claude--local": {}, "codex--local": {}}})
+    )
+    monkeypatch.setattr(acp, "load_env", lambda: None)
+    monkeypatch.setattr(acp.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "configure-acp-agents.py",
+            "--output",
+            str(output),
+            "--agents",
+            "claude--local,codex--local",
+        ],
+    )
+    acp.main()
+    assert json.loads(output.read_text()) == {"acpAgents": {}}
+    first = output.read_bytes()
+    acp.main()
+    assert output.read_bytes() == first
 
 
 def test_voice_pro_gateway_admission_and_refusal(monkeypatch, tmp_path):

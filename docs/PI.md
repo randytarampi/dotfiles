@@ -48,12 +48,12 @@ Two runtime notes:
 - The apiKey is fixed at generation time. Switching between keyed and keyless
   oMLX modes requires rerunning `configure-pi.py` (i.e. `make deploy` or
   `DOTFILES_RUN_PI_SETUP=1 make configure`); a generated literal placeholder
-  does not later become a `$OMLX_API_KEY` reference on its own. For cloud tiers, the fallback ACP agent's full
-`~/.pi-local` configuration is materialized using
-`DOTFILES_LOCAL_FALLBACK_PRESET` (default: `local`) passed as `--preset`
-so the fallback is fully local. `local-*` tiers skip that duplicate
-configuration, omit `@pi--local` from the ACP registry, and clean stale
-fallback files on deploy.
+  does not later become a `$OMLX_API_KEY` reference on its own.
+
+The OpenCode ACP generator no longer emits `@pi--local`. Pi still supports local
+models through its normal tier-resolved provider configuration. The separate
+`~/.pi-local` generation path remains pending a user-state-safe retirement
+review; it is not needed by an OpenCode ACP wrapper.
 
 The repository generates and manages `~/.pi/agent/mcp-adapter.json` as the
 adapter-owned MCP file. `configs/mcp/global-mcps.json` registers Pi with that
@@ -177,8 +177,8 @@ is a no-op with an info log).
 
 - Enable `pi-web-access` for web-backed research and use the Plannotator Pi
   extension for plan review.
-- From OpenCode, delegate with `@pi` or the local Ollama `@pi--local` ACP
-  entry.
+- From OpenCode, delegate with `@pi` where ACP is configured; select local
+  models through native OpenCode and Pi tiers.
 
 ### Effective context window
 
@@ -270,7 +270,7 @@ Pi has three timeout layers that affect local Ollama inference:
 |---|---|---|---|---:|
 | `httpIdleTimeoutMs` | `~/.pi/agent/settings.json` | Undici body/headers idle timeout + fallback provider timeout | `300000` (5 min) | `900000` (15 min) |
 | `retry.provider.timeoutMs` | `~/.pi/agent/settings.json` | Pi → provider HTTP request | SDK default (600000 / 10 min) | not set (SDK default) |
-| `timeoutMs` (ACP) | `configs/opencode/acp-agents.json` | OpenCode → ACP agent session | `300000` (5 min) | `900000` (15 min, `--local` only) |
+| `timeoutMs` (ACP) | `configs/opencode/acp-agents.json` | OpenCode → ordinary ACP agent session | `300000` (5 min) | `300000` (5 min) |
 
 ### Why `httpIdleTimeoutMs` matters
 
@@ -311,8 +311,8 @@ OLLAMA_KEEP_ALIVE > expected idle interval between requests
 
 Pi is unusual in exposing `httpIdleTimeoutMs` and `retry.provider.timeoutMs`.
 Claude Code, Codex CLI, Gemini CLI, and Junie do not expose equivalent settings
-for local model calls. For those agents, the ACP session `timeoutMs` (bumped to
-`900000` for `--local` variants) is the only tunable timeout.
+for local model calls. The normal ACP wrapper timeout is five minutes;
+configure each native CLI/provider timeout independently where supported.
 
 ### Recommended values
 
