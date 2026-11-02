@@ -1,6 +1,6 @@
 # OpenCode v2 one-way cutover runbook
 
-This is an owner-run procedure, not a claim that a live cutover has been tested. The detailed local deepwork runbook is the origin of this sanitised procedure; consult that private artifact for machine-specific execution notes. Do not copy secrets, private paths or user data into this document or review systems.
+This is an owner-run procedure. The live macOS cutover reported below is **owner-reported evidence**, not independently reproduced verification of every consumer in steps 9–11. The detailed local deepwork runbook is the origin of this sanitised procedure; consult that private artifact for machine-specific execution notes. Do not copy secrets, private paths or user data into this document or review systems.
 
 ## Preflight and hold point
 
@@ -21,12 +21,12 @@ This is an owner-run procedure, not a claim that a live cutover has been tested.
 
 ## Live cutover record (2026-11-02, macOS arm64)
 
-A live host cutover was performed per this runbook: pinned install of the qualified CLI, Meridian `--v2` registration, upgrade to latest stable, launchd re-bootstrap and authenticated loopback `/api/info`, external route with Caddy Basic auth, two idempotent deploys, then the canonical verification chain. Recovery flows and context sensitivities recorded on that cutover:
+The machine owner reports a macOS arm64 cutover with the qualified CLI, Meridian `--v2` registration, upgrade to OpenCode 2.2.5, launchd re-bootstrap and authenticated loopback `/api/info`, external Caddy Basic auth, two idempotent deploys and `make verify` (exit 0). This does not establish that every consumer listed in step 10 was exercised. Recovery flows and context sensitivities reported from that host:
 
 - **Stale `@latest` package artifacts:** `plugin check` prints a versionless `(check failed)` line when the plugin cache holds a broken or outdated artifact, and the deploy fails closed — by design. Heal the cache with `opencode plugin update <spec>` and re-check; never loosen the parser to trust versionless lines.
-- **Instrumented parent shells:** when `OTEL_EXPORTER_OTLP_ENDPOINT` is in the environment (e.g. shells spawned by an OpenCode session), `opencode --version` blocks ~3 s, breaking Meridian's 3 s version probe and the OMO-slim install check. Unset the `OTEL_*` endpoint/protocol/interval variables before running cutover or deploy commands from such a shell.
-- **PATH context:** the official installer's PATH line lands in `~/.zshrc` only; add the same export to `~/.zshenv` so login, non-login and service contexts resolve the managed binary. The plugin lane probes `opencode` from PATH, not from the managed helper.
-- **Caddy serving lane:** a root-run LaunchDaemon holding the Caddyfile with the admin API on `:2019` is the serving lane; a parallel brew-managed service label conflicts on the admin port and should not be started alongside it. Reload live via the admin API (`POST /load`, `Content-Type: text/caddyfile`) rather than restarting the daemon.
+- **Instrumented parent shells:** the owner observed an approximately 3 s `opencode --version` under an inherited OTLP exporter endpoint, exceeding Meridian's 3 s probe. Confirm the timing with the managed binary in a clean shell. For the affected diagnostic/deploy child process only, remove inherited `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL` and `OTEL_METRIC_EXPORT_INTERVAL` as needed; retain `OTEL_SDK_DISABLED` if it is set intentionally. Do not disable telemetry policy globally to address a probe timeout.
+- **PATH context:** on the owner's macOS host, the installer updated `~/.zshrc`, so standalone shell invocations may require an absolute managed path or a local PATH adjustment. The plugin installer already resolves `~/.opencode/bin/opencode` via `scripts/lib/opencode_bin.sh`, and the host probe and LaunchAgent likewise prefer managed paths; these consumers do not require adding PATH exports to `~/.zshenv`. Compare `command -v opencode` with the managed binary before assuming shell selection and deploy selection are identical.
+- **Caddy serving lane:** the owner observed the repository-managed root LaunchDaemon as the serving instance; a second brew-managed service could conflict over the admin listener (observed at `:2019`). Check the active process/launchd label before making service changes. Prefer the repository's `make caddy-reload` (and Caddyfile validation) to a raw admin-API `POST /load`; use `make caddy-deploy`/`make caddy-restart` only when the lifecycle requires it. See [Caddy operation](CADDY.md). Do not POST arbitrary configuration or start a parallel Caddy instance.
 
 ## Windows lane
 
