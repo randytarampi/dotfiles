@@ -61,6 +61,19 @@ def test_read_only_generation_and_scoped_publication():
     assert 'silent_mode: "true"' in workflow
     assert "steps.junie.outputs.junie_summary" in workflow
     assert "steps.gemini.outputs.summary" in workflow
+    gemini_step = workflow.split("      - id: gemini\n", 1)[1].split(
+        "      - name: Save Gemini review", 1
+    )[0]
+    assert re.search(
+        r'^          gemini_cli_version: "0[.]66[.]0"$',
+        gemini_step,
+        re.M,
+    )
+    assert re.search(
+        r"^          gemini_model: .*vars[.]GEMINI_REVIEW_MODEL.*gemini-3[.]5-flash-lite.*$",
+        gemini_step,
+        re.M,
+    )
     notify = workflow.split("  notify:\n", 1)[1]
     assert "permissions:\n      contents: read" in notify
     assert "steps.junie_app.outputs.token" in notify
