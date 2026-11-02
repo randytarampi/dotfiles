@@ -1,5 +1,10 @@
 # Agentic Review on GitHub
 
+For the November 2026 recovery investigation, the linear draft-PR stack,
+six-repository re-onboarding contract, variable/secret distinction, and owner
+acceptance/rollback plan, see
+[Agentic review recovery and downstream rollout](AGENTIC-REVIEW-RECOVERY-2026-11-02.md).
+
 Agentic PR review for this repo and downstream repos (`me`, `pwa`, `pseudoimage`,
 `pseudolocalize`, `lwip`, `slamscan`), built on the three official agentic
 GitHub Actions plus GitHub Copilot's native reviewer. All reviewer triggers are
