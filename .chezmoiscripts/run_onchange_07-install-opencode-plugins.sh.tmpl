@@ -8,11 +8,14 @@ set -euo pipefail
 # scripts/lib/opencode_plugins.py: {{ include "scripts/lib/opencode_plugins.py" | sha256sum }}
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
 # scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
+# scripts/lib/opencode_bin.sh: {{ include "scripts/lib/opencode_bin.sh" | sha256sum }}
 # opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/env.sh"
+# Managed OpenCode binary resolver (chezmoi children cannot rely on paths.sh).
+source "${LIB_DIR}/opencode_bin.sh"
 
 # Load env before gate (DOTFILES_RUN_OPENCODE_TOOLS_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -32,26 +35,32 @@ parse_plugin_check() {
   parsed="$(printf '%s\n' "$output" | python3 -c '
 import re, sys
 spec, expected, current_only = sys.argv[1:]
-name = spec.rsplit("@", 1)[0]
-if name.startswith("github:"):
-    name = name.split("#", 1)[0].rsplit("/", 1)[-1]
+# Real-binary check lines print the RESOLVED package name, which may lose
+# the npm scope ("@tarquinen/opencode-dcp" -> "opencode-dcp"), the @latest
+# alias, or the repo-qualifier suffix of a Git source. Match any of these
+# derived forms; the exactly-one-match + version/status strictness stays.
+spec_base = spec.rsplit("@", 1)[0]
+names = {spec_base, spec_base.rsplit("/", 1)[-1]}
+if spec_base.startswith("github:"):
+    repo = spec_base.split("#", 1)[0].rsplit("/", 1)[-1]
+    names.update({repo, repo[:-3] if repo.endswith("-v2") else repo})
 matches = []
 for line in sys.stdin:
     match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\s+\((current|latest|check failed)\)\s*", line.rstrip("\n"))
-    if match and match.group(1) == name:
+    if match and match.group(1) in names:
         matches.append((match.group(2), match.group(3)))
 if len(matches) != 1:
-    print("ERROR: expected exactly one version/status line for " + name, file=sys.stderr)
+    print("ERROR: expected exactly one version/status line for " + spec, file=sys.stderr)
     sys.exit(2)
 version, status = matches[0]
 if status == "check failed":
-    print("ERROR: plugin check reported failure for " + name, file=sys.stderr)
+    print("ERROR: plugin check reported failure for " + spec, file=sys.stderr)
     sys.exit(2)
 if expected and version != expected:
-    print("ERROR: resolved version changed for " + name + ": expected " + expected + ", got " + version, file=sys.stderr)
+    print("ERROR: resolved version changed for " + spec + ": expected " + expected + ", got " + version, file=sys.stderr)
     sys.exit(2)
 if status != "current" and not (status == "latest" and current_only != "1"):
-    print("ERROR: plugin is not current for " + name + ": " + status, file=sys.stderr)
+    print("ERROR: plugin is not current for " + spec + ": " + status, file=sys.stderr)
     sys.exit(2)
 print(version)
 ' "$spec" "$expected_version" "$current_only")" || return 1
@@ -60,10 +69,15 @@ print(version)
 
 HOST_STATE="absent"
 HOST_MAJOR=""
-if command -v opencode >/dev/null 2>&1; then
+OC_MANAGED="$(opencode_managed_bin)"
+if [[ -n "$OC_MANAGED" ]] || command -v opencode >/dev/null 2>&1; then
   HOST_INFO="$(PYTHONPATH="{{ .chezmoi.sourceDir }}/scripts/lib" python3 -c 'import opencode_host; print(" ".join(str(x) if x is not None else "" for x in opencode_host.resolve_opencode_host()))' 2>/dev/null || true)"
   read -r HOST_STATE HOST_MAJOR <<<"${HOST_INFO}"
 fi
+# Every v2 plugin command targets the managed binary; children inherit the
+# resolution so plugin adds, checks and updates cannot resolve a stale
+# PATH v1 when ~/.opencode/bin is outside this process's PATH.
+export OPENCODE_MANAGED_BIN="${OPENCODE_MANAGED_BIN:-$OC_MANAGED}"
 if [[ "${HOST_STATE}" != "known" || "${HOST_MAJOR}" != "2" ]]; then
   warn "OpenCode host is ${HOST_STATE:-unknown}${HOST_MAJOR:+ (major ${HOST_MAJOR})}; skipping v2 plugin commands."
   # OMO Slim uses its own installer and is intentionally retained on v1.
@@ -131,7 +145,7 @@ for plugin in "${PLUGIN_SPECS[@]}"; do
 done
 
 for plugin in "${PLUGINS[@]}"; do
-  if opencode plugin add "${plugin}" 2>/dev/null; then
+  if "${OC_MANAGED}" plugin add "${plugin}" 2>/dev/null; then
     ok "opencode plugin: ${plugin}"
   else
     warn "opencode plugin ${plugin} failed"
@@ -155,7 +169,7 @@ PY
 )
 
 for plugin in "${CLI_PLUGIN_SPECS[@]}"; do
-  if opencode plugin add "${plugin}" 2>/dev/null; then
+  if "${OC_MANAGED}" plugin add "${plugin}" 2>/dev/null; then
     ok "opencode CLI plugin: ${plugin}"
   else
     warn "opencode CLI plugin ${plugin} failed"
@@ -168,7 +182,7 @@ fi
 
 PLUGIN_RESOLVED_VERSIONS=()
 for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
-  if output="$(opencode plugin check "${plugin}" 2>&1)"; then
+  if output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)"; then
     if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "")"; then
       PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
       info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
@@ -188,7 +202,7 @@ fi
 if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
   PLUGIN_UPDATE_FAILED=0
   for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
-    if output="$(opencode plugin update "${plugin}" 2>&1)"; then
+    if output="$("${OC_MANAGED}" plugin update "${plugin}" 2>&1)"; then
       info "OpenCode plugin update ${plugin}: ${output}"
       expected_version=""
       for resolved in "${PLUGIN_RESOLVED_VERSIONS[@]}"; do
@@ -197,7 +211,7 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
           break
         fi
       done
-      if recheck="$(opencode plugin check "${plugin}" 2>&1)"; then
+      if recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)"; then
         if ! resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "${expected_version}" 1)"; then
           warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
           PLUGIN_UPDATE_FAILED=1

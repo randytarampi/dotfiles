@@ -1,7 +1,7 @@
 # OpenCode v2 — one-way migration handoff
 
 **Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).
-**Status:** Phased implementation is underway across PRs #133–#136; the actual one-way host cutover and owner-controlled live validation remain outstanding. No host proof is claimed here.
+**Status:** Phased implementation complete via PRs #133–#137 (2026-11-01): quota retirement, native v2 config/installer, plugin stack + voice/cli.json, Meridian/services/ACP hardening, optional Pi parity. This cutover change removes the package-manager channel and hands the host to the official install script. Meridian CLI qualification is limited to 2.0.16, 2.0.21 and 2.0.31; 2.2.0 is desktop-only and does not qualify the CLI.
 **Author:** ChatGPT (GPT-6), research and implementation foundation. The initial draft received an independent OpenCode reviewer-agent engineering review of the quota removal and plan (PR #133, 2026-10-31); live host tests remain unperformed.
 
 ## Decisions
@@ -22,7 +22,7 @@
 | DCP | `@tarquinen/opencode-dcp@latest` | 3.2.0+, reject major 4+ |
 | Plannotator | `@plannotator/opencode@latest` | 0.28.22+ source candidate, check npm |
 | TokenScope | `@cheesecodestudio/opencode-tokenscope-v2@latest` | 2.0.0+, reject major 3+ |
-| Secret redaction | `link-seek/opencode-vibeguard` | reviewed Git commit, `package.json` source 0.2.0 |
+| Secret redaction | `github:AxeForce/opencode-vibeguard-v2#main` | reviewed floating main branch, source 0.2.0 |
 | Voice | `@bojackduy/opencode-voice@latest` | 0.11.1+ source candidate, check npm |
 | Memory | `opencode-mem@latest` | 2.29.2+; prefer verified 2.31.x+ |
 | Quota | **none** | intentionally removed |
@@ -32,7 +32,7 @@
 
 ## Meridian version strategy
 
-Upstream `docs/agents.md` currently lists OpenCode **2.2.0** on Darwin arm64 and **2.0.16, 2.0.21, 2.0.31** (plus named betas) in its qualified set. It uses a fail-closed `SUPPORTED_OPENCODE_V2_VERSIONS` allowlist. The current latest v2 may be newer than its qualified set.
+Upstream `docs/agents.md` currently lists OpenCode **2.0.16, 2.0.21 and 2.0.31** (plus named betas) in its qualified CLI set. The **2.2.0 Darwin arm64** allowance applies only to the desktop-bundled binary. It uses a fail-closed `SUPPORTED_OPENCODE_V2_VERSIONS` allowlist. The current latest v2 may be newer than its qualified set.
 
 1. Detect the installed executable's real version and platform; include desktop bundle path where appropriate.
 2. Update Meridian and run `meridian setup --v2 --opencode-bin <path>`.

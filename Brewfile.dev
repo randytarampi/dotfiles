@@ -152,10 +152,10 @@ brew "parallel"
 brew "cask"
 
 # --- Shared tap formulas (from core Brewfile) ---
-# OpenCode stays on the v1 formula until the v2 machine-cutover phase
-# (opencode-v2 conflicts_with opencode; the swap + uninstall-first step
-# lands with the cutover PR, after the Meridian qualification decision).
-brew "anomalyco/tap/opencode", trusted: true
+# OpenCode: the official install script owns the channel (latest stable v2,
+# HOME ~/.opencode/bin on PATH). The v1 brew formula and the 2.2.0
+# qualification workaround are one-time machine-cutover steps (see
+# docs/OPENCODE-V2-MIGRATION-PLAN.md); brew does not manage opencode.
 brew "facebook/fb/idb-companion"
 brew "microsoft/mssql-release/msodbcsql18"
 brew "microsoft/mssql-release/mssql-tools18"

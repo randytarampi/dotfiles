@@ -14,10 +14,7 @@ Docker.DockerCLI
 GitHub.Copilot
 # Cross-ref: brew cask 'codex'
 OpenAI.Codex
-# Cross-ref: brew 'anomalyco/tap/opencode'
-SST.opencode
-# Cross-ref: brew cask 'opencode-desktop'
-SST.OpenCodeDesktop
+# OpenCode: official install script owns the channel; no v2 winget package exists (verified 2026-10-31).
 # Cross-ref: brew cask 'jetbrains-toolbox' (bundled JetBrains tools)
 JetBrains.dotPeek
 # Cross-ref: brew cask 'jetbrains-toolbox' (bundled JetBrains tools)
@@ -36,3 +33,4 @@ koalaman.shellcheck
 mvdan.shfmt
 # Cross-ref: brew 'stripe-cli'
 Stripe.StripeCli
+# OpenCode is provisioned via the official Windows NSIS desktop installers (x64 / aarch64), not winget.

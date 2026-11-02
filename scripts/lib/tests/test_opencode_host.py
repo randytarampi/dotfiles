@@ -4,7 +4,9 @@ import opencode_host
 
 
 def _stub_probe(monkeypatch, result):
-    monkeypatch.setattr(opencode_host.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        opencode_host, "host_binary", lambda binary="opencode": f"/usr/bin/{binary}"
+    )
     runner = result if callable(result) else (lambda *a, **k: result)
     monkeypatch.setattr(opencode_host.subprocess, "run", runner)
 
