@@ -22,9 +22,24 @@ def assignment_records(content):
     return records
 
 
+REMOTE_GATES = (
+    b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
+    b"DOTFILES_RUN_PASEO_SETUP",
+    b"DOTFILES_RUN_PASEO_HERMES_ACP_SETUP",
+)
+
+
+def baseline_records(content):
+    """Freeze upstream assignments while checking opt-in gates separately."""
+    return [
+        (commented, line)
+        for commented, line in assignment_records(content)
+        if not any(line.lstrip(b"# ").startswith(key + b"=") for key in REMOTE_GATES)
+    ]
+
 class EnvTemplateSemanticsTests(unittest.TestCase):
     def test_ordered_assignment_records_match_baseline(self):
-        records = assignment_records(TEMPLATE.read_bytes())
+        records = baseline_records(TEMPLATE.read_bytes())
         digest = hashlib.sha256(b"\n".join(line for _, line in records)).hexdigest()
         self.assertEqual(digest, BASELINE_ASSIGNMENTS_SHA256)
 
@@ -41,9 +56,22 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
         )
         for mutated in mutations:
             self.assertNotEqual(mutated, original)
-            records = assignment_records(mutated)
+            records = baseline_records(mutated)
             digest = hashlib.sha256(b"\n".join(line for _, line in records)).hexdigest()
             self.assertNotEqual(digest, BASELINE_ASSIGNMENTS_SHA256)
+
+    def test_remote_access_gates_are_comment_only_and_disabled(self):
+        lines = TEMPLATE.read_bytes().splitlines()
+        seen = set()
+        for line in lines:
+            for key in REMOTE_GATES:
+                if line.lstrip(b"# ").startswith(key + b"="):
+                    self.assertNotIn(key, seen, "duplicate remote-access gate")
+                    seen.add(key)
+                    self.assertTrue(
+                        line.startswith(b"# " + key + b"='0'"),
+                        f"{key.decode()} must be commented and opt-in",
+                    )
 
     def test_telemetry_defaults_and_litellm_gate_key_order_are_explicit(self):
         records = assignment_records(TEMPLATE.read_bytes())
