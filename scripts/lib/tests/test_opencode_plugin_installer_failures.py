@@ -143,8 +143,16 @@ def test_plugin_check_failure_is_fail_closed():
         (None, None, True),
         ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (current)", False),
         ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (check failed)", False),
-        ("@bojackduy/opencode-voice@latest", "opencode-voice 0.11.5 (check failed)", True),
-        ("@bojackduy/opencode-voice@latest", "opencode-voice 0.11.6 (check failed)", False),
+        (
+            "@bojackduy/opencode-voice@latest",
+            "opencode-voice 0.11.5 (check failed)",
+            True,
+        ),
+        (
+            "@bojackduy/opencode-voice@latest",
+            "opencode-voice 0.11.6 (check failed)",
+            False,
+        ),
         ("@bojackduy/opencode-voice@latest", "bojackduy 0.11.5 (check failed)", False),
     ],
 )
