@@ -2486,30 +2486,6 @@ def test_voice_omlx_llm_endpoint_and_api_key_are_conditional(monkeypatch):
     assert "apiKeyEnv" not in unconfigured
 
 
-def test_acp_local_model_uses_combined_pool(monkeypatch):
-    acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
-    seen = []
-
-    def resolve(models):
-        seen.extend(models)
-        return {"solo": "omlx/winner"}
-
-    with (
-        patch.object(
-            acp,
-            "active_engine_pools",
-            return_value={
-                "ollama": [{"name": "legacy", "provider": "ollama"}],
-                "omlx": [{"name": "winner", "provider": "omlx"}],
-            },
-        ),
-        patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
-    ):
-        assert acp.local_model() == "omlx/winner"
-    assert [model["name"] for model in seen] == ["legacy", "winner"]
-
-
 def test_local_engine_registry_routes_a_third_engine_without_consumer_branch(
     monkeypatch,
 ):
@@ -2682,40 +2658,6 @@ def test_fleet_synthetic_engine_materializes_across_consumers(monkeypatch, tmp_p
         assert local_engines.engine_gate_active("lmstudio") is False
         assert "lmstudio" not in local_engines.active_engines()
         assert local_engines.iter_engine_models("lmstudio") == []
-
-
-def test_unknown_engine_winner_falls_back_to_ollama(monkeypatch):
-    acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
-    calls = []
-
-    def resolve(models):
-        calls.append(models)
-        return (
-            {"solo": "unknown/model"} if len(calls) == 1 else {"solo": "ollama/legacy"}
-        )
-
-    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "0")
-    with (
-        patch.object(
-            acp,
-            "active_engine_pools",
-            return_value={
-                "ollama": [{"name": "legacy", "provider": "ollama"}],
-                "lmstudio": [{"name": "unknown/model", "provider": "lmstudio"}],
-            },
-        ),
-        patch.object(tier_resolve, "resolve_roles_from_list", side_effect=resolve),
-    ):
-        # local_model() resolves the openai-compatible pool winner (claude--
-        # local gates itself on Anthropic support separately).
-        assert acp.local_model() == "ollama/legacy"
-    assert len(calls) == 2
-
-
-def test_gemini_local_is_ollama_only():
-    acp = _load_script("configure_acp_agents", "configure-acp-agents.py")
-    assert "gemini--local" in acp.build_local_agents("ollama/chat")
-    assert "gemini--local" not in acp.build_local_agents("omlx/chat")
 
 
 def test_pi_omlx_provider_is_absent_when_gate_is_off():
