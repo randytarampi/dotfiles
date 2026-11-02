@@ -185,8 +185,10 @@ The Route 53 zone ID, record names, and TTL now live in
 
 ### OpenCode web
 
-OpenCode external Caddy routes require a Caddy auth entry named `opencode`;
-other sites may retain additional users. Caddy stores only the generated hash.
+OpenCode external Caddy routes require a Caddy auth entry named `opencode`.
+Only this user is included in the OpenCode site; additional users in the
+shared auth snippet remain available to other Caddy sites, not OpenCode.
+Caddy stores only the generated hash.
 Provision the same plaintext password separately as `OPENCODE_PASSWORD` in
 `~/.env`, which launchd passes to OpenCode; Caddy forwards the browser's
 `Authorization` header, so the two password values must match. The hash cannot

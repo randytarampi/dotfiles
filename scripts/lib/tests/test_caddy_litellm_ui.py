@@ -78,6 +78,9 @@ def test_opencode_auth_identity_is_required_only_for_external_routes(monkeypatch
     )
     assert "$2a$hashed" in external
     assert "plaintext" not in external
+    assert "opencode $2a$hashed" in external
+    assert "alice" not in external
+    assert "$other" not in external
     # Caddy reverse_proxy forwards Authorization by default. An explicit
     # header_up rewrite could inject an empty header on localhost requests.
     assert "header_up Authorization" not in external
