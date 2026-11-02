@@ -184,6 +184,38 @@ fi
         assert "parser failed" in combined
 
 
+@pytest.mark.parametrize(
+    ("sha_spec", "should_pass"),
+    [
+        ("github:AxeForce/opencode-vibeguard-v2#main", True),
+        ("@tarquinen/opencode-dcp@latest", False),
+    ],
+)
+def test_git_sha_version_is_only_valid_for_github_plugins(
+    tmp_path, sha_spec, should_pass
+):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  if [[ "$3" == "__SHA_SPEC__" ]]; then
+    case "$3" in
+      github:*) name=opencode-vibeguard-v2 ;;
+      *) name="${3%@*}" ;;
+    esac
+    echo "$name 934823e (current)"
+    exit 0
+  fi
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+""".replace("__SHA_SPEC__", sha_spec)
+    result = run_installer(tmp_path, opencode_script=script)
+    assert (result.returncode == 0) is should_pass, result.stdout + result.stderr
+
+
 def test_plugin_parser_accepts_concrete_version_only():
     import re
 

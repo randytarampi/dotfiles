@@ -72,6 +72,11 @@ if len(matches) != 1:
     print("ERROR: expected exactly one version/status line for " + spec, file=sys.stderr)
     sys.exit(2)
 identity, version, status = matches[0]
+# Only Git-sourced plugins resolve to short commit hashes. A non-Git plugin
+# returning a SHA is not a concrete published-package version.
+if re.fullmatch(r"[0-9a-f]{7,40}", version) and not spec_base.startswith("github:"):
+    print("ERROR: unexpected Git SHA version for non-Git plugin " + spec, file=sys.stderr)
+    sys.exit(2)
 tolerated = False
 if status == "check failed":
     # Recorded 2026-11-02 on the v2 cutover machine: the printed line was
