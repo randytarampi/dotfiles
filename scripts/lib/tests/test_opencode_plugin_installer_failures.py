@@ -120,20 +120,60 @@ def test_plugin_check_failure_is_fail_closed():
     # The check exit code is captured but not trusted — the parser decides.
     # A crashed check with empty output still fails closed at the parser.
     # (The split key above consumed '"${OC_MANAGED}" plugin check' already.)
-    assert '"${plugin}" 2>&1)" || true' in check_block
+    assert '"${plugin}" 2>&1)" || check_exit=$?' in check_block
+    assert '"${output}" "" 0 "${check_exit}"' in check_block
     assert "parser failed" in check_block
     assert '"${OC_MANAGED}" plugin update "${plugin}"' in source
     assert 'if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then' in source
     # The recheck lane trusts parsed output, not the check exit code.
     recheck_block = source.split("# Same tolerated-exit handling", 1)[1]
     assert (
-        'recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true'
+        'recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?'
         in recheck_block
     )
     assert "recheck parser failed" in recheck_block
     # Every plugin subcommand runs through the managed-binary resolver.
     assert 'opencode plugin add "${plugin}"' not in source
     assert "opencode_managed_bin" in source
+
+
+@pytest.mark.parametrize(
+    ("failed_spec", "check_line", "should_pass"),
+    [
+        (None, None, True),
+        ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (current)", False),
+        ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (check failed)", False),
+        ("@bojackduy/opencode-voice@latest", "opencode-voice 0.11.5 (check failed)", True),
+        ("@bojackduy/opencode-voice@latest", "opencode-voice 0.11.6 (check failed)", False),
+        ("@bojackduy/opencode-voice@latest", "bojackduy 0.11.5 (check failed)", False),
+    ],
+)
+def test_nonzero_check_exit_only_tolerates_known_voice_headless_failure(
+    tmp_path, failed_spec, check_line, should_pass
+):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  if [[ "$3" == "__FAILED_SPEC__" ]]; then
+    echo "__CHECK_LINE__"
+    exit 1
+  fi
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+"""
+    script = script.replace("__FAILED_SPEC__", failed_spec or "never-match")
+    script = script.replace("__CHECK_LINE__", check_line or "none")
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert (result.returncode == 0) is should_pass, combined
+    if failed_spec and should_pass:
+        assert "tolerated upstream headless-context limitation" in combined
+    elif failed_spec:
+        assert "parser failed" in combined
 
 
 def test_plugin_parser_accepts_concrete_version_only():
