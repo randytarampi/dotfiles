@@ -148,6 +148,38 @@ if [[ $1 == plugin && $2 == update ]]; then exit 0; fi
     assert "did not converge" not in result.stdout + result.stderr
 
 
+@pytest.mark.parametrize(
+    ("post_status", "should_pass"), [("current", True), ("latest", False)]
+)
+def test_plugin_update_accepts_new_concrete_version_only_if_current(
+    tmp_path, post_status, should_pass
+):
+    # A successful update is expected to change the resolved version.
+    # The pre-update 3.2.0 is not an equality constraint for the 3.2.1 recheck.
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/plugin-updated"; exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  version=3.2.0; status=current
+  if [[ -f "$HOME/plugin-updated" ]]; then
+    version=3.2.1; status=__POST_STATUS__
+  fi
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  echo "$name $version ($status)"
+  exit 0
+fi
+""".replace("__POST_STATUS__", post_status)
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    combined = result.stdout + result.stderr
+    assert (result.returncode == 0) is should_pass, combined
+    if should_pass:
+        assert "previous=3.2.0; resolved=3.2.1" in combined
+    else:
+        assert "recheck parser failed" in combined
+
+
 def test_parser_failure_is_reported_intentionally_not_by_pipefail(tmp_path):
     script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
 if [[ $1 == plugin && $2 == check ]]; then echo "${3%@*} garbled response"; exit 0; fi
