@@ -106,6 +106,33 @@ NVMSH
   ! grep -q "MANAGED upgrade" "$BATS_TEST_TMPDIR/calls"
 }
 
+
+@test "opencode lane rejects a failed version probe that prints valid-looking v2" {
+  setup_managed_opencode
+  cat > "$HOME/.opencode/bin/opencode" <<'SH'
+#!/bin/sh
+if [ "$1" = "--version" ]; then
+  printf 'opencode v2.2.5\n'
+  [ ! -f "$HOME/.opencode/upgrade-completed" ] || exit 7
+  exit 0
+fi
+if [ "$1" = "upgrade" ]; then
+  touch "$HOME/.opencode/upgrade-completed"
+  exit 0
+fi
+exit 0
+SH
+  chmod +x "$HOME/.opencode/bin/opencode"
+
+  run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
+    PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
+    bash "$REPO_ROOT/scripts/update-system.sh"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"opencode post-upgrade probe command failed"* ]]
+  [ -f "$HOME/.opencode/upgrade-completed" ]
+}
+
 @test "opencode lane records a failing managed upgrade as a failure" {
   setup_managed_opencode
   printf '#!/bin/sh\nif [ "$1" = --version ]; then printf "opencode v2.2.5\\n"; exit 0; fi\nexit 1\n' > "$HOME/.opencode/bin/opencode"
