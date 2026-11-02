@@ -181,7 +181,11 @@ def load_effective_opencode_config(config_dir):
                 # would leave a bogus server named "servers" beside the real
                 # servers and defeat later canonical v2 normalization.
                 value = {
-                    **{name: entry for name, entry in value.items() if name != "servers"},
+                    **{
+                        name: entry
+                        for name, entry in value.items()
+                        if name != "servers"
+                    },
                     **value["servers"],
                 }
             if isinstance(value, dict) and isinstance(target.get(key), dict):
