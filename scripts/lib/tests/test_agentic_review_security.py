@@ -91,7 +91,7 @@ def test_read_only_generation_and_scoped_publication():
     }
     assert policy == expected_policy
     assert "GEMINI_CLI_SYSTEM_SETTINGS_PATH=" in workflow
-    assert 'SYSTEM_POLICY: ' in workflow
+    assert "SYSTEM_POLICY: " in workflow
     assert "gemini-system-settings.json" in workflow
     notify = workflow.split("  notify:\n", 1)[1]
     assert "permissions:\n      contents: read" in notify
