@@ -172,7 +172,11 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" == "1" ]]; then
     elif ! "$managed_bin" upgrade; then
       failures=$((failures + 1))
       failed_lanes+=("opencode upgrade")
-    elif ! opencode_bin_output_is_stable_v2 "$("$managed_bin" --version 2>&1)"; then
+    elif ! upgraded_version_output="$("$managed_bin" --version 2>&1)"; then
+      # A CLI printing a valid-looking version but exiting nonzero is not proof.
+      failures=$((failures + 1))
+      failed_lanes+=("opencode post-upgrade probe command failed")
+    elif ! opencode_bin_output_is_stable_v2 "$upgraded_version_output"; then
       failures=$((failures + 1))
       failed_lanes+=("opencode post-upgrade probe")
     elif ! {
