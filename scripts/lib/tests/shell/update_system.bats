@@ -47,7 +47,7 @@ NVMSH
   local tool
   # Script 07 invokes the OMO installer via npx or bunx; never let this
   # isolated update-lane test invoke a real package manager or the network.
-  for tool in brew apt-get dnf pacman winget npm npx bunx uv pipx pi junie ollama omllx curl; do
+  for tool in brew sudo apt-get apt dpkg dnf pacman winget npm npx bunx uv pipx pi junie ollama omllx curl; do
     printf '#!/bin/sh\nprintf "%%s|%%s\\n" "$(basename "$0")" "$*" >> "%s"\nexit 0\n' "$BATS_TEST_TMPDIR/calls" > "$bin/$tool"
     chmod +x "$bin/$tool"
   done
