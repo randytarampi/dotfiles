@@ -65,6 +65,13 @@ NVMSH
   run env DOTFILES_RUN_UPDATE_SYSTEM_SETUP=1 DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 \
     PATH="$BATS_TEST_TMPDIR/stubbin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
     bash "$REPO_ROOT/scripts/update-system.sh"
+  if [ "$status" -ne 0 ]; then
+    # DIAG7: the update lane swallowed this lane's failure on CI-only hosts;
+    # print the captured output and the failure tail so the failing lane and
+    # its reason are visible in the runner log. Remove once green everywhere.
+    printf 'DIAG7 status=%s\n' "$status" >&3
+    printf 'DIAG7 output:\n%s\n' "$output" >&3
+  fi
   [ "$status" -eq 0 ]
   calls="$(cat "$BATS_TEST_TMPDIR/calls")"
   [[ "$calls" == *"MANAGED upgrade"* ]]
