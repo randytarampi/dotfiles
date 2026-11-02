@@ -1267,7 +1267,13 @@ def test_caddy_auth_matcher_is_defined_in_each_site_block(monkeypatch):
     assert len(blocks) == 2
     for block in blocks:
         lines = block.splitlines()
-        if "opencode.example.com" in block:
+        is_opencode_site = any(
+            line.startswith(
+                ("https://opencode.example.com", "http://opencode.example.com")
+            )
+            for line in lines
+        )
+        if is_opencode_site:
             assert "  basic_auth {" in lines
             continue
         auth_index = next(
