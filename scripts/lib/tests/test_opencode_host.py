@@ -29,7 +29,12 @@ def test_resolve_host_known_versions(monkeypatch):
     assert opencode_host._probe_host("opencode")[0] == "unknown"
 
 
-def test_resolve_host_absent_and_unknown(monkeypatch):
+def test_resolve_host_absent_and_unknown(monkeypatch, tmp_path):
+    # The managed-path and PATH resolutions must both see an absent host:
+    # post-v2-cutover machines hold a real $HOME/.opencode/bin/opencode, so
+    # stubbing which() alone is not enough to simulate absence.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("OPENCODE_MANAGED_BIN", raising=False)
     monkeypatch.setattr(opencode_host.shutil, "which", lambda name: None)
     assert opencode_host._probe_host("opencode") == ("absent", None, None)
 
