@@ -19,6 +19,15 @@ This is an owner-run procedure, not a claim that a live cutover has been tested.
 10. Exercise one real request from each required consumer, including CLI/orchestrator, Meridian and LiteLLM routes, ACP delegates, Plannotator, DCP, TokenScope, voice and copied-memory retrieval/capture. Verify synthetic redaction at provider egress and restoration for local tools.
 11. Deploy a second time. Confirm idempotency, no duplicate plugins, no stale v1 service binary, persistent Meridian registration and unchanged auth/permissions. Run focused checks plus canonical `make verify` on the final candidate and record each boundary as VERIFIED, OWNER-REPORTED, NOT RUN, UNKNOWN or N/A.
 
+## Live cutover record (2026-11-02, macOS arm64)
+
+A live host cutover was performed per this runbook: pinned install of the qualified CLI, Meridian `--v2` registration, upgrade to latest stable, launchd re-bootstrap and authenticated loopback `/api/info`, external route with Caddy Basic auth, two idempotent deploys, then the canonical verification chain. Recovery flows and context sensitivities recorded on that cutover:
+
+- **Stale `@latest` package artifacts:** `plugin check` prints a versionless `(check failed)` line when the plugin cache holds a broken or outdated artifact, and the deploy fails closed — by design. Heal the cache with `opencode plugin update <spec>` and re-check; never loosen the parser to trust versionless lines.
+- **Instrumented parent shells:** when `OTEL_EXPORTER_OTLP_ENDPOINT` is in the environment (e.g. shells spawned by an OpenCode session), `opencode --version` blocks ~3 s, breaking Meridian's 3 s version probe and the OMO-slim install check. Unset the `OTEL_*` endpoint/protocol/interval variables before running cutover or deploy commands from such a shell.
+- **PATH context:** the official installer's PATH line lands in `~/.zshrc` only; add the same export to `~/.zshenv` so login, non-login and service contexts resolve the managed binary. The plugin lane probes `opencode` from PATH, not from the managed helper.
+- **Caddy serving lane:** a root-run LaunchDaemon holding the Caddyfile with the admin API on `:2019` is the serving lane; a parallel brew-managed service label conflicts on the admin port and should not be started alongside it. Reload live via the admin API (`POST /load`, `Content-Type: text/caddyfile`) rather than restarting the daemon.
+
 ## Windows lane
 
 KNOWN-UNVALIDATED. The selected channel is the official desktop NSIS installer, x64 or aarch64 as appropriate, run silently with `/S`. The exact installed CLI destination and successful version probe must be established on the target before Windows can be declared accepted.
