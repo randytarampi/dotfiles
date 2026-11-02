@@ -150,7 +150,9 @@ global tier switch until the project configuration is regenerated. See
 - Switch between OpenAI, Anthropic, Ollama, and Meridian providers through
   Pi's generated `models.json`.
 - Delegate parallel work to the pi-subagents built-ins (scout, researcher,
-  worker, reviewer, oracle, delegate); models are pinned from the preset.
+  worker, reviewer, oracle, delegate). Matching roles are pinned from the
+  preset; new reviewer configurations inherit the Pi default model instead of the
+  OMO visual observer's model; existing reviewer overrides are preserved.
 
 ## Model resolution
 
@@ -161,8 +163,9 @@ names. The default model is the preset's `orchestrator` role; the
 
 For `local*` presets, `moe_codegen_reuse=True` is passed to the resolver. When
 the code-gen model is MoE and vision-capable (e.g. `ornith-1.5:35b`), it serves
-code-gen, lightweight, and vision roles — so `researcher`, `scout`, and
-`reviewer` built-ins all use the single loaded MoE model. See
+code-gen, lightweight, and vision roles — so `researcher` and `scout`
+built-ins share the chosen MoE model. Pi's code `reviewer` instead inherits
+`subagents.defaultModel` unless an explicit user override is applied. See
 [docs/TIERS.md](TIERS.md) for the full reuse rules.
 
 `--category-model`, `--role-model`, and

@@ -296,6 +296,12 @@ def test_profiles_only_never_touches_active_state(tmp_path, monkeypatch, active)
     assert configure_pi.main() == 0
     target = agent / "profiles/pi-subagents/anthropic.json"
     first = (target.read_bytes(), target.stat().st_mtime_ns)
+    profile_overrides = json.loads(target.read_text())["subagents"]["agentOverrides"]
+    assert "reviewer" not in profile_overrides
+    assert set(profile_overrides) == set(configure_pi.ROLE_TO_BUILTIN.values())
+    assert {"delegate", "oracle", "researcher", "scout", "worker"} <= set(
+        profile_overrides
+    )
     assert target.stat().st_mode & 0o777 == 0o600
     assert configure_pi.main() == 0
     assert (target.read_bytes(), target.stat().st_mtime_ns) == first
@@ -819,6 +825,77 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     assert "litellm/google/models/gemini-3.8-flash" in settings["enabledModels"]
     assert "litellm/opencode/nemotron-3.5-lightning-free" in settings["enabledModels"]
     assert "fixture-secret" not in json.dumps([providers, settings, auth])
+
+
+def test_pi_reviewer_preserves_existing_override_and_does_not_generate_new_one(
+    tmp_path, monkeypatch
+):
+    """An unowned existing reviewer pin must not be silently overwritten."""
+    first_home = tmp_path / "existing"
+    first_home.mkdir()
+    agent_dir = first_home / "pi-agent"
+    agent_dir.mkdir()
+    (agent_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "subagents": {
+                    "agentOverrides": {
+                        "reviewer": {"model": "ollama/user-selected-reviewer"},
+                        "my-agent": {"model": "ollama/my-model"},
+                    }
+                }
+            }
+        )
+    )
+    catalogue = {"data": [{"id": "google/models/gemini-3.8-flash"}]}
+    out = _run_pi_main(first_home, catalogue, monkeypatch)
+    overrides = json.loads((out / "settings.json").read_text())["subagents"][
+        "agentOverrides"
+    ]
+    assert overrides["reviewer"]["model"] == "ollama/user-selected-reviewer"
+    assert overrides["my-agent"]["model"] == "ollama/my-model"
+    # This fixture has a partial gateway catalogue, so other roles may
+    # legitimately be excluded by the existing fail-closed provider policy.
+    before = (out / "settings.json").read_bytes()
+    _run_pi_main(first_home, catalogue, monkeypatch)
+    assert (out / "settings.json").read_bytes() == before
+
+    fresh_home = tmp_path / "fresh"
+    fresh_home.mkdir()
+    fresh = _run_pi_main(fresh_home, catalogue, monkeypatch)
+    generated = json.loads((fresh / "settings.json").read_text())
+    assert "reviewer" not in generated["subagents"]["agentOverrides"]
+
+
+def test_pi_existing_reviewer_survives_explicit_unsupported_role_override(
+    tmp_path, monkeypatch
+):
+    """Unmapped reviewer role selection must not erase user-owned Pi state."""
+    home = tmp_path / "explicit-role"
+    home.mkdir()
+    agent_dir = home / "pi-agent"
+    agent_dir.mkdir()
+    saved = {"model": "ollama/user-reviewer", "thinking": "high"}
+    (agent_dir / "settings.json").write_text(
+        json.dumps({"subagents": {"agentOverrides": {"reviewer": saved}}})
+    )
+    original = configure_pi.tier_registry.materialize_role_models
+
+    def materialize(registry, preset, categories, role_overrides=None):
+        resolved = original(registry, preset, categories, role_overrides)
+        resolved["reviewer"] = "ollama/unmapped-reviewer"
+        return resolved
+
+    monkeypatch.setattr(
+        configure_pi.tier_registry, "materialize_role_models", materialize
+    )
+    out = _run_pi_main(
+        home,
+        {"data": [{"id": "google/models/gemini-3.8-flash"}]},
+        monkeypatch,
+    )
+    generated = json.loads((out / "settings.json").read_text())
+    assert generated["subagents"]["agentOverrides"]["reviewer"] == saved
 
 
 def test_pi_main_keeps_gateway_wire_ids_and_qualified_settings_refs(
