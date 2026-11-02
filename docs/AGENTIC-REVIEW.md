@@ -18,7 +18,10 @@ used by both the GitHub Actions and local review lanes.
 | Gemini | `google-github-actions/run-gemini-cli@v0` | `@gemini-cli /review` mention, or `review-gemini` label | `GEMINI_API_KEY` | behavior regressions, missing tests, operational risk |
 | Copilot auto-request | REST job in the reusable workflow | `review-copilot` label | none | requests `copilot-pull-request-reviewer[bot]` |
 
-`review-all` requests Junie, Gemini and Copilot on a label event. OpenCode's official action cannot handle that event and is skipped; request OpenCode with an authorized `/opencode` or `/oc` PR comment. Other reviewers retain their current opt-in label/mention support.
+`review-all` requests Junie and Copilot on a label event. The standalone
+Gemini reviewer is explicitly opt-in via `review-gemini` or an authorised
+Gemini command because its model's free-tier quota can be exhausted independently.
+A specifically requested Gemini review still fails visibly on HTTP 429/503. OpenCode's official action cannot handle that event and is skipped; request OpenCode with an authorized `/opencode` or `/oc` PR comment. Other reviewers retain their current opt-in label/mention support.
 
 ## Labels
 
@@ -26,7 +29,7 @@ used by both the GitHub Actions and local review lanes.
 - `review-junie` — Junie code review
 - `review-gemini` — Gemini review
 - `review-copilot` — request Copilot as reviewer
-- `review-all` — all of the above
+- `review-all` — Junie and Copilot only; Gemini requires `review-gemini`, and OpenCode requires an authorized PR comment
 
 ## Mentions
 
