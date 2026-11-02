@@ -236,8 +236,10 @@ def _meridian_entry_matches(value: object) -> bool:
     """Match the precise Meridian plugin entry forms (not substring soup):
     the bare scoped package name; a scoped-package version alias; a plugin
     path whose segments contain the @rynfar/meridian package directory and
-    end in the plugin's entry module; and the same three forms as owner
-    disable directives (a `-` prefix).
+    end in the plugin's entry module — including the ``dist/meridian-v2``
+    form that ``meridian setup --v2`` registers on OpenCode v2 hosts
+    (recorded on the 2026-11-02 cutover); and the same forms as owner
+    disable directives (a ``-`` prefix).
     """
     if not isinstance(value, str):
         return False
@@ -247,7 +249,11 @@ def _meridian_entry_matches(value: object) -> bool:
         return True
     return (
         "/@rynfar/meridian/" in body
-        and (body.endswith("meridian.ts") or body.endswith("meridian.mjs"))
+        and (
+            body.endswith("meridian.ts")
+            or body.endswith("meridian.mjs")
+            or body.endswith("meridian-v2")
+        )
     ) or body.rstrip("/") == "@rynfar/meridian"
 
 
