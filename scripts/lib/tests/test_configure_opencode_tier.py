@@ -53,6 +53,46 @@ def test_effective_config_replaces_permission_and_plugin_arrays(tmp_path, monkey
     assert effective["plugins"] == ["new"]
 
 
+def test_effective_config_flattens_mixed_mcp_without_losing_disabled_policy(
+    tmp_path, monkeypatch
+):
+    home_config = tmp_path / "home" / ".config/opencode"
+    home_config.mkdir(parents=True)
+    project_root = tmp_path / "project"
+    config_dir = project_root / ".opencode"
+    config_dir.mkdir(parents=True)
+    (home_config / "opencode.json").write_text(
+        json.dumps(
+            {
+                "mcp": {
+                    "servers": {
+                        "codegraph": {"type": "local", "disabled": True},
+                    },
+                    "github": {"type": "remote", "disabled": False},
+                }
+            }
+        )
+    )
+    (project_root / "opencode.json").write_text(
+        json.dumps(
+            {
+                "mcp": {
+                    "servers": {"codegraph": {"disabled": False}},
+                    "notion": {"type": "remote", "disabled": True},
+                }
+            }
+        )
+    )
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    effective = configure_tier.load_effective_opencode_config(config_dir)
+    assert effective["mcp"] == {
+        "codegraph": {"type": "local", "disabled": False},
+        "github": {"type": "remote", "disabled": False},
+        "notion": {"type": "remote", "disabled": True},
+    }
+    assert "servers" not in effective["mcp"]
+
+
 JETBRAINS_SCRIPT = REPO_ROOT / "scripts/generate-jetbrains-profiles.py"
 JETBRAINS_SPEC = importlib.util.spec_from_file_location(
     "generate_jetbrains_profiles", JETBRAINS_SCRIPT

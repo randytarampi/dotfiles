@@ -176,7 +176,14 @@ def load_effective_opencode_config(config_dir):
                 and isinstance(value, dict)
                 and isinstance(value.get("servers"), dict)
             ):
-                value = {**value, **value["servers"]}
+                # Normalize a mixed legacy/native map into flat entries for the
+                # standalone tier consumer. Keeping the "servers" wrapper
+                # would leave a bogus server named "servers" beside the real
+                # servers and defeat later canonical v2 normalization.
+                value = {
+                    **{name: entry for name, entry in value.items() if name != "servers"},
+                    **value["servers"],
+                }
             if isinstance(value, dict) and isinstance(target.get(key), dict):
                 merge(target[key], value)
             else:
