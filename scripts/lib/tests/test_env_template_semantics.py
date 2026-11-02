@@ -37,6 +37,7 @@ def baseline_records(content):
         if not any(line.lstrip(b"# ").startswith(key + b"=") for key in REMOTE_GATES)
     ]
 
+
 class EnvTemplateSemanticsTests(unittest.TestCase):
     def test_ordered_assignment_records_match_baseline(self):
         records = baseline_records(TEMPLATE.read_bytes())
