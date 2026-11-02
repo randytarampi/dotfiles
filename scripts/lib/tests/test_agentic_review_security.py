@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -74,6 +75,24 @@ def test_read_only_generation_and_scoped_publication():
         gemini_step,
         re.M,
     )
+    policy_line = next(
+        line
+        for line in gemini_step.splitlines()
+        if line.startswith("          settings: ")
+    )
+    policy = json.loads(policy_line.split("settings: ", 1)[1].strip("'"))
+    expected_policy = {
+        "tools": {
+            "core": ["ReadFileTool", "GlobTool"],
+            "exclude": ["run_shell_command", "write_file", "replace", "web_fetch"],
+        },
+        "hooksConfig": {"enabled": False},
+        "security": {"blockGitExtensions": True},
+    }
+    assert policy == expected_policy
+    assert "GEMINI_CLI_SYSTEM_SETTINGS_PATH=" in workflow
+    assert 'SYSTEM_POLICY: ' in workflow
+    assert "gemini-system-settings.json" in workflow
     notify = workflow.split("  notify:\n", 1)[1]
     assert "permissions:\n      contents: read" in notify
     assert "steps.junie_app.outputs.token" in notify

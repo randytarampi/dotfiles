@@ -702,6 +702,16 @@ jobs:
             # Keep the closer on its own line even if the prompt lacks a trailing newline.
             printf '\n%s\n' "$delim"
           } >> "$GITHUB_ENV"
+      - name: Install trusted Gemini system policy
+        env:
+          SYSTEM_POLICY: '{"tools":{"core":["ReadFileTool","GlobTool"],"exclude":["run_shell_command","write_file","replace","web_fetch"]},"hooksConfig":{"enabled":false},"security":{"blockGitExtensions":true}}'
+        run: |
+          set -euo pipefail
+          umask 077
+          policy_path="${RUNNER_TEMP}/gemini-system-settings.json"
+          printf '%s\n' "${SYSTEM_POLICY}" > "${policy_path}"
+          jq -e 'type == "object" and .hooksConfig.enabled == false and .security.blockGitExtensions == true' "${policy_path}" >/dev/null
+          echo "GEMINI_CLI_SYSTEM_SETTINGS_PATH=${policy_path}" >> "${GITHUB_ENV}"
       # GEMINI_CLI_TRUST_WORKSPACE bypasses the workspace-trust prompt; the action's --yolo covers tool approvals (docs: run-gemini-cli trust-guidance.md).
       - id: gemini
         uses: google-github-actions/run-gemini-cli@v0
@@ -718,6 +728,10 @@ jobs:
           # No model is immune to per-project daily quota exhaustion.
           gemini_cli_version: "0.66.0"
           gemini_model: ${{ vars.GEMINI_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}
+          # Upstream action invokes --yolo; explicitly constrain the tools
+          # it can discover while reviewing code from an untrusted PR.
+          # These names are from the Gemini CLI built-in tool vocabulary.
+          settings: '{"tools":{"core":["ReadFileTool","GlobTool"],"exclude":["run_shell_command","write_file","replace","web_fetch"]},"hooksConfig":{"enabled":false},"security":{"blockGitExtensions":true}}'
           prompt: ${{ env.GEMINI_EFFECTIVE_PROMPT }}
       - name: Save Gemini review
         id: gemini_review
