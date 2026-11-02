@@ -31,6 +31,16 @@ setup_managed_opencode() {
   # (later PATH dirs); curl/brew are stubbed to protect network/registry.
   local bin="$BATS_TEST_TMPDIR/stubbin"
   mkdir -p "$bin" "$HOME/.opencode/bin" "$HOME/.config/opencode"
+  # The CI job installs chezmoi into the runner's original $HOME/bin. Bats
+  # switches HOME to an isolated test directory, and the explicit PATH below
+  # omits the runner's bin directory. Keep the real template renderer available
+  # without broadening PATH or mocking away the plugin-install integration.
+  local chezmoi_bin
+  chezmoi_bin="$(command -v chezmoi)" || {
+    printf 'chezmoi is required for the OpenCode update integration test\\n' >&2
+    return 1
+  }
+  ln -s "$chezmoi_bin" "$bin/chezmoi"
   # Stub nvm.sh so the npm-globals lane succeeds deterministically on any
   # host (a brew-nvm on the owner machine masked this in local runs).
   mkdir -p "$HOME/.nvm"
