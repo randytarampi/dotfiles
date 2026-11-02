@@ -66,17 +66,16 @@ ROOT = Path(SCRIPT_DIR).parent
 SLIM = ROOT / "configs/opencode/oh-my-opencode-slim.json"
 VIBEGUARD_CONFIG = ROOT / "configs/pi/vibeguard.config.json"
 # Map OMO-Slim preset roles to the matching pi-subagents built-in. The six
-# built-ins (scout, researcher, worker, reviewer, oracle, delegate) already
-# carry the prompt, tools, and thinking; we only pin their model via
-# agentOverrides. Roles with no built-in (designer, council) are intentionally
-# absent so they fall through to subagents.defaultModel.
+# built-ins have their own task contracts; a visual OMO observer is *not*
+# Pi's read-only code reviewer. Map only semantically matching roles. The
+# reviewer inherits subagents.defaultModel rather than a vision specialization.
+# Roles with no equivalent (designer, observer, council) likewise stay unmapped.
 ROLE_TO_BUILTIN = {
     "orchestrator": "delegate",
     "oracle": "oracle",
     "librarian": "researcher",
     "explorer": "scout",
     "fixer": "worker",
-    "observer": "reviewer",
 }
 # Cache of model_id -> Ollama model details discovered via `ollama show`.
 # A model's native window can be smaller than the global OLLAMA_CONTEXT_LENGTH cap
@@ -1376,15 +1375,22 @@ def main():
         prefixes.add(default_model)
     settings["enabledModels"] = sorted(prefixes)
     # Preserve any user-added agentOverrides we do not manage (e.g. a custom
-    # agent the user added by hand). The six built-in names are (re)set
-    # from the preset above; everything else is carried over so it survives
+    # agent the user added by hand). Mapped built-ins are (re)set from the
+    # preset above; everything else is carried over so it survives
     # a regenerate. Legacy entries written by pre-ROLE_TO_BUILTIN versions
     # (string-form overrides keyed by preset role name, e.g.
     # "orchestrator": "ollama/old-model") are dropped: role names are now
     # system-owned (pinned via builtins or falling through to
     # subagents.defaultModel), so carrying them over would pin roles to
     # models that may no longer exist locally.
-    managed = set(ROLE_TO_BUILTIN.values()) | set(role_models)
+    # A previous generator pinned reviewer from observer, but settings.json
+    # has no provenance for individual overrides. Preserve existing reviewer
+    # entries rather than silently erasing potentially user-owned preferences.
+    # Fresh settings omit reviewer and inherit subagents.defaultModel.
+    # A source role named reviewer has no mapped Pi built-in. Exclude it from
+    # generator ownership so explicit unsupported role selections cannot
+    # erase a user-authored agentOverrides.reviewer entry.
+    managed = set(ROLE_TO_BUILTIN.values()) | (set(role_models) - {"reviewer"})
     old_overrides = previous.get("subagents", {}).get("agentOverrides", {})
     for name, val in old_overrides.items():
         if name not in managed:

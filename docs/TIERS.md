@@ -414,8 +414,10 @@ For every `local*` tier, OpenCode (via `configure-opencode-tier.py`), Junie
 `moe_codegen_reuse=True` to `resolve_roles_from_list`. When the selected
 code-gen model is MoE and vision-capable (for example,
 `ornith-1.5:35b`), one model serves code-gen, lightweight, and vision roles.
-Thus librarian, explorer, and observer — along with Pi's researcher, scout,
-and reviewer built-ins — use the same MoE model.
+Thus librarian, explorer, and observer — along with Pi's researcher and scout
+built-ins — use the same MoE model. Pi's code reviewer inherits the configured
+Pi default in fresh configurations (existing reviewer overrides are
+preserved). It is not a vision agent.
 
 In Junie's local groups, `fasterModel: _local:lightweight` consequently
 resolves to the code-gen model under reuse, so primary and faster model can be
