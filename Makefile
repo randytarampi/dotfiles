@@ -506,3 +506,10 @@ paseo-tailnet-check: ## Inspect Paseo tailnet readiness without writes
 
 paseo-tailnet-apply: ## Configure Paseo listener on tailnet after password set (gate required)
 	@$(LOAD_ENV); python3 scripts/configure-paseo-tailnet.py --apply
+
+.PHONY: paseo-hermes-check paseo-hermes-apply
+paseo-hermes-check: ## Check Hermes ACP integration without writes
+	@$(LOAD_ENV); python3 scripts/configure-paseo-hermes.py
+
+paseo-hermes-apply: ## Opt-in Hermes ACP provider registration into Paseo
+	@$(LOAD_ENV); python3 scripts/configure-paseo-hermes.py --apply
