@@ -22,7 +22,10 @@ def assignment_records(content):
     return records
 
 
-REMOTE_GATES = (b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",)
+REMOTE_GATES = (
+    b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
+    b"DOTFILES_RUN_PASEO_SETUP",
+)
 
 
 def baseline_records(content):
