@@ -31,10 +31,10 @@ info "Installing opencode plugins..."
 # add/@latest is deduplicated by OpenCode; ordinary make deploy does not
 # refresh packages. Refresh is explicit in the managed update-system workflow.
 parse_plugin_check() {
-  local spec="$1" output="$2" expected_version="$3" current_only="${4:-0}" parsed
+  local spec="$1" output="$2" expected_version="$3" current_only="${4:-0}" check_exit="${5:-0}" parsed
   parsed="$(printf '%s\n' "$output" | python3 -c '
 import re, sys
-spec, expected, current_only = sys.argv[1:]
+spec, expected, current_only, check_exit = sys.argv[1:]
 # Real-binary check lines print the RESOLVED package name, which may lose
 # the npm scope ("@tarquinen/opencode-dcp" -> "opencode-dcp"), the @latest
 # alias, or the repo-qualifier suffix of a Git source. Record from the
@@ -81,11 +81,17 @@ if status == "check failed":
     # context (the plugin loads fine in TUI sessions); 0.11.5 is the
     # newest published release. Tolerate ONLY this resolved identity and
     # still refuse any other plugin check failure.
-    if not (identity.startswith("opencode-voice-") or identity == "opencode-voice"):
+    # Scope the exception to the exact plugin/version observed on the live
+    # host. Future versions and unrelated check failures must fail closed.
+    if not (spec_base == "@bojackduy/opencode-voice" and identity == "opencode-voice"
+            and version == "0.11.5" and check_exit != "0"):
         print("ERROR: plugin check reported failure for " + spec, file=sys.stderr)
         sys.exit(2)
     tolerated = True
     print("WARNING: " + spec + " check status is the tolerated upstream headless-context limitation (see cutover ledger)", file=sys.stderr)
+if check_exit != "0" and not tolerated:
+    print("ERROR: plugin check command exited " + check_exit + " for " + spec, file=sys.stderr)
+    sys.exit(2)
 if expected and version != expected:
     print("ERROR: resolved version changed for " + spec + ": expected " + expected + ", got " + version, file=sys.stderr)
     sys.exit(2)
@@ -93,7 +99,7 @@ if not tolerated and status != "current" and not (status == "latest" and current
     print("ERROR: plugin is not current for " + spec + ": " + status, file=sys.stderr)
     sys.exit(2)
 print(version)
-' "$spec" "$expected_version" "$current_only")" || return 1
+' "$spec" "$expected_version" "$current_only" "$check_exit")" || return 1
   printf '%s\n' "$parsed"
 }
 
@@ -217,8 +223,9 @@ for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
   # failure). Capture regardless of exit code and let the parser's
   # exactly-one-match + tolerance + status rules decide; a crashed check
   # with empty output still fails closed here.
-  output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true
-  if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "")"; then
+  check_exit=0
+  output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?
+  if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "" 0 "${check_exit}")"; then
     PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
     info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
   else
@@ -244,8 +251,9 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
       done
       # Same tolerated-exit handling as the install-time check above: parse
       # the recheck output regardless of the check exit code.
-      recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true
-      if resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1)"; then
+      check_exit=0
+      recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?
+      if resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1 "${check_exit}")"; then
         info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}; ${recheck}"
       else
         warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
