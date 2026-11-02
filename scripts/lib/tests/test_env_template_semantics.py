@@ -24,8 +24,6 @@ def assignment_records(content):
 
 REMOTE_GATES = (
     b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
-    b"DOTFILES_RUN_PASEO_SETUP",
-    b"DOTFILES_RUN_PASEO_HERMES_ACP_SETUP",
 )
 
 
