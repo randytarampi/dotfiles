@@ -163,6 +163,14 @@ Set per repo (Settings → Secrets and variables → Actions):
   to `0.66.0` in the reusable workflow. These are testable defaults, **not**
   a free-tier guarantee. A project-specific 429 or 503 still fails the
   explicitly requested Gemini job and its notifier; see issue #106.
+  The workflow supplies a read-only Gemini tool configuration because the
+  upstream action invokes `--yolo` on PR data: only `ReadFileTool` and
+  `GlobTool` are enabled, while shell execution, edits, and web fetch are
+  explicitly excluded. Workspace hooks are disabled and Git-sourced
+  extensions blocked using settings supported by the pinned Gemini CLI.
+  Validate this behaviour with the pinned CLI in an
+  actual untrusted-PR smoke test; this does not establish immunity to
+  malicious project-level Gemini policies or other injection surfaces.
 - `OPENROUTER_API_KEY` — OpenRouter (consumed by OpenCode's `free`
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
