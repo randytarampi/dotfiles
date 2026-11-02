@@ -713,6 +713,11 @@ jobs:
           GEMINI_EFFECTIVE_PROMPT: ${{ needs.parse.outputs.prompt != '' && format('{0}\n\n---\n\n{1}', needs.parse.outputs.prompt, env.CODE_REVIEW_PROMPT) || env.CODE_REVIEW_PROMPT }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          # Pin the CLI separately from the @v0 action and let repo owners
+          # override the model through an Actions VARIABLE, not a secret.
+          # No model is immune to per-project daily quota exhaustion.
+          gemini_cli_version: "0.66.0"
+          gemini_model: ${{ vars.GEMINI_REVIEW_MODEL || 'gemini-3.5-flash-lite' }}
           prompt: ${{ env.GEMINI_EFFECTIVE_PROMPT }}
       - name: Save Gemini review
         id: gemini_review

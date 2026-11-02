@@ -29,7 +29,7 @@ A specifically requested Gemini review still fails visibly on HTTP 429/503. Open
 - `review-junie` — Junie code review
 - `review-gemini` — Gemini review
 - `review-copilot` — request Copilot as reviewer
-- `review-all` — Junie and Copilot only; Gemini requires `review-gemini`, and OpenCode requires an authorized PR comment
+- `review-all` — all of the above
 
 ## Mentions
 
@@ -152,7 +152,12 @@ Set per repo (Settings → Secrets and variables → Actions):
 - `OPENCODE_API_KEY` — OpenCode Zen (used by the OpenCode job and its
   cross-provider fallbacks)
 - `JUNIE_API_KEY` — Junie backend token (from junie.jetbrains.com/cli)
-- `GEMINI_API_KEY` — Google AI Studio
+- `GEMINI_API_KEY` — Google AI Studio.
+- Optional Actions **variable** `GEMINI_REVIEW_MODEL` sets the standalone Gemini
+  review model. The default is `gemini-3.5-flash-lite`, with Gemini CLI pinned
+  to `0.66.0` in the reusable workflow. These are testable defaults, **not**
+  a free-tier guarantee. A project-specific 429 or 503 still fails the
+  explicitly requested Gemini job and its notifier; see issue #106.
 - `OPENROUTER_API_KEY` — OpenRouter (consumed by OpenCode's `free`
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
