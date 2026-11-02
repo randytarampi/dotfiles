@@ -59,6 +59,8 @@ NON_TRACKED_SCRIPTS = {
     "scripts/verify-ci-assets.py",  # self-verifying manifest checker
     "scripts/generate-review-bundles.py",  # CI-only generator checked by Makefile
     "scripts/configure-tailnet-opencode.py",  # Owner-only Makefile CLI; never chezmoi-deployed
+    "scripts/configure-paseo-tailnet.py",  # Owner-only Makefile CLI; never chezmoi-deployed
+    "scripts/install-paseo.sh",  # Owner-only Makefile CLI; never chezmoi-deployed
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
