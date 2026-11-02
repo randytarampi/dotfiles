@@ -8,9 +8,13 @@ classified as free or included in strict-free fallback chains.
 
 OpenCode is installed/updated via the official install script (latest stable
 v2; binary at `~/.opencode/bin/opencode`, directory first on PATH). Brew and
-winget do not manage OpenCode. The official installer appends its PATH line to
-`~/.zshrc` (interactive shells only); mirror the same export in `~/.zshenv` so
-login, non-login and service contexts resolve the managed binary. For the one-time Meridian CLI qualification stage, install **OpenCode 2.0.31**
+winget do not manage OpenCode. On the documented macOS cutover, the official
+installer updated `~/.zshrc` only; standalone shells may need an explicit PATH
+adjustment or an absolute `~/.opencode/bin/opencode` invocation. Managed repo
+consumers (plugin installer, host probe and launchd service) select the binary
+by absolute path through the shared managed resolver, not via shell startup
+files. Do not add a global `~/.zshenv` change solely to fix a service or deploy.
+For the one-time Meridian CLI qualification stage, install **OpenCode 2.0.31**
 (not the desktop-bundled 2.2.0 qualification), run `meridian setup --v2`,
 then upgrade to latest v2 only after checking registration and real provider
 routing. Follow [the cutover runbook](OPENCODE-V2-CUTOVER-RUNBOOK.md);
