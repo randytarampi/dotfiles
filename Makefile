@@ -488,3 +488,11 @@ skills-update: ## Update all skills from upstream via `skills` CLI
 codegraph: ## Batch-initialize CodeGraph indexes in all git repos under ~/Development
 	@$(LOAD_ENV); python3 scripts/configure-codegraph.py
 	@echo "CodeGraph indexes configured."
+
+# Explicit remote-access controls; never part of automatic deploy.
+.PHONY: tailnet-opencode-check tailnet-opencode-apply
+tailnet-opencode-check: ## Inspect Tailscale/OpenCode Serve without writes
+	@$(LOAD_ENV); python3 scripts/configure-tailnet-opencode.py
+
+tailnet-opencode-apply: ## Explicitly expose authenticated OpenCode to the tailnet (gate required)
+	@$(LOAD_ENV); python3 scripts/configure-tailnet-opencode.py --apply

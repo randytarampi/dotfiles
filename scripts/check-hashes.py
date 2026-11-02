@@ -58,6 +58,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/onboard-agentic-review.py",  # CI-only asset verified by check-ci-assets
     "scripts/verify-ci-assets.py",  # self-verifying manifest checker
     "scripts/generate-review-bundles.py",  # CI-only generator checked by Makefile
+    "scripts/configure-tailnet-opencode.py",  # Owner-only Makefile CLI; never chezmoi-deployed
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
