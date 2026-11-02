@@ -174,6 +174,11 @@ def test_manual_fix_uses_read_only_cli_generation_and_exact_patch_inputs():
     fix = read(".github/workflows/agentic-review-fix.yml")
     generator, publisher = fix.split("  publish:", 1)
     assert "opencode run --auto" in generator
+    # OpenCode v2 run does not accept the legacy --dir flag. The runner's
+    # working-directory selects the checked-out PR workspace instead.
+    assert "working-directory: ${{ github.workspace }}" in generator
+    assert "opencode run --auto --model opencode/big-pickle" in generator
+    assert ' --dir "${GITHUB_WORKSPACE}"' not in generator
     assert "anomalyco/opencode/github" not in generator
     assert "use_github_token" not in generator
     assert (

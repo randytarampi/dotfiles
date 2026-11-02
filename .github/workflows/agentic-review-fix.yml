@@ -122,6 +122,7 @@ jobs:
           printf '%s/.opencode/bin\n' "${HOME}" >> "${GITHUB_PATH}"
 
       - name: Generate the requested fix with the OpenCode CLI
+        working-directory: ${{ github.workspace }}
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -130,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           generator_prompt=$'Modify only the approved workspace files for this request. Do not commit, push, create a branch, comment, or create a pull request. Return successfully after making workspace edits.\n\nRequest:\n'"${FIX_PROMPT}"
-          opencode run --auto --model opencode/big-pickle --dir "${GITHUB_WORKSPACE}" "${generator_prompt}"
+          opencode run --auto --model opencode/big-pickle "${generator_prompt}"
 
       - name: Inventory and stage the exact generated patch
         id: patch
