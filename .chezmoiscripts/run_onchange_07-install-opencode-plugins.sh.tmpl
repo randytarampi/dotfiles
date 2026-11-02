@@ -37,29 +37,59 @@ import re, sys
 spec, expected, current_only = sys.argv[1:]
 # Real-binary check lines print the RESOLVED package name, which may lose
 # the npm scope ("@tarquinen/opencode-dcp" -> "opencode-dcp"), the @latest
-# alias, or the repo-qualifier suffix of a Git source. Match any of these
-# derived forms; the exactly-one-match + version/status strictness stays.
+# alias, or the repo-qualifier suffix of a Git source. Record from the
+# 2.2.5 cutover: scoped packages can also resolve to the bare scope name
+# ("@plannotator/opencode" -> "plannotator") and repo-derived ids drop the
+# "opencode-"/"-v2" decoration ("opencode-tokenscope-v2" -> "tokenscope").
+# Match any of these derived forms; the exactly-one-match + version/status
+# strictness stays. Git-source plugins may also print a short SHA version
+# ("opencode-vibeguard 934823e (current)").
 spec_base = spec.rsplit("@", 1)[0]
 names = {spec_base, spec_base.rsplit("/", 1)[-1]}
+unscoped = spec_base.rsplit("/", 1)[-1]
+if spec_base.startswith("@"):
+    names.add(spec_base.lstrip("@").split("/", 1)[0])
+def _decorations(name):
+    stripped = name
+    if stripped.startswith("opencode-"):
+        stripped = stripped[len("opencode-"):]
+    if stripped.endswith("-v2"):
+        stripped = stripped[:-3]
+    return stripped
+for form in (spec_base, unscoped):
+    names.add(_decorations(form))
+    if "/" in form:
+        names.add(_decorations(form.rsplit("/", 1)[-1]))
 if spec_base.startswith("github:"):
     repo = spec_base.split("#", 1)[0].rsplit("/", 1)[-1]
     names.update({repo, repo[:-3] if repo.endswith("-v2") else repo})
 matches = []
 for line in sys.stdin:
-    match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\s+\((current|latest|check failed)\)\s*", line.rstrip("\n"))
+    match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[0-9a-f]{7,40})\s+\((current|latest|check failed)\)\s*", line.rstrip("\n"))
     if match and match.group(1) in names:
-        matches.append((match.group(2), match.group(3)))
+        matches.append((match.group(1), match.group(2), match.group(3)))
 if len(matches) != 1:
     print("ERROR: expected exactly one version/status line for " + spec, file=sys.stderr)
     sys.exit(2)
-version, status = matches[0]
+identity, version, status = matches[0]
+tolerated = False
 if status == "check failed":
-    print("ERROR: plugin check reported failure for " + spec, file=sys.stderr)
-    sys.exit(2)
+    # Recorded 2026-11-02 on the v2 cutover machine: the printed line was
+    # "opencode-voice 0.11.5 (check failed)". Root cause is upstream —
+    # @bojackduy/opencode-voice v2-compat adaptV2Context requires
+    # ctx.client.session, which is absent in the headless check/update
+    # context (the plugin loads fine in TUI sessions); 0.11.5 is the
+    # newest published release. Tolerate ONLY this resolved identity and
+    # still refuse any other plugin check failure.
+    if not (identity.startswith("opencode-voice-") or identity == "opencode-voice"):
+        print("ERROR: plugin check reported failure for " + spec, file=sys.stderr)
+        sys.exit(2)
+    tolerated = True
+    print("WARNING: " + spec + " check status is the tolerated upstream headless-context limitation (see cutover ledger)", file=sys.stderr)
 if expected and version != expected:
     print("ERROR: resolved version changed for " + spec + ": expected " + expected + ", got " + version, file=sys.stderr)
     sys.exit(2)
-if status != "current" and not (status == "latest" and current_only != "1"):
+if not tolerated and status != "current" and not (status == "latest" and current_only != "1"):
     print("ERROR: plugin is not current for " + spec + ": " + status, file=sys.stderr)
     sys.exit(2)
 print(version)
@@ -182,16 +212,17 @@ fi
 
 PLUGIN_RESOLVED_VERSIONS=()
 for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
-  if output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)"; then
-    if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "")"; then
-      PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
-      info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
-    else
-      warn "OpenCode plugin check ${plugin} parser failed: ${output}"
-      PLUGIN_INSTALL_FAILED=1
-    fi
+  # The check command can exit nonzero while still printing a parseable
+  # status table (recorded: voice's upstream headless-context check
+  # failure). Capture regardless of exit code and let the parser's
+  # exactly-one-match + tolerance + status rules decide; a crashed check
+  # with empty output still fails closed here.
+  output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true
+  if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "")"; then
+    PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
+    info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
   else
-    warn "OpenCode plugin check ${plugin} (check failed): ${output}"
+    warn "OpenCode plugin check ${plugin} parser failed: ${output}"
     PLUGIN_INSTALL_FAILED=1
   fi
 done
@@ -211,15 +242,13 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
           break
         fi
       done
-      if recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)"; then
-        if ! resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1)"; then
-          warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
-          PLUGIN_UPDATE_FAILED=1
-        else
-          info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}; ${recheck}"
-        fi
+      # Same tolerated-exit handling as the install-time check above: parse
+      # the recheck output regardless of the check exit code.
+      recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true
+      if resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1)"; then
+        info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}; ${recheck}"
       else
-        warn "OpenCode plugin recheck ${plugin} failed after update"
+        warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
         PLUGIN_UPDATE_FAILED=1
       fi
     else

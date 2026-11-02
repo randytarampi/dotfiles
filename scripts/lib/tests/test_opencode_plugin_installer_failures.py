@@ -113,13 +113,24 @@ def test_plugin_check_failure_is_fail_closed():
     source = (
         ROOT.parent / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
     ).read_text()
-    check_block = source.split('if output="$("${OC_MANAGED}" plugin check', 1)[1].split(
+    check_block = source.split('output="$("${OC_MANAGED}" plugin check', 1)[1].split(
         "done", 1
     )[0]
     assert "PLUGIN_INSTALL_FAILED=1" in check_block
-    assert "check failed" not in check_block.split("else", 1)[0]
+    # The check exit code is captured but not trusted — the parser decides.
+    # A crashed check with empty output still fails closed at the parser.
+    # (The split key above consumed '"${OC_MANAGED}" plugin check' already.)
+    assert '"${plugin}" 2>&1)" || true' in check_block
+    assert "parser failed" in check_block
     assert '"${OC_MANAGED}" plugin update "${plugin}"' in source
     assert 'if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then' in source
+    # The recheck lane trusts parsed output, not the check exit code.
+    recheck_block = source.split("# Same tolerated-exit handling", 1)[1]
+    assert (
+        'recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || true'
+        in recheck_block
+    )
+    assert "recheck parser failed" in recheck_block
     # Every plugin subcommand runs through the managed-binary resolver.
     assert 'opencode plugin add "${plugin}"' not in source
     assert "opencode_managed_bin" in source
