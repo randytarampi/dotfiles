@@ -291,14 +291,21 @@ def build_opencode_site_block(
 ) -> str:
     if not valid_tcp_port(opencode_port):
         raise ValueError("OpenCode server port must be an integer from 1 to 65535")
-    if auth_block and "basic_auth @not_omlx" in auth_block:
-        auth_block = auth_block.replace("basic_auth @not_omlx", "basic_auth", 1)
-    if auth_block and not any(
-        user == "opencode" for user, _ in parse_auth_conf_entries(auth_block)
-    ):
-        raise ValueError(
-            "OpenCode external routes require a Caddy basic-auth user named 'opencode'."
-        )
+    if auth_block:
+        # OpenCode expects HTTP Basic user "opencode" upstream. Reusing a
+        # multi-user edge block would allow a different Caddy user through
+        # the proxy only to fail with 401 at OpenCode. Retain only the hash
+        # for the matching user; other sites keep their original auth block.
+        opencode_users = [
+            (user, password_hash)
+            for user, password_hash in parse_auth_conf_entries(auth_block)
+            if user == "opencode"
+        ]
+        if not opencode_users:
+            raise ValueError(
+                "OpenCode external routes require a Caddy basic-auth user named 'opencode'."
+            )
+        auth_block = build_auth_block(opencode_users)
     lines = [f"{site_label} {{", f"  bind {bind_ip}", f"  {tls_line}", ""]
     if lan_only:
         lines.extend(
