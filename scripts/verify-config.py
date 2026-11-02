@@ -2057,19 +2057,19 @@ def main():
     computer_data = computer_root / "data"
     computer_env = computer_root / "service.env"
     if computer_gate:
+        # The service-env file is credential-bearing; its path is never
+        # printed, so it is checked outside the generic loop (whose other
+        # paths are safe to name in diagnostics).
+        if not computer_env.exists():
+            print(f"  \u2717 cptr service env: MISSING (under {computer_root})")
+            exit_code = 1
         for path, label in (
             (computer_venv, "cptr executable"),
             (computer_data, "cptr data directory"),
-            (computer_env, "cptr service env"),
             (computer_plist, "cptr LaunchAgent"),
         ):
             if not path.exists():
-                # The label identifies the component; the doctor never logs
-                # the service-env file path (it is a credential-bearing file).
-                if path == computer_env:
-                    print(f"  \u2717 {label}: MISSING (under {computer_root})")
-                else:
-                    print(f"  \u2717 {label}: MISSING {path}")
+                print(f"  \u2717 {label}: MISSING {path}")
                 exit_code = 1
         if not (computer_venv.is_file() and os.access(computer_venv, os.X_OK)):
             print(f"  \u2717 cptr executable: not executable (under {computer_root})")
