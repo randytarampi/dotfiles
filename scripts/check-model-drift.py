@@ -824,9 +824,13 @@ def _provider_models(client, model_map):
 
 
 def _provider_base_url(client, provider):
-    options = provider.get("options", {})
-    if client == "opencode" and isinstance(options, dict):
-        return options.get("baseURL")
+    # Native v2 emission carries provider URL/keys under `settings`; the
+    # legacy v1 emission used `options`. Accept either layout.
+    for field in ("settings", "options"):
+        block = provider.get(field, {})
+        if client == "opencode" and isinstance(block, dict):
+            if block.get("baseURL"):
+                return block.get("baseURL")
     return provider.get("baseUrl")
 
 
@@ -850,12 +854,13 @@ def _is_litellm_url(base_url, port):
 
 
 def _direct_route_reason(client, provider_name, provider, base_url):
-    options = provider.get("options", {})
+    blocks = [provider.get(field, {}) for field in ("settings", "options")]
     if (
         client == "opencode"
         and provider_name in {"openai", "anthropic"}
-        and isinstance(options, dict)
-        and "baseURL" not in options
+        and all(
+            not (isinstance(block, dict) and "baseURL" in block) for block in blocks
+        )
     ):
         return "NATIVE_PROVIDER_NOT_PROXIED"
     if isinstance(base_url, str) and base_url.startswith(("http://", "https://")):
@@ -866,12 +871,14 @@ def _direct_route_reason(client, provider_name, provider, base_url):
 def _compare_client_provider(
     client, path, name, provider, references, key, expected_key_ref
 ):
-    options = provider.get("options", {})
-    key_ref = (
-        options.get("apiKey")
-        if client == "opencode" and isinstance(options, dict)
-        else provider.get("apiKey")
-    )
+    key_ref = None
+    for field in ("settings", "options"):
+        block = provider.get(field, {})
+        if client == "opencode" and isinstance(block, dict) and block.get("apiKey"):
+            key_ref = block.get("apiKey")
+            break
+    if key_ref is None and client != "opencode":
+        key_ref = provider.get("apiKey")
     scope = f"{client}:{name}"
     if key_ref != expected_key_ref or key is None:
         return (
