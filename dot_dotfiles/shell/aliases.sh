@@ -25,8 +25,8 @@ opencode() {
     if [ -z "${_OPENCODE_MAJOR:-}" ]; then
       _opencode_version_banner="$(command opencode --version 2>/dev/null || true)"
       case "${_opencode_version_banner}" in
-        *v1.*) _OPENCODE_MAJOR=1 ;;
-        *) _OPENCODE_MAJOR=2 ;;
+      *v1.*) _OPENCODE_MAJOR=1 ;;
+      *) _OPENCODE_MAJOR=2 ;;
       esac
       export _OPENCODE_MAJOR
     fi
