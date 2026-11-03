@@ -281,7 +281,7 @@ opencode_plugin_check_retried() {
       printf '%s\n' "${parsed}"
       return 0
     fi
-    if [[ "${attempt}" -lt 2 && ( -z "${output}" || "${output}" == *"Plugin is not configured"* ) ]]; then
+    if [[ "${attempt}" -lt 2 && (-z "${output}" || "${output}" == *"Plugin is not configured"*) ]]; then
       warn "OpenCode plugin check ${spec} reported a transient context error; retrying once"
       sleep 1
       continue
