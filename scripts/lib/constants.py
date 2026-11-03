@@ -48,6 +48,10 @@ BASE_URLS = {
     "openrouter": "https://openrouter.ai/api/v1",
 }
 
+# OpenCode v2 runtime package for OpenAI-compatible custom providers; used by the
+# generator and the shared local-engine provider builder (v2 providers.md).
+OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE = "@opencode/ai/providers/openai-compatible"
+
 PROVIDER_BASE_URL_ENVS = {
     "ollama-cloud": "OLLAMA_CLOUD_BASE_URL",
     "openai": "OPENAI_BASE_URL",

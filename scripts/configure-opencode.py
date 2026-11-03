@@ -27,6 +27,7 @@ if LIB_DIR not in sys.path:
 import logger  # noqa: E402 -- local imports follow the scripts/lib sys.path bootstrap.
 import opencode_host  # noqa: E402 -- local import follows the bootstrap.
 from constants import (  # noqa: E402 -- local import follows bootstrap.
+    OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
     get_litellm_proxy_mode,
     get_ollama_local_base_url,
     is_meridian_configured,
@@ -446,7 +447,7 @@ def apply_litellm_client_gate(config: dict) -> None:
     config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
-            "package": "@opencode/ai/providers/openai-compatible",
+            "package": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
             "settings": {
                 "baseURL": resolution["base_url"],
                 "apiKey": resolution["api_key"],
@@ -811,7 +812,7 @@ def route_dynamic_free_registry(registry, audit, preset, config):
     config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
-            "package": "@opencode/ai/providers/openai-compatible",
+            "package": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
             "settings": {
                 "baseURL": base_url,
                 "apiKey": "{file:" + str(key_path.resolve()) + "}",
@@ -1042,7 +1043,7 @@ def _register_ollama_cloud_routes(
         config["providers"]["ollama"] = {
             "models": combined_models,
             "name": "Ollama",
-            "package": "@opencode/ai/providers/openai-compatible",
+            "package": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
             "settings": {"baseURL": get_ollama_local_base_url()},
         }
     elif local_ollama and preset not in ["plus", "pro"]:
@@ -1877,7 +1878,7 @@ def main():
                 continue
             spec = PROVIDER_ENDPOINTS[provider]
             config.setdefault("provider", {})[provider] = {
-                "package": "@opencode/ai/providers/openai-compatible",
+                "package": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
                 "settings": {
                     "baseURL": base_url,
                     "apiKey": "{env:" + spec["apiKeyEnv"] + "}",

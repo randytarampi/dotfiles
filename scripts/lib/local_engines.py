@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import logger
 from constants import (
+    OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
     OMLX_DEFAULT_PORT,
     check_omlx_daemon,
     get_omlx_base_url,
@@ -26,7 +27,7 @@ LOCAL_ENGINES = {
         "provider_config": False,
         "health_check": None,
         "display_name": "Ollama",
-        "npm": "@opencode/ai/providers/openai-compatible",
+        "npm": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
         "resolve_model": True,
         "context_fallback": None,
         "default_port": "11434",
@@ -50,7 +51,7 @@ LOCAL_ENGINES = {
         "provider_config": True,
         "health_check": check_omlx_daemon,
         "display_name": "oMLX",
-        "npm": "@opencode/ai/providers/openai-compatible",
+        "npm": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
         "resolve_model": False,
         "context_fallback": 32768,
         "default_port": str(OMLX_DEFAULT_PORT),
