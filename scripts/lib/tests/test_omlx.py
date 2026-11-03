@@ -3415,6 +3415,7 @@ def test_pi_unknown_catalogue_without_prior_config_fails_closed(monkeypatch, tmp
 
 
 def test_opencode_v2_model_boundary_keeps_identity_modalities_cache():
+    configure_opencode = _load_script("configure_opencode_v2", "configure-opencode.py")
     entry = configure_opencode._native_model_entry(
         {
             "id": "meridian/claude-haiku",
