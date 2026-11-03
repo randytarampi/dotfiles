@@ -608,3 +608,61 @@ def test_pi_legacy_memory_identical_registration_can_migrate(tmp_path):
         "command": "preserve"
     }
     assert not old.exists()
+
+
+def test_basic_memory_registry_renders_compatible_runtime_across_all_clients():
+    """Prove each producer/format carries the same local, private MCP contract."""
+    module = load_script()
+    registry = json.loads(
+        (ROOT.parent / "configs/mcp/global-mcps.json").read_text(encoding="utf-8")
+    )
+    templates = ROOT.parent / "configs/mcp/templates"
+    expected = json.loads(
+        (templates / "basic-memory.json").read_text(encoding="utf-8")
+    )
+    assert len(registry["tools"]) == 15
+    for tool, spec in registry["tools"].items():
+        definitions = module.resolve_defs_list(
+            str(templates), ["basic-memory"], spec, "global"
+        )
+        assert len(definitions) == 1, tool
+        assert definitions[0]["name"] == "basic-memory"
+        rendered = module.format_configs_to_str(spec["format"], definitions)
+        if spec["format"] == "toml-mcpServers":
+            entry = tomllib.loads(rendered)["mcp_servers"]["basic-memory"]
+            env = entry["env"]
+            command = [entry["command"], *entry["args"]]
+        else:
+            payload = json.loads(rendered)
+            namespace = (
+                "servers"
+                if spec["format"] == "json-servers"
+                else "mcp" if spec["format"] == "opencode-internal" else "mcpServers"
+            )
+            entry = payload[namespace]["basic-memory"]
+            env = entry.get("environment", entry.get("env", {}))
+            command = (
+                entry["command"]
+                if isinstance(entry["command"], list)
+                else [entry["command"], *entry.get("args", [])]
+            )
+        assert command == [expected["command"], *expected["args"]], tool
+        assert env == expected["env"], tool
+
+
+def test_basic_memory_missing_from_generated_set_does_not_block_removal(tmp_path):
+    """Excluding Basic Memory must not make the legacy entry undeletable."""
+    module = load_script()
+    path = tmp_path / "mcp.json"
+    path.write_text(
+        json.dumps({"mcpServers": {"basic-memory": {"command": "custom"}}}),
+        encoding="utf-8",
+    )
+    module.merge_configs_to_file(
+        "json-mcpServers-merge",
+        path,
+        json.dumps({"mcpServers": {"codegraph": {"command": "codegraph"}}}),
+    )
+    assert json.loads(path.read_text())["mcpServers"] == {
+        "codegraph": {"command": "codegraph"}
+    }
