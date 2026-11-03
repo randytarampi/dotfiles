@@ -522,46 +522,36 @@ def test_basic_memory_collision_allows_identical_json_and_non_memory_entries(tmp
     }
 
 
+_V2_BUNDLE = [
+    "uvx",
+    "--prerelease=allow",
+    "--from",
+    "basic-memory==1.0.0",
+    "basic-memory",
+    "mcp",
+]
+
+
+def _v2_native_documents(extra=None):
+    """Existing/generated opencode-internal docs for one Basic Memory entry.
+
+    Recorded 2026-11-03 from the live OpenCode v2 host: the existing
+    native-shaped entry (bundled command array, `environment` alias,
+    `disabled: false` policy key) differed from the template only in layout.
+    """
+    entry = {
+        "type": "local",
+        "command": list(_V2_BUNDLE),
+        "environment": {"BASIC_MEMORY_FORCE_LOCAL": "true"},
+    }
+    existing = {"mcp": {"servers": {"basic-memory": {**entry, **(extra or {})}}}}
+    return existing, {"mcp": {"servers": {"basic-memory": entry}}}
+
+
 def test_basic_memory_v2_native_entry_with_identical_substance_passes(tmp_path):
-    # Recorded 2026-11-03 from the live OpenCode v2 host: the generated entry
-    # is semantically identical to the existing native-shaped one (bundled
-    # command array, `environment` alias, `disabled: false` policy key) yet
-    # the raw-dict comparison refused the re-render. Substance parity must
-    # pass; only vault/command/env/enabled differences are user-owned.
     module = load_script()
     path = tmp_path / "opencode.json"
-    bundle = [
-        "uvx",
-        "--prerelease=allow",
-        "--from",
-        "basic-memory==1.0.0",
-        "basic-memory",
-        "mcp",
-    ]
-    env = {"BASIC_MEMORY_FORCE_LOCAL": "true"}
-    existing = {
-        "mcp": {
-            "servers": {
-                "basic-memory": {
-                    "type": "local",
-                    "command": bundle,
-                    "environment": dict(env),
-                    "disabled": False,
-                }
-            }
-        }
-    }
-    generated = {
-        "mcp": {
-            "servers": {
-                "basic-memory": {
-                    "type": "local",
-                    "command": bundle,
-                    "environment": dict(env),
-                }
-            }
-        }
-    }
+    existing, generated = _v2_native_documents({"disabled": False})
     path.write_text(json.dumps(existing), encoding="utf-8")
     module.merge_configs_to_file("opencode-internal", path, json.dumps(generated))
     assert (
