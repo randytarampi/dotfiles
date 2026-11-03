@@ -231,6 +231,28 @@ def test_plugin_parser_accepts_concrete_version_only():
     assert parser.findall("opencode-dcp 3.2.1 (latest)") == [("opencode-dcp", "3.2.1")]
 
 
+_GATE_ADD_LINE = "if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\n"
+_GATE_CHECK_IF = "if [[ $1 == plugin && $2 == check ]]; then\n"
+_GATE_PROLOGUE = _GATE_ADD_LINE + _GATE_CHECK_IF
+_GATE_EPILOGUE = "fi\n"
+# The resolved-name branch mirrors the live 2.2.5 check output: Git-source
+# plugins print the bare repo name; scoped packages print the bare scope.
+_GATE_RESOLVE_OK = (
+    '    case "$3" in\n'
+    "        github:*) name=opencode-vibeguard-v2 ;;\n"
+    '        *) name="${3%@*}" ;;\n'
+    "    esac\n"
+)
+_GATE_OK_LINE = '    echo "$name 3.2.0 (current)"\n    exit 0\n'
+
+
+def _gate_stub(check_body):
+    """Compose a plugin-check stub: prologue + caller body + resolved echo + epilogue."""
+    return (
+        _GATE_PROLOGUE + check_body + _GATE_RESOLVE_OK + _GATE_OK_LINE + _GATE_EPILOGUE
+    )
+
+
 @pytest.mark.parametrize(
     ("target_spec", "check_lines", "should_pass", "expect_note"),
     [
@@ -293,17 +315,25 @@ def test_plugin_parser_accepts_concrete_version_only():
 def test_live_v2_check_output_shapes(
     tmp_path, target_spec, check_lines, should_pass, expect_note
 ):
-    body = "\n".join(f'  echo "{line}"' for line in check_lines)
+    body = "\n".join("        echo " + repr(line) for line in check_lines)
     script = (
-        "if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\n"
-        "if [[ $1 == plugin && $2 == check ]]; then\n"
-        '  case "$3" in\n'
-        f"    {target_spec})\n" + body + "\n      exit 0\n      ;;\n"
-        "    github:*) echo 'opencode-vibeguard-v2 3.2.0 (current)' ;;\n"
-        '    *) echo "${3%@*} 3.2.0 (current)" ;;\n'
-        "  esac\n"
-        "  exit 0\n"
-        "fi\n"
+        _GATE_PROLOGUE
+        + f'    case "$3" in\n        {target_spec})\n'
+        + body
+        + "\n        exit 0\n        ;;\n"
+        + _GATE_RESOLVE_OK.splitlines()[1]
+        + "\n"
+        + _GATE_RESOLVE_OK.splitlines()[2]
+        + "\n"
+        + "    esac\n"
+        + '    echo "'
+        + (
+            "opencode-vibeguard-v2 3.2.0 (current)"
+            if target_spec.startswith("github")
+            else "${3%@*} 3.2.0 (current)"
+        )
+        + '"\n    exit 0\n'
+        + _GATE_EPILOGUE
     )
     result = run_installer(tmp_path, opencode_script=script)
     combined = result.stdout + result.stderr
@@ -318,23 +348,18 @@ def test_live_v2_voice_check_failed_exit_with_current_tui(tmp_path):
     # Recorded 2026-11-03: the CLI exits 1 while BOTH sections print — the
     # Server artifact and the healthy TUI echo. The parsed (current) echo
     # decides; the exit code does not.
-    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then
-  case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
-    *) name="${3%@*}" ;;
-  esac
-  if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then
-    echo "Server"
-    echo "  opencode-voice 0.11.5 (check failed)"
-    echo "TUI"
-    echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"
-    exit 1
-  fi
-  echo "$name 3.2.0 (current)"
-  exit 0
-fi
-"""
+    voice_body = (
+        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
+        '        echo "Server"\n'
+        '        echo "  opencode-voice 0.11.5 (check failed)"\n'
+        '        echo "TUI"\n'
+        '        echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"\n'
+        "        exit 1\n"
+        "    fi\n"
+    )
+    script = (
+        _GATE_PROLOGUE + voice_body + _GATE_RESOLVE_OK + _GATE_OK_LINE + _GATE_EPILOGUE
+    )
     result = run_installer(tmp_path, opencode_script=script)
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
@@ -342,25 +367,25 @@ fi
 
 
 def test_update_lane_refreshes_update_available_and_rechecks_current(tmp_path):
-    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/plugin-updated"; exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then
-  case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
-    *) name="${3%@*}" ;;
-  esac
-  if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then
-    if [[ -f "$HOME/plugin-updated" ]]; then
-      echo "$name 3.2.1 (current)"
-      exit 0
-    fi
-    echo "$name 3.2.0 (update available)"
-    exit 0
-  fi
-  echo "$name 3.2.0 (current)"
-  exit 0
-fi
-"""
+    script = (
+        _GATE_ADD_LINE
+        + '    if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/plugin-updated"; exit 0; fi\n'
+        + _GATE_CHECK_IF
+        + _GATE_RESOLVE_OK
+        + (
+            '    if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then\n'
+            '        if [[ -f "$HOME/plugin-updated" ]]; then\n'
+            '            echo "$name 3.2.1 (current)"\n'
+            "            exit 0\n"
+            "        fi\n"
+            '        echo "$name 3.2.0 (update available)"\n'
+            "        exit 0\n"
+            "    fi\n"
+            '    echo "$name 3.2.0 (current)"\n'
+            "    exit 0\n"
+        )
+        + _GATE_EPILOGUE
+    )
     result = run_installer(tmp_path, opencode_script=script, update_gate="1")
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
@@ -368,43 +393,42 @@ fi
 
 
 def test_update_lane_recheck_still_update_available_fails_closed(tmp_path):
-    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == update ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then
-  case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
-    *) name="${3%@*}" ;;
-  esac
-  if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then
-    echo "$name 3.2.0 (update available)"
-    exit 0
-  fi
-  echo "$name 3.2.0 (current)"
-  exit 0
-fi
-"""
+    script = (
+        _GATE_PROLOGUE
+        + _GATE_RESOLVE_OK
+        + (
+            '    if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then\n'
+            '        echo "$name 3.2.0 (update available)"\n'
+            "        exit 0\n"
+            "    fi\n"
+            '    echo "$name 3.2.0 (current)"\n'
+            "    exit 0\n"
+        )
+        + _GATE_EPILOGUE
+    )
     result = run_installer(tmp_path, opencode_script=script, update_gate="1")
     assert result.returncode != 0, result.stdout + result.stderr
 
 
 def test_recorded_context_transient_gets_one_retry(tmp_path):
-    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then
-  n=$(cat "$HOME/check-count" 2>/dev/null || echo 0)
-  n=$((n + 1))
-  echo "$n" > "$HOME/check-count"
-  case "$3" in
-    github:*) name=opencode-vibeguard-v2 ;;
-    *) name="${3%@*}" ;;
-  esac
-  if [[ "$n" -eq 1 ]]; then
-    echo "Error: Plugin is not configured: $3"
-    exit 1
-  fi
-  echo "$name 3.2.0 (current)"
-  exit 0
-fi
-"""
+    script = (
+        _GATE_PROLOGUE
+        + (
+            '    n=$(cat "$HOME/check-count" 2>/dev/null || echo 0)\n'
+            "    n=$((n + 1))\n"
+            '    echo "$n" > "$HOME/check-count"\n'
+        )
+        + _GATE_RESOLVE_OK
+        + (
+            '    if [[ "$n" -eq 1 ]]; then\n'
+            '        echo "Error: Plugin is not configured: $3"\n'
+            "        exit 1\n"
+            "    fi\n"
+            '    echo "$name 3.2.0 (current)"\n'
+            "    exit 0\n"
+        )
+        + _GATE_EPILOGUE
+    )
     result = run_installer(tmp_path, opencode_script=script)
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
@@ -412,12 +436,11 @@ fi
 
 
 def test_persistent_context_error_fails_closed(tmp_path):
-    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
-if [[ $1 == plugin && $2 == check ]]; then
-  echo "Error: Plugin is not configured: $3"
-  exit 1
-fi
-"""
+    script = (
+        _GATE_PROLOGUE
+        + ('    echo "Error: Plugin is not configured: $3"\n' "    exit 1\n")
+        + _GATE_EPILOGUE
+    )
     result = run_installer(tmp_path, opencode_script=script)
     combined = result.stdout + result.stderr
     assert result.returncode != 0, combined
