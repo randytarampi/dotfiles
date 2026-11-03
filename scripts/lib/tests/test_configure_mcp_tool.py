@@ -634,11 +634,12 @@ def test_basic_memory_registry_renders_compatible_runtime_across_all_clients():
             command = [entry["command"], *entry["args"]]
         else:
             payload = json.loads(rendered)
-            namespace = (
-                "servers"
-                if spec["format"] == "json-servers"
-                else "mcp" if spec["format"] == "opencode-internal" else "mcpServers"
-            )
+            if spec["format"] == "json-servers":
+                namespace = "servers"
+            elif spec["format"] == "opencode-internal":
+                namespace = "mcp"
+            else:
+                namespace = "mcpServers"
             entry = payload[namespace]["basic-memory"]
             env = entry.get("environment", entry.get("env", {}))
             command = (
