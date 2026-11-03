@@ -9,7 +9,6 @@ set -euo pipefail
 # scripts/lib/meridian_path.py: {{ include "scripts/lib/meridian_path.py" | sha256sum }}
 # scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
 # scripts/lib/opencode_bin.sh: {{ include "scripts/lib/opencode_bin.sh" | sha256sum }}
-# opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -153,10 +152,6 @@ for plugin in active_plugin_specs(sys.argv[1]):
     print(plugin)
 PY
 )
-
-if [[ "${DOTFILES_RUN_OPENCODE_MEMORY_SETUP:-0}" != "1" ]]; then
-  info "DOTFILES_RUN_OPENCODE_MEMORY_SETUP='${DOTFILES_RUN_OPENCODE_MEMORY_SETUP:-0}' — skipping optional OpenCode plugin setup"
-fi
 
 # Install oh-my-opencode-slim via its dedicated installer (not opencode plugin)
 # --background-subagents=yes enables background subagents during install

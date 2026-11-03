@@ -91,7 +91,6 @@ def test_v2_installs_manifest_plugins_and_is_idempotent(tmp_path):
         for spec in active_plugin_specs(
             ROOT / "configs/opencode/opencode-plugins.json"
         )[1:]
-        if spec != "opencode-mem@latest"
     ] + ["plugin add @bojackduy/opencode-voice@latest"]
     assert calls == expected * 2
 

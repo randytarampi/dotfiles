@@ -8,6 +8,7 @@ source "${LIB_DIR}/env.sh"
 
 # Script hash triggers (re-run when MCP configs or helpers change):
 # configs/mcp/atlassian.json: {{ include "configs/mcp/atlassian.json" | sha256sum }}
+# configs/mcp/basic-memory.json: {{ include "configs/mcp/basic-memory.json" | sha256sum }}
 # configs/mcp/betterstack.json: {{ include "configs/mcp/betterstack.json" | sha256sum }}
 # configs/mcp/codegraph.json: {{ include "configs/mcp/codegraph.json" | sha256sum }}
 # configs/mcp/context7.json: {{ include "configs/mcp/context7.json" | sha256sum }}
@@ -20,6 +21,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/shortcut.json: {{ include "configs/mcp/shortcut.json" | sha256sum }}
 
 # configs/mcp/templates/atlassian.json: {{ include "configs/mcp/templates/atlassian.json" | sha256sum }}
+# configs/mcp/templates/basic-memory.json: {{ include "configs/mcp/templates/basic-memory.json" | sha256sum }}
 # configs/mcp/templates/betterstack.json: {{ include "configs/mcp/templates/betterstack.json" | sha256sum }}
 # configs/mcp/templates/codegraph.json: {{ include "configs/mcp/templates/codegraph.json" | sha256sum }}
 # configs/mcp/templates/context7.json: {{ include "configs/mcp/templates/context7.json" | sha256sum }}
