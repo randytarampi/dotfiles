@@ -112,7 +112,9 @@ those descriptions are therefore limitations rather than repo changes.
 ### Package decisions
 
 `@xzzpig/pi-vibeguard` is approved baseline security parity, not an optional UI
-extension. `pi-edit-session-in-place` is the optional UI package. The rewind
+extension. `pi-edit-session-in-place` was removed from the managed package
+list on 2026-11-03: upstream unpublished it from npm on 2026-10-31, and every
+`pi update --all` fails while the dead entry is requested. The rewind
 hook is not enabled. The following packages are
 explicitly declined: `pi-side-chat`, `pi-intercom`, `pi-messenger`,
 `pi-interactive-shell`, `pi-rewind-hook`, `pi-custom-compaction`, and
