@@ -328,6 +328,7 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert "Stop runner-local LiteLLM" in workflow
     assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
 
+
 def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
     fixture = json.loads(
         (ROOT / "configs/opencode/ci/opencode.json").read_text(encoding="utf-8")
@@ -340,7 +341,10 @@ def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
         assert "npm" not in provider and "options" not in provider
 
     for route, overrides in (
-        ("mistral", {"REVIEW_INFERENCE_PROVIDER": "mistral", "HAS_MISTRAL_KEY": "true"}),
+        (
+            "mistral",
+            {"REVIEW_INFERENCE_PROVIDER": "mistral", "HAS_MISTRAL_KEY": "true"},
+        ),
         ("review-free", {"HAS_MISTRAL_KEY": "true", "HAS_GROQ_KEY": "true"}),
     ):
         target = tmp_path / route

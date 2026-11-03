@@ -727,6 +727,7 @@ def test_basic_memory_missing_from_generated_set_does_not_block_removal(tmp_path
         "codegraph": {"command": "codegraph"}
     }
 
+
 @pytest.mark.parametrize(
     "extra",
     [

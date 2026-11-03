@@ -265,8 +265,7 @@ def _native_model_entry(entry):
     variants = model.get("variants")
     if isinstance(variants, dict):
         model["variants"] = [
-            {"id": name, "settings": settings}
-            for name, settings in variants.items()
+            {"id": name, "settings": settings} for name, settings in variants.items()
         ]
     return model
 

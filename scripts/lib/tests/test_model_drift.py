@@ -298,6 +298,7 @@ def test_provider_url_and_key_read_v2_native_settings(tmp_path, monkeypatch):
         == "NATIVE_PROVIDER_NOT_PROXIED"
     )
 
+
 def test_native_provider_does_not_fall_back_to_stale_legacy_fields():
     native = {
         "package": "@opencode/ai/providers/openai-compatible",
