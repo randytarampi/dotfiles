@@ -113,25 +113,27 @@ def test_plugin_check_failure_is_fail_closed():
     source = (
         ROOT.parent / ".chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl"
     ).read_text()
-    check_block = source.split('output="$("${OC_MANAGED}" plugin check', 1)[1].split(
-        "done", 1
+    check_block = source.split("opencode_plugin_check_retried() {", 1)[1].split(
+        "PLUGIN_RESOLVED_VERSIONS=()", 1
     )[0]
-    assert "PLUGIN_INSTALL_FAILED=1" in check_block
+    assert "PLUGIN_INSTALL_FAILED=1" in source
     # The check exit code is captured but not trusted — the parser decides.
     # A crashed check with empty output still fails closed at the parser.
-    # (The split key above consumed '"${OC_MANAGED}" plugin check' already.)
-    assert '"${plugin}" 2>&1)" || check_exit=$?' in check_block
-    assert '"${output}" "" 0 "${check_exit}"' in check_block
+    assert (
+        '"${OC_MANAGED}" plugin check "${spec}" 2>&1)" || check_exit=$?' in check_block
+    )
+    assert "parse_plugin_check" in check_block
+    # The recorded context transient gets one bounded retry, not a silent pass.
+    assert '*"Plugin is not configured"*' in check_block
+    assert '"${attempt}" -lt 2' in check_block
     assert "parser failed" in check_block
+    assert 'cd "$HOME"' in source
+    assert 'die "One or more OpenCode plugin version checks failed"' in source
     assert '"${OC_MANAGED}" plugin update "${plugin}"' in source
     assert 'if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then' in source
-    # The recheck lane trusts parsed output, not the check exit code.
-    recheck_block = source.split("# Same tolerated-exit handling", 1)[1]
-    assert (
-        'recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?'
-        in recheck_block
-    )
-    assert "recheck parser failed" in recheck_block
+    # The recheck lane trusts parsed output, not the check exit code, and
+    # stays strict: a refreshed plugin must report (current).
+    assert 'opencode_plugin_check_retried "${plugin}" "" 1' in source
     # Every plugin subcommand runs through the managed-binary resolver.
     assert 'opencode plugin add "${plugin}"' not in source
     assert "opencode_managed_bin" in source
@@ -227,6 +229,198 @@ def test_plugin_parser_accepts_concrete_version_only():
     assert parser.findall("opencode-dcp (check failed)") == []
     assert parser.findall("opencode-dcp (check") == []
     assert parser.findall("opencode-dcp 3.2.1 (latest)") == [("opencode-dcp", "3.2.1")]
+
+
+@pytest.mark.parametrize(
+    ("target_spec", "check_lines", "should_pass", "expect_note"),
+    [
+        # The TUI section echoes the configured spec (alias included) even
+        # without a Server section — recorded from the 2026-11-03 TMPDIR run.
+        (
+            "@tarquinen/opencode-dcp@latest",
+            ["@tarquinen/opencode-dcp@latest 3.2.0 (current)"],
+            True,
+            False,
+        ),
+        # Server + TUI sections printing one agreeing (version, status) pair.
+        (
+            "@tarquinen/opencode-dcp@latest",
+            [
+                "Server",
+                "  opencode-dcp 3.2.0 (current)",
+                "TUI",
+                "  @tarquinen/opencode-dcp@latest 3.2.0 (current)",
+            ],
+            True,
+            False,
+        ),
+        # Disagreeing sections are a real divergence and fail closed.
+        (
+            "@tarquinen/opencode-dcp@latest",
+            [
+                "Server",
+                "  opencode-dcp 3.2.0 (current)",
+                "TUI",
+                "  @tarquinen/opencode-dcp@latest 3.3.0 (latest)",
+            ],
+            False,
+            False,
+        ),
+        # Recorded 2026-11-03: @plannotator prints (update available) while
+        # configured with @latest; ordinary deploys pass with a note.
+        (
+            "@plannotator/opencode@latest",
+            ["plannotator 0.28.45 (update available)"],
+            True,
+            True,
+        ),
+        # Recorded 2026-11-03: voice prints BOTH the Server "(check failed)"
+        # artifact and a TUI "(current)" echo with the same version; the
+        # tolerated artifact must not create a second pair.
+        (
+            "@bojackduy/opencode-voice@latest",
+            [
+                "Server",
+                "  opencode-voice 0.11.5 (check failed)",
+                "TUI",
+                "  @bojackduy/opencode-voice@latest 0.11.5 (current)",
+            ],
+            True,
+            False,
+        ),
+    ],
+)
+def test_live_v2_check_output_shapes(
+    tmp_path, target_spec, check_lines, should_pass, expect_note
+):
+    body = "\n".join(f'  echo "{line}"' for line in check_lines)
+    script = (
+        "if [[ $1 == plugin && $2 == add ]]; then exit 0; fi\n"
+        "if [[ $1 == plugin && $2 == check ]]; then\n"
+        '  case "$3" in\n'
+        f"    {target_spec})\n" + body + "\n      exit 0\n      ;;\n"
+        "    github:*) echo 'opencode-vibeguard-v2 3.2.0 (current)' ;;\n"
+        '    *) echo "${3%@*} 3.2.0 (current)" ;;\n'
+        "  esac\n"
+        "  exit 0\n"
+        "fi\n"
+    )
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert (result.returncode == 0) is should_pass, combined
+    if expect_note and should_pass:
+        assert "behind upstream" in combined
+    if not should_pass:
+        assert "ambiguous version/status lines" in combined
+
+
+def test_live_v2_voice_check_failed_exit_with_current_tui(tmp_path):
+    # Recorded 2026-11-03: the CLI exits 1 while BOTH sections print — the
+    # Server artifact and the healthy TUI echo. The parsed (current) echo
+    # decides; the exit code does not.
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then
+    echo "Server"
+    echo "  opencode-voice 0.11.5 (check failed)"
+    echo "TUI"
+    echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"
+    exit 1
+  fi
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+"""
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, combined
+    assert "tolerated upstream headless-context limitation" in combined
+
+
+def test_update_lane_refreshes_update_available_and_rechecks_current(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/plugin-updated"; exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then
+    if [[ -f "$HOME/plugin-updated" ]]; then
+      echo "$name 3.2.1 (current)"
+      exit 0
+    fi
+    echo "$name 3.2.0 (update available)"
+    exit 0
+  fi
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+"""
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, combined
+    assert "OpenCode plugin update @tarquinen/opencode-dcp@latest" in combined
+
+
+def test_update_lane_recheck_still_update_available_fails_closed(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == update ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  if [[ "$3" == "@tarquinen/opencode-dcp@latest" ]]; then
+    echo "$name 3.2.0 (update available)"
+    exit 0
+  fi
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+"""
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_recorded_context_transient_gets_one_retry(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  n=$(cat "$HOME/check-count" 2>/dev/null || echo 0)
+  n=$((n + 1))
+  echo "$n" > "$HOME/check-count"
+  case "$3" in
+    github:*) name=opencode-vibeguard-v2 ;;
+    *) name="${3%@*}" ;;
+  esac
+  if [[ "$n" -eq 1 ]]; then
+    echo "Error: Plugin is not configured: $3"
+    exit 1
+  fi
+  echo "$name 3.2.0 (current)"
+  exit 0
+fi
+"""
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, combined
+    assert "retrying once" in combined
+
+
+def test_persistent_context_error_fails_closed(tmp_path):
+    script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
+if [[ $1 == plugin && $2 == check ]]; then
+  echo "Error: Plugin is not configured: $3"
+  exit 1
+fi
+"""
+    result = run_installer(tmp_path, opencode_script=script)
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
 
 
 def test_successful_update_recheck_uses_same_current_line_parser(tmp_path):

@@ -62,21 +62,58 @@ for form in (spec_base, unscoped):
 if spec_base.startswith("github:"):
     repo = spec_base.split("#", 1)[0].rsplit("/", 1)[-1]
     names.update({repo, repo[:-3] if repo.endswith("-v2") else repo})
+# The TUI status section echoes the CONFIGURED spec text (alias included),
+# e.g. "@tarquinen/opencode-dcp@latest 3.2.0 (current)", while the Server
+# section resolves to a bare package name. Record the echo forms as well;
+# the exactly-one-distinct-pair rule below stays strict.
+names.add(spec)
+names.add(spec_base + "@latest")
 matches = []
 for line in sys.stdin:
-    match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[0-9a-f]{7,40})\s+\((current|latest|check failed)\)\s*", line.rstrip("\n"))
+    match = re.fullmatch(r"\s*(\S+)\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[0-9a-f]{7,40})\s+\((current|latest|check failed|update available)\)\s*", line.rstrip("\n"))
     if match and match.group(1) in names:
         matches.append((match.group(1), match.group(2), match.group(3)))
-if len(matches) != 1:
+if not matches:
     print("ERROR: expected exactly one version/status line for " + spec, file=sys.stderr)
     sys.exit(2)
+def _is_tolerated_voice_failure(entry):
+    identity_, version_, status_ = entry
+    return (status_ == "check failed"
+            and spec_base == "@bojackduy/opencode-voice"
+            and identity_ == "opencode-voice"
+            and version_ == "0.11.5")
+voice_tolerated_lines = [m for m in matches if _is_tolerated_voice_failure(m)]
+if voice_tolerated_lines:
+    # Recorded 2026-11-03 on the live 2.2.5 host: voice prints BOTH a Server
+    # "(check failed)" table (the upstream headless-context artifact) and a
+    # TUI "(current)" echo with the same version. Drop the known artifact so
+    # the distinct-pair rule sees the honest line; when the artifact was the
+    # only line, keep it and preserve the tolerated semantics below.
+    matches = [m for m in matches if not _is_tolerated_voice_failure(m)]
+    if not matches:
+        matches = voice_tolerated_lines[:1]
+# The 2.2.5 CLI may print multiple status sections (Server and TUI) for the
+# same plugin. Sections must agree: exactly one distinct (version, status)
+# pair. Disagreeing sections are a real divergence and still fail closed.
+pairs = {(version_, status_) for _, version_, status_ in matches}
+if len(pairs) != 1:
+    print("ERROR: ambiguous version/status lines for " + spec + ": " + ", ".join(
+        version_ + " (" + status_ + ")" for version_, status_ in sorted(pairs)
+    ), file=sys.stderr)
+    sys.exit(2)
 identity, version, status = matches[0]
+tolerated = False
+if voice_tolerated_lines:
+    # The check command exits nonzero BECAUSE of the recorded artifact above;
+    # the parser still decided from a healthy (current) echo line. Suppress
+    # the exit-code guard exactly the way the all-lines-failed case does.
+    tolerated = True
+    print("WARNING: " + spec + " check status is the tolerated upstream headless-context limitation (see cutover ledger)", file=sys.stderr)
 # Only Git-sourced plugins resolve to short commit hashes. A non-Git plugin
 # returning a SHA is not a concrete published-package version.
 if re.fullmatch(r"[0-9a-f]{7,40}", version) and not spec_base.startswith("github:"):
     print("ERROR: unexpected Git SHA version for non-Git plugin " + spec, file=sys.stderr)
     sys.exit(2)
-tolerated = False
 if status == "check failed":
     # Recorded 2026-11-02 on the v2 cutover machine: the printed line was
     # "opencode-voice 0.11.5 (check failed)". Root cause is upstream —
@@ -99,7 +136,13 @@ if check_exit != "0" and not tolerated:
 if expected and version != expected:
     print("ERROR: resolved version changed for " + spec + ": expected " + expected + ", got " + version, file=sys.stderr)
     sys.exit(2)
-if not tolerated and status != "current" and not (status == "latest" and current_only != "1"):
+if status == "update available" and current_only != "1":
+    # Recorded 2026-11-03 from the live 2.2.5 host: @plannotator/opencode
+    # prints "(update available)" while configured with @latest. Ordinary
+    # deploys do not refresh packages; the managed update lane refreshes
+    # explicitly and its post-update recheck still requires (current).
+    print("NOTE: " + spec + " is behind upstream (" + version + " installed); refresh runs in the managed update lane", file=sys.stderr)
+if not tolerated and status != "current" and not (status in ("latest", "update available") and current_only != "1"):
     print("ERROR: plugin is not current for " + spec + ": " + status, file=sys.stderr)
     sys.exit(2)
 print(version)
@@ -216,6 +259,39 @@ if [[ "${PLUGIN_INSTALL_FAILED}" -ne 0 ]]; then
   die "One or more OpenCode CLI plugins failed to install"
 fi
 
+# OpenCode plugin checks resolve their configuration context from the working
+# directory. From scratch contexts the 2.2.5 CLI intermittently reports
+# false "Plugin is not configured" errors for globally configured plugins
+# (recorded 2026-11-03 in the update lane) or prints partial status sections.
+# Pin the context to $HOME and retry a bounded once on that known transient
+# before failing closed.
+cd "$HOME" || die "cannot enter $HOME for plugin checks"
+
+# Shared check helper: runs $OC_MANAGED plugin check, captures the exit code
+# without trusting it, retries the recorded context transient once, and
+# returns the parsed version through stdout. $1=spec $2=expected version
+# ("" at install time) $3=current_only ("1" for post-update rechecks).
+opencode_plugin_check_retried() {
+  local spec="$1" expected="$2" current_only="$3" attempt check_exit output parsed
+  for attempt in 1 2; do
+    check_exit=0
+    output="$("${OC_MANAGED}" plugin check "${spec}" 2>&1)" || check_exit=$?
+    parsed="$(parse_plugin_check "${spec}" "${output}" "${expected}" "${current_only}" "${check_exit}")" || parsed=""
+    if [[ -n "${parsed}" ]]; then
+      printf '%s\n' "${parsed}"
+      return 0
+    fi
+    if [[ "${attempt}" -lt 2 && ( -z "${output}" || "${output}" == *"Plugin is not configured"* ) ]]; then
+      warn "OpenCode plugin check ${spec} reported a transient context error; retrying once"
+      sleep 1
+      continue
+    fi
+    warn "OpenCode plugin check ${spec} parser failed: ${output}"
+    return 1
+  done
+  return 1
+}
+
 PLUGIN_RESOLVED_VERSIONS=()
 for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
   # The check command can exit nonzero while still printing a parseable
@@ -223,13 +299,10 @@ for plugin in "${PLUGINS[@]}" "${CLI_PLUGIN_SPECS[@]}"; do
   # failure). Capture regardless of exit code and let the parser's
   # exactly-one-match + tolerance + status rules decide; a crashed check
   # with empty output still fails closed here.
-  check_exit=0
-  output="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?
-  if resolved_version="$(parse_plugin_check "${plugin}" "${output}" "" 0 "${check_exit}")"; then
+  if resolved_version="$(opencode_plugin_check_retried "${plugin}" "" 0)"; then
     PLUGIN_RESOLVED_VERSIONS+=("${plugin}=${resolved_version}")
-    info "OpenCode plugin check ${plugin}: resolved=${resolved_version}; ${output}"
+    info "OpenCode plugin check ${plugin}: resolved=${resolved_version}"
   else
-    warn "OpenCode plugin check ${plugin} parser failed: ${output}"
     PLUGIN_INSTALL_FAILED=1
   fi
 done
@@ -250,13 +323,12 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
         fi
       done
       # Same tolerated-exit handling as the install-time check above: parse
-      # the recheck output regardless of the check exit code.
-      check_exit=0
-      recheck="$("${OC_MANAGED}" plugin check "${plugin}" 2>&1)" || check_exit=$?
-      if resolved_version="$(parse_plugin_check "${plugin}" "${recheck}" "" 1 "${check_exit}")"; then
-        info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}; ${recheck}"
+      # the recheck output regardless of the check exit code. current_only=1
+      # keeps the recheck strict: a refreshed plugin must report (current).
+      if resolved_version="$(opencode_plugin_check_retried "${plugin}" "" 1)"; then
+        info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}"
       else
-        warn "OpenCode plugin ${plugin} recheck parser failed: ${recheck}"
+        warn "OpenCode plugin ${plugin} recheck parser failed"
         PLUGIN_UPDATE_FAILED=1
       fi
     else
