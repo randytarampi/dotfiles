@@ -435,6 +435,63 @@ def test_recorded_context_transient_gets_one_retry(tmp_path):
     assert "retrying once" in combined
 
 
+def test_update_lane_voice_update_artifact_recovers(tmp_path):
+    # Recorded 2026-11-03: `plugin update` for voice fails with the same
+    # upstream headless-context crash the check path tolerates (the CLI
+    # prints 'Failed to check Server plugin "opencode-voice"'), and the
+    # plugin reports no available update. The lane tolerates this exact
+    # signature for this spec and still passes the strict recheck.
+    voice_body = (
+        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
+        '        if [[ -f "$HOME/update-attempted" ]]; then\n'
+        '            echo "Server"\n'
+        '            echo "  opencode-voice 0.11.5 (check failed)"\n'
+        '            echo "TUI"\n'
+        '            echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"\n'
+        "            exit 1\n"
+        "        fi\n"
+        "    fi\n"
+    )
+    script = (
+        _GATE_ADD_LINE
+        + '    if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/update-attempted"; if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then echo "Failed to check Server plugin \\"opencode-voice\\""; exit 1; fi; exit 0; fi\n'
+        + _GATE_CHECK_IF
+        + voice_body
+        + _GATE_RESOLVE_OK
+        + _GATE_OK_LINE
+        + _GATE_EPILOGUE
+    )
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, combined
+    assert "tolerated upstream headless-context failure" in combined
+    assert "OpenCode plugin recheck @bojackduy/opencode-voice@latest" in combined
+
+
+def test_update_lane_voice_artifact_not_matched_fails_closed(tmp_path):
+    # The tolerance is signature-scoped: a voice update failure without the
+    # recorded CLI line still aborts the lane, as does any other plugin.
+    voice_body = (
+        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
+        '        echo "  opencode-voice 0.11.5 (check failed)"\n'
+        "        exit 1\n"
+        "    fi\n"
+    )
+    script = (
+        _GATE_ADD_LINE
+        + "    if [[ $1 == plugin && $2 == update ]]; then exit 1; fi\n"
+        + _GATE_CHECK_IF
+        + voice_body
+        + _GATE_RESOLVE_OK
+        + _GATE_OK_LINE
+        + _GATE_EPILOGUE
+    )
+    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
+    assert "OpenCode plugin update @bojackduy/opencode-voice@latest failed" in combined
+
+
 def test_persistent_context_error_fails_closed(tmp_path):
     script = (
         _GATE_PROLOGUE
