@@ -10,7 +10,7 @@
   ],
   "cli_plugins": [
     {
-      "package": "@bojackduy/opencode-voice@latest"
+      "package": "@renjfk/opencode-voice@latest"
     }
   ],
   "gated": {},

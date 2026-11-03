@@ -25,7 +25,7 @@
 | Plannotator | `@plannotator/opencode@latest` | 0.28.22+ source candidate, check npm |
 | TokenScope | `@cheesecodestudio/opencode-tokenscope-v2@latest` | 2.0.0+, reject major 3+ |
 | Secret redaction | `github:AxeForce/opencode-vibeguard-v2#main` | reviewed floating main branch, source 0.2.0 |
-| Voice | `@bojackduy/opencode-voice@latest` | 0.11.1+ source candidate, check npm |
+| Voice | `@renjfk/opencode-voice@latest` | 1.0.0+ native v2; the 2026-11-03 bojackduy fork swap is retired |
 | Memory | `opencode-mem@latest` | 2.29.2+; prefer verified 2.31.x+ |
 | Quota | **none** | intentionally removed |
 | Meridian | `@rynfar/meridian` via `meridian setup --v2` | newest release qualifying host |
@@ -81,6 +81,6 @@ Owner-only verification: real model credentials/entitlements and billing, Meridi
 - [OpenCode Memory](https://github.com/tickernelz/opencode-mem#-getting-started)
 - [OMO Slim compatibility](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/opencode-v2-compatibility.md)
 - [Plannotator](https://github.com/backnotprop/plannotator/blob/main/apps/opencode-plugin/README.md)
-- [Voice v2](https://github.com/bojackduy/opencode-voice)
+- [Voice v2](https://github.com/renjfk/opencode-voice)
 - [TokenScope v2](https://github.com/cheesecodestudio/opencode-tokenscope-v2)
 - [VibeGuard candidate](https://github.com/link-seek/opencode-vibeguard)
