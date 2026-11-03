@@ -2,7 +2,7 @@
 
 > Deep reference for voice plugin configuration, tier mapping, and dependencies.
 
-OpenCode voice support is provided by [`@bojackduy/opencode-voice`](https://github.com/bojackduy/opencode-voice) — a TUI-only plugin that adds voice input (STT) and output (TTS) to the OpenCode terminal interface. (The v1-era package `@renjfk/opencode-voice` has been replaced; the writer removes any stale entries it previously managed in `tui.json`.)
+OpenCode voice support is provided by [`@renjfk/opencode-voice`](https://github.com/renjfk/opencode-voice) — a TUI-only plugin that adds voice input (STT) and output (TTS) to the OpenCode terminal interface. (The v2-era fork `@bojackduy/opencode-voice` is retired: its headless-context crash (adaptV2Context) broke TUI starts; upstream is native v2 again, and the writer removes stale entries the fork previously managed in `cli.json`.)
 
 ---
 
@@ -17,7 +17,7 @@ OpenCode voice support is provided by [`@bojackduy/opencode-voice`](https://gith
 
 ## Voice Config Generation
 
-`scripts/configure-opencode-voice.py` writes `~/.config/opencode/cli.json` with a tier-aware voice plugin entry of the form `{"package": "@bojackduy/opencode-voice@latest", "options": {…}}`. It merges with any pre-existing `cli.json` (including entries upstream migrates from `tui.json`, and both the entry-array and the `{plugins: [...]}` object root upstream consumes), preserves every unrelated entry, and preserves unknown option keys the user set (e.g. `sttAutoSubmit`, `ttsVoice`). It is called automatically by `configure-opencode.py` after tier switching.
+`scripts/configure-opencode-voice.py` writes `~/.config/opencode/cli.json` with a tier-aware voice plugin entry of the form `{"package": "@renjfk/opencode-voice@latest", "options": {…}}`. It merges with any pre-existing `cli.json` (including entries upstream migrates from `tui.json`, and both the entry-array and the `{plugins: [...]}` object root upstream consumes), preserves every unrelated entry, and preserves unknown option keys the user set (e.g. `sttAutoSubmit`, `ttsVoice`). It is called automatically by `configure-opencode.py` after tier switching.
 
 Two transition guarantees:
 
@@ -145,7 +145,7 @@ Voice deps in `run_onchange_07-install-opencode-plugins.sh.tmpl` are gated on `D
 
 | Tool | Voice support | Mechanism | Notes |
 |---|---|---|---|
-| opencode | Full (STT + TTS) | `@bojackduy/opencode-voice` plugin (cli.json) | Tier-aware; see sections above |
+| opencode | Full (STT + TTS) | `@renjfk/opencode-voice` plugin (cli.json) | Tier-aware; see sections above |
 | pi | STT only | `@juicesharp/rpiv-voice` plugin | TTS not available; hallucination filter configurable |
 | claude | STT only | built-in `/voice` dictation | No TTS; speech-to-text only |
 | codex | None | — | No voice plugin or built-in support |
@@ -172,7 +172,7 @@ model formats and fixed paths.
 
 ### Piper TTS
 
-Piper is currently OpenCode-only (via `@bojackduy/opencode-voice`). No other tool
+Piper is currently OpenCode-only (via `@renjfk/opencode-voice`). No other tool
 in this repo has Piper integration. The Piper voice model is configured via
 `DOTFILES_PIPER_VOICE` and managed by `scripts/configure-opencode-voice.py`.
 

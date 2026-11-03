@@ -95,10 +95,11 @@ from opencode_plugins import (  # noqa: E402 -- scripts/lib bootstrap ordering.
     active_cli_plugin_specs,
 )
 
-VOICE_PLUGIN_KEY = "@bojackduy/opencode-voice"
-# The previously managed v1-era voice package: its stale tui.json entries are
-# also ours to clean after the cli.json replacement works.
-LEGACY_VOICE_PLUGIN_KEY = "@renjfk/opencode-voice"
+VOICE_PLUGIN_KEY = "@renjfk/opencode-voice"
+# The v2-era fork previously managed here: it crashed headless loads
+# (adaptV2Context) and upstream @renjfk is native v2 again; its stale
+# cli.json entries are ours to clean after the replacement works.
+LEGACY_VOICE_PLUGIN_KEY = "@bojackduy/opencode-voice"
 
 
 def _spec_matches_key(value, key):
@@ -1145,14 +1146,15 @@ def get_voice_config(tier: str, options=None, state=None) -> dict:
     elif resolved_transport == "local":
         configure_local_stt()
 
-    # This plugin synthesizes through Piper; HTTP TTS belongs to Open WebUI.
+    # This plugin synthesizes through local Piper; HTTP TTS belongs to
+    # Open WebUI (and the STT API endpoint serves ASR, not speech).
     discovered_tts = any(
         model.get("model_type") == "audio_tts" for model in audio_models("omlx")
     )
     logger.warning(
-        "The installed opencode-voice consumer (<=0.6.0) synthesizes via local "
-        "Piper and ignores HTTP TTS configuration; local HTTP TTS is served "
-        "through the Open WebUI audio bundle%s",
+        "The opencode-voice consumer synthesizes via local Piper and ignores "
+        "HTTP TTS configuration; local HTTP TTS is served through the "
+        "Open WebUI audio bundle%s",
         " (oMLX TTS model discovered)" if discovered_tts else "",
     )
 

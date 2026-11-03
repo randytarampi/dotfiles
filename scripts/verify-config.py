@@ -1320,7 +1320,7 @@ def check_opencode_orphan_files():
             )
             if isinstance(tui_entries, list):
                 managed_tui_prefixes = (
-                    "@bojackduy/opencode-voice",
+                    "@renjfk/opencode-voice",
                     "@tarquinen/opencode-dcp",
                 )
                 lingering = {

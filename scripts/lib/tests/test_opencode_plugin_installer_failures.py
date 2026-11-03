@@ -145,20 +145,9 @@ def test_plugin_check_failure_is_fail_closed():
         (None, None, True),
         ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (current)", False),
         ("@tarquinen/opencode-dcp@latest", "opencode-dcp 3.2.0 (check failed)", False),
-        (
-            "@bojackduy/opencode-voice@latest",
-            "opencode-voice 0.11.5 (check failed)",
-            True,
-        ),
-        (
-            "@bojackduy/opencode-voice@latest",
-            "opencode-voice 0.11.6 (check failed)",
-            False,
-        ),
-        ("@bojackduy/opencode-voice@latest", "bojackduy 0.11.5 (check failed)", False),
     ],
 )
-def test_nonzero_check_exit_only_tolerates_known_voice_headless_failure(
+def test_nonzero_check_exit_fails_closed_on_check_failures(
     tmp_path, failed_spec, check_line, should_pass
 ):
     script = """if [[ $1 == plugin && $2 == add ]]; then exit 0; fi
@@ -180,9 +169,7 @@ fi
     result = run_installer(tmp_path, opencode_script=script)
     combined = result.stdout + result.stderr
     assert (result.returncode == 0) is should_pass, combined
-    if failed_spec and should_pass:
-        assert "tolerated upstream headless-context limitation" in combined
-    elif failed_spec:
+    if failed_spec:
         assert "parser failed" in combined
 
 
@@ -296,20 +283,6 @@ def _gate_stub(check_body):
             True,
             True,
         ),
-        # Recorded 2026-11-03: voice prints BOTH the Server "(check failed)"
-        # artifact and a TUI "(current)" echo with the same version; the
-        # tolerated artifact must not create a second pair.
-        (
-            "@bojackduy/opencode-voice@latest",
-            [
-                "Server",
-                "  opencode-voice 0.11.5 (check failed)",
-                "TUI",
-                "  @bojackduy/opencode-voice@latest 0.11.5 (current)",
-            ],
-            True,
-            False,
-        ),
     ],
 )
 def test_live_v2_check_output_shapes(
@@ -342,28 +315,6 @@ def test_live_v2_check_output_shapes(
         assert "behind upstream" in combined
     if not should_pass:
         assert "ambiguous version/status lines" in combined
-
-
-def test_live_v2_voice_check_failed_exit_with_current_tui(tmp_path):
-    # Recorded 2026-11-03: the CLI exits 1 while BOTH sections print — the
-    # Server artifact and the healthy TUI echo. The parsed (current) echo
-    # decides; the exit code does not.
-    voice_body = (
-        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
-        '        echo "Server"\n'
-        '        echo "  opencode-voice 0.11.5 (check failed)"\n'
-        '        echo "TUI"\n'
-        '        echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"\n'
-        "        exit 1\n"
-        "    fi\n"
-    )
-    script = (
-        _GATE_PROLOGUE + voice_body + _GATE_RESOLVE_OK + _GATE_OK_LINE + _GATE_EPILOGUE
-    )
-    result = run_installer(tmp_path, opencode_script=script)
-    combined = result.stdout + result.stderr
-    assert result.returncode == 0, combined
-    assert "tolerated upstream headless-context limitation" in combined
 
 
 def test_update_lane_refreshes_update_available_and_rechecks_current(tmp_path):
@@ -433,63 +384,6 @@ def test_recorded_context_transient_gets_one_retry(tmp_path):
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
     assert "retrying once" in combined
-
-
-def test_update_lane_voice_update_artifact_recovers(tmp_path):
-    # Recorded 2026-11-03: `plugin update` for voice fails with the same
-    # upstream headless-context crash the check path tolerates (the CLI
-    # prints 'Failed to check Server plugin "opencode-voice"'), and the
-    # plugin reports no available update. The lane tolerates this exact
-    # signature for this spec and still passes the strict recheck.
-    voice_body = (
-        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
-        '        if [[ -f "$HOME/update-attempted" ]]; then\n'
-        '            echo "Server"\n'
-        '            echo "  opencode-voice 0.11.5 (check failed)"\n'
-        '            echo "TUI"\n'
-        '            echo "  @bojackduy/opencode-voice@latest 0.11.5 (current)"\n'
-        "            exit 1\n"
-        "        fi\n"
-        "    fi\n"
-    )
-    script = (
-        _GATE_ADD_LINE
-        + '    if [[ $1 == plugin && $2 == update ]]; then touch "$HOME/update-attempted"; if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then echo "Failed to check Server plugin \\"opencode-voice\\""; exit 1; fi; exit 0; fi\n'
-        + _GATE_CHECK_IF
-        + voice_body
-        + _GATE_RESOLVE_OK
-        + _GATE_OK_LINE
-        + _GATE_EPILOGUE
-    )
-    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
-    combined = result.stdout + result.stderr
-    assert result.returncode == 0, combined
-    assert "tolerated upstream headless-context failure" in combined
-    assert "OpenCode plugin recheck @bojackduy/opencode-voice@latest" in combined
-
-
-def test_update_lane_voice_artifact_not_matched_fails_closed(tmp_path):
-    # The tolerance is signature-scoped: a voice update failure without the
-    # recorded CLI line still aborts the lane, as does any other plugin.
-    voice_body = (
-        '    if [[ "$3" == "@bojackduy/opencode-voice@latest" ]]; then\n'
-        '        echo "  opencode-voice 0.11.5 (check failed)"\n'
-        "        exit 1\n"
-        "    fi\n"
-    )
-    script = (
-        _GATE_ADD_LINE
-        + "    if [[ $1 == plugin && $2 == update ]]; then exit 1; fi\n"
-        + _GATE_CHECK_IF
-        + voice_body
-        + _GATE_RESOLVE_OK
-        + _GATE_OK_LINE
-        + _GATE_EPILOGUE
-    )
-    result = run_installer(tmp_path, opencode_script=script, update_gate="1")
-    combined = result.stdout + result.stderr
-    assert result.returncode != 0, combined
-    assert "OpenCode plugin update @bojackduy/opencode-voice@latest failed" in combined
 
 
 def test_persistent_context_error_fails_closed(tmp_path):
