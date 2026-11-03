@@ -332,8 +332,32 @@ if [[ "${DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE:-0}" == "1" ]]; then
         PLUGIN_UPDATE_FAILED=1
       fi
     else
-      warn "OpenCode plugin update ${plugin} failed: ${output}"
-      PLUGIN_UPDATE_FAILED=1
+      # Recorded 2026-11-03: `plugin update` for @bojackduy/opencode-voice
+      # fails with the same upstream headless-context crash the check path
+      # tolerates (adaptV2Context: ctx.client.session absent in the headless
+      # update context; the CLI prints 'Failed to check Server plugin
+      # "opencode-voice"'), while the plugin itself reports no available
+      # update. Tolerate ONLY this spec with this signature; any other
+      # plugin's update failure still aborts the update lane.
+      if [[ "${plugin}" == "@bojackduy/opencode-voice@latest" && "${output}" == *'Failed to check Server plugin "opencode-voice"'* ]]; then
+        warn "OpenCode plugin update ${plugin} reported the tolerated upstream headless-context failure (see cutover ledger); no update was applied"
+        expected_version=""
+        for resolved in "${PLUGIN_RESOLVED_VERSIONS[@]}"; do
+          if [[ "${resolved%%=*}" == "${plugin}" ]]; then
+            expected_version="${resolved#*=}"
+            break
+          fi
+        done
+        if resolved_version="$(opencode_plugin_check_retried "${plugin}" "" 1)"; then
+          info "OpenCode plugin recheck ${plugin}: previous=${expected_version}; resolved=${resolved_version}"
+        else
+          warn "OpenCode plugin ${plugin} recheck parser failed"
+          PLUGIN_UPDATE_FAILED=1
+        fi
+      else
+        warn "OpenCode plugin update ${plugin} failed: ${output}"
+        PLUGIN_UPDATE_FAILED=1
+      fi
     fi
   done
   if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then
