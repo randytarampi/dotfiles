@@ -112,21 +112,35 @@ def _spec_matches_key(value, key):
 
 
 def _voice_entry_matches(entry):
-    """Match the voice writer's own cli.json entries (current spec only)."""
+    """Match current and retired CLI voice registrations."""
     value = entry.get("package") if isinstance(entry, dict) else entry
     if isinstance(value, (list, tuple)) and value:
         value = value[0]
     if not isinstance(value, str):
         return False
-    if value.startswith("-") and _spec_matches_key(value[1:], VOICE_PLUGIN_KEY):
-        return True
-    if value.startswith("*") or value.startswith("-") and value[1:].endswith(".*"):
+    value = value.removeprefix("-")
+    if value == "*" or value.startswith("*") or value.endswith(".*"):
         return False
-    if value.startswith("-"):
-        return False
-    if value == "*" or value.endswith(".*"):
-        return False
-    return _spec_matches_key(value, VOICE_PLUGIN_KEY)
+    return any(
+        _spec_matches_key(value, key)
+        for key in (VOICE_PLUGIN_KEY, LEGACY_VOICE_PLUGIN_KEY)
+    )
+
+
+def _voice_entry_is_disabled(entry):
+    value = entry.get("package") if isinstance(entry, dict) else entry
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    return isinstance(value, str) and value.startswith("-") and _voice_entry_matches(entry)
+
+
+def _voice_entry_is_current(entry):
+    value = entry.get("package") if isinstance(entry, dict) else entry
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    return isinstance(value, str) and _spec_matches_key(
+        value.removeprefix("-"), VOICE_PLUGIN_KEY
+    )
 
 
 def _voice_tui_entry_matches(entry):
@@ -480,7 +494,7 @@ def _gateway_alias(provider, model, key=None):
         ),
         None,
     )
-    if match is None:
+    if match is None and provider in ("google", "openrouter"):
         canonical_model = canonical_allowlist_key(model)
         match = next(
             (
@@ -1427,26 +1441,23 @@ def main():
             return 1
     else:
         cli_config = []
-    filtered_plugins = [
-        entry
-        for entry in cli_config
-        if not _voice_entry_matches(entry)
-        or (
-            isinstance(entry, str)
-            and entry.startswith("-")
-            and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
-        )
-    ]
+    # Remove both package generations only after cli.json is written.
+    # A disable directive is a user opt-out even when it names the old fork.
+    filtered_plugins = [entry for entry in cli_config if not _voice_entry_matches(entry)]
     existing_voice = next(
-        (entry for entry in cli_config if _voice_entry_matches(entry)),
+        (entry for entry in cli_config
+         if _voice_entry_is_current(entry) and not _voice_entry_is_disabled(entry)),
         None,
     )
-    voice_disabled = any(
-        isinstance(entry, str)
-        and entry.startswith("-")
-        and _spec_matches_key(entry[1:], VOICE_PLUGIN_KEY)
-        for entry in cli_config
-    )
+    if existing_voice is None:
+        existing_voice = next(
+            (entry for entry in cli_config
+             if _voice_entry_matches(entry) and not _voice_entry_is_disabled(entry)),
+            None,
+        )
+    voice_disabled = any(_voice_entry_is_disabled(entry) for entry in cli_config)
+    if voice_disabled:
+        filtered_plugins.append("-" + voice_plugin_spec)
     # When cli.json has no voice entry yet, the previously managed tui.json
     # route seeds the v2 entry: the package maps onto the current manifest
     # spec and its options are preserved verbatim.
@@ -1494,16 +1505,17 @@ def main():
         "sttApiKeyEnv",
     }
     user_options = {}
-    if isinstance(existing_voice, dict) and isinstance(
-        existing_voice.get("options"), dict
+    # Unknown options survive both generations; the current package wins
+    # conflicts with values from the retired fork.
+    for registered in sorted(
+        (entry for entry in cli_config if _voice_entry_matches(entry)),
+        key=lambda entry: _voice_entry_is_current(entry),
     ):
-        user_options.update(
-            {
-                key: value
-                for key, value in existing_voice["options"].items()
-                if key not in managed_keys
-            }
-        )
+        if isinstance(registered, dict) and isinstance(registered.get("options"), dict):
+            user_options.update(
+                {key: value for key, value in registered["options"].items()
+                 if key not in managed_keys}
+            )
     if isinstance(legacy_options, dict):
         user_options.update(
             {
@@ -1530,8 +1542,19 @@ def main():
     ):
         # Tier resolution delivered no LLM route: keep the existing cli.json
         # entry as-is instead of rebuilding it into an empty route.
-        filtered_plugins.append(existing_voice)
-        route_installed = True
+        # Preserve an existing route without re-registering the retired fork.
+        if _voice_entry_is_current(existing_voice):
+            filtered_plugins.append(existing_voice)
+            route_installed = True
+        elif (
+            isinstance(existing_options, dict)
+            and existing_options.get("endpoint")
+            and existing_options.get("model")
+        ):
+            filtered_plugins.append(
+                {"package": voice_plugin_spec, "options": existing_options}
+            )
+            route_installed = True
     elif (
         not voice_disabled
         and not (voice_config.get("endpoint") and voice_config.get("model"))

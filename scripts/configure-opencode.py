@@ -234,6 +234,52 @@ def _convert_mcp_server_entry(name, entry):
 OPENCODE_CONFIG_FILE_NAME = "opencode.json"
 
 
+def _native_model_entry(entry):
+    """Convert supported V1 model metadata at the V2 provider boundary."""
+    if not isinstance(entry, dict):
+        return entry
+    model = dict(entry)
+    if "id" in model:
+        model["modelID"] = model.pop("id")
+    capabilities = dict(model.get("capabilities") or {})
+    modalities = model.pop("modalities", None)
+    if isinstance(modalities, dict):
+        for direction in ("input", "output"):
+            if direction in modalities:
+                capabilities[direction] = modalities[direction]
+    if "tool_call" in model:
+        capabilities["tools"] = model.pop("tool_call")
+    if capabilities:
+        model["capabilities"] = capabilities
+    cost = model.get("cost")
+    if isinstance(cost, dict) and ("cache_read" in cost or "cache_write" in cost):
+        cost = dict(cost)
+        cache = dict(cost.get("cache") or {})
+        for old, new in (("cache_read", "read"), ("cache_write", "write")):
+            if old in cost:
+                cache[new] = cost.pop(old)
+        cost["cache"] = cache
+        model["cost"] = cost
+    if model.pop("status", None) == "deprecated":
+        model["disabled"] = True
+    variants = model.get("variants")
+    if isinstance(variants, dict):
+        model["variants"] = [
+            {"id": name, "settings": settings}
+            for name, settings in variants.items()
+        ]
+    return model
+
+
+def _native_provider_models(config):
+    for provider in (config.get("providers") or {}).values():
+        if isinstance(provider, dict) and isinstance(provider.get("models"), dict):
+            provider["models"] = {
+                name: _native_model_entry(entry)
+                for name, entry in provider["models"].items()
+            }
+
+
 def _meridian_entry_matches(value: object) -> bool:
     """Match the precise Meridian plugin entry forms (not substring soup):
     the bare scoped package name; a scoped-package version alias; a plugin
@@ -1877,7 +1923,7 @@ def main():
             if args.mode == "project" and provider not in needed_providers:
                 continue
             spec = PROVIDER_ENDPOINTS[provider]
-            config.setdefault("provider", {})[provider] = {
+            config.setdefault("providers", {})[provider] = {
                 "package": OPENCODE_V2_COMPATIBLE_PROVIDER_PACKAGE,
                 "settings": {
                     "baseURL": base_url,
@@ -1894,13 +1940,9 @@ def main():
             dynamic_registry, dynamic_audit, args.preset, config
         )
 
-    # Native v2 emission: provider entries intentionally stay in the
-    # officially supported V1 format (v2 normalizes supported V1 fields
-    # silently; per-entry formats must not mix, so provider/model envelopes
-    # convert only after machine-level validation). Native keys converted
-    # here: ordered permissions (last-match-wins — the external_directory
-    # ask-all rule leads, temp-directory allows follow), mcp.servers, and
-    # v2 plugin object entries. v2-ignored fields are dropped.
+    # Convert every selected local/cloud/LiteLLM model to native v2 metadata.
+    _native_provider_models(config)
+    # Native permissions and MCP envelopes; v2-ignored fields are dropped.
     config["permissions"] = _native_permissions(
         _external_dir_permissions, config.pop("permissions", None)
     )

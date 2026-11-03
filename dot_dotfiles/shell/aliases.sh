@@ -22,13 +22,16 @@ fi
 opencode() {
   _opencode_subcommands="completion acp mcp attach run debug providers auth agent upgrade uninstall serve web models stats export import github pr session plugin db"
   if { [ -n "${TMUX:-}" ] || [ -n "${ZELLIJ:-}" ]; } && ! echo "$_opencode_subcommands" | grep -qw -- "${1:-__default__}"; then
-    if [ -z "${_OPENCODE_MAJOR:-}" ]; then
-      _opencode_version_banner="$(command opencode --version 2>/dev/null || true)"
-      case "${_opencode_version_banner}" in
-      *v1.*) _OPENCODE_MAJOR=1 ;;
+    # Re-probe to detect PATH switches and in-place upgrades.
+    _opencode_version_banner="$(command opencode --version 2>/dev/null || true)"
+    if [ "${_OPENCODE_VERSION_BANNER:-}" != "${_opencode_version_banner}" ] || [ -z "${_OPENCODE_MAJOR:-}" ]; then
+      _opencode_version_token="$(printf '%s\n' "${_opencode_version_banner}" | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+      case "${_opencode_version_token}" in
+      v1.*|1.*) _OPENCODE_MAJOR=1 ;;
       *) _OPENCODE_MAJOR=2 ;;
       esac
-      export _OPENCODE_MAJOR
+      _OPENCODE_VERSION_BANNER="${_opencode_version_banner}"
+      export _OPENCODE_MAJOR _OPENCODE_VERSION_BANNER
     fi
     if [ "${_OPENCODE_MAJOR}" = "1" ]; then
       export OPENCODE_PORT="${OPENCODE_PORT:-$(jot -r 1 49152 65535)}"

@@ -27,12 +27,8 @@
       "enabled": true
     }
   },
-  "provider": {
+  "providers": {
     "opencode": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://opencode.ai/zen/v1"
-      },
       "models": {
         "big-pickle": {
           "name": "big-pickle"
@@ -46,10 +42,13 @@
         "mimo-v2.5-free": {
           "name": "mimo-v2.5-free"
         }
+      },
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://opencode.ai/zen/v1"
       }
     },
     "google": {
-      "npm": "@ai-sdk/google",
       "models": {
         "gemini-3.8-flash": {
           "name": "gemini-3.8-flash"
@@ -64,14 +63,13 @@
     },
     "openrouter": {
       "name": "OpenRouter",
-      "npm": "@openrouter/ai-sdk-provider",
-      "options": {
-        "baseURL": "https://openrouter.ai/api/v1"
-      },
       "models": {
         "nvidia/nemotron-3.5-lightning:free": {
           "name": "Nemotron 3.5 Lightning (free)"
         }
+      },
+      "settings": {
+        "baseURL": "https://openrouter.ai/api/v1"
       }
     }
   }
