@@ -617,9 +617,7 @@ def test_basic_memory_registry_renders_compatible_runtime_across_all_clients():
         (ROOT.parent / "configs/mcp/global-mcps.json").read_text(encoding="utf-8")
     )
     templates = ROOT.parent / "configs/mcp/templates"
-    expected = json.loads(
-        (templates / "basic-memory.json").read_text(encoding="utf-8")
-    )
+    expected = json.loads((templates / "basic-memory.json").read_text(encoding="utf-8"))
     assert len(registry["tools"]) == 15
     for tool, spec in registry["tools"].items():
         definitions = module.resolve_defs_list(
