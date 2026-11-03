@@ -142,14 +142,12 @@ the canonical manifest (all plugins pinned to `@latest`, per migration plan) at
 | `@plannotator/opencode` | Interactive plan/code review UI (emitted as a `{package, options}` object) |
 | `github:AxeForce/opencode-vibeguard-v2#934823e5` | Secrets redaction before LLM requests — GitHub-pinned dual-runtime build (v1 `server()` + v2 `setup()`), package.json 0.2.0 |
 | `@cheesecodestudio/opencode-tokenscope-v2@latest` | Token usage/cost reporting (replaces `@ramtinj95/opencode-tokenscope`) |
-| `opencode-mem@latest` | Persistent project/user memory with vector search (opt-in gated) |
 | Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
 
 Voice is a global TUI-client-only plugin: it lives in `~/.config/opencode/cli.json`
 (manifest `cli_plugins` registry; tier options attached by
-`configure-opencode-voice.py`) — see [VOICE.md](VOICE.md). DCP and memory are
-TUI-capable and load from the `plugins` array above; they are never duplicated
-in `cli.json`.
+`configure-opencode-voice.py`) — see [VOICE.md](VOICE.md). DCP loads
+from the `plugins` array above; Basic Memory is configured via MCP instead.
 
 > **Note (2026-10-13, revised 2026-10-31):** `@slkiser/opencode-quota` and its
 > quota surfaces are retired from the fleet as part of the one-way OpenCode v2
@@ -160,17 +158,9 @@ in `cli.json`.
 > original VibeGuard npm line (0.1.0) and TokenScope (`@ramtinj95`, 1.8.1) are
 > replaced by the v2-capable builds in the table above.
 
-### Memory opt-in
+### Shared local memory
 
-`opencode-mem` is controlled by `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1` and
-defaults to off. The managed `opencode-mem.jsonc` configuration uses loopback web hosting, local
-embeddings, and pins memory extraction to the shared fast local LLM using
-`opencodeProvider: "ollama"` and the bare `opencodeModel: "gemma4:12b-mxfp8"`
-wire ID instead of inheriting the session's routing —
-extraction is deterministic and offline-capable. Update the pin through the
-model-update flow when the fast model changes. The plugin's own embedding
-(`Xenova/nomic-embed-text-v1`) stays local and unchanged. Remote embedding endpoints
-are deliberately absent and require an explicit egress decision.
+The OpenCode-specific `opencode-mem` plugin has been retired from the managed v2 manifest. `basic-memory` is registered through `configs/mcp/global-mcps.json` for all supported MCP clients when `DOTFILES_RUN_MCP_SETUP=1`. It uses FastEmbed semantic retrieval with a local cross-encoder and disabled telemetry. Data under `~/.opencode-mem/data` is retained for separate owner-controlled export/import; no automatic migration is performed. See [Basic Memory](BASIC_MEMORY.md).
 
 ## Observer Vision Path and Image Payloads
 
@@ -212,10 +202,9 @@ of 2026-10-13:
   observations plus an explicit error note. The file ships untracked —
   create it on new machines when the observer lane is in use.
 
-> **Note (2026-09-24, revised 2026-10-31):** These plugins are registered for
-> the OpenCode v2 CLI. `opencode-mem` 2.39.0 ships `./v2` and `./tui` exports
-> (v2-capable; the older "no v2 build" note no longer applies). Quota is
-> retired from the fleet and must not be re-added.
+> **Note (2026-11-03):** `opencode-mem` was retired from the managed
+> OpenCode v2 plugin list in favour of fleet-wide Basic Memory MCP. Its data
+> remains untouched for owner-controlled migration. Quota remains retired.
 
 ## Tokenscope
 
