@@ -1167,7 +1167,6 @@ def main():
             "npm:@juicesharp/rpiv-voice",
             "npm:@juicesharp/rpiv-i18n",
             "npm:@xzzpig/pi-vibeguard",
-            "npm:pi-edit-session-in-place",
         ],
         "skills": ["~/.pi/agent/skills", ".pi/skills"],
         "extensions": [".pi/extensions"],
