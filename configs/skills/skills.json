@@ -27,6 +27,10 @@
       {
         "name": "pull-intake",
         "source": "local"
+      },
+      {
+        "name": "attribution-migration",
+        "source": "local"
       }
     ]
   }
