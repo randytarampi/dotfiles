@@ -206,7 +206,23 @@ else
 fi
 
 if command -v junie >/dev/null 2>&1; then
-  run_update "junie" junie update
+  # The bundled JetBrains runtime's AutoUpdateService has failed its TLS
+  # check against a healthy public chain (recorded 2026-11-03: PKIX with the
+  # shipped runtime cacerts) while the shim's own --force path downloads the
+  # channel installer through curl with system trust. One forced reinstall
+  # restores an intact runtime store; after it, plain updates pass. This
+  # stays a bounded single fallback: the lane still fails honestly when the
+  # forced path fails too.
+  if junie update; then
+    ran_lanes+=("junie")
+  elif junie update --force; then
+    ran_lanes+=("junie")
+    info "junie update recovered via forced channel reinstall"
+  else
+    failures=$((failures + 1))
+    failed_lanes+=("junie")
+    warn "junie update failed"
+  fi
 else
   info "junie not found — skipping"
   skipped_lanes+=("junie")
