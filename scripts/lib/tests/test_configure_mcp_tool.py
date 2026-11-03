@@ -563,7 +563,6 @@ def test_basic_memory_v2_native_entry_with_identical_substance_passes(tmp_path):
         }
     }
     path.write_text(json.dumps(existing), encoding="utf-8")
-    before = path.read_bytes()
     module.merge_configs_to_file("opencode-internal", path, json.dumps(generated))
     assert (
         json.loads(path.read_text())["mcp"]["servers"]["basic-memory"]["type"]
