@@ -39,6 +39,8 @@ def test_voice_matches_forms_and_preserves_cli_directives():
     module = _load("voice_cli", ROOT / "configure-opencode-voice.py")
     assert module._voice_entry_matches("@renjfk/opencode-voice@latest")
     assert module._voice_entry_matches({"package": "-@renjfk/opencode-voice@latest"})
+    assert module._voice_entry_matches("@bojackduy/opencode-voice@latest")
+    assert module._voice_entry_matches("-@bojackduy/opencode-voice@latest")
     assert not module._voice_entry_matches("*")
     assert not module._voice_entry_matches("-team.*")
 
@@ -321,3 +323,50 @@ def test_voice_cli_entry_options_shape_is_object(tmp_path, monkeypatch):
         "endpoint": "https://voice.example/v1",
         "model": "voice-model",
     }
+
+def test_cli_reconcile_retires_fork_and_preserves_unknown_options(tmp_path, monkeypatch):
+    module = _load("voice_cli_retire_fork", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module, "get_voice_config",
+        lambda *_a, **_k: {"endpoint": "https://new.example", "model": "new"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(module.sys, "argv", ["voice", "--preset", "local", "--no-backup"])
+    (tmp_path / "cli.json").write_text(json.dumps([
+        "unrelated",
+        {"package": "@bojackduy/opencode-voice@latest",
+         "options": {"endpoint": "https://old.example", "model": "old",
+                     "ttsVoice": "chosen"}},
+    ]))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == [
+        "unrelated",
+        {"package": "@renjfk/opencode-voice@latest",
+         "options": {"ttsVoice": "chosen", "endpoint": "https://new.example",
+                     "model": "new"}},
+    ]
+
+
+def test_cli_reconcile_preserves_retired_fork_disable(tmp_path, monkeypatch):
+    module = _load("voice_cli_retired_disabled", ROOT / "configure-opencode-voice.py")
+    monkeypatch.setenv("OPENCODE_DIR", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(module, "load_env", lambda *_: False)
+    monkeypatch.setattr(module, "get_available_tiers", lambda: ["local"])
+    monkeypatch.setattr(
+        module, "get_voice_config",
+        lambda *_a, **_k: {"endpoint": "https://new.example", "model": "new"},
+    )
+    monkeypatch.setattr(module, "_voice_resolution_options", lambda *_: {})
+    monkeypatch.setattr(module.sys, "argv", ["voice", "--preset", "local", "--no-backup"])
+    (tmp_path / "cli.json").write_text(json.dumps([
+        "-@bojackduy/opencode-voice@latest", "other-plugin",
+    ]))
+    assert module.main() is None
+    assert json.loads((tmp_path / "cli.json").read_text()) == [
+        "other-plugin", "-@renjfk/opencode-voice@latest",
+    ]

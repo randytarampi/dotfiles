@@ -210,7 +210,7 @@ def test_review_free_uses_credentialed_mistral_primary_without_secret_literal(tm
     assert result.returncode == 0, result.stderr
     assert config["model"] == "mistral/mistral-small-latest"
     assert output["selected_provider"] == "mistral"
-    assert config["provider"]["mistral"]["options"]["apiKey"] == (
+    assert config["providers"]["mistral"]["settings"]["apiKey"] == (
         "{env:MISTRAL_API_KEY}"
     )
 
@@ -225,7 +225,7 @@ def test_review_free_uses_account_bound_cloudflare_with_key(tmp_path):
     assert result.returncode == 0, result.stderr
     assert output["selected_provider"] == "cloudflare"
     assert config["model"].startswith("cloudflare/")
-    assert config["provider"]["cloudflare"]["options"]["baseURL"].endswith(
+    assert config["providers"]["cloudflare"]["settings"]["baseURL"].endswith(
         f"/accounts/{account}/ai/v1"
     )
 
@@ -262,7 +262,7 @@ def test_review_free_native_router_has_independent_ordered_deployments(tmp_path)
     assert result.returncode == 0, result.stderr
     assert output["selected_provider"] == "review-free"
     assert config["model"] == "review-free/review-free"
-    assert config["provider"]["review-free"]["options"]["baseURL"] == (
+    assert config["providers"]["review-free"]["settings"]["baseURL"] == (
         "http://127.0.0.1:4907/v1"
     )
     router_config = json.loads(
@@ -327,3 +327,29 @@ def test_review_workflow_starts_local_router_only_for_qualified_free_pool():
     assert "Review with official OpenCode GitHub App" in workflow
     assert "Stop runner-local LiteLLM" in workflow
     assert 'OPENCODE_DISABLE_PROJECT_CONFIG: "true"' in workflow
+
+def test_review_v2_provider_schema_is_consistent_for_all_routes(tmp_path):
+    fixture = json.loads(
+        (ROOT / "configs/opencode/ci/opencode.json").read_text(encoding="utf-8")
+    )
+    assert "provider" not in fixture
+    assert fixture["providers"]["opencode"]["package"] == (
+        "@opencode/ai/providers/openai-compatible"
+    )
+    for provider in fixture["providers"].values():
+        assert "npm" not in provider and "options" not in provider
+
+    for route, overrides in (
+        ("mistral", {"REVIEW_INFERENCE_PROVIDER": "mistral", "HAS_MISTRAL_KEY": "true"}),
+        ("review-free", {"HAS_MISTRAL_KEY": "true", "HAS_GROQ_KEY": "true"}),
+    ):
+        target = tmp_path / route
+        target.mkdir()
+        result, config, output = _run_review_model_setup(target, **overrides)
+        assert result.returncode == 0, result.stderr
+        assert "provider" not in config
+        assert output["selected_provider"] == route
+        entry = config["providers"][route]
+        assert entry["package"] == "@opencode/ai/providers/openai-compatible"
+        assert entry["settings"]["baseURL"].startswith("http")
+        assert "npm" not in entry and "options" not in entry

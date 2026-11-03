@@ -297,3 +297,19 @@ def test_provider_url_and_key_read_v2_native_settings(tmp_path, monkeypatch):
         module._direct_route_reason("opencode", "anthropic", {"settings": {}}, None)
         == "NATIVE_PROVIDER_NOT_PROXIED"
     )
+
+def test_native_provider_does_not_fall_back_to_stale_legacy_fields():
+    native = {
+        "package": "@opencode/ai/providers/openai-compatible",
+        "settings": {},
+        "options": {
+            "baseURL": "http://127.0.0.1:4000/v1",
+            "apiKey": "{file:/stale}",
+        },
+    }
+    assert DRIFT._provider_base_url("opencode", native) is None
+    assert DRIFT._opencode_connection_settings(native).get("apiKey") is None
+    assert (
+        DRIFT._direct_route_reason("opencode", "anthropic", native, None)
+        == "NATIVE_PROVIDER_NOT_PROXIED"
+    )
