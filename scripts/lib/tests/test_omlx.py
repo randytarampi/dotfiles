@@ -3412,3 +3412,23 @@ def test_pi_unknown_catalogue_without_prior_config_fails_closed(monkeypatch, tmp
     configure_pi, _agent = _pi_preserve_fixtures(monkeypatch, tmp_path)
     with pytest.raises(RuntimeError, match="no prior Pi configuration"):
         configure_pi.main()
+
+def test_opencode_v2_model_boundary_keeps_identity_modalities_cache():
+    entry = configure_opencode._native_model_entry(
+        {
+            "id": "meridian/claude-haiku",
+            "name": "Test model",
+            "modalities": {"input": ["text", "image"], "output": ["text"]},
+            "cost": {"input": 1.0, "output": 2.0,
+                     "cache_read": 0.1, "cache_write": 0.2},
+        }
+    )
+    assert entry["modelID"] == "meridian/claude-haiku"
+    assert entry["capabilities"]["input"] == ["text", "image"]
+    assert entry["capabilities"]["output"] == ["text"]
+    assert entry["cost"]["cache"] == {"read": 0.1, "write": 0.2}
+    assert "id" not in entry and "modalities" not in entry
+    assert "cache_read" not in entry["cost"]
+    config = {"providers": {"litellm": {"models": {"alias": entry}}}}
+    configure_opencode._native_provider_models(config)
+    assert config["providers"]["litellm"]["models"]["alias"] == entry

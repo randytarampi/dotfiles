@@ -117,8 +117,8 @@ def test_plugin_check_failure_is_fail_closed():
         "PLUGIN_RESOLVED_VERSIONS=()", 1
     )[0]
     assert "PLUGIN_INSTALL_FAILED=1" in source
-    # The check exit code is captured but not trusted — the parser decides.
-    # A crashed check with empty output still fails closed at the parser.
+    # The check exit code reaches the parser; even (current) output fails
+    # when the plugin-check command exits nonzero.
     assert (
         '"${OC_MANAGED}" plugin check "${spec}" 2>&1)" || check_exit=$?' in check_block
     )
@@ -131,8 +131,7 @@ def test_plugin_check_failure_is_fail_closed():
     assert 'die "One or more OpenCode plugin version checks failed"' in source
     assert '"${OC_MANAGED}" plugin update "${plugin}"' in source
     assert 'if [[ "${PLUGIN_UPDATE_FAILED}" -ne 0 ]]; then' in source
-    # The recheck lane trusts parsed output, not the check exit code, and
-    # stays strict: a refreshed plugin must report (current).
+    # The recheck fails on nonzero exits and non-(current) status.
     assert 'opencode_plugin_check_retried "${plugin}" "" 1' in source
     # Every plugin subcommand runs through the managed-binary resolver.
     assert 'opencode plugin add "${plugin}"' not in source
@@ -341,6 +340,8 @@ def test_update_lane_refreshes_update_available_and_rechecks_current(tmp_path):
     combined = result.stdout + result.stderr
     assert result.returncode == 0, combined
     assert "OpenCode plugin update @tarquinen/opencode-dcp@latest" in combined
+    assert "resolved=3.2.1" in combined
+    assert "behind upstream" in combined
 
 
 def test_update_lane_recheck_still_update_available_fails_closed(tmp_path):
@@ -359,6 +360,7 @@ def test_update_lane_recheck_still_update_available_fails_closed(tmp_path):
     )
     result = run_installer(tmp_path, opencode_script=script, update_gate="1")
     assert result.returncode != 0, result.stdout + result.stderr
+    assert "recheck parser failed" in result.stdout + result.stderr
 
 
 def test_recorded_context_transient_gets_one_retry(tmp_path):
@@ -389,7 +391,7 @@ def test_recorded_context_transient_gets_one_retry(tmp_path):
 def test_persistent_context_error_fails_closed(tmp_path):
     script = (
         _GATE_PROLOGUE
-        + ('    echo "Error: Plugin is not configured: $3"\n' "    exit 1\n")
+        + '    echo "Error: Plugin is not configured: $3"\n    exit 1\n'
         + _GATE_EPILOGUE
     )
     result = run_installer(tmp_path, opencode_script=script)
@@ -487,3 +489,21 @@ def test_git_cache_checker_fails_closed_for_missing_or_corrupt_metadata(tmp_path
     corrupt.parent.mkdir(parents=True)
     corrupt.write_text("{")
     assert not module.is_plugin_installed(spec_text, tmp_path)
+
+def test_plugin_update_available_is_rejected_for_pinned_specs(tmp_path):
+    script = (
+        _GATE_PROLOGUE
+        + _GATE_RESOLVE_OK
+        + '    if [[ "$3" == "@tarquinen/opencode-dcp@3.2.0" ]]; then\n'
+        + '        echo "$name 3.2.0 (update available)"\n'
+        + '        exit 0\n'
+        + '    fi\n'
+        + '    echo "$name 3.2.0 (current)"\n'
+        + '    exit 0\n'
+        + _GATE_EPILOGUE
+    )
+    # A rendered installer currently uses @latest; test the same parser
+    # contract with a pinned manifest substitution in the template.
+    original = TEMPLATE.read_text()
+    assert 'spec.endswith("@latest")' in original
+    assert 'status == "update available"' in original

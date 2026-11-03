@@ -726,3 +726,23 @@ def test_basic_memory_missing_from_generated_set_does_not_block_removal(tmp_path
     assert json.loads(path.read_text())["mcpServers"] == {
         "codegraph": {"command": "codegraph"}
     }
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"enabled_tools": ["search"]},
+        {"disabled_tools": ["delete"]},
+        {"cwd": "/private/vault"},
+        {"timeout": 10},
+        {"headers": {"Authorization": "Bearer {env:MY_TOKEN}"}},
+    ],
+)
+def test_basic_memory_extra_owned_settings_refuse_overwrite(tmp_path, extra):
+    module = load_script()
+    path = tmp_path / "opencode.json"
+    existing, generated = _v2_native_documents(extra)
+    path.write_text(json.dumps(existing), encoding="utf-8")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        module.merge_configs_to_file("opencode-internal", path, json.dumps(generated))
+    assert path.read_bytes() == before

@@ -1457,7 +1457,17 @@ def main():
         )
     voice_disabled = any(_voice_entry_is_disabled(entry) for entry in cli_config)
     if voice_disabled:
-        filtered_plugins.append("-" + voice_plugin_spec)
+        # Keep an existing current disable directive byte-for-byte; only
+        # rewrite retired-fork disables to the replacement package.
+        current_disable = next(
+            (entry for entry in cli_config
+             if _voice_entry_is_current(entry) and _voice_entry_is_disabled(entry)),
+            None,
+        )
+        filtered_plugins.append(
+            current_disable if current_disable is not None
+            else "-" + voice_plugin_spec
+        )
     # When cli.json has no voice entry yet, the previously managed tui.json
     # route seeds the v2 entry: the package maps onto the current manifest
     # spec and its options are preserved verbatim.
@@ -1540,9 +1550,8 @@ def main():
         not (voice_config.get("endpoint") and voice_config.get("model"))
         and existing_voice is not None
     ):
-        # Tier resolution delivered no LLM route: keep the existing cli.json
-        # entry as-is instead of rebuilding it into an empty route.
-        # Preserve an existing route without re-registering the retired fork.
+        # Tier resolution delivered no LLM route: retain a valid existing
+        # entry without re-registering the retired fork.
         if _voice_entry_is_current(existing_voice):
             filtered_plugins.append(existing_voice)
             route_installed = True
