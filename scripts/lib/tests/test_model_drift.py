@@ -260,3 +260,40 @@ def test_junie_profile_scan_skips_manifest_and_non_object_json(tmp_path, monkeyp
         "http://127.0.0.1:4000/v1/chat/completions"
     ]
     assert DRIFT.profile_models(models_dir / "invalid-shape.json") is None
+
+
+def test_provider_url_and_key_read_v2_native_settings(tmp_path, monkeypatch):
+    """Native v2 emission carries provider URL/keys under `settings`; the
+    audit must accept it the same way it accepted the legacy `options`."""
+    module = DRIFT
+
+    v2_provider = {
+        "package": "x",
+        "settings": {"baseURL": "http://127.0.0.1:4000/v1", "apiKey": "{file:/k}"},
+        "models": {"a": {"name": "a"}},
+    }
+    assert (
+        module._provider_base_url("opencode", v2_provider) == "http://127.0.0.1:4000/v1"
+    )
+    assert (
+        module._direct_route_reason(
+            "opencode",
+            "litellm",
+            {"settings": {"baseURL": "http://127.0.0.1:4001/v1"}},
+            "http://127.0.0.1:4001/v1",
+        )
+        == "DIRECT_NOT_PROXIED"
+    )
+    legacy_provider = {
+        "options": {"baseURL": "http://127.0.0.1:4000/v1", "apiKey": "{file:/k}"},
+        "models": {"a": {"name": "a"}},
+    }
+    assert (
+        module._provider_base_url("opencode", legacy_provider)
+        == "http://127.0.0.1:4000/v1"
+    )
+    # A native provider whose settings carry no baseURL is NATIVE, not malformed.
+    assert (
+        module._direct_route_reason("opencode", "anthropic", {"settings": {}}, None)
+        == "NATIVE_PROVIDER_NOT_PROXIED"
+    )
