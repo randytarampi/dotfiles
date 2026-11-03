@@ -281,7 +281,7 @@ stamped block and must be fixed separately by each repository maintainer.
 | 04 | install-packages | run_onchange | Homebrew/Winget packages | `DOTFILES_RUN_PACKAGES_SETUP` |
 | 05 | setup-bin-symlinks | run_onchange | Symlink scripts to ~/bin | — |
 | 06 | install-junie-cli | run_onchange | Junie CLI + model profiles | `DOTFILES_RUN_JUNIE_CLI_SETUP` |
-| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (oh-my-opencode-slim dedicated installer, DCP, plannotator, vibeguard (pinned git build), tokenscope-v2, opencode-mem, voice (cli.json)) + per-spec resolved-version checks; ordinary `make deploy` does not refresh (add/@latest dedupes and run_onchange only re-runs on hash changes); explicit update-workflow refresh with convergence proof | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP`; memory opt-in; update refresh opt-in (`DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE`) |
+| 07 | install-opencode-plugins | run_onchange | OpenCode plugins (oh-my-opencode-slim dedicated installer, DCP, plannotator, vibeguard (pinned git build), tokenscope-v2, voice (cli.json)) + per-spec resolved-version checks; ordinary `make deploy` does not refresh (add/@latest dedupes and run_onchange only re-runs on hash changes); explicit update-workflow refresh with convergence proof | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP`; update refresh opt-in (`DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE`) |
 | 08 | install-ai-cli-tools | run_onchange | Standalone CLIs: codegraph | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
 | 09 | install-plannotator | run_onchange | Plannotator CLI (version-aware via update-plannotator.sh) | `DOTFILES_RUN_PLANNOTATOR_SETUP` |
 | 10 | install-acp-adapters | run_onchange | ACP adapters for supported coding agents | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` |
@@ -361,7 +361,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_HERMES_SETUP` | 0 | Opt-in `configure-hermes.py` gateway config scaffold; also requires `DOTFILES_USE_LITELLM_PROXY=1`. Does not provision a key or change the default model/provider. |
 | `DOTFILES_RUN_COPILOT_SETUP` | 0 | Standalone Copilot CLI gateway adapter; separately requires `DOTFILES_USE_LITELLM_PROXY=1` and `DOTFILES_RUN_LITELLM_SETUP=1`. Does not qualify the IDE extension. |
 | `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | 0 | Scripts 07, 08 (OpenCode plugins + CLI tools) |
-| `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` | 0 | Script 07 opencode-mem plugin and memory configuration |
+| `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` | retired | Legacy gate ignored by current OpenCode plugin manifest; shared Basic Memory MCP follows `DOTFILES_RUN_MCP_SETUP` |
 | `DOTFILES_RUN_PLANNOTATOR_SETUP` | 0 | Script 09 (Plannotator CLI) |
 | `DOTFILES_RUN_MERIDIAN_SETUP` | 0 | Script 11 (Meridian launchd) |
 | `DOTFILES_RUN_CLAUDE_SETUP` | 0 | Standalone Claude CLI LiteLLM launcher; enable explicitly to use `scripts/claude-litellm` |
@@ -388,7 +388,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_VOICE_SETUP` | 0 | `run_onchange_07` (voice deps: whisper.cpp, sox, piper-tts, models) |
 | `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE` | 0 | Script 07 opt-in refresh: runs `opencode plugin update` per installed spec in addition to the default non-mutating `opencode plugin check` (check runs always and fails closed when it cannot resolve a concrete version) |
 
-Ordinary `make deploy` does not refresh OpenCode plugins: `plugin add` (including `@latest`) deduplicates an already installed package, and this `run_onchange` script runs again only when its input hashes change. Explicit refresh occurs through the managed `scripts/update-system.sh` OpenCode lane, which requests plugin updates and proves convergence after the CLI update; setting `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1` also explicitly requests refresh. The gated `opencode-mem` plugin remains excluded unless `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`. Per owner decision D2 (2026-11-01), VibeGuard follows floating Git `#main`; this has no audited-pin guarantee and may change without a reviewed immutable commit.
+Ordinary `make deploy` does not refresh OpenCode plugins: `plugin add` (including `@latest`) deduplicates an already installed package, and this `run_onchange` script runs again only when its input hashes change. Explicit refresh occurs through the managed `scripts/update-system.sh` OpenCode lane, which requests plugin updates and proves convergence after the CLI update; setting `DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1` also explicitly requests refresh. The retired `opencode-mem` plugin is absent from the managed manifest; existing user data remains untouched. Per owner decision D2 (2026-11-01), VibeGuard follows floating Git `#main`; this has no audited-pin guarantee and may change without a reviewed immutable commit.
 
 ## Dependency Ordering
 

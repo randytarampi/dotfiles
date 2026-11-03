@@ -1,5 +1,7 @@
 # OpenCode v2 — one-way migration handoff
 
+> **Superseded memory decision (2 November 2026):** The historical instructions below to retain `opencode-mem` and `DOTFILES_RUN_OPENCODE_MEMORY_SETUP` were superseded by the Basic Memory PR stack (#147–#148). The canonical runtime now disables `opencode-mem`, preserves old data, and provides Basic Memory through the shared MCP registry. See [BASIC_MEMORY.md](BASIC_MEMORY.md). This archive retains the original v2 migration decisions for historical reference.
+
 **Baseline:** `main` at `1557ddfcf3cc53dc483533c1eb593509319f6363` (31 October 2026).
 **Status:** Phased implementation complete via PRs #133–#137 (2026-11-01): quota retirement, native v2 config/installer, plugin stack + voice/cli.json, Meridian/services/ACP hardening, optional Pi parity. This cutover change removes the package-manager channel and hands the host to the official install script. Meridian CLI qualification is limited to 2.0.16, 2.0.21 and 2.0.31; 2.2.0 is desktop-only and does not qualify the CLI.
 **Author:** ChatGPT (GPT-6), research and implementation foundation. The initial draft received an independent OpenCode reviewer-agent engineering review of the quota removal and plan (PR #133, 2026-10-31); live host tests remain unperformed.

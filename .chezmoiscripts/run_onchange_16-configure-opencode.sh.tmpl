@@ -66,7 +66,6 @@ source "${LIB_DIR}/tier_args.sh"
 # scripts/lib/opencode_host.py: {{ include "scripts/lib/opencode_host.py" | sha256sum }}
 # scripts/lib/generation_lock.py: {{ include "scripts/lib/generation_lock.py" | sha256sum }}
 # configs/opencode/opencode-plugins.json: {{ include "configs/opencode/opencode-plugins.json" | sha256sum }}
-# opencode-memory-gate: {{ env "DOTFILES_RUN_OPENCODE_MEMORY_SETUP" | sha256sum }}
 # env delegated gate fingerprint: {{ env "DOTFILES_RUN_OPENCODE_WEB_SETUP" | sha256sum }}
 # scripts/verify-slim-invariants.py: {{ include "scripts/verify-slim-invariants.py" | sha256sum }}
 # scripts/verify-tier-docs.py: {{ include "scripts/verify-tier-docs.py" | sha256sum }}

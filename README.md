@@ -644,17 +644,16 @@ The canonical plugin set is maintained in `configs/opencode/opencode-plugins.jso
 (manifest version 2): the ordered `plugins` array for `opencode.json`
 (`oh-my-opencode-slim@latest` dedicated first entry, `@tarquinen/opencode-dcp@latest`,
 `@plannotator/opencode`, `github:AxeForce/opencode-vibeguard-v2#934823e5` (pinned
-dual-runtime secrets redaction), `@cheesecodestudio/opencode-tokenscope-v2@latest`,
-opt-in `opencode-mem@latest`) and a `cli_plugins` array for global TUI-client-only
+dual-runtime secrets redaction), `@cheesecodestudio/opencode-tokenscope-v2@latest`) and a `cli_plugins` array for global TUI-client-only
 plugins (`@bojackduy/opencode-voice@latest` → `cli.json`). All plugins track
 `@latest` except the pinned VibeGuard Git source.
 
 ### OpenCode Mem
 
-Persistent project/user memory with vector search.
+Shared Markdown-backed knowledge via the canonical MCP registry. `basic-memory==1.0.0` runs in local stdio mode with FastEmbed embeddings, enabled `jinaai/jina-reranker-v1-tiny-en` reranking, and telemetry disabled. Old `opencode-mem` data is preserved, not migrated.
 
-- OpenCode plugin: `opencode-mem@latest` (opt-in via `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1`; managed `~/.config/opencode/opencode-mem.jsonc`; 2.39.0 ships v2 + TUI exports)
-- Upstream: https://github.com/tickernelz/opencode-mem
+- Upstream: https://github.com/basicmachines-co/basic-memory
+- [Deployment, security and owner-run validation](docs/BASIC_MEMORY.md)
 
 ### Junie CLI
 

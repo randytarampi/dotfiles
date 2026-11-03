@@ -19,7 +19,7 @@ shell startup. These are the canonical opt-out levers:
 | pi | `PI_TELEMETRY=0`, `PI_SKIP_VERSION_CHECK=1` | `~/.pi/agent/settings.json`: `enableInstallTelemetry: false`, `enableAnalytics: false` | env var + config injection |
 | cline | `CLINE_OTEL_TELEMETRY_ENABLED=false`, `OTEL_SDK_DISABLED=true` | VS Code extension settings | env var (OTel SDK) |
 | opencode | — | — | no known telemetry collection |
-| opencode-mem | `DOTFILES_RUN_OPENCODE_MEMORY_SETUP=1` | `~/.config/opencode/opencode-mem.jsonc` | Opt-in, local-only memory and embeddings; remote embeddings require an explicit egress decision |
+| Basic Memory | `BASIC_MEMORY_NO_PROMOS=1`; Logfire off; OTel SDK disabled | Fleet MCP template `configs/mcp/basic-memory.json` | Disables upstream Umami promo/analytics, Logfire and OTel for generated MCP processes; separate manual CLI invocations are not covered |
 | copilot | — | — | no local opt-out (org/enterprise policy) |
 | cursor | — | — | no local opt-out (account dashboard) |
 | agy (Antigravity) | — | — | no local opt-out (Google account policy) |
