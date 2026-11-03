@@ -38,7 +38,8 @@ Multiplexer mode requires starting OpenCode with the `--port` flag. The `opencod
 # Inside tmux or zellij — port flag is automatic
 opencode
 
-# Pass additional flags — port is still auto-injected
+# Pass additional flags — a v1 binary on PATH also gets a random port
+# (v2 hosts share the background service, so no port flag exists)
 opencode --chat
 opencode --preset local
 
@@ -46,7 +47,7 @@ opencode --preset local
 opencode models
 opencode serve
 
-# Override port via env var
+# Override port via env var (v1 hosts only)
 OPENCODE_PORT=5000 opencode
 
 # Outside tmux/zellij — normal opencode, no port flag
@@ -67,9 +68,9 @@ opencode
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `OPENCODE_PORT` | Random (49152–65535) | Port for multiplexer communication between OpenCode and the editor pane |
+| `OPENCODE_PORT` | Random (49152–65535) | Port for multiplexer communication between OpenCode and the editor pane (OpenCode v1 only; v2 removed the `--port` flag and instances share the background service) |
 
-`OPENCODE_PORT` defaults to a random high port via `jot -r 1 49152 65535`, avoiding conflicts with other opencode instances (ACP servers, headless serve, etc.). Set it explicitly in `~/.env` or on the command line if you need a fixed port.
+On OpenCode v1, `OPENCODE_PORT` defaults to a random high port via `jot -r 1 49152 65535`, avoiding conflicts with other opencode instances (ACP servers, headless serve, etc.). Set it explicitly in `~/.env` or on the command line if you need a fixed port. On v2 the wrapper probes the host major once per shell session (cached in `_OPENCODE_MAJOR`) and passes through unchanged.
 
 ---
 
@@ -77,7 +78,7 @@ opencode
 
 | Task | Command |
 |------|---------|
-| Launch OpenCode (auto-multiplexer) | `opencode` (inside tmux/zellij: port is automatic) |
-| Launch with specific port | `OPENCODE_PORT=5000 opencode` |
+| Launch OpenCode (multiplexer-aware) | `opencode` (inside tmux/zellij; on v1 the port injects automatically, on v2 it passes through) |
+| Launch with specific port | `OPENCODE_PORT=5000 opencode` (v1 only) |
 | Change multiplexer layout | Edit `configs/opencode/oh-my-opencode-slim.json`, then `scripts/configure-opencode.py` |
 | Switch multiplexer type | Edit `type` in slim.json (`auto`/`tmux`/`zellij`/`none`), then `scripts/configure-opencode.py` |
