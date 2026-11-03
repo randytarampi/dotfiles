@@ -493,6 +493,7 @@ def _gateway_alias(provider, model, key=None):
         )
     if match is not None:
         _gateway_alias.last_error = None
+    return match
 
 
 _gateway_alias.last_error = None
