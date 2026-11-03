@@ -131,7 +131,9 @@ def _voice_entry_is_disabled(entry):
     value = entry.get("package") if isinstance(entry, dict) else entry
     if isinstance(value, (list, tuple)) and value:
         value = value[0]
-    return isinstance(value, str) and value.startswith("-") and _voice_entry_matches(entry)
+    return (
+        isinstance(value, str) and value.startswith("-") and _voice_entry_matches(entry)
+    )
 
 
 def _voice_entry_is_current(entry):
@@ -1443,16 +1445,24 @@ def main():
         cli_config = []
     # Remove both package generations only after cli.json is written.
     # A disable directive is a user opt-out even when it names the old fork.
-    filtered_plugins = [entry for entry in cli_config if not _voice_entry_matches(entry)]
+    filtered_plugins = [
+        entry for entry in cli_config if not _voice_entry_matches(entry)
+    ]
     existing_voice = next(
-        (entry for entry in cli_config
-         if _voice_entry_is_current(entry) and not _voice_entry_is_disabled(entry)),
+        (
+            entry
+            for entry in cli_config
+            if _voice_entry_is_current(entry) and not _voice_entry_is_disabled(entry)
+        ),
         None,
     )
     if existing_voice is None:
         existing_voice = next(
-            (entry for entry in cli_config
-             if _voice_entry_matches(entry) and not _voice_entry_is_disabled(entry)),
+            (
+                entry
+                for entry in cli_config
+                if _voice_entry_matches(entry) and not _voice_entry_is_disabled(entry)
+            ),
             None,
         )
     voice_disabled = any(_voice_entry_is_disabled(entry) for entry in cli_config)
@@ -1460,13 +1470,15 @@ def main():
         # Keep an existing current disable directive byte-for-byte; only
         # rewrite retired-fork disables to the replacement package.
         current_disable = next(
-            (entry for entry in cli_config
-             if _voice_entry_is_current(entry) and _voice_entry_is_disabled(entry)),
+            (
+                entry
+                for entry in cli_config
+                if _voice_entry_is_current(entry) and _voice_entry_is_disabled(entry)
+            ),
             None,
         )
         filtered_plugins.append(
-            current_disable if current_disable is not None
-            else "-" + voice_plugin_spec
+            current_disable if current_disable is not None else "-" + voice_plugin_spec
         )
     # When cli.json has no voice entry yet, the previously managed tui.json
     # route seeds the v2 entry: the package maps onto the current manifest
@@ -1523,8 +1535,11 @@ def main():
     ):
         if isinstance(registered, dict) and isinstance(registered.get("options"), dict):
             user_options.update(
-                {key: value for key, value in registered["options"].items()
-                 if key not in managed_keys}
+                {
+                    key: value
+                    for key, value in registered["options"].items()
+                    if key not in managed_keys
+                }
             )
     if isinstance(legacy_options, dict):
         user_options.update(

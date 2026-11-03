@@ -490,19 +490,27 @@ def test_git_cache_checker_fails_closed_for_missing_or_corrupt_metadata(tmp_path
     corrupt.write_text("{")
     assert not module.is_plugin_installed(spec_text, tmp_path)
 
+
 def test_plugin_update_available_is_rejected_for_pinned_specs():
     source = TEMPLATE.read_text()
-    parser = "parse_plugin_check() {" + source.split(
-        "parse_plugin_check() {", 1
-    )[1].split("\nHOST_STATE=", 1)[0]
+    parser = (
+        "parse_plugin_check() {"
+        + source.split("parse_plugin_check() {", 1)[1].split("\nHOST_STATE=", 1)[0]
+    )
     for spec, status, should_pass in (
         ("@tarquinen/opencode-dcp@3.2.0", "update available", False),
         ("@tarquinen/opencode-dcp@latest", "update available", True),
         ("@tarquinen/opencode-dcp@3.2.0", "current", True),
     ):
         result = subprocess.run(
-            ["bash", "-c", parser + '\nparse_plugin_check "$1" "$2" "" 0 0',
-             "bash", spec, f"opencode-dcp 3.2.0 ({status})"],
+            [
+                "bash",
+                "-c",
+                parser + '\nparse_plugin_check "$1" "$2" "" 0 0',
+                "bash",
+                spec,
+                f"opencode-dcp 3.2.0 ({status})",
+            ],
             text=True,
             capture_output=True,
             check=False,

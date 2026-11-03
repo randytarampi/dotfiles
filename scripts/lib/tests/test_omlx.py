@@ -3413,14 +3413,19 @@ def test_pi_unknown_catalogue_without_prior_config_fails_closed(monkeypatch, tmp
     with pytest.raises(RuntimeError, match="no prior Pi configuration"):
         configure_pi.main()
 
+
 def test_opencode_v2_model_boundary_keeps_identity_modalities_cache():
     entry = configure_opencode._native_model_entry(
         {
             "id": "meridian/claude-haiku",
             "name": "Test model",
             "modalities": {"input": ["text", "image"], "output": ["text"]},
-            "cost": {"input": 1.0, "output": 2.0,
-                     "cache_read": 0.1, "cache_write": 0.2},
+            "cost": {
+                "input": 1.0,
+                "output": 2.0,
+                "cache_read": 0.1,
+                "cache_write": 0.2,
+            },
         }
     )
     assert entry["modelID"] == "meridian/claude-haiku"
