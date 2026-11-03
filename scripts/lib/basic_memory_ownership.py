@@ -7,6 +7,34 @@ the managed defaults, or keep their existing MCP configuration untouched.
 """
 
 
+def _comparison_shape(entry):
+    """Reduce the known MCP entry layouts to their substantive fields.
+
+    Handled layouts: template/JSON ``{command, args, env}``, v2-native
+    ``{command: [bin, ...args], environment}``, and any variant carrying
+    ``disabled``/``enabled`` policy keys. Fields that only express the same
+    intent in a different layout (``environment`` vs ``env``, a bundled
+    argument array) must not read as a user-owned divergence.
+    """
+    if not isinstance(entry, dict):
+        return entry
+    command = entry.get("command")
+    args = list(entry.get("args") or [])
+    if isinstance(command, list):
+        args = command[1:] if len(command) > 1 else args
+        command = command[0] if command else None
+    env = entry.get("environment") or entry.get("env") or {}
+    enabled = entry.get("enabled")
+    if enabled is None:
+        enabled = not bool(entry.get("disabled", False))
+    return {
+        "command": command,
+        "args": args,
+        "env": dict(env),
+        "enabled": bool(enabled),
+    }
+
+
 def ensure_basic_memory_ownership(existing, generated, namespace):
     """Reject collisions with a differently configured existing memory server."""
     if not isinstance(existing, dict) or not isinstance(generated, dict):
@@ -21,8 +49,11 @@ def ensure_basic_memory_ownership(existing, generated, namespace):
     if "basic-memory" not in after:
         return
     previous = before.get("basic-memory")
-    if previous is not None and previous != after.get("basic-memory"):
-        raise ValueError(
-            "existing basic-memory MCP configuration differs from the managed "
-            "template; refusing to overwrite user-owned vault/arguments/env"
-        )
+    if previous is not None:
+        before_shape = _comparison_shape(previous)
+        after_shape = _comparison_shape(after.get("basic-memory"))
+        if before_shape != after_shape:
+            raise ValueError(
+                "existing basic-memory MCP configuration differs from the managed "
+                "template; refusing to overwrite user-owned vault/arguments/env"
+            )
