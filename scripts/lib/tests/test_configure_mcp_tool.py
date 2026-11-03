@@ -556,18 +556,22 @@ def test_pi_legacy_memory_collision_preserves_old_file(tmp_path):
     module = load_script()
     old = tmp_path / "mcp.json"
     adapter = tmp_path / "mcp-adapter.json"
-    original = {"mcpServers": {
-        "basic-memory": {"command": "custom-memory"},
-        "other": {"command": "other"},
-    }}
+    original = {
+        "mcpServers": {
+            "basic-memory": {"command": "custom-memory"},
+            "other": {"command": "other"},
+        }
+    }
     old.write_text(json.dumps(original), encoding="utf-8")
     with pytest.raises(ValueError, match="refusing to overwrite"):
         module.migrate_pi_mcp_config(
             old,
             adapter,
-            generated_data={"mcpServers": {
-                "basic-memory": {"command": "uvx"},
-            }},
+            generated_data={
+                "mcpServers": {
+                    "basic-memory": {"command": "uvx"},
+                }
+            },
         )
     assert json.loads(old.read_text()) == original
     assert not adapter.exists()
@@ -577,14 +581,25 @@ def test_pi_legacy_memory_identical_registration_can_migrate(tmp_path):
     module = load_script()
     old = tmp_path / "mcp.json"
     adapter = tmp_path / "mcp-adapter.json"
-    old.write_text(json.dumps({"mcpServers": {
-        "basic-memory": {"command": "uvx"},
-        "old": {"command": "preserve"},
-    }}), encoding="utf-8")
+    old.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "basic-memory": {"command": "uvx"},
+                    "old": {"command": "preserve"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     assert module.migrate_pi_mcp_config(
-        old, adapter, generated_data={"mcpServers": {
-            "basic-memory": {"command": "uvx"},
-        }},
+        old,
+        adapter,
+        generated_data={
+            "mcpServers": {
+                "basic-memory": {"command": "uvx"},
+            }
+        },
     )
     assert json.loads(adapter.read_text())["mcpServers"]["basic-memory"] == {
         "command": "uvx"
