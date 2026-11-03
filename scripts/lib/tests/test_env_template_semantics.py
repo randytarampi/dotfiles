@@ -6,9 +6,10 @@ from pathlib import Path
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
 # Baseline also accounts for deliberate removal of obsolete --local ACP
 # sample assignments; maintain order-sensitive protection for all remaining
-# environment keys and defaults.
+# environment keys and defaults. The Basic Memory cutover updated the retired
+# OpenCode-only memory gate comment while leaving its default disabled.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "18cb50f9bc40e9487643bb346014f42d4957019fe891bf7f55822bfb43936198"
+    "559a8d431cfa0f06e7c9cc43c1367183bd6993d137029526b0723e86d563070a"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
