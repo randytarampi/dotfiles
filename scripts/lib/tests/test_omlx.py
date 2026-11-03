@@ -589,7 +589,7 @@ def test_configure_opencode_omlx_provider_requires_reachable_daemon():
         ),
     ):
         provider = configure_opencode.build_local_provider("omlx", models)
-    assert provider["options"]["baseURL"] == "http://omlx:8000/v1"
+    assert provider["settings"]["baseURL"] == "http://omlx:8000/v1"
     assert provider["models"] == {"qwen": {"name": "qwen"}}
 
     with (patch.dict(os.environ, {"DOTFILES_RUN_OMLX_SETUP": "0"}, clear=False),):
@@ -636,7 +636,7 @@ def test_configure_opencode_two_mode_gate_is_fail_closed_and_rewrites_alias(tmp_
         configure_opencode.apply_litellm_client_gate(proxied)
     assert proxied["model"] == "litellm/openai/gpt-x"
     assert set(proxied["providers"]) == {"litellm"}
-    assert proxied["providers"]["litellm"]["options"]["apiKey"] == (
+    assert proxied["providers"]["litellm"]["settings"]["apiKey"] == (
         "{file:" + str(key_file) + "}"
     )
 
@@ -2566,9 +2566,9 @@ def test_fleet_synthetic_engine_materializes_across_consumers(monkeypatch, tmp_p
 
         # 2. OpenCode provider block via the shared registry builder
         block = local_engines.local_provider_block("lmstudio", ["lmchat"])
-        assert block["options"]["baseURL"] == "http://lmstudio:1234/v1"
+        assert block["settings"]["baseURL"] == "http://lmstudio:1234/v1"
         assert block["name"] == "LM Studio"
-        assert "apiKey" not in block["options"]
+        assert "apiKey" not in block["settings"]
 
         # 3. Pi provider via the registry-driven consumer
         configure_pi = _load_script("configure_pi", "configure-pi.py")

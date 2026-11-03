@@ -446,8 +446,8 @@ def apply_litellm_client_gate(config: dict) -> None:
     config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
-            "npm": "@ai-sdk/openai-compatible",
-            "options": {
+            "package": "@opencode/ai/providers/openai-compatible",
+            "settings": {
                 "baseURL": resolution["base_url"],
                 "apiKey": resolution["api_key"],
             },
@@ -811,8 +811,8 @@ def route_dynamic_free_registry(registry, audit, preset, config):
     config["providers"] = {
         "litellm": {
             "name": "LiteLLM",
-            "npm": "@ai-sdk/openai-compatible",
-            "options": {
+            "package": "@opencode/ai/providers/openai-compatible",
+            "settings": {
                 "baseURL": base_url,
                 "apiKey": "{file:" + str(key_path.resolve()) + "}",
             },
@@ -1042,8 +1042,8 @@ def _register_ollama_cloud_routes(
         config["providers"]["ollama"] = {
             "models": combined_models,
             "name": "Ollama",
-            "npm": "@ai-sdk/openai-compatible",
-            "options": {"baseURL": get_ollama_local_base_url()},
+            "package": "@opencode/ai/providers/openai-compatible",
+            "settings": {"baseURL": get_ollama_local_base_url()},
         }
     elif local_ollama and preset not in ["plus", "pro"]:
         config["providers"]["ollama"] = local_ollama
@@ -1527,7 +1527,7 @@ def main():
                     mid: build_model_entry(mid, models_dev_data, "opencode")
                     for mid in opencode_models
                 },
-                "options": {
+                "settings": {
                     "baseURL": "https://opencode.ai/zen/v1",
                     **(
                         {"apiKey": "{env:OPENCODE_API_KEY}"}
@@ -1542,7 +1542,7 @@ def main():
                     mid: build_model_entry(mid, models_dev_data, "github-copilot")
                     for mid in github_copilot_models
                 },
-                "options": {"baseURL": "https://api.githubcopilot.com"},
+                "settings": {"baseURL": "https://api.githubcopilot.com"},
             }
 
         if dynamic_registry is not None:
@@ -1563,7 +1563,7 @@ def main():
                             )
                             for model_id in model_ids
                         },
-                        "options": {
+                        "settings": {
                             "baseURL": endpoint["baseUrl"],
                             "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
                         },
@@ -1678,7 +1678,7 @@ def main():
                         mid: build_model_entry(mid, models_dev_data, "opencode")
                         for mid in opencode_models
                     },
-                    "options": {
+                    "settings": {
                         "baseURL": "https://opencode.ai/zen/v1",
                         **(
                             {"apiKey": "{env:OPENCODE_API_KEY}"}
@@ -1693,7 +1693,7 @@ def main():
                         mid: build_model_entry(mid, models_dev_data, "github-copilot")
                         for mid in github_copilot_models
                     },
-                    "options": {"baseURL": "https://api.githubcopilot.com"},
+                    "settings": {"baseURL": "https://api.githubcopilot.com"},
                 }
             config["disabled_providers"].extend(["anthropic", "ollama-cloud", "ollama"])
         elif args.preset in DYNAMIC_FREE_PRESETS:
@@ -1715,7 +1715,7 @@ def main():
                             )
                             for model_id in model_ids
                         },
-                        "options": {
+                        "settings": {
                             "baseURL": endpoint["baseUrl"],
                             "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
                         },
@@ -1748,7 +1748,7 @@ def main():
                         mid: build_model_entry(mid, models_dev_data, "opencode")
                         for mid in opencode_models
                     },
-                    "options": {
+                    "settings": {
                         "baseURL": "https://opencode.ai/zen/v1",
                         **(
                             {"apiKey": "{env:OPENCODE_API_KEY}"}
@@ -1784,7 +1784,7 @@ def main():
                         mid: build_model_entry(mid, models_dev_data, provider)
                         for mid in models
                     },
-                    "options": {
+                    "settings": {
                         "baseURL": endpoint["baseUrl"],
                         "apiKey": "{env:%s}" % endpoint["apiKeyEnv"],
                     },
@@ -1877,8 +1877,8 @@ def main():
                 continue
             spec = PROVIDER_ENDPOINTS[provider]
             config.setdefault("provider", {})[provider] = {
-                "npm": "@ai-sdk/openai-compatible",
-                "options": {
+                "package": "@opencode/ai/providers/openai-compatible",
+                "settings": {
                     "baseURL": base_url,
                     "apiKey": "{env:" + spec["apiKeyEnv"] + "}",
                 },
