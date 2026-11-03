@@ -630,6 +630,10 @@ def migrate_pi_mcp_config(old_path, adapter_path, generated_data=None, dry_run=F
         return False
     with open(old, "r", encoding="utf-8") as handle:
         old_data = json.load(handle)
+    if generated_data:
+        # The legacy Pi file is user-owned, even when the current adapter
+        # file is absent. Do not replace a pre-existing custom memory vault.
+        ensure_basic_memory_ownership(old_data, generated_data, "mcpServers")
     adapter_data = {}
     if os.path.isfile(adapter):
         with open(adapter, "r", encoding="utf-8") as handle:
