@@ -534,10 +534,9 @@ def test_adopted_opencode_memory_config_is_not_an_orphan(tmp_path, monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
     assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
-    assert any(
+    assert not any(
         gate == "DOTFILES_RUN_OPENCODE_MEMORY_SETUP"
-        and any(path.name == "opencode-mem.jsonc" for path in paths)
-        for gate, _description, paths in VERIFY_CONFIG.CHECKS
+        for gate, _description, _paths in VERIFY_CONFIG.CHECKS
     )
 
 

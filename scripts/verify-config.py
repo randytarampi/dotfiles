@@ -1028,11 +1028,6 @@ CHECKS = [
         ],
     ),
     (
-        "DOTFILES_RUN_OPENCODE_MEMORY_SETUP",
-        "OpenCode memory config",
-        [HOME / ".config/opencode/opencode-mem.jsonc"],
-    ),
-    (
         "DOTFILES_RUN_MCP_SETUP",
         "MCP configs",
         [

@@ -297,7 +297,17 @@ def parse_config_plugins(path):
     source = Path(path).read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     environment = _plugin_list_environment(configured_plugin_specs())
-    return _plugins_entry_from_tree(tree, environment)
+    plugins = _plugins_entry_from_tree(tree, environment)
+    # OpenCode v2 uses a negative entry to disable a previously installed
+    # legacy plugin. This one explicitly approved directive is not a
+    # manifest package; require it exactly once, at the end of the list.
+    if plugins.count("-opencode-mem") != 1:
+        raise ValueError("config must disable retired opencode-mem exactly once")
+    # The AST fixture has no live Meridian entries, but real hosts preserve
+    # their registration after the disable directive. Remove only that
+    # sentinel, not a machine-owned Meridian entry.
+    plugins.remove("-opencode-mem")
+    return plugins
 
 
 def _config_consumes_manifest(path=CONFIG_SCRIPT):

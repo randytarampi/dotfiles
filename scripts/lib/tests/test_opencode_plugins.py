@@ -30,7 +30,7 @@ def test_manifest_matches_config_and_install_template():
     """Keep plugin specs and ordering consistent across manifest and consumers."""
     checker = load_checker()
     full_manifest = checker.load_manifest()["plugins"]
-    assert "opencode-mem@latest" in full_manifest
+    assert "opencode-mem@latest" not in full_manifest
     loader = load_pinned_spec_loader()
     assert all(loader.is_pinned_spec(spec) for spec in full_manifest)
     assert full_manifest[1] == "@tarquinen/opencode-dcp@latest"
@@ -39,14 +39,16 @@ def test_manifest_matches_config_and_install_template():
     assert checker.parse_install_plugins(checker.INSTALL_SCRIPT) == expected
 
 
-def test_gated_plugins_are_excluded_until_explicitly_enabled(monkeypatch):
+def test_legacy_memory_plugin_stays_retired_with_old_gate(monkeypatch):
     checker = load_checker()
-    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "0")
-    inactive = checker.active_plugin_specs()
-    assert "opencode-mem@latest" not in inactive
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_MEMORY_SETUP", "1")
-    active = checker.active_plugin_specs()
-    assert "opencode-mem@latest" in active
+    assert "opencode-mem@latest" not in checker.active_plugin_specs()
+
+    # The native-v2 plugin array must also disable an already installed
+    # package, not merely omit it from the declarative manifest.
+    source = (ROOT / "scripts/configure-opencode.py").read_text(encoding="utf-8")
+    assert '"-opencode-mem"' in source
+    assert source.index('"-opencode-mem"') < source.index("*meridian_preserved,")
 
 
 @pytest.mark.parametrize("field", ["install", "config"])

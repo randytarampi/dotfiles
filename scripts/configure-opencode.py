@@ -52,6 +52,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     local_provider_block,
     resolve_engine,
 )
+from basic_memory_ownership import ensure_basic_memory_ownership  # noqa: E402
 from opencode_plugins import (  # noqa: E402  # sys.path bootstrap above is intentional.
     active_plugin_specs,
     plugin_specs,
@@ -1461,14 +1462,6 @@ def main():
     }
 
     configured_plugins = active_plugin_specs()
-    for plugin in set(plugin_specs()) - set(configured_plugins):
-        logger.info(
-            "%s='%s' — skipping optional OpenCode plugin: %s",
-            "DOTFILES_RUN_OPENCODE_MEMORY_SETUP",
-            "0",
-            plugin,
-        )
-
     if args.mode == "project":
         # Project configs must be self-sufficient: emit every provider the
         # selected preset references, and reset disabled_providers so an
@@ -1645,7 +1638,12 @@ def main():
                     )
                     for plugin_spec in configured_plugins[1:]
                 ],
-                # Upstream Meridian registration, preserved verbatim.
+                # OpenCode v2 may load already-installed package plugins even
+                # after their manifest entry disappears. Disable the retired
+                # memory plugin explicitly; never delete its user-owned data.
+                "-opencode-mem",
+                # Upstream Meridian registration, preserved verbatim; keep
+                # this last for the existing registration-order contract.
                 *meridian_preserved,
             ],
             "agents": {
@@ -1912,6 +1910,12 @@ def main():
 
     # Prepare both managed outputs before either one is installed.
     output_path = os.path.join(config_dir_path, OPENCODE_CONFIG_FILE_NAME)
+    if args.mode == "global" and os.path.isfile(output_path):
+        # The regular OpenCode generator writes its config directly, not via
+        # configure-mcp-tool's merge path. Enforce the same fail-closed rule.
+        with open(output_path, "r", encoding="utf-8") as existing_handle:
+            existing_config = json.load(existing_handle)
+        ensure_basic_memory_ownership(existing_config, config, "mcp")
 
     if args.mode == "project":
         try:

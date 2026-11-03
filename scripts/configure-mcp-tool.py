@@ -20,6 +20,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 from env import load_env
+from basic_memory_ownership import ensure_basic_memory_ownership
 
 
 def _ensure_toml_runtime():
@@ -454,6 +455,29 @@ def redact_output_content(format_type, output_content):
 
 
 def merge_configs_to_file(fmt, mcp_path, output):
+    # Validate the collision before touching the destination. Regular
+    # regeneration is idempotent, but a prior custom Basic Memory entry
+    # must never lose its user-selected vault or security environment.
+    if os.path.isfile(mcp_path):
+        with open(mcp_path, "r", encoding="utf-8") as handle:
+            current_text = handle.read()
+        if fmt == "toml-mcpServers":
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
+            existing_document = tomllib.loads(current_text)
+            generated_document = tomllib.loads(output)
+            namespace = "mcp_servers"
+        else:
+            existing_document = json.loads(current_text) if current_text.strip() else {}
+            generated_document = json.loads(output)
+            namespace = (
+                "servers"
+                if fmt == "json-servers"
+                else "mcp" if fmt == "opencode-internal" else "mcpServers"
+            )
+        ensure_basic_memory_ownership(existing_document, generated_document, namespace)
     if not os.path.exists(mcp_path):
         with open(mcp_path, "w", encoding="utf-8") as f:
             f.write(output)

@@ -6,14 +6,13 @@
     "@tarquinen/opencode-dcp@latest",
     "@plannotator/opencode@latest",
     "github:AxeForce/opencode-vibeguard-v2#main",
-    "@cheesecodestudio/opencode-tokenscope-v2@latest",
-    "opencode-mem@latest"
+    "@cheesecodestudio/opencode-tokenscope-v2@latest"
   ],
   "cli_plugins": [
-    {"package": "@bojackduy/opencode-voice@latest"}
+    {
+      "package": "@bojackduy/opencode-voice@latest"
+    }
   ],
-  "gated": {
-    "opencode-mem@latest": "DOTFILES_RUN_OPENCODE_MEMORY_SETUP"
-  },
+  "gated": {},
   "excluded": {}
 }

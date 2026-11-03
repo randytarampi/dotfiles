@@ -15,6 +15,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -39,6 +42,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -62,6 +68,9 @@
       "project_mcp_path": ".cursor/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },
@@ -95,6 +104,9 @@
       "format": "toml-mcpServers",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -118,6 +130,9 @@
       "project_mcp_path": "opencode.json",
       "format": "opencode-internal",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },
@@ -146,6 +161,9 @@
       "format": "json-settings-merge",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -169,6 +187,9 @@
       "project_mcp_path": ".ai/mcp/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },
@@ -195,6 +216,9 @@
       "note": "Claude Code CLI. ~/.claude.json is a shared app config with many top-level keys; merge preserves them. Project-mode writes to .claude/mcp.json.",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -220,6 +244,9 @@
       "note": "Claude Desktop legacy file supports stdio only; idea (IntelliJ URL) intentionally excluded. Remote MCP (sentry, github, context7) managed via Connectors UI.",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "codegraph"
         }
       ]
@@ -229,6 +256,9 @@
       "project_mcp_path": ".vscode/mcp.json",
       "format": "json-servers",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },
@@ -253,6 +283,9 @@
       "project_mcp_path": ".mcp.json",
       "format": "json-mcpServers-http",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },
@@ -285,6 +318,9 @@
       "format": "json-mcpServers-antigravity",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -316,6 +352,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -340,6 +379,9 @@
       "format": "json-mcpServers",
       "mcp_servers": [
         {
+          "template": "basic-memory"
+        },
+        {
           "template": "context7"
         },
         {
@@ -363,6 +405,9 @@
       "project_mcp_path": ".snowflake/cortex/mcp.json",
       "format": "json-mcpServers",
       "mcp_servers": [
+        {
+          "template": "basic-memory"
+        },
         {
           "template": "context7"
         },

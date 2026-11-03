@@ -472,3 +472,81 @@ def test_unsupported_toml_merge_layout_refuses_without_writing(tmp_path, origina
         )
     assert path.read_text(encoding="utf-8") == original
     assert path.stat().st_mtime_ns == before.st_mtime_ns
+
+
+@pytest.mark.parametrize(
+    "fmt,namespace",
+    [
+        ("json-mcpServers", "mcpServers"),
+        ("json-mcpServers-merge", "mcpServers"),
+        ("json-servers", "servers"),
+        ("opencode-internal", "mcp"),
+        ("json-mcpServers-http", "mcpServers"),
+        ("json-mcpServers-antigravity", "mcpServers"),
+    ],
+)
+def test_basic_memory_collision_refuses_overwrite_for_json_clients(
+    tmp_path, fmt, namespace
+):
+    module = load_script()
+    path = tmp_path / "client.json"
+    generated_entry = {"command": "uvx", "args": ["basic-memory", "mcp"]}
+    custom_entry = {"command": "custom-basic-memory", "args": ["--vault", "private"]}
+    if namespace == "mcp":
+        generated = {"mcp": {"basic-memory": generated_entry}}
+        existing = {"mcp": {"basic-memory": custom_entry}, "user": "retain"}
+    else:
+        generated = {namespace: {"basic-memory": generated_entry}}
+        existing = {namespace: {"basic-memory": custom_entry}, "user": "retain"}
+    path.write_text(json.dumps(existing), encoding="utf-8")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        module.merge_configs_to_file(fmt, path, json.dumps(generated))
+    assert path.read_bytes() == before
+
+
+def test_basic_memory_collision_allows_identical_json_and_non_memory_entries(tmp_path):
+    module = load_script()
+    path = tmp_path / "client.json"
+    generated = {"mcpServers": {"basic-memory": {"command": "uvx"}}}
+    existing = {
+        "mcpServers": {
+            "basic-memory": {"command": "uvx"},
+            "custom": {"command": "user"},
+        }
+    }
+    path.write_text(json.dumps(existing), encoding="utf-8")
+    module.merge_configs_to_file("json-mcpServers-merge", path, json.dumps(generated))
+    assert json.loads(path.read_text())["mcpServers"]["basic-memory"] == {
+        "command": "uvx"
+    }
+
+
+def test_basic_memory_toml_collision_preserves_bytes(tmp_path):
+    module = load_script()
+    path = tmp_path / "config.toml"
+    old = '[mcp_servers.basic-memory]\ncommand = "custom"\n'
+    new = '[mcp_servers.basic-memory]\ncommand = "uvx"\n'
+    path.write_text(old, encoding="utf-8")
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        module.merge_configs_to_file("toml-mcpServers", path, new)
+    assert path.read_text(encoding="utf-8") == old
+
+
+def test_basic_memory_pi_adapter_user_definition_wins(tmp_path):
+    module = load_script()
+    path = tmp_path / "mcp-adapter.json"
+    path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {"basic-memory": {"command": "private"}},
+                "custom": "retain",
+            }
+        )
+    )
+    module.merge_pi_adapter_config(
+        path, json.dumps({"mcpServers": {"basic-memory": {"command": "uvx"}}})
+    )
+    result = json.loads(path.read_text())
+    assert result["mcpServers"]["basic-memory"]["command"] == "private"
+    assert result["custom"] == "retain"
