@@ -27,7 +27,7 @@ opencode() {
     if [ "${_OPENCODE_VERSION_BANNER:-}" != "${_opencode_version_banner}" ] || [ -z "${_OPENCODE_MAJOR:-}" ]; then
       _opencode_version_token="$(printf '%s\n' "${_opencode_version_banner}" | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
       case "${_opencode_version_token}" in
-      v1.*|1.*) _OPENCODE_MAJOR=1 ;;
+      v1.* | 1.*) _OPENCODE_MAJOR=1 ;;
       *) _OPENCODE_MAJOR=2 ;;
       esac
       _OPENCODE_VERSION_BANNER="${_opencode_version_banner}"
