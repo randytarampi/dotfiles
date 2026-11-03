@@ -229,7 +229,7 @@ def test_voice_main_preserves_llm_fields_when_unresolved_with_stt(
     entry_holder = [p for p in cli if isinstance(p, dict)]
     assert len(entry_holder) == 1
     entry = entry_holder[0]["options"]
-    assert entry_holder[0]["package"].startswith("@bojackduy/opencode-voice")
+    assert entry_holder[0]["package"].startswith("@renjfk/opencode-voice")
     assert entry["endpoint"] == original["endpoint"]
     assert entry["model"] == original["model"]
     assert entry["apiKeyEnv"] == original["apiKeyEnv"]
@@ -269,7 +269,7 @@ def test_voice_main_preserves_unknown_options_on_resolution(monkeypatch, tmp_pat
         json.dumps(
             [
                 {
-                    "package": "@bojackduy/opencode-voice@latest",
+                    "package": "@renjfk/opencode-voice@latest",
                     "options": {
                         "endpoint": "http://previous/v1",
                         "model": "previous",
@@ -359,11 +359,11 @@ def test_voice_main_writes_resolved_llm_without_audio_state(
         p
         for p in cli
         if isinstance(p, dict)
-        and p.get("package", "").startswith("@bojackduy/opencode-voice")
+        and p.get("package", "").startswith("@renjfk/opencode-voice")
     ]
     assert voice_entries == [
         {
-            "package": "@bojackduy/opencode-voice@latest",
+            "package": "@renjfk/opencode-voice@latest",
             "options": {"endpoint": "http://resolved/v1", "model": "resolved"},
         },
     ]
@@ -494,7 +494,7 @@ def test_voice_config_only_tier_matrix_main_contract(
         p
         for p in cli
         if isinstance(p, dict)
-        and p.get("package", "").startswith("@bojackduy/opencode-voice")
+        and p.get("package", "").startswith("@renjfk/opencode-voice")
     ]
     if tier.startswith("local"):
         assert len(voice_entries) == int(existing)
@@ -883,7 +883,7 @@ def test_voice_unqualified_tier_does_not_replace_existing_plugin(monkeypatch, tm
         p
         for p in written
         if isinstance(p, dict)
-        and p.get("package", "").startswith("@bojackduy/opencode-voice")
+        and p.get("package", "").startswith("@renjfk/opencode-voice")
     ]
     assert len(voice_entries) == 1
     assert voice_entries[0]["options"] == existing_options

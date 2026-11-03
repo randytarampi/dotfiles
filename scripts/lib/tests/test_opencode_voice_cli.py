@@ -30,15 +30,15 @@ def test_voice_writer_cli_registration_matches_manifest():
     # Membership (not count): a future gated CLI/TUI companion can join
     # without rewriting this contract; each entry must be unique.
     assert specs == sorted(set(specs))
-    assert "@bojackduy/opencode-voice@latest" in specs
+    assert "@renjfk/opencode-voice@latest" in specs
     assert "active_cli_plugin_specs()" in source
     assert 'os.path.join(config_dir_path, "cli.json")' in source
 
 
 def test_voice_matches_forms_and_preserves_cli_directives():
     module = _load("voice_cli", ROOT / "configure-opencode-voice.py")
-    assert module._voice_entry_matches("@bojackduy/opencode-voice@latest")
-    assert module._voice_entry_matches({"package": "-@bojackduy/opencode-voice@latest"})
+    assert module._voice_entry_matches("@renjfk/opencode-voice@latest")
+    assert module._voice_entry_matches({"package": "-@renjfk/opencode-voice@latest"})
     assert not module._voice_entry_matches("*")
     assert not module._voice_entry_matches("-team.*")
 
@@ -73,7 +73,7 @@ def test_cli_reconcile_preserves_object_root_form(tmp_path, monkeypatch):
     assert set(result) == {"$schema", "plugins"}
     assert result["plugins"][:-1] == ["first", ["foreign", {}]]
     assert result["plugins"][-1] == {
-        "package": "@bojackduy/opencode-voice@latest",
+        "package": "@renjfk/opencode-voice@latest",
         "options": {"endpoint": "https://v.example", "model": "m"},
     }
 
@@ -97,7 +97,7 @@ def test_cli_object_root_without_plugins_is_preserved(tmp_path, monkeypatch):
     assert module.main() is None
     result = json.loads((tmp_path / "cli.json").read_text())
     assert result["$schema"] == "schema"
-    assert result["plugins"][-1]["package"] == "@bojackduy/opencode-voice@latest"
+    assert result["plugins"][-1]["package"] == "@renjfk/opencode-voice@latest"
 
 
 def test_cli_voice_disable_directive_is_not_reenabled(tmp_path, monkeypatch):
@@ -115,7 +115,7 @@ def test_cli_voice_disable_directive_is_not_reenabled(tmp_path, monkeypatch):
     monkeypatch.setattr(
         module.sys, "argv", ["voice", "--preset", "local", "--no-backup"]
     )
-    disabled = "-@bojackduy/opencode-voice@latest"
+    disabled = "-@renjfk/opencode-voice@latest"
     (tmp_path / "cli.json").write_text(json.dumps([disabled]))
     assert module.main() is None
     assert json.loads((tmp_path / "cli.json").read_text()) == [disabled]
@@ -212,7 +212,7 @@ def test_cli_reconcile_preserves_entries_and_removes_old_tui(tmp_path, monkeypat
     result = json.loads((tmp_path / "cli.json").read_text())
     assert result[:-1] == cli
     assert result[-1] == {
-        "package": "@bojackduy/opencode-voice@latest",
+        "package": "@renjfk/opencode-voice@latest",
         "options": {
             "endpoint": "https://voice.example/v1",
             "model": "voice-model",
@@ -316,7 +316,7 @@ def test_voice_cli_entry_options_shape_is_object(tmp_path, monkeypatch):
     )
     assert module.main() is None
     entry = json.loads((tmp_path / "cli.json").read_text())[0]
-    assert entry["package"] == "@bojackduy/opencode-voice@latest"
+    assert entry["package"] == "@renjfk/opencode-voice@latest"
     assert entry["options"] == {
         "endpoint": "https://voice.example/v1",
         "model": "voice-model",

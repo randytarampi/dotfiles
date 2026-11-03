@@ -91,6 +91,9 @@ from selected_service import (  # noqa: E402
 from litellm_client_auth import (  # noqa: E402 -- scripts/lib bootstrap ordering.
     resolve_client_auth,
 )
+from litellm_aliases import (
+    canonical_allowlist_key,
+)  # noqa: E402 -- scripts/lib bootstrap ordering.
 from opencode_plugins import (  # noqa: E402 -- scripts/lib bootstrap ordering.
     active_cli_plugin_specs,
 )
@@ -464,9 +467,32 @@ def _gateway_alias(provider, model, key=None):
         else None
     )
     wanted = f"{provider}/{model}"
-    if wanted in (models or []):
+    models = models or []
+    if wanted in models:
         _gateway_alias.last_error = None
         return wanted
+    # Mirrors the OpenCode generator's inventory-owner rule: Anthropic
+    # selections route through the Meridian gateway aliases (same canonical
+    # model ID in the meridian/ owner namespace) and Cohere through
+    # cohere_chat/; fall back to a direct-provider alias, then to canonical
+    # key matching against the owner namespace.
+    owner_for_lookup = {
+        "anthropic": "meridian",
+        "cohere": "cohere_chat",
+    }.get(provider, provider)
+    for candidate in (f"{owner_for_lookup}/{model}", f"{provider}/{model}"):
+        if candidate in models:
+            _gateway_alias.last_error = None
+            return candidate
+    canonical_model = canonical_allowlist_key(model)
+    for item in models:
+        head, _, tail = item.partition("/")
+        if (
+            head == owner_for_lookup
+            and canonical_allowlist_key(tail) == canonical_model
+        ):
+            _gateway_alias.last_error = None
+            return item
     return None
 
 
