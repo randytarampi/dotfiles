@@ -28,7 +28,7 @@ Read `AGENTS.md`, `configs/agents/home-agents.md`, `configs/agents/repo-agents-s
 
 ## Gate 0 — audit without modifying remote or local-owned state
 
-**Owner:** one named coordinator; **helpers:** read-only attribution investigators.
+**Owner:** one named coordinator; **helpers:** read-only attribution investigators. **This gate is metadata-only:** do not read, export or index private agent sessions, personal histories or credential-bearing home directories. Record only public and already-authorized Git/GitHub metadata; inventory existence and location of private evidence without opening its contents. Obtain separate explicit named-owner permission before inspecting those sources.
 
 Record current `main` SHA, all branch/tag/note/replace refs, worktrees, unpushed commits, stashes **without modifying them**, Git LFS pointers, releases, open/closed PRs, review threads, branch rulesets, GitHub Actions status, downstream immutable SHA pins and any third-party forks. Distinguish reachable `main` commits from other refs, and GitHub-owned PR refs from writable branches. Capture a dated inventory and where each fact came from.
 
@@ -53,7 +53,7 @@ Use `gh api -X GET` with query fields: without `-X GET`, `-f` makes a request PO
 
 ## Gate 1 — evidence-backed attribution ledger
 
-Collect parallel read-only claims from the agents that actually did the work. Each claim must identify the **original commit SHA**, original author, affected paths, agent/tool and verified model where known, role, source/session evidence pointer, confidence, duplicate/conflict group, and requested change. For PR-body claims record original PR number and original body hash. Suggested statuses: `proposed`, `corroborated`, `contested`, `unknown`, `owner_approved`, `owner_rejected`.
+Before asking agents to inspect private sessions or collecting nonpublic participant histories, obtain explicit consent from the named dotfiles repository owner for the exact source, authorized operator, purpose, storage and retention limits. An agent's ordinary access to files is not such consent. Public Git/PR evidence can be analysed in metadata-only mode. Collect corroborated claims from agents that actually did the work. Each claim must identify the **original commit SHA**, original author, affected paths, agent/tool and verified model where known, role, source/session evidence pointer, confidence, duplicate/conflict group, and requested change. For PR-body claims record original PR number and original body hash. Suggested statuses: `proposed`, `corroborated`, `contested`, `unknown`, `owner_approved`, `owner_rejected`.
 
 Keep private transcripts and credentials out of the repo, public PRs and Plannotator links. A public ledger may contain only sanitized evidence references. The operator verifies proposed trailer identities against current policy; no invented e-mails or human identity impersonation. Separate roles:
 
