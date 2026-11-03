@@ -20,7 +20,7 @@ if LIB_DIR not in sys.path:
 
 import logger
 from env import load_env
-from basic_memory_ownership import ensure_basic_memory_ownership
+from basic_memory_ownership import ensure_basic_memory_ownership  # noqa: E402
 
 
 def _ensure_toml_runtime():
@@ -472,11 +472,12 @@ def merge_configs_to_file(fmt, mcp_path, output):
         else:
             existing_document = json.loads(current_text) if current_text.strip() else {}
             generated_document = json.loads(output)
-            namespace = (
-                "servers"
-                if fmt == "json-servers"
-                else "mcp" if fmt == "opencode-internal" else "mcpServers"
-            )
+            if fmt == "json-servers":
+                namespace = "servers"
+            elif fmt == "opencode-internal":
+                namespace = "mcp"
+            else:
+                namespace = "mcpServers"
         ensure_basic_memory_ownership(existing_document, generated_document, namespace)
     if not os.path.exists(mcp_path):
         with open(mcp_path, "w", encoding="utf-8") as f:
