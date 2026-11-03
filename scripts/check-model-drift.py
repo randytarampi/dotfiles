@@ -823,14 +823,16 @@ def _provider_models(client, model_map):
     return [], True, False
 
 
+def _opencode_connection_settings(provider):
+    """Use exactly one provider format, never a stale mixed-format fallback."""
+    field = "settings" if "package" in provider or "settings" in provider else "options"
+    block = provider.get(field, {})
+    return block if isinstance(block, dict) else {}
+
+
 def _provider_base_url(client, provider):
-    # Native v2 emission carries provider URL/keys under `settings`; the
-    # legacy v1 emission used `options`. Accept either layout.
-    for field in ("settings", "options"):
-        block = provider.get(field, {})
-        if client == "opencode" and isinstance(block, dict):
-            if block.get("baseURL"):
-                return block.get("baseURL")
+    if client == "opencode":
+        return _opencode_connection_settings(provider).get("baseURL")
     return provider.get("baseUrl")
 
 
@@ -854,13 +856,10 @@ def _is_litellm_url(base_url, port):
 
 
 def _direct_route_reason(client, provider_name, provider, base_url):
-    blocks = [provider.get(field, {}) for field in ("settings", "options")]
     if (
         client == "opencode"
         and provider_name in {"openai", "anthropic"}
-        and all(
-            not (isinstance(block, dict) and "baseURL" in block) for block in blocks
-        )
+        and "baseURL" not in _opencode_connection_settings(provider)
     ):
         return "NATIVE_PROVIDER_NOT_PROXIED"
     if isinstance(base_url, str) and base_url.startswith(("http://", "https://")):
@@ -871,14 +870,11 @@ def _direct_route_reason(client, provider_name, provider, base_url):
 def _compare_client_provider(
     client, path, name, provider, references, key, expected_key_ref
 ):
-    key_ref = None
-    for field in ("settings", "options"):
-        block = provider.get(field, {})
-        if client == "opencode" and isinstance(block, dict) and block.get("apiKey"):
-            key_ref = block.get("apiKey")
-            break
-    if key_ref is None and client != "opencode":
-        key_ref = provider.get("apiKey")
+    key_ref = (
+        _opencode_connection_settings(provider).get("apiKey")
+        if client == "opencode"
+        else provider.get("apiKey")
+    )
     scope = f"{client}:{name}"
     if key_ref != expected_key_ref or key is None:
         return (

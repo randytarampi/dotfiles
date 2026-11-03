@@ -414,9 +414,9 @@ jobs:
                   proxy_path.chmod(0o600)
                   requested = "review-free"
                   selected = "review-free/review-free"
-                  config.setdefault("provider", {})["review-free"] = {
-                      "npm": "@ai-sdk/openai-compatible",
-                      "options": {
+                  config.setdefault("providers", {})["review-free"] = {
+                      "package": "@opencode/ai/providers/openai-compatible",
+                      "settings": {
                           "baseURL": "http://127.0.0.1:4907/v1",
                           "apiKey": "{env:REVIEW_LITELLM_KEY}",
                       },
@@ -428,9 +428,9 @@ jobs:
               model, base, key, available = options[requested]
               if os.environ.get(available) == "true":
                   selected = f"{requested}/{model}"
-                  config.setdefault("provider", {})[requested] = {
-                      "npm": "@ai-sdk/openai-compatible",
-                      "options": {"baseURL": base, "apiKey": "{env:" + key + "}"},
+                  config.setdefault("providers", {})[requested] = {
+                      "package": "@opencode/ai/providers/openai-compatible",
+                      "settings": {"baseURL": base, "apiKey": "{env:" + key + "}"},
                       "models": {model: {"name": model}},
                   }
               else:

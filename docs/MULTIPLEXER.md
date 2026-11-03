@@ -29,13 +29,13 @@ The multiplexer config is in `configs/opencode/oh-my-opencode-slim.json`:
 
 ## Launching
 
-Multiplexer mode requires starting OpenCode with the `--port` flag. The `opencode` shell function (defined in `dot_dotfiles/shell/aliases.sh`) handles this automatically:
+Only OpenCode **v1** needs `--port` for editor-pane communication inside tmux/zellij; **v2** removed the flag. The `opencode` shell function (defined in `dot_dotfiles/shell/aliases.sh`) detects the binary version:
 
-- **Inside tmux/zellij:** auto-injects `--port` for the TUI (default command only — subcommands like `models`, `serve`, `run` pass through without `--port`)
-- **Outside multiplexer:** runs `opencode` normally, no `--port` flag
+- **Inside tmux/zellij:** injects `--port` only for a v1 TUI; v2 passes through unchanged. Subcommands such as `models`, `serve`, and `run` never receive the flag.
+- **Outside multiplexer:** runs `opencode` unchanged
 
 ```bash
-# Inside tmux or zellij — port flag is automatic
+# Inside tmux or zellij — v1 gets a port; v2 passes through unchanged
 opencode
 
 # Pass additional flags — a v1 binary on PATH also gets a random port
@@ -70,7 +70,7 @@ opencode
 |----------|---------|---------|
 | `OPENCODE_PORT` | Random (49152–65535) | Port for multiplexer communication between OpenCode and the editor pane (OpenCode v1 only; v2 removed the `--port` flag and instances share the background service) |
 
-On OpenCode v1, `OPENCODE_PORT` defaults to a random high port via `jot -r 1 49152 65535`, avoiding conflicts with other opencode instances (ACP servers, headless serve, etc.). Set it explicitly in `~/.env` or on the command line if you need a fixed port. On v2 the wrapper probes the host major once per shell session (cached in `_OPENCODE_MAJOR`) and passes through unchanged.
+On OpenCode v1, `OPENCODE_PORT` defaults to a random high port via `jot -r 1 49152 65535`, avoiding conflicts with other opencode instances (ACP servers, headless serve, etc.). Set it explicitly in `~/.env` or on the command line if you need a fixed port. On v2 the wrapper rechecks the binary version and caches the current major in `_OPENCODE_MAJOR` and passes through unchanged.
 
 ---
 

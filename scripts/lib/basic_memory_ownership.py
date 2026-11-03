@@ -18,19 +18,29 @@ def _comparison_shape(entry):
     """
     if not isinstance(entry, dict):
         return entry
-    command = entry.get("command")
-    args = list(entry.get("args") or [])
+    # Normalize only layout aliases; all other fields must match to avoid
+    # overwriting user-owned tool filters, timeouts, cwd, or transport settings.
+    normalized = dict(entry)
+    command = normalized.pop("command", None)
+    args = list(normalized.pop("args", None) or [])
     if isinstance(command, list):
         args = command[1:] if len(command) > 1 else args
         command = command[0] if command else None
-    env = entry.get("environment") or entry.get("env") or {}
-    enabled = entry.get("enabled")
+    environment = normalized.pop("environment", None)
+    env = normalized.pop("env", None)
+    if environment is not None and env is not None and environment != env:
+        normalized["environment"] = environment
+    enabled = normalized.pop("enabled", None)
+    disabled = normalized.pop("disabled", None)
     if enabled is None:
-        enabled = not bool(entry.get("disabled", False))
+        enabled = not bool(disabled)
+    elif disabled is not None and bool(enabled) == bool(disabled):
+        normalized["disabled"] = disabled
     return {
+        **normalized,
         "command": command,
         "args": args,
-        "env": dict(env),
+        "env": dict(environment if environment is not None else env or {}),
         "enabled": bool(enabled),
     }
 
@@ -55,5 +65,5 @@ def ensure_basic_memory_ownership(existing, generated, namespace):
         if before_shape != after_shape:
             raise ValueError(
                 "existing basic-memory MCP configuration differs from the managed "
-                "template; refusing to overwrite user-owned vault/arguments/env"
+                "template; refusing to overwrite user-owned vault/arguments/env/settings"
             )
