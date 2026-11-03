@@ -26,7 +26,7 @@ LOCAL_ENGINES = {
         "provider_config": False,
         "health_check": None,
         "display_name": "Ollama",
-        "npm": "@ai-sdk/openai-compatible",
+        "npm": "@opencode/ai/providers/openai-compatible",
         "resolve_model": True,
         "context_fallback": None,
         "default_port": "11434",
@@ -50,7 +50,7 @@ LOCAL_ENGINES = {
         "provider_config": True,
         "health_check": check_omlx_daemon,
         "display_name": "oMLX",
-        "npm": "@ai-sdk/openai-compatible",
+        "npm": "@opencode/ai/providers/openai-compatible",
         "resolve_model": False,
         "context_fallback": 32768,
         "default_port": str(OMLX_DEFAULT_PORT),
@@ -536,11 +536,11 @@ def local_provider_block(provider, models):
     block = {
         "models": models,
         "name": engine["display_name"],
-        "npm": engine["npm"],
-        "options": {"baseURL": base_url},
+        "package": engine["npm"],
+        "settings": {"baseURL": base_url},
     }
     if api_key_env and os.environ.get(api_key_env, "").strip():
-        block["options"]["apiKey"] = f"{{env:{api_key_env}}}"
+        block["settings"]["apiKey"] = f"{{env:{api_key_env}}}"
     return block
 
 
