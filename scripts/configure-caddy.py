@@ -22,9 +22,9 @@ import logger
 from env import load_env
 from file_utils import write_text_file
 from caddy_domains import load_domains
-from paseo_web_policy import (
+from paseo_web_policy import (  # noqa: E402
     validate_proxy_config as validate_paseo_proxy_config,
-)  # noqa: E402
+)
 from cli_helpers import add_common_args
 from local_engines import (
     active_engines,
