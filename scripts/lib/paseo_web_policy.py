@@ -80,8 +80,10 @@ def domains_for_access(access):
     if os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") != "1":
         return []
     zones = Path(
-        os.path.expanduser(
-            os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")
+        os.path.expandvars(
+            os.path.expanduser(
+                os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")
+            )
         )
     )
     domains = load_domains(zones)
