@@ -17,6 +17,8 @@ import os
 import re
 import subprocess
 import sys
+import site
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -67,6 +69,18 @@ def safe_env():
         "TERM": "dumb",
         "NO_COLOR": "1",
     }
+    # Scripts that import user-site modules (e.g. the tomli fallback for
+    # Python builds without tomllib) must still resolve them under the
+    # sandboxed HOME: expose the real interpreter's user site read-only.
+    try:
+        site_dir = site.getusersitepackages()
+    except (AttributeError, KeyError):
+        site_dir = None
+    if site_dir and os.path.isdir(site_dir):
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{site_dir}{os.pathsep}{existing}" if existing else site_dir
+        )
     return env
 
 
