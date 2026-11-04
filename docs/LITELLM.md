@@ -15,7 +15,7 @@ Cloudflare uses a validated account-specific URL. See
 See [ChatGPT Desktop surface qualification](CHATGPT-DESKTOP.md) for the
 supported-vs-unknown boundary. Standalone Codex CLI can generate an opt-in
 `litellm` profile using `DOTFILES_CODEX_LITELLM_MODEL` set to an
-exact served Responses-compatible gateway alias. Without that value the
+exact served Responses-compatible gateway alias. Without that value, the
 generator does **not** invent a model profile. No ChatGPT Chat/Work
 custom inference is claimed, and no Desktop Codex-profile readback is proven.
 

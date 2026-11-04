@@ -24,7 +24,7 @@ custom-inference qualification is claimed.**
 1. Set **all three gates**: `DOTFILES_RUN_CODEX_SETUP=1`,
    `DOTFILES_USE_LITELLM_PROXY=1`, and `DOTFILES_RUN_LITELLM_SETUP=1`.
    The third gate is required for the managed shell export of the private
-   `codex.key`. Alternatively provide `LITELLM_CODEX_KEY` explicitly in the
+   `codex.key`. Alternatively, provide `LITELLM_CODEX_KEY` explicitly in the
    launched Codex process after verifying the key's identity and scope.
    Provide a dedicated, valid `LITELLM_CODEX_KEY` through the existing
    private, owner-controlled
@@ -38,9 +38,11 @@ custom-inference qualification is claimed.**
    then approve a normal run. The profile is omitted when the model is
    unspecified; the provider and user-owned root default are separate.
 4. Test in an explicitly bounded terminal session:
+
    ```sh
    codex --profile litellm
    ```
+
    Inspect `codex --help` for the installed version's exact syntax.
    Record selected model, actual `/v1/responses` request, streaming,
    tool calls, cost/usage and gateway receipt. Preserve the direct
