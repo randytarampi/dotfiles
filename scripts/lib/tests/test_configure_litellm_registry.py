@@ -866,7 +866,7 @@ def test_backed_row_provisions_and_preserves_key_on_second_apply(monkeypatch, tm
     original_request = configure_litellm._request_json
 
     def existing_aliases(url, method, key, payload=None):
-        if url.endswith("/key/list?return_full_object=true"):
+        if "/key/list?return_full_object=true" in url:
             return {"keys": [{"key_alias": alias} for alias in records]}
         return original_request(url, method, key, payload)
 

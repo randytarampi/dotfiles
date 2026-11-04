@@ -303,7 +303,7 @@ def test_strict_provisioning_requires_enabled_key_authentication(tmp_path, monke
     urls = [url for url, _method in calls]
     assert (
         urls.index("http://127.0.0.1:4000/health/readiness")
-        < urls.index("http://127.0.0.1:4000/key/list?return_full_object=true")
+        < urls.index("http://127.0.0.1:4000/key/list?return_full_object=true&page=1")
         < urls.index("http://127.0.0.1:4000/v1/models")
     )
     assert all(method == "GET" for _url, method in calls)
