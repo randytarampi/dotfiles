@@ -1134,14 +1134,33 @@ CHECKS = [
 
 
 def check_acp_agents(config):
-    """Warn if acpAgents entry exists but CLI not on PATH."""
+    """Report invalid ACP registration as an error, missing binaries as warnings."""
+    if not isinstance(config, dict):
+        print("  \u2717 ACP agents: OpenCode config must be an object")
+        return 1
     acp_agents = config.get("acpAgents", {})
+    if not isinstance(acp_agents, dict):
+        print("  \u2717 ACP agents: acpAgents must be an object")
+        return 1
+    failed = 0
     for name, entry in acp_agents.items():
-        cmd = entry.get("command", "")
-        if cmd and not shutil.which(cmd):
+        if not isinstance(entry, dict):
+            print(f"  \u2717 ACP agent '{name}': entry must be an object")
+            failed = 1
+            continue
+        command = entry.get("command")
+        if isinstance(command, list):
+            cmd = command[0] if command else None
+        else:
+            cmd = command
+        if not isinstance(cmd, str) or not cmd.strip():
+            print(f"  \u2717 ACP agent '{name}': invalid command")
+            failed = 1
+        elif not shutil.which(cmd):
             print(
                 f"  \u26a0 ACP agent '{name}' configured but command '{cmd}' not found on PATH"
             )
+    return failed
 
 
 def validate_omlx_settings(data):
@@ -1159,7 +1178,7 @@ def validate_omlx_settings(data):
     server = sections["server"]
     if not isinstance(server.get("host"), str):
         errors.append("server.host must be a string")
-    if not isinstance(server.get("port"), int) or not 1 <= server["port"] <= 65535:
+    if type(server.get("port")) is not int or not 1 <= server["port"] <= 65535:
         errors.append("server.port must be an integer from 1 to 65535")
     upload_size = server.get("max_audio_upload_size")
     if upload_size is not None and not isinstance(upload_size, str):
@@ -1204,11 +1223,14 @@ def validate_omlx_settings(data):
         )
     scheduler = sections["scheduler"]
     if (
-        not isinstance(scheduler.get("max_concurrent_requests"), int)
+        type(scheduler.get("max_concurrent_requests")) is not int
         or scheduler["max_concurrent_requests"] < 1
     ):
         errors.append("scheduler.max_concurrent_requests must be an integer >= 1")
     cache = data.get("cache", {})
+    if not isinstance(cache, dict):
+        errors.append("cache must be a JSON object")
+        cache = {}
     if cache.get("ssd_cache_dir") is not None and not isinstance(
         cache.get("ssd_cache_dir"), str
     ):
@@ -1222,11 +1244,14 @@ def validate_omlx_settings(data):
     if not isinstance(cache.get("hot_cache_write_through"), bool):
         errors.append("cache.hot_cache_write_through must be a boolean")
     if (
-        not isinstance(cache.get("initial_cache_blocks"), int)
+        type(cache.get("initial_cache_blocks")) is not int
         or cache["initial_cache_blocks"] < 0
     ):
         errors.append("cache.initial_cache_blocks must be an integer >= 0")
     mcp = data.get("mcp", {})
+    if not isinstance(mcp, dict):
+        errors.append("mcp must be a JSON object")
+        mcp = {}
     if not isinstance(mcp.get("expose_tools"), bool):
         errors.append("mcp.expose_tools must be a boolean")
     elif mcp["expose_tools"] and os.environ.get("OMLX_MCP_EXPOSE_TOOLS") != "1":
@@ -1456,9 +1481,9 @@ def check_opencode_orphan_files():
             continue
         try:
             if path.read_bytes() == live.read_bytes():
-                # Backup identical to the live file: the config regenerated
-                # to the same content, so the backup adds nothing. Prune it.
-                path.unlink()
+                # A doctor is read-only, even for redundant backups. Keeping
+                # user-owned snapshots is preferable to implicit pruning.
+                print(f"  \u26a0 Redundant backup: {path.name} (retained)")
                 continue
         except OSError:
             pass
@@ -1491,7 +1516,11 @@ def main():
             print(f"  \u2298 {description} (gate {gate}=0, skipped)")
             continue
 
-        if gate == "DOTFILES_RUN_CADDY_SETUP" and BREW_PREFIX is None:
+        if (
+            gate == "DOTFILES_RUN_CADDY_SETUP"
+            and sys.platform == "darwin"
+            and BREW_PREFIX is None
+        ):
             print(f"  \u2298 {description} (brew not found, skipped)")
             continue
 
@@ -1672,6 +1701,10 @@ def main():
         try:
             with open(opencode_json) as f:
                 opencode_config = json.load(f)
+            if not isinstance(opencode_config, dict):
+                print("  \u2717 OpenCode config: opencode.json root must be an object")
+                exit_code = 1
+                opencode_config = None
         except (json.JSONDecodeError, OSError):
             opencode_config = None
 
@@ -1907,13 +1940,11 @@ def main():
                 )
                 exit_code = 1
         else:
-            if caddy_gate and sys.platform == "darwin":
+            if caddy_gate:
                 print("  \u2717 Open WebUI Caddy site: Caddyfile missing")
                 exit_code = 1
             else:
-                print(
-                    "  \u2298 Open WebUI Caddy site (Caddyfile unavailable on this platform)"
-                )
+                print("  \u2298 Open WebUI Caddy site (Caddy gate disabled)")
     else:
         wrong_platform_service = (
             openwebui_plist if sys.platform == "darwin" else openwebui_unit
@@ -2519,7 +2550,7 @@ def main():
         if opencode_config is not None:
             mcps = opencode_config.get("mcp", {})
             mcps = mcps.get("servers", mcps) if isinstance(mcps, dict) else {}
-            if "codegraph" in mcps:
+            if isinstance(mcps, dict) and "codegraph" in mcps:
                 print("  \u2713 CodeGraph MCP: registered in opencode.json")
             else:
                 print("  \u2717 CodeGraph MCP: not found in opencode.json")
@@ -2538,7 +2569,7 @@ def main():
 
     # ACP agent CLI availability check (runs whenever opencode.json is parseable)
     if opencode_config is not None:
-        check_acp_agents(opencode_config)
+        exit_code = max(exit_code, check_acp_agents(opencode_config))
 
     # SSH permissions drift check (always runs — security-critical)
     check_ssh_permissions()

@@ -1426,3 +1426,54 @@ def test_optional_ide_credentials_match_provisioning_eligibility(
             assert not VERIFY_CONFIG.litellm_config.ide_app_installed(
                 client, (tmp_path / "Applications",)
             )
+
+
+def test_opencode_doctor_retains_identical_backup(tmp_path, monkeypatch, capsys):
+    opencode_dir = tmp_path / ".config/opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "opencode.json").write_text(
+        '{"compaction": {"auto": false}}', encoding="utf-8"
+    )
+    (opencode_dir / "dcp.jsonc").write_text('{"compress":{}}', encoding="utf-8")
+    backup = opencode_dir / "opencode.json.bak"
+    backup.write_bytes((opencode_dir / "opencode.json").read_bytes())
+    before = backup.stat()
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 0
+    assert backup.read_bytes() == (opencode_dir / "opencode.json").read_bytes()
+    assert backup.stat().st_mtime_ns == before.st_mtime_ns
+    assert "Redundant backup" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "agents",
+    [
+        [],
+        {"broken": None},
+        {"broken": {"command": []}},
+        {"broken": {"command": {"nested": "not-a-command"}}},
+    ],
+)
+def test_acp_doctor_reports_malformed_entries_without_crashing(agents, capsys):
+    assert VERIFY_CONFIG.check_acp_agents({"acpAgents": agents}) == 1
+    assert "ACP agent" in capsys.readouterr().out
+
+
+def test_acp_doctor_allows_valid_registrations_without_crashing(monkeypatch):
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda _: "/bin/tool")
+    assert (
+        VERIFY_CONFIG.check_acp_agents(
+            {"acpAgents": {"hermes": {"command": ["/bin/hermes", "acp"]}}}
+        )
+        == 0
+    )
+
+
+def test_opencode_doctor_handles_non_object_managed_config(tmp_path, monkeypatch):
+    opencode_dir = tmp_path / ".config/opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "opencode.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    assert VERIFY_CONFIG.check_opencode_orphan_files() == 1

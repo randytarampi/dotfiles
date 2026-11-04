@@ -3438,3 +3438,28 @@ def test_opencode_v2_model_boundary_keeps_identity_modalities_cache():
     config = {"providers": {"litellm": {"models": {"alias": entry}}}}
     configure_opencode._native_provider_models(config)
     assert config["providers"]["litellm"]["models"]["alias"] == entry
+
+
+@pytest.mark.parametrize("section", ["cache", "mcp"])
+@pytest.mark.parametrize("invalid", [None, [], "broken", True])
+def test_omlx_doctor_rejects_malformed_nested_sections(section, invalid):
+    verify = _load_script("verify_config_nested", "verify-config.py")
+    settings = local_engines.merge_omlx_settings({})
+    settings[section] = invalid
+    errors = verify.validate_omlx_settings(settings)
+    assert any(message.startswith(section + " must") for message in errors)
+
+
+@pytest.mark.parametrize(
+    "section,key",
+    [
+        ("server", "port"),
+        ("scheduler", "max_concurrent_requests"),
+        ("cache", "initial_cache_blocks"),
+    ],
+)
+def test_omlx_doctor_rejects_bool_integer_fields(section, key):
+    verify = _load_script("verify_config_boolean", "verify-config.py")
+    settings = local_engines.merge_omlx_settings({})
+    settings[section][key] = True
+    assert key in " ".join(verify.validate_omlx_settings(settings))

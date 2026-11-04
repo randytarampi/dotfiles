@@ -147,3 +147,31 @@ def test_reject_group_readable_config(tmp_path, monkeypatch):
     (home / "config.json").chmod(0o644)
     with pytest.raises(ValueError, match="exclusively owned"):
         paseo.checked_config(home)
+
+
+def test_tailnet_explicit_dry_run_does_not_run_paseo(monkeypatch, tmp_path):
+    import json
+
+    home = tmp_path / ".paseo"
+    home.mkdir()
+    path = home / "config.json"
+    path.write_text(json.dumps(config()), encoding="utf-8")
+    path.chmod(0o600)
+    before = path.read_bytes()
+    monkeypatch.setenv("PASEO_HOME", str(home))
+    monkeypatch.setenv(paseo.GATE, "1")
+    monkeypatch.setattr(paseo.shutil, "which", lambda name: f"/bin/{name}")
+
+    def fake_run(args, **kwargs):
+        assert args[1:] == ["ip", "-4"]
+        return Mock(stdout="100.101.102.103\n")
+
+    monkeypatch.setattr(paseo.subprocess, "run", fake_run)
+    assert paseo.main(["--apply", "--dry-run"]) == 0
+    assert path.read_bytes() == before
+
+def test_tailnet_preflight_comparison_refuses_json_type_coercion():
+    assert paseo.same_config({"value": 1}, {"value": True}) is False
+    assert paseo.same_config({"value": 1}, {"value": 1.0}) is False
+    nested = {"outer": {"b": [1, True]}}
+    assert paseo.same_config(nested, nested)

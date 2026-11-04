@@ -10,6 +10,7 @@ import shutil
 import stat
 import subprocess  # nosec B404 - resolved Hermes/Paseo commands, no shell.
 import sys
+import tempfile
 
 GATE = "DOTFILES_RUN_PASEO_HERMES_ACP_SETUP"
 
@@ -53,6 +54,15 @@ def decode_config(source):
     return json.loads(source, object_pairs_hook=no_duplicates)
 
 
+def same_config(actual, expected):
+    """Compare JSON values without Python's bool/int/float equality coercion."""
+    return json.dumps(
+        actual, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ) == json.dumps(
+        expected, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+
+
 def checked_config(home):
     if home.is_symlink() or home.parent.is_symlink():
         raise ValueError("refusing symlink Paseo home")
@@ -73,6 +83,9 @@ def checked_config(home):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Register Hermes ACP")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without modifying live state"
+    )
     args = parser.parse_args(argv)
     try:
         paseo, hermes = shutil.which("paseo"), shutil.which("hermes")
@@ -85,7 +98,7 @@ def main(argv=None):
         path = checked_config(home)
         original = decode_config(path.read_text(encoding="utf-8"))
         verdict = classify(original, desired)
-        if not args.apply:
+        if not args.apply or args.dry_run:
             print(f"Hermes ACP provider: {verdict}; no changes made")
             return 0
         if os.environ.get(GATE, "0") != "1":
@@ -106,25 +119,48 @@ def main(argv=None):
         if verdict == "unchanged":
             print("Hermes ACP already registered and preflight passed")
             return 0
-        subprocess.run(  # nosec B603 - resolved Paseo CLI; validated JSON value.
-            [
-                paseo,
-                "daemon",
-                "config",
-                "set",
-                "agents.providers.hermes",
-                json.dumps(desired, separators=(",", ":")),
-                "--home",
-                str(home),
-            ],
-            check=True,
-            timeout=30,
-        )
-        updated = decode_config(path.read_text(encoding="utf-8"))
         expected = copy.deepcopy(original)
         providers = expected.setdefault("agents", {}).setdefault("providers", {})
         providers["hermes"] = desired
-        if updated != expected or classify(updated, desired) != "unchanged":
+        command = [
+            paseo,
+            "daemon",
+            "config",
+            "set",
+            "agents.providers.hermes",
+            json.dumps(desired, separators=(",", ":")),
+            "--home",
+        ]
+        # The native Paseo CLI may normalize or discard unrelated user-owned
+        # keys. Prove the exact mutation in a private copy before any live write.
+        with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-hermes-") as scratch:
+            staged_home = Path(scratch)
+            staged_config = staged_home / "config.json"
+            staged_config.write_bytes(path.read_bytes())
+            staged_config.chmod(0o600)
+            subprocess.run(  # nosec B603 - resolved CLI and private staged home.
+                command + [str(staged_home)],
+                check=True,
+                timeout=30,
+                capture_output=True,
+                text=True,
+            )
+            preview = decode_config(staged_config.read_text(encoding="utf-8"))
+            if not same_config(preview, expected):
+                raise ValueError(
+                    "Paseo CLI would rewrite unrelated config; refusing live write"
+                )
+        if not same_config(decode_config(path.read_text(encoding="utf-8")), original):
+            raise ValueError("Paseo config changed during preflight; retry")
+        subprocess.run(  # nosec B603 - resolved CLI; staged layout validated.
+            command + [str(home)],
+            check=True,
+            timeout=30,
+            capture_output=True,
+            text=True,
+        )
+        updated = decode_config(path.read_text(encoding="utf-8"))
+        if not same_config(updated, expected) or classify(updated, desired) != "unchanged":
             raise ValueError("Paseo config write changed more than Hermes ACP provider")
         print("Hermes ACP registered; validate a real local session in Paseo")
         return 0
