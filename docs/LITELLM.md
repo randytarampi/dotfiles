@@ -34,6 +34,13 @@ provider behaviour. The installed CLI version's transport, key handling and
 exact gateway model alias require a live check before relying on this adapter;
 no inference qualification is claimed here.
 
+## Claude Desktop gateway pilot
+
+See [the owner-controlled Claude Desktop pilot](CLAUDE-DESKTOP.md).
+This adds a read-only credential helper for an owner-managed, dedicated
+Desktop virtual key. **Neither the Desktop key nor the profile is installed
+by repo deployment**; native Chat/Cowork/Code inference is not qualified.
+
 ## Claude Desktop third-party gateway (export scaffold only)
 
 `scripts/export-claude-desktop-gateway.py` is an explicit, standalone exporter;

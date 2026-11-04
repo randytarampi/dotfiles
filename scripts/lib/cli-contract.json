@@ -123,6 +123,14 @@
       "child_scripts": []
     },
     {
+      "path": "scripts/claude-desktop-credential-helper.py",
+      "capabilities": ["public"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--check"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/export-claude-desktop-gateway.py",
       "capabilities": [
         "public"
