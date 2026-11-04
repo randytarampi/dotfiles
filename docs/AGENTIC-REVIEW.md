@@ -34,7 +34,7 @@ A specifically requested Gemini review still fails visibly on HTTP 429/503. Open
 - `review-junie` — Junie code review
 - `review-gemini` — Gemini review
 - `review-copilot` — request Copilot as reviewer
-- `review-all` — all of the above
+- `review-all` — Junie and Copilot only on authorised label events; does not include OpenCode or quota-limited Gemini
 
 ## Mentions
 
@@ -175,11 +175,15 @@ Set per repo (Settings → Secrets and variables → Actions):
   fallback chains in CI; also usable by Junie BYOK if preferred)
 
 - OpenCode publishing uses the installed [OpenCode GitHub App](https://github.com/apps/opencode-agent) through OIDC; **no `OPENCODE_APP_ID` or `OPENCODE_APP_PRIVATE_KEY` secrets are needed**. Callers must grant `id-token: write`.
-- Junie/Gemini do not require publisher App credentials. The `notify` job
-  obtains the job-scoped `GITHUB_TOKEN` with `pull-requests: write` and posts as
-  `github-actions[bot]`. Generation jobs retain `contents: read` only.
-  GitHub API failures, missing publication permission, and empty model outputs
-  fail visibly; unrequested events do not start publication.
+- Junie and Gemini publication uses **separate installed GitHub Apps**.
+  After a successful, nonempty requested model run, `notify` obtains short-lived
+  installation tokens through `actions/create-github-app-token@v3`, using
+  `vars.JUNIE_GITHUB_APP_ID` / `secrets.JUNIE_GITHUB_APP_PRIVATE_KEY`
+  and the corresponding `GEMINI_*` variable/secret. It verifies the returned
+  `app-slug` and posts only as that App's `<slug>[bot]` identity.
+  Review generation jobs retain `contents: read` only. Missing App
+  configuration, foreign marker ownership, GitHub API failures and empty
+  model output fail visibly; unrequested events do not start publication.
 - OpenCode uses the **official** `anomalyco/opencode/github` composite action,
   pinned to its upstream `latest` tag's resolved commit. The action invokes
   `opencode github run`, exchanges the runner's OIDC token for the installed
@@ -190,11 +194,13 @@ Set per repo (Settings → Secrets and variables → Actions):
   `<!-- agent-review:opencode -->` marker or guarantee comment deduplication.
   The native action accepts `/opencode` and `/oc` **PR conversation issue_comment events only**; inline review comments are not qualified and do not start this lane.
   Label events are not valid OpenCode action inputs and never run this lane.
-- Junie's `silent_mode: "true"` exposes its `junie_summary` for the separate
-  `notify` job, which publishes Junie/Gemini bodies using the GitHub Actions
-  bot identity and marker-based updates. Copilot uses its native reviewer.
-  Avoid PAT-backed user publishers: unlike `github-actions[bot]`, they might
-  retrigger the dispatcher.
+- Junie's `silent_mode: "true"` exposes its `junie_summary` for the
+  separate `notify` job. The notifier uses each reviewer App's token and
+  immutable marker ownership to update its own existing comment, or create
+  one if no conflicting marker exists. Copilot uses its native reviewer.
+  The earlier `github-actions[bot]` smoke receipts are historical, not the
+  current Junie/Gemini publication implementation. Avoid PAT-backed user
+  publishing and duplicate marker ownership.
 
 ## MCP servers in CI
 
@@ -315,11 +321,14 @@ marker/update-in-place contract. The native action may write PR branches when
 using a mutating agent, hence this workflow's read-only plan configuration and
 push guard. Test real events, permissions and lack of mutations.
 
-Junie and Gemini require successful model execution, nonempty review artifacts
-and a `notify` token authorized for issue comments. Failed models and missing
-publication permissions must not produce misleading success. Copilot requests a
+Junie and Gemini require successful model execution, nonempty review
+artifacts and the correct reviewer App installation token in `notify`.
+Failed models, missing App installation and foreign marker ownership must
+not produce misleading success or duplicate comments. Copilot requests a
 native review and gets no redundant status comment. Unrequested events do not
-publish.
+publish. Gemini's App-authored review and repeat-update acceptance remain
+**NOT VERIFIED** under [issue #106](https://github.com/randytarampi/dotfiles/issues/106);
+OpenCode's unrelated OIDC publication proof does not close that issue.
 
 Before promotion, test a same-repository, maintainer-controlled PR with the
 exact action ref: OIDC exchange, substantive review, publication, no code push,
