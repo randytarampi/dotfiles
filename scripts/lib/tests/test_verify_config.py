@@ -1471,9 +1471,7 @@ def test_acp_doctor_allows_valid_registrations_without_crashing(monkeypatch):
 
 
 @pytest.mark.parametrize("raw", ["[]", "null", "true", '"string"'])
-def test_direct_mode_rejects_non_object_config_without_crashing(
-    tmp_path, raw
-):
+def test_direct_mode_rejects_non_object_config_without_crashing(tmp_path, raw):
     opencode_dir = tmp_path / ".config/opencode"
     opencode_dir.mkdir(parents=True)
     (opencode_dir / "opencode.json").write_text(raw, encoding="utf-8")

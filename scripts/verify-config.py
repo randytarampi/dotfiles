@@ -1663,7 +1663,9 @@ def main():
         caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
         if caddyfile and caddyfile.is_file():
             if not shutil.which("caddy"):
-                print("  \u2717 Caddyfile validation unavailable: caddy executable not found")
+                print(
+                    "  \u2717 Caddyfile validation unavailable: caddy executable not found"
+                )
                 exit_code = 1
             else:
                 valid, output = validate_caddyfile(caddyfile)
@@ -2579,7 +2581,9 @@ def main():
     # output is a failed generation, never evidence of empty registrations.
     if os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") == "1":
         if not isinstance(installed_slim, dict):
-            print("  \u2717 ACP agents: installed Slim configuration unavailable or malformed")
+            print(
+                "  \u2717 ACP agents: installed Slim configuration unavailable or malformed"
+            )
             exit_code = 1
         else:
             exit_code = max(exit_code, check_acp_agents(installed_slim))
