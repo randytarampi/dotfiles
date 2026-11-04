@@ -25,7 +25,7 @@ BASE_CONFIG = {
 
 
 @pytest.fixture(autouse=True)
-def isolated_environment(monkeypatch):
+def isolated_environment(monkeypatch, tmp_path):
     for name in (
         "DOTFILES_RUN_PASEO_WEB_SETUP",
         "DOTFILES_RUN_CADDY_SETUP",
@@ -37,6 +37,9 @@ def isolated_environment(monkeypatch):
         "CADDY_ZONES_CONFIG",
     ):
         monkeypatch.delenv(name, raising=False)
+    # The policy falls back to the machine's real ddns-zones.json when the
+    # env is unset; pin every test to an absent per-test zones file.
+    monkeypatch.setenv("CADDY_ZONES_CONFIG", str(tmp_path / "zones.json"))
 
 
 def home_with_config(tmp_path, config=None):
