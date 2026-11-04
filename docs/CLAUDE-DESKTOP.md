@@ -46,12 +46,12 @@ Sources:
     ```sh
     mkdir -p "$HOME/.local/bin"
     ( set -C
-     scripts/claude-desktop-credential-helper.py --wrapper \
-       > "$HOME/.local/bin/claude-desktop-gateway-key"
+      scripts/claude-desktop-credential-helper.py --wrapper \
+        > "$HOME/.local/bin/claude-desktop-gateway-key"
     )
     chmod 700 "$HOME/.local/bin/claude-desktop-gateway-key"
     env -i HOME="$HOME" PATH=/usr/bin:/bin \
-     "$HOME/.local/bin/claude-desktop-gateway-key" --check
+      "$HOME/.local/bin/claude-desktop-gateway-key" --check
     ```
 
     The wrapper must be tested from a restricted GUI-like environment: a
@@ -72,10 +72,10 @@ Sources:
 
     ```sh
     scripts/export-claude-desktop-gateway.py \
-     --endpoint http://127.0.0.1:4000 \
-     --model '<verified-served-messages-alias>' \
-     --helper "$HOME/.local/bin/claude-desktop-gateway-key" \
-     > claude-desktop.mobileconfig
+      --endpoint http://127.0.0.1:4000 \
+      --model '<verified-served-messages-alias>' \
+      --helper "$HOME/.local/bin/claude-desktop-gateway-key" \
+      > claude-desktop.mobileconfig
     ```
 
     Inspect the profile and helper path before installing it. The exporter
