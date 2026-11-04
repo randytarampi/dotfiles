@@ -497,9 +497,7 @@ class PaseoSiteOptions:
     public_opt_in: bool
 
 
-def build_paseo_site_blocks(
-    domains: list[str], options: PaseoSiteOptions
-) -> list[str]:
+def build_paseo_site_blocks(domains: list[str], options: PaseoSiteOptions) -> list[str]:
     """Generate complete Paseo origins with Caddy's standard access semantics."""
     access_mode = options.access_mode
     https_port = options.https_port
