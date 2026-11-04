@@ -92,25 +92,48 @@
   "scripts": [
     {
       "path": "scripts/configure-tailnet-opencode.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply", "--https-port"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--https-port"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/generate-review-bundles.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--check", "--write", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--check",
+        "--write",
+        "--dry-run"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/export-claude-desktop-gateway.py",
-      "capabilities": ["public"],
+      "capabilities": [
+        "public"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--endpoint", "--model", "--helper"],
+      "accepted_flags": [
+        "--help",
+        "--endpoint",
+        "--model",
+        "--helper"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -1021,9 +1044,16 @@
     },
     {
       "path": "scripts/check-vibeguard-audit.py",
-      "capabilities": ["public"],
+      "capabilities": [
+        "public"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--full", "--changed-only", "--strict"],
+      "accepted_flags": [
+        "--help",
+        "--full",
+        "--changed-only",
+        "--strict"
+      ],
       "positional_operand": "target and audit-mode extras",
       "child_scripts": []
     },
@@ -1083,17 +1113,33 @@
     },
     {
       "path": "scripts/configure-hermes.py",
-      "capabilities": ["public", "mutates", "backups"],
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--no-backup", "--model", "--endpoint"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--model",
+        "--endpoint"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/copilot-litellm",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "notes": "Adapter dry-run previews redacted settings without key reads; ordinary Copilot arguments are forwarded.",
       "positional_operand": null,
       "child_scripts": []
@@ -1115,15 +1161,24 @@
     },
     {
       "path": "scripts/claude-litellm",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run"
+      ],
       "positional_operand": "Claude CLI arguments",
       "child_scripts": []
     },
     {
       "path": "scripts/verify-local-ai-smoke.py",
-      "capabilities": ["public", "inspect"],
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
         "--help",
@@ -1136,7 +1191,9 @@
         "--baseline-inventory"
       ],
       "positional_operand": null,
-      "child_scripts": ["configure-litellm.py"]
+      "child_scripts": [
+        "configure-litellm.py"
+      ]
     },
     {
       "path": "scripts/configure-litellm-venv.py",
@@ -1201,6 +1258,36 @@
       "positional_operand": null,
       "child_scripts": [],
       "notes": "Maintenance CLI that reprices historical spend rows from the merged model-rate snapshot via the prisma client; no local file writes, so backup semantics are unsupported."
+    },
+    {
+      "path": "scripts/configure-paseo-hermes.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-tailnet.py",
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }

@@ -65,6 +65,15 @@ def decode_config(source):
     return json.loads(source, object_pairs_hook=no_duplicates)
 
 
+def same_config(actual, expected):
+    """Compare JSON values without Python's bool/int/float equality coercion."""
+    return json.dumps(
+        actual, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ) == json.dumps(
+        expected, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+
+
 def checked_config(home):
     if home.is_symlink() or home.parent.is_symlink():
         raise ValueError("refusing symlink Paseo home")
@@ -85,6 +94,9 @@ def checked_config(home):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Change Paseo listener")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without modifying live state"
+    )
     args = parser.parse_args(argv)
     try:
         tailscale, paseo = shutil.which("tailscale"), shutil.which("paseo")
@@ -104,7 +116,7 @@ def main(argv=None):
         path = checked_config(home)
         original = decode_config(path.read_text(encoding="utf-8"))
         verdict = validate_config(original, listen)
-        if not args.apply:
+        if not args.apply or args.dry_run:
             print(f"Paseo tailnet listener: {verdict}; desired {listen}")
             return 0
         if os.environ.get(GATE, "0") != "1":
@@ -145,11 +157,11 @@ def main(argv=None):
             preview = decode_config(scratch_config.read_text(encoding="utf-8"))
             intended = copy.deepcopy(original)
             intended.setdefault("daemon", {})["listen"] = listen
-            if preview != intended:
+            if not same_config(preview, intended):
                 raise ValueError(
                     "Paseo CLI would rewrite unrelated config; refusing live write"
                 )
-        if decode_config(path.read_text(encoding="utf-8")) != original:
+        if not same_config(decode_config(path.read_text(encoding="utf-8")), original):
             raise ValueError("Paseo config changed during preflight; retry")
         subprocess.run(  # nosec B603 - resolved Paseo binary, validated arguments.
             [
@@ -168,7 +180,7 @@ def main(argv=None):
         updated = decode_config(path.read_text(encoding="utf-8"))
         expected = copy.deepcopy(original)
         expected.setdefault("daemon", {})["listen"] = listen
-        if updated != expected or validate_config(updated, listen) != "unchanged":
+        if not same_config(updated, expected) or validate_config(updated, listen) != "unchanged":
             raise ValueError(
                 "Paseo config write changed more than the intended listener"
             )
