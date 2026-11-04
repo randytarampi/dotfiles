@@ -442,7 +442,7 @@ def test_previous_settings_subprocess_exits_nonzero_for_non_object(tmp_path):
 
 
 @pytest.mark.parametrize("suffix", [":cloud", "-cloud"])
-def test_ollama_cloud_context_uses_native_window_and_original_model_id(suffix):
+def test_ollama_cloud_context_defers_to_pi_without_local_probe(suffix):
     model_id = f"provider/model{suffix}"
     configure_pi._model_details_cache.clear()
     with (
@@ -451,19 +451,33 @@ def test_ollama_cloud_context_uses_native_window_and_original_model_id(suffix):
             configure_pi, "_native_context", return_value=65536
         ) as native_context,
     ):
-        assert configure_pi._model_context_window(model_id, local=False) == 65536
-    native_context.assert_called_once_with(model_id)
+        assert configure_pi._model_context_window(model_id, local=False) is None
+        entry = configure_pi.model_entry(model_id)
+        assert "contextWindow" not in entry
+        assert "maxTokens" not in entry
+    native_context.assert_not_called()
 
 
-def test_non_cloud_model_context_remains_capped():
+def test_non_local_model_defers_context_to_pi():
     with (
         patch.dict(os.environ, {"OLLAMA_CONTEXT_LENGTH": "32768"}),
         patch.object(configure_pi, "_native_context") as native_context,
     ):
-        assert (
-            configure_pi._model_context_window("provider/model", local=False) == 32768
-        )
+        assert configure_pi._model_context_window("provider/model", local=False) is None
+        entry = configure_pi.model_entry("provider/model")
+        assert "contextWindow" not in entry
+        assert "maxTokens" not in entry
     native_context.assert_not_called()
+
+
+def test_unknown_ollama_cloud_context_defers_to_pi():
+    with (
+        patch.dict(os.environ, {"OLLAMA_CONTEXT_LENGTH": "32768"}),
+        patch.object(configure_pi, "_native_context", return_value=None),
+    ):
+        entry = configure_pi.model_entry("model:cloud")
+        assert "contextWindow" not in entry
+        assert "maxTokens" not in entry
 
 
 def test_local_model_context_remains_capped_by_native_window():

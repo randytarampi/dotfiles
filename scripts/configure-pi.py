@@ -23,7 +23,6 @@ from constants import (  # noqa: E402 -- local import follows bootstrap.
     get_ollama_local_base_url,
 )
 from discover_models import (  # noqa: E402 -- local import follows bootstrap.
-    is_ollama_cloud_model,
     list_local_ollama_models,
 )
 from file_utils import (  # noqa: E402 -- local import follows bootstrap.
@@ -138,18 +137,13 @@ def _model_context_window(model_id, local, provider="ollama"):
 
     Local models are capped by resolve_effective_context_window() at
     min(native-if-known, client cap) so Pi never requests a window the model
-    can't hold, with a 32768 floor when native context is unknown. Ollama
-    cloud models use their native window when available; other cloud/API
-    models use the cap.
+    can't hold, with a 32768 fallback when native context is unknown.
+    Cloud/API models omit the override so Pi can use its own model metadata.
     """
     if local:
         native = _native_context(model_id, provider)
         return resolve_effective_context_window(native, provider)
-    elif is_ollama_cloud_model(model_id):
-        native = _native_context(model_id)
-        if native:
-            return native
-    return _ollama_context_cap()
+    return None
 
 
 def _compaction_tokens(local_refs):
@@ -180,10 +174,8 @@ def _compaction_tokens(local_refs):
 def model_entry(model_id, name=None, local=False, provider="ollama"):
     """Build a pi model entry.
 
-    Context window is the OLLAMA_CONTEXT_LENGTH cap, further capped at the model's
-    own native window for local Ollama models (see _model_context_window). This
-    keeps pi in sync with the Ollama daemon's KV sizing without ever asking a
-    model for a window it can't hold.
+    Only local models receive client context caps. Cloud models keep Pi's
+    metadata without querying local backends for remote model limits.
     """
     compat: dict[str, object] = {}
     if local:
@@ -195,15 +187,20 @@ def model_entry(model_id, name=None, local=False, provider="ollama"):
         if compat["supportsReasoningEffort"]:
             compat["thinkingFormat"] = "openai"
 
+    resolved_window = _model_context_window(model_id, local, provider)
     return {
         "id": model_id,
         "name": name or model_id,
         "reasoning": True,
         "input": ["text"],
-        "contextWindow": (
-            resolved_window := _model_context_window(model_id, local, provider)
+        **(
+            {
+                "contextWindow": resolved_window,
+                "maxTokens": max(4096, min(32768, resolved_window - 8192)),
+            }
+            if resolved_window is not None
+            else {}
         ),
-        "maxTokens": max(4096, min(32768, resolved_window - 8192)),
         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
         **(
             {
