@@ -8,8 +8,11 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # sample assignments; maintain order-sensitive protection for all remaining
 # environment keys and defaults. The Basic Memory cutover updated the retired
 # OpenCode-only memory gate comment while leaving its default disabled.
+# Project-only keys now live in docs/project-env.example; OpenRouter has its
+# own commented credential placeholder in the home template. Deprecated and
+# retired declarations are deliberately absent; migration support remains.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "559a8d431cfa0f06e7c9cc43c1367183bd6993d137029526b0723e86d563070a"
+    "c8d666927f5d3447fa2e51b3a848048d34b1f064cd0712cf55251380de0cb2d8"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 

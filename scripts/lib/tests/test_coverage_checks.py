@@ -59,6 +59,9 @@ def test_env_coverage_scans_and_classifies_documentation(tmp_path):
     env_example.write_text("# DOTFILES_" + "RUN_EXAMPLE_SETUP=0\nGH_TOKEN=x\n")
     module.SCAN_DIRS = [(scan, {".py"})]
     module.ENV_EXAMPLE = env_example
+    project_example = tmp_path / "project-env.example"
+    project_example.write_text("")
+    module.PROJECT_ENV_EXAMPLE = project_example
     assert module.find_referenced_vars() == {"DOTFILES_" + "RUN_EXAMPLE_SETUP"}
     assert "GH_TOKEN" in module.find_referenced_env_names()
     assert module.find_documented_vars() == {"DOTFILES_" + "RUN_EXAMPLE_SETUP"}
@@ -74,6 +77,24 @@ def test_env_coverage_scans_and_classifies_documentation(tmp_path):
     assert module.ownership_info({"DOTFILES_" + "RUN_EXAMPLE_SETUP", "OTHER"}) == [
         ("DOTFILES_" + "RUN_EXAMPLE_SETUP", "repo")
     ]
+
+
+def test_env_coverage_requires_correct_documentation_scope(tmp_path):
+    module = load_script("check-env-coverage")
+    home = tmp_path / "home.example"
+    project = tmp_path / "project.example"
+    home.write_text(
+        "# DOTFILES_" + "PROJECT_WRONG=''\n# DOTFILES_" + "RUN_HOME_SETUP='0'\n"
+    )
+    project.write_text(
+        "# DOTFILES_PROJECT_PRESET=''\n# DOTFILES_" + "RUN_WRONG_SETUP='0'\n"
+    )
+    module.ENV_EXAMPLE = home
+    module.PROJECT_ENV_EXAMPLE = project
+    assert module.find_documented_vars() == {
+        "DOTFILES_" + "RUN_HOME_SETUP",
+        "DOTFILES_PROJECT_PRESET",
+    }
 
 
 def test_docs_drift_reference_helpers_are_hermetic(tmp_path):
