@@ -10,7 +10,9 @@ TEMPLATE = (
 )
 
 
-def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
+def run_installer(
+    tmp_path, *, opencode_script, npx_exit="0", update_gate="0", npx_script=None
+):
     bin_dir = tmp_path / "bin"
     home = tmp_path / "home"
     bin_dir.mkdir()
@@ -22,7 +24,7 @@ def run_installer(tmp_path, *, opencode_script, npx_exit="0", update_gate="0"):
     )
     opencode.chmod(0o755)
     npx = bin_dir / "npx"
-    npx.write_text(f"#!/bin/bash\nexit {npx_exit}\n")
+    npx.write_text("#!/bin/bash\n" + (npx_script or f"exit {npx_exit}\n"))
     npx.chmod(0o755)
     rendered = subprocess.run(
         ["chezmoi", "execute-template", "--source", str(REPO_ROOT)],
@@ -100,6 +102,33 @@ def test_rendered_installer_failure_matrix(
         update_gate=update_gate,
     )
     assert (result.returncode == 0) is should_pass, result.stdout + result.stderr
+
+
+def test_omo_probe_drops_inherited_exporter_settings_only(tmp_path, monkeypatch):
+    for key in (
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_PROTOCOL",
+        "OTEL_METRIC_EXPORT_INTERVAL",
+    ):
+        monkeypatch.setenv(key, "inherited")
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
+    result = run_installer(
+        tmp_path,
+        opencode_script=(
+            "if [[ $1 == plugin && $2 == check ]]; then "
+            'case "$3" in github:*) echo "opencode-vibeguard-v2 3.2.0 (current)" ;; '
+            '*) echo "${3%@*} 3.2.0 (current)" ;; esac; fi\n'
+        ),
+        npx_script=(
+            "[[ -z ${OTEL_EXPORTER_OTLP_ENDPOINT+x} && "
+            "-z ${OTEL_EXPORTER_OTLP_PROTOCOL+x} && "
+            "-z ${OTEL_METRIC_EXPORT_INTERVAL+x} && "
+            "${OTEL_SDK_DISABLED:-} == true ]]\n"
+        ),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "oh-my-opencode-slim installed" in result.stdout
+    assert os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] == "inherited"
 
 
 def test_installer_keeps_omo_failure_bit():

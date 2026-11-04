@@ -173,7 +173,10 @@ if command -v bun &>/dev/null; then
 else
   OMO_INSTALLER=(npx)
 fi
-if echo n | "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null; then
+# Inherited OTLP exporters push OpenCode's version probe past OMO's 3s timeout.
+# Scope the workaround to this child; preserve explicit SDK-disable policy.
+if echo n | env -u OTEL_EXPORTER_OTLP_ENDPOINT -u OTEL_EXPORTER_OTLP_PROTOCOL -u OTEL_METRIC_EXPORT_INTERVAL \
+  "${OMO_INSTALLER[@]}" "$OH_MY_PLUGIN" install --background-subagents=yes 2>/dev/null; then
   ok "oh-my-opencode-slim installed"
 else
   warn "oh-my-opencode-slim install failed"
