@@ -34,6 +34,7 @@ from selected_service import (
     select,
 )
 from ai_models import is_known_unqualified_tts
+from omlx import prefer_pinned_omlx_audio
 from local_engines import (
     LOCAL_ENGINES,
     active_engines,
@@ -769,7 +770,7 @@ def _desired_audio_settings(
     if "omlx" in _disabled() or "omlx" not in active_engines():
         return None
     endpoint = local_endpoint_for("omlx", "openai")
-    models = audio_models("omlx")
+    models = prefer_pinned_omlx_audio(audio_models("omlx"))
     if not endpoint:
         return None
     selection_records = selection_records if selection_records is not None else {}
