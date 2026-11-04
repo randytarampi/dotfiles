@@ -37,6 +37,12 @@ can reconcile relay drift before Caddy is configured, but Caddy refuses a
 remaining active relay or process-level `PASEO_RELAY_ENABLED` override.
 With a loopback daemon, set
 `DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`.
+`make deploy` **only checks** the native Web UI settings; it does not apply
+changes to Paseo config. First inspect with `make paseo-web-check`, then make
+a private backup and ensure no Paseo daemon, UI, CLI or other settings writer
+is running before explicitly calling `make paseo-web-apply`. Run `make deploy`
+afterward to generate/reload the Caddy routing. This is an operator procedure,
+not a transactional concurrency guarantee (issue #173).
 `CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves
 configured `paseo.<domain>` hosts to private ranges; `public` serves them
 publicly. A gate-enabled, installed service follows `CADDY_ACCESS`; the Paseo
@@ -49,6 +55,9 @@ and WebSocket clients.
 The script preflights edits in a private home and does not automatically
 install or start Paseo. Native config writes are not a multi-writer transaction
 (see issue #173): never run concurrent Paseo UI, daemon, or CLI config writers.
+A green read-only check or Caddy configuration is not live browser/WebSocket
+acceptance. Keep the public exposure opt-in and verify the actual listener,
+TLS, wrong-password rejection, WebSocket upgrade and hostname allowlist.
 A daemon listening on a direct-Tailscale IP is not simultaneously available on
 127.0.0.1; treat direct tailnet binding as an alternative topology.
 
