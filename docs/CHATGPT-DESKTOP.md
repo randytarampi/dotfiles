@@ -22,35 +22,35 @@ custom-inference qualification is claimed.**
 ## Standalone Codex CLI opt-in qualification
 
 1. Set **all three gates**: `DOTFILES_RUN_CODEX_SETUP=1`,
-   `DOTFILES_USE_LITELLM_PROXY=1`, and `DOTFILES_RUN_LITELLM_SETUP=1`.
-   The third gate is required for the managed shell export of the private
-   `codex.key`. Alternatively, provide `LITELLM_CODEX_KEY` explicitly in the
-   launched Codex process after verifying the key's identity and scope.
-   Provide a dedicated, valid `LITELLM_CODEX_KEY` through the existing
-   private, owner-controlled
-   provisioning procedure. Do not create or rotate the key in this PR.
+    `DOTFILES_USE_LITELLM_PROXY=1`, and `DOTFILES_RUN_LITELLM_SETUP=1`.
+    The third gate is required for the managed shell export of the private
+    `codex.key`. Alternatively, provide `LITELLM_CODEX_KEY` explicitly in the
+    launched Codex process after verifying the key's identity and scope.
+    Provide a dedicated, valid `LITELLM_CODEX_KEY` through the existing
+    private, owner-controlled
+    provisioning procedure. Do not create or rotate the key in this PR.
 2. Set `DOTFILES_CODEX_LITELLM_MODEL` to an **exact served** gateway alias
-   that accepts `/v1/responses`, e.g. a verified alias of the form
-   `openrouter/vendor/model:free`. This example is syntax, not a claim
-   that a particular route is present, free or Responses-compatible.
+    that accepts `/v1/responses`, e.g. a verified alias of the form
+    `openrouter/vendor/model:free`. This example is syntax, not a claim
+    that a particular route is present, free or Responses-compatible.
 3. Generate config with `scripts/configure-codex.py --dry-run`, inspect
-   `~/.codex/config.toml` for an unmanaged-collision refusal, and only
-   then approve a normal run. The profile is omitted when the model is
-   unspecified; the provider and user-owned root default are separate.
+    `~/.codex/config.toml` for an unmanaged-collision refusal, and only
+    then approve a normal run. The profile is omitted when the model is
+    unspecified; the provider and user-owned root default are separate.
 4. Test in an explicitly bounded terminal session:
 
-   ```sh
-   codex --profile litellm
-   ```
+    ```sh
+    codex --profile litellm
+    ```
 
-   Inspect `codex --help` for the installed version's exact syntax.
-   Record selected model, actual `/v1/responses` request, streaming,
-   tool calls, cost/usage and gateway receipt. Preserve the direct
-   OpenAI default and test switch-back.
+    Inspect `codex --help` for the installed version's exact syntax.
+    Record selected model, actual `/v1/responses` request, streaming,
+    tool calls, cost/usage and gateway receipt. Preserve the direct
+    OpenAI default and test switch-back.
 5. Test Codex inside **ChatGPT Desktop** independently. Inspect effective
-   app version, selected model/provider and requests. If it does not
-   honour the CLI profile, record UNSUPPORTED or UNKNOWN, not a fabricated
-   desktop launcher or inference override.
+    app version, selected model/provider and requests. If it does not
+    honour the CLI profile, record UNSUPPORTED or UNKNOWN, not a fabricated
+    desktop launcher or inference override.
 
 ## Negative matrix
 
