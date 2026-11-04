@@ -11,7 +11,7 @@ case "${1:-}" in
     echo "Unexpected arguments" >&2
     exit 2
   fi
-  echo "Would install @getpaseo/cli@0.14.0 globally; no changes made"
+  echo "Would install @getpaseo/cli@0.15.0 globally; no changes made"
   exit 0
   ;;
 "") ;;
@@ -33,14 +33,14 @@ if ! command -v npm >/dev/null; then
   exit 1
 fi
 # Stable pin for this pilot. No implicit beta upgrades.
-npm install --global --no-audit --no-fund '@getpaseo/cli@0.14.0'
+npm install --global --no-audit --no-fund '@getpaseo/cli@0.15.0'
 command -v paseo >/dev/null || {
   echo 'Paseo CLI not found after installation' >&2
   exit 1
 }
 version="$(paseo --version)"
-if [[ ! "$version" =~ ^([Pp]aseo[[:space:]]+)?v?0[.]14[.]0$ ]]; then
-  echo 'Installed Paseo CLI does not report pinned v0.14.0' >&2
+if [[ ! "$version" =~ ^([Pp]aseo[[:space:]]+)?v?0[.]15[.]0$ ]]; then
+  echo 'Installed Paseo CLI does not report pinned v0.15.0' >&2
   exit 1
 fi
 printf '%s\n' "Paseo CLI verified: $version"
