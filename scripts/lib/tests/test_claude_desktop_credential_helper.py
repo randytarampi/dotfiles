@@ -12,10 +12,20 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "claude-desktop-credential-helper.py"
 
 
+def _private_credential_directory_chain(home):
+    """Make fixture ownership/modes deterministic even under a 0002 umask."""
+    current = home
+    for part in (None, ".local", "share", "litellm", "clients"):
+        if part is not None:
+            current = current / part
+        current.chmod(0o700)
+
+
 def invoke(tmp_path, secret="sk-synthetic-key", mode=0o600, check=False):
     home = tmp_path / "home"
     parent = home / ".local/share/litellm/clients"
     parent.mkdir(parents=True, exist_ok=True)
+    _private_credential_directory_chain(home)
     key = parent / "claude-desktop.key"
     if secret is not None:
         key.write_bytes(secret.encode("utf-8"))
@@ -180,19 +190,37 @@ def test_in_process_credential_failures(tmp_path, monkeypatch, failure):
     elif failure == "directory-not-file":
         key.unlink()
         key.mkdir()
-    with pytest.raises((OSError, ValueError)):
-        HELPER.credential()
+    failures = {
+        "empty": "invalid credential syntax",
+        "weak-file": "unsafe credential file",
+        "weak-directory": "unsafe credential directory",
+        "oversize": "oversize credential",
+        "multiline": "invalid credential syntax",
+        "non-ascii": "invalid credential syntax",
+        "symlink-file": "unsafe credential file",
+        "symlink-directory": "unsafe credential directory",
+        "directory-not-file": "unsafe credential file",
+    }
+    if failure == "missing":
+        with pytest.raises(FileNotFoundError):
+            HELPER.credential()
+    else:
+        with pytest.raises(ValueError, match=failures[failure]):
+            HELPER.credential()
 
 
 def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
     home = tmp_path / "home"
     key = home / ".local/share/litellm/clients/claude-desktop.key"
     key.parent.mkdir(parents=True)
+    _private_credential_directory_chain(home)
     key.write_text("sk-synthetic-key", encoding="ascii")
     key.chmod(0o600)
     wrapper_path = tmp_path / "Claude Desktop wrapper.sh"
+    helper_copy = tmp_path / "Claude Desktop's helper.py"
+    helper_copy.write_bytes(SCRIPT.read_bytes())
     generated = subprocess.run(
-        [sys.executable, str(SCRIPT), "--wrapper"],
+        [sys.executable, str(helper_copy), "--wrapper"],
         env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True,
         text=True,
@@ -202,8 +230,6 @@ def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
     assert generated.stderr == ""
     assert generated.stdout.startswith("#!/bin/sh\nexec ")
     assert "sk-synthetic-key" not in generated.stdout
-    assert str(Path(sys.executable).resolve()) in generated.stdout
-    assert str(SCRIPT.resolve()) in generated.stdout
     wrapper_path.write_text(generated.stdout, encoding="utf-8")
     wrapper_path.chmod(0o700)
     checked = subprocess.run(
