@@ -109,8 +109,8 @@ def prefer_pinned_omlx_audio(models):
     return sorted(
         models,
         key=lambda item: (
-            not (item.get("pinned") is True),
-            not (item.get("is_favorite") is True),
+            item.get("pinned") is not True,
+            item.get("is_favorite") is not True,
         ),
     )
 
