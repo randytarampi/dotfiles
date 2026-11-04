@@ -135,9 +135,7 @@ def test_notify_posts_then_updates_only_its_own_marker(tmp_path, agent):
             "body": f"<!-- agent-review:{agent} -->\nOld review",
         }
     ]
-    updated, calls = _run_notify(
-        tmp_path / "updated", comments=existing, agent=agent
-    )
+    updated, calls = _run_notify(tmp_path / "updated", comments=existing, agent=agent)
     assert updated.returncode == 0, updated.stderr
     assert any("--method" in call and "PATCH" in call for call in calls)
     assert not any("--method" in call and "POST" in call for call in calls)
