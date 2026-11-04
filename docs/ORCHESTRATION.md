@@ -116,6 +116,8 @@ sequenceDiagram
     Configure->>Configure: codegraph install
     Configure->>Configure: configure-codegraph.py
     Configure->>Configure: configure-skills.py
+    Configure->>Configure: configure-paseo-web.py (opt-in, before Caddy)
+    Configure->>Configure: configure-caddy.py (opt-in)
 ```
 
 ### Executed orchestration checks

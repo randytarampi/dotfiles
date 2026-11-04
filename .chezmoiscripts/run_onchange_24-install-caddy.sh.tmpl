@@ -2,13 +2,14 @@
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_LITELLM_UI_EXPOSED" | default "0" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_PASEO_WEB_SETUP" | default "0" | sha256sum }}:{{ env "DOTFILES_PASEO_PUBLIC" | default "0" | sha256sum }}:{{ env "CADDY_ACCESS" | default "localhost" | sha256sum }}
 
 # configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
 # scripts/lib/caddy_domains.py: {{ include "scripts/lib/caddy_domains.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.12.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
 # secret presence fingerprint: {{ if env "WEBUI_SECRET_KEY" }}set{{ else }}unset{{ end }}:{{ if env "WEBUI_ADMIN_PASSWORD" }}set{{ else }}unset{{ end }}:{{ if env "OPENWEBUI_API_KEY" }}set{{ else }}unset{{ end }}
 
 {{- if eq .chezmoi.os "darwin" }}
@@ -101,7 +102,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$(
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" DOTFILES_RUN_PASEO_WEB_SETUP="${DOTFILES_RUN_PASEO_WEB_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -120,6 +121,7 @@ entries = build_hosts_entries(
     os.environ.get("CADDY_ACCESS", "localhost"),
     openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
     litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+    paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
 )
 
 for entry in entries:
@@ -261,7 +263,7 @@ fi
 
 SCRIPT_DIR="{{ .chezmoi.sourceDir }}/scripts"
 HOSTS_ENTRIES="$({
-  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" python3 - <<'PY' 2>/dev/null || true
+  SCRIPT_DIR="$SCRIPT_DIR" REAL_HOME="$REAL_HOME" CADDY_ACCESS="${CADDY_ACCESS:-localhost}" DOTFILES_RUN_OPENWEBUI_SETUP="${DOTFILES_RUN_OPENWEBUI_SETUP:-0}" DOTFILES_LITELLM_UI_EXPOSED="${DOTFILES_LITELLM_UI_EXPOSED:-0}" DOTFILES_RUN_PASEO_WEB_SETUP="${DOTFILES_RUN_PASEO_WEB_SETUP:-0}" python3 - <<'PY' 2>/dev/null || true
 import os
 import sys
 from pathlib import Path
@@ -278,6 +280,7 @@ entries = build_hosts_entries(
     os.environ.get("CADDY_ACCESS", "localhost"),
     openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
     litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+    paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
 )
 for entry in entries:
     print(entry)

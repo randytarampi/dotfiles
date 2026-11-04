@@ -11,7 +11,7 @@ case "${1:-}" in
     echo "Unexpected arguments" >&2
     exit 2
   fi
-  echo "Would install @getpaseo/cli@0.15.0 globally; no changes made"
+  echo "Would install @getpaseo/cli@latest globally; no changes made"
   exit 0
   ;;
 "") ;;
@@ -32,15 +32,24 @@ if ! command -v npm >/dev/null; then
   echo 'Refusing Paseo install: npm not found' >&2
   exit 1
 fi
-# Stable pin for this pilot. No implicit beta upgrades.
-npm install --global --no-audit --no-fund '@getpaseo/cli@0.15.0'
+# Explicit owner-run stable channel; the owner intentionally follows @latest.
+# Refuse an unparsable or prerelease CLI version rather than accepting any output.
+npm install --global --no-audit --no-fund '@getpaseo/cli@latest'
 command -v paseo >/dev/null || {
   echo 'Paseo CLI not found after installation' >&2
   exit 1
 }
-version="$(paseo --version)"
-if [[ ! "$version" =~ ^([Pp]aseo[[:space:]]+)?v?0[.]15[.]0$ ]]; then
-  echo 'Installed Paseo CLI does not report pinned v0.15.0' >&2
+# npm's global prefix identifies the installed executable. Reject an older
+# shadowing binary earlier on PATH instead of reporting a false success.
+npm_paseo="$(npm prefix -g)/bin/paseo"
+resolved_paseo="$(command -v paseo)"
+if [[ ! -x "$npm_paseo" || "$resolved_paseo" != "$npm_paseo" ]]; then
+  echo "Paseo CLI on PATH does not match npm global executable at $npm_paseo" >&2
+  exit 1
+fi
+version="$("$npm_paseo" --version)"
+if [[ ! "$version" =~ ^([Pp]aseo[[:space:]]+)?v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo 'Installed Paseo CLI did not report a stable semantic version' >&2
   exit 1
 fi
 printf '%s\n' "Paseo CLI verified: $version"

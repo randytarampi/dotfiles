@@ -73,6 +73,21 @@ and `public` when you intentionally want internet-reachable exposure.
 `CADDY_HTTPS_PORT` defaults to `443` for the root LaunchDaemon. When set to
 `443`, site addresses render as `https://host` (no explicit port).
 
+### Paseo Web UI
+
+With `DOTFILES_RUN_PASEO_WEB_SETUP=1`, Caddy serves `paseo.localhost`
+in `CADDY_ACCESS=localhost` (plus loopback local-domain aliases). For `lan`
+or `public`, it serves `paseo.<domain>` with the same real TLS and LAN
+allowlist semantics as Open WebUI. `DOTFILES_PASEO_PUBLIC=1` is required
+before the `public` mode site becomes accessible outside private ranges; it
+defaults to `0`. The native Paseo daemon remains on `127.0.0.1:6767`.
+
+The entire origin, including API and WebSockets, is forwarded. Caddy Basic
+Auth is not stacked over Paseo's own password and API authentication. Native
+password authentication, explicit relay disablement, and the correct
+hostnames allowlist are required for external access. The opt-in setup script
+preflights its native config mutations and does not start a daemon.
+
 ### LiteLLM administration UI
 
 `DOTFILES_LITELLM_UI_EXPOSED` defaults to `0`. When enabled with
@@ -143,6 +158,7 @@ manually if you prefer to manage Keychain trust yourself.
 | oMLX | `/omlx/*` | `http://127.0.0.1:8000` | Gated read-only proxy; administrative, write, and non-local `/v1/models/status` endpoints are blocked. With `OMLX_API_KEY`, the Bearer key is the route's auth layer instead of basic auth. |
 | Meridian | `/meridian/v1/*` | `http://127.0.0.1:3456` (default) | OpenAI-compatible API surface only. |
 | OpenCode web | `/opencode/*` | `http://127.0.0.1:4096` | WebSocket-aware; gated by `DOTFILES_RUN_OPENCODE_WEB_SETUP=1`; OpenCode v2 Basic auth is forwarded to the upstream. |
+| Paseo Web UI | `paseo.<domain>` / `paseo.localhost` | `http://127.0.0.1:6767` | Native password for LAN/public, hostname allowlist, same-origin WebSocket/API; public needs `DOTFILES_PASEO_PUBLIC=1`. |
 | Open WebUI | `chat.<domain>` | `http://127.0.0.1:8080` | Dedicated host (not a path prefix); LAN allowlist only, **no Caddy `basic_auth`** — Open WebUI's own session auth is the application layer (both Caddy basic auth and app Bearer use the `Authorization` header). Gated by `DOTFILES_RUN_OPENWEBUI_SETUP=1`; public exposure requires the explicit opt-in `DOTFILES_OPENWEBUI_PUBLIC=1` (default 0). |
 | Plannotator paste | `/plannotator/*` | `http://127.0.0.1:19433` | Encrypted-payload paste backend. |
 | Plannotator portal | `/` | static files | Static share portal; no backend control plane exposed. |
@@ -162,6 +178,8 @@ manually if you prefer to manage Keychain trust yourself.
 | Variable | Purpose |
 |----------|---------|
 | `CADDY_ACCESS` | Access mode: `localhost`, `lan`, or `public`. |
+| `DOTFILES_RUN_PASEO_WEB_SETUP` | Opt-in Paseo Web UI and Caddy route; native daemon remains loopback. |
+| `DOTFILES_PASEO_PUBLIC` | Explicit public access opt-in (default `0`); native password required. |
 | `DOTFILES_LITELLM_UI_EXPOSED` | Optional LiteLLM UI Caddy site; requires `lan` or `public` access mode. |
 | `CADDY_HTTPS_PORT` | HTTPS listen port (default `443`). |
 | `CADDY_ZONES_CONFIG` | Machine-local DDNS zone config (`~/.config/caddy/ddns-zones.json`). |

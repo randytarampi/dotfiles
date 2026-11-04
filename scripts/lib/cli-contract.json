@@ -1296,6 +1296,23 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/configure-paseo-web.py",
+      "capabilities": [
+        "public",
+        "mutates",
+        "backups"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--no-backup",
+        "--apply"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }

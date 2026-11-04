@@ -1,11 +1,11 @@
 # Paseo: private remote coding-agent sessions
 
-**Status:** opt-in stable v0.15.0 pilot. Does not enable a public listener, relay, or daemon automatically. Read [REMOTE_ACCESS.md](REMOTE_ACCESS.md) first.
+**Status:** CLI package managed by the dev-tier Brewfile at npm `@latest`; daemon/network configuration remains an opt-in pilot. Does not enable a public listener, relay, or daemon automatically. Read [REMOTE_ACCESS.md](REMOTE_ACCESS.md) first.
 
 ## Owner-run setup
 
 1. Confirm an enrolled Tailscale host and mobile client, with grants limited to the intended daemon port (`6767`). Test OpenCode v2 connectivity independently before installing Paseo.
-2. On the development host: `DOTFILES_RUN_PASEO_SETUP=1 bash scripts/install-paseo.sh`. This installs the `@getpaseo/cli@0.15.0` stable CLI for the current user; review npm scope/PATH first. If Desktop Paseo is already installed, avoid creating a competing daemon. The installer verifies that `paseo --version` reports the requested v0.15.0 and otherwise returns failure. Check `paseo --version`, `paseo daemon status` and the process owner.
+2. On the development host: `DOTFILES_RUN_PASEO_SETUP=1 bash scripts/install-paseo.sh`. This installs the `@getpaseo/cli@latest` CLI for the current user; review npm scope/PATH first. If Desktop Paseo is already installed, avoid creating a competing daemon. The installer requires a stable semantic version from `paseo --version`; this is a floating channel and must be re-qualified after every version change. Check `paseo --version`, `paseo daemon status` and the process owner.
 3. Interactive authentication: `paseo daemon set-password`. Explicitly disable relay with `paseo daemon config set daemon.relay.enabled false` (important for older homes, whose omitted setting may enable relay). Keep the generated bcrypt hash in user-owned `~/.paseo/config.json`; never store the plaintext in the repo, shell history, or a URL query parameter.
 4. Run `python3 scripts/configure-paseo-tailnet.py` (read-only). Then `DOTFILES_RUN_PASEO_SETUP=1 python3 scripts/configure-paseo-tailnet.py --apply`. This checks `tailscale ip -4`, requires a structurally valid bcrypt hash and an **explicit** `daemon.relay.enabled: false` setting, refuses a non-default existing listener or an override such as `PASEO_RELAY_ENABLED=true`, and delegates the edit to Paseo's own `daemon config set` command, and verifies no unrelated JSON content changed. Record the original listener and private config backup first.
 5. Restart via Paseo's native supervisor (`paseo daemon restart` if already running, otherwise `paseo daemon start`). Test the mobile **direct connection** to the host's Tailscale IP, port 6767, SSL off (Tailscale encrypts transport), with the Paseo password. Do not bind the daemon to `0.0.0.0`.
@@ -22,10 +22,27 @@ The CLI supports the locally installed provider binaries and their existing auth
 
 ## Boundaries and negative tests
 
-- The script is intentionally **not** part of `make deploy`; no unattended user-state mutations. No automatic session starts or CLI provider reconfiguration.
+- Paseo **CLI installation** is part of the dev-tier `Brewfile.dev` package lane when packages setup is enabled; this follows the owner's `@latest` policy. The separate `install-paseo.sh` helper remains an explicit owner-run action. Paseo **daemon config and Web UI setup** are opt-in via their gates. No unattended session starts or CLI provider reconfiguration.
 - Missing/broken Tailscale, unprotected Paseo daemon, existing custom listener, enabled relay, missing CLI or config: refuse instead of widening access.
-- No public Caddy site, Cloudflare Tunnel, Tailscale Funnel or E2EE relay is enabled here. Direct Tailscale TCP access still requires Paseo's own password.
+- The separate Paseo Web UI lane adds Caddy sites for `CADDY_ACCESS=localhost|lan|public` when both `DOTFILES_RUN_CADDY_SETUP=1` and `DOTFILES_RUN_PASEO_WEB_SETUP=1`, with `DOTFILES_PASEO_PUBLIC=1` additionally required for public access. It requires a loopback-only Paseo daemon; direct-Tailscale binding is an alternative, not simultaneously served on loopback. No Cloudflare Tunnel, Tailscale Funnel or E2EE relay is enabled here. Direct Tailscale TCP access still requires Paseo's own password.
 - Test denial for the wrong tailnet identity and wrong app password. Test session continuity after app suspension and after switching between Wi-Fi and cellular; confirm terminal, diff and approval surfaces.
+
+## Bundled Web UI through Caddy
+
+Set a Paseo daemon password with `paseo daemon set-password` and explicitly
+disable relay in native configuration. With a loopback daemon, set
+`DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`.
+`CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves
+configured `paseo.<domain>` hosts to private ranges. `public` remains
+private-range-only unless `DOTFILES_PASEO_PUBLIC=1` is also set. Caddy
+terminates TLS, Paseo authenticates API and WebSocket clients, and the
+native hostname allowlist is extended through validated CLI writes.
+
+The script preflights edits in a private home and does not automatically
+install or start Paseo. Native config writes are not a multi-writer transaction
+(see issue #173): never run concurrent Paseo UI, daemon, or CLI config writers.
+A daemon listening on a direct-Tailscale IP is not simultaneously available on
+127.0.0.1; treat direct tailnet binding as an alternative topology.
 
 ## Rollback
 

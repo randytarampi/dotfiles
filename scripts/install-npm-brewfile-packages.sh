@@ -72,15 +72,23 @@ RECONCILED_COREPACK=0
 
 while IFS= read -r pkg; do
   [[ -z "$pkg" ]] && continue
+  # Determine the install spec before previewing it so dry runs are truthful.
+  if [[ "$pkg" =~ @[0-9]+(\.[0-9]+)*$ ]]; then
+    spec="$pkg"
+  else
+    spec="$pkg@latest"
+  fi
   if [[ "$COMMON_DRY_RUN" == "1" ]]; then
-    info "[DRY RUN] Would install $pkg@latest globally"
+    info "[DRY RUN] Would install $spec globally"
     if [[ "$pkg" == "corepack" ]]; then
       info "[DRY RUN] Would run corepack enable"
     fi
     continue
   fi
   info "Installing $pkg..."
-  if npm install -g "$pkg@latest" >/dev/null 2>&1; then
+  # Exact-version entries install verbatim (pilot pins keep their channel);
+  # bare names follow the registry's latest stable release.
+  if npm install -g "$spec" >/dev/null 2>&1; then
     ok "$pkg installed"
     INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
     if [[ "$pkg" == "corepack" ]]; then
