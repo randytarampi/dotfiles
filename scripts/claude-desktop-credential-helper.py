@@ -77,7 +77,7 @@ def main(argv=None):
             print("Claude Desktop helper executable unavailable", file=sys.stderr)
             return 1
         print("#!/bin/sh")
-        print(f"exec {shlex.quote(str(python))} {shlex.quote(str(helper))} \"$@\"")
+        print(f'exec {shlex.quote(str(python))} {shlex.quote(str(helper))} "$@"')
         return 0
     try:
         token = credential()
