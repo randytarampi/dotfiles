@@ -488,6 +488,9 @@ def _direct_mode_routing_errors(home):
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        if not isinstance(data, dict):
+            errors.append(f"Direct mode config root must be an object: {path}")
+            continue
         providers = data.get("providers", data.get("provider", {}))
         if isinstance(providers, dict) and "litellm" in providers:
             errors.append(f"Direct mode has a LiteLLM provider in {path}")
@@ -1658,15 +1661,19 @@ def main():
     # Machine-local Caddy v2 files should be present when Caddy is enabled.
     if caddy_gate:
         caddyfile = CADDY_CHECK_PATHS[0] if CADDY_CHECK_PATHS else None
-        if caddyfile and caddyfile.is_file() and shutil.which("caddy"):
-            valid, output = validate_caddyfile(caddyfile)
-            if valid:
-                print(f"  \u2713 Caddyfile parses: {caddyfile}")
-            else:
-                print(f"  \u2717 Caddyfile validation failed: {caddyfile}")
-                if output:
-                    print(f"    {output}")
+        if caddyfile and caddyfile.is_file():
+            if not shutil.which("caddy"):
+                print("  \u2717 Caddyfile validation unavailable: caddy executable not found")
                 exit_code = 1
+            else:
+                valid, output = validate_caddyfile(caddyfile)
+                if valid:
+                    print(f"  \u2713 Caddyfile parses: {caddyfile}")
+                else:
+                    print(f"  \u2717 Caddyfile validation failed: {caddyfile}")
+                    if output:
+                        print(f"    {output}")
+                    exit_code = 1
 
         caddy_local_checks = [
             (HOME / ".config/caddy/ddns-zones.json", "Caddy DDNS zones"),
@@ -2567,9 +2574,15 @@ def main():
     # OpenCode orphan config check (only enforced when OpenCode setup is enabled)
     exit_code = max(exit_code, check_opencode_orphan_files())
 
-    # ACP agent CLI availability check (runs whenever opencode.json is parseable)
-    if opencode_config is not None:
-        exit_code = max(exit_code, check_acp_agents(opencode_config))
+    # OpenCode v2 installs generated acpAgents in Slim, not opencode.json.
+    # Only enforce this for managed OpenCode deployments. Missing/malformed
+    # output is a failed generation, never evidence of empty registrations.
+    if os.environ.get("DOTFILES_RUN_OPENCODE_SETUP", "0") == "1":
+        if not isinstance(installed_slim, dict):
+            print("  \u2717 ACP agents: installed Slim configuration unavailable or malformed")
+            exit_code = 1
+        else:
+            exit_code = max(exit_code, check_acp_agents(installed_slim))
 
     # SSH permissions drift check (always runs — security-critical)
     check_ssh_permissions()
