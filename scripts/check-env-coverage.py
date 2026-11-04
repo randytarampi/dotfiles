@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_EXAMPLE = REPO_ROOT / "dot_dotfiles" / "shell" / ".env.example"
+PROJECT_ENV_EXAMPLE = REPO_ROOT / "docs" / "project-env.example"
 SCAN_DIRS = [
     (REPO_ROOT / "scripts", {".py", ".sh"}),
     (REPO_ROOT / ".chezmoiscripts", {".sh", ".tmpl"}),
@@ -58,6 +59,8 @@ DEPRECATED_VARS = {
 REMOVED_VARS = {
     "DOTFILES_RUN_SMALLCODE_SETUP",
     "DOTFILES_SMALLCODE_TIER",
+    "DOTFILES_RUN_OPENCODE_MEMORY_SETUP",
+    "DOTFILES_USE_OLLAMA_CLOUD_PROXY",
 }
 
 KNOWN_ALIASES = {
@@ -121,13 +124,17 @@ def find_referenced_env_names():
 
 
 def find_documented_vars():
-    """Find DOTFILES_* variables documented in .env.example."""
+    """Find variables in their home- or project-scoped reference."""
     documented = set()
 
-    for line in ENV_EXAMPLE.read_text().splitlines():
-        match = DOCUMENTED_VAR_PATTERN.match(line)
-        if match:
-            documented.add(match.group(1))
+    for path, project_scope in ((ENV_EXAMPLE, False), (PROJECT_ENV_EXAMPLE, True)):
+        for line in path.read_text().splitlines():
+            match = DOCUMENTED_VAR_PATTERN.match(line)
+            if (
+                match
+                and match.group(1).startswith("DOTFILES_PROJECT_") == project_scope
+            ):
+                documented.add(match.group(1))
 
     return documented
 
@@ -206,7 +213,9 @@ def main():
         print(f"\n⚠ {len(missing)} vars missing from .env.example:")
         for var in sorted(missing):
             print(f"  ✗ {var}")
-        print("\nAdd each missing variable to dot_dotfiles/shell/.env.example.")
+        print(
+            "\nDocument home keys in dot_dotfiles/shell/.env.example and project keys in docs/project-env.example."
+        )
         sys.exit(1)
 
     print(

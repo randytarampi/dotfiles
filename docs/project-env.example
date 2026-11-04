@@ -4,7 +4,8 @@
 #
 # Home-level (non-project) env vars are documented in dot_dotfiles/shell/.env.example
 # (symlinked from the repo root as .env.example). This file covers project-scoped
-# vars only.
+# vars only. The loader still accepts home-level defaults for compatibility,
+# but keeping these keys here avoids applying project choices across repositories.
 
 # Model/tier selection. Leave unset to inherit the global tier as-is (no project
 # opencode.json is written). Set it only when this project needs a different tier;
@@ -38,3 +39,9 @@ DOTFILES_PROJECT_MCP_TOOLS='cursor,ai'
 # DOTFILES_PROJECT_PI='true' # Project-local .pi/agent/ config via configure-pi.py
 # DOTFILES_PROJECT_ACP_AGENTS='gemini,claude'
 # DOTFILES_PROJECT_SECRETS='true'
+
+# Project model overrides and local resolution constraints.
+# DOTFILES_PROJECT_CATEGORY_MODELS='code-gen=ollama/ornith-1.5:35b'
+# DOTFILES_PROJECT_ROLE_MODELS=''
+# DOTFILES_PROJECT_LOCAL_FALLBACK_PRESET=''
+# DOTFILES_PROJECT_MIN_REASONING_EMBEDDING='0' # 0 disables the minimum
