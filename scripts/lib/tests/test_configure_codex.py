@@ -101,7 +101,7 @@ def test_litellm_profile_is_opt_in_and_selects_exact_gateway_model(monkeypatch):
         "line\nbreak",
     ],
 )
-def test_litellm_profile_rejects_unsafe_model_without_writing(monkeypatch, bad_alias):
+def test_litellm_profile_rejects_unsafe_model_in_builder(monkeypatch, bad_alias):
     monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     monkeypatch.setenv("DOTFILES_CODEX_LITELLM_MODEL", bad_alias)
@@ -876,3 +876,81 @@ def test_python310_locked_runtime_when_explicitly_requested(tmp_path):
         assert result.returncode == 0, result.stderr
         assert phrase in result.stdout + result.stderr
     assert not (home / ".codex" / "config.toml").exists()
+
+
+@pytest.mark.parametrize(
+    "bad_alias",
+    ['a"\n[model_providers.evil]', "two words", "../bad\\ref"],
+)
+def test_main_rejects_invalid_alias_without_writing_config(
+    tmp_path, monkeypatch, bad_alias
+):
+    home = tmp_path / "home"
+    config_dir = home / ".codex"
+    config_dir.mkdir(parents=True)
+    config = config_dir / "config.toml"
+    original = (
+        b'# User configuration\nmodel_provider = "openai"\n'
+        b'[profiles.mine]\nmodel = "safe"\n'
+    )
+    config.write_bytes(original)
+    config.chmod(0o600)
+    old = config.stat()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_CODEX_LITELLM_MODEL", bad_alias)
+    monkeypatch.setattr(configure_codex, "load_env", lambda: None)
+    monkeypatch.setattr(
+        configure_codex, "resolve_ollama_cloud_model", lambda: ("model", "fixture")
+    )
+    monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
+    monkeypatch.setattr(configure_codex, "active_engine_pools", lambda: {})
+    monkeypatch.setattr(sys, "argv", ["configure-codex.py"])
+    with pytest.raises(SystemExit) as exc:
+        configure_codex.main()
+    assert exc.value.code == 1
+    assert config.read_bytes() == original
+    fresh = config.stat()
+    assert (fresh.st_dev, fresh.st_ino, fresh.st_mode) == (
+        old.st_dev,
+        old.st_ino,
+        old.st_mode,
+    )
+    assert sorted(config_dir.iterdir()) == [config]
+    assert not list(tmp_path.rglob("*.bak*"))
+
+
+def test_retiring_old_managed_profile_warns_and_preserves_root(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    config_dir = home / ".codex"
+    config_dir.mkdir(parents=True)
+    config = config_dir / "config.toml"
+    config.write_text(
+        '# User-owned root\nmodel_provider = "openai"\n'
+        "# BEGIN DOTFILES MANAGED PROFILES\n"
+        '[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
+        'model_provider = "litellm"\n'
+        "# END DOTFILES MANAGED PROFILES\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.delenv("DOTFILES_CODEX_LITELLM_MODEL", raising=False)
+    monkeypatch.setattr(configure_codex, "load_env", lambda: None)
+    monkeypatch.setattr(
+        configure_codex, "resolve_ollama_cloud_model", lambda: ("model", "fixture")
+    )
+    monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
+    monkeypatch.setattr(configure_codex, "active_engine_pools", lambda: {})
+    warnings = []
+    monkeypatch.setattr(configure_codex.logger, "warning", warnings.append)
+    monkeypatch.setattr(sys, "argv", ["configure-codex.py"])
+    configure_codex.main()
+    parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+    assert parsed["model_provider"] == "openai"
+    assert "litellm" not in parsed["profiles"]
+    assert any("will be removed" in message for message in warnings)
