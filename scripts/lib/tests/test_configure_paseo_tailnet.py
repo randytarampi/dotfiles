@@ -176,3 +176,9 @@ def test_tailnet_preflight_comparison_refuses_json_type_coercion():
     assert paseo.same_config({"value": 1}, {"value": 1.0}) is False
     nested = {"outer": {"b": [1, True]}}
     assert paseo.same_config(nested, nested)
+
+
+def test_abbreviated_apply_flag_rejected_before_mutation():
+    with pytest.raises(SystemExit) as caught:
+        paseo.main(["--app"])
+    assert caught.value.code == 2

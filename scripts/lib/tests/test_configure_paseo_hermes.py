@@ -184,3 +184,9 @@ def test_hermes_preflight_comparison_refuses_json_type_coercion():
     assert paseo_hermes.same_config({"value": 1}, {"value": 1.0}) is False
     nested = {"outer": {"b": [1, True]}}
     assert paseo_hermes.same_config(nested, nested)
+
+
+def test_abbreviated_apply_flag_rejected_before_mutation():
+    with pytest.raises(SystemExit) as caught:
+        paseo_hermes.main(["--app"])
+    assert caught.value.code == 2
