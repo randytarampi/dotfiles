@@ -200,7 +200,7 @@ def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
     )
     assert generated.returncode == 0
     assert generated.stderr == ""
-    assert generated.stdout.startswith("#!/bin/sh\\nexec ")
+    assert generated.stdout.startswith("#!/bin/sh\nexec ")
     assert "sk-synthetic-key" not in generated.stdout
     assert str(Path(sys.executable).resolve()) in generated.stdout
     assert str(SCRIPT.resolve()) in generated.stdout
@@ -214,7 +214,7 @@ def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
         check=False,
     )
     assert checked.returncode == 0, checked.stderr
-    assert checked.stdout == "Claude Desktop credential ready\\n"
+    assert checked.stdout == "Claude Desktop credential ready\n"
     assert "sk-synthetic-key" not in checked.stdout + checked.stderr
 
 
