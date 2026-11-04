@@ -23,9 +23,9 @@ def valid_daemon(config):
     daemon = config.get("daemon", {})
     if not isinstance(daemon, dict):
         raise ValueError("Paseo daemon config must be an object")
-    if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN or os.environ.get(
-        "PASEO_LISTEN"
-    ):
+    if os.environ.get("PASEO_LISTEN"):
+        raise ValueError("PASEO_LISTEN would override the managed loopback listener")
+    if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN:
         raise ValueError("Paseo Caddy mode requires an unmodified loopback listener")
     relay = daemon.get("relay")
     if not isinstance(relay, dict) or relay.get("enabled") is not False:
