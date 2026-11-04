@@ -182,3 +182,68 @@ def test_in_process_credential_failures(tmp_path, monkeypatch, failure):
         key.mkdir()
     with pytest.raises((OSError, ValueError)):
         HELPER.credential()
+
+
+def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
+    home = tmp_path / "home"
+    key = home / ".local/share/litellm/clients/claude-desktop.key"
+    key.parent.mkdir(parents=True)
+    key.write_text("sk-synthetic-key", encoding="ascii")
+    key.chmod(0o600)
+    wrapper_path = tmp_path / "Claude Desktop wrapper.sh"
+    generated = subprocess.run(
+        [sys.executable, str(SCRIPT), "--wrapper"],
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert generated.returncode == 0
+    assert generated.stderr == ""
+    assert generated.stdout.startswith("#!/bin/sh\\nexec ")
+    assert "sk-synthetic-key" not in generated.stdout
+    assert str(Path(sys.executable).resolve()) in generated.stdout
+    assert str(SCRIPT.resolve()) in generated.stdout
+    wrapper_path.write_text(generated.stdout, encoding="utf-8")
+    wrapper_path.chmod(0o700)
+    checked = subprocess.run(
+        [str(wrapper_path), "--check"],
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode == 0, checked.stderr
+    assert checked.stdout == "Claude Desktop credential ready\\n"
+    assert "sk-synthetic-key" not in checked.stdout + checked.stderr
+
+
+@pytest.mark.parametrize("subject", ["directory", "file"])
+@pytest.mark.parametrize("check", [False, True])
+def test_wrong_owner_fails_without_secret_output(
+    tmp_path, monkeypatch, subject, check
+):
+    _, key = invoke(tmp_path)
+    target = key.parent if subject == "directory" else key
+    original_lstat = HELPER.Path.lstat
+    original_uid = HELPER.os.geteuid()
+
+    def wrong_owner_lstat(path, *args, **kwargs):
+        metadata = original_lstat(path, *args, **kwargs)
+        if path != target:
+            return metadata
+        parts = list(metadata)
+        parts[4] = original_uid + 1
+        return os.stat_result(parts)
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with monkeypatch.context() as patch:
+        patch.setattr(HELPER.Path, "home", lambda: tmp_path / "home")
+        patch.setattr(HELPER.Path, "lstat", wrong_owner_lstat)
+        patch.setattr(HELPER.sys, "stdout", stdout)
+        patch.setattr(HELPER.sys, "stderr", stderr)
+        assert HELPER.main(["--check"] if check else []) == 1
+    assert stdout.getvalue() == ""
+    assert "credential unavailable or unsafe" in stderr.getvalue()
+    assert "sk-synthetic-key" not in stderr.getvalue()
