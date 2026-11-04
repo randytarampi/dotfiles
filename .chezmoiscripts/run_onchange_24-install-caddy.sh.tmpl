@@ -7,6 +7,7 @@ set -euo pipefail
 # configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
 # scripts/lib/caddy_domains.py: {{ include "scripts/lib/caddy_domains.py" | sha256sum }}
+# scripts/lib/paseo_web_policy.py: {{ include "scripts/lib/paseo_web_policy.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
 # env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
