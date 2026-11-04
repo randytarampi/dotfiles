@@ -229,9 +229,9 @@ frontend.
     design). A dedicated host is the default because a path prefix
     (`/webui/*`) can break root-relative assets, redirects and WebSocket
     URLs; subpath serving would need local verification first and is not
-    assumed. Making `chat.<domain>` publicly reachable requires the explicit
-    opt-in gate `DOTFILES_OPENWEBUI_PUBLIC=1` (default 0) — it never inherits
-    a global `CADDY_ACCESS=public` mode.
+    assumed. When gate-enabled and installed, `chat.<domain>` follows
+    `CADDY_ACCESS`; Open WebUI app auth is the boundary in public mode. The
+    former `DOTFILES_OPENWEBUI_PUBLIC` per-service public key is retired.
  3. **Cloud providers are reconciler-managed when their keys exist.** The
     reconciler (`scripts/lib/openwebui.py`) includes repo-known cloud
     providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama
@@ -254,11 +254,12 @@ frontend.
    API backends; they stay in their vendor apps.
 5. **Security boundaries stay separate.** The chat frontend is the only
     Caddy-exposed piece: LAN-accessible via the repo's LAN allowlist with no
-    Caddy basic auth, and **never inheriting a global `CADDY_ACCESS=public` mode** —
-    public exposure requires the explicit `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
-    Application session auth is the boundary: initial admin bootstrap via
-   `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` (auto-disables signup after
-   creating the admin), `ENABLE_SIGNUP=False` thereafter, single-user posture.
+    Caddy basic auth. When gate-enabled and installed, it follows
+    `CADDY_ACCESS`; app session auth is the boundary in public mode. The
+    per-service `DOTFILES_OPENWEBUI_PUBLIC` key is retired. Application
+    session auth is the boundary: initial admin bootstrap via
+    `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` (auto-disables signup after
+    creating the admin), `ENABLE_SIGNUP=False` thereafter, single-user posture.
     Open Terminal is explicitly registered into the LAN-facing chat instance
     under the user-authorized application-authenticated LAN boundary; its UX
     lives inside the chat UI. The terminal server remains a separate
@@ -827,8 +828,8 @@ live-validated against `open-webui==0.11.4`:
    Early Phase 4 validation was against 0.11.4; the pinned default is
    0.13.0 (target; live deployment verified on 0.12.5; upgrade rehearsal required before deployment).
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
-   `chat.<CADDY_DOMAIN>`, LAN-only by default with the explicit
-   `DOTFILES_OPENWEBUI_PUBLIC=1` opt-in.
+    `chat.<CADDY_DOMAIN>` follows `CADDY_ACCESS` when the service is
+    gate-enabled and installed; app auth is the public-mode boundary.
 4. **Reconciliation API surface verified live:** reads are
    `GET /openai/config` + `GET /ollama/config`; writes are
    `POST /openai/config/update` + `POST /ollama/config/update`; envelopes are

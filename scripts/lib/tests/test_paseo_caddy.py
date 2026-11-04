@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -24,7 +25,7 @@ def isolated(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def paseo_options(access_mode, *, https_port="443", public_opt_in=False):
+def paseo_options(access_mode, *, https_port="443"):
     return caddy.PaseoSiteOptions(
         access_mode=access_mode,
         bind_ip="192.168.1.10",
@@ -32,7 +33,6 @@ def paseo_options(access_mode, *, https_port="443", public_opt_in=False):
         cert_key="/key",
         local_domain_tls_line="tls internal",
         https_port=https_port,
-        public_opt_in=public_opt_in,
     )
 
 
@@ -46,26 +46,47 @@ def test_site_modes_have_correct_exposure_and_forward_all_paths():
     assert "reverse_proxy 127.0.0.1:6767" in local
     assert "X-Forwarded-Proto" in local
     assert "basic_auth" not in local
-    lan = "\n".join(
-        caddy.build_paseo_site_blocks(
-            [DOMAIN], paseo_options("lan", public_opt_in=True)
-        )
-    )
+    lan = "\n".join(caddy.build_paseo_site_blocks([DOMAIN], paseo_options("lan")))
     assert "bind 192.168.1.10" in lan
     assert "@not_lan not remote_ip private_ranges" in lan
     assert "https://paseo.local.example.test {" in lan.splitlines()
     assert "tls /cert /key" in lan
-    public_private = "\n".join(
-        caddy.build_paseo_site_blocks([DOMAIN], paseo_options("public"))
-    )
-    assert "@not_lan" in public_private
-    public_opted = "\n".join(
+    public = "\n".join(caddy.build_paseo_site_blocks([DOMAIN], paseo_options("public")))
+    assert "https://paseo.local.example.test {" in public.splitlines()
+    assert "@not_lan" not in public
+    public_port = "\n".join(
         caddy.build_paseo_site_blocks(
-            [DOMAIN], paseo_options("public", https_port="8443", public_opt_in=True)
+            [DOMAIN], paseo_options("public", https_port="8443")
         )
     )
-    assert "https://paseo.local.example.test:8443 {" in public_opted.splitlines()
-    assert "@not_lan" not in public_opted
+    assert "https://paseo.local.example.test:8443 {" in public_port.splitlines()
+    assert "@not_lan" not in public_port
+
+
+def test_openwebui_sites_follow_caddy_access_mode(monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("OPENCODE_PASSWORD", "test-password")
+    monkeypatch.delenv("DOTFILES_OPENWEBUI_PUBLIC", raising=False)
+    for mode in ("localhost", "lan", "public"):
+        caddyfile = caddy.build_caddyfile(
+            [DOMAIN],
+            mode,
+            "",
+            "192.168.1.10",
+            "/cert",
+            "/key",
+            "tls internal",
+            "4096",
+            "/portal",
+            "443",
+        )
+        chat_sites = re.findall(r"https://chat\.[^{]+\{(.*?)\n\}", caddyfile, re.DOTALL)
+        if mode == "localhost":
+            assert len(chat_sites) == 2
+            assert all("@not_lan" not in block for block in chat_sites)
+        else:
+            assert len(chat_sites) == 1
+            assert all(("@not_lan" in block) == (mode == "lan") for block in chat_sites)
 
 
 def configured_home(tmp_path, monkeypatch, *, password=True):
@@ -105,6 +126,32 @@ def test_missing_auth_and_hostnames_are_refused(tmp_path, monkeypatch):
     path.chmod(0o600)
     with pytest.raises(ValueError, match="allowlist"):
         caddy.validate_paseo_proxy_config("public", [DOMAIN])
+
+
+def test_public_requires_native_password(tmp_path, monkeypatch):
+    configured_home(tmp_path, monkeypatch, password=False)
+    with pytest.raises(ValueError, match="password"):
+        caddy.validate_paseo_proxy_config("public", [DOMAIN])
+
+
+def test_build_caddyfile_skips_absent_paseo_config(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("PASEO_HOME", str(tmp_path / ".paseo"))
+    monkeypatch.setenv("DOTFILES_RUN_PASEO_WEB_SETUP", "1")
+    monkeypatch.setenv("OPENCODE_PASSWORD", "test-password")
+    caddyfile = caddy.build_caddyfile(
+        [DOMAIN],
+        "localhost",
+        "",
+        "192.168.1.10",
+        "/cert",
+        "/key",
+        "tls internal",
+        "4096",
+        "/portal",
+        "443",
+    )
+    assert "Paseo config not found; skipping Paseo Web UI lane" in caplog.text
+    assert "reverse_proxy 127.0.0.1:6767" not in caddyfile
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,5 @@
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,38 @@ def test_litellm_site_blocks_are_ui_only_and_auth_matcher_is_local():
         assert "reverse_proxy 127.0.0.1:4000" in block
         assert "handle / {" not in block
         assert "/sso/key/generate" not in block
+
+
+def test_openwebui_sites_follow_access_mode_not_public_escalation(monkeypatch):
+    caddy = load_script("configure-caddy")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_OPENWEBUI_PUBLIC", "0")
+    monkeypatch.setenv("OPENCODE_PASSWORD", "test-password")
+    domains = ["local.example.ca"]
+    for mode in ("localhost", "lan", "public"):
+        caddyfile = caddy.build_caddyfile(
+            domains,
+            mode,
+            "",
+            "0.0.0.0",
+            "/cert",
+            "/key",
+            "tls internal",
+            "4096",
+            "/portal",
+            "443",
+        )
+        chat_blocks = re.findall(
+            r"https://chat\.[^{]+\{(.*?)\n\}", caddyfile, re.DOTALL
+        )
+        if mode == "localhost":
+            assert len(chat_blocks) == 2
+            assert all("@not_lan" not in block for block in chat_blocks)
+        else:
+            assert len(chat_blocks) == 1
+            assert all(
+                ("@not_lan" in block) == (mode == "lan") for block in chat_blocks
+            )
 
 
 def test_opencode_auth_identity_is_required_only_for_external_routes(monkeypatch):

@@ -18,6 +18,10 @@ WEB_UI_KEY = "features.webUi.enabled"
 BCRYPT = re.compile(r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}\Z")
 
 
+class PaseoNotConfigured(RuntimeError):
+    """Paseo home or daemon configuration has not been created yet."""
+
+
 def valid_daemon(config):
     """Fail closed on listener, relay and launch overrides."""
     daemon = config.get("daemon", {})
@@ -110,6 +114,8 @@ def read_proxy_config():
     path = home / "config.json"
     if home.is_symlink() or home.parent.is_symlink() or path.is_symlink():
         raise ValueError("unsafe Paseo config symlink")
+    if not home.exists() or not path.exists():
+        raise PaseoNotConfigured("Paseo config not found")
     info = path.stat()
     if (
         info.st_uid != os.getuid()

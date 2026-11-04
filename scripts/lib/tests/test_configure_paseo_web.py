@@ -29,7 +29,6 @@ def isolated_environment(monkeypatch, tmp_path):
     for name in (
         "DOTFILES_RUN_PASEO_WEB_SETUP",
         "DOTFILES_RUN_CADDY_SETUP",
-        "DOTFILES_PASEO_PUBLIC",
         "CADDY_ACCESS",
         "PASEO_LISTEN",
         "PASEO_RELAY_ENABLED",
@@ -96,6 +95,18 @@ def test_apply_requires_paseo_cli(tmp_path, monkeypatch):
     monkeypatch.setenv(web.GATE, "1")
     monkeypatch.setattr(web.shutil, "which", lambda name: None)
     assert web.main(["--apply"]) == 1
+
+
+def test_absent_config_warns_and_skips_without_writes(tmp_path, monkeypatch, capsys):
+    home = tmp_path / ".paseo"
+    monkeypatch.setenv("PASEO_HOME", str(home))
+    monkeypatch.setenv(web.GATE, "1")
+    monkeypatch.setattr(web.shutil, "which", lambda name: "/bin/paseo")
+    assert web.main(["--apply"]) == 0
+    assert (
+        "Paseo config not found; skipping Paseo Web UI lane" in capsys.readouterr().out
+    )
+    assert not home.exists()
 
 
 def test_dry_run_and_unapplied_are_read_only(tmp_path, monkeypatch):
