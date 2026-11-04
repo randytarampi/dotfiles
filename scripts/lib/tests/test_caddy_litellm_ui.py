@@ -158,7 +158,7 @@ def test_hosts_entries_include_litellm_only_for_exposed_external_sites():
     ]
     for mode in ("localhost", "lan", "public"):
         enabled = caddy_domains.build_hosts_entries(
-            domains, mode, litellm_ui_exposed=True
+            domains, mode, caddy_domains.HostServices(litellm_ui_exposed=True)
         )
         names = {line.split()[1] for line in enabled}
         expected = (
