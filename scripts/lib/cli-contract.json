@@ -126,7 +126,7 @@
       "path": "scripts/claude-desktop-credential-helper.py",
       "capabilities": ["public"],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--check"],
+      "accepted_flags": ["--help", "--check", "--wrapper"],
       "positional_operand": null,
       "child_scripts": []
     },

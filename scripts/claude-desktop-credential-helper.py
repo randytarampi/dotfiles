@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import shlex
 import stat
 import sys
 from pathlib import Path
@@ -57,12 +58,27 @@ def credential():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(allow_abbrev=False, description=__doc__)
-    parser.add_argument(
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument(
         "--check",
         action="store_true",
         help="Check key availability without disclosing it",
     )
+    actions.add_argument(
+        "--wrapper",
+        action="store_true",
+        help="Print a secret-free POSIX wrapper with absolute Python and helper paths",
+    )
     args = parser.parse_args(argv)
+    if args.wrapper:
+        python = Path(sys.executable).resolve()
+        helper = Path(__file__).resolve()
+        if not python.is_file() or not helper.is_file():
+            print("Claude Desktop helper executable unavailable", file=sys.stderr)
+            return 1
+        print("#!/bin/sh")
+        print(f"exec {shlex.quote(str(python))} {shlex.quote(str(helper))} \"$@\"")
+        return 0
     try:
         token = credential()
     except (OSError, ValueError):

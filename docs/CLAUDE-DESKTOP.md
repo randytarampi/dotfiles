@@ -30,21 +30,44 @@ Sources:
    `scripts/claude-desktop-credential-helper.py --check` should print only
    `Claude Desktop credential ready`. Without `--check` the helper prints
    the **secret** to stdout for Desktop; never run that form in logs or chats.
-4. Preferred first pilot: Claude Desktop → Help → Troubleshooting → Enable
+4. For the optional managed-profile route, make a **stable GUI-safe wrapper**
+   with absolute executable paths. This is an explicitly manual owner action,
+   not a dotfiles deployment step. Run from a persistent checkout, not a
+   temporary worktree; the wrapper embeds the current resolved Python
+   interpreter and helper source paths:
+
+   ```sh
+   mkdir -p "$HOME/.local/bin"
+   ( set -C
+     scripts/claude-desktop-credential-helper.py --wrapper \\
+       > "$HOME/.local/bin/claude-desktop-gateway-key"
+   )
+   chmod 700 "$HOME/.local/bin/claude-desktop-gateway-key"
+   env -i HOME="$HOME" PATH=/usr/bin:/bin \\
+     "$HOME/.local/bin/claude-desktop-gateway-key" --check
+   ```
+
+   The wrapper must be tested from a restricted GUI-like environment: a
+   terminal `--check` through `/usr/bin/env python3` does **not** prove
+   Claude Desktop can locate Homebrew or an isolated interpreter. The
+   generation command refuses to overwrite an existing wrapper; inspect
+   and replace it manually when Python or the repository moves. Never invoke
+   the unqualified wrapper without `--check` in diagnostic logs.
+5. Preferred first pilot: Claude Desktop → Help → Troubleshooting → Enable
    Developer Mode → Developer → Configure Third-Party Inference. Choose Gateway,
    root `http://127.0.0.1:4000` (no `/v1`) and the explicit Static API key
    option, if available. Enter the dedicated key directly into that UI;
    **do not** export a plaintext key to a repo-controlled profile. Apply,
    Save & Restart, and use the documented third-party sign-in path.
-5. Optional managed-profile pilot, only with separate consent: generate a
+6. Optional managed-profile pilot, only with separate consent: generate a
    **secret-free** profile, specifying exact Messages-compatible aliases
-   and an absolute helper path to the deployed checkout:
+   and the absolute path to the validated, stable wrapper:
 
    ```sh
    scripts/export-claude-desktop-gateway.py \
      --endpoint http://127.0.0.1:4000 \
      --model '<verified-served-messages-alias>' \
-     --helper '/absolute/path/to/scripts/claude-desktop-credential-helper.py' \
+     --helper "$HOME/.local/bin/claude-desktop-gateway-key" \
      > claude-desktop.mobileconfig
    ```
 
