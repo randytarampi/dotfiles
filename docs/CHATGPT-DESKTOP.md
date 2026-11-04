@@ -21,8 +21,13 @@ custom-inference qualification is claimed.**
 
 ## Standalone Codex CLI opt-in qualification
 
-1. Set the existing Codex and proxy gates and provide a dedicated, valid
-   `LITELLM_CODEX_KEY` through the existing private, owner-controlled
+1. Set **all three gates**: `DOTFILES_RUN_CODEX_SETUP=1`,
+   `DOTFILES_USE_LITELLM_PROXY=1`, and `DOTFILES_RUN_LITELLM_SETUP=1`.
+   The third gate is required for the managed shell export of the private
+   `codex.key`. Alternatively provide `LITELLM_CODEX_KEY` explicitly in the
+   launched Codex process after verifying the key's identity and scope.
+   Provide a dedicated, valid `LITELLM_CODEX_KEY` through the existing
+   private, owner-controlled
    provisioning procedure. Do not create or rotate the key in this PR.
 2. Set `DOTFILES_CODEX_LITELLM_MODEL` to an **exact served** gateway alias
    that accepts `/v1/responses`, e.g. a verified alias of the form
@@ -64,6 +69,11 @@ Run `pytest -q scripts/lib/tests/test_configure_codex.py`, `make
 check-env-coverage`, `make verify`, then inspect exact-head GitHub CI.
 Test the installed Codex CLI separately (owner-only). A static TOML
 profile does not qualify the desktop GUI.
+
+**Upgrade:** without an explicit model, this change retires an older
+managed `[profiles.litellm]` and emits a warning. If you depend on the
+existing profile, set `DOTFILES_CODEX_LITELLM_MODEL` to its still-served
+alias before regeneration. Review the private config backup before rollback.
 
 **Rollback:** unset `DOTFILES_CODEX_LITELLM_MODEL` and regenerate the
 marked profile with an approved backup. Never delete private Codex

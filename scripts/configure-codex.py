@@ -322,6 +322,21 @@ def main():
             content = ""
         original_content = content
 
+        # Existing managed profiles may be used by a running Codex workflow.
+        # Warn before retiring a formerly hard-coded LiteLLM model.
+        if (
+            PROFILES_START in content
+            and PROFILES_END in content
+            and "[profiles.litellm]"
+            in content.split(PROFILES_START, 1)[1].split(PROFILES_END, 1)[0]
+            and not os.environ.get("DOTFILES_CODEX_LITELLM_MODEL", "")
+        ):
+            logger.warning(
+                "Existing managed Codex LiteLLM profile will be removed because "
+                "DOTFILES_CODEX_LITELLM_MODEL is unset; configure a currently "
+                "served alias before running if that profile is still in use"
+            )
+
         # Remove only the marked block before legacy provider cleanup.
         content = reconcile_litellm_provider(content, False)
         provider_start = "# BEGIN DOTFILES MANAGED PROVIDERS"
