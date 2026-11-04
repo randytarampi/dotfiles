@@ -583,11 +583,11 @@ elif ! step_skipped ddns && [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_
   run_step "ddns-route53 configuration" python3 "$SCRIPT_DIR/configure-ddns.py"
 fi
 
-# 8a-1. Paseo Web UI native hostname reconciliation (before Caddy routes)
+# 8a-1. Read-only Paseo Web UI inspection (before Caddy routes); see #173.
 if [[ "$COMMON_DRY_RUN" == "1" ]]; then
   info "Skipping Paseo Web UI configuration (dry-run mode)"
 elif ! step_skipped paseo-web && [[ "${DOTFILES_RUN_PASEO_WEB_SETUP:-0}" == "1" ]]; then
-  run_step "Paseo Web UI configuration" python3 "$SCRIPT_DIR/configure-paseo-web.py" --apply ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+  run_step "Paseo Web UI inspection (owner-only apply)" python3 "$SCRIPT_DIR/configure-paseo-web.py" ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
 else
   info "DOTFILES_RUN_PASEO_WEB_SETUP='${DOTFILES_RUN_PASEO_WEB_SETUP:-0}' — skipping Paseo Web UI configuration"
 fi
