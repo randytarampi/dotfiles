@@ -20,12 +20,14 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
 from paseo_web_policy import (  # noqa: E402
+    PaseoNotConfigured,
     WEB_UI_KEY,
     domains_for_access,
     validate_native_config,
 )
 
 GATE = "DOTFILES_RUN_PASEO_WEB_SETUP"
+CONFIG_JSON = "config.json"
 
 _loader = importlib.util.spec_from_file_location(
     "configure_paseo_tailnet", Path(__file__).parent / "configure-paseo-tailnet.py"
@@ -46,6 +48,8 @@ def paseo_cli(paseo_bin, home, *args):
 
 
 def read_config(home):
+    if not home.exists() or not (home / CONFIG_JSON).exists():
+        raise PaseoNotConfigured("Paseo config not found")
     path = tailnet.checked_config(home)
     data = tailnet.decode_config(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -122,7 +126,7 @@ def _stage_changes(paseo_bin, path, original, changes):
     """Preflight every CLI setter against an isolated copy of user state."""
     with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-web-") as scratch:
         staged_home = Path(scratch)
-        staged = staged_home / "config.json"
+        staged = staged_home / CONFIG_JSON
         staged.write_bytes(path.read_bytes())
         staged.chmod(0o600)
         _apply_changes(paseo_bin, staged_home, original, changes)
@@ -177,6 +181,11 @@ def main(argv=None):
     try:
         paseo_bin = shutil.which("paseo")
         if not paseo_bin:
+            home = Path(
+                os.environ.get("PASEO_HOME", str(Path.home() / ".paseo"))
+            ).expanduser()
+            if not home.exists() or not (home / CONFIG_JSON).exists():
+                raise PaseoNotConfigured("Paseo config not found")
             if not args.apply or args.dry_run:
                 print("Paseo CLI not installed; no changes")
                 return 0
@@ -195,6 +204,11 @@ def main(argv=None):
             )
             return 0
         configure(paseo_bin, home, original, desired, args.no_backup)
+        return 0
+    except PaseoNotConfigured:
+        print(
+            "Paseo config not found; skipping Paseo Web UI lane — run `paseo daemon set-password` first, next deploy configures it"
+        )
         return 0
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
         print(f"Paseo Web UI configuration refused: {exc}", file=sys.stderr)

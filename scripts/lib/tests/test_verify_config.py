@@ -1484,16 +1484,49 @@ def test_direct_mode_rejects_non_object_config_without_crashing(tmp_path, raw):
     assert "Direct mode config root must be an object" in errors[0]
 
 
-def _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys):
+def _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys, gates=None):
     monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
     monkeypatch.setattr(VERIFY_CONFIG, "CHECKS", [])
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     for key in list(__import__("os").environ):
         if key.startswith("DOTFILES_RUN_"):
-            monkeypatch.setenv(key, "0")
+            monkeypatch.setenv(key, (gates or {}).get(key, "0"))
     with pytest.raises(SystemExit) as caught:
         VERIFY_CONFIG.main()
     return caught.value.code, capsys.readouterr().out
+
+
+def test_openwebui_caddy_doctor_uses_caddy_access_without_retired_public_flag(
+    tmp_path, monkeypatch, capsys
+):
+    zones = tmp_path / ".config/caddy"
+    zones.mkdir(parents=True)
+    caddyfile = zones / "Caddyfile"
+    caddyfile.write_text(
+        "chat.example.com {\n"
+        "  reverse_proxy 127.0.0.1:8080 {\n"
+        "    flush_interval -1\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setattr(VERIFY_CONFIG, "CADDY_CHECK_PATHS", [caddyfile])
+    monkeypatch.setenv("CADDY_ACCESS", "public")
+    monkeypatch.setenv("DOTFILES_OPENWEBUI_PUBLIC", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    for key in list(__import__("os").environ):
+        if key.startswith("DOTFILES_RUN_") and key not in {
+            "DOTFILES_RUN_OPENWEBUI_SETUP",
+            "DOTFILES_RUN_CADDY_SETUP",
+        }:
+            monkeypatch.setenv(key, "0")
+    with pytest.raises(SystemExit):
+        VERIFY_CONFIG.main()
+    output = capsys.readouterr().out
+    assert "Open WebUI Caddy site:" in output
+    assert "Open WebUI Caddy site: Caddyfile missing" not in output
 
 
 def test_main_rejects_non_object_opencode_root(tmp_path, monkeypatch, capsys):

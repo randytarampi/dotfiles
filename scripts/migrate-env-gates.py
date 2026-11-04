@@ -157,7 +157,12 @@ TIER_VALUE_KEYS = {
 
 # Removed integrations are deleted from ~/.env rather than retained as
 # commented-out settings, so they cannot be rediscovered by future tooling.
-REMOVED_ENV_VARS = {"DOTFILES_RUN_SMALLCODE_SETUP", "DOTFILES_SMALLCODE_TIER"}
+REMOVED_ENV_VARS = {
+    "DOTFILES_RUN_SMALLCODE_SETUP",
+    "DOTFILES_SMALLCODE_TIER",
+    "DOTFILES_PASEO_PUBLIC",
+    "DOTFILES_OPENWEBUI_PUBLIC",
+}
 REMOVED_ENV_PREFIXES = ("SMALLCODE_",)
 
 CADDY_V1_REMOVALS = {

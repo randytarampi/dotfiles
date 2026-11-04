@@ -4,12 +4,10 @@ import unittest
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
-# Baseline also accounts for deliberate removal of obsolete --local ACP
-# sample assignments; maintain order-sensitive protection for all remaining
-# environment keys and defaults, including the desktop/Codex gates added
-# by stack #167 and the Paseo Web UI/0.13.0 upgrades in #174.
+# Baseline protects remaining environment keys and defaults while retired
+# access gates are checked separately.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "0d19b9d598f1c470fee32574a3f055d3b4f2c9d05bcdaa9b70e7323a748ee4a2"
+    "5abf1c0754bc11c8a82d84c0e8bc5d25a4f510be4611b192414933e3ec8981f3"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
@@ -27,7 +25,7 @@ REMOTE_GATES = (
     b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
     b"DOTFILES_RUN_PASEO_SETUP",
     b"DOTFILES_RUN_PASEO_HERMES_ACP_SETUP",
-    b"DOTFILES_PASEO_PUBLIC",
+    b"DOTFILES_OPENWEBUI_PUBLIC",
 )
 
 
@@ -75,6 +73,12 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
                         line.startswith(b"# " + key + b"='0'"),
                         f"{key.decode()} must be commented and opt-in",
                     )
+        template = TEMPLATE.read_bytes()
+        for key in (b"DOTFILES_PASEO_PUBLIC", b"DOTFILES_OPENWEBUI_PUBLIC"):
+            self.assertRegex(
+                template,
+                rb"(?m)^# " + key + rb"='0'.*Retired and ignored",
+            )
 
     def test_telemetry_defaults_and_litellm_gate_key_order_are_explicit(self):
         records = assignment_records(TEMPLATE.read_bytes())

@@ -23,6 +23,7 @@ from env import load_env
 from file_utils import write_text_file
 from caddy_domains import load_domains
 from paseo_web_policy import (  # noqa: E402
+    PaseoNotConfigured,
     validate_proxy_config as validate_paseo_proxy_config,
 )
 from cli_helpers import add_common_args
@@ -431,7 +432,6 @@ def build_openwebui_site_blocks(
     local_domain_tls_line: str,
     port: str,
     https_port: str,
-    public_opt_in: bool,
 ) -> list[str]:
     blocks: list[str] = []
     if access_mode == "localhost":
@@ -441,7 +441,6 @@ def build_openwebui_site_blocks(
                 "127.0.0.1",
                 "tls internal",
                 port,
-                lan_only=not public_opt_in,
             )
         )
         for domain in domains:
@@ -452,7 +451,6 @@ def build_openwebui_site_blocks(
                         "127.0.0.1",
                         local_domain_tls_line,
                         port,
-                        lan_only=not public_opt_in,
                     )
                 )
         return blocks
@@ -463,7 +461,7 @@ def build_openwebui_site_blocks(
                 bind_ip,
                 f"tls {cert_fullchain} {cert_key}",
                 port,
-                lan_only=access_mode == "lan" or not public_opt_in,
+                lan_only=access_mode == "lan",
             )
         )
     return blocks
@@ -495,7 +493,6 @@ class PaseoSiteOptions(NamedTuple):
     cert_key: str
     local_domain_tls_line: str
     https_port: str
-    public_opt_in: bool
 
 
 def build_paseo_site_blocks(domains: list[str], options: PaseoSiteOptions) -> list[str]:
@@ -525,7 +522,7 @@ def build_paseo_site_blocks(domains: list[str], options: PaseoSiteOptions) -> li
             build_site_label(f"paseo.{domain}", https_port),
             options.bind_ip,
             f"tls {options.cert_fullchain} {options.cert_key}",
-            lan_only=access_mode == "lan" or not options.public_opt_in,
+            lan_only=access_mode == "lan",
         )
         for domain in domains
     ]
@@ -690,7 +687,6 @@ def build_caddyfile(
             local_domain_tls_line=local_domain_tls_line,
             port=openwebui_port,
             https_port=https_port,
-            public_opt_in=os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1",
         )
     litellm_sites = build_litellm_site_blocks(
         domains=domains,
@@ -706,19 +702,24 @@ def build_caddyfile(
 
     paseo_sites = []
     if os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1":
-        validate_paseo_proxy_config(access_mode, domains)
-        paseo_sites = build_paseo_site_blocks(
-            domains,
-            PaseoSiteOptions(
-                access_mode=access_mode,
-                bind_ip=bind_ip,
-                cert_fullchain=cert_fullchain,
-                cert_key=cert_key,
-                local_domain_tls_line=local_domain_tls_line,
-                https_port=https_port,
-                public_opt_in=os.environ.get("DOTFILES_PASEO_PUBLIC", "0") == "1",
-            ),
-        )
+        try:
+            validate_paseo_proxy_config(access_mode, domains)
+        except PaseoNotConfigured:
+            logger.warning(
+                "Paseo config not found; skipping Paseo Web UI lane — run `paseo daemon set-password` first, next deploy configures it"
+            )
+        else:
+            paseo_sites = build_paseo_site_blocks(
+                domains,
+                PaseoSiteOptions(
+                    access_mode=access_mode,
+                    bind_ip=bind_ip,
+                    cert_fullchain=cert_fullchain,
+                    cert_key=cert_key,
+                    local_domain_tls_line=local_domain_tls_line,
+                    https_port=https_port,
+                ),
+            )
 
     template_path = (
         Path(__file__).resolve().parent.parent / "configs" / "caddy" / "Caddyfile.tmpl"

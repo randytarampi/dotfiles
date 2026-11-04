@@ -1923,9 +1923,8 @@ def main():
         if caddyfile and caddyfile.exists():
             caddy_text = caddyfile.read_text(encoding="utf-8")
             port = os.environ.get("OPENWEBUI_PORT", "8080")
-            public = os.environ.get("DOTFILES_OPENWEBUI_PUBLIC", "0") == "1"
             access_mode = os.environ.get("CADDY_ACCESS", "localhost").strip().lower()
-            matcher_required = access_mode == "lan" or not public
+            matcher_required = access_mode == "lan"
             chat_blocks = []
             lines = caddy_text.splitlines()
             for index, line in enumerate(lines):

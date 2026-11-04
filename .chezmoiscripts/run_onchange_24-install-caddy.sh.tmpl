@@ -2,7 +2,7 @@
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_CADDY_SETUP" | sha256sum }}
 # env gate fingerprint: {{ env "DOTFILES_LITELLM_UI_EXPOSED" | default "0" | sha256sum }}
-# env gate fingerprint: {{ env "DOTFILES_RUN_PASEO_WEB_SETUP" | default "0" | sha256sum }}:{{ env "DOTFILES_PASEO_PUBLIC" | default "0" | sha256sum }}:{{ env "CADDY_ACCESS" | default "localhost" | sha256sum }}
+# env gate fingerprint: {{ env "DOTFILES_RUN_PASEO_WEB_SETUP" | default "0" | sha256sum }}:{{ env "CADDY_ACCESS" | default "localhost" | sha256sum }}
 
 # configs/caddy/Caddyfile.tmpl: {{ include "configs/caddy/Caddyfile.tmpl" | sha256sum }}
 # scripts/configure-caddy.py: {{ include "scripts/configure-caddy.py" | sha256sum }}
@@ -10,7 +10,7 @@ set -euo pipefail
 # scripts/lib/paseo_web_policy.py: {{ include "scripts/lib/paseo_web_policy.py" | sha256sum }}
 # scripts/lib/caddy_helpers.sh: {{ include "scripts/lib/caddy_helpers.sh" | sha256sum }}
 # scripts/migrate-acme-ddns.sh: {{ include "scripts/migrate-acme-ddns.sh" | sha256sum }}
-# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}:{{ env "DOTFILES_OPENWEBUI_PUBLIC" | default "0" }}
+# env fingerprint: {{ env "DOTFILES_RUN_OPENWEBUI_SETUP" | default "0" }}:{{ env "DOTFILES_OPENWEBUI_VERSION" | default "0.13.0" }}:{{ env "OPENWEBUI_PORT" | default "8080" }}
 # secret presence fingerprint: {{ if env "WEBUI_SECRET_KEY" }}set{{ else }}unset{{ end }}:{{ if env "WEBUI_ADMIN_PASSWORD" }}set{{ else }}unset{{ end }}:{{ if env "OPENWEBUI_API_KEY" }}set{{ else }}unset{{ end }}
 
 {{- if eq .chezmoi.os "darwin" }}
