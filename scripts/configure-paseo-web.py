@@ -12,7 +12,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess  # nosec B404 - absolute local CLI, fixed arguments.
 import sys
@@ -20,12 +19,13 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
-from caddy_domains import load_domains  # noqa: E402
+from paseo_web_policy import (  # noqa: E402
+    WEB_UI_KEY,
+    domains_for_access,
+    validate_native_config,
+)
 
 GATE = "DOTFILES_RUN_PASEO_WEB_SETUP"
-ACCESS_MODES = {"localhost", "lan", "public"}
-DEFAULT_LISTEN = "127.0.0.1:6767"
-BCRYPT = re.compile(r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}\Z")
 
 _loader = importlib.util.spec_from_file_location(
     "configure_paseo_tailnet", Path(__file__).parent / "configure-paseo-tailnet.py"
@@ -53,74 +53,16 @@ def read_config(home):
     return path, data
 
 
-def domains_for_access(access):
-    if os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") != "1":
-        return []
-    from pathlib import Path as _Path
-
-    zones = _Path(
-        os.path.expanduser(
-            os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")
-        )
-    )
-    domains = load_domains(zones)
-    if access != "localhost" and not domains:
-        raise ValueError("Caddy LAN/public access requires configured domains")
-    if access == "localhost":
-        return ["paseo.localhost"] + [
-            f"paseo.{d}" for d in domains if d.startswith("local.")
-        ]
-    return [f"paseo.{d}" for d in domains]
-
-
 def desired_config(original, access):
-    """Validate policy and compute only intentional native Paseo edits."""
-    if access not in ACCESS_MODES:
-        raise ValueError("invalid CADDY_ACCESS; choose localhost, lan or public")
-    daemon = original.get("daemon", {})
-    if not isinstance(daemon, dict):
-        raise ValueError("Paseo daemon config must be an object")
-    if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN or os.environ.get(
-        "PASEO_LISTEN"
-    ):
-        raise ValueError(
-            "Web UI Caddy mode requires the loopback Paseo listener without PASEO_LISTEN override"
-        )
-    relay = daemon.get("relay")
-    if not isinstance(relay, dict) or relay.get("enabled") is not False:
-        raise ValueError("Paseo relay must be explicitly disabled")
-    if os.environ.get("PASEO_RELAY_ENABLED", "").lower() not in ("", "false", "0"):
-        raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
-    password = (
-        daemon.get("auth", {}).get("password")
-        if isinstance(daemon.get("auth"), dict)
-        else None
-    )
-    if access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1":
-        if not isinstance(password, str) or not BCRYPT.fullmatch(password):
-            raise ValueError("Caddy LAN/public access requires a Paseo daemon password")
-    if os.environ.get("PASEO_WEB_UI_ENABLED", "").lower() not in ("", "true", "1"):
-        raise ValueError("PASEO_WEB_UI_ENABLED contradicts the managed web UI setting")
-    features = original.get("features", {})
-    if not isinstance(features, dict) or not isinstance(
-        features.get("webUi", {}), dict
-    ):
-        raise ValueError("Paseo features.webUi must be an object")
-    hostnames = daemon.get("hostnames", [])
-    if not isinstance(hostnames, list) or any(
-        not isinstance(s, str) for s in hostnames
-    ):
-        raise ValueError("Paseo daemon.hostnames must be an array of strings")
+    """Validate native policy and add only the Web UI and Caddy hostnames."""
+    hostnames = validate_native_config(original, access)
     wanted = domains_for_access(access)
     target = copy.deepcopy(original)
     target.setdefault("features", {}).setdefault("webUi", {})["enabled"] = True
-    target.setdefault("daemon", {})["hostnames"] = (
-        hostnames + [s for s in wanted if s not in hostnames]
-        if wanted or "hostnames" in daemon
-        else hostnames
-    )
-    if not wanted and "hostnames" not in daemon:
-        target["daemon"].pop("hostnames", None)
+    if wanted or "hostnames" in original.get("daemon", {}):
+        target.setdefault("daemon", {})["hostnames"] = hostnames + [
+            name for name in wanted if name not in hostnames
+        ]
     return target
 
 
@@ -128,7 +70,7 @@ def planned_mutations(original, desired):
     changes = []
     before_web = original.get("features", {}).get("webUi", {}).get("enabled")
     if before_web is not True:
-        changes.append(("features.webUi.enabled", True))
+        changes.append((WEB_UI_KEY, True))
     old_hosts = original.get("daemon", {}).get("hostnames", [])
     new_hosts = desired.get("daemon", {}).get("hostnames", [])
     if old_hosts != new_hosts:
@@ -159,52 +101,60 @@ def check_expected(home, desired):
         )
 
 
-def configure(paseo_bin, home, original, desired, path, no_backup):
-    changes = planned_mutations(original, desired)
-    if not changes:
-        print("Paseo Web UI and hostname allowlist already configured")
-        return 0
-    # A private staged home detects lossy schema rewrites before any live mutation.
-    with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-web-") as scratch:
-        staged_home = Path(scratch)
-        staged = staged_home / "config.json"
-        staged.write_bytes(path.read_bytes())
-        staged.chmod(0o600)
-        intermediate = copy.deepcopy(original)
-        for key, value in changes:
-            if key == "features.webUi.enabled":
-                intermediate.setdefault("features", {}).setdefault("webUi", {})[
-                    "enabled"
-                ] = value
-            else:
-                intermediate.setdefault("daemon", {})["hostnames"] = value
-            apply_one(paseo_bin, staged_home, key, value, intermediate)
-    _, still_current = read_config(home)
-    if not tailnet.same_config(still_current, original):
-        raise ValueError("Paseo config changed during preflight; aborting")
-    if not no_backup:
-        backup = path.with_name("config.json.pre-web-ui")
-        # O_EXCL prevents both clobbering a previous backup and symlink following.
-        try:
-            fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            if not backup.is_file() or backup.is_symlink():
-                raise ValueError("unsafe Paseo Web UI backup path")
-        else:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(path.read_bytes())
+def _set_expected(config, key, value):
+    if key == WEB_UI_KEY:
+        config.setdefault("features", {}).setdefault("webUi", {})["enabled"] = value
+    else:
+        config.setdefault("daemon", {})["hostnames"] = value
+
+
+def _apply_changes(paseo_bin, home, original, changes):
     intermediate = copy.deepcopy(original)
     for key, value in changes:
         _, latest = read_config(home)
         if not tailnet.same_config(latest, intermediate):
             raise ValueError("Paseo config changed before the write; aborting")
-        if key == "features.webUi.enabled":
-            intermediate.setdefault("features", {}).setdefault("webUi", {})[
-                "enabled"
-            ] = value
-        else:
-            intermediate.setdefault("daemon", {})["hostnames"] = value
+        _set_expected(intermediate, key, value)
         apply_one(paseo_bin, home, key, value, intermediate)
+
+
+def _stage_changes(paseo_bin, path, original, changes):
+    """Preflight every CLI setter against an isolated copy of user state."""
+    with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-web-") as scratch:
+        staged_home = Path(scratch)
+        staged = staged_home / "config.json"
+        staged.write_bytes(path.read_bytes())
+        staged.chmod(0o600)
+        _apply_changes(paseo_bin, staged_home, original, changes)
+
+
+def _backup_config(path):
+    backup = path.with_name("config.json.pre-web-ui")
+    # O_EXCL prevents clobbering a prior backup or following a symlink.
+    try:
+        fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if not backup.is_file() or backup.is_symlink():
+            raise ValueError("unsafe Paseo Web UI backup path")
+    else:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(path.read_bytes())
+
+
+def configure(paseo_bin, home, original, desired, no_backup):
+    """Stage, back up and apply additive settings without unsafe rollback."""
+    changes = planned_mutations(original, desired)
+    if not changes:
+        print("Paseo Web UI and hostname allowlist already configured")
+        return
+    path = tailnet.checked_config(home)
+    _stage_changes(paseo_bin, path, original, changes)
+    _, still_current = read_config(home)
+    if not tailnet.same_config(still_current, original):
+        raise ValueError("Paseo config changed during preflight; aborting")
+    if not no_backup:
+        _backup_config(path)
+    _apply_changes(paseo_bin, home, original, changes)
     result = paseo_cli(paseo_bin, home, "reload")
     if result.returncode:
         print("Paseo reload failed; restart the existing daemon to serve the Web UI")
@@ -212,7 +162,6 @@ def configure(paseo_bin, home, original, desired, path, no_backup):
         print(
             "Paseo settings saved and reload requested; restart the daemon to serve the Web UI"
         )
-    return 0
 
 
 def main(argv=None):
@@ -245,7 +194,8 @@ def main(argv=None):
                 f"Paseo Web UI: {len(planned_mutations(original, desired))} changes proposed; no changes made"
             )
             return 0
-        return configure(paseo_bin, home, original, desired, path, args.no_backup)
+        configure(paseo_bin, home, original, desired, args.no_backup)
+        return 0
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
         print(f"Paseo Web UI configuration refused: {exc}", file=sys.stderr)
         return 1
