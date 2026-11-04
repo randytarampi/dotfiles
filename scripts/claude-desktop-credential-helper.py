@@ -45,9 +45,9 @@ def credential():
     descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as source:
         actual = os.fstat(source.fileno())
-        if (
-            not _private_regular_file(actual)
-            or (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino)
+        if not _private_regular_file(actual) or (actual.st_dev, actual.st_ino) != (
+            expected.st_dev,
+            expected.st_ino,
         ):
             raise ValueError("credential changed during read")
         data = source.read(MAX_BYTES + 1)
