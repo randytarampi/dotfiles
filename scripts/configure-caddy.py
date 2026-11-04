@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from typing import NamedTuple
 import os
 import string
 import re
@@ -488,8 +488,7 @@ def build_paseo_site_block(
     return "\n".join(lines)
 
 
-@dataclass(frozen=True)
-class PaseoSiteOptions:
+class PaseoSiteOptions(NamedTuple):
     access_mode: str
     bind_ip: str
     cert_fullchain: str
