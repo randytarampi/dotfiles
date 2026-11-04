@@ -24,17 +24,20 @@ def isolated(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_site_modes_have_correct_exposure_and_forward_all_paths():
-    args = (
-        [DOMAIN],
-        "localhost",
-        "192.168.1.10",
-        "/cert",
-        "/key",
-        "tls internal",
-        "443",
+def paseo_options(access_mode, *, https_port="443", public_opt_in=False):
+    return caddy.PaseoSiteOptions(
+        access_mode=access_mode,
+        bind_ip="192.168.1.10",
+        cert_fullchain="/cert",
+        cert_key="/key",
+        local_domain_tls_line="tls internal",
+        https_port=https_port,
+        public_opt_in=public_opt_in,
     )
-    local = "\n".join(caddy.build_paseo_site_blocks(*args, public_opt_in=False))
+
+
+def test_site_modes_have_correct_exposure_and_forward_all_paths():
+    local = "\n".join(caddy.build_paseo_site_blocks([DOMAIN], paseo_options("localhost")))
     assert "https://paseo.localhost {" in local.splitlines()
     assert "https://paseo.local.example.test {" in local.splitlines()
     assert "bind 127.0.0.1" in local
@@ -42,44 +45,19 @@ def test_site_modes_have_correct_exposure_and_forward_all_paths():
     assert "X-Forwarded-Proto" in local
     assert "basic_auth" not in local
     lan = "\n".join(
-        caddy.build_paseo_site_blocks(
-            [DOMAIN],
-            "lan",
-            "192.168.1.10",
-            "/cert",
-            "/key",
-            "tls internal",
-            "443",
-            True,
-        )
+        caddy.build_paseo_site_blocks([DOMAIN], paseo_options("lan", public_opt_in=True))
     )
     assert "bind 192.168.1.10" in lan
     assert "@not_lan not remote_ip private_ranges" in lan
     assert "https://paseo.local.example.test {" in lan.splitlines()
     assert "tls /cert /key" in lan
     public_private = "\n".join(
-        caddy.build_paseo_site_blocks(
-            [DOMAIN],
-            "public",
-            "192.168.1.10",
-            "/cert",
-            "/key",
-            "tls internal",
-            "443",
-            False,
-        )
+        caddy.build_paseo_site_blocks([DOMAIN], paseo_options("public"))
     )
     assert "@not_lan" in public_private
     public_opted = "\n".join(
         caddy.build_paseo_site_blocks(
-            [DOMAIN],
-            "public",
-            "192.168.1.10",
-            "/cert",
-            "/key",
-            "tls internal",
-            "8443",
-            True,
+            [DOMAIN], paseo_options("public", https_port="8443", public_opt_in=True)
         )
     )
     assert "https://paseo.local.example.test:8443 {" in public_opted.splitlines()
@@ -163,10 +141,10 @@ def test_native_config_symlink_is_refused(tmp_path, monkeypatch):
 
 
 def test_hosts_entries_cover_paseo_domains():
-    from caddy_domains import build_hosts_entries
+    from caddy_domains import HostServices, build_hosts_entries
 
-    localhost = build_hosts_entries([DOMAIN], "localhost", paseo_enabled=True)
+    localhost = build_hosts_entries([DOMAIN], "localhost", HostServices(paseo_enabled=True))
     assert any("paseo.localhost" in entry for entry in localhost)
     assert any(f"paseo.{DOMAIN}" in entry for entry in localhost)
-    off = build_hosts_entries([DOMAIN], "lan", paseo_enabled=False)
+    off = build_hosts_entries([DOMAIN], "lan")
     assert all("paseo." not in entry for entry in off)

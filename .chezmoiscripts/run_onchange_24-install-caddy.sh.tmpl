@@ -110,7 +110,7 @@ from pathlib import Path
 script_dir = os.environ["SCRIPT_DIR"]
 sys.path.insert(0, os.path.join(script_dir, "lib"))
 
-from caddy_domains import build_hosts_entries, load_domains
+from caddy_domains import HostServices, build_hosts_entries, load_domains
 
 zones_path = Path(
     os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json"))
@@ -119,9 +119,11 @@ domains = load_domains(zones_path)
 entries = build_hosts_entries(
     domains,
     os.environ.get("CADDY_ACCESS", "localhost"),
-    openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
-    litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
-    paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
+    HostServices(
+        openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
+        litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+        paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
+    ),
 )
 
 for entry in entries:
@@ -271,16 +273,18 @@ from pathlib import Path
 script_dir = os.environ["SCRIPT_DIR"]
 sys.path.insert(0, os.path.join(script_dir, "lib"))
 from caddy_domains import load_domains
-from caddy_domains import build_hosts_entries
+from caddy_domains import HostServices, build_hosts_entries
 
 zones_path = Path(os.path.expanduser(os.environ.get("CADDY_ZONES_CONFIG", "~/.config/caddy/ddns-zones.json")))
 domains = load_domains(zones_path)
 entries = build_hosts_entries(
     domains,
     os.environ.get("CADDY_ACCESS", "localhost"),
-    openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
-    litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
-    paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
+    HostServices(
+        openwebui_enabled=os.environ.get("DOTFILES_RUN_OPENWEBUI_SETUP", "0") == "1",
+        litellm_ui_exposed=os.environ.get("DOTFILES_LITELLM_UI_EXPOSED", "0") == "1",
+        paseo_enabled=os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1",
+    ),
 )
 for entry in entries:
     print(entry)
