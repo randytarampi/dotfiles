@@ -220,9 +220,7 @@ def test_secret_free_wrapper_runs_with_restricted_gui_path(tmp_path):
 
 @pytest.mark.parametrize("subject", ["directory", "file"])
 @pytest.mark.parametrize("check", [False, True])
-def test_wrong_owner_fails_without_secret_output(
-    tmp_path, monkeypatch, subject, check
-):
+def test_wrong_owner_fails_without_secret_output(tmp_path, monkeypatch, subject, check):
     _, key = invoke(tmp_path)
     target = key.parent if subject == "directory" else key
     original_lstat = HELPER.Path.lstat
