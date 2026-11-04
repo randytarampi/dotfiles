@@ -1470,10 +1470,76 @@ def test_acp_doctor_allows_valid_registrations_without_crashing(monkeypatch):
     )
 
 
-def test_opencode_doctor_handles_non_object_managed_config(tmp_path, monkeypatch):
+@pytest.mark.parametrize("raw", ["[]", "null", "true", '"string"'])
+def test_direct_mode_rejects_non_object_config_without_crashing(
+    tmp_path, raw
+):
+    opencode_dir = tmp_path / ".config/opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "opencode.json").write_text(raw, encoding="utf-8")
+    errors = VERIFY_CONFIG._direct_mode_routing_errors(tmp_path)
+    assert len(errors) == 1
+    assert "Direct mode config root must be an object" in errors[0]
+
+
+def _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    monkeypatch.setattr(VERIFY_CONFIG, "CHECKS", [])
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    for key in list(__import__("os").environ):
+        if key.startswith("DOTFILES_RUN_"):
+            monkeypatch.setenv(key, "0")
+    with pytest.raises(SystemExit) as caught:
+        VERIFY_CONFIG.main()
+    return caught.value.code, capsys.readouterr().out
+
+
+def test_main_rejects_non_object_opencode_root(tmp_path, monkeypatch, capsys):
     opencode_dir = tmp_path / ".config/opencode"
     opencode_dir.mkdir(parents=True)
     (opencode_dir / "opencode.json").write_text("[]", encoding="utf-8")
-    monkeypatch.setattr(VERIFY_CONFIG, "HOME", tmp_path)
+    code, output = _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys)
+    assert code == 1
+    assert "OpenCode config: opencode.json root must be an object" in output
+
+
+def test_main_checks_installed_slim_acp_not_opencode_json(
+    tmp_path, monkeypatch, capsys
+):
+    opencode_dir = tmp_path / ".config/opencode"
+    opencode_dir.mkdir(parents=True)
+    (opencode_dir / "opencode.json").write_text("{}", encoding="utf-8")
+    (opencode_dir / "dcp.jsonc").write_text('{"compress":{}}', encoding="utf-8")
+    (opencode_dir / "oh-my-opencode-slim.json").write_text(
+        '{"acpAgents":{"hermes":{"command":[]}}}', encoding="utf-8"
+    )
+    # Avoid integration startup for other gated services, but enable the
+    # managed OpenCode check after the shared isolation fixture is set up.
+    code, output = _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys)
+    # Perform a second pass with OpenCode gate explicitly enabled.
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
-    assert VERIFY_CONFIG.check_opencode_orphan_files() == 1
+    with pytest.raises(SystemExit) as caught:
+        VERIFY_CONFIG.main()
+    checked = capsys.readouterr().out
+    assert caught.value.code == 1
+    assert "ACP agent 'hermes': invalid command" in checked
+
+
+def test_main_fails_when_caddy_binary_missing(tmp_path, monkeypatch, capsys):
+    caddyfile = tmp_path / "Caddyfile"
+    caddyfile.write_text(":80 { respond ok }", encoding="utf-8")
+    _doctor_run_with_isolated_home(monkeypatch, tmp_path, capsys)
+    monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    monkeypatch.setattr(VERIFY_CONFIG, "CADDY_CHECK_PATHS", [caddyfile])
+    which = VERIFY_CONFIG.shutil.which
+    monkeypatch.setattr(
+        VERIFY_CONFIG.shutil,
+        "which",
+        lambda name: None if name == "caddy" else which(name),
+    )
+    with pytest.raises(SystemExit) as caught:
+        VERIFY_CONFIG.main()
+    assert caught.value.code == 1
+    assert "Caddyfile validation unavailable: caddy executable not found" in (
+        capsys.readouterr().out
+    )
