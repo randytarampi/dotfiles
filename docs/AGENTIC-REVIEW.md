@@ -176,11 +176,15 @@ Set per repo (Settings → Secrets and variables → Actions):
 
 - OpenCode publishing uses the installed [OpenCode GitHub App](https://github.com/apps/opencode-agent) through OIDC; **no `OPENCODE_APP_ID` or `OPENCODE_APP_PRIVATE_KEY` secrets are needed**. Callers must grant `id-token: write`.
 - Junie and Gemini publication uses **separate installed GitHub Apps**.
-  After a successful, nonempty requested model run, `notify` obtains short-lived
-  installation tokens through `actions/create-github-app-token@v3`, using
+  On a successful requested reviewer job, `notify` first obtains a short-lived
+  installation token through `actions/create-github-app-token@v3`, using
   `vars.JUNIE_GITHUB_APP_ID` / `secrets.JUNIE_GITHUB_APP_PRIVATE_KEY`
-  and the corresponding `GEMINI_*` variable/secret. It verifies the returned
-  `app-slug` and posts only as that App's `<slug>[bot]` identity.
+  or the matching `GEMINI_*` credentials. **The nonempty review-body check
+  occurs later in the publication step**, so an empty successful artifact
+  may still mint an App token but cannot publish a comment. The notifier
+  requires a nonempty action-returned `app-slug` and uses the derived
+  `<slug>[bot]` identity to match existing comments; it does **not**
+  independently verify that slug against an expected App identity.
   Review generation jobs retain `contents: read` only. Missing App
   configuration, foreign marker ownership, GitHub API failures and empty
   model output fail visibly; unrequested events do not start publication.
