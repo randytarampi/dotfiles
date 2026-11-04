@@ -137,7 +137,12 @@ def test_notify_posts_then_updates_only_its_own_marker(tmp_path, agent):
     ]
     updated, calls = _run_notify(tmp_path / "updated", comments=existing, agent=agent)
     assert updated.returncode == 0, updated.stderr
-    assert any("--method" in call and "PATCH" in call for call in calls)
+    assert any(
+        "--method" in call
+        and "PATCH" in call
+        and "/repos/randytarampi/dotfiles/issues/comments/42" in call
+        for call in calls
+    )
     assert not any("--method" in call and "POST" in call for call in calls)
 
     existing[0]["user"]["login"] = "a-maintainer"
