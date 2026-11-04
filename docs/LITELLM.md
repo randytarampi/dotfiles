@@ -10,6 +10,15 @@ entitlement is positively verified; the default `free` scope stays strict.
 Cloudflare uses a validated account-specific URL. See
 [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
 
+## ChatGPT Desktop and Codex CLI
+
+See [ChatGPT Desktop surface qualification](CHATGPT-DESKTOP.md) for the
+supported-vs-unknown boundary. Standalone Codex CLI can generate an opt-in
+`litellm` profile using `DOTFILES_CODEX_LITELLM_MODEL` set to an
+exact served Responses-compatible gateway alias. Without that value the
+generator does **not** invent a model profile. No ChatGPT Chat/Work
+custom inference is claimed, and no Desktop Codex-profile readback is proven.
+
 ## Standalone Claude CLI
 
 `scripts/claude-litellm` is an explicit standalone launcher; it does not
