@@ -8,7 +8,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # sample assignments; maintain order-sensitive protection for all remaining
 # environment keys and defaults.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "beda1e25ecf7be7cdd8aab80db3a8076d0de261f4c59429527e77cac1affef5c"
+    "6436727727b360ddc8bdff94bbd402f80c606db9164fcca317aa8d6cc6223965"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
