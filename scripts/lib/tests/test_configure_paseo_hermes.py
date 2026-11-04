@@ -178,6 +178,7 @@ def test_hermes_explicit_dry_run_never_runs_external_commands(monkeypatch, tmp_p
     assert paseo_hermes.main(["--apply", "--dry-run"]) == 0
     assert path.read_text() == "{}"
 
+
 def test_hermes_preflight_comparison_refuses_json_type_coercion():
     assert paseo_hermes.same_config({"value": 1}, {"value": True}) is False
     assert paseo_hermes.same_config({"value": 1}, {"value": 1.0}) is False

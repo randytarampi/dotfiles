@@ -58,9 +58,7 @@ def same_config(actual, expected):
     """Compare JSON values without Python's bool/int/float equality coercion."""
     return json.dumps(
         actual, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ) == json.dumps(
-        expected, sort_keys=True, separators=(",", ":"), allow_nan=False
-    )
+    ) == json.dumps(expected, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def checked_config(home):
@@ -160,7 +158,10 @@ def main(argv=None):
             text=True,
         )
         updated = decode_config(path.read_text(encoding="utf-8"))
-        if not same_config(updated, expected) or classify(updated, desired) != "unchanged":
+        if (
+            not same_config(updated, expected)
+            or classify(updated, desired) != "unchanged"
+        ):
             raise ValueError("Paseo config write changed more than Hermes ACP provider")
         print("Hermes ACP registered; validate a real local session in Paseo")
         return 0
