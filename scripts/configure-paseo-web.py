@@ -184,7 +184,7 @@ def main(argv=None):
         home = Path(
             os.environ.get("PASEO_HOME", str(Path.home() / ".paseo"))
         ).expanduser()
-        path, original = read_config(home)
+        _, original = read_config(home)
         access = (
             os.environ.get("CADDY_ACCESS", "localhost").strip().lower() or "localhost"
         )
