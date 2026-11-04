@@ -34,16 +34,23 @@ Sources:
    with absolute executable paths. This is an explicitly manual owner action,
    not a dotfiles deployment step. Run from a persistent checkout, not a
    temporary worktree; the wrapper embeds the current resolved Python
-   interpreter and helper source paths:
+   interpreter and helper source paths. **Trust boundary:** this procedure is
+   intended only for a trusted single-user host. Inspect the wrapper's
+   `~/.local/bin` directory and every parent of the helper's persistent
+   checkout and interpreter; none may be writable by an untrusted local user,
+   and the wrapper, helper and interpreter must remain owner-controlled.
+   On a shared host, first deploy these executables under an independently
+   secured, non-symlinked owner-controlled location. Otherwise, an attacker
+   could replace executable code before it reads the bearer credential:
 
    ```sh
    mkdir -p "$HOME/.local/bin"
    ( set -C
-     scripts/claude-desktop-credential-helper.py --wrapper \\
+     scripts/claude-desktop-credential-helper.py --wrapper \
        > "$HOME/.local/bin/claude-desktop-gateway-key"
    )
    chmod 700 "$HOME/.local/bin/claude-desktop-gateway-key"
-   env -i HOME="$HOME" PATH=/usr/bin:/bin \\
+   env -i HOME="$HOME" PATH=/usr/bin:/bin \
      "$HOME/.local/bin/claude-desktop-gateway-key" --check
    ```
 
