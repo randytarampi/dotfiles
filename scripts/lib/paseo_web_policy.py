@@ -44,7 +44,9 @@ def require_password(daemon):
 
 def web_ui_features(config, *, require_enabled):
     features = config.get("features", {})
-    if not isinstance(features, dict) or not isinstance(features.get("webUi", {}), dict):
+    if not isinstance(features, dict) or not isinstance(
+        features.get("webUi", {}), dict
+    ):
         raise ValueError("Paseo features.webUi must be an object")
     if os.environ.get("PASEO_WEB_UI_ENABLED", "").lower() not in ("", "true", "1"):
         raise ValueError("PASEO_WEB_UI_ENABLED contradicts the managed Web UI")
@@ -55,7 +57,9 @@ def web_ui_features(config, *, require_enabled):
 
 def configured_hostnames(daemon):
     hostnames = daemon.get("hostnames", [])
-    if not isinstance(hostnames, list) or any(not isinstance(s, str) for s in hostnames):
+    if not isinstance(hostnames, list) or any(
+        not isinstance(s, str) for s in hostnames
+    ):
         raise ValueError("Paseo daemon.hostnames must be an array of strings")
     return hostnames
 
@@ -132,4 +136,6 @@ def validate_proxy_config(access, domains):
         require_password(daemon)
     required_hosts = set(desired_hostnames(access, domains))
     if not required_hosts.issubset(configured_hostnames(daemon)):
-        raise ValueError("Paseo hostname allowlist is missing generated Caddy hostnames")
+        raise ValueError(
+            "Paseo hostname allowlist is missing generated Caddy hostnames"
+        )
