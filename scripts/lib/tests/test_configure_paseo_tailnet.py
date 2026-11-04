@@ -184,6 +184,7 @@ def test_abbreviated_apply_flag_rejected_before_mutation():
         paseo.main(["--app"])
     assert caught.value.code == 2
 
+
 def test_paseo_installer_dry_run_reports_pinned_stable_without_install():
     script = SCRIPT.with_name("install-paseo.sh")
     run = subprocess.run(
