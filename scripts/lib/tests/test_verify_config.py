@@ -122,7 +122,9 @@ def test_caddyfile_validation_runs_when_binary_is_available(tmp_path, monkeypatc
 
     def fake_run(args, **kwargs):
         calls.append(args)
-        return SimpleNamespace(returncode=0, stdout="Valid configuration\n", stderr="")
+        return SimpleNamespace(
+            returncode=0, stdout="adapted config to JSON\n", stderr=""
+        )
 
     monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda name: "/usr/bin/caddy")
     monkeypatch.setattr(VERIFY_CONFIG.subprocess, "run", fake_run)
@@ -130,8 +132,10 @@ def test_caddyfile_validation_runs_when_binary_is_available(tmp_path, monkeypatc
     valid, output = VERIFY_CONFIG.validate_caddyfile(caddyfile)
 
     assert valid
-    assert "Valid configuration" in output
-    assert calls == [["/usr/bin/caddy", "validate", "--config", str(caddyfile)]]
+    assert "adapted config to JSON" in output
+    assert calls == [
+        ["/usr/bin/caddy", "adapt", "--config", str(caddyfile), "--pretty"]
+    ]
 
 
 def test_caddyfile_validation_skips_without_binary(tmp_path, monkeypatch):
