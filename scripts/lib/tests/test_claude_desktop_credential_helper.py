@@ -116,7 +116,10 @@ def test_invalid_flag_exits_two(tmp_path):
     assert result.returncode == 2
     assert result.stdout == ""
 
-SPEC = importlib.util.spec_from_file_location("claude_desktop_credential_helper", SCRIPT)
+
+SPEC = importlib.util.spec_from_file_location(
+    "claude_desktop_credential_helper", SCRIPT
+)
 assert SPEC is not None and SPEC.loader is not None
 HELPER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(HELPER)
