@@ -20,9 +20,18 @@ DOMAIN = "local.example.test"
 
 
 @pytest.fixture(autouse=True)
-def isolated(monkeypatch):
-    for key in ("PASEO_LISTEN", "PASEO_RELAY_ENABLED", "PASEO_WEB_UI_ENABLED"):
+def isolated(monkeypatch, tmp_path):
+    for key in (
+        "PASEO_LISTEN",
+        "PASEO_RELAY_ENABLED",
+        "PASEO_WEB_UI_ENABLED",
+        "DOTFILES_RUN_PASEO_WEB_SETUP",
+    ):
         monkeypatch.delenv(key, raising=False)
+    # The paseo lane is deployed on real hosts; an inherited gate plus the live
+    # config would leak machine state into these tests. Point PASEO_HOME at an
+    # absent per-test path so any stray gate hits the graceful skip instead.
+    monkeypatch.setenv("PASEO_HOME", str(tmp_path / ".paseo"))
 
 
 def paseo_options(access_mode, *, https_port="443"):

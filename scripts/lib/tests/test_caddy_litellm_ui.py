@@ -62,11 +62,16 @@ def test_litellm_site_blocks_are_ui_only_and_auth_matcher_is_local():
         assert "/sso/key/generate" not in block
 
 
-def test_openwebui_sites_follow_access_mode_not_public_escalation(monkeypatch):
+def test_openwebui_sites_follow_access_mode_not_public_escalation(
+    monkeypatch, tmp_path
+):
     caddy = load_script("configure-caddy")
     monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "1")
-    monkeypatch.setenv("DOTFILES_OPENWEBUI_PUBLIC", "0")
     monkeypatch.setenv("OPENCODE_PASSWORD", "test-password")
+    monkeypatch.setenv("DOTFILES_OPENWEBUI_PUBLIC", "0")
+    monkeypatch.delenv("DOTFILES_RUN_PASEO_WEB_SETUP", raising=False)
+    # Isolate the paseo lanes from the live host (see test_paseo_caddy.isolated).
+    monkeypatch.setenv("PASEO_HOME", str(tmp_path / ".paseo"))
     domains = ["local.example.ca"]
     for mode in ("localhost", "lan", "public"):
         caddyfile = caddy.build_caddyfile(
