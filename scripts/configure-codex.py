@@ -81,7 +81,7 @@ def selected_litellm_profile_model():
     return name
 
 
-def build_profiles_config(ollama_model, local_model=""):
+def build_profiles_config(ollama_model, local_model="", preserved_litellm_profile=""):
     provider, model = _model_parts(local_model) if local_model else ("ollama", "local")
     engine = resolve_engine(provider)
     profile_provider = engine["profile_provider"] if engine else "ollama"
@@ -90,12 +90,13 @@ def build_profiles_config(ollama_model, local_model=""):
         f'model_provider = "{profile_provider}"\n'
     )
     litellm_model = selected_litellm_profile_model()
-    litellm_profile = (
-        f'\n[profiles.litellm]\nmodel = "{litellm_model}"\n'
-        'model_provider = "litellm"\n'
-        if litellm_model
-        else ""
-    )
+    if litellm_model:
+        litellm_profile = (
+            f'\n[profiles.litellm]\nmodel = "{litellm_model}"\n'
+            'model_provider = "litellm"\n'
+        )
+    else:
+        litellm_profile = preserved_litellm_profile
     return f"""# BEGIN DOTFILES MANAGED PROFILES
 [profiles.meridian]
 model = "claude-sonnet-5-5"
@@ -204,6 +205,23 @@ def build_provider_config(local_model=""):
 
 def strip_managed_profiles(content):
     return strip_owned_block(content, PROFILES_START, PROFILES_END, "profiles")
+
+
+def managed_litellm_profile(content):
+    """Return the exact managed LiteLLM table section, including its line ending."""
+    if PROFILES_START not in content or PROFILES_END not in content:
+        return ""
+    managed = content.split(PROFILES_START, 1)[1].split(PROFILES_END, 1)[0]
+    lines = managed.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.strip() == "[profiles.litellm]":
+            end = index + 1
+            while end < len(lines) and not re.match(
+                r"^\s*\[[^]]+\]\s*(?:#.*)?(?:\r?\n)?$", lines[end]
+            ):
+                end += 1
+            return "".join(lines[index:end])
+    return ""
 
 
 def strip_owned_block(content, start, end, table):
@@ -322,20 +340,14 @@ def main():
             content = ""
         original_content = content
 
-        # Existing managed profiles may be used by a running Codex workflow.
-        # Warn before retiring a formerly hard-coded LiteLLM model.
-        if (
-            PROFILES_START in content
-            and PROFILES_END in content
-            and "[profiles.litellm]"
-            in content.split(PROFILES_START, 1)[1].split(PROFILES_END, 1)[0]
-            and not os.environ.get("DOTFILES_CODEX_LITELLM_MODEL", "")
-        ):
-            logger.warning(
-                "Existing managed Codex LiteLLM profile will be removed because "
-                "DOTFILES_CODEX_LITELLM_MODEL is unset; configure a currently "
-                "served alias before running if that profile is still in use"
-            )
+        preserved_litellm_profile = ""
+        if not os.environ.get("DOTFILES_CODEX_LITELLM_MODEL", ""):
+            preserved_litellm_profile = managed_litellm_profile(content)
+            if preserved_litellm_profile:
+                logger.info(
+                    "existing managed Codex LiteLLM profile preserved; set "
+                    "DOTFILES_CODEX_LITELLM_MODEL to regenerate it with an exact served alias"
+                )
 
         # Remove only the marked block before legacy provider cleanup.
         content = reconcile_litellm_provider(content, False)
@@ -356,7 +368,9 @@ def main():
             new_content = content.rstrip()
             if new_content:
                 new_content += "\n\n"
-        generated_profiles = build_profiles_config(ollama_cloud_model, local_model)
+        generated_profiles = build_profiles_config(
+            ollama_cloud_model, local_model, preserved_litellm_profile
+        )
         existing = tomllib.loads(content)
         for table, generated in (
             ("model_providers", base_providers),

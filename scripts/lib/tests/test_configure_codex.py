@@ -922,17 +922,20 @@ def test_main_rejects_invalid_alias_without_writing_config(
     assert not list(tmp_path.rglob("*.bak*"))
 
 
-def test_retiring_old_managed_profile_warns_and_preserves_root(tmp_path, monkeypatch):
+def test_unset_litellm_model_preserves_existing_managed_profile(tmp_path, monkeypatch):
     home = tmp_path / "home"
     config_dir = home / ".codex"
     config_dir.mkdir(parents=True)
     config = config_dir / "config.toml"
+    profile_section = (
+        '[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
+        'model_provider = "litellm"\n'
+    )
     config.write_text(
         '# User-owned root\nmodel_provider = "openai"\n'
         "# BEGIN DOTFILES MANAGED PROFILES\n"
-        '[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
-        'model_provider = "litellm"\n'
-        "# END DOTFILES MANAGED PROFILES\n",
+        + profile_section
+        + "# END DOTFILES MANAGED PROFILES\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("HOME", str(home))
@@ -946,11 +949,15 @@ def test_retiring_old_managed_profile_warns_and_preserves_root(tmp_path, monkeyp
     )
     monkeypatch.setattr(configure_codex, "resolve_local_model", lambda: "")
     monkeypatch.setattr(configure_codex, "active_engine_pools", lambda: {})
-    warnings = []
-    monkeypatch.setattr(configure_codex.logger, "warning", warnings.append)
+    info = []
+    monkeypatch.setattr(configure_codex.logger, "info", info.append)
     monkeypatch.setattr(sys, "argv", ["configure-codex.py"])
     configure_codex.main()
     parsed = tomllib.loads(config.read_text(encoding="utf-8"))
     assert parsed["model_provider"] == "openai"
-    assert "litellm" not in parsed["profiles"]
-    assert any("will be removed" in message for message in warnings)
+    assert parsed["profiles"]["litellm"] == {
+        "model": "openai/gpt-6-luna",
+        "model_provider": "litellm",
+    }
+    assert profile_section in config.read_text(encoding="utf-8")
+    assert any("profile preserved" in message for message in info)
