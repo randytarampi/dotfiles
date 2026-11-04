@@ -465,6 +465,142 @@ def build_openwebui_site_blocks(
     return blocks
 
 
+def build_paseo_site_block(
+    site_label: str, bind_ip: str, tls_line: str, lan_only: bool = False
+) -> str:
+    """Proxy Paseo's entire origin, including /api/* and WebSockets."""
+    lines = [f"{site_label} {{", f"  bind {bind_ip}", f"  {tls_line}", ""]
+    if lan_only:
+        lines += ["  @not_lan not remote_ip private_ranges", "  abort @not_lan", ""]
+    # Do not conflict with Paseo's own Authorization header or WebSockets.
+    lines += [
+        "  reverse_proxy 127.0.0.1:6767 {",
+        "    flush_interval -1",
+        "    header_up X-Forwarded-Proto {scheme}",
+        "    header_up X-Forwarded-Host {host}",
+        "  }",
+        "}",
+    ]
+    return "\n".join(lines)
+
+
+def build_paseo_site_blocks(
+    domains: list[str],
+    access_mode: str,
+    bind_ip: str,
+    cert_fullchain: str,
+    cert_key: str,
+    local_domain_tls_line: str,
+    https_port: str,
+    public_opt_in: bool,
+) -> list[str]:
+    if access_mode == "localhost":
+        sites = [
+            build_paseo_site_block(
+                build_site_label("paseo.localhost", https_port),
+                "127.0.0.1",
+                "tls internal",
+            )
+        ]
+        sites += [
+            build_paseo_site_block(
+                build_site_label(f"paseo.{domain}", https_port),
+                "127.0.0.1",
+                local_domain_tls_line,
+            )
+            for domain in domains
+            if domain.startswith("local.")
+        ]
+        return sites
+    return [
+        build_paseo_site_block(
+            build_site_label(f"paseo.{domain}", https_port),
+            bind_ip,
+            f"tls {cert_fullchain} {cert_key}",
+            lan_only=access_mode == "lan" or not public_opt_in,
+        )
+        for domain in domains
+    ]
+
+
+def validate_paseo_proxy_config(access_mode: str, domains: list[str]) -> None:
+    """Fail closed instead of accidentally routing to an unprotected daemon."""
+    import json
+    import re
+    import stat
+
+    home = Path(os.environ.get("PASEO_HOME", str(Path.home() / ".paseo"))).expanduser()
+    target = home / "config.json"
+    if home.is_symlink() or home.parent.is_symlink() or target.is_symlink():
+        raise ValueError("unsafe Paseo config symlink")
+    info = target.stat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
+        raise ValueError("Paseo config must be a private regular file")
+    with target.open(encoding="utf-8") as handle:
+
+        def unique_keys(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate Paseo configuration key")
+                result[key] = value
+            return result
+
+        data = json.load(handle, object_pairs_hook=unique_keys)
+    if not isinstance(data, dict):
+        raise ValueError("Paseo configuration must be an object")
+    daemon = data.get("daemon", {})
+    if (
+        not isinstance(daemon, dict)
+        or daemon.get("listen", "127.0.0.1:6767") != "127.0.0.1:6767"
+    ):
+        raise ValueError(
+            "Paseo Caddy route requires a loopback-only daemon on port 6767"
+        )
+    if os.environ.get("PASEO_LISTEN"):
+        raise ValueError("PASEO_LISTEN would override the managed loopback listener")
+    relay = daemon.get("relay")
+    if not isinstance(relay, dict) or relay.get("enabled") is not False:
+        raise ValueError("Paseo relay must be explicitly disabled")
+    if os.environ.get("PASEO_RELAY_ENABLED", "").lower() not in ("", "0", "false"):
+        raise ValueError("PASEO_RELAY_ENABLED could enable public relay access")
+    features = data.get("features", {})
+    if (
+        not isinstance(features, dict)
+        or not isinstance(features.get("webUi"), dict)
+        or features["webUi"].get("enabled") is not True
+    ):
+        raise ValueError("Paseo Web UI is not enabled in the native daemon config")
+    if os.environ.get("PASEO_WEB_UI_ENABLED", "").lower() in ("false", "0"):
+        raise ValueError("PASEO_WEB_UI_ENABLED disables the native UI")
+    if access_mode != "localhost":
+        password = (
+            daemon.get("auth", {}).get("password")
+            if isinstance(daemon.get("auth"), dict)
+            else None
+        )
+        if not isinstance(password, str) or not re.fullmatch(
+            r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}", password
+        ):
+            raise ValueError(
+                "LAN/public Paseo requires a native bcrypt daemon password"
+            )
+    wanted = (
+        ["paseo.localhost"] + [f"paseo.{d}" for d in domains if d.startswith("local.")]
+        if access_mode == "localhost"
+        else [f"paseo.{d}" for d in domains]
+    )
+    allowlist = daemon.get("hostnames", [])
+    if (
+        not isinstance(allowlist, list)
+        or any(not isinstance(s, str) for s in allowlist)
+        or not set(wanted).issubset(allowlist)
+    ):
+        raise ValueError(
+            "Paseo hostname allowlist is missing generated Caddy hostnames"
+        )
+
+
 def build_litellm_site_block(
     site_label: str,
     bind_ip: str,
@@ -638,6 +774,20 @@ def build_caddyfile(
         https_port=https_port,
     )
 
+    paseo_sites = []
+    if os.environ.get("DOTFILES_RUN_PASEO_WEB_SETUP", "0") == "1":
+        validate_paseo_proxy_config(access_mode, domains)
+        paseo_sites = build_paseo_site_blocks(
+            domains,
+            access_mode,
+            bind_ip,
+            cert_fullchain,
+            cert_key,
+            local_domain_tls_line,
+            https_port,
+            os.environ.get("DOTFILES_PASEO_PUBLIC", "0") == "1",
+        )
+
     template_path = (
         Path(__file__).resolve().parent.parent / "configs" / "caddy" / "Caddyfile.tmpl"
     )
@@ -651,6 +801,7 @@ def build_caddyfile(
         opencode_sites="\n\n".join(opencode_sites),
         openwebui_sites="\n\n".join(openwebui_sites),
         litellm_sites="\n\n".join(litellm_sites),
+        paseo_sites="\n\n".join(paseo_sites),
         localhost_block="\n\n".join(localhost_blocks),
     )
 

@@ -6,9 +6,10 @@ from pathlib import Path
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
 # Baseline also accounts for deliberate removal of obsolete --local ACP
 # sample assignments; maintain order-sensitive protection for all remaining
-# environment keys and defaults.
+# environment keys and defaults, including the desktop/Codex gates added
+# by stack #167 and the Paseo Web UI/0.13.0 upgrades in #174.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "6436727727b360ddc8bdff94bbd402f80c606db9164fcca317aa8d6cc6223965"
+    "0d19b9d598f1c470fee32574a3f055d3b4f2c9d05bcdaa9b70e7323a748ee4a2"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
@@ -26,6 +27,7 @@ REMOTE_GATES = (
     b"DOTFILES_RUN_TAILSCALE_ACCESS_SETUP",
     b"DOTFILES_RUN_PASEO_SETUP",
     b"DOTFILES_RUN_PASEO_HERMES_ACP_SETUP",
+    b"DOTFILES_PASEO_PUBLIC",
 )
 
 

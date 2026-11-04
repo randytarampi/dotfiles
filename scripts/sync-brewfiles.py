@@ -38,7 +38,13 @@ class BrewEntry:
 
     @property
     def key(self) -> str:
-        return f"{self.kind}:{self.name.lower()}"
+        name = self.name.lower()
+        if self.kind == "npm":
+            # Version-suffixed npm entries must key equal to their installed
+            # bare name, or the sync lane re-appends the bare package forever
+            # whenever a Brewfile entry names a specific version.
+            name = re.sub(r"@\d+(?:\.\d+)*$", "", name)
+        return f"{self.kind}:{name}"
 
 
 @dataclass

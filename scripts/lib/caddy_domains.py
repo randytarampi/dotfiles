@@ -37,6 +37,7 @@ def build_hosts_entries(
     *,
     openwebui_enabled: bool = False,
     litellm_ui_exposed: bool = False,
+    paseo_enabled: bool = False,
 ) -> list[str]:
     """Build managed loopback hosts entries for the local Caddy sites."""
     marker = "# dotfiles-caddy-managed"
@@ -44,6 +45,13 @@ def build_hosts_entries(
         f"127.0.0.1\topencode.localhost\t{marker}",
         f"::1\t\topencode.localhost\t{marker}",
     ]
+    if paseo_enabled:
+        entries.extend(
+            [
+                f"127.0.0.1\tpaseo.localhost\t{marker}",
+                f"::1\t\tpaseo.localhost\t{marker}",
+            ]
+        )
     if openwebui_enabled:
         entries.extend(
             [
@@ -66,6 +74,8 @@ def build_hosts_entries(
         )
         if openwebui_enabled:
             entries.append(f"127.0.0.1\tchat.{domain}\t{marker}")
+        if paseo_enabled:
+            entries.append(f"127.0.0.1\tpaseo.{domain}\t{marker}")
         if litellm_ui_exposed and access_mode in {"lan", "public"}:
             entries.append(f"127.0.0.1\tlitellm.{domain}\t{marker}")
     return entries

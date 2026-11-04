@@ -185,7 +185,7 @@ def test_abbreviated_apply_flag_rejected_before_mutation():
     assert caught.value.code == 2
 
 
-def test_paseo_installer_dry_run_reports_pinned_stable_without_install():
+def test_paseo_installer_dry_run_reports_candidate_without_install():
     script = SCRIPT.with_name("install-paseo.sh")
     run = subprocess.run(
         ["bash", str(script), "--dry-run"],
@@ -193,5 +193,5 @@ def test_paseo_installer_dry_run_reports_pinned_stable_without_install():
         capture_output=True,
         text=True,
     )
-    assert "@getpaseo/cli@0.15.0" in run.stdout
+    assert "@getpaseo/cli@latest" in run.stdout
     assert "no changes made" in run.stdout

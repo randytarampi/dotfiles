@@ -125,7 +125,7 @@ IFS=',' read -ra _skip_list <<<"$SKIP_STEPS"
 # empty array as unset under set -u; CI runs with system bash 3.2.
 for _skip in ${_skip_list[@]+"${_skip_list[@]}"}; do
   case "$_skip" in
-  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | openwebui | litellm | opencode-restart | "") ;;
+  cleanup | npm-packages | secrets | aws | junie | mcps | opencode | pi | cortex | meridian | codex | mozart | agent-guidance | codegraph | codegraph-indexes | ollama-daemon | skills | ddns | caddy | paseo-web | openwebui | litellm | opencode-restart | "") ;;
   *)
     printf 'Error: unknown skip step: %s\n' "$_skip" >&2
     exit 2
@@ -581,6 +581,15 @@ if [[ "$COMMON_DRY_RUN" == "1" ]]; then
 elif ! step_skipped ddns && [[ "${DOTFILES_RUN_DDNS_SETUP:-${DOTFILES_RUN_CADDY_SETUP:-0}}" == "1" ]]; then
   info "Configuring ddns-route53..."
   run_step "ddns-route53 configuration" python3 "$SCRIPT_DIR/configure-ddns.py"
+fi
+
+# 8a-1. Paseo Web UI native hostname reconciliation (before Caddy routes)
+if [[ "$COMMON_DRY_RUN" == "1" ]]; then
+  info "Skipping Paseo Web UI configuration (dry-run mode)"
+elif ! step_skipped paseo-web && [[ "${DOTFILES_RUN_PASEO_WEB_SETUP:-0}" == "1" ]]; then
+  run_step "Paseo Web UI configuration" python3 "$SCRIPT_DIR/configure-paseo-web.py" --apply ${COMMON_FORWARD_ARGS[@]+"${COMMON_FORWARD_ARGS[@]}"}
+else
+  info "DOTFILES_RUN_PASEO_WEB_SETUP='${DOTFILES_RUN_PASEO_WEB_SETUP:-0}' — skipping Paseo Web UI configuration"
 fi
 
 # 8b. Caddy config (LAN exposure front door)
