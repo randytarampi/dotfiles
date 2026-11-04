@@ -296,6 +296,38 @@ def _request_json(url, method, master_key, payload=None, timeout=30):
         return json.loads(response.read().decode("utf-8"))
 
 
+def _all_key_records(api_base, master_key, max_pages=50):
+    """Collect every page of /key/list records.
+
+    The proxy paginates the listing at a fixed page size; a single-page read
+    hid aliases beyond it, which the alias-uniqueness preflight then misread
+    as missing gateway records. Servers without pagination return one body
+    and keep working here.
+    """
+    records = []
+    page = 1
+    while True:
+        listing = _request_json(
+            f"{api_base}/key/list?return_full_object=true&page={page}",
+            "GET",
+            master_key,
+        )
+        rows = listing.get("keys", []) if isinstance(listing, dict) else []
+        if not isinstance(rows, list) or not rows:
+            break
+        before = len(records)
+        records.extend(rows)
+        total_pages = listing.get("total_pages") if isinstance(listing, dict) else None
+        try:
+            last_page = int(total_pages) if total_pages is not None else page
+        except (TypeError, ValueError):
+            last_page = page
+        if page >= min(last_page, max_pages) or len(records) == before:
+            break
+        page += 1
+    return records
+
+
 def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
     values = {}
     if path.exists():
@@ -901,10 +933,9 @@ def _provision_app_keys(
         )
         # Default /key/list responses carry opaque hash strings; only
         # return_full_object=true exposes key_alias for idempotency.
-        listing = _request_json(
-            f"{api_base}/key/list?return_full_object=true", "GET", master_key
-        )
-        records = listing.get("keys", []) if isinstance(listing, dict) else []
+        # Page through the listing: single-page reads drop aliases beyond
+        # the server's fixed page size.
+        records = _all_key_records(api_base, master_key)
         provisioning_rows, preflight = _provisioning_preflight(
             records, service_env_path, enforce_registry_gates, strict
         )
