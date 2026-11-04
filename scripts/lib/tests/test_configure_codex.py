@@ -72,18 +72,41 @@ def test_litellm_provider_requires_setup_gate(monkeypatch):
     assert configure_codex.build_litellm_provider_config() == ""
 
 
-def test_litellm_profile_is_opt_in_and_selects_gateway_model(monkeypatch):
+def test_litellm_profile_is_opt_in_and_selects_exact_gateway_model(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.delenv("DOTFILES_CODEX_LITELLM_MODEL", raising=False)
+    profiles = tomllib.loads(configure_codex.build_profiles_config("model"))["profiles"]
+    assert "litellm" not in profiles
+
+    monkeypatch.setenv("DOTFILES_CODEX_LITELLM_MODEL", "openrouter/vendor/twin:free")
     profiles = tomllib.loads(configure_codex.build_profiles_config("model"))["profiles"]
     assert profiles["litellm"] == {
-        "model": "openai/gpt-6-luna",
+        "model": "openrouter/vendor/twin:free",
         "model_provider": "litellm",
     }
 
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
     profiles = tomllib.loads(configure_codex.build_profiles_config("model"))["profiles"]
     assert "litellm" not in profiles
+
+
+@pytest.mark.parametrize(
+    "bad_alias",
+    [
+        'a"\n[model_providers.evil]',
+        "two words",
+        "../bad\\ref",
+        "x" * 201,
+        "line\nbreak",
+    ],
+)
+def test_litellm_profile_rejects_unsafe_model_without_writing(monkeypatch, bad_alias):
+    monkeypatch.setenv("DOTFILES_RUN_CODEX_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_CODEX_LITELLM_MODEL", bad_alias)
+    with pytest.raises(ValueError, match="invalid DOTFILES_CODEX_LITELLM_MODEL"):
+        configure_codex.build_profiles_config("model")
 
 
 @pytest.mark.parametrize("shell_mode", ["login", "noninteractive"])

@@ -28,6 +28,12 @@ bridge or compatibility layer is used.
 | cline | Cline-configured providers | native/config varies by extension | `cline --acp` | yes, shared skill distribution | no | yes | no | N/A | env var (Cline OTel) | none | env-vars |
 | agy | Antigravity-configured providers | native `~/.gemini/config/mcp_config.json` | native `agy-acp` bridge | yes, `~/.gemini/antigravity-cli/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 
+ChatGPT Desktop Chat and Work are distinct from the standalone Codex CLI and
+have no repo-verified custom LiteLLM inference endpoint. The Codex CLI has
+an opt-in gateway profile only with explicit `DOTFILES_CODEX_LITELLM_MODEL`;
+whether ChatGPT Desktop's Codex surface consumes it is UNKNOWN. See
+[ChatGPT Desktop surface qualification](CHATGPT-DESKTOP.md).
+
 Claude Desktop gateway support is an explicit export scaffold only:
 `scripts/export-claude-desktop-gateway.py` prints a secret-free profile to
 stdout. Owner installation/application, credential delivery, and live

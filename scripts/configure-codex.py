@@ -67,6 +67,20 @@ def resolve_local_model():
     return resolve_local_winner(models, "openai") or ""
 
 
+def selected_litellm_profile_model():
+    """Return only a deliberate, TOML-safe gateway alias; never guess a model."""
+    if not build_litellm_provider_config():
+        return ""
+    name = os.environ.get("DOTFILES_CODEX_LITELLM_MODEL", "")
+    if not name:
+        return ""
+    if len(name) > 200 or not re.fullmatch(r"[A-Za-z0-9._:/+-]+", name):
+        raise ValueError(
+            "invalid DOTFILES_CODEX_LITELLM_MODEL; expected exact served alias"
+        )
+    return name
+
+
 def build_profiles_config(ollama_model, local_model=""):
     provider, model = _model_parts(local_model) if local_model else ("ollama", "local")
     engine = resolve_engine(provider)
@@ -75,10 +89,11 @@ def build_profiles_config(ollama_model, local_model=""):
         f'\n[profiles.local]\nmodel = "{model}"\n'
         f'model_provider = "{profile_provider}"\n'
     )
+    litellm_model = selected_litellm_profile_model()
     litellm_profile = (
-        '\n[profiles.litellm]\nmodel = "openai/gpt-6-luna"\n'
+        f'\n[profiles.litellm]\nmodel = "{litellm_model}"\n'
         'model_provider = "litellm"\n'
-        if build_litellm_provider_config()
+        if litellm_model
         else ""
     )
     return f"""# BEGIN DOTFILES MANAGED PROFILES

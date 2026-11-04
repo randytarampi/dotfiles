@@ -1,0 +1,74 @@
+# ChatGPT Desktop and Codex CLI: custom inference qualification
+
+**Status (2026-11-03):** documentation and an explicitly selected standalone
+Codex CLI model alias. **No ChatGPT Desktop Chat, Work or Codex-panel
+custom-inference qualification is claimed.**
+
+## Separate the products and consumers
+
+- **ChatGPT Desktop Chat:** repo does not have a supported setting to replace
+  the hosted ChatGPT model endpoint with the local LiteLLM gateway. Do not
+  edit application internals or install a blanket TLS proxy.
+- **ChatGPT Work:** a different product surface; Codex CLI `config.toml`
+  does not establish an inference endpoint for Work.
+- **Codex CLI:** supports `~/.codex/config.toml`, named profiles, provider
+  base URLs and Responses wire API. The existing `configure-codex.py`
+  provides a local `[model_providers.litellm]` only when the owner enables
+  `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`.
+- **Codex within the ChatGPT Desktop app:** inspect the installed version
+  and effective configuration separately. Whether it honours a named
+  CLI profile is UNKNOWN until verified through the actual GUI process.
+
+## Standalone Codex CLI opt-in qualification
+
+1. Set the existing Codex and proxy gates and provide a dedicated, valid
+   `LITELLM_CODEX_KEY` through the existing private, owner-controlled
+   provisioning procedure. Do not create or rotate the key in this PR.
+2. Set `DOTFILES_CODEX_LITELLM_MODEL` to an **exact served** gateway alias
+   that accepts `/v1/responses`, e.g. a verified alias of the form
+   `openrouter/vendor/model:free`. This example is syntax, not a claim
+   that a particular route is present, free or Responses-compatible.
+3. Generate config with `scripts/configure-codex.py --dry-run`, inspect
+   `~/.codex/config.toml` for an unmanaged-collision refusal, and only
+   then approve a normal run. The profile is omitted when the model is
+   unspecified; the provider and user-owned root default are separate.
+4. Test in an explicitly bounded terminal session:
+   ```sh
+   codex --profile litellm
+   ```
+   Inspect `codex --help` for the installed version's exact syntax.
+   Record selected model, actual `/v1/responses` request, streaming,
+   tool calls, cost/usage and gateway receipt. Preserve the direct
+   OpenAI default and test switch-back.
+5. Test Codex inside **ChatGPT Desktop** independently. Inspect effective
+   app version, selected model/provider and requests. If it does not
+   honour the CLI profile, record UNSUPPORTED or UNKNOWN, not a fabricated
+   desktop launcher or inference override.
+
+## Negative matrix
+
+- Missing/unsafe/rotated key; missing gateway, invalid exact model alias;
+  `/v1/responses` unsupported; malformed/unmanaged `config.toml` collision;
+  gate-off mode; hosted/default mode unaffected; no hidden billed fallback;
+  no shell/GitHub credentials accidentally written into Codex config.
+- Existing model-specific `model_reasoning_effort`, marketplace, plugin,
+  desktop settings, MCP and other user-owned sections must survive. Run
+  generation twice and compare bytes/permissions.
+- For each surface, record VERIFIED / OWNER-REPORTED / NOT RUN /
+  UNKNOWN / UNSUPPORTED and a concrete provider/model/gateway receipt.
+  No ChatGPT app internal files or private settings should be modified.
+
+## Reviewer handoff
+
+Run `pytest -q scripts/lib/tests/test_configure_codex.py`, `make
+check-env-coverage`, `make verify`, then inspect exact-head GitHub CI.
+Test the installed Codex CLI separately (owner-only). A static TOML
+profile does not qualify the desktop GUI.
+
+**Rollback:** unset `DOTFILES_CODEX_LITELLM_MODEL` and regenerate the
+marked profile with an approved backup. Never delete private Codex
+configuration, tokens, history or existing sessions automatically.
+
+**Attribution:** ChatGPT (GPT-6), 2026-11-03. No actual ChatGPT Desktop
+operation, Codex CLI inference, owner credentials or independent review
+were performed.
