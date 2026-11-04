@@ -12,6 +12,15 @@ CLIENT_PATH = (".local", "share", "litellm", "clients", "claude-desktop.key")
 MAX_BYTES = 4096
 
 
+def _private_regular_file(metadata):
+    """Require an owner-controlled, strictly 0600 regular credential file."""
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and metadata.st_uid == os.geteuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o600
+    )
+
+
 def credential():
     """Fail closed on symlinks, unsafe file modes, ownership and malformed keys."""
     if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
@@ -29,11 +38,7 @@ def credential():
             raise ValueError("unsafe credential directory")
     path = directory / CLIENT_PATH[-1]
     expected = path.lstat()
-    if (
-        not stat.S_ISREG(expected.st_mode)
-        or expected.st_uid != os.geteuid()
-        or stat.S_IMODE(expected.st_mode) != 0o600
-    ):
+    if not _private_regular_file(expected):
         raise ValueError("unsafe credential file")
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NONBLOCK", 0)
@@ -41,9 +46,7 @@ def credential():
     with os.fdopen(descriptor, "rb") as source:
         actual = os.fstat(source.fileno())
         if (
-            not stat.S_ISREG(actual.st_mode)
-            or actual.st_uid != os.geteuid()
-            or stat.S_IMODE(actual.st_mode) != 0o600
+            not _private_regular_file(actual)
             or (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino)
         ):
             raise ValueError("credential changed during read")
