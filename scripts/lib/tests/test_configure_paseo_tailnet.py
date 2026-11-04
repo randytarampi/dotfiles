@@ -170,6 +170,7 @@ def test_tailnet_explicit_dry_run_does_not_run_paseo(monkeypatch, tmp_path):
     assert paseo.main(["--apply", "--dry-run"]) == 0
     assert path.read_bytes() == before
 
+
 def test_tailnet_preflight_comparison_refuses_json_type_coercion():
     assert paseo.same_config({"value": 1}, {"value": True}) is False
     assert paseo.same_config({"value": 1}, {"value": 1.0}) is False
