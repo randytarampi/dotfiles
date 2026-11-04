@@ -10,6 +10,9 @@ import shutil
 import stat
 import subprocess  # nosec B404 - resolved Hermes/Paseo commands, no shell.
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from cli_helpers import add_common_args  # noqa: E402 -- local bootstrap above.
 import tempfile
 
 GATE = "DOTFILES_RUN_PASEO_HERMES_ACP_SETUP"
@@ -79,11 +82,9 @@ def checked_config(home):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--apply", action="store_true", help="Register Hermes ACP")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without modifying live state"
-    )
+    add_common_args(parser)
     args = parser.parse_args(argv)
     try:
         paseo, hermes = shutil.which("paseo"), shutil.which("hermes")

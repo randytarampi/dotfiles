@@ -16,6 +16,9 @@ import stat
 import subprocess  # nosec B404 - fixed local Paseo and Tailscale CLI operations.
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from cli_helpers import add_common_args  # noqa: E402 -- local bootstrap above.
+
 GATE = "DOTFILES_RUN_PASEO_SETUP"
 DEFAULT_LISTEN = "127.0.0.1:6767"
 _BCRYPT = re.compile(r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}\Z")
@@ -90,11 +93,9 @@ def checked_config(home):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--apply", action="store_true", help="Change Paseo listener")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without modifying live state"
-    )
+    add_common_args(parser)
     args = parser.parse_args(argv)
     try:
         tailscale, paseo = shutil.which("tailscale"), shutil.which("paseo")
