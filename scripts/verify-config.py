@@ -201,13 +201,20 @@ def validate_caddy_auth_conf(path: Path) -> tuple[bool, int]:
 
 
 def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
-    """Validate an existing Caddyfile when the Caddy binary is available."""
+    """Validate an existing Caddyfile when the Caddy binary is available.
+
+    Uses `caddy adapt`: it runs the full parser and config builder without
+    provisioning runtime state. `caddy validate` additionally loads TLS
+    automation material, which a root-owned Caddy service keeps unreadable
+    for the user running this doctor, so it fails closed without evidence of
+    a config problem.
+    """
     caddy = shutil.which("caddy")
     if not caddy or not path.is_file():
         return None, ""
     try:
         result = subprocess.run(  # nosec B603 - caddy is PATH-resolved; fixed arguments, no operator input.
-            [caddy, "validate", "--config", str(path)],
+            [caddy, "adapt", "--config", str(path), "--pretty"],
             capture_output=True,
             text=True,
             check=False,
@@ -215,7 +222,7 @@ def validate_caddyfile(path: Path) -> tuple[Optional[bool], str]:
     except OSError as error:
         return False, str(error)
     output = (result.stdout + result.stderr).strip()
-    return result.returncode == 0, output
+    return result.returncode == 0, output[-2000:]
 
 
 def validate_litellm_routing_text(config_text: str, port: int = 4000) -> bool:
