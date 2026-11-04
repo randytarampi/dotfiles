@@ -57,8 +57,11 @@ def credential():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(allow_abbrev=False, description=__doc__)
-    parser.add_argument("--check", action="store_true",
-                        help="Check key availability without disclosing it")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check key availability without disclosing it",
+    )
     args = parser.parse_args(argv)
     try:
         token = credential()
