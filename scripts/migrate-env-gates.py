@@ -423,7 +423,7 @@ def migrate_env(lines, dry_run=False):
             changes.append(f"Updated: {key} tier value {old_value} → {new_value}")
 
         if key in REMOVED_ENV_VARS or key.startswith(REMOVED_ENV_PREFIXES):
-            changes.append(f"Removed obsolete SmallCode setting: {key}")
+            changes.append(f"Removed retired setting: {key}")
             continue
 
         if key in CADDY_V1_REMOVALS_DELETE:
