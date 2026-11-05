@@ -1,0 +1,89 @@
+"""Read-only Paseo security assessment checks."""
+
+import pytest
+
+from paseo_security import audit
+
+BCRYPT = "$2b$12$" + "a" * 53
+
+
+def base():
+    return {
+        "daemon": {
+            "listen": "127.0.0.1:6767",
+            "relay": {"enabled": False},
+            "hostnames": ["paseo.localhost", "paseo.example.test"],
+            "auth": {"password": BCRYPT},
+        },
+        "features": {"webUi": {"enabled": True}},
+    }
+
+
+def test_lan_requires_password_and_loopback(monkeypatch):
+    monkeypatch.delenv("PASEO_LISTEN", raising=False)
+    monkeypatch.delenv("PASEO_RELAY_ENABLED", raising=False)
+    assert (
+        audit(base(), "lan", required_hosts=["paseo.example.test"])[
+            "stored_password"
+        ]
+        == "bcrypt-present"
+    )
+    without = base()
+    del without["daemon"]["auth"]
+    with pytest.raises(ValueError, match="password"):
+        audit(without, "lan")
+    wrong = base()
+    wrong["daemon"]["listen"] = "0.0.0.0:6767"
+    with pytest.raises(ValueError, match="loopback"):
+        audit(wrong, "lan")
+
+
+def test_public_follows_caddy_access_but_still_requires_native_password():
+    assert audit(base(), "public")["access"] == "public"
+    unprotected = base()
+    del unprotected["daemon"]["auth"]
+    with pytest.raises(ValueError, match="password"):
+        audit(unprotected, "public")
+
+
+def test_disabled_caddy_and_relay_refused():
+    with pytest.raises(ValueError, match="Caddy service"):
+        audit(base(), "lan", caddy_enabled=False)
+    wrong = base()
+    wrong["daemon"]["relay"]["enabled"] = True
+    with pytest.raises(ValueError, match="relay"):
+        audit(wrong, "lan")
+
+
+def test_missing_hostname_and_web_ui():
+    with pytest.raises(ValueError, match="allowlist"):
+        audit(base(), "lan", required_hosts=["paseo.unlisted.test"])
+    wrong = base()
+    wrong["features"]["webUi"]["enabled"] = False
+    with pytest.raises(ValueError, match="not enabled"):
+        audit(wrong, "lan")
+
+
+def test_security_cli_requires_actual_lan_hostnames(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2] / "check-paseo-security.py"
+    spec = importlib.util.spec_from_file_location("check_paseo_security_test", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setenv("CADDY_ACCESS", "lan")
+    monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    monkeypatch.setattr(module, "read_proxy_config", base)
+    monkeypatch.setattr(
+        module, "domains_for_access", lambda access: ["paseo.required.test"]
+    )
+    assert module.main(["--json"]) == 1
+    assert "hostname" in capsys.readouterr().err
+
+    data = base()
+    data["daemon"]["hostnames"].append("paseo.required.test")
+    monkeypatch.setattr(module, "read_proxy_config", lambda: data)
+    assert module.main(["--json"]) == 0
+    assert '"access": "lan"' in capsys.readouterr().out
