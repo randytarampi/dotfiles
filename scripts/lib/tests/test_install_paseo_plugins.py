@@ -31,7 +31,9 @@ def test_codexbar_requires_executable_and_machine_status_unsupported_on_015():
 
 def test_preview_and_gate_refuse_all_mutations(monkeypatch):
     monkeypatch.setattr(
-        module.shutil, "which", lambda name: "/usr/local/bin/paseo" if name == "paseo" else None
+        module.shutil,
+        "which",
+        lambda name: "/usr/local/bin/paseo" if name == "paseo" else None,
     )
     calls = []
 
@@ -56,9 +58,11 @@ def test_apply_skips_unsupported_plugin_and_installs_exact_registry_ids(monkeypa
     def fake_run(argv, **kwargs):
         calls.append(list(argv))
         return Mock(
-            stdout=("v22.18.0" if argv[0] == "/bin/node" else "0.15.0")
-            if argv[1:] == ["--version"]
-            else "",
+            stdout=(
+                ("v22.18.0" if argv[0] == "/bin/node" else "0.15.0")
+                if argv[1:] == ["--version"]
+                else ""
+            ),
             returncode=0,
         )
 
