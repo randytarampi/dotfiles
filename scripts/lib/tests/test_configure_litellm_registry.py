@@ -130,10 +130,7 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
         "DOTFILES_USE_LITELLM_PROXY=1",
         "DOTFILES_RUN_LITELLM_SETUP=1",
     }
-    assert all(
-        rows[name]["credential_policy"] == "no-credential"
-        for name in ("copilot",)
-    )
+    assert rows["copilot"]["credential_policy"] == "no-credential"
     assert rows["claude"]["classification"] == "eligible"
     assert rows["claude"]["credential_policy"] == "provision"
     assert rows["claude"]["setup_gates"] == [
