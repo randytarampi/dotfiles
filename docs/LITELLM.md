@@ -286,6 +286,7 @@ refer to a removed section; the generator does not repair these references.
 | Codex | `LITELLM_CODEX_KEY` | `codex.key` |
 | JetBrains Toolbox | `LITELLM_JETBRAINS_KEY` | `jetbrains.key` |
 | Visual Studio Code | `LITELLM_VSCODE_KEY` | `vscode.key` |
+| Cursor GUI | `LITELLM_CURSOR_KEY` | `cursor.key` |
 | Xcode | `LITELLM_XCODE_KEY` | `xcode.key` |
 
 `service.env` is reconciled before and after config generation. The synchronizer
@@ -300,15 +301,19 @@ credentials with their user, team, budget and model restrictions preserved.
 The Admin UI cannot reveal a previously issued plaintext key; no Enterprise
 rotation endpoint is needed for a separately approved replacement workflow.
 
-JetBrains Toolbox, Visual Studio Code and Xcode keys are provisioned only
+JetBrains Toolbox, Visual Studio Code, Cursor and Xcode keys are provisioned only
 when the matching macOS app bundle identifier is verified and all three gates
 are enabled: `DOTFILES_RUN_LITELLM_SETUP=1`,
 `DOTFILES_USE_LITELLM_PROXY=1` and the client-specific
-`DOTFILES_RUN_JETBRAINS_SETUP=1`, `DOTFILES_RUN_VSCODE_SETUP=1`, or
-`DOTFILES_RUN_XCODE_SETUP=1`. The app probe checks `/Applications` and
+`DOTFILES_RUN_JETBRAINS_SETUP=1`, `DOTFILES_RUN_VSCODE_SETUP=1`,
+`DOTFILES_RUN_CURSOR_SETUP=1`, or `DOTFILES_RUN_XCODE_SETUP=1`. The app probe checks `/Applications` and
 `~/Applications`; a bundle match is installation evidence, **not** evidence
 that the IDE reads this key or supports gateway AI routing. All three
-IDE-native transports remain **UNVERIFIED**. The existing Junie key is
+IDE-native transports remain **UNVERIFIED**. Cursor's OpenAI base URL override
+is a documented candidate, but its backend-originated traffic cannot reach this
+repository's loopback-only gateway. The key is **not** automatically inserted
+into Cursor; see [manual Cursor setup and caveats](UNMANAGED-CLIENTS.md#cursor).
+The existing Junie key is
 distinct from the Toolbox key.
 
 These are client-specific credentials, not host-OS credentials. Per-host

@@ -56,6 +56,7 @@ _CLIENT_ENABLE_GATES = {
     "copilot-cli": ("DOTFILES_RUN_COPILOT_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "jetbrains": ("DOTFILES_RUN_JETBRAINS_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "vscode": ("DOTFILES_RUN_VSCODE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "cursor": ("DOTFILES_RUN_CURSOR_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "xcode": ("DOTFILES_RUN_XCODE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
 }
 _LEGACY_CLIENT_GATES = (
@@ -463,6 +464,11 @@ def _write_jetbrains_key(service_env_path: Path, dry_run=False) -> None:
 
 def _write_vscode_key(service_env_path: Path, dry_run=False) -> None:
     _write_client_key(service_env_path, "vscode", "LITELLM_VSCODE_KEY", dry_run)
+
+
+def _write_cursor_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the dedicated Cursor GUI virtual key, not a Cursor CLI key."""
+    _write_client_key(service_env_path, "cursor", "LITELLM_CURSOR_KEY", dry_run)
 
 
 def _write_xcode_key(service_env_path: Path, dry_run=False) -> None:
@@ -912,6 +918,7 @@ PROVISIONED_CLIENT_KEY_WRITERS = {
     "copilot-cli": _write_copilot_cli_key,
     "jetbrains": _write_jetbrains_key,
     "vscode": _write_vscode_key,
+    "cursor": _write_cursor_key,
     "xcode": _write_xcode_key,
 }
 

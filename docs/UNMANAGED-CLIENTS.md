@@ -8,17 +8,49 @@ gateway setup, and key handling.
 
 ## Cursor
 
+Dotfiles may provision a **dedicated virtual key** for the Cursor desktop GUI,
+but never edits Cursor's own settings or exposes LiteLLM. On macOS, enable
+`DOTFILES_RUN_LITELLM_SETUP=1`, `DOTFILES_USE_LITELLM_PROXY=1` and
+`DOTFILES_RUN_CURSOR_SETUP=1` in the owner-managed environment, with the
+production `Cursor.app` bundle installed. Re-run the managed LiteLLM setup;
+the key is stored privately in
+`~/.local/share/litellm/clients/cursor.key` (mode `0600`), and the
+`LITELLM_CURSOR_KEY` entry is preserved in `service.env`. This creates a
+LiteLLM virtual key named `cursor`, not a separate LiteLLM user record.
+
 | What to set | Where | Value shape |
 |-------------|-------|-------------|
-| OpenAI Base URL override | Cursor Settings → Models → OpenAI → Override OpenAI Base URL | `<gateway>/cursor` |
-| OpenAI API key | Same settings area | Cursor-specific virtual key |
+| OpenAI Base URL override | Cursor Settings → Models → API Keys → Override OpenAI Base URL | `<approved HTTPS gateway>/cursor` (LiteLLM 1.97+, not `/v1` for the dedicated Cursor route) |
+| OpenAI API key | Same settings area | Value of the private `cursor.key` file, entered manually |
+| Custom model | Cursor Settings → Models → Add Custom Model | Exact public LiteLLM model alias that supports the requested mode |
 
-**Caveat:** Cursor-originated requests come from Cursor servers, so the proxy
-must be internet-reachable; a loopback-only proxy will not work. In particular,
-the local loopback Caddy endpoint does not make a `127.0.0.1` proxy reachable
-from Cursor's servers. Agent mode requires LiteLLM v1.97 or later. As an
-alternative, configure Cursor's Azure OpenAI provider with the gateway base URL
-without the `/cursor` suffix.
+**Network and security blocker:** LiteLLM's Cursor integration documents
+server-originated traffic. The default local
+`http://127.0.0.1:4000/v1` in the screenshot is therefore **not a
+verified working Cursor endpoint**. Neither the private loopback service
+nor a Tailscale-only address is reachable from Cursor's servers. Do **not**
+publish the LiteLLM service, its administrative API or its master key to
+the internet as part of key provisioning. A separately reviewed, authenticated
+HTTPS access design (or independently proven local-only request route) is
+required before declaring GUI inference functional.
+
+After approved connectivity is available, manually enter the virtual key,
+choose a verified LiteLLM alias, and test a local Chat request, an Agent
+tool call and an authorized gateway usage receipt attributed to `cursor`.
+Confirm the key fails for unrelated administrative operations and that
+disabling the Cursor gate does not revoke or erase existing secrets.
+Until then, the credential is provisioned but the Cursor transport is
+**UNVERIFIED**.
+
+The integration does **not** configure Cursor Tab, Auto, Cloud/Background
+Agents, Automations, Cursor CLI (`agent`/`cursor-agent`) or Cursor's API/SDK.
+`CURSOR_API_KEY` is a separate Cursor CLI credential and must not be replaced
+with `LITELLM_CURSOR_KEY`. Only local Chat/Agent modes can be considered for
+bring-your-own-key routing.
+
+References: [LiteLLM Cursor integration](https://docs.litellm.ai/docs/tutorials/cursor_integration),
+[Cursor BYOK](https://prod.cursor.com/help/models-and-usage/api-keys),
+[OpenAI's Cursor gateway guidance](https://help.openai.com/en/articles/20001506-using-openai-models-in-cursor).
 
 ## Gemini CLI
 
