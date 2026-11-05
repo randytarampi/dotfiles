@@ -171,7 +171,14 @@ def _available_voices(data):
 
 
 def probe_tts(
-    base_url, model, key_reference=None, key_value=None, timeout=5, *, voice=None
+    base_url,
+    model,
+    key_reference=None,
+    key_value=None,
+    timeout=5,
+    *,
+    voice=None,
+    strict_voice=False,
 ):
     endpoint = base_url.rstrip("/") + "/audio/speech"
     attempts = voice or "alloy"
@@ -184,7 +191,7 @@ def probe_tts(
         failed = _status_result(code, model, endpoint)
         if failed:
             voices = _available_voices(data) if code == 500 else []
-            if not voices or _attempt:
+            if not voices or _attempt or strict_voice:
                 return failed
             attempts = voices[0]
             notes.append(f"server-recommended voice discovered: {attempts}")
