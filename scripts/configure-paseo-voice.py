@@ -120,7 +120,12 @@ def validate_persisted_routes(config, selections, endpoint, key, voice):
             expected["voice"] = voice
         for name, wanted in expected.items():
             if name in node and node[name] != wanted:
-                raise ValueError("Paseo persisted speech override conflicts: " + ".".join(keys) + "." + name)
+                raise ValueError(
+                    "Paseo persisted speech override conflicts: "
+                    + ".".join(keys)
+                    + "."
+                    + name
+                )
 
 
 def write_new(path, content):
@@ -147,7 +152,9 @@ def main(argv=None):
     parser.add_argument("--probe-routes", action="store_true")
     parser.add_argument("--stt-model")
     parser.add_argument("--tts-model")
-    parser.add_argument("--voice", default=os.environ.get("DOTFILES_VOICE_TTS_VOICE") or "serena")
+    parser.add_argument(
+        "--voice", default=os.environ.get("DOTFILES_VOICE_TTS_VOICE") or "serena"
+    )
     args = parser.parse_args(argv)
     try:
         if not args.probe_routes:
@@ -206,7 +213,9 @@ def main(argv=None):
         print("Qualified TTS: " + selection["tts"]["wire_model"])
         if not args.apply or args.dry_run:
             return 0
-        validate_persisted_routes(read_proxy_config(), selection, endpoint, key, args.voice)
+        validate_persisted_routes(
+            read_proxy_config(), selection, endpoint, key, args.voice
+        )
         write_new(settings_path(), render(selection, endpoint, key, args.voice))
         print("Private speech adapter written; inspect daemon env inheritance")
         return 0

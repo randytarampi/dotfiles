@@ -223,22 +223,20 @@ def test_persisted_paseo_site_override_must_match_qualified_route():
         "stt": {"wire_model": "stt-local"},
         "tts": {"wire_model": "tts-local"},
     }
-    config = {"features": {
-        "dictation": {"stt": {"baseUrl": endpoint}},
-        "voiceMode": {"stt": {}, "tts": {"voice": "serena"}},
-    }}
+    config = {
+        "features": {
+            "dictation": {"stt": {"baseUrl": endpoint}},
+            "voiceMode": {"stt": {}, "tts": {"voice": "serena"}},
+        }
+    }
     module.validate_persisted_routes(config, selections, endpoint, "key", "serena")
     config["features"]["voiceMode"]["tts"]["baseUrl"] = "https://api.openai.com/v1"
     with pytest.raises(ValueError, match="persisted speech override"):
-        module.validate_persisted_routes(
-            config, selections, endpoint, "key", "serena"
-        )
+        module.validate_persisted_routes(config, selections, endpoint, "key", "serena")
     config["features"]["voiceMode"]["tts"]["baseUrl"] = endpoint
     config["features"]["dictation"]["stt"]["apiKey"] = "cloud-key"
     with pytest.raises(ValueError, match="persisted speech override"):
-        module.validate_persisted_routes(
-            config, selections, endpoint, "key", "serena"
-        )
+        module.validate_persisted_routes(config, selections, endpoint, "key", "serena")
 
 
 def test_private_adapter_rejects_symlinked_ancestor(tmp_path):
