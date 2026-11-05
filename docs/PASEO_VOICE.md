@@ -1,0 +1,38 @@
+# Paseo speech integration — local oMLX or LiteLLM gateway
+
+The source of truth for local speech is oMLX's inference-visible model
+inventory and its independent status flags. This adapter ranks **qualified**
+STT/TTS separately: explicit request, previously selected model (while still
+qualified), then pinned, favourite, and stable discovery order. It excludes
+known-unqualified TTS and refuses all endpoints except loopback.
+
+Use `DOTFILES_RUN_PASEO_VOICE_SETUP=1` and
+`python3 scripts/configure-paseo-voice.py --probe-routes --dry-run` for
+an explicit local speech inference probe. Probing submits a synthetic
+transcription and speech request, using exact model IDs and the selected
+`DOTFILES_VOICE_TTS_VOICE` (default serena). No model is auto-downloaded.
+For direct mode (`DOTFILES_USE_LITELLM_PROXY=0`), the route is oMLX
+loopback. For gateway mode (`=1`), the adapter requires the distinct
+`clients/paseo.key`, an exact served gateway alias and successful
+`/v1/audio/transcriptions` and `/v1/audio/speech` probes. It never
+falls back to direct when the gateway fails.
+
+Owner-only apply: `DOTFILES_RUN_PASEO_VOICE_SETUP=1 python3
+scripts/configure-paseo-voice.py --probe-routes --apply` writes a new
+private `~/.local/share/paseo/dotfiles-voice.env` with exact `STT_MODEL`,
+`TTS_MODEL`, `TTS_VOICE`, per-protocol keys and loopback URLs. It
+refuses to overwrite an existing different file or follow symlinks.
+The env file is **not automatically loaded** by managed/Desktop Paseo.
+Only a foreground daemon launch explicitly supplied this environment can
+use it; owner must validate their actual supervisor's secret delivery.
+Existing persisted Paseo voice feature settings can override provider
+selection; review `features.dictation` and `features.voiceMode`.
+
+Do not claim that passing a route probe demonstrates a real iPhone/iPad
+transcription or voice response. Verify both modes, hot restart, wrong
+speaker, auth rotation, and no cloud egress on the installed host before
+promoting any client preference. Never source this file into an unrelated
+global shell, commit its secret contents or copy the Open WebUI credential.
+
+Owner and host approval: Randy Tarampi. Implementation: ChatGPT (GPT-6).
+Live audio and effective managed-daemon environment: NOT RUN.
