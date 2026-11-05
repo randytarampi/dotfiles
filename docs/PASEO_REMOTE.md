@@ -30,7 +30,12 @@ The CLI supports the locally installed provider binaries and their existing auth
 ## Bundled Web UI through Caddy
 
 Set a Paseo daemon password with `paseo daemon set-password` and explicitly
-disable relay in native configuration. With a loopback daemon, set
+disable relay in native configuration. Set `DOTFILES_PASEO_RELAY=0` (the default);
+a hosted relay and a Caddy Web UI route are alternative exposure paths, not
+simultaneously supported. An explicit owner-only `configure-paseo-web.py --apply`
+can reconcile relay drift before Caddy is configured, but Caddy refuses a
+remaining active relay or process-level `PASEO_RELAY_ENABLED` override.
+With a loopback daemon, set
 `DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`.
 `CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves
 configured `paseo.<domain>` hosts to private ranges; `public` serves them
