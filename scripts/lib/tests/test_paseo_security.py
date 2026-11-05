@@ -23,9 +23,7 @@ def test_lan_requires_password_and_loopback(monkeypatch):
     monkeypatch.delenv("PASEO_LISTEN", raising=False)
     monkeypatch.delenv("PASEO_RELAY_ENABLED", raising=False)
     assert (
-        audit(base(), "lan", required_hosts=["paseo.example.test"])[
-            "stored_password"
-        ]
+        audit(base(), "lan", required_hosts=["paseo.example.test"])["stored_password"]
         == "bcrypt-present"
     )
     without = base()
