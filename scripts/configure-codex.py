@@ -344,6 +344,13 @@ def main():
         if not os.environ.get("DOTFILES_CODEX_LITELLM_MODEL", ""):
             preserved_litellm_profile = managed_litellm_profile(content)
             if preserved_litellm_profile:
+                if not build_litellm_provider_config():
+                    raise ValueError(
+                        "existing managed Codex LiteLLM profile requires its provider; "
+                        "refusing gate-off regeneration rather than orphaning it. "
+                        "Re-enable the Codex LiteLLM gateway or reconcile the "
+                        "managed profile explicitly"
+                    )
                 logger.info(
                     "existing managed Codex LiteLLM profile preserved; set "
                     "DOTFILES_CODEX_LITELLM_MODEL to regenerate it with an exact served alias"
