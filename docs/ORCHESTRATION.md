@@ -371,6 +371,7 @@ All gates follow the `DOTFILES_RUN_*_SETUP` naming pattern and default to `0` (o
 | `DOTFILES_RUN_OPENCODE_WEB_SETUP` | 0 | Script 26 (OpenCode web LaunchAgent) |
 | `DOTFILES_RUN_OPENCODE_SETUP` | 0 | Script 16 (OpenCode tier, models, voice) |
 | `DOTFILES_RUN_MCP_SETUP` | 0 | Script 15 (`run_onchange_15-configure-mcp.sh.tmpl`, MCP config) |
+| `DOTFILES_RUN_XCODE_MCP_SETUP` | 0 | Explicit macOS-only Xcode bridge, requires `xcrun mcpbridge` and enabled Xcode external-agent access; no background adoption. |
 | `DOTFILES_RUN_MOZART_SETUP` | 0 | Script 17 (Mozart router) |
 | `DOTFILES_RUN_SECRETS_SETUP` | 0 | Script 14 + `configure-all.sh` (secrets distribution via configure-secrets.py; inherits from `DOTFILES_RUN_OPENCODE_SETUP`) |
 | `DOTFILES_RUN_AWS_CONFIG_SETUP` | 0 | `configure-all.sh` (non-secret AWS CLI config baseline) |
