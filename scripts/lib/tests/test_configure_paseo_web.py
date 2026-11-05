@@ -250,6 +250,7 @@ def test_public_domain_hostname_is_only_added_by_explicit_setup(tmp_path, monkey
     config = json.loads((home / "config.json").read_text())
     assert config["daemon"]["hostnames"] == ["paseo.local.example.test"]
 
+
 def test_relay_intent_must_be_boolean_before_native_write(tmp_path, monkeypatch):
     home = home_with_config(tmp_path)
     calls = install_stub(monkeypatch, home)
@@ -259,6 +260,7 @@ def test_relay_intent_must_be_boolean_before_native_write(tmp_path, monkeypatch)
     assert web.main(["--apply"]) == 1
     assert not calls
     assert (home / "config.json").read_bytes() == original
+
 
 def test_caddy_plus_relay_intent_refuses_before_native_writes(tmp_path, monkeypatch):
     home = home_with_config(tmp_path)

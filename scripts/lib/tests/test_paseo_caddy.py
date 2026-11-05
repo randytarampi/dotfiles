@@ -212,10 +212,9 @@ def test_hosts_entries_cover_paseo_domains():
     off = build_hosts_entries([DOMAIN], "lan")
     assert all("paseo." not in entry for entry in off)
 
+
 @pytest.mark.parametrize("mode", ("localhost", "lan", "public"))
-def test_caddy_refuses_relay_drift_and_process_override(
-    tmp_path, monkeypatch, mode
-):
+def test_caddy_refuses_relay_drift_and_process_override(tmp_path, monkeypatch, mode):
     path, data = configured_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
     with pytest.raises(ValueError, match="cannot coexist"):
