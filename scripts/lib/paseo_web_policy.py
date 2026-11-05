@@ -24,8 +24,8 @@ class PaseoNotConfigured(RuntimeError):
     """Paseo home or daemon configuration has not been created yet."""
 
 
-def valid_daemon(config):
-    """Fail closed on listener, relay and launch overrides."""
+def valid_daemon(config, *, allow_relay_drift=False):
+    """Reject exposure drift except during an explicit owner-only reconciliation."""
     daemon = config.get("daemon", {})
     if not isinstance(daemon, dict):
         raise ValueError("Paseo daemon config must be an object")
@@ -39,6 +39,11 @@ def valid_daemon(config):
         "0",
     ):
         raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
+    if not allow_relay_drift and (
+        not isinstance(daemon.get("relay"), dict)
+        or daemon["relay"].get("enabled") is not False
+    ):
+        raise ValueError("Paseo relay must be disabled before external exposure")
     return daemon
 
 
@@ -120,7 +125,8 @@ def domains_for_access(access):
 def validate_native_config(config, access):
     if access not in ACCESS_MODES:
         raise ValueError("invalid CADDY_ACCESS; choose localhost, lan or public")
-    daemon = valid_daemon(config)
+    # Only the owner-run native writer may inspect persisted relay drift.
+    daemon = valid_daemon(config, allow_relay_drift=True)
     if os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1" and desired_relay_state():
         raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
     if access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1":
