@@ -3545,3 +3545,29 @@ def test_omlx_doctor_rejects_bool_integer_fields(section, key):
     settings = local_engines.merge_omlx_settings({})
     settings[section][key] = True
     assert key in " ".join(verify.validate_omlx_settings(settings))
+
+
+def test_openwebui_speech_locator_consumes_pinned_candidate_order(monkeypatch):
+    import openwebui
+    from selected_service import Operation, Qualification
+
+    class ObservedOrder(Exception):
+        pass
+
+    def expect_preference(operation, candidates, preference, **_kwargs):
+        assert operation == Operation.STT
+        assert preference == [("omlx", "pinned"), ("omlx", "ordinary")]
+        assert [item[1] for item in candidates] == ["pinned", "ordinary"]
+        raise ObservedOrder
+
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "select", expect_preference)
+    candidates = [
+        ("omlx", "pinned", Qualification.PROTOCOL_PROBED),
+        ("omlx", "ordinary", Qualification.PROTOCOL_PROBED),
+    ]
+    with pytest.raises(ObservedOrder):
+        openwebui._audio_locator(
+            Operation.STT, candidates, ("http://127.0.0.1:8765/v1", "OMLX_API_KEY")
+        )
