@@ -164,6 +164,9 @@ REMOVED_ENV_VARS = {
     "DOTFILES_OPENWEBUI_PUBLIC",
 }
 REMOVED_ENV_PREFIXES = ("SMALLCODE_",)
+# Retired per-service public flags whose '1' value unified into CADDY_ACCESS
+# ='public' evidence during the v1→v2 exposure migration.
+RETIRED_PUBLIC_EXPOSURE_KEYS = {"DOTFILES_PASEO_PUBLIC", "DOTFILES_OPENWEBUI_PUBLIC"}
 
 CADDY_V1_REMOVALS = {
     "CADDY_BASIC_AUTH_USERS": "moved to caddy-auth.conf",
@@ -349,6 +352,7 @@ def migrate_env(lines, dry_run=False):
         for key in legacy_keys
     )
     migrated_keys = {}  # old_key → new_key
+    retired_public_exposure_evidence = False
 
     # Build rename map from MIGRATIONS (only for entries where old_key exists)
     rename_map = {}
@@ -424,6 +428,11 @@ def migrate_env(lines, dry_run=False):
 
         if key in REMOVED_ENV_VARS or key.startswith(REMOVED_ENV_PREFIXES):
             changes.append(f"Removed retired setting: {key}")
+            if key in RETIRED_PUBLIC_EXPOSURE_KEYS and (
+                normalize_env_value(split_inline_comment(value)[0])
+                in {"1", "true", "yes", "on"}
+            ):
+                retired_public_exposure_evidence = True
             continue
 
         if key in CADDY_V1_REMOVALS_DELETE:
@@ -562,8 +571,13 @@ def migrate_env(lines, dry_run=False):
         parsed and parsed[2] == "CADDY_ACCESS" and not parsed[1].strip().startswith("#")
         for parsed in (parse_env_line(line) for line in new_lines)
     ):
-        new_lines.append(format_caddy_access_line("", "localhost"))
-        changes.append("Added: CADDY_ACCESS='localhost' (v1 default migration)")
+        synthesized = (
+            "localhost"
+            if (force_localhost or not retired_public_exposure_evidence)
+            else "public"
+        )
+        new_lines.append(format_caddy_access_line("", synthesized))
+        changes.append(f"Added: CADDY_ACCESS='{synthesized}' (v1 default migration)")
 
     if explicit_proxy_value is None and legacy_enabled:
         new_lines.append(f"{proxy_key}='1'  # migrated from {legacy_label}\n")
