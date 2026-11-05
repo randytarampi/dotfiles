@@ -43,6 +43,12 @@ def test_absent_paseo_alias_preview_has_no_post_and_no_key_file(monkeypatch, tmp
 
     monkeypatch.setattr(module, "_request_json", request)
     monkeypatch.setattr(module.shutil, "which", lambda _: "/bin/paseo")
+    # The preview must not read this host's real client credentials.
+    # Owner shells can export sibling LITELLM_* keys (for example
+    # LITELLM_OPENCODE_KEY), which would strand them against the
+    # stubbed gateway and refuse the whole preflight.
+    for env_name in APP_KEYS.values():
+        monkeypatch.delenv(env_name, raising=False)
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
