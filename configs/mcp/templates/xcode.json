@@ -1,0 +1,7 @@
+{
+  "name": "xcode",
+  "type": "stdio",
+  "command": "xcrun",
+  "args": ["mcpbridge"],
+  "note": "Opt-in Xcode MCP bridge; macOS only, with Xcode Intelligence external-agent permission and an open project."
+}

@@ -1360,28 +1360,29 @@ def main():
             "opencode",
         ]
         mcp_args += forward_common_args(args)
-        mcp_json_str = "{}"
-        try:
-            result = subprocess.run(
-                mcp_args, capture_output=True, text=True, timeout=15
-            )
-            # Extract JSON from dry-run output (skip comment header lines starting with #)
-            json_lines = [
-                line
-                for line in result.stdout.strip().splitlines()
-                if not line.strip().startswith("#")
-            ]
-            mcp_json_str = "\n".join(json_lines).strip()
-            if not mcp_json_str:
-                mcp_json_str = "{}"
-        except Exception as e:
-            logger.warning(f"Failed to generate MCP config: {e}")
-
-        try:
-            mrg_data = json.loads(mcp_json_str) if mcp_json_str else {}
-            mcp_config = mrg_data.get("mcp", {})
-        except Exception:
+        # A failed/malformed child must never become an empty MCP catalogue:
+        # downstream generation would then overwrite user-owned MCP entries.
+        result = subprocess.run(mcp_args, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            raise ValueError("MCP generator failed; preserving installed config")
+        json_lines = [
+            line
+            for line in result.stdout.strip().splitlines()
+            if not line.strip().startswith("#")
+        ]
+        mcp_json_str = "\n".join(json_lines).strip()
+        if not mcp_json_str:
+            raise ValueError("MCP generator returned no data")
+        mrg_data = json.loads(mcp_json_str)
+        if args.mode == "project" and mrg_data == {}:
+            # A project with no MCP templates is a valid, empty project map.
             mcp_config = {}
+        elif not isinstance(mrg_data, dict) or not isinstance(
+            mrg_data.get("mcp"), dict
+        ):
+            raise ValueError("MCP generator returned invalid configuration")
+        else:
+            mcp_config = mrg_data["mcp"]
 
     # Read externalized models configs
     openai_models_path = os.path.join(

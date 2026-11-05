@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # env gate fingerprint: {{ env "DOTFILES_RUN_MCP_SETUP" | sha256sum }}
+# Xcode opt-in fingerprint: {{ env "DOTFILES_RUN_XCODE_MCP_SETUP" | sha256sum }}
 
 LIB_DIR="{{ .chezmoi.sourceDir }}/scripts/lib"
 source "${LIB_DIR}/common.sh"
@@ -15,6 +16,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/github.json: {{ include "configs/mcp/github.json" | sha256sum }}
 # configs/mcp/global-mcps.json: {{ include "configs/mcp/global-mcps.json" | sha256sum }}
 # configs/mcp/idea.json: {{ include "configs/mcp/idea.json" | sha256sum }}
+# configs/mcp/xcode.json: {{ include "configs/mcp/xcode.json" | sha256sum }}
 # configs/mcp/mongodb.json: {{ include "configs/mcp/mongodb.json" | sha256sum }}
 # configs/mcp/notion.json: {{ include "configs/mcp/notion.json" | sha256sum }}
 # configs/mcp/sentry.json: {{ include "configs/mcp/sentry.json" | sha256sum }}
@@ -27,6 +29,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/templates/context7.json: {{ include "configs/mcp/templates/context7.json" | sha256sum }}
 # configs/mcp/templates/github.json: {{ include "configs/mcp/templates/github.json" | sha256sum }}
 # configs/mcp/templates/idea.json: {{ include "configs/mcp/templates/idea.json" | sha256sum }}
+# configs/mcp/templates/xcode.json: {{ include "configs/mcp/templates/xcode.json" | sha256sum }}
 # configs/mcp/templates/mongodb.json: {{ include "configs/mcp/templates/mongodb.json" | sha256sum }}
 # configs/mcp/templates/notion.json: {{ include "configs/mcp/templates/notion.json" | sha256sum }}
 # configs/mcp/templates/sentry.json: {{ include "configs/mcp/templates/sentry.json" | sha256sum }}
@@ -35,6 +38,7 @@ source "${LIB_DIR}/env.sh"
 # configs/mcp/testrigor.json: {{ include "configs/mcp/testrigor.json" | sha256sum }}
 # scripts/configure-mcps.py: {{ include "scripts/configure-mcps.py" | sha256sum }}
 # scripts/configure-mcp-tool.py: {{ include "scripts/configure-mcp-tool.py" | sha256sum }}
+# scripts/lib/xcode_mcp.py: {{ include "scripts/lib/xcode_mcp.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_MCP_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
@@ -66,6 +70,16 @@ done
 for config_file in "$MCP_SOURCE"/*.json; do
   [[ -f "$config_file" ]] || continue
   basename=$(basename "$config_file")
+  if [[ "$basename" == "xcode.json" ]]; then
+    if [[ "${DOTFILES_RUN_XCODE_MCP_SETUP:-0}" != "1" ]]; then
+      continue
+    fi
+    # Validate platform and exact bridge BEFORE copying any owner-visible file.
+    if ! python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from xcode_mcp import require_available; require_available()' "${SOURCE_DIR}/scripts/lib"; then
+      die "Xcode MCP qualification failed; refusing partial configuration"
+      exit 1
+    fi
+  fi
 
   # Validate JSON syntax
   if command -v jq &>/dev/null; then

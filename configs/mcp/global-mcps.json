@@ -33,6 +33,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -60,6 +64,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -95,6 +103,10 @@
               "${workspaceFolder}"
             ]
           }
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -122,6 +134,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -152,6 +168,10 @@
           "extra_fields": {
             "enabled": true
           }
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -179,6 +199,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -206,6 +230,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -234,6 +262,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -248,6 +280,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -275,6 +311,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -309,6 +349,10 @@
         },
         {
           "template": "github"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -343,6 +387,10 @@
         },
         {
           "template": "github"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -370,6 +418,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -397,6 +449,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     },
@@ -424,6 +480,10 @@
         },
         {
           "template": "codegraph"
+        },
+        {
+          "template": "xcode",
+          "opt_in_gate": "DOTFILES_RUN_XCODE_MCP_SETUP"
         }
       ]
     }
