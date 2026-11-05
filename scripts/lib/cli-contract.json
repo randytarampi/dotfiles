@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/check-paseo-security.py",
+      "capabilities": ["public", "inspect"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--json", "--access"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-paseo-metadata.py",
       "capabilities": ["public", "mutates"],
       "enforcement": "strict",

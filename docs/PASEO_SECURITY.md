@@ -1,0 +1,47 @@
+# Paseo password, Caddy and concurrency acceptance
+
+## Password source of truth
+
+Paseo supports a `PASEO_PASSWORD` environment variable for foreground
+daemon startup, but current upstream managed/Desktop daemon startup does not
+necessarily inherit caller environment overrides. In particular, placing
+`PASEO_PASSWORD` in `~/.env` is **not** proof that the managed daemon uses
+it. The native `paseo daemon set-password` is interactive; do not pipe a
+password to its stdin, put it on the command line, log it, write it into a
+public launchd plist, or rotate persisted bcrypt on every deploy.
+
+The operator must establish the actual daemon process owner, supported
+secret delivery and readback privately. This repository makes no automatic
+password mutations. If secure managed-daemon injection is unavailable,
+continue using Paseo's native interactive setup, without exposing a listener.
+
+## Read-only security check
+
+`python3 scripts/check-paseo-security.py --access localhost --json` reads
+only an existing private native Paseo configuration and checks the Caddy
+loopback listener, disabled relay, enabled Web UI, required localhost host,
+and owner-selected exposure mode. LAN/public require stored bcrypt. Per the pending [#187](https://github.com/randytarampi/dotfiles/pull/187) exposure unification, `CADDY_ACCESS` alone selects localhost/LAN/public Caddy exposure; the separate `DOTFILES_PASEO_PUBLIC` key is retired. This PR must be rebased and reverified after #187 merges. The audit
+reports **daemon runtime, Caddy TLS and WebSockets as UNKNOWN**, because
+configuration is not a network acceptance test.
+
+Owner-only acceptance must prove correct and incorrect password, missing
+allowlist host, alternate Host header, TLS/DNS, WebSocket upgrade, Caddy
+reconfiguration, and private tailnet vs public reachability using the
+actual installed service. Keep direct tailnet binding separate from
+loopback Caddy topology and do not expand the attack surface to LiteLLM,
+oMLX, Pi, Xcode MCP or arbitrary agent tools.
+
+## Concurrency remains unresolved
+
+Issue #173 tracks lost disjoint-key writes from native CLI/UI/daemon
+configuration writers. Staged CLI rehearsal and a preflight readback do
+**not** establish shared cross-process locking. To close #173, require an
+upstream lock/CAS that serializes all native writers, with two-writer
+disjoint-key preservation, stale revision refusal, crash/interrupt and
+repeat-write tests. Until then, every native Paseo config apply is
+owner-invoked while all other writers are quiescent; never automatically
+roll back a newer config snapshot or mark #173 complete.
+
+This change only adds a read-only checker and acceptance runbook.
+Author: ChatGPT (GPT-6); requirements/host qualification: Randy Tarampi.
+Live TLS/auth/session tests and cross-process race resolution: NOT RUN.
