@@ -957,10 +957,14 @@ def test_partial_key_registry_refuses_to_authorize_provisioning(
     monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
-    assert configure_litellm.provision_app_keys(
-        "master", tmp_path / "service.env", strict=False
-    ) is False
+    assert (
+        configure_litellm.provision_app_keys(
+            "master", tmp_path / "service.env", strict=False
+        )
+        is False
+    )
     assert not any(method == "POST" for _, method in calls)
+
 
 def test_page_two_existing_alias_is_not_generated_again(monkeypatch, tmp_path):
     calls = []

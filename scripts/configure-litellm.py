@@ -318,7 +318,9 @@ def _all_key_records(api_base, master_key, max_pages=50):
             master_key,
         )
         if not isinstance(listing, dict) or not isinstance(listing.get("keys"), list):
-            raise IncompleteKeyInventoryError("LiteLLM key inventory response malformed")
+            raise IncompleteKeyInventoryError(
+                "LiteLLM key inventory response malformed"
+            )
         rows = listing["keys"]
         if not all(isinstance(row, dict) for row in rows):
             raise IncompleteKeyInventoryError("LiteLLM key inventory records malformed")
@@ -342,6 +344,7 @@ def _all_key_records(api_base, master_key, max_pages=50):
         if expected_pages is None or page >= expected_pages:
             return records
     raise IncompleteKeyInventoryError("LiteLLM key inventory page limit exceeded")
+
 
 def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
     values = {}
