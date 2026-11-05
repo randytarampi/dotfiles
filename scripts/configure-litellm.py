@@ -336,8 +336,8 @@ def _all_key_records(api_base, master_key, max_pages=50):
             ):
                 raise IncompleteKeyInventoryError("incomplete LiteLLM key inventory")
             expected_pages = declared_pages
-        if not rows and expected_pages is not None and page < expected_pages:
-            raise IncompleteKeyInventoryError("missing intermediate LiteLLM key page")
+        if not rows and expected_pages is not None and expected_pages > 1:
+            raise IncompleteKeyInventoryError("missing LiteLLM key page")
         records.extend(rows)
         if expected_pages is None or page >= expected_pages:
             return records

@@ -941,7 +941,7 @@ def test_complete_paginated_registry_includes_page_two_alias(monkeypatch):
     ),
 )
 def test_partial_key_registry_refuses_to_authorize_provisioning(
-    monkeypatch, first, second
+    monkeypatch, tmp_path, first, second
 ):
     calls = []
 
@@ -958,6 +958,36 @@ def test_partial_key_registry_refuses_to_authorize_provisioning(
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
     assert configure_litellm.provision_app_keys(
-        "master", Path("/tmp/unused-service-env"), strict=False
+        "master", tmp_path / "service.env", strict=False
     ) is False
     assert not any(method == "POST" for _, method in calls)
+
+def test_page_two_existing_alias_is_not_generated_again(monkeypatch, tmp_path):
+    calls = []
+
+    def request(url, method, _key, payload=None):
+        calls.append((url, method))
+        assert payload is None
+        if url.endswith("/health/liveliness"):
+            return {"status": "ok"}
+        if url.endswith("&page=1"):
+            return {"keys": [{"key_alias": "another-client"}], "total_pages": 2}
+        if url.endswith("&page=2"):
+            return {"keys": [{"key_alias": "opencode"}], "total_pages": 2}
+        pytest.fail("a known page-two key must never be regenerated")
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    _enabled(monkeypatch, "DOTFILES_RUN_LITELLM_SETUP", "DOTFILES_RUN_OPENCODE_SETUP")
+    monkeypatch.setenv("LITELLM_OPENCODE_KEY", "existing-key")
+    service = tmp_path / "service.env"
+    service.write_text("LITELLM_OPENCODE_KEY='existing-key'\n", encoding="utf-8")
+    client_path = tmp_path / "clients/opencode.key"
+    client_path.parent.mkdir(mode=0o700)
+    client_path.write_text("existing-key", encoding="utf-8")
+    client_path.chmod(0o600)
+
+    assert configure_litellm.provision_app_keys("master", service)
+    assert any(url.endswith("&page=2") for url, _ in calls)
+    assert not any(method == "POST" for _, method in calls)
+    assert client_path.read_text(encoding="utf-8") == "existing-key"
