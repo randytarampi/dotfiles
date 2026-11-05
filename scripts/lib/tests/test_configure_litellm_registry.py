@@ -33,6 +33,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_CLAUDE_SETUP",
         "DOTFILES_RUN_JETBRAINS_SETUP",
         "DOTFILES_RUN_VSCODE_SETUP",
+        "DOTFILES_RUN_CURSOR_SETUP",
         "DOTFILES_RUN_XCODE_SETUP",
         "DOTFILES_RUN_HERMES_SETUP",
         "DOTFILES_RUN_OPENWEBUI_SETUP",
@@ -52,6 +53,7 @@ def _isolate_client_gates(monkeypatch):
         "LITELLM_COPILOT_CLI_KEY",
         "LITELLM_JETBRAINS_KEY",
         "LITELLM_VSCODE_KEY",
+        "LITELLM_CURSOR_KEY",
     ):
         monkeypatch.delenv(gate, raising=False)
 
@@ -130,7 +132,7 @@ def test_registry_truth_table_and_pending_rows_are_not_eligible(monkeypatch):
     }
     assert all(
         rows[name]["credential_policy"] == "no-credential"
-        for name in ("cursor", "copilot")
+        for name in ("copilot",)
     )
     assert rows["claude"]["classification"] == "eligible"
     assert rows["claude"]["credential_policy"] == "provision"
@@ -400,7 +402,7 @@ def test_registry_gate_is_enforced_independently(monkeypatch, enabled):
     assert reason == ("eligible" if enabled else "setup gate disabled")
 
 
-def test_provisioning_authorities_have_exact_nine_client_parity():
+def test_provisioning_authorities_have_exact_client_parity():
     provisioned = {
         row["client"]
         for row in litellm_config.CLIENT_REGISTRY
@@ -416,6 +418,7 @@ def test_provisioning_authorities_have_exact_nine_client_parity():
         "copilot-cli",
         "jetbrains",
         "vscode",
+        "cursor",
         "xcode",
     }
     assert provisioned == expected
@@ -448,6 +451,12 @@ def test_provisioning_authorities_have_exact_nine_client_parity():
             "Visual Studio Code.app",
             "com.microsoft.VSCode",
             "DOTFILES_RUN_VSCODE_SETUP",
+        ),
+        (
+            "cursor",
+            "Cursor.app",
+            "com.todesktop.230313mzl4w4u92",
+            "DOTFILES_RUN_CURSOR_SETUP",
         ),
         ("xcode", "Xcode.app", "com.apple.dt.Xcode", "DOTFILES_RUN_XCODE_SETUP"),
     ],
@@ -491,6 +500,7 @@ def test_ide_keys_require_all_gates_and_verified_app_bundle(
     [
         ("jetbrains", "LITELLM_JETBRAINS_KEY"),
         ("vscode", "LITELLM_VSCODE_KEY"),
+        ("cursor", "LITELLM_CURSOR_KEY"),
         ("xcode", "LITELLM_XCODE_KEY"),
     ],
 )

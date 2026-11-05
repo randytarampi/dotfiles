@@ -65,13 +65,20 @@ def test_setup_gates_and_classification_only_credentials():
             assert row["credential_policy"] == "no-credential"
 
 
-def test_cursor_is_non_routable_without_credential():
+def test_cursor_key_is_opt_in_and_transport_remains_unverified():
     row = next(
         row for row in litellm_config.CLIENT_REGISTRY if row["client"] == "cursor"
     )
-    assert row["credential_policy"] == "no-credential"
-    assert row["classification"] == "classification-only"
-    assert row["classification_status"] == "classification-only; not-routable"
+    assert row["credential_policy"] == "provision"
+    assert row["classification"] == "eligible"
+    assert row["env_name"] == "LITELLM_CURSOR_KEY"
+    assert row["key_file"].endswith("/cursor.key")
+    assert row["setup_gates"] == [
+        "DOTFILES_RUN_CURSOR_SETUP=1",
+        "DOTFILES_USE_LITELLM_PROXY=1",
+        "DOTFILES_RUN_LITELLM_SETUP=1",
+    ]
+    assert "UNVERIFIED" in row["classification_status"]
 
 
 def test_mozart_is_existing_consumer_with_evidence():

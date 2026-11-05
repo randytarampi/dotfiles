@@ -398,6 +398,7 @@ APP_KEYS = {
     "copilot-cli": "LITELLM_COPILOT_CLI_KEY",
     "jetbrains": "LITELLM_JETBRAINS_KEY",
     "vscode": "LITELLM_VSCODE_KEY",
+    "cursor": "LITELLM_CURSOR_KEY",
     "xcode": "LITELLM_XCODE_KEY",
 }
 
@@ -405,6 +406,7 @@ APP_KEYS = {
 IDE_APP_BUNDLES = {
     "jetbrains": ("JetBrains Toolbox.app", "com.jetbrains.toolbox"),
     "vscode": ("Visual Studio Code.app", "com.microsoft.VSCode"),
+    "cursor": ("Cursor.app", "com.todesktop.230313mzl4w4u92"),
     "xcode": ("Xcode.app", "com.apple.dt.Xcode"),
 }
 
@@ -673,16 +675,29 @@ CLIENT_REGISTRY = [
     ),
     _client_row(
         "cursor",
-        "not-applicable",
-        ["Cursor installed"],
-        ["loopback-unroutable"],
-        "docs/UNMANAGED-CLIENTS.md",
-        ["explicit separate keys-only approval required"],
-        "none",
-        "No supported LiteLLM consumer path",
-        "classification-only",
-        "no-credential",
-        "classification-only; not-routable",
+        APP_KEYS["cursor"],
+        [
+            "/Applications/Cursor.app or ~/Applications/Cursor.app",
+            "CFBundleIdentifier com.todesktop.230313mzl4w4u92 verified",
+        ],
+        ["OpenAI-compatible base URL override; server-to-gateway route UNVERIFIED"],
+        "Cursor Settings > Models (manual; no IDE settings mutation)",
+        [
+            "DOTFILES_RUN_CURSOR_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "manual entry from ~/.local/share/litellm/clients/cursor.key",
+        "eligible",
+        "provision",
+        "Credential provisioning only; remote transport and live inference UNVERIFIED",
+        eligibility={
+            "setup_gate": "DOTFILES_RUN_LITELLM_SETUP=1",
+            "installed": "Cursor production app bundle with expected bundle identifier",
+            "user_enabled": "DOTFILES_RUN_CURSOR_SETUP=1",
+            "verified_usable_transport": "Credential-only; Cursor server-to-gateway transport UNVERIFIED",
+        },
     ),
     _client_row(
         "gemini",

@@ -31,6 +31,7 @@ def isolate_litellm_client_credentials(monkeypatch, tmp_path):
         "LITELLM_COPILOT_CLI_KEY",
         "LITELLM_JETBRAINS_KEY",
         "LITELLM_VSCODE_KEY",
+        "LITELLM_CURSOR_KEY",
         "LITELLM_XCODE_KEY",
     )
     for name in ("LITELLM_MASTER_KEY", "LITELLM_API_KEY", *client_keys):
@@ -2063,6 +2064,7 @@ def test_provisioned_client_key_writers_cover_every_registered_app_key():
         "copilot-cli",
         "jetbrains",
         "vscode",
+        "cursor",
         "xcode",
     }
 
@@ -3388,7 +3390,7 @@ def test_litellm_env_sync_preserves_and_restores_all_client_keys(tmp_path):
     assert sync().returncode == 0
     assert env_path.read_bytes() == persisted
     # A missing env entry is restored from the actual canonical client file.
-    lost = "LITELLM_VSCODE_KEY"
+    lost = "LITELLM_CURSOR_KEY"
     env_path.write_text(
         env_path.read_text().replace(f"{lost}={keys[lost]}\n", ""),
         encoding="utf-8",
