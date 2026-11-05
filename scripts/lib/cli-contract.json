@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/configure-paseo-acp.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--apply", "--agents"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/install-paseo-plugins.py",
       "capabilities": ["public", "mutates"],
       "enforcement": "strict",
