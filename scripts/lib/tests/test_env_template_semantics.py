@@ -7,7 +7,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # Baseline protects remaining environment keys and defaults while retired
 # access gates are checked separately.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "5abf1c0754bc11c8a82d84c0e8bc5d25a4f510be4611b192414933e3ec8981f3"
+    "6af1fbac25f57b83b5ebb70fe83d7c5658f93760d5fd1052678aa506d02944f2"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
@@ -75,10 +75,13 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
                     )
         template = TEMPLATE.read_bytes()
         for key in (b"DOTFILES_PASEO_PUBLIC", b"DOTFILES_OPENWEBUI_PUBLIC"):
-            self.assertRegex(
+            # The obsolete names may be mentioned as comments, but cannot
+            # appear as assignments that the owner could reactivate.
+            self.assertNotRegex(
                 template,
-                rb"(?m)^# " + key + rb"='0'.*Retired and ignored",
+                rb"(?m)^\\s*(?:#\\s*)?(?:export\\s+)?" + key + rb"\\s*=",
             )
+            self.assertIn(b"# " + key + b": retired", template)
 
     def test_telemetry_defaults_and_litellm_gate_key_order_are_explicit(self):
         records = assignment_records(TEMPLATE.read_bytes())

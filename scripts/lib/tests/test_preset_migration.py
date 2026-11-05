@@ -1123,5 +1123,23 @@ class PresetMigrationTests(unittest.TestCase):
         )
 
 
+    def test_retired_access_gates_have_generic_migration_diagnostics(self):
+        original = [
+            "DOTFILES_PASEO_PUBLIC='0'\\n",
+            "DOTFILES_OPENWEBUI_PUBLIC='1'\\n",
+            "DOTFILES_RUN_SMALLCODE_SETUP='0'\\n",
+            "KEEP_UNRELATED='yes'\\n",
+        ]
+        converted, changes = migrate_env_gates.migrate_env(original)
+        self.assertEqual(converted, ["KEEP_UNRELATED='yes'\\n"])
+        for key in (
+            "DOTFILES_PASEO_PUBLIC",
+            "DOTFILES_OPENWEBUI_PUBLIC",
+            "DOTFILES_RUN_SMALLCODE_SETUP",
+        ):
+            self.assertIn(f"Removed retired setting: {key}", changes)
+        self.assertEqual(migrate_env_gates.migrate_env(converted), (converted, []))
+
+
 if __name__ == "__main__":
     unittest.main()
