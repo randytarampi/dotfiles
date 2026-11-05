@@ -259,3 +259,14 @@ def test_relay_intent_must_be_boolean_before_native_write(tmp_path, monkeypatch)
     assert web.main(["--apply"]) == 1
     assert not calls
     assert (home / "config.json").read_bytes() == original
+
+def test_caddy_plus_relay_intent_refuses_before_native_writes(tmp_path, monkeypatch):
+    home = home_with_config(tmp_path)
+    calls = install_stub(monkeypatch, home)
+    monkeypatch.setenv(web.GATE, "1")
+    monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    original = (home / "config.json").read_bytes()
+    assert web.main(["--apply"]) == 1
+    assert not calls
+    assert (home / "config.json").read_bytes() == original

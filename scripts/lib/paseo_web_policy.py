@@ -121,6 +121,8 @@ def validate_native_config(config, access):
     if access not in ACCESS_MODES:
         raise ValueError("invalid CADDY_ACCESS; choose localhost, lan or public")
     daemon = valid_daemon(config)
+    if os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1" and desired_relay_state():
+        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
     if access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1":
         require_password(daemon)
     web_ui_features(config, require_enabled=False)
