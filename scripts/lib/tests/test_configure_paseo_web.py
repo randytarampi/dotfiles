@@ -272,3 +272,15 @@ def test_caddy_plus_relay_intent_refuses_before_native_writes(tmp_path, monkeypa
     assert web.main(["--apply"]) == 1
     assert not calls
     assert (home / "config.json").read_bytes() == original
+
+@pytest.mark.parametrize("relay_config", ({"enabled": True}, {}))
+def test_native_relay_drift_exception_is_not_shared_with_other_consumers(
+    monkeypatch, relay_config
+):
+    from paseo_web_policy import valid_daemon, validate_native_config
+
+    monkeypatch.delenv("PASEO_RELAY_ENABLED", raising=False)
+    config = {"daemon": {"relay": relay_config}, "features": {"webUi": {}}}
+    with pytest.raises(ValueError, match="relay must be disabled"):
+        valid_daemon(config)
+    assert validate_native_config(config, "localhost") == []
