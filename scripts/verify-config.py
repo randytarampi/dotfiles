@@ -414,6 +414,15 @@ def litellm_client_gate_errors(environ=None, home=None, slim_registry=None):
         return ["DOTFILES_USE_LITELLM_PROXY=1 requires DOTFILES_RUN_LITELLM_SETUP=1"]
     errors = []
     for client in APP_KEYS:
+        if client == "paseo":
+            row = next(
+                row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client
+            )
+            if not all(
+                environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
+                for gate in row["setup_gates"]
+            ):
+                continue
         if client in litellm_config.IDE_APP_BUNDLES:
             row = next(
                 row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client

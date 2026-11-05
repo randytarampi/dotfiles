@@ -7,7 +7,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # Baseline protects remaining environment keys and defaults while retired
 # access gates are checked separately.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "3c755bd27c1d50b53bf2bcf4ce437d19dc6eada3bd9d5a5816d346efd703a895"
+    "3dc0f40c592d468fb2f164ca91444035f6d4458657e5b818ee56a0080138c670"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
@@ -28,6 +28,7 @@ REMOTE_GATES = (
     b"DOTFILES_RUN_PASEO_PLUGINS_SETUP",
     b"DOTFILES_RUN_PASEO_ACP_SETUP",
     b"DOTFILES_RUN_PASEO_MCP_SETUP",
+    b"DOTFILES_RUN_PASEO_VOICE_SETUP",
     b"DOTFILES_RUN_XCODE_MCP_SETUP",
     b"DOTFILES_RUN_PASEO_HERMES_ACP_SETUP",
     b"DOTFILES_PASEO_RELAY",

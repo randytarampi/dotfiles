@@ -30,6 +30,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_LITELLM_SETUP",
         "DOTFILES_RUN_OPENCODE_SETUP",
         "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_RUN_PASEO_VOICE_SETUP",
         "DOTFILES_RUN_CLAUDE_SETUP",
         "DOTFILES_RUN_JETBRAINS_SETUP",
         "DOTFILES_RUN_VSCODE_SETUP",
@@ -45,6 +46,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_CLAUDE_SETUP",
         "LITELLM_OPENCODE_KEY",
         "LITELLM_PI_KEY",
+        "LITELLM_PASEO_KEY",
         "LITELLM_JUNIE_KEY",
         "LITELLM_OPENWEBUI_KEY",
         "LITELLM_CODEX_KEY",
@@ -400,7 +402,7 @@ def test_registry_gate_is_enforced_independently(monkeypatch, enabled):
     assert reason == ("eligible" if enabled else "setup gate disabled")
 
 
-def test_provisioning_authorities_have_exact_nine_client_parity():
+def test_provisioning_authorities_have_exact_eleven_client_parity():
     provisioned = {
         row["client"]
         for row in litellm_config.CLIENT_REGISTRY
@@ -409,6 +411,7 @@ def test_provisioning_authorities_have_exact_nine_client_parity():
     expected = {
         "opencode",
         "pi",
+        "paseo",
         "openwebui",
         "junie",
         "codex",
