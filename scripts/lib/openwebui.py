@@ -930,7 +930,7 @@ def _desired_audio_settings(
 def _audio_locator(
     operation, candidates, endpoint, selection_records=None, gateway_route=None
 ):
-    preference = []
+    preference = [(provider, model) for provider, model, _ in candidates]
     previous = _read_audio_selection()
     previous = previous.get(operation.value) if isinstance(previous, dict) else None
     previous_tuple = None
