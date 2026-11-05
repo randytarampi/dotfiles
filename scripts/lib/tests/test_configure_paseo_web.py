@@ -229,6 +229,23 @@ def test_native_set_failure_does_not_restore_stale_backup(tmp_path, monkeypatch)
     assert (home / "config.json.pre-web-ui").exists()
 
 
+def test_deploy_cannot_write_paseo_native_settings_unattended():
+    """Prevent make deploy from turning a Web UI gate into an unsafe CLI write."""
+    orchestrator = (SCRIPT.parent / "configure-all.sh").read_text(encoding="utf-8")
+    lane = orchestrator.split("# 8a-1. Read-only Paseo Web UI inspection", 1)
+    assert len(lane) == 2
+    section = lane[1].split("# 8b. Caddy config", 1)
+    assert len(section) == 2
+    assert 'python3 "$SCRIPT_DIR/configure-paseo-web.py"' in section[0]
+    assert "--apply" not in section[0]
+
+    makefile = (SCRIPT.parent.parent / "Makefile").read_text(encoding="utf-8")
+    assert "paseo-web-check:" in makefile
+    assert "paseo-web-apply:" in makefile
+    apply_recipe = makefile.split("paseo-web-apply:", 1)[1].split("\n\n", 1)[0]
+    assert "configure-paseo-web.py --apply" in apply_recipe
+
+
 def test_abbreviated_apply_is_rejected():
     with pytest.raises(SystemExit) as error:
         web.main(["--app"])

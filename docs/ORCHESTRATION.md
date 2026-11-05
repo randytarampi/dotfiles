@@ -116,7 +116,7 @@ sequenceDiagram
     Configure->>Configure: codegraph install
     Configure->>Configure: configure-codegraph.py
     Configure->>Configure: configure-skills.py
-    Configure->>Configure: configure-paseo-web.py (opt-in, before Caddy)
+    Configure->>Configure: configure-paseo-web.py (read-only inspection; owner-only apply)
     Configure->>Configure: configure-caddy.py (opt-in)
 ```
 

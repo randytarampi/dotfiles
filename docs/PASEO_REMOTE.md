@@ -37,6 +37,11 @@ can reconcile relay drift before Caddy is configured, but Caddy refuses a
 remaining active relay or process-level `PASEO_RELAY_ENABLED` override.
 With a loopback daemon, set
 `DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`.
+`make deploy` performs read-only native Web UI inspection; it does not
+apply native Paseo configuration changes. Inspect with `make paseo-web-check`,
+then make a private backup, ensure the daemon and other Paseo settings writers
+are quiescent, and explicitly run `make paseo-web-apply` before redeploying.
+This operator procedure is not a cross-process transaction (issue #173).
 `CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves
 configured `paseo.<domain>` hosts to private ranges; `public` serves them
 publicly. A gate-enabled, installed service follows `CADDY_ACCESS`; the Paseo
