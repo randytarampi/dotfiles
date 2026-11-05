@@ -1009,7 +1009,8 @@ def test_gate_off_refuses_to_orphan_managed_litellm_profile(
     assert config.read_text(encoding="utf-8") == original
     after = config.stat()
     assert (before.st_dev, before.st_ino, before.st_mtime_ns) == (
-        after.st_dev, after.st_ino, after.st_mtime_ns
+        after.st_dev,
+        after.st_ino,
+        after.st_mtime_ns,
     )
     assert not list(config_dir.glob("*.bak*"))
-
