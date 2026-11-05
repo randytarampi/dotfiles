@@ -1399,6 +1399,12 @@ def test_optional_ide_credentials_match_provisioning_eligibility(
             "com.microsoft.VSCode",
             "DOTFILES_RUN_VSCODE_SETUP",
         ),
+        (
+            "cursor",
+            "Cursor.app",
+            "com.todesktop.230313mzl4w4u92",
+            "DOTFILES_RUN_CURSOR_SETUP",
+        ),
         ("xcode", "Xcode.app", "com.apple.dt.Xcode", "DOTFILES_RUN_XCODE_SETUP"),
     ):
         settings = {
