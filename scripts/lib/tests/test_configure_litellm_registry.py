@@ -46,6 +46,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_CLAUDE_SETUP",
         "LITELLM_OPENCODE_KEY",
         "LITELLM_PI_KEY",
+        "LITELLM_PASEO_KEY",
         "LITELLM_JUNIE_KEY",
         "LITELLM_OPENWEBUI_KEY",
         "LITELLM_CODEX_KEY",
