@@ -99,6 +99,22 @@ def map_omlx_capabilities(model_entry):
     return capabilities
 
 
+def prefer_pinned_omlx_audio(models):
+    """Order qualified-candidate tie breakers: pinned, favourite, then discovery.
+
+    Only ranks: qualification and the consumer's explicit/prior selection still
+    win in selected_service.select. Missing flags preserve discovery ordering.
+    Only call for speech models, not embedding or inference tier assignments.
+    """
+    return sorted(
+        models,
+        key=lambda item: (
+            item.get("pinned") is not True,
+            item.get("is_favorite") is not True,
+        ),
+    )
+
+
 def list_omlx_models(strict=False):
     """List oMLX models in the local discovery shape.
 
@@ -134,6 +150,9 @@ def list_omlx_models(strict=False):
                     # and sets are not JSON-serializable.
                     "capabilities": sorted(map_omlx_capabilities(merged)),
                     "primary_category": effective_type,
+                    "pinned": merged.get("pinned") is True,
+                    "is_favorite": merged.get("is_favorite") is True,
+                    "loaded": merged.get("loaded") is True,
                     "is_moe": merged.get("is_moe", merged.get("is_moe_model")),
                     "object": merged.get("object"),
                     "created": merged.get("created"),

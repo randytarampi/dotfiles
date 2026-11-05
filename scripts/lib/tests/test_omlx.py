@@ -233,6 +233,88 @@ def test_list_omlx_models_marks_embedding_and_reranker_separately():
     assert "thinking" in models[0]["capabilities"]
 
 
+def test_omlx_speech_preference_orders_pinned_then_favourite_stably():
+    models = [
+        {"name": "ordinary", "model_type": "audio_stt"},
+        {"name": "fav", "is_favorite": True, "model_type": "audio_stt"},
+        {"name": "pin", "pinned": True, "model_type": "audio_stt"},
+        {
+            "name": "both",
+            "pinned": True,
+            "is_favorite": True,
+            "model_type": "audio_stt",
+        },
+        {"name": "pin2", "pinned": True, "model_type": "audio_stt"},
+    ]
+    preferred = omlx.prefer_pinned_omlx_audio(models)
+    assert [model["name"] for model in preferred] == [
+        "both",
+        "pin",
+        "pin2",
+        "fav",
+        "ordinary",
+    ]
+    assert models[0]["name"] == "ordinary"
+
+
+def test_omlx_speech_rank_never_overrides_stronger_qualification():
+    from selected_service import Operation, Qualification, select
+
+    preferred = omlx.prefer_pinned_omlx_audio(
+        [
+            {"name": "probed", "is_favorite": True},
+            {"name": "unknown", "pinned": True, "is_favorite": True},
+        ]
+    )
+    candidate_qualifications = {
+        "probed": Qualification.PROTOCOL_PROBED,
+        "unknown": Qualification.DISCOVERED,
+    }
+    result = select(
+        Operation.STT,
+        [
+            ("omlx", item["name"], candidate_qualifications[item["name"]])
+            for item in preferred
+        ],
+    )
+    assert result.model == "probed"
+
+
+def test_omlx_model_listing_retains_status_preferences_and_inference_visibility():
+    omlx._STATUS_CACHE.clear()
+    exposed = {
+        "data": [
+            {"id": "speech", "model_type": "audio_stt"},
+            {"id": "visible", "model_type": "audio_tts"},
+        ]
+    }
+    statuses = {
+        "models": [
+            {
+                "id": "speech",
+                "model_type": "audio_stt",
+                "pinned": True,
+                "is_favorite": True,
+                "loaded": True,
+            },
+            {
+                "id": "visible",
+                "model_type": "audio_tts",
+                "is_favorite": False,
+                "pinned": False,
+            },
+            {"id": "hidden", "model_type": "audio_stt", "pinned": True},
+        ]
+    }
+    with patch.object(omlx, "_get_json", side_effect=[exposed, statuses]):
+        models = omlx.list_omlx_models(strict=True)
+    assert [model["name"] for model in models] == ["speech", "visible"]
+    assert models[0]["pinned"] is True
+    assert models[0]["is_favorite"] is True
+    assert models[0]["loaded"] is True
+    assert models[1]["pinned"] is False
+
+
 def test_omlx_embeddinggemma_name_is_specialized_after_provider_normalization():
     installed_name = "embeddinggemma-2:740m-mxfp8"
     omlx_record = {
@@ -3463,3 +3545,29 @@ def test_omlx_doctor_rejects_bool_integer_fields(section, key):
     settings = local_engines.merge_omlx_settings({})
     settings[section][key] = True
     assert key in " ".join(verify.validate_omlx_settings(settings))
+
+
+def test_openwebui_speech_locator_consumes_pinned_candidate_order(monkeypatch):
+    import openwebui
+    from selected_service import Operation, Qualification
+
+    class ObservedOrder(Exception):
+        pass
+
+    def expect_preference(operation, candidates, preference, **_kwargs):
+        assert operation == Operation.STT
+        assert preference == [("omlx", "pinned"), ("omlx", "ordinary")]
+        assert [item[1] for item in candidates] == ["pinned", "ordinary"]
+        raise ObservedOrder
+
+    monkeypatch.setattr(openwebui, "_read_audio_selection", lambda: {})
+    monkeypatch.setattr(openwebui, "_read_audio_projection", lambda: {})
+    monkeypatch.setattr(openwebui, "select", expect_preference)
+    candidates = [
+        ("omlx", "pinned", Qualification.PROTOCOL_PROBED),
+        ("omlx", "ordinary", Qualification.PROTOCOL_PROBED),
+    ]
+    with pytest.raises(ObservedOrder):
+        openwebui._audio_locator(
+            Operation.STT, candidates, ("http://127.0.0.1:8765/v1", "OMLX_API_KEY")
+        )
