@@ -273,6 +273,7 @@ def test_caddy_plus_relay_intent_refuses_before_native_writes(tmp_path, monkeypa
     assert not calls
     assert (home / "config.json").read_bytes() == original
 
+
 @pytest.mark.parametrize("relay_config", ({"enabled": True}, {}))
 def test_native_relay_drift_exception_is_not_shared_with_other_consumers(
     monkeypatch, relay_config
