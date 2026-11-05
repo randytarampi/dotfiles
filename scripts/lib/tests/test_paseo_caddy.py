@@ -160,6 +160,7 @@ def test_build_caddyfile_skips_absent_paseo_config(tmp_path, monkeypatch, caplog
         "443",
     )
     assert "Paseo config not found; skipping Paseo Web UI lane" in caplog.text
+    assert "explicitly run `configure-paseo-web.py --apply`" in caplog.text
     assert "reverse_proxy 127.0.0.1:6767" not in caddyfile
 
 

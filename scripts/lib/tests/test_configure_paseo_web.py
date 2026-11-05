@@ -103,9 +103,10 @@ def test_absent_config_warns_and_skips_without_writes(tmp_path, monkeypatch, cap
     monkeypatch.setenv(web.GATE, "1")
     monkeypatch.setattr(web.shutil, "which", lambda name: "/bin/paseo")
     assert web.main(["--apply"]) == 0
-    assert (
-        "Paseo config not found; skipping Paseo Web UI lane" in capsys.readouterr().out
-    )
+    output = capsys.readouterr().out
+    assert "Paseo config not found; skipping Paseo Web UI lane" in output
+    assert "explicitly run `configure-paseo-web.py --apply`" in output
+    assert "next deploy configures it" not in output
     assert not home.exists()
 
 

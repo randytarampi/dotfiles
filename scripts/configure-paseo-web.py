@@ -207,7 +207,7 @@ def main(argv=None):
         return 0
     except PaseoNotConfigured:
         print(
-            "Paseo config not found; skipping Paseo Web UI lane — run `paseo daemon set-password` first, next deploy configures it"
+            "Paseo config not found; skipping Paseo Web UI lane — set the native password, then explicitly run `configure-paseo-web.py --apply` with other Paseo writers quiescent before redeploying"
         )
         return 0
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
