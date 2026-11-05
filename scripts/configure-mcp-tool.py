@@ -786,7 +786,9 @@ def orchestrate_mcp_config(args):
             template_list = registry_templates
     else:
         servers = tool_config.get("mcp_servers", [])
-        template_list = [s["template"] for s in servers if "template" in s]
+        from xcode_mcp import enabled_entries
+
+        template_list = enabled_entries(servers)
 
     if args.include or args.exclude:
         template_list = filter_mcp_templates(template_list, args.include, args.exclude)
@@ -795,6 +797,16 @@ def orchestrate_mcp_config(args):
                 "No MCP templates remaining after --include/--exclude filtering"
             )
             return
+
+    for template_name in template_list:
+        template_path = os.path.join(templates_dir, template_name + ".json")
+        if not os.path.isfile(template_path):
+            raise ValueError("unknown or missing MCP template: " + template_name)
+
+    if "xcode" in template_list:
+        from xcode_mcp import require_available
+
+        require_available()
 
     mcp_defs = resolve_defs_list(templates_dir, template_list, tool_config, args.mode)
 
