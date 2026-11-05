@@ -904,6 +904,7 @@ def test_negative_failures_remain_distinct(monkeypatch, tmp_path, error, status)
         is False
     )
 
+
 def test_complete_paginated_registry_includes_page_two_alias(monkeypatch):
     calls = []
 
@@ -929,13 +930,19 @@ def test_complete_paginated_registry_includes_page_two_alias(monkeypatch):
         ({"keys": [{"key_alias": "a"}], "total_pages": 51}, None),
         ({"keys": [{"key_alias": "a"}], "total_pages": "not-an-integer"}, None),
         ({"keys": "malformed", "total_pages": 1}, None),
-        ({"keys": [{"key_alias": "a"}], "total_pages": 2},
-         {"keys": [], "total_pages": 2}),
-        ({"keys": [{"key_alias": "a"}], "total_pages": 2},
-         {"keys": [{"key_alias": "b"}], "total_pages": 3}),
+        (
+            {"keys": [{"key_alias": "a"}], "total_pages": 2},
+            {"keys": [], "total_pages": 2},
+        ),
+        (
+            {"keys": [{"key_alias": "a"}], "total_pages": 2},
+            {"keys": [{"key_alias": "b"}], "total_pages": 3},
+        ),
     ),
 )
-def test_partial_key_registry_refuses_to_authorize_provisioning(monkeypatch, first, second):
+def test_partial_key_registry_refuses_to_authorize_provisioning(
+    monkeypatch, first, second
+):
     calls = []
 
     def request(url, method, _key, payload=None):
