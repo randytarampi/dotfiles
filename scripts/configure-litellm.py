@@ -49,6 +49,7 @@ _APPLICATION_ROOTS = (Path("/Applications"), Path.home() / "Applications")
 _CLIENT_ENABLE_GATES = {
     "opencode": ("DOTFILES_RUN_OPENCODE_SETUP",),
     "pi": ("DOTFILES_RUN_PI_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
+    "paseo": ("DOTFILES_RUN_PASEO_VOICE_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
     "openwebui": ("DOTFILES_RUN_OPENWEBUI_SETUP",),
     "junie": ("DOTFILES_RUN_JUNIE_CLI_SETUP",),
     "codex": ("DOTFILES_RUN_CODEX_SETUP",),
@@ -69,6 +70,7 @@ _LEGACY_CLIENT_GATES = (
 _CLI_INSTALLS = {
     "opencode": "opencode",
     "pi": "pi",
+    "paseo": "paseo",
     "codex": "codex",
     "copilot-cli": "copilot",
 }
@@ -430,6 +432,11 @@ def _write_opencode_key(service_env_path: Path, dry_run=False) -> None:
 def _write_pi_key(service_env_path: Path, dry_run=False) -> None:
     """Materialize the Pi app key without sourcing service.env."""
     _write_client_key(service_env_path, "pi", "LITELLM_PI_KEY", dry_run)
+
+
+def _write_paseo_key(service_env_path: Path, dry_run=False) -> None:
+    """Materialize the dedicated Paseo speech key without sourcing service.env."""
+    _write_client_key(service_env_path, "paseo", "LITELLM_PASEO_KEY", dry_run)
 
 
 def _write_junie_key(service_env_path: Path, dry_run=False) -> None:
@@ -816,6 +823,9 @@ def _prepare_app_key(
         return found, False
     if auth.state == "accepted":
         return found, False
+    if dry_run:
+        logger.info("Would create LiteLLM key for %s; preview is read-only", alias)
+        return found, False
     return found, _generate_app_key(
         alias, env_name, client_key_path, service_env_path, api_base, master_key, found
     )
@@ -911,6 +921,7 @@ def _persist_generated_app_keys(found, rows, service_env_path):
 PROVISIONED_CLIENT_KEY_WRITERS = {
     "opencode": _write_opencode_key,
     "pi": _write_pi_key,
+    "paseo": _write_paseo_key,
     "junie": _write_junie_key,
     "openwebui": _write_openwebui_key,
     "codex": _write_codex_key,
@@ -978,8 +989,11 @@ def _provision_app_keys(
         finally:
             # Remote key generation is irreversible without its plaintext.
             # Preserve successful earlier results even when a later row fails.
-            _persist_generated_app_keys(found, provisioning_rows, service_env_path)
-            _write_provisioned_client_keys(provisioning_rows, service_env_path, dry_run)
+            if not dry_run:
+                _persist_generated_app_keys(found, provisioning_rows, service_env_path)
+                _write_provisioned_client_keys(
+                    provisioning_rows, service_env_path, dry_run=False
+                )
         if strict and not _verify_provisioned_keys(
             provisioning_rows, api_base, service_env_path
         ):

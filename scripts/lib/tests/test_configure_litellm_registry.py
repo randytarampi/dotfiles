@@ -399,7 +399,7 @@ def test_registry_gate_is_enforced_independently(monkeypatch, enabled):
     assert reason == ("eligible" if enabled else "setup gate disabled")
 
 
-def test_provisioning_authorities_have_exact_client_parity():
+def test_provisioning_authorities_have_exact_twelve_client_parity():
     provisioned = {
         row["client"]
         for row in litellm_config.CLIENT_REGISTRY
@@ -408,6 +408,7 @@ def test_provisioning_authorities_have_exact_client_parity():
     expected = {
         "opencode",
         "pi",
+        "paseo",
         "openwebui",
         "junie",
         "codex",

@@ -391,6 +391,7 @@ def openrouter_pricing_for(model_id):
 APP_KEYS = {
     "opencode": "LITELLM_OPENCODE_KEY",
     "pi": "LITELLM_PI_KEY",
+    "paseo": "LITELLM_PASEO_KEY",
     "openwebui": "LITELLM_OPENWEBUI_KEY",
     "junie": "LITELLM_JUNIE_KEY",
     "codex": "LITELLM_CODEX_KEY",
@@ -501,6 +502,26 @@ CLIENT_REGISTRY = [
         "scripts/configure-pi.py provider config",
         "eligible",
         "provision",
+    ),
+    _client_row(
+        "paseo",
+        APP_KEYS["paseo"],
+        ["Paseo CLI installed"],
+        [
+            "OpenAI-compatible",
+            "STT/TTS audio endpoints require exact route qualification",
+        ],
+        "scripts/configure-paseo-voice.py",
+        [
+            "DOTFILES_RUN_PASEO_VOICE_SETUP=1",
+            "DOTFILES_USE_LITELLM_PROXY=1",
+            LITELLM_SETUP_GATE,
+        ],
+        "file",
+        "~/.local/share/litellm/clients/paseo.key",
+        "eligible",
+        "provision",
+        "Dedicated Paseo speech credential; installed consumer and audio routes NOT YET verified",
     ),
     _client_row(
         "openwebui",
