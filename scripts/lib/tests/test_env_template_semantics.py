@@ -79,7 +79,7 @@ class EnvTemplateSemanticsTests(unittest.TestCase):
             # appear as assignments that the owner could reactivate.
             self.assertNotRegex(
                 template,
-                rb"(?m)^\\s*(?:#\\s*)?(?:export\\s+)?" + key + rb"\\s*=",
+                rb"(?m)^\s*(?:#\s*)?(?:export\s+)?" + key + rb"\s*=",
             )
             self.assertIn(b"# " + key + b": retired", template)
 

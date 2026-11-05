@@ -962,6 +962,7 @@ def test_unset_litellm_model_preserves_existing_managed_profile(tmp_path, monkey
     assert profile_section in config.read_text(encoding="utf-8")
     assert any("profile preserved" in message for message in info)
 
+
 @pytest.mark.parametrize(
     "disabled_gate",
     ("DOTFILES_RUN_CODEX_SETUP", "DOTFILES_USE_LITELLM_PROXY"),
@@ -974,19 +975,19 @@ def test_gate_off_refuses_to_orphan_managed_litellm_profile(
     config_dir.mkdir(parents=True)
     config = config_dir / "config.toml"
     original = (
-        'model_provider = "openai"\\n'
-        "# BEGIN DOTFILES MANAGED PROVIDER litellm\\n"
-        "[model_providers.litellm]\\n"
-        'name = "LiteLLM Proxy"\\n'
-        'base_url = "http://127.0.0.1:4000/v1"\\n'
-        'env_key = "LITELLM_CODEX_KEY"\\n'
-        'wire_api = "responses"\\n'
-        "# END DOTFILES MANAGED PROVIDER litellm\\n"
-        "# BEGIN DOTFILES MANAGED PROFILES\\n"
-        "[profiles.litellm]\\n"
-        'model = "served-alias"\\n'
-        'model_provider = "litellm"\\n'
-        "# END DOTFILES MANAGED PROFILES\\n"
+        'model_provider = "openai"\n'
+        "# BEGIN DOTFILES MANAGED PROVIDER litellm\n"
+        "[model_providers.litellm]\n"
+        'name = "LiteLLM Proxy"\n'
+        'base_url = "http://127.0.0.1:4000/v1"\n'
+        'env_key = "LITELLM_CODEX_KEY"\n'
+        'wire_api = "responses"\n'
+        "# END DOTFILES MANAGED PROVIDER litellm\n"
+        "# BEGIN DOTFILES MANAGED PROFILES\n"
+        "[profiles.litellm]\n"
+        'model = "served-alias"\n'
+        'model_provider = "litellm"\n'
+        "# END DOTFILES MANAGED PROFILES\n"
     )
     config.write_text(original, encoding="utf-8")
     before = config.stat()
