@@ -507,6 +507,13 @@ paseo-tailnet-check: ## Inspect Paseo tailnet readiness without writes
 paseo-tailnet-apply: ## Configure Paseo listener on tailnet after password set (gate required)
 	@$(LOAD_ENV); python3 scripts/configure-paseo-tailnet.py --apply
 
+.PHONY: paseo-plugins-check paseo-plugins-apply
+paseo-plugins-check: ## Preview Paseo plugin setup and optional prerequisites
+	@$(LOAD_ENV); python3 scripts/install-paseo-plugins.py --dry-run
+
+paseo-plugins-apply: ## Explicit, owner-gated plugin installation; never automatic
+	@$(LOAD_ENV); python3 scripts/install-paseo-plugins.py --apply
+
 .PHONY: paseo-web-check paseo-web-apply
 paseo-web-check: ## Inspect Paseo bundled Web UI / Caddy prerequisites without editing native config
 	@$(LOAD_ENV); python3 scripts/configure-paseo-web.py

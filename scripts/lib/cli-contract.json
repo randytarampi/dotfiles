@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/install-paseo-plugins.py",
+      "capabilities": ["public", "mutates"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--apply", "--codexbar-daemon-verified"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/configure-tailnet-opencode.py",
       "capabilities": [
         "public",
