@@ -67,7 +67,7 @@ def _fake_gateway(monkeypatch):
 
     def request(url, method, key, payload=None):
         calls.append((url, method, payload))
-        if url.endswith("/key/list?return_full_object=true"):
+        if "/key/list?return_full_object=true&page=" in url:
             return {"keys": list(records)}
         if url.endswith("/key/generate"):
             assert payload is not None
@@ -711,7 +711,7 @@ def test_strict_auth_checks_client_identity(monkeypatch, tmp_path):
 
     def request(url, method, key, payload=None):
         calls.append((url, method, key, payload))
-        if url.endswith("/key/list?return_full_object=true"):
+        if "/key/list?return_full_object=true&page=" in url:
             return {"keys": []}
         if url.endswith("/key/generate"):
             assert payload is not None
@@ -903,3 +903,54 @@ def test_negative_failures_remain_distinct(monkeypatch, tmp_path, error, status)
         )
         is False
     )
+
+def test_complete_paginated_registry_includes_page_two_alias(monkeypatch):
+    calls = []
+
+    def request(url, method, _key, payload=None):
+        calls.append((url, method))
+        assert payload is None
+        if url.endswith("&page=1"):
+            return {"keys": [{"key_alias": "first"}], "total_pages": 2}
+        if url.endswith("&page=2"):
+            return {"keys": [{"key_alias": "opencode"}], "total_pages": 2}
+        pytest.fail("unexpected key-inventory page")
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    records = configure_litellm._all_key_records("http://127.0.0.1:4000", "master")
+    assert [row["key_alias"] for row in records] == ["first", "opencode"]
+    assert [url.rsplit("page=", 1)[1] for url, _ in calls] == ["1", "2"]
+    assert all(method == "GET" for _, method in calls)
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    (
+        ({"keys": [{"key_alias": "a"}], "total_pages": 51}, None),
+        ({"keys": [{"key_alias": "a"}], "total_pages": "not-an-integer"}, None),
+        ({"keys": "malformed", "total_pages": 1}, None),
+        ({"keys": [{"key_alias": "a"}], "total_pages": 2},
+         {"keys": [], "total_pages": 2}),
+        ({"keys": [{"key_alias": "a"}], "total_pages": 2},
+         {"keys": [{"key_alias": "b"}], "total_pages": 3}),
+    ),
+)
+def test_partial_key_registry_refuses_to_authorize_provisioning(monkeypatch, first, second):
+    calls = []
+
+    def request(url, method, _key, payload=None):
+        calls.append((url, method))
+        if "/health/liveliness" in url:
+            return {"status": "healthy"}
+        if "/key/list" in url:
+            return first if url.endswith("&page=1") else second
+        pytest.fail("incomplete registry must not reach key-generation or model probes")
+
+    monkeypatch.setattr(configure_litellm, "_request_json", request)
+    monkeypatch.setattr(configure_litellm.shutil, "which", lambda _name: "/bin/client")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "1")
+    assert configure_litellm.provision_app_keys(
+        "master", Path("/tmp/unused-service-env"), strict=False
+    ) is False
+    assert not any(method == "POST" for _, method in calls)

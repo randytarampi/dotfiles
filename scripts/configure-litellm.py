@@ -38,6 +38,10 @@ class StrandedClientKeyError(ValueError):
     """A remote client alias exists but its local secret is unavailable."""
 
 
+class IncompleteKeyInventoryError(ValueError):
+    """A partial LiteLLM key listing must never authorize key provisioning."""
+
+
 GATE_ENV = "DOTFILES_RUN_LITELLM_SETUP"
 SERVICE_ENV_DEFAULT = "~/.local/share/litellm/service.env"
 _APPLICATION_ROOTS = (Path("/Applications"), Path.home() / "Applications")
@@ -297,36 +301,47 @@ def _request_json(url, method, master_key, payload=None, timeout=30):
 
 
 def _all_key_records(api_base, master_key, max_pages=50):
-    """Collect every page of /key/list records.
+    """Read the complete key inventory before deciding whether aliases exist.
 
-    The proxy paginates the listing at a fixed page size; a single-page read
-    hid aliases beyond it, which the alias-uniqueness preflight then misread
-    as missing gateway records. Servers without pagination return one body
-    and keep working here.
+    Older proxies omit pagination metadata; newer proxies declare total_pages.
+    A malformed or incomplete listing must not turn an existing alias into a
+    supposedly missing key and cause an irreversible /key/generate POST.
     """
+    if max_pages < 1:
+        raise ValueError("max_pages must be positive")
     records = []
-    page = 1
-    while True:
+    expected_pages = None
+    for page in range(1, max_pages + 1):
         listing = _request_json(
             f"{api_base}/key/list?return_full_object=true&page={page}",
             "GET",
             master_key,
         )
-        rows = listing.get("keys", []) if isinstance(listing, dict) else []
-        if not isinstance(rows, list) or not rows:
-            break
-        before = len(records)
+        if not isinstance(listing, dict) or not isinstance(listing.get("keys"), list):
+            raise IncompleteKeyInventoryError("LiteLLM key inventory response malformed")
+        rows = listing["keys"]
+        if not all(isinstance(row, dict) for row in rows):
+            raise IncompleteKeyInventoryError("LiteLLM key inventory records malformed")
+        total_pages = listing.get("total_pages")
+        if total_pages is not None:
+            if isinstance(total_pages, bool) or not str(total_pages).isdecimal():
+                raise IncompleteKeyInventoryError("invalid LiteLLM key page count")
+            declared_pages = int(total_pages)
+            if declared_pages == 0 and page == 1 and not rows:
+                return []
+            if (
+                declared_pages < page
+                or declared_pages > max_pages
+                or (expected_pages is not None and declared_pages != expected_pages)
+            ):
+                raise IncompleteKeyInventoryError("incomplete LiteLLM key inventory")
+            expected_pages = declared_pages
+        if not rows and expected_pages is not None and page < expected_pages:
+            raise IncompleteKeyInventoryError("missing intermediate LiteLLM key page")
         records.extend(rows)
-        total_pages = listing.get("total_pages") if isinstance(listing, dict) else None
-        try:
-            last_page = int(total_pages) if total_pages is not None else page
-        except (TypeError, ValueError):
-            last_page = page
-        if page >= min(last_page, max_pages) or len(records) == before:
-            break
-        page += 1
-    return records
-
+        if expected_pages is None or page >= expected_pages:
+            return records
+    raise IncompleteKeyInventoryError("LiteLLM key inventory page limit exceeded")
 
 def _persist_app_keys(path: Path, keys: dict[str, str]) -> None:
     values = {}
@@ -960,7 +975,7 @@ def _provision_app_keys(
         ):
             return False
         return True
-    except StrandedClientKeyError as error:
+    except (StrandedClientKeyError, IncompleteKeyInventoryError) as error:
         logger.error("LiteLLM app-key provisioning refused: %s", error)
         return False
     except (OSError, ValueError, TypeError) as error:
