@@ -1130,13 +1130,22 @@ class PresetMigrationTests(unittest.TestCase):
             "KEEP_UNRELATED='yes'\n",
         ]
         converted, changes = migrate_env_gates.migrate_env(original)
-        self.assertEqual(converted, ["KEEP_UNRELATED='yes'\n"])
+        self.assertEqual(
+            converted,
+            [
+                "KEEP_UNRELATED='yes'\n",
+                # OPENWEBUI_PUBLIC='1' is v1 public-exposure evidence; the
+                # unified model preserves it as 'public' (owner-visible).
+                "CADDY_ACCESS='public'\n",
+            ],
+        )
         for key in (
             "DOTFILES_PASEO_PUBLIC",
             "DOTFILES_OPENWEBUI_PUBLIC",
             "DOTFILES_RUN_SMALLCODE_SETUP",
         ):
             self.assertIn(f"Removed retired setting: {key}", changes)
+        self.assertIn("Added: CADDY_ACCESS='public' (v1 default migration)", changes)
         self.assertEqual(migrate_env_gates.migrate_env(converted), (converted, []))
 
 
