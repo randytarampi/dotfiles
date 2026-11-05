@@ -306,10 +306,10 @@ when the matching macOS app bundle identifier is verified and all three gates
 are enabled: `DOTFILES_RUN_LITELLM_SETUP=1`,
 `DOTFILES_USE_LITELLM_PROXY=1` and the client-specific
 `DOTFILES_RUN_JETBRAINS_SETUP=1`, `DOTFILES_RUN_VSCODE_SETUP=1`,
-`DOTFILES_RUN_CURSOR_SETUP=1`, or `DOTFILES_RUN_XCODE_SETUP=1`. The app probe checks `/Applications` and
-`~/Applications`; a bundle match is installation evidence, **not** evidence
-that the IDE reads this key or supports gateway AI routing. All three
-IDE-native transports remain **UNVERIFIED**. Cursor's OpenAI base URL override
+`DOTFILES_RUN_CURSOR_SETUP=1`, or `DOTFILES_RUN_XCODE_SETUP=1`.
+The app probe checks `/Applications` and `~/Applications`; a bundle match
+is installation evidence, **not** evidence that the IDE reads this key or
+supports gateway AI routing. All four GUI transports remain **UNVERIFIED**. Cursor's OpenAI base URL override
 is a documented candidate, but its backend-originated traffic cannot reach this
 repository's loopback-only gateway. The key is **not** automatically inserted
 into Cursor; see [manual Cursor setup and caveats](UNMANAGED-CLIENTS.md#cursor).
