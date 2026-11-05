@@ -15,6 +15,7 @@ from caddy_domains import load_domains
 ACCESS_MODES = {"localhost", "lan", "public"}
 DEFAULT_LISTEN = "127.0.0.1:6767"
 WEB_UI_KEY = "features.webUi.enabled"
+RELAY_KEY = "daemon.relay.enabled"
 BCRYPT = re.compile(r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}\Z")
 
 
@@ -31,12 +32,29 @@ def valid_daemon(config):
         raise ValueError("PASEO_LISTEN would override the managed loopback listener")
     if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN:
         raise ValueError("Paseo Caddy mode requires an unmodified loopback listener")
-    relay = daemon.get("relay")
-    if not isinstance(relay, dict) or relay.get("enabled") is not False:
-        raise ValueError("Paseo relay must be explicitly disabled")
-    if os.environ.get("PASEO_RELAY_ENABLED", "").lower() not in ("", "false", "0"):
-        raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
     return daemon
+
+
+def desired_relay_state():
+    """Read the declared relay posture from ~/.env (default: disabled).
+
+    Relay enables Paseo's hosted remote relay; the deploy owner declares the
+    posture once and the Web UI lane reconciles drift (Paseo itself may
+    re-enable it during daemon lifecycle operations) instead of failing.
+    """
+    return os.environ.get("DOTFILES_PASEO_RELAY", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def relay_state(config):
+    relay = config.get("daemon", {}).get("relay", {})
+    if isinstance(relay, dict) and relay.get("enabled") is True:
+        return True
+    return False
 
 
 def require_password(daemon):

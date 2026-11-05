@@ -168,7 +168,6 @@ def test_build_caddyfile_skips_absent_paseo_config(tmp_path, monkeypatch, caplog
     "path_and_value",
     (
         (("daemon", "listen"), "0.0.0.0:6767"),
-        (("daemon", "relay", "enabled"), True),
         (("features", "webUi", "enabled"), False),
     ),
 )

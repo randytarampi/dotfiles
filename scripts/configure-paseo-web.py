@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
 from paseo_web_policy import (  # noqa: E402
     PaseoNotConfigured,
+    RELAY_KEY,
     WEB_UI_KEY,
+    desired_relay_state,
     domains_for_access,
     validate_native_config,
 )
@@ -58,7 +60,12 @@ def read_config(home):
 
 
 def desired_config(original, access):
-    """Validate native policy and add only the Web UI and Caddy hostnames."""
+    """Validate native policy and add only the Web UI, relay and Caddy hostnames.
+
+    Relay reconciles toward the ~/.env-declared DOTFILES_PASEO_RELAY posture
+    (default disabled) instead of failing on drift: Paseo's own lifecycle
+    re-enables it, so the deploy corrects it with a warning.
+    """
     hostnames = validate_native_config(original, access)
     wanted = domains_for_access(access)
     target = copy.deepcopy(original)
@@ -67,6 +74,9 @@ def desired_config(original, access):
         target.setdefault("daemon", {})["hostnames"] = hostnames + [
             name for name in wanted if name not in hostnames
         ]
+    target.setdefault("daemon", {}).setdefault("relay", {})[
+        "enabled"
+    ] = desired_relay_state()
     return target
 
 
@@ -75,6 +85,10 @@ def planned_mutations(original, desired):
     before_web = original.get("features", {}).get("webUi", {}).get("enabled")
     if before_web is not True:
         changes.append((WEB_UI_KEY, True))
+    desired_relay = desired.get("daemon", {}).get("relay", {}).get("enabled")
+    actual_relay = original.get("daemon", {}).get("relay", {}).get("enabled")
+    if desired_relay is not None and actual_relay != desired_relay:
+        changes.append((RELAY_KEY, desired_relay))
     old_hosts = original.get("daemon", {}).get("hostnames", [])
     new_hosts = desired.get("daemon", {}).get("hostnames", [])
     if old_hosts != new_hosts:
@@ -108,6 +122,8 @@ def check_expected(home, desired):
 def _set_expected(config, key, value):
     if key == WEB_UI_KEY:
         config.setdefault("features", {}).setdefault("webUi", {})["enabled"] = value
+    elif key == RELAY_KEY:
+        config.setdefault("daemon", {}).setdefault("relay", {})["enabled"] = value
     else:
         config.setdefault("daemon", {})["hostnames"] = value
 
@@ -151,6 +167,11 @@ def configure(paseo_bin, home, original, desired, no_backup):
     if not changes:
         print("Paseo Web UI and hostname allowlist already configured")
         return
+    if (RELAY_KEY, False) in changes:
+        print(
+            "Paseo relay drifted from the declared DOTFILES_PASEO_RELAY posture; "
+            "reconciling back to disabled"
+        )
     path = tailnet.checked_config(home)
     _stage_changes(paseo_bin, path, original, changes)
     _, still_current = read_config(home)

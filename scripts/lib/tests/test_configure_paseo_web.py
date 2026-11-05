@@ -171,19 +171,29 @@ def test_backup_preserved_and_no_backup_respected(tmp_path, monkeypatch):
     assert not (home2 / "config.json.pre-web-ui").exists()
 
 
-def test_unsafe_listeners_relay_and_override_fail_closed(tmp_path, monkeypatch):
+def test_listener_override_fails_closed_and_relay_drift_reconciles(
+    tmp_path, monkeypatch
+):
     home = home_with_config(tmp_path)
     install_stub(monkeypatch, home)
     monkeypatch.setenv(web.GATE, "1")
     path = home / "config.json"
-    for field, value in (("listen", "0.0.0.0:6767"), ("relay", {"enabled": True})):
-        candidate = copy.deepcopy(BASE_CONFIG)
-        candidate["daemon"][field] = value
-        path.write_text(json.dumps(candidate))
-        path.chmod(0o600)
-        assert web.main(["--apply"]) == 1
-    path.write_text(json.dumps(BASE_CONFIG))
+    # Relay drift is NOT a safety boundary: the lane reconciles it back to
+    # the declared DOTFILES_PASEO_RELAY posture (default: disabled) with a
+    # warning, instead of failing the deploy on a non-conforming field.
+    drifted = copy.deepcopy(BASE_CONFIG)
+    drifted["daemon"]["relay"] = {"enabled": True}
+    path.write_text(json.dumps(drifted))
     path.chmod(0o600)
+    assert web.main(["--apply"]) == 0
+    config = json.loads(path.read_text())
+    assert config["daemon"]["relay"]["enabled"] is False
+    # The listener is a safety boundary the lane never rewrites.
+    candidate = copy.deepcopy(BASE_CONFIG)
+    candidate["daemon"]["listen"] = "0.0.0.0:6767"
+    path.write_text(json.dumps(candidate))
+    path.chmod(0o600)
+    assert web.main(["--apply"]) == 1
     monkeypatch.setenv("PASEO_LISTEN", "0.0.0.0:6767")
     assert web.main(["--apply"]) == 1
 
