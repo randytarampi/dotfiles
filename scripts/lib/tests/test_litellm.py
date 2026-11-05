@@ -2057,6 +2057,7 @@ def test_provisioned_client_key_writers_cover_every_registered_app_key():
     assert set(CONFIGURE.PROVISIONED_CLIENT_KEY_WRITERS) == {
         "opencode",
         "pi",
+        "paseo",
         "openwebui",
         "junie",
         "codex",
