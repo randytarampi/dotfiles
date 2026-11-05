@@ -24,6 +24,7 @@ def isolated(monkeypatch, tmp_path):
     for key in (
         "PASEO_LISTEN",
         "PASEO_RELAY_ENABLED",
+        "DOTFILES_PASEO_RELAY",
         "PASEO_WEB_UI_ENABLED",
         "DOTFILES_RUN_PASEO_WEB_SETUP",
     ):
@@ -210,3 +211,31 @@ def test_hosts_entries_cover_paseo_domains():
     assert any(f"paseo.{DOMAIN}" in entry for entry in localhost)
     off = build_hosts_entries([DOMAIN], "lan")
     assert all("paseo." not in entry for entry in off)
+
+@pytest.mark.parametrize("mode", ("localhost", "lan", "public"))
+def test_caddy_refuses_relay_drift_and_process_override(
+    tmp_path, monkeypatch, mode
+):
+    path, data = configured_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    with pytest.raises(ValueError, match="cannot coexist"):
+        caddy.validate_paseo_proxy_config(mode, [DOMAIN])
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
+    data["daemon"]["relay"]["enabled"] = True
+    path.write_text(json.dumps(data))
+    path.chmod(0o600)
+    with pytest.raises(ValueError, match="relay must be disabled"):
+        caddy.validate_paseo_proxy_config(mode, [DOMAIN])
+    data["daemon"]["relay"]["enabled"] = False
+    path.write_text(json.dumps(data))
+    path.chmod(0o600)
+    monkeypatch.setenv("PASEO_RELAY_ENABLED", "true")
+    with pytest.raises(ValueError, match="PASEO_RELAY_ENABLED"):
+        caddy.validate_paseo_proxy_config(mode, [DOMAIN])
+
+
+def test_caddy_refuses_unknown_relay_intent(tmp_path, monkeypatch):
+    configured_home(tmp_path, monkeypatch)
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "typo")
+    with pytest.raises(ValueError, match="DOTFILES_PASEO_RELAY"):
+        caddy.validate_paseo_proxy_config("lan", [DOMAIN])

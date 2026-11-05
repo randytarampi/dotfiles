@@ -32,6 +32,7 @@ def isolated_environment(monkeypatch, tmp_path):
         "CADDY_ACCESS",
         "PASEO_LISTEN",
         "PASEO_RELAY_ENABLED",
+        "DOTFILES_PASEO_RELAY",
         "PASEO_WEB_UI_ENABLED",
         "CADDY_ZONES_CONFIG",
     ):
@@ -248,3 +249,13 @@ def test_public_domain_hostname_is_only_added_by_explicit_setup(tmp_path, monkey
     assert web.main(["--apply"]) == 0
     config = json.loads((home / "config.json").read_text())
     assert config["daemon"]["hostnames"] == ["paseo.local.example.test"]
+
+def test_relay_intent_must_be_boolean_before_native_write(tmp_path, monkeypatch):
+    home = home_with_config(tmp_path)
+    calls = install_stub(monkeypatch, home)
+    monkeypatch.setenv(web.GATE, "1")
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "enabled-ish")
+    original = (home / "config.json").read_bytes()
+    assert web.main(["--apply"]) == 1
+    assert not calls
+    assert (home / "config.json").read_bytes() == original

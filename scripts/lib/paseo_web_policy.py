@@ -1,7 +1,8 @@
 """Paseo Web UI policy shared by native config writes and Caddy routing.
 
 The CLI may write only to an existing private home. The daemon remains on
-loopback; Caddy owns TLS and network exposure. Never enable a relay here.
+loopback; Caddy owns TLS and network exposure. Relay settings are explicit;
+a Caddy site cannot be published while relay exposure is enabled.
 """
 
 import json
@@ -32,6 +33,12 @@ def valid_daemon(config):
         raise ValueError("PASEO_LISTEN would override the managed loopback listener")
     if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN:
         raise ValueError("Paseo Caddy mode requires an unmodified loopback listener")
+    if os.environ.get("PASEO_RELAY_ENABLED", "").strip().lower() not in (
+        "",
+        "false",
+        "0",
+    ):
+        raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
     return daemon
 
 
@@ -42,12 +49,12 @@ def desired_relay_state():
     posture once and the Web UI lane reconciles drift (Paseo itself may
     re-enable it during daemon lifecycle operations) instead of failing.
     """
-    return os.environ.get("DOTFILES_PASEO_RELAY", "0").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    setting = os.environ.get("DOTFILES_PASEO_RELAY", "0").strip().lower()
+    if setting in ("", "0", "false", "no", "off"):
+        return False
+    if setting in ("1", "true", "yes", "on"):
+        return True
+    raise ValueError("DOTFILES_PASEO_RELAY must be 0 or 1 (boolean)")
 
 
 def relay_state(config):
@@ -158,6 +165,11 @@ def validate_proxy_config(access, domains):
     data = read_proxy_config()
     daemon = valid_daemon(data)
     web_ui_features(data, require_enabled=True)
+    if desired_relay_state():
+        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
+    relay = daemon.get("relay")
+    if not isinstance(relay, dict) or relay.get("enabled") is not False:
+        raise ValueError("Paseo relay must be disabled before Caddy exposure")
     if access != "localhost":
         require_password(daemon)
     required_hosts = set(desired_hostnames(access, domains))
