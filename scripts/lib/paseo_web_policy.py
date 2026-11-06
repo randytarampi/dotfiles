@@ -35,9 +35,7 @@ def valid_daemon(config, *, allow_relay_drift=False):
         raise ValueError("Paseo Caddy mode requires an unmodified loopback listener")
     declared_relay = desired_relay_state()
     relay_override = os.environ.get("PASEO_RELAY_ENABLED", "").strip().lower()
-    if relay_override not in ("", "false", "0") or (
-        declared_relay and relay_override
-    ):
+    if relay_override and (declared_relay or relay_override not in ("false", "0")):
         raise ValueError("PASEO_RELAY_ENABLED could override declared relay posture")
     relay = daemon.get("relay")
     native_relay = relay.get("enabled") if isinstance(relay, dict) else None
