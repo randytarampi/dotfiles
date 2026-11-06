@@ -105,7 +105,7 @@ with cached-input rate fields preserved. Spend reports identify the tier
 actually served. There is no automatic Flex-to-standard fallback. For lane
 configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
 
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models. Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
+Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models. Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
 
 Every preset defines an explicit observer. `image_routing: "auto"` routes image
 attachments to the observer: the hook strips images from the main conversation
@@ -168,8 +168,8 @@ Fallbacks stay within the OpenAI/Anthropic provider boundary; no paid entitlemen
 - `plus` now prefers `gpt-6.1-terra` (high) for orchestration, (medium) for design and (low) for observation, with Sol reserved for oracle and synthesis. Its three council seats are Terra / Sol / Astra. The `plus-anthropic` orchestrator likewise uses Terra; the existing Anthropic specialization remains.
 - `omo-slim-openai` follows upstream's Sol/medium orchestrator and Sol/low fixer, while preserving this repository's librarian, observer and gateway fallback conventions. `omo-slim-thirty-dollars` follows upstream's Astra oracle and Sol/medium orchestrator, preserving the existing working Copilot designer ID instead of blindly adopting a different Copilot wire spelling.
 - The Zen-free static *preferences* now name GLM-5.3-Flash Free for orchestration, DeepSeek V4.1 Flash Free for designer/fixer, and Nemotron 3.5 Super VL Free for observation. These are **candidates**, not verified requests. Dynamic materialization still requires fresh endpoint-scoped provenance, free classification, role capabilities and expiry; do not select them from Console screenshots alone. Images and confidential data must not go to contributor endpoints without explicit acceptance.
-- MiMo V2.6 Pro/Flash and the Kimi K3/K2.7 Code paired groups are selectable from Junie only where the exact Ollama Cloud wire IDs and credentials qualify. `fasterModel` means a cheaper/smaller option, not proven latency. LiteLLM twins are generated only when authenticated aliases exist.
-- Existing `pro`, `pro-plus`, `pro-plus-anthropic`, local and Anthropic-only defaults are deliberately unchanged pending comparative task-level probes. A new model's availability is not evidence it outperforms the incumbent in an actual tool loop.
+- MiMo V2.6 Pro/Flash and the Kimi K3.1 Pro/K2.7 Code paired groups are selectable from Junie only where the exact Ollama Cloud wire IDs and credentials qualify. `fasterModel` means a cheaper/smaller option, not proven latency. LiteLLM twins are generated only when authenticated aliases exist.
+- The `pro` oracle and council gamma now select the published Ollama Cloud Kimi K3.1 Pro endpoint in place of K3; `pro-plus`, `pro-plus-anthropic`, local and Anthropic-only defaults remain unchanged pending task-level probes. Catalogue availability is not proof of successful inference.
 - **Owner validation:** verify provider catalogue IDs and actual inference on OpenCode/Junie/Pi/LiteLLM, including tools, image input, rate limits, spending, and a rollback by restoring the previous preset. No host-specific inference, credential, or CI verification is claimed here.
 
 ### Cohere Tier (`cohere`)
@@ -265,13 +265,20 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | Role | Model | Variant |
 |------|-------|---------|
 | orchestrator | `glm-5.3-flash` | max |
-| oracle | `kimi-k3` | max |
+| oracle | `kimi-k3.1-pro` | max |
 | librarian | `gemma4:31b` | low |
 | explorer | `gemma4:31b` | low |
 | designer | `glm-5.3-flash` | medium |
 | fixer | `kimi-k2.7-code` | high |
 | observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
+
+Kimi K3.1 Pro replaces K3 in the oracle and council-gamma seats. Ollama's
+published pricing is $2 input / $0.20 cached / $10 output per million tokens,
+versus K3 at $3 / $0.30 / $15. Ollama advertises 1M context, text/image input
+and tools, but installed OpenCode inference and gateway twins still require
+authenticated checks. K3 remains catalogued for manual rollback; it is
+not a strict-free or automatic fallback.
 
 Fallbacks are provider-deduplicated and retain one best alternative per role.
 The `pro` observer is `gemma4:31b`; the `pro-plus` observer is
@@ -309,7 +316,6 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 | designer | `claude-sonnet-5-5` | medium |
 | fixer | `gpt-6-luna` | high |
 | observer | `claude-haiku-5-5` | low |
-| council | `claude-opus-5-5` | xhigh |
 | council | `glm-5.3` | max |
 
 Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
@@ -568,7 +574,7 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 ## Ollama Cloud Models
 
 Ollama Cloud presets use `deepseek-v4.1-flash`,
-`gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3`, and `kimi-k2.7-code` — the
+`gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the
 exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama
 Cloud Pro accounts
 have a 3-slot concurrency limit (3 concurrent requests per account, regardless
@@ -700,7 +706,7 @@ Variants control reasoning effort per agent role. They are set in `oh-my-opencod
 | `glm-5.2` | standard | max | 1M context; supports High/Max thinking effort; orchestrator uses max, oracle fallback uses max, other fallbacks use standard |
 | `glm-5.3-flash` | standard | max | 320B/18B MoE, 1M context, vision (images+video), always-on tunable thinking; orchestrator uses max (replaces glm-5.2 as primary orchestrator in pro/pro-plus); glm-5.2 remains as secondary fallback |
 | `glm-5.3` | standard | max | 753B MoE flagship, 1M context, text-only; strictly dominates glm-5.2 on all 13 shared benchmarks; leads nemotron-3-ultra on GDPval-AA v2 (1769 vs 1448, NVIDIA vendor-reported); orchestrator/oracle fallbacks use max |
-| `kimi-k3` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
+| `kimi-k3.1-pro` | max | max | Reasoning effort defaults to max; council gamma uses max or no variant |
 | `kimi-k2.6` | standard | none | Legacy model retained as a degraded fallback; upstream uses no variant for observer, `medium` for designer |
 | `kimi-k2.7-code` | standard | none | Active pro-tier fixer and fallback in the other cloud presets; mandatory thinking (cannot disable) |
 | `gpt-5.5` | retired | — | Flagship retired from the consumer API 2026-10-14; ChatGPT OAuth verification returns DEFERRED (entitlement). Preset β/γ and plus fixer/designer references retargeted to `gpt-5.6-sol` on 2026-10-26 |

@@ -4,6 +4,27 @@
 
 Use this playbook when adding or changing models, switching tiers, or updating provider configuration. Keep the source JSON, tier behavior, documentation, and generated configuration aligned.
 
+## 6 November 2026: Kimi K3.1 Pro replacement (paid Ollama Cloud)
+
+Ollama publishes `kimi-k3.1-pro` at
+https://ollama.com/library/kimi-k3.1-pro with a 1M-token context window,
+text/image input, tool calling and thinking. Published rates per million
+tokens are $2 input, $0.20 cached input and $10 output, versus Kimi K3 at
+$3, $0.30 and $15 respectively (https://ollama.com/pricing, 2026-11-06).
+
+The direct Ollama Cloud ID is `kimi-k3.1-pro`; a local Ollama daemon's
+cloud stub may be `kimi-k3.1-pro:cloud` and is not interchangeable.
+Replace K3 in the `pro` oracle and council gamma and Junie's curated
+`ollama-cloud-kimi` primary. Keep K2.7 Code as the cheaper secondary.
+Retain K3 in the allowlist for manual rollback, never in strict-free
+fallbacks; subscription usage credits do not mean zero-charge inference.
+
+Before promotion, verify authenticated model discovery and real tool calls
+from OpenCode's oracle/council, Junie primary/faster and its LiteLLM twin,
+with scoped credentials, latency, cost and user-config preservation.
+Public listing is not evidence of account-specific access. Runtime
+qualification remains UNKNOWN until owner-host tests are recorded.
+
 ## November 2026 model-refresh validation
 
 The upstream `openai`, `$30`, and `$40` preset references are compared against `docs/presets/` in `alvinunreal/oh-my-opencode-slim`; this repository retains its own observer, librarian, three-seat council, credential and fallback contracts. The `$40` adaptation is deliberately named `omo-slim-forty-dollars`, with the requested spelling. No OpenAI or Anthropic consumer subscription implies API entitlement.
