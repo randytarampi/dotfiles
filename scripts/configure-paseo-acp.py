@@ -14,11 +14,11 @@ from pathlib import Path
 import shutil
 import subprocess  # nosec B404 - fixed Paseo CLI and curated ACP argv.
 import sys
-import tempfile
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
+from paseo_provider_write import apply_document  # noqa: E402
 
 GATE = "DOTFILES_RUN_PASEO_ACP_SETUP"
 # These command contracts exist in configure-acp-agents.py. Paseo already has
@@ -89,40 +89,8 @@ def desired_entries(config, found, selected):
     return updates
 
 
-def run_set(binary, home, providers):
-    result = subprocess.run(  # nosec B603 - resolved executable, fixed native CLI.
-        [
-            binary,
-            "daemon",
-            "config",
-            "set",
-            "agents.providers",
-            json.dumps(providers, separators=(",", ":")),
-            "--home",
-            str(home),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if result.returncode:
-        # The native CLI may echo the entire providers JSON, including secrets.
-        # Disclose only a fixed diagnostic rather than untrusted CLI output.
-        output = str(result.stdout or "") + str(result.stderr or "")
-        detail = (
-            "Unknown configuration path: agents.providers"
-            if "Unknown configuration path" in output
-            else "native output suppressed to protect provider settings"
-        )
-        raise ValueError(
-            f"Paseo config setter failed (exit {result.returncode}): {detail}"
-        )
-    # The CLI may save and report a reload error; readback determines success.
-    return result.returncode
-
-
 def apply_entries(paseo, home, source, config, updates, helpers):
+    """Preserve all user providers while applying only approved ACP additions."""
     expected = copy.deepcopy(config)
     agents = expected.get("agents", {})
     if not isinstance(agents, dict):
@@ -132,25 +100,11 @@ def apply_entries(paseo, home, source, config, updates, helpers):
         raise ValueError("agents.providers must be an object")
     for name, value in updates.items():
         providers[name] = value
-    # Only agents.providers entries differ from the original document.
     expected.setdefault("agents", {})["providers"] = providers
-    with tempfile.TemporaryDirectory(prefix="paseo-acp-preflight-") as scratch:
-        staged_home = Path(scratch)
-        target = staged_home / "config.json"
-        target.write_bytes(source.read_bytes())
-        target.chmod(0o600)
-        run_set(paseo, staged_home, providers)
-        preview = helpers.decode_config(target.read_text(encoding="utf-8"))
-        if not helpers.same_config(preview, expected):
-            raise ValueError("native CLI would alter unrelated Paseo settings")
-    if not helpers.same_config(
-        helpers.decode_config(source.read_text(encoding="utf-8")), config
-    ):
-        raise ValueError("Paseo config changed before apply")
-    run_set(paseo, home, providers)
-    current = helpers.decode_config(source.read_text(encoding="utf-8"))
-    if not helpers.same_config(current, expected):
-        raise ValueError("Paseo config changed unexpectedly; no rollback attempted")
+    apply_document(
+        paseo, home, source, config, expected,
+        helpers.decode_config, helpers.same_config, timeout=60,
+    )
 
 
 def main(argv=None):
