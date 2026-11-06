@@ -18,8 +18,6 @@ def audit(config, access, *, caddy_enabled=True, required_hosts=()):
     if not isinstance(config, dict):
         raise ValueError("Paseo config must be a JSON object")
     daemon = valid_daemon(config)
-    if desired_relay_state():
-        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
     web_ui_features(config, require_enabled=True)
     if access != "localhost":
         require_password(daemon)
@@ -30,7 +28,7 @@ def audit(config, access, *, caddy_enabled=True, required_hosts=()):
     return {
         "access": access,
         "listener": "127.0.0.1:6767",
-        "relay": "disabled",
+        "relay": ("enabled (declared)" if desired_relay_state() else "disabled"),
         "stored_password": (
             "bcrypt-present" if valid_bcrypt(daemon) else "not-qualified"
         ),

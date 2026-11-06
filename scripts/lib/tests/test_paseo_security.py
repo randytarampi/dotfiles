@@ -101,14 +101,46 @@ def test_security_cli_requires_actual_lan_hostnames(monkeypatch, capsys):
     assert '"access": "lan"' in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("intent", ("1", "true", "yes", "on", "unknown"))
-def test_audit_refuses_declared_relay_before_reporting_caddy_safe(monkeypatch, intent):
+@pytest.mark.parametrize("intent", ("1", "true", "yes", "on"))
+def test_audit_reports_declared_hosted_relay_with_caddy_route(monkeypatch, intent):
+    """Owner-declared relay intent coexists with the Caddy route by declaration."""
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", intent)
     config = base()
     before = copy.deepcopy(config)
-    monkeypatch.setenv("DOTFILES_PASEO_RELAY", intent)
-    with pytest.raises(ValueError, match="cannot coexist|DOTFILES_PASEO_RELAY"):
-        audit(config, "lan", required_hosts=["paseo.example.test"])
+    result = audit(config, "lan", required_hosts=["paseo.example.test"])
+    assert result["relay"] == "enabled (declared)"
     assert config == before
+
+
+def test_audit_accepts_declared_relay_with_native_enabled(monkeypatch):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    config = base()
+    config["daemon"]["relay"]["enabled"] = True
+    result = audit(config, "lan", required_hosts=["paseo.example.test"])
+    assert result["relay"] == "enabled (declared)"
+
+
+@pytest.mark.parametrize("intent", ("", "0", "false", "no", "off"))
+def test_audit_reports_disabled_relay_without_declared_intent(monkeypatch, intent):
+    if intent:
+        monkeypatch.setenv("DOTFILES_PASEO_RELAY", intent)
+    result = audit(base(), "lan", required_hosts=["paseo.example.test"])
+    assert result["relay"] == "disabled"
+
+
+def test_audit_native_relay_without_declared_intent_still_refused(monkeypatch):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
+    wrong = base()
+    wrong["daemon"]["relay"]["enabled"] = True
+    with pytest.raises(ValueError, match="relay must be disabled"):
+        audit(wrong, "lan")
+
+
+@pytest.mark.parametrize("intent", ("unknown", "typo", "2"))
+def test_audit_refuses_unknown_relay_intent(monkeypatch, intent):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", intent)
+    with pytest.raises(ValueError, match="DOTFILES_PASEO_RELAY"):
+        audit(base(), "lan", required_hosts=["paseo.example.test"])
 
 
 def test_security_cli_uses_canonical_env_and_local_zone_aliases(

@@ -279,16 +279,25 @@ def test_relay_intent_must_be_boolean_before_native_write(tmp_path, monkeypatch)
     assert (home / "config.json").read_bytes() == original
 
 
-def test_caddy_plus_relay_intent_refuses_before_native_writes(tmp_path, monkeypatch):
+def test_caddy_gate_reconciles_declared_relay_during_owner_apply(
+    tmp_path, monkeypatch, capsys
+):
     home = home_with_config(tmp_path)
     calls = install_stub(monkeypatch, home)
+    zones = tmp_path / "ddns-zones.json"
+    zones.write_text(
+        json.dumps({"zones": [{"records": [{"name": "local.example.test"}]}]})
+    )
+    monkeypatch.setenv("CADDY_ZONES_CONFIG", str(zones))
     monkeypatch.setenv(web.GATE, "1")
     monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    monkeypatch.setenv("CADDY_ACCESS", "lan")
     monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
-    original = (home / "config.json").read_bytes()
-    assert web.main(["--apply"]) == 1
-    assert not calls
-    assert (home / "config.json").read_bytes() == original
+    assert web.main(["--apply"]) == 0
+    assert calls  # reconciliation went through Paseo's own CLI writer
+    config = json.loads((home / "config.json").read_text())
+    assert config["daemon"]["relay"]["enabled"] is True
+    assert "relay" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("relay_config", ({"enabled": True}, {}))
