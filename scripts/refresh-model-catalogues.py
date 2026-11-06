@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Write a review-only OpenCode Zen free-model inventory artefact."""
+"""Write a review-only OpenCode Console free-model candidate inventory."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -18,8 +19,9 @@ sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 # sys.path must be bootstrapped before importing the shared library.
 from cli_helpers import add_common_args  # noqa: E402
 from model_catalogues import get_catalogue  # noqa: E402
+from models_dev import MODELS_DEV_URL, fetch_models_dev_snapshot  # noqa: E402
 
-ZEN_MODELS_URL = "https://opencode.ai/zen/v1/models"
+CONSOLE_MODELS_URL = "https://opencode.ai/inference/v1/models"
 DEFAULT_OUTPUT = REPO_ROOT / "artifacts/model-catalogues/opencode-zen-free.json"
 
 
@@ -42,14 +44,34 @@ def _all_zero_numeric(value) -> bool:
     return False
 
 
-def is_zero_priced(pricing) -> bool:
-    if (
-        not isinstance(pricing, dict)
-        or "prompt" not in pricing
-        or "completion" not in pricing
-    ):
+def _valid_nonnegative_prices(value) -> bool:
+    """Validate each reported price, including optional nested price tiers."""
+    if isinstance(value, dict):
+        return bool(value) and all(
+            _valid_nonnegative_prices(child) for child in value.values()
+        )
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         return False
-    return _all_zero_numeric(pricing)
+    try:
+        amount = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(amount) and amount >= 0
+
+
+def valid_pricing(pricing) -> bool:
+    return (
+        isinstance(pricing, dict)
+        and "input" in pricing
+        and "output" in pricing
+        and isinstance(pricing["input"], (int, float, str))
+        and isinstance(pricing["output"], (int, float, str))
+        and _valid_nonnegative_prices(pricing)
+    )
+
+
+def is_zero_priced(pricing) -> bool:
+    return valid_pricing(pricing) and _all_zero_numeric(pricing)
 
 
 def normalize_models(models: list[dict]) -> list[dict]:
@@ -76,7 +98,7 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
             output,
             {
                 "status": "unavailable",
-                "source": ZEN_MODELS_URL,
+                "source": CONSOLE_MODELS_URL,
                 "fetched_at": fetched_at,
                 "reason": "OPENCODE_API_KEY is not set",
             },
@@ -85,37 +107,110 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
         return 1
 
     try:
-        catalogue = get_catalogue(ZEN_MODELS_URL, api_key, strict=True)
-    except Exception as exc:
-        print(f"OpenCode catalogue unavailable: {exc}", file=sys.stderr)
+        catalogue = get_catalogue(CONSOLE_MODELS_URL, api_key, strict=True)
+        raw_models = catalogue["data"]
+        if not isinstance(raw_models, list) or not raw_models:
+            raise ValueError("Console model catalogue is empty or malformed")
+        ids = []
+        for item in raw_models:
+            model_id = item.get("id") if isinstance(item, dict) else None
+            if (
+                not isinstance(model_id, str)
+                or not model_id.strip()
+                or model_id != model_id.strip()
+            ):
+                raise ValueError("Console model catalogue contains an invalid ID")
+            ids.append(model_id)
+        if len(ids) != len(set(ids)):
+            raise ValueError("Console model catalogue contains duplicate IDs")
+    except Exception:
+        # External errors may include request details; do not print credentials.
+        print(
+            "OpenCode Console catalogue unavailable or malformed",
+            file=sys.stderr,
+        )
         write_artifact(
             output,
             {
                 "status": "unavailable",
-                "source": ZEN_MODELS_URL,
+                "source": CONSOLE_MODELS_URL,
                 "fetched_at": fetched_at,
-                "reason": str(exc),
+                "reason": "Console model catalogue unavailable or malformed",
             },
             dry_run=dry_run,
         )
         return 1
 
-    models = normalize_models(
-        [
-            {"id": item["id"], "pricing": item["pricing"]}
-            for item in catalogue.get("data", [])
-            if isinstance(item, dict)
-            and isinstance(item.get("id"), str)
-            and is_zero_priced(item.get("pricing"))
-        ]
-    )
+    try:
+        snapshot = fetch_models_dev_snapshot()
+        provider = snapshot["models"]["opencode"]
+        prices = provider["models"]
+        observed = snapshot["observed_at"]
+        expires = snapshot["expires_at"]
+        if (
+            not isinstance(prices, dict)
+            or not isinstance(observed, str)
+            or not isinstance(expires, str)
+        ):
+            raise ValueError("models.dev pricing evidence is malformed")
+    except Exception:
+        print("OpenCode pricing metadata unavailable", file=sys.stderr)
+        write_artifact(
+            output,
+            {
+                "status": "unavailable",
+                "source": CONSOLE_MODELS_URL,
+                "pricing_source": MODELS_DEV_URL,
+                "fetched_at": fetched_at,
+                "reason": "models.dev pricing metadata unavailable",
+                "counts": {
+                    "catalogue": len(ids),
+                    "classified": 0,
+                    "free": 0,
+                    "unclassified": len(ids),
+                },
+            },
+            dry_run=dry_run,
+        )
+        return 1
+
+    free_models = []
+    unclassified = []
+    classified = 0
+    for model_id in ids:
+        record = prices.get(model_id)
+        cost = record.get("cost") if isinstance(record, dict) else None
+        if not valid_pricing(cost):
+            unclassified.append(model_id)
+            continue
+        classified += 1
+        if is_zero_priced(cost):
+            free_models.append({"id": model_id, "pricing": cost})
+
+    models = normalize_models(free_models)
     payload = {
-        "status": "available",
-        "source": ZEN_MODELS_URL,
+        "status": "incomplete" if unclassified else "available",
+        "source": CONSOLE_MODELS_URL,
+        "pricing_source": MODELS_DEV_URL,
         "fetched_at": fetched_at,
+        "pricing_observed_at": observed,
+        "pricing_expires_at": expires,
+        "counts": {
+            "catalogue": len(ids),
+            "classified": classified,
+            "free": len(models),
+            "unclassified": len(unclassified),
+        },
         "models": models,
     }
-    if output.is_file():
+    if unclassified:
+        payload["unclassified_model_ids"] = sorted(unclassified)
+        print(
+            "OpenCode pricing incomplete: "
+            f"{len(unclassified)} of {len(ids)} Console models lack valid cost data",
+            file=sys.stderr,
+        )
+    elif output.is_file():
         try:
             previous = json.loads(output.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -124,8 +219,10 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
             isinstance(previous, dict)
             and previous.get("status") in {"available", "unchanged"}
             and previous.get("source") == payload["source"]
+            and previous.get("pricing_source") == payload["pricing_source"]
+            and previous.get("counts") == payload["counts"]
             and isinstance(previous.get("models"), list)
-            and normalize_models(previous.get("models", [])) == payload["models"]
+            and normalize_models(previous["models"]) == payload["models"]
         ):
             payload["status"] = "unchanged"
     write_artifact(output, payload, dry_run=dry_run)

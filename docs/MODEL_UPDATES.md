@@ -139,7 +139,7 @@ for the automated check.
 
 `refresh-model-catalogues.yml` runs weekly at 06:00 UTC Monday and can also be
 started with `workflow_dispatch`. Its read-only refresh job queries the
-authenticated OpenCode Zen catalogue with `OPENCODE_API_KEY`; HTTP 401/403 and
+authenticated OpenCode Console model list with `OPENCODE_API_KEY`; HTTP 401/403 and
 network failures produce an `unavailable` timestamped artefact and never modify
 an allowlist. Manual dispatches are restricted to the authenticated repository
 owner on the default branch, and the publisher validates the complete diff
@@ -160,12 +160,49 @@ issue, command and default-branch identity. It uses the immutable default-branch
 SHA, not arbitrary commit text from a comment. The existing
 `workflow_dispatch` input and protected publication environment remain intact.
 
-The refresh keeps only entries whose numeric pricing values are all zero and
-writes evidence to
-`artifacts/model-catalogues/opencode-zen-free.json`. This is inventory for a
-human-reviewed update, not an allowlist writer: do not consume it by changing
-model catalogues, slim presets, Junie groups, CI configuration, or fallbacks
-without following this document's normal review flow.
+OpenCode Console lists models at the documented authenticated
+`GET https://opencode.ai/inference/v1/models` endpoint. This is **not**
+`/inference/openai/v1/models`: generation uses separate OpenAI, Anthropic
+and Gemini protocol-specific endpoints. The list supplies serving IDs,
+not reliable pricing evidence for the existing candidate classifier. The refresher now joins those IDs (without fuzzy name matching)
+against the `opencode` provider's `cost` records from a fresh
+[`models.dev` snapshot](https://models.dev/api.json). It classifies a model
+as a review-only *zero-price candidate* only when `input`, `output` and
+every reported optional price tier are valid nonnegative numbers and zero.
+A nonzero cost is paid. Missing/invalid cost, a missing provider mapping, an
+unreachable metadata source, or an empty/malformed Console response is never
+interpreted as evidence that no free models exist.
+
+The artefact retains the historical
+`artifacts/model-catalogues/opencode-zen-free.json` filename for the
+workflow's path allowlist and existing bot PR. Its `source` field now
+identifies the Console inference model list. It includes
+both sources, observation times, classification counts, and exact free model
+IDs with their observed pricing. A partial join is marked `incomplete` with
+the unclassified IDs; unavailable sources are `unavailable`. Neither status
+can enter the protected publisher (only `available` can), though the run
+retains its downloadable artefact for diagnosis. Fresh third-party price
+metadata is not proof of account entitlement, capacity or sustained
+availability. Free-tier chat models are available only inside OpenCode,
+not automatically from external API callers; owner review is required
+before a model is promoted.
+
+The Actions secret `OPENCODE_API_KEY` must contain a key accepted by the
+new OpenCode Console workspace. Use a Console read-only API key or a
+restricted key with **Models: Read** for this read-only inventory.
+Do not assume an existing legacy Zen-only key will work. HTTP 401/403
+produces an `unavailable` artifact without publishing or leaking the key.
+Other runtime consumers still use legacy Zen inference base URLs;
+migrate those independently with protocol-specific API and credential tests.
+
+This is inventory for a human-reviewed update, not an allowlist writer: do
+not consume it by changing model catalogues, slim presets, Junie groups,
+CI configuration, or fallbacks without following this document's normal
+review flow. The generated draft PR must not be merged automatically. Once a bot draft
+exists, timestamp-only changes to the same source, classifications and
+zero-price candidates preserve the existing bot branch tip and PR. A changed
+price, candidate set or classification count still updates the draft via
+force-with-lease, and a missing/closed draft never suppresses publication.
 
 
 ### Publishing credentials and recovery

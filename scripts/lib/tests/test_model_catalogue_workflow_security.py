@@ -230,3 +230,115 @@ def test_owner_comment_validation_rejects_wrong_actor_issue_body_and_pr():
                 check=False,
             )
             assert outcome.returncode == expected, (name, overrides)
+
+
+def test_publish_noop_is_scoped_to_an_open_pr_and_timestamp_only_diffs():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    marker = "Preserve an existing draft when the only differences"
+    assert marker in publish
+    before, after = publish.split(marker, 1)
+    assert before.index("git add --") < before.index("Publish the bot branch")
+    assert after.index("Catalogue unchanged apart from observation times") < (
+        after.index("git commit -m")
+    )
+    assert '[[ "${BOT_BRANCH_EXISTS}" == "true" ]]' in after
+    assert '[[ -n "${existing_pr}" ]]' in after
+    assert (
+        "git cat-file -e"
+        ' "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json"'
+    ) in after
+    assert "del(.fetched_at, .pricing_observed_at, .pricing_expires_at)" in after
+    assert "git -c credential.helper='!gh auth git-credential' push" in after
+
+
+def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    if not shutil.which("git") or not shutil.which("jq"):
+        import pytest
+
+        pytest.skip("Git and jq are required for the workflow-shell regression")
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    start = publish.index(
+        "          # Preserve an existing draft when the only differences"
+    )
+    end = publish.index('          git config user.name "model-catalogue-bot[bot]"')
+    shell = "\n".join(
+        line[10:]
+        for line in publish[start:end].splitlines()
+        if line.startswith("          ")
+    )
+    checkout = tmp_path / "repo"
+    checkout.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "CI fixture"], cwd=checkout, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "ci@example.invalid"],
+        cwd=checkout,
+        check=True,
+    )
+    path = checkout / "artifacts/model-catalogues/opencode-zen-free.json"
+    path.parent.mkdir(parents=True)
+    baseline = {
+        "status": "available",
+        "source": "https://opencode.ai/zen/v1/models",
+        "pricing_source": "https://models.dev/api.json",
+        "fetched_at": "2026-11-06T18:58:00Z",
+        "pricing_observed_at": "2026-11-06T18:58:00Z",
+        "pricing_expires_at": "2026-11-07T18:58:00Z",
+        "counts": {"catalogue": 1, "classified": 1, "free": 1, "unclassified": 0},
+        "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 0}}],
+    }
+    path.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=checkout, check=True)
+    tip = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+    ).strip()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text('#!/bin/sh\nprintf "%s" "${GH_PR_NUMBER:-}"\n')
+    gh.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "BOT_BRANCH_EXISTS": "true",
+            "BOT_BRANCH_EXPECTED_TIP": tip,
+        }
+    )
+
+    def evaluate(data, pr_number):
+        path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", shell],
+            cwd=checkout,
+            env={**env, "GH_PR_NUMBER": pr_number},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    timestamp_only = {
+        **baseline,
+        "fetched_at": "2026-11-06T19:01:00Z",
+        "pricing_observed_at": "2026-11-06T19:01:00Z",
+        "pricing_expires_at": "2026-11-07T19:01:00Z",
+    }
+    assert "Catalogue unchanged" in evaluate(timestamp_only, "200")
+    assert "Catalogue unchanged" not in evaluate(timestamp_only, "")
+    price_changed = {
+        **timestamp_only,
+        "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 1}}],
+    }
+    assert "Catalogue unchanged" not in evaluate(price_changed, "200")
