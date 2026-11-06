@@ -423,6 +423,18 @@ def litellm_client_gate_errors(environ=None, home=None, slim_registry=None):
                 for gate in row["setup_gates"]
             ):
                 continue
+            if shutil.which("paseo") is None:
+                errors.append("LiteLLM proxy mode requires installed Paseo CLI: paseo")
+                continue
+        if client == "paseo":
+            row = next(
+                row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client
+            )
+            if not all(
+                environ.get(gate.split("=", 1)[0], "0") == gate.split("=", 1)[1]
+                for gate in row["setup_gates"]
+            ):
+                continue
         if client in litellm_config.IDE_APP_BUNDLES:
             row = next(
                 row for row in litellm_config.CLIENT_REGISTRY if row["client"] == client

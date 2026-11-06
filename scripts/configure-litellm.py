@@ -113,7 +113,7 @@ def _client_provisioning_state(
         binary is not None
         and shutil.which(binary) is None
         and enforce_registry_gates
-        and not strict_provisioning
+        and (row["client"] == "paseo" or not strict_provisioning)
     ):
         return False, "not installed"
     if row["client"] in litellm_config.IDE_APP_BUNDLES:

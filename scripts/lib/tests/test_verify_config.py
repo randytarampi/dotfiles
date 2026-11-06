@@ -169,6 +169,7 @@ def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monke
     monkeypatch.setattr(
         VERIFY_CONFIG.litellm_config, "_registry_model_refs", lambda: {"openai/gpt-x"}
     )
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda _: "/fake/paseo")
     assert (
         VERIFY_CONFIG.litellm_client_gate_errors(
             {
@@ -188,6 +189,37 @@ def test_litellm_client_gate_enforces_gateway_only_prerequisites(tmp_path, monke
             home=tmp_path,
         )
     )
+
+
+def test_paseo_key_requirement_follows_voice_gate(tmp_path, monkeypatch):
+    key_dir = tmp_path / ".local/share/litellm/clients"
+    key_dir.mkdir(parents=True)
+    for client in VERIFY_CONFIG.APP_KEYS:
+        (key_dir / f"{client}.key").write_text("synthetic")
+    (key_dir / "paseo.key").unlink()
+    config = tmp_path / ".local/share/litellm/config.yaml"
+    config.write_text('  - model_name: "openai/gpt-x"\n')
+    monkeypatch.setattr(
+        VERIFY_CONFIG.litellm_config, "_registry_model_refs", lambda: {"openai/gpt-x"}
+    )
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda _: "/fake/paseo")
+    base = {
+        "DOTFILES_USE_LITELLM_PROXY": "1",
+        "DOTFILES_RUN_LITELLM_SETUP": "1",
+        "DOTFILES_RUN_PASEO_VOICE_SETUP": "1",
+        "OPENAI_API_KEY": "synthetic",
+    }
+    assert VERIFY_CONFIG.litellm_client_gate_errors(base, home=tmp_path) == [
+        f"LiteLLM proxy mode requires client key file: {key_dir / 'paseo.key'}"
+    ]
+    voice_off = {
+        **base,
+        "DOTFILES_RUN_PASEO_VOICE_SETUP": "0",
+    }  # paseo gates not all on
+    assert VERIFY_CONFIG.litellm_client_gate_errors(voice_off, home=tmp_path) == []
+    monkeypatch.setattr(VERIFY_CONFIG.shutil, "which", lambda _: None)
+    missing_cli = VERIFY_CONFIG.litellm_client_gate_errors(base, home=tmp_path)
+    assert "LiteLLM proxy mode requires installed Paseo CLI: paseo" in missing_cli
 
 
 def test_litellm_openai_subscription_preflight_direct_subscription_or_unavailable(
