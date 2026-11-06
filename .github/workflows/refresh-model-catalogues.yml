@@ -68,7 +68,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Refresh the review-only Zen inventory
+      - name: Refresh review-only free-model candidates
         id: refresh_catalogue
         continue-on-error: true
         env:
@@ -82,7 +82,7 @@ jobs:
           REFRESH_OUTCOME: ${{ steps.refresh_catalogue.outcome }}
         run: |
           set -euo pipefail
-          status="$(jq -r '.status // empty' artifacts/model-catalogues/opencode-zen-free.json)"
+          status="$(jq -r '.status // empty' artifacts/model-catalogues/free-model-candidates.json)"
           [[ -n "${status}" ]]
           printf 'status=%s\n' "${status}" >> "${GITHUB_OUTPUT}"
           if [[ "${status}" == "unavailable" ]]; then
@@ -90,11 +90,11 @@ jobs:
           fi
           [[ "${REFRESH_OUTCOME}" == "success" ]]
 
-      - name: Upload the catalogue artefact
+      - name: Upload the catalogue artifact
         uses: actions/upload-artifact@v7
         with:
           name: model-catalogue-${{ github.run_id }}
-          path: artifacts/model-catalogues/opencode-zen-free.json
+          path: artifacts/model-catalogues/free-model-candidates.json
           if-no-files-found: error
 
   publish:
@@ -143,7 +143,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Download the catalogue artefact
+      - name: Download the catalogue artifact
         uses: actions/download-artifact@v8
         with:
           name: model-catalogue-${{ github.run_id }}
@@ -165,11 +165,11 @@ jobs:
             printf 'BOT_BRANCH_EXPECTED_TIP=\n' >> "${GITHUB_ENV}"
           fi
 
-      - name: Validate and stage the exact artefact path
+      - name: Validate and stage the exact artifact path
         run: |
           set -euo pipefail
-          allowed_path="artifacts/model-catalogues/opencode-zen-free.json"
-          artifact_path="${RUNNER_TEMP}/model-catalogue/opencode-zen-free.json"
+          allowed_path="artifacts/model-catalogues/free-model-candidates.json"
+          artifact_path="${RUNNER_TEMP}/model-catalogue/free-model-candidates.json"
           test -f "${artifact_path}"
           test "$(git rev-parse HEAD)" = "${TRUSTED_SHA}"
           mkdir -p "$(dirname "${allowed_path}")"
@@ -188,6 +188,26 @@ jobs:
             echo "Refusing to publish a tree containing a gitlink (mode 160000)." >&2
             exit 1
           fi
+
+      - name: Prepare a template-compliant candidate review
+        run: |
+          set -euo pipefail
+          previous="${RUNNER_TEMP}/previous-candidates.json"
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
+            # Read old bot inventory only as data for the one-time PR #200 migration.
+            if git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" 2>/dev/null; then
+              git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" > "${previous}"
+            elif git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" 2>/dev/null; then
+              git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" > "${previous}"
+            fi
+          fi
+          args=(--current "artifacts/model-catalogues/free-model-candidates.json"
+                --output "${RUNNER_TEMP}/model-catalogue/review-pr.md")
+          if [[ -f "${previous}" ]]; then
+            args+=(--previous "${previous}")
+          fi
+          python3 scripts/lib/catalogue_review.py "${args[@]}"
 
       - name: Validate GitHub App publication credentials
         env:
@@ -219,32 +239,34 @@ jobs:
           publish_branch="model-catalogue-bot/inventory"
           [[ "${publish_branch}" =~ ^model-catalogue-bot/[a-z0-9-]+$ ]]
           # Preserve an existing draft when the only differences are observation times.
-          # This check is deliberately after the exact artefact-path and gitlink
+          # This check is deliberately after the exact artifact-path and gitlink
           # allowlists; do not skip those checks on repeated runs.
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
             existing_pr="$(gh pr list --head "model-catalogue-bot/inventory" --state open --json number --jq '.[0].number')"
             if [[ -n "${existing_pr}" ]] &&
-              git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" 2>/dev/null; then
-              old_semantics="$(git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" |
+              git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" 2>/dev/null; then
+              old_semantics="$(git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" |
                 jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)')"
-              new_semantics="$(jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)'                 artifacts/model-catalogues/opencode-zen-free.json)"
+              new_semantics="$(jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)'                 artifacts/model-catalogues/free-model-candidates.json)"
               if [[ "${old_semantics}" == "${new_semantics}" ]]; then
                 echo "Catalogue unchanged apart from observation times; preserving existing draft PR."
                 exit 0
               fi
             fi
           fi
-          git config user.name "model-catalogue-bot[bot]"
-          git config user.email "model-catalogue-bot[bot]@users.noreply.github.com"
-          git commit -m "chore: refresh model catalogue artefact"
+          # ID 353209076 is the verified WOOFDY App author of PR #200.
+          bot_login="woofdy-randytarampi-ca[bot]"
+          git config user.name "${bot_login}"
+          git config user.email "353209076+${bot_login}@users.noreply.github.com"
+          git commit -m "chore(agents): refresh free-model candidate inventory"
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
           fi
           git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
           mapfile -t published_paths < <(git diff --name-only "origin/${DEFAULT_BRANCH}...HEAD")
           ((${#published_paths[@]} == 1))
-          [[ "${published_paths[0]}" == "artifacts/model-catalogues/opencode-zen-free.json" ]]
+          [[ "${published_paths[0]}" == "artifacts/model-catalogues/free-model-candidates.json" ]]
           if ! git diff --raw "origin/${DEFAULT_BRANCH}...HEAD" | awk '$2 ~ /^160000$/ || $3 ~ /^160000$/ { found=1 } END { exit found }'; then
             echo "Refusing to publish a commit containing a gitlink (mode 160000)." >&2
             exit 1
@@ -253,8 +275,11 @@ jobs:
             --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" \
             origin "HEAD:refs/heads/${publish_branch}"
           existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"
+          review_body="${RUNNER_TEMP}/model-catalogue/review-pr.md"
+          test -s "${review_body}"
           if [[ -n "${existing_pr}" ]]; then
-            gh pr edit "${existing_pr}" --title "chore: refresh model catalogue" --body "Generated review-only OpenCode Zen inventory artefact."
+            gh pr edit "${existing_pr}" --title "chore(agents): review free-model candidates" --body-file "${review_body}"
           else
-            gh pr create --draft --base main --head "${publish_branch}" --title "chore: refresh model catalogue" --body "Generated review-only OpenCode Zen inventory artefact."
+            gh pr create --draft --base main --head "${publish_branch}" \
+              --title "chore(agents): review free-model candidates" --body-file "${review_body}"
           fi

@@ -46,7 +46,7 @@ def test_publish_branch_and_patch_path_are_strictly_allowlisted():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "^model-catalogue-bot/[a-z0-9-]+$" in workflow
     assert 'publish_branch="model-catalogue-bot/inventory"' in workflow
-    assert "artifacts/model-catalogues/opencode-zen-free.json" in workflow
+    assert "artifacts/model-catalogues/free-model-candidates.json" in workflow
     assert "git ls-files --stage" in workflow
     assert "160000" in workflow
     assert (
@@ -246,7 +246,8 @@ def test_publish_noop_is_scoped_to_an_open_pr_and_timestamp_only_diffs():
     assert '[[ -n "${existing_pr}" ]]' in after
     assert (
         "git cat-file -e"
-        ' "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json"'
+        ' "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/'
+        'free-model-candidates.json"'
     ) in after
     assert "del(.fetched_at, .pricing_observed_at, .pricing_expires_at)" in after
     assert "git -c credential.helper='!gh auth git-credential' push" in after
@@ -267,7 +268,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     start = publish.index(
         "          # Preserve an existing draft when the only differences"
     )
-    end = publish.index('          git config user.name "model-catalogue-bot[bot]"')
+    end = publish.index('          bot_login="woofdy-randytarampi-ca[bot]"')
     shell = "\n".join(
         line[10:]
         for line in publish[start:end].splitlines()
@@ -284,7 +285,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         cwd=checkout,
         check=True,
     )
-    path = checkout / "artifacts/model-catalogues/opencode-zen-free.json"
+    path = checkout / "artifacts/model-catalogues/free-model-candidates.json"
     path.parent.mkdir(parents=True)
     baseline = {
         "status": "available",
@@ -342,3 +343,36 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 1}}],
     }
     assert "Catalogue unchanged" not in evaluate(price_changed, "200")
+
+
+
+def test_candidate_report_uses_template_and_woofdy_commit_identity():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    refresh, publish = workflow.split("  publish:\n", 1)
+    assert "free-model-candidates.json" in refresh
+    assert "Prepare a template-compliant candidate review" in publish
+    assert "scripts/lib/catalogue_review.py" in publish
+    assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
+    assert '353209076+${bot_login}@users.noreply.github.com' in publish
+    assert 'git config user.name "${bot_login}"' in publish
+    assert (
+        'git commit -m "chore(agents): refresh free-model candidate inventory"'
+        in publish
+    )
+    assert 'gh pr create --draft --base main --head "${publish_branch}"' in publish
+    assert 'gh pr edit "${existing_pr}"' in publish
+    assert publish.count('--body-file "${review_body}"') == 2
+    assert "model-catalogue-bot[bot]@users.noreply.github.com" not in publish
+    assert (
+        'git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/'
+        'opencode-zen-free.json"' in publish
+    )
+    assert (
+        '[[ "${published_paths[0]}" == "artifacts/model-catalogues/'
+        'free-model-candidates.json" ]]' in publish
+    )
+    # The renamed source path is only accepted for reading old PR #200 data.
+    allowed = publish.split('allowed_path="', 1)[1].split('"', 1)[0]
+    assert allowed == "artifacts/model-catalogues/free-model-candidates.json"
+    assert "git add -- \"${allowed_path}\"" in publish
+    assert "artefact" not in workflow
