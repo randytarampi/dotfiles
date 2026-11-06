@@ -175,6 +175,7 @@ jobs:
       - name: Publish the bot branch and create or update its draft PR
         env:
           GH_TOKEN: ${{ steps.publish_app_token.outputs.token }}
+          GIT_TERMINAL_PROMPT: "0"
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
@@ -196,7 +197,7 @@ jobs:
             echo "Refusing to publish a commit containing a gitlink (mode 160000)." >&2
             exit 1
           fi
-          git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push \
+          git -c credential.helper='!gh auth git-credential' push \
             --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" \
             origin "HEAD:refs/heads/${publish_branch}"
           existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"

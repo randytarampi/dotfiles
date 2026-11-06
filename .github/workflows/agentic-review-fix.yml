@@ -293,6 +293,7 @@ jobs:
       - name: Publish a unique bot branch and create or update its draft PR
         env:
           GH_TOKEN: ${{ steps.publish.outputs.token }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           set -euo pipefail
           publish_branch="agentic-review-bot/${GITHUB_RUN_ID}"
@@ -302,9 +303,9 @@ jobs:
           git commit -m "fix: apply requested agentic review change"
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
-            git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" origin "HEAD:refs/heads/${publish_branch}"
+            git -c credential.helper='!gh auth git-credential' push --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" origin "HEAD:refs/heads/${publish_branch}"
           else
-            git -c http.extraheader="Authorization: Bearer ${GH_TOKEN}" push origin "HEAD:refs/heads/${publish_branch}"
+            git -c credential.helper='!gh auth git-credential' push origin "HEAD:refs/heads/${publish_branch}"
           fi
           existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"
           if [[ -n "${existing_pr}" ]]; then

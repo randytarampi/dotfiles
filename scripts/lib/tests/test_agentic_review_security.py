@@ -293,3 +293,16 @@ def test_manual_fix_uses_woofdy_app_publisher_credentials():
     assert "permission-contents: write" in publish
     assert "permission-pull-requests: write" in publish
     assert "GH_TOKEN: ${{ steps.publish.outputs.token }}" in publish
+
+
+def test_manual_fix_push_uses_scoped_github_cli_app_credentials():
+    workflow = read(".github/workflows/agentic-review-fix.yml")
+    generate, publish = workflow.split("  publish:\n", 1)
+    helper = "git -c credential.helper='!gh auth git-credential' push"
+    assert "gh auth git-credential" not in generate
+    assert publish.count(helper) == 2
+    assert "GH_TOKEN: ${{ steps.publish.outputs.token }}" in publish
+    assert 'GIT_TERMINAL_PROMPT: "0"' in publish
+    assert "persist-credentials: false" in publish
+    assert "http.extraheader" not in publish
+    assert "Authorization: Bearer" not in publish
