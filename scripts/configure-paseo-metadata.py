@@ -36,21 +36,31 @@ def helpers():
 
 
 def native_set(paseo, home, providers):
-    subprocess.run(  # nosec B603 - resolved binary, fixed native config args.
-        [
-            paseo,
-            "daemon",
-            "config",
-            "set",
-            "agents.metadataGeneration.providers",
-            json.dumps(providers, separators=(",", ":")),
-            "--home",
-            str(home),
-        ],
-        capture_output=True,
-        timeout=60,
-        check=False,
-    )
+    try:
+        result = subprocess.run(  # nosec B603 - fixed native config args.
+            [
+                paseo,
+                "daemon",
+                "config",
+                "set",
+                "agents.metadataGeneration.providers",
+                json.dumps(providers, separators=(",", ":")),
+                "--home",
+                str(home),
+            ],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        # Do not disclose subprocess output or roll back an uncertain live write.
+        raise ValueError("Paseo metadata native setter timed out") from None
+    if result.returncode:
+        # A failed command may already have changed the native configuration.
+        # Refuse success even when the subsequent JSON readback looks correct.
+        raise ValueError(
+            f"Paseo metadata native setter failed (exit {result.returncode})"
+        )
 
 
 def apply(paseo, home, path, original, desired, helper):
@@ -115,7 +125,7 @@ def main(argv=None):
         apply(paseo, home, path, original, changes, helper)
         print("Paseo manual metadata preference saved; restart the daemon")
         return 0
-    except (OSError, ValueError, KeyError) as error:
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print("Paseo local metadata refused: " + str(error), file=sys.stderr)
         return 1
 
