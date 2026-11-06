@@ -18,6 +18,34 @@ import tempfile
 GATE = "DOTFILES_RUN_PASEO_HERMES_ACP_SETUP"
 
 
+def native_set(paseo, home, providers):
+    result = subprocess.run(  # nosec B603 - resolved Paseo binary, fixed path.
+        [
+            paseo,
+            "daemon",
+            "config",
+            "set",
+            "agents.providers",
+            json.dumps(providers, separators=(",", ":")),
+            "--home",
+            str(home),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode:
+        reason = f"{result.stdout or ''}\n{result.stderr or ''}"
+        reason = reason.replace("/Users/randy.tarampi", "<user>")
+        reason = reason.replace(str(home), "<home>")
+        reason = " ".join(reason.split())[:300]
+        raise ValueError(
+            f"Paseo config setter failed (exit {result.returncode})"
+            + (f": {reason}" if reason else "")
+        )
+
+
 def provider(hermes_binary):
     """Use an absolute executable so the Paseo daemon needs no shell PATH."""
     return {
@@ -119,17 +147,11 @@ def main(argv=None):
             print("Hermes ACP already registered and preflight passed")
             return 0
         expected = copy.deepcopy(original)
-        providers = expected.setdefault("agents", {}).setdefault("providers", {})
+        providers = copy.deepcopy(original.get("agents", {}).get("providers", {}))
+        if not isinstance(providers, dict):
+            raise ValueError("agents.providers must be an object")
         providers["hermes"] = desired
-        command = [
-            paseo,
-            "daemon",
-            "config",
-            "set",
-            "agents.providers.hermes",
-            json.dumps(desired, separators=(",", ":")),
-            "--home",
-        ]
+        expected.setdefault("agents", {})["providers"] = providers
         # The native Paseo CLI may normalize or discard unrelated user-owned
         # keys. Prove the exact mutation in a private copy before any live write.
         with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-hermes-") as scratch:
@@ -137,13 +159,7 @@ def main(argv=None):
             staged_config = staged_home / "config.json"
             staged_config.write_bytes(path.read_bytes())
             staged_config.chmod(0o600)
-            subprocess.run(  # nosec B603 - resolved CLI and private staged home.
-                command + [str(staged_home)],
-                check=True,
-                timeout=30,
-                capture_output=True,
-                text=True,
-            )
+            native_set(paseo, staged_home, providers)
             preview = decode_config(staged_config.read_text(encoding="utf-8"))
             if not same_config(preview, expected):
                 raise ValueError(
@@ -151,13 +167,7 @@ def main(argv=None):
                 )
         if not same_config(decode_config(path.read_text(encoding="utf-8")), original):
             raise ValueError("Paseo config changed during preflight; retry")
-        subprocess.run(  # nosec B603 - resolved CLI; staged layout validated.
-            command + [str(home)],
-            check=True,
-            timeout=30,
-            capture_output=True,
-            text=True,
-        )
+        native_set(paseo, home, providers)
         updated = decode_config(path.read_text(encoding="utf-8"))
         if (
             not same_config(updated, expected)

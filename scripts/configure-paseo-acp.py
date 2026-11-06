@@ -89,15 +89,15 @@ def desired_entries(config, found, selected):
     return updates
 
 
-def run_set(binary, home, name, value):
+def run_set(binary, home, providers):
     result = subprocess.run(  # nosec B603 - resolved executable, fixed native CLI.
         [
             binary,
             "daemon",
             "config",
             "set",
-            "agents.providers." + name,
-            json.dumps(value, separators=(",", ":")),
+            "agents.providers",
+            json.dumps(providers, separators=(",", ":")),
             "--home",
             str(home),
         ],
@@ -105,21 +105,37 @@ def run_set(binary, home, name, value):
         timeout=60,
         check=False,
     )
+    if result.returncode:
+        reason = f"{result.stdout or ''}\n{result.stderr or ''}"
+        reason = reason.replace("/Users/randy.tarampi", "<user>")
+        reason = reason.replace(str(home), "<home>")
+        reason = " ".join(reason.split())[:300]
+        raise ValueError(
+            f"Paseo config setter failed (exit {result.returncode})"
+            + (f": {reason}" if reason else "")
+        )
     # The CLI may save and report a reload error; readback determines success.
     return result.returncode
 
 
 def apply_entries(paseo, home, source, config, updates, helpers):
     expected = copy.deepcopy(config)
+    agents = expected.get("agents", {})
+    if not isinstance(agents, dict):
+        raise ValueError("agents must be an object")
+    providers = copy.deepcopy(agents.get("providers", {}))
+    if not isinstance(providers, dict):
+        raise ValueError("agents.providers must be an object")
     for name, value in updates.items():
-        expected.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        providers[name] = value
+    # Only agents.providers entries differ from the original document.
+    expected.setdefault("agents", {})["providers"] = providers
     with tempfile.TemporaryDirectory(prefix="paseo-acp-preflight-") as scratch:
         staged_home = Path(scratch)
         target = staged_home / "config.json"
         target.write_bytes(source.read_bytes())
         target.chmod(0o600)
-        for name, value in updates.items():
-            run_set(paseo, staged_home, name, value)
+        run_set(paseo, staged_home, providers)
         preview = helpers.decode_config(target.read_text(encoding="utf-8"))
         if not helpers.same_config(preview, expected):
             raise ValueError("native CLI would alter unrelated Paseo settings")
@@ -127,13 +143,10 @@ def apply_entries(paseo, home, source, config, updates, helpers):
         helpers.decode_config(source.read_text(encoding="utf-8")), config
     ):
         raise ValueError("Paseo config changed before apply")
-    intermediate = copy.deepcopy(config)
-    for name, value in updates.items():
-        intermediate.setdefault("agents", {}).setdefault("providers", {})[name] = value
-        run_set(paseo, home, name, value)
-        current = helpers.decode_config(source.read_text(encoding="utf-8"))
-        if not helpers.same_config(current, intermediate):
-            raise ValueError("Paseo config changed unexpectedly; no rollback attempted")
+    run_set(paseo, home, providers)
+    current = helpers.decode_config(source.read_text(encoding="utf-8"))
+    if not helpers.same_config(current, expected):
+        raise ValueError("Paseo config changed unexpectedly; no rollback attempted")
 
 
 def main(argv=None):
