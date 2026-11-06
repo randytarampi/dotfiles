@@ -185,6 +185,113 @@ def test_native_lossy_stage_aborts_before_live_write(tmp_path, monkeypatch):
     assert json.loads(target.read_text()) == original
 
 
+def test_native_lossy_first_live_write_leaves_damage_and_stops(tmp_path, monkeypatch):
+    home = tmp_path / ".paseo"
+    home.mkdir()
+    target = home / "config.json"
+    original = {"version": 1, "user": {"keep": "yes"}}
+    target.write_text(json.dumps(original))
+    target.chmod(0o600)
+    helpers = module.load_module("paseo_acp_live_lossy", "configure-paseo-hermes.py")
+    desired = {"extends": "acp", "command": ["/bin/gemini"]}
+    calls = []
+
+    def native(_binary, native_home, name, value):
+        calls.append(native_home)
+        file = native_home / "config.json"
+        data = json.loads(file.read_text())
+        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        if native_home == home:
+            data.pop("user")
+        file.write_text(json.dumps(data))
+        return 0
+
+    monkeypatch.setattr(module, "run_set", native)
+    with pytest.raises(ValueError, match="no rollback attempted"):
+        module.apply_entries(
+            "/bin/paseo", home, target, original, {"gemini": desired}, helpers
+        )
+    assert len(calls) == 2
+    assert json.loads(target.read_text()) == {
+        "version": 1,
+        "agents": {"providers": {"gemini": desired}},
+    }
+
+
+def test_second_live_write_damage_leaves_partial_apply(tmp_path, monkeypatch):
+    home = tmp_path / ".paseo"
+    home.mkdir()
+    target = home / "config.json"
+    original = {"version": 1, "metadata": {"keep": "exact"}}
+    target.write_text(json.dumps(original))
+    target.chmod(0o600)
+    helpers = module.load_module("paseo_acp_second_lossy", "configure-paseo-hermes.py")
+    entries = {
+        "gemini": {"extends": "acp", "command": ["/bin/gemini"]},
+        "junie": {"extends": "acp", "command": ["/bin/junie"]},
+    }
+    calls = []
+
+    def native(_binary, native_home, name, value):
+        calls.append((native_home, name))
+        file = native_home / "config.json"
+        data = json.loads(file.read_text())
+        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        if native_home == home and name == "junie":
+            data["metadata"]["keep"] = "damaged"
+        file.write_text(json.dumps(data))
+        return 0
+
+    monkeypatch.setattr(module, "run_set", native)
+    with pytest.raises(ValueError, match="no rollback attempted"):
+        module.apply_entries("/bin/paseo", home, target, original, entries, helpers)
+    assert [name for native_home, name in calls if native_home == home] == [
+        "gemini",
+        "junie",
+    ]
+    assert json.loads(target.read_text()) == {
+        "version": 1,
+        "metadata": {"keep": "damaged"},
+        "agents": {
+            "providers": {
+                "gemini": entries["gemini"],
+                "junie": entries["junie"],
+            }
+        },
+    }
+
+
+def test_nonzero_native_return_code_accepts_correct_readback(tmp_path, monkeypatch):
+    home = tmp_path / ".paseo"
+    home.mkdir()
+    target = home / "config.json"
+    original = {"version": 1, "user": {"keep": "yes"}}
+    target.write_text(json.dumps(original))
+    target.chmod(0o600)
+    helpers = module.load_module("paseo_acp_nonzero", "configure-paseo-hermes.py")
+    desired = {"extends": "acp", "command": ["/bin/gemini"]}
+    calls = []
+
+    def native(_binary, native_home, name, value):
+        calls.append(native_home)
+        file = native_home / "config.json"
+        data = json.loads(file.read_text())
+        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        file.write_text(json.dumps(data))
+        return 23
+
+    monkeypatch.setattr(module, "run_set", native)
+    module.apply_entries(
+        "/bin/paseo", home, target, original, {"gemini": desired}, helpers
+    )
+    assert len(calls) == 2
+    assert json.loads(target.read_text()) == {
+        "version": 1,
+        "user": {"keep": "yes"},
+        "agents": {"providers": {"gemini": desired}},
+    }
+
+
 def test_relative_paseo_binary_refused_even_in_apply_preview(monkeypatch, tmp_path):
     monkeypatch.setattr(
         module.shutil,
