@@ -1,6 +1,8 @@
 name: Refresh model catalogues
 
 on:
+  issue_comment:
+    types: [created]
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
@@ -15,6 +17,15 @@ permissions:
 
 jobs:
   refresh:
+    # Filter the owner-only issue command before entering the secret-bearing job.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (
+        github.actor == github.repository_owner &&
+        github.event.issue.number == 197 &&
+        github.event.issue.pull_request == null &&
+        github.event.comment.body == '/refresh-model-catalogues'
+      )
     runs-on: ubuntu-latest
     outputs:
       status: ${{ steps.catalogue_status.outputs.status }}
@@ -29,12 +40,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           TRUSTED_REF: ${{ inputs.trusted_ref }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          COMMENT_ISSUE: ${{ github.event.issue.number || '' }}
+          COMMENT_IS_PR: ${{ github.event.issue.pull_request != null }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
             test -n "${TRUSTED_REF}"
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "issue_comment" ]]; then
+            test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+            test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+            test "${COMMENT_ISSUE}" = "197"
+            test "${COMMENT_IS_PR}" = "false"
+            test "${COMMENT_BODY}" = "/refresh-model-catalogues"
+            test -z "${TRUSTED_REF}"
+            test "${TRUSTED_SHA}" = "${GITHUB_SHA}"
           fi
           [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
@@ -90,6 +113,9 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           TRUSTED_REF: ${{ inputs.trusted_ref }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          COMMENT_ISSUE: ${{ github.event.issue.number || '' }}
+          COMMENT_IS_PR: ${{ github.event.issue.pull_request != null }}
         run: |
           set -euo pipefail
           publish_branch="model-catalogue-bot/inventory"
@@ -98,6 +124,15 @@ jobs:
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
             test -n "${TRUSTED_REF}"
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "issue_comment" ]]; then
+            test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
+            test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
+            test "${COMMENT_ISSUE}" = "197"
+            test "${COMMENT_IS_PR}" = "false"
+            test "${COMMENT_BODY}" = "/refresh-model-catalogues"
+            test -z "${TRUSTED_REF}"
+            test "${TRUSTED_SHA}" = "${GITHUB_SHA}"
           fi
           [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
 
