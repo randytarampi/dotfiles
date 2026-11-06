@@ -13,40 +13,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from cli_helpers import add_common_args  # noqa: E402 -- local bootstrap above.
-import tempfile
+from paseo_provider_write import apply_document  # noqa: E402
 
 GATE = "DOTFILES_RUN_PASEO_HERMES_ACP_SETUP"
 
-
-def native_set(paseo, home, providers):
-    result = subprocess.run(  # nosec B603 - resolved Paseo binary, fixed path.
-        [
-            paseo,
-            "daemon",
-            "config",
-            "set",
-            "agents.providers",
-            json.dumps(providers, separators=(",", ":")),
-            "--home",
-            str(home),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode:
-        # The native CLI may echo the entire providers JSON, including secrets.
-        # Disclose only a fixed diagnostic rather than untrusted CLI output.
-        output = str(result.stdout or "") + str(result.stderr or "")
-        detail = (
-            "Unknown configuration path: agents.providers"
-            if "Unknown configuration path" in output
-            else "native output suppressed to protect provider settings"
-        )
-        raise ValueError(
-            f"Paseo config setter failed (exit {result.returncode}): {detail}"
-        )
 
 
 def provider(hermes_binary):
@@ -155,28 +125,12 @@ def main(argv=None):
             raise ValueError("agents.providers must be an object")
         providers["hermes"] = desired
         expected.setdefault("agents", {})["providers"] = providers
-        # The native Paseo CLI may normalize or discard unrelated user-owned
-        # keys. Prove the exact mutation in a private copy before any live write.
-        with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-hermes-") as scratch:
-            staged_home = Path(scratch)
-            staged_config = staged_home / "config.json"
-            staged_config.write_bytes(path.read_bytes())
-            staged_config.chmod(0o600)
-            native_set(paseo, staged_home, providers)
-            preview = decode_config(staged_config.read_text(encoding="utf-8"))
-            if not same_config(preview, expected):
-                raise ValueError(
-                    "Paseo CLI would rewrite unrelated config; refusing live write"
-                )
-        if not same_config(decode_config(path.read_text(encoding="utf-8")), original):
-            raise ValueError("Paseo config changed during preflight; retry")
-        native_set(paseo, home, providers)
-        updated = decode_config(path.read_text(encoding="utf-8"))
-        if (
-            not same_config(updated, expected)
-            or classify(updated, desired) != "unchanged"
-        ):
-            raise ValueError("Paseo config write changed more than Hermes ACP provider")
+        # Native config-set has no credential-safe value channel; use a private
+        # staged file, Paseo schema check, atomic save and daemon reload.
+        apply_document(
+            paseo, home, path, original, expected,
+            decode_config, same_config,
+        )
         print("Hermes ACP registered; validate a real local session in Paseo")
         return 0
     except (ValueError, OSError, subprocess.SubprocessError) as error:

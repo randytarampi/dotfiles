@@ -18,8 +18,13 @@ working ACP session. Install/authenticate agents outside this script and
 verify an actual `initialize`, streaming task, tool approval and denial,
 cancellation, reconnection and workspace use.
 
-The script stages all native `paseo daemon config set` changes before apply,
-and compares the entire resulting JSON document. This does **not** solve the
+The script stages a private candidate config, validates it with Paseo's
+`daemon config get` schema reader, then atomically replaces the user-owned
+config and invokes `daemon reload`. The native `config set` command cannot
+accept a secret JSON provider map without exposing it in argv, so it is never
+used. A failed reload may leave the saved file changed: investigate the
+reported saved/reload state, never automatically roll back. The original
+file mode and all unrelated JSON keys are preserved. This does **not** solve the
 upstream lost-update race tracked in #173. Do not apply concurrently, and
 never auto-restore a stale snapshot on failure. Remove only an exact managed
 entry through an owner-approved native `config unset` after taking a backup.
