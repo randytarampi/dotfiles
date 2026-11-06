@@ -124,18 +124,22 @@ def test_native_preflight_and_live_readback_preserve_other_keys(tmp_path, monkey
     home = tmp_path / ".paseo"
     home.mkdir()
     target = home / "config.json"
-    original = {"version": 1, "user": {"keep": "yes"}}
+    original = {
+        "version": 1,
+        "user": {"keep": "yes"},
+        "agents": {"providers": {"pi": {"label": "preserve"}}},
+    }
     target.write_text(json.dumps(original))
     target.chmod(0o600)
     helpers = module.load_module("paseo_hermes_acp_test", "configure-paseo-hermes.py")
     desired = {"extends": "acp", "label": "Gemini", "command": ["/bin/gemini", "--acp"]}
     calls = []
 
-    def native(_binary, native_home, name, value):
-        calls.append((native_home, name))
+    def native(_binary, native_home, providers):
+        calls.append((native_home, providers))
         file = native_home / "config.json"
         data = json.loads(file.read_text())
-        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        data.setdefault("agents", {})["providers"] = providers
         file.write_text(json.dumps(data))
         return 0
 
@@ -145,8 +149,12 @@ def test_native_preflight_and_live_readback_preserve_other_keys(tmp_path, monkey
     )
     data = json.loads(target.read_text())
     assert data["user"] == original["user"]
+    assert data["agents"]["providers"]["pi"] == {"label": "preserve"}
     assert data["agents"]["providers"]["gemini"] == desired
     assert len(calls) == 2
+    assert all(
+        call_providers["pi"] == {"label": "preserve"} for _, call_providers in calls
+    )
 
 
 def test_native_lossy_stage_aborts_before_live_write(tmp_path, monkeypatch):
@@ -159,10 +167,10 @@ def test_native_lossy_stage_aborts_before_live_write(tmp_path, monkeypatch):
     helpers = module.load_module("paseo_hermes_acp_lossy", "configure-paseo-hermes.py")
     calls = []
 
-    def lossy(_binary, native_home, name, value):
+    def lossy(_binary, native_home, providers):
         calls.append(native_home)
         file = native_home / "config.json"
-        file.write_text(json.dumps({"agents": {"providers": {name: value}}}))
+        file.write_text(json.dumps({"agents": {"providers": providers}}))
         return 0
 
     monkeypatch.setattr(module, "run_set", lossy)
@@ -196,11 +204,11 @@ def test_native_lossy_first_live_write_leaves_damage_and_stops(tmp_path, monkeyp
     desired = {"extends": "acp", "command": ["/bin/gemini"]}
     calls = []
 
-    def native(_binary, native_home, name, value):
+    def native(_binary, native_home, providers):
         calls.append(native_home)
         file = native_home / "config.json"
         data = json.loads(file.read_text())
-        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        data.setdefault("agents", {})["providers"] = providers
         if native_home == home:
             data.pop("user")
         file.write_text(json.dumps(data))
@@ -232,12 +240,12 @@ def test_second_live_write_damage_leaves_partial_apply(tmp_path, monkeypatch):
     }
     calls = []
 
-    def native(_binary, native_home, name, value):
-        calls.append((native_home, name))
+    def native(_binary, native_home, providers):
+        calls.append((native_home, providers))
         file = native_home / "config.json"
         data = json.loads(file.read_text())
-        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
-        if native_home == home and name == "junie":
+        data.setdefault("agents", {})["providers"] = providers
+        if native_home == home:
             data["metadata"]["keep"] = "damaged"
         file.write_text(json.dumps(data))
         return 0
@@ -245,10 +253,9 @@ def test_second_live_write_damage_leaves_partial_apply(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "run_set", native)
     with pytest.raises(ValueError, match="no rollback attempted"):
         module.apply_entries("/bin/paseo", home, target, original, entries, helpers)
-    assert [name for native_home, name in calls if native_home == home] == [
-        "gemini",
-        "junie",
-    ]
+    assert [
+        len(providers) for native_home, providers in calls if native_home == home
+    ] == [2]
     assert json.loads(target.read_text()) == {
         "version": 1,
         "metadata": {"keep": "damaged"},
@@ -272,11 +279,11 @@ def test_nonzero_native_return_code_accepts_correct_readback(tmp_path, monkeypat
     desired = {"extends": "acp", "command": ["/bin/gemini"]}
     calls = []
 
-    def native(_binary, native_home, name, value):
+    def native(_binary, native_home, providers):
         calls.append(native_home)
         file = native_home / "config.json"
         data = json.loads(file.read_text())
-        data.setdefault("agents", {}).setdefault("providers", {})[name] = value
+        data.setdefault("agents", {})["providers"] = providers
         file.write_text(json.dumps(data))
         return 23
 
@@ -290,6 +297,18 @@ def test_nonzero_native_return_code_accepts_correct_readback(tmp_path, monkeypat
         "user": {"keep": "yes"},
         "agents": {"providers": {"gemini": desired}},
     }
+
+
+def test_nonzero_native_cli_reason_is_reported(tmp_path, monkeypatch):
+    result = module.subprocess.CompletedProcess(
+        args=[],
+        returncode=1,
+        stdout="",
+        stderr="Unknown configuration path: agents.providers.gemini",
+    )
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: result)
+    with pytest.raises(ValueError, match="Unknown configuration path"):
+        module.run_set("/bin/paseo", tmp_path, {"gemini": {}})
 
 
 def test_relative_paseo_binary_refused_even_in_apply_preview(monkeypatch, tmp_path):

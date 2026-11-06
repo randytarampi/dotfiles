@@ -82,18 +82,22 @@ def test_apply_validates_acp_and_preserves_providers(monkeypatch, tmp_path):
         calls.append(args)
         if args[1:] == ["acp", "--check"]:
             return Mock(returncode=0)
+        assert args[4] == "agents.providers"
+        sent = json.loads(args[5])
+        assert sent["pi"] == original["agents"]["providers"]["pi"]
+        assert sent["hermes"] == PROVIDER
         expected = copy.deepcopy(original)
-        expected["agents"]["providers"]["hermes"] = paseo_hermes.provider("/bin/hermes")
+        expected["agents"]["providers"] = sent
         target = Path(args[-1]) / "config.json"
         target.write_text(json.dumps(expected))
-        return Mock(returncode=0)
+        return Mock(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(paseo_hermes.subprocess, "run", fake_run)
     assert paseo_hermes.main(["--apply"]) == 0
     assert calls[0] == ["/bin/hermes", "acp", "--check"]
     assert [call[0:5] for call in calls[1:]] == [
-        ["/bin/paseo", "daemon", "config", "set", "agents.providers.hermes"],
-        ["/bin/paseo", "daemon", "config", "set", "agents.providers.hermes"],
+        ["/bin/paseo", "daemon", "config", "set", "agents.providers"],
+        ["/bin/paseo", "daemon", "config", "set", "agents.providers"],
     ]
     assert calls[1][-1] != str(home)
     assert calls[2][-1] == str(home)
@@ -152,13 +156,28 @@ def test_hermes_preflight_rejects_lossy_cli_without_live_mutation(
             return Mock(returncode=0)
         staged = Path(args[-1]) / "config.json"
         staged.write_text(json.dumps({"agents": {"providers": {"hermes": PROVIDER}}}))
-        return Mock(returncode=0)
+        return Mock(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(paseo_hermes.subprocess, "run", fake_run)
     assert paseo_hermes.main(["--apply"]) == 1
     assert len(calls) == 2
     assert calls[1][-1] != str(home)
     assert path.read_bytes() == before
+
+
+def test_native_set_failure_reports_redacted_cli_reason(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        paseo_hermes.subprocess,
+        "run",
+        lambda *args, **kwargs: Mock(
+            returncode=1,
+            stdout="",
+            stderr="Unknown configuration path under /Users/randy.tarampi/.paseo",
+        ),
+    )
+    with pytest.raises(ValueError, match="Unknown configuration path") as caught:
+        paseo_hermes.native_set("/bin/paseo", tmp_path, {})
+    assert "/Users/randy.tarampi" not in str(caught.value)
 
 
 def test_hermes_explicit_dry_run_never_runs_external_commands(monkeypatch, tmp_path):
