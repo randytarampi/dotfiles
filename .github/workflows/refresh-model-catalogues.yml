@@ -218,6 +218,23 @@ jobs:
           # catalogue updates idempotent across sequential or concurrent runs.
           publish_branch="model-catalogue-bot/inventory"
           [[ "${publish_branch}" =~ ^model-catalogue-bot/[a-z0-9-]+$ ]]
+          # Preserve an existing draft when the only differences are observation times.
+          # This check is deliberately after the exact artefact-path and gitlink
+          # allowlists; do not skip those checks on repeated runs.
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
+            existing_pr="$(gh pr list --head "model-catalogue-bot/inventory" --state open --json number --jq '.[0].number')"
+            if [[ -n "${existing_pr}" ]] &&
+              git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" 2>/dev/null; then
+              old_semantics="$(git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" |
+                jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)')"
+              new_semantics="$(jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)'                 artifacts/model-catalogues/opencode-zen-free.json)"
+              if [[ "${old_semantics}" == "${new_semantics}" ]]; then
+                echo "Catalogue unchanged apart from observation times; preserving existing draft PR."
+                exit 0
+              fi
+            fi
+          fi
           git config user.name "model-catalogue-bot[bot]"
           git config user.email "model-catalogue-bot[bot]@users.noreply.github.com"
           git commit -m "chore: refresh model catalogue artefact"
