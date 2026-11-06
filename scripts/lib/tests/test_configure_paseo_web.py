@@ -51,7 +51,9 @@ def home_with_config(tmp_path, config=None):
     return home
 
 
-def install_stub(monkeypatch, home, *, rewrite_unrelated=False, fail_live=False):
+def install_stub(
+    monkeypatch, home, *, rewrite_unrelated=False, fail_live=False, fail_reload=False
+):
     monkeypatch.setenv("PASEO_HOME", str(home))
     monkeypatch.setattr(web.shutil, "which", lambda name: "/bin/paseo")
     calls = []
@@ -63,6 +65,8 @@ def install_stub(monkeypatch, home, *, rewrite_unrelated=False, fail_live=False)
             argv[-2] == "--home"
         ), "native Paseo CLI must always select the inspected home"
         target = Path(argv[-1]) / "config.json"
+        if fail_reload and target == home / "config.json" and argv[2] == "reload":
+            return Mock(returncode=23, stderr="sensitive-native-output")
         if argv[2:4] == ["config", "set"]:
             if fail_live and target == home / "config.json":
                 return Mock(returncode=1, stderr="refused")
@@ -245,6 +249,25 @@ def test_native_set_failure_does_not_restore_stale_backup(tmp_path, monkeypatch)
     monkeypatch.setenv(web.GATE, "1")
     assert web.main(["--apply"]) == 1
     assert (home / "config.json.pre-web-ui").exists()
+
+
+def test_saved_hosted_relay_reload_failure_is_a_partial_failure(
+    tmp_path, monkeypatch, capsys
+):
+    home = home_with_config(tmp_path)
+    calls = install_stub(monkeypatch, home, fail_reload=True)
+    monkeypatch.setenv(web.GATE, "1")
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    assert web.main(["--apply"]) == 1
+    config = json.loads((home / "config.json").read_text())
+    assert config["daemon"]["relay"]["enabled"] is True
+    assert config["features"]["webUi"]["enabled"] is True
+    assert (home / "config.json.pre-web-ui").exists()
+    assert any(call[2] == "reload" and call[-1] == str(home) for call in calls)
+    stderr = capsys.readouterr().err
+    assert "config saved; daemon reload failed (exit 23)" in stderr
+    assert "no rollback attempted" in stderr
+    assert "sensitive-native-output" not in stderr
 
 
 def test_deploy_cannot_write_paseo_native_settings_unattended():
