@@ -316,7 +316,9 @@ def test_discovered_audio_catalogue_is_unavailable(monkeypatch):
     assert bundle is None
 
 
-def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
+def test_chatterbox_turbo_tts_is_eligible(monkeypatch):
+    from selected_service import Qualification
+
     monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
     monkeypatch.setattr(openwebui, "active_engines", lambda: ["omlx"])
     monkeypatch.setattr(
@@ -327,12 +329,23 @@ def test_chatterbox_only_omits_tts_with_warning(monkeypatch, caplog):
         "audio_models",
         lambda _: [
             {"name": "asr", "model_type": "audio_stt"},
-            {"name": "chatterbox", "model_type": "audio_tts"},
+            {"name": "whisper-large-v3-turbo-asr-fp16", "model_type": "audio_stt"},
+            {"name": "chatterbox-turbo-4bit", "model_type": "audio_tts"},
         ],
     )
+    monkeypatch.setattr(
+        openwebui,
+        "_qualify_candidates",
+        lambda candidates, *_args, **_kwargs: (
+            [
+                (provider, model, Qualification.PROTOCOL_PROBED)
+                for provider, model, _ in candidates
+            ],
+            {},
+        ),
+    )
     bundle = openwebui._desired_audio_settings()
-    assert bundle is None
-    assert "No qualified oMLX STT model" in caplog.text
+    assert bundle["settings"]["tts"]["MODEL"] == "chatterbox-turbo-4bit"
 
 
 def test_non_qwen_tts_does_not_receive_qwen_voice(monkeypatch):

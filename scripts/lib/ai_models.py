@@ -65,9 +65,12 @@ SPECIALIZED_MODEL_NAME_PREFIXES = (
     "s3tokenizer",
 )
 
-# Chatterbox failed the 2026-10-16 oMLX TTS probe without voice-cloning
-# conditionals; do not select it as an automatic local TTS default.
-KNOWN_UNQUALIFIED_TTS_PREFIXES = ("chatterbox",)
+# chatterbox-multilingual-v3 failed the 2026-10-16 oMLX TTS probe: plain
+# /v1/audio/speech returned HTTP 500, "No conditionals available..."
+# (conds.safetensors missing from the model directory). On 2026-11-06,
+# chatterbox-turbo-4bit qualified on oMLX 0.7.3 with a plain payload, HTTP 200,
+# and an approximately 52 KB WAV response.
+KNOWN_UNQUALIFIED_TTS_PREFIXES = ()
 
 
 def is_known_unqualified_tts(model_name):
