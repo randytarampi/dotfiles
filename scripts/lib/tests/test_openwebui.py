@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import route_probes
+import paseo_http
 
 import constants
 import openwebui
@@ -1178,7 +1179,9 @@ def test_fake_route_probe_http_surfaces_shapes_auth_and_refusal(monkeypatch):
             ),
         ]
     )
-    monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: next(responses))
+    monkeypatch.setattr(
+        paseo_http, "open_credentialed", lambda *_a, **_k: next(responses)
+    )
     stt = route_probes.probe_stt("http://fake/v1", "asr", "KEY", "sentinel")
     embedding = route_probes.probe_embeddings("http://fake/v1", "emb", None)
     auth = route_probes.probe_tts("http://fake/v1", "tts", key_value="sentinel")
