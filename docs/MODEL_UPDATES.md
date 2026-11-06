@@ -133,6 +133,33 @@ human-reviewed update, not an allowlist writer: do not consume it by changing
 model catalogues, slim presets, Junie groups, CI configuration, or fallbacks
 without following this document's normal review flow.
 
+
+### Publishing credentials and recovery
+
+The `publish` job authenticates with a GitHub App, not the workflow's
+read-only `GITHUB_TOKEN`. To enable catalogue PR publication:
+
+1. Install an appropriate GitHub App on `randytarampi/dotfiles` with
+    **Contents: Read and write** and **Pull requests: Read and write**
+    repository permissions. Confirm the installation can access this repository.
+2. Under **Settings → Secrets and variables → Actions → Variables**, create the
+    repository variable `WOOFDY_GITHUB_APP_CLIENT_ID` using the App's **Client
+    ID** (not its numeric App ID).
+3. Under **Settings → Environments**, set the environment secret
+    `WOOFDY_GITHUB_APP_PRIVATE_KEY` to the complete PEM private key in **both**
+    `model-catalogue-publish` and `agentic-review-fix`. The two publisher jobs
+    use the same WOOFDY App but separate protected environments. Do not commit
+    the private key or copy it into ordinary environment variables.
+4. Approve any environment protection rules, then start a new workflow run
+    after configuration. A manual run requires an immutable 40-hex `trusted_ref`
+    from the default branch. Re-running a previous failed attempt does not
+    automatically incorporate subsequent workflow changes.
+
+If either credential is unavailable, the publisher now fails with an
+explicit preflight error without printing either secret. The refresh job
+remains read-only and its uploaded inventory artefact remains available for
+inspection. A successful refresh does not mean a draft PR was published.
+
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
 
 - Historical retired entry `glm-5.1` was removed from the active ollama-cloud registry; `deepseek-v4.1-flash` and `nemotron-3-super` remain active.

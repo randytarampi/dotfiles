@@ -66,3 +66,87 @@ def test_refresher_uses_shared_catalogue_fetcher_without_duplicate_http_code():
     # W8B-A: all shared-fetch HTTP goes through model_catalogues.open_same_origin
     # (redirect-gated); direct urllib.request.urlopen calls no longer exist.
     assert "open_same_origin" in shared
+
+
+def test_publication_credentials_are_checked_before_app_token_creation():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    preflight = publish.split(
+        "      - name: Validate GitHub App publication credentials\n", 1
+    )[1].split("      - id: publish_app_token\n", 1)[0]
+    assert publish.index(
+        "      - name: Validate GitHub App publication credentials"
+    ) < publish.index("      - id: publish_app_token")
+    assert (
+        "HAS_APP_CLIENT_ID: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID != '' }}" in preflight
+    )
+    assert (
+        "HAS_APP_PRIVATE_KEY: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY != '' }}"
+        in preflight
+    )
+    assert (
+        '"${HAS_APP_CLIENT_ID}" != "true" || "${HAS_APP_PRIVATE_KEY}" != "true"'
+        in preflight
+    )
+    assert "docs/MODEL_UPDATES.md#publishing-credentials-and-recovery" in preflight
+    assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in publish
+    assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in publish
+    assert "app-id:" not in publish
+    assert "secrets.APP_ID" not in publish
+
+
+def test_publication_credentials_preflight_fails_closed_without_values():
+    import subprocess
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    preflight = workflow.split(
+        "      - name: Validate GitHub App publication credentials\n", 1
+    )[1].split("      - id: publish_app_token\n", 1)[0]
+    run_block = preflight.split("        run: |\n", 1)[1]
+    script = "\n".join(
+        line[10:] for line in run_block.splitlines() if line.startswith("          ")
+    )
+    for has_id, has_private_key, expected_exit in (
+        ("false", "false", 1),
+        ("true", "false", 1),
+        ("false", "true", 1),
+        ("true", "true", 0),
+    ):
+        outcome = subprocess.run(
+            ["bash", "-c", script],
+            env={"HAS_APP_CLIENT_ID": has_id, "HAS_APP_PRIVATE_KEY": has_private_key},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert outcome.returncode == expected_exit
+        if expected_exit:
+            assert (
+                "::error title=Missing GitHub App publication credentials::"
+                in outcome.stdout
+            )
+
+
+def test_actionlint_woofdy_client_id_compatibility_is_scoped():
+    import yaml
+
+    config = yaml.safe_load(read(".github/actionlint.yaml"))
+    paths = config["paths"]
+    allowed = {
+        ".github/workflows/refresh-model-catalogues.yml",
+        ".github/workflows/agentic-review-fix.yml",
+    }
+    known_false_positives = [
+        'missing input "app-id" which is required by action '
+        '"actions/create-github-app-token@v3"',
+        'input "client-id" is not defined in action '
+        '"actions/create-github-app-token@v3"',
+    ]
+    assert set(config) == {"paths"}
+    assert set(paths) == allowed
+    for path in allowed:
+        assert paths[path]["ignore"] == known_false_positives
+        workflow = read(path)
+        assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in workflow
+        assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in workflow
+        assert "app-id:" not in workflow

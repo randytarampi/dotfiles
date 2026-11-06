@@ -150,6 +150,15 @@ tip and uses an exact-ref `--force-with-lease` update; a changed tip fails
 closed. It updates an existing open draft PR for that head or creates one when
 absent.
 
+The manual fix publisher uses the WOOFDY GitHub App, authenticated with
+repository Actions variable `WOOFDY_GITHUB_APP_CLIENT_ID` and the
+`WOOFDY_GITHUB_APP_PRIVATE_KEY` secret in the protected
+`agentic-review-fix` environment. The same private-key secret must also be
+configured in `model-catalogue-publish` for the catalogue publisher. Both
+publisher tokens request only Contents and Pull requests write permissions.
+See [publishing credentials](MODEL_UPDATES.md#publishing-credentials-and-recovery)
+for setup. The App private key is not available to the read-only generator job.
+
 ## Secrets
 
 Set per repo (Settings → Secrets and variables → Actions):
