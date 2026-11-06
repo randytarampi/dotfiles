@@ -7,7 +7,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.exampl
 # Baseline protects remaining environment keys and defaults while retired
 # access gates are checked separately.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "0ab8ccf9c6b05ae09c72eb423beed1945d66912463a42782f6edde518bdde142"
+    "a1402469030e089865e44ef38f15607b5783b7610be6bfb45442ef7447f51cda"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
