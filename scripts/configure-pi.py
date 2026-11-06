@@ -1095,9 +1095,11 @@ def main():
         default = role_models["orchestrator"]
     elif pi_litellm_proxy and isinstance(default, str) and "/" in default:
         canonical_default = default.removeprefix("litellm/")
-        if canonical_default == "ollama/no-model-available":
+        if os.environ.get("DOTFILES_PI_DEFAULT_MODEL", "").strip():
+            pass
+        elif canonical_default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
-        if canonical_default in cloud_routes.get("_available", set()):
+        elif canonical_default in cloud_routes.get("_available", set()):
             default = "litellm/" + canonical_default
             gateway_models.add(canonical_default)
         elif canonical_default.startswith("google/"):
@@ -1256,7 +1258,6 @@ def main():
             ", ".join(skipped_providers),
         )
     if pi_litellm_proxy:
-        providers.clear()
         if not gateway_models:
             raise RuntimeError(
                 "Pi LiteLLM mode has no resolvable canonical model aliases"
@@ -1320,6 +1321,39 @@ def main():
             "/"
         )
         settings["subagents"]["defaultModel"] = default
+    explicit_default = os.environ.get("DOTFILES_PI_DEFAULT_MODEL", "").strip()
+    if explicit_default:
+        provider, separator, model_id = explicit_default.partition("/")
+        if (
+            not separator
+            or not provider
+            or not model_id
+            or not any(
+                entry.get("id") == model_id
+                for entry in providers.get(provider, {}).get("models", [])
+            )
+        ):
+            raise ValueError(
+                "DOTFILES_PI_DEFAULT_MODEL must name an emitted provider/model"
+            )
+        settings["defaultProvider"] = provider
+        settings["defaultModel"] = model_id
+    elif pi_litellm_proxy:
+        litellm_models = providers.get("litellm", {}).get("models", [])
+        preferred = next(
+            (
+                entry["id"]
+                for family in ("omlx/", "ollama/")
+                for entry in litellm_models
+                if entry.get("id", "").startswith(family)
+                and ":cloud" not in entry["id"]
+                and "no-model-available" not in entry["id"]
+            ),
+            None,
+        )
+        if preferred and settings["defaultProvider"] == "litellm":
+            settings["defaultProvider"] = "litellm"
+            settings["defaultModel"] = preferred
     auth = {
         "anthropic": {"type": "api_key", "key": "$ANTHROPIC_API_KEY"},
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},
@@ -1347,7 +1381,9 @@ def main():
     prefixes: set[str] = set()
     for mid in all_model_ids:
         if pi_litellm_proxy:
-            prefixes.add(f"litellm/{mid}")
+            for provider, config in providers.items():
+                if any(entry.get("id") == mid for entry in config.get("models", [])):
+                    prefixes.add(f"{provider}/{mid}")
             continue
         if mid.startswith(("google/models/", "openrouter/")):
             prefixes.add(f"litellm/{mid}")

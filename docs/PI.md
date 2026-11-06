@@ -34,11 +34,16 @@ stays loopback-only in no-key mode; Caddy owns external exposure. When the key
 env var is set, the provider block references it (`$OMLX_API_KEY`).
 
 Set `DOTFILES_USE_LITELLM_PROXY=1` to route through the LiteLLM gateway. This is
-a gateway-only switch: `DOTFILES_RUN_LITELLM_SETUP=1`, Pi's client key file, and
+a gateway routing switch: `DOTFILES_RUN_LITELLM_SETUP=1`, Pi's client key file, and
 the required exact gateway aliases must be available; missing prerequisites are
 errors, with no direct-provider fallback. See [LiteLLM Proxy](LITELLM.md) for
 setup and client-key requirements. Google models disable Pi's `store`
 compatibility field; this setting is Google-specific.
+
+Set `DOTFILES_PI_DEFAULT_MODEL` to pin the top-level Pi default as
+`<provider>/<model-id>` exactly as emitted in `models.json`. LiteLLM-proxied
+aliases use the `litellm/omlx/<model>` gateway-alias shape. This does not alter
+subagent role defaults.
 
 Two runtime notes:
 
