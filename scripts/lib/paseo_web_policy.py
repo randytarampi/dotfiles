@@ -39,10 +39,17 @@ def valid_daemon(config, *, allow_relay_drift=False):
         "0",
     ):
         raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
-    if not allow_relay_drift and (
-        not isinstance(daemon.get("relay"), dict)
-        or daemon["relay"].get("enabled") is not False
-    ):
+    relay = daemon.get("relay")
+    native_relay = relay.get("enabled") if isinstance(relay, dict) else None
+    if desired_relay_state():
+        # Declared hosted-relay intent: the native state must at least be
+        # explicit; a reconciled non-loopback relay is owner-accepted.
+        if native_relay not in (True, False):
+            raise ValueError(
+                "Paseo relay must explicitly declare daemon.relay.enabled "
+                "to combine it with a Caddy route"
+            )
+    elif not allow_relay_drift and native_relay is not False:
         raise ValueError("Paseo relay must be disabled before external exposure")
     return daemon
 
@@ -125,10 +132,9 @@ def domains_for_access(access):
 def validate_native_config(config, access):
     if access not in ACCESS_MODES:
         raise ValueError("invalid CADDY_ACCESS; choose localhost, lan or public")
-    # Only the owner-run native writer may inspect persisted relay drift.
+    # Only the owner-run native writer may inspect persisted relay drift;
+    # the apply reconciles it toward the declared DOTFILES_PASEO_RELAY posture.
     daemon = valid_daemon(config, allow_relay_drift=True)
-    if os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1" and desired_relay_state():
-        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
     if access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1":
         require_password(daemon)
     web_ui_features(config, require_enabled=False)
@@ -173,10 +179,7 @@ def validate_proxy_config(access, domains):
     data = read_proxy_config()
     daemon = valid_daemon(data)
     web_ui_features(data, require_enabled=True)
-    if desired_relay_state():
-        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
-    relay = daemon.get("relay")
-    if not isinstance(relay, dict) or relay.get("enabled") is not False:
+    if relay_state(data) and not desired_relay_state():
         raise ValueError("Paseo relay must be disabled before Caddy exposure")
     if access != "localhost":
         require_password(daemon)

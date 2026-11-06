@@ -25,12 +25,16 @@ and owner-selected exposure mode. The checker uses the same configured domain
 calculation as Caddy, including `paseo.local.*` aliases in localhost mode.
 LAN/public require stored bcrypt. Merged #187 establishes `CADDY_ACCESS`
 as the Caddy exposure selector and retires `DOTFILES_PASEO_PUBLIC`; there
-is no second public opt-in gate. Merged #189 also requires
-`DOTFILES_PASEO_RELAY=0` for any Caddy route; declaring relay on (or an
-invalid relay value) must make this audit fail even when stored native relay
-is disabled. The audit
-reports **daemon runtime, Caddy TLS and WebSockets as UNKNOWN**, because
-configuration is not a network acceptance test.
+is no second public opt-in gate. Merged #189 originally forbade any
+`DOTFILES_PASEO_RELAY=1` intent on a Caddy route; the revised contract
+(owner decision, November 2026) allows a **declared** hosted-relay posture
+to coexist with the Caddy Web UI route: the audit reports
+`relay: "enabled (declared)"` instead of refusing, and still fails closed
+on invalid relay values, an undeclared enabled native relay, loopback or
+`PASEO_LISTEN`/`PASEO_RELAY_ENABLED` conflicts, and missing bcrypt for
+lan/public. Hosted-relay reachability is owner-accepted, not verified
+here; the audit reports **daemon runtime, Caddy TLS and WebSockets as
+UNKNOWN**, because configuration is not a network acceptance test.
 
 Owner-only acceptance must prove correct and incorrect password, missing
 allowlist host, alternate Host header, TLS/DNS, WebSocket upgrade, Caddy

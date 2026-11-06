@@ -172,6 +172,11 @@ def configure(paseo_bin, home, original, desired, no_backup):
             "Paseo relay drifted from the declared DOTFILES_PASEO_RELAY posture; "
             "reconciling back to disabled"
         )
+    if (RELAY_KEY, True) in changes:
+        print(
+            "Reconciling Paseo relay on to the declared DOTFILES_PASEO_RELAY='1' "
+            "hosted-relay posture; the Caddy Web UI route remains served"
+        )
     path = tailnet.checked_config(home)
     _stage_changes(paseo_bin, path, original, changes)
     _, still_current = read_config(home)

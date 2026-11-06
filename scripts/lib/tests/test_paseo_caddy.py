@@ -214,20 +214,22 @@ def test_hosts_entries_cover_paseo_domains():
 
 
 @pytest.mark.parametrize("mode", ("localhost", "lan", "public"))
-def test_caddy_refuses_relay_drift_and_process_override(tmp_path, monkeypatch, mode):
+def test_caddy_publishes_declared_relay_and_refuses_drift(tmp_path, monkeypatch, mode):
     path, data = configured_home(tmp_path, monkeypatch)
+    # Declared hosted-relay intent coexists with the Caddy route pre-apply.
     monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
-    with pytest.raises(ValueError, match="cannot coexist"):
-        caddy.validate_paseo_proxy_config(mode, [DOMAIN])
-    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
+    caddy.validate_paseo_proxy_config(mode, [DOMAIN])
+    # ... and after the native relay is reconciled on.
     data["daemon"]["relay"]["enabled"] = True
     path.write_text(json.dumps(data))
     path.chmod(0o600)
+    caddy.validate_paseo_proxy_config(mode, [DOMAIN])
+    # Undeclared enabled relay remains refused for publication.
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
     with pytest.raises(ValueError, match="relay must be disabled"):
         caddy.validate_paseo_proxy_config(mode, [DOMAIN])
-    data["daemon"]["relay"]["enabled"] = False
-    path.write_text(json.dumps(data))
-    path.chmod(0o600)
+    # Process-level override stays fail-closed in every declared posture.
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
     monkeypatch.setenv("PASEO_RELAY_ENABLED", "true")
     with pytest.raises(ValueError, match="PASEO_RELAY_ENABLED"):
         caddy.validate_paseo_proxy_config(mode, [DOMAIN])
