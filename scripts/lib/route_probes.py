@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from selected_service import Qualification
+from paseo_http import open_credentialed
 
 
 @dataclass(frozen=True)
@@ -60,9 +61,7 @@ def _request(url, payload, key_value, timeout, content_type="application/json"):
         headers["Authorization"] = "Bearer " + key_value
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(
-            req, timeout=timeout
-        ) as response:  # nosec B310 - scheme validated above
+        with open_credentialed(req, timeout=timeout) as response:
             return response.status, response.headers, response.read(), None
     except urllib.error.HTTPError as error:
         return error.code, error.headers, error.read(), None
@@ -271,9 +270,7 @@ def fetch_gateway_models(base_url, key_value=None, timeout=5, status_out=None):
     headers = {"Authorization": "Bearer " + key_value} if key_value else {}
     request = urllib.request.Request(endpoint, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(
-            request, timeout=timeout
-        ) as response:  # nosec B310 - scheme validated above
+        with open_credentialed(request, timeout=timeout) as response:
             code, data = response.status, response.read()
     except urllib.error.HTTPError as error:
         status_out.append(error.code)
