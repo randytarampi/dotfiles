@@ -10,10 +10,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
-from constants import get_litellm_proxy_mode  # noqa: E402
+from constants import get_litellm_proxy_mode, get_omlx_base_url  # noqa: E402
 from local_engines import local_endpoint_for  # noqa: E402
 from omlx import list_omlx_models  # noqa: E402
-from paseo_audio import MODEL_ID, choose  # noqa: E402
+from paseo_audio import MODEL_ID, choose, is_loopback_audio_endpoint  # noqa: E402
 from paseo_web_policy import read_proxy_config  # noqa: E402
 from route_probes import fetch_gateway_models  # noqa: E402
 
@@ -166,6 +166,8 @@ def main(argv=None):
             raise ValueError("speech route probes require explicit " + GATE + "=1")
         if not MODEL_ID.fullmatch(args.voice):
             raise ValueError("invalid TTS voice")
+        if not is_loopback_audio_endpoint(get_omlx_base_url()):
+            raise ValueError("Paseo oMLX discovery must be loopback-only")
         models = list_omlx_models(strict=True)
         if not models:
             raise ValueError("no inference-visible oMLX models")
