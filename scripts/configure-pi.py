@@ -1378,18 +1378,18 @@ def main():
     # Derive enabledModels from actual provider model IDs instead of hardcoding
     # patterns that may not match any available model in a local-solo tier.
     all_model_ids = [
-        m["id"] for prov in providers.values() for m in prov.get("models", [])
+        (provider, entry["id"])
+        for provider, config in providers.items()
+        for entry in config.get("models", [])
     ]
     # Build glob patterns from model family prefixes.
     # - Cloud models (name:tag:cloud) → glob on the name prefix (e.g. "glm-*")
     # - Local Ollama models (name:tag) → include the full ID (tags aren't globbable)
     # - API models (family-variant) → glob on the family prefix (e.g. "claude-*")
     prefixes: set[str] = set()
-    for mid in all_model_ids:
+    for provider, mid in all_model_ids:
         if pi_litellm_proxy:
-            for provider, config in providers.items():
-                if any(entry.get("id") == mid for entry in config.get("models", [])):
-                    prefixes.add(f"{provider}/{mid}")
+            prefixes.add(f"{provider}/{mid}")
             continue
         if mid.startswith(("google/models/", "openrouter/")):
             prefixes.add(f"litellm/{mid}")

@@ -849,12 +849,16 @@ def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monke
     monkeypatch.setattr(
         configure_pi,
         "resolve_engine",
-        lambda provider: {"provider_config": True} if provider == "omlx" else None,
+        lambda provider: (
+            {"provider_config": True} if provider in ("omlx", "ollama") else None
+        ),
     )
     monkeypatch.setattr(
         configure_pi,
         "local_chat_model_ids",
-        lambda models, provider: ["omlx-local"] if provider == "omlx" else [],
+        lambda models, provider: (
+            [f"{provider}-local"] if provider in ("omlx", "ollama") else []
+        ),
     )
     monkeypatch.setattr(
         configure_pi,
@@ -865,7 +869,7 @@ def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monke
                 "api": "openai-completions",
                 "models": [{"id": f"{provider}-local"}],
             }
-            if provider == "omlx"
+            if provider in ("omlx", "ollama")
             else None
         ),
     )
@@ -880,7 +884,10 @@ def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monke
             ]
         },
         monkeypatch,
-        local_models=[{"name": "omlx-local", "provider": "omlx", "model_type": "llm"}],
+        local_models=[
+            {"name": "omlx-local", "provider": "omlx", "model_type": "llm"},
+            {"name": "ollama-local", "provider": "ollama", "model_type": "llm"},
+        ],
     )
     providers = json.loads((out / "models.json").read_text())["providers"]
     settings = json.loads((out / "settings.json").read_text())
@@ -889,6 +896,8 @@ def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monke
     assert settings["defaultModel"] == "omlx/Mellum2.1-12B-A2.5B-Thinking-6bit"
     assert "litellm/omlx/Mellum2.1-12B-A2.5B-Thinking-6bit" in settings["enabledModels"]
     assert "omlx/omlx-local" in settings["enabledModels"]
+    assert "ollama/ollama-local" in settings["enabledModels"]
+    assert {"id": "ollama-local"} in providers["ollama"]["models"]
 
 
 def test_pi_proxy_default_skips_both_ollama_cloud_stub_suffixes(tmp_path, monkeypatch):
@@ -1036,6 +1045,31 @@ def test_pi_main_keeps_gateway_wire_ids_and_qualified_settings_refs(
     assert (
         settings["subagents"]["defaultModel"] == "litellm/openrouter/vendor/twin:free"
     )
+
+
+def test_pi_gateway_nonlocal_default_preserves_orchestrator_selection(
+    tmp_path, monkeypatch
+):
+    """When no local alias exists, do not replace the chosen gateway model."""
+    chosen = "openrouter/vendor/twin:free"
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": chosen},
+    )
+    out = _run_pi_main(
+        tmp_path,
+        {
+            "data": [
+                {"id": chosen},
+                {"id": "google/models/gemini-3.8-flash"},
+            ]
+        },
+        monkeypatch,
+    )
+    settings = json.loads((out / "settings.json").read_text())
+    assert settings["defaultProvider"] == "litellm"
+    assert settings["defaultModel"] == chosen
 
 
 def test_pi_main_lists_every_advertised_gateway_identity(tmp_path, monkeypatch):
