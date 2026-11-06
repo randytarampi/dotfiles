@@ -106,6 +106,24 @@ def test_tts_uses_selected_voice():
     assert calls[0]["voice"] == "serena"
 
 
+def test_chatterbox_turbo_is_eligible_and_configurable_exclusion_still_works(
+    monkeypatch,
+):
+    import ai_models
+
+    candidate = [{"name": "chatterbox-turbo-4bit", "model_type": "audio_tts"}]
+    assert eligible(candidate, "tts") == [
+        ("chatterbox-turbo-4bit", "chatterbox-turbo-4bit")
+    ]
+
+    monkeypatch.setattr(ai_models, "KNOWN_UNQUALIFIED_TTS_PREFIXES", ("blocked-tts",))
+    assert ai_models.is_known_unqualified_tts("blocked-tts-model")
+    assert (
+        eligible([{"name": "blocked-tts-model", "model_type": "audio_tts"}], "tts")
+        == []
+    )
+
+
 def test_stale_previous_model_falls_back_to_qualified_pinned_candidate():
     def probe(_endpoint, alias, **_kwargs):
         return Mock(status="unavailable" if alias == "plain" else "ok")

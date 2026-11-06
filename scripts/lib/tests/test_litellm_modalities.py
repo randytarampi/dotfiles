@@ -9,6 +9,7 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
         {"name": "whisper-large-v3-turbo-asr-fp16", "model_type": "audio_stt"},
         {"name": "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit", "model_type": "audio_tts"},
         {"name": "chatterbox-multilingual-v3", "model_type": "audio_tts"},
+        {"name": "chatterbox-turbo-4bit", "model_type": "audio_tts"},
         {"name": "S3TokenizerV2", "model_type": "tokenizer"},
         {"name": "MarkItDown", "model_type": "conversion"},
         {"name": "vectors", "model_type": "embedding"},
@@ -33,11 +34,12 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
         "Qwen3-ASR-1.7B-8bit",
         "whisper-large-v3-turbo-asr-fp16",
         "Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+        "chatterbox-turbo-4bit",
         "vectors",
         "ranker",
     }
     assert modalities <= by_name.keys()
-    assert not {"chatterbox-multilingual-v3", "S3TokenizerV2"} & by_name.keys()
+    assert not {"S3TokenizerV2"} & by_name.keys()
     assert by_name["MarkItDown"]["litellm_params"] == {
         "model": "openai/MarkItDown",
         "api_base": "http://127.0.0.1:11427/v1",
