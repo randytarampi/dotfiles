@@ -150,3 +150,16 @@ def test_actionlint_woofdy_client_id_compatibility_is_scoped():
         assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in workflow
         assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in workflow
         assert "app-id:" not in workflow
+
+
+def test_publication_push_uses_scoped_github_cli_app_credentials():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    helper = "git -c credential.helper='!gh auth git-credential' push"
+    assert publish.count(helper) == 1
+    assert "GH_TOKEN: ${{ steps.publish_app_token.outputs.token }}" in publish
+    assert 'GIT_TERMINAL_PROMPT: "0"' in publish
+    assert "persist-credentials: false" in publish
+    assert "http.extraheader" not in publish
+    assert "Authorization: Bearer" not in publish
+    assert "x-access-token:${GH_TOKEN}" not in publish
