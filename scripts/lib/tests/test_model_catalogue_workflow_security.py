@@ -264,7 +264,10 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
 
         pytest.skip("Git and jq are required for the workflow-shell regression")
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    publish = workflow.split("  publish:\n", 1)[1]
+    publish = workflow.split(
+        "      - name: Publish the bot branch and create or update its draft PR\n",
+        1,
+    )[1]
     start = publish.index('          publish_branch="model-catalogue-bot/inventory"')
     end = publish.index('          bot_login="woofdy-randytarampi-ca[bot]"')
     shell = "\n".join(
@@ -272,6 +275,8 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         for line in publish[start:end].splitlines()
         if line.startswith("          ")
     )
+    assert "existing_prs=" in shell
+    assert "TRUSTED_SHA" not in shell
     checkout = tmp_path / "repo"
     checkout.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
