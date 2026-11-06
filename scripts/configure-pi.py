@@ -1352,6 +1352,7 @@ def main():
                 for entry in litellm_models
                 if entry.get("id", "").startswith(family)
                 and CLOUD_TAG not in entry["id"]
+                and not entry["id"].endswith("-cloud")
                 and "no-model-available" not in entry["id"]
             ),
             None,
