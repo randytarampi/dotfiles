@@ -1,6 +1,7 @@
 """Fail-closed, read-only Paseo Caddy/auth posture checks."""
 
 from paseo_web_policy import (
+    desired_relay_state,
     configured_hostnames,
     require_password,
     valid_daemon,
@@ -17,6 +18,8 @@ def audit(config, access, *, caddy_enabled=True, required_hosts=()):
     if not isinstance(config, dict):
         raise ValueError("Paseo config must be a JSON object")
     daemon = valid_daemon(config)
+    if desired_relay_state():
+        raise ValueError("Paseo Caddy route cannot coexist with enabled relay")
     web_ui_features(config, require_enabled=True)
     if access != "localhost":
         require_password(daemon)
