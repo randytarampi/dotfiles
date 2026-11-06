@@ -12,6 +12,14 @@ module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
 
+@pytest.fixture(autouse=True)
+def isolated_relay_environment(monkeypatch):
+    """Host shells export the canonical ~/.env; pin the undeclared posture."""
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
+    for key in ("PASEO_RELAY_ENABLED", "PASEO_LISTEN", "PASEO_WEB_UI_ENABLED"):
+        monkeypatch.delenv(key, raising=False)
+
+
 def test_safe_defaults_only():
     assert module.plan({"version": 1}) == [
         ("daemon.mcp.enabled", True),
