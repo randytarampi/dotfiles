@@ -242,6 +242,14 @@ Missing, stale, malformed or unqualified evidence refuses selection; it does
 not silently exempt or replace a route. This is not request-time billing or
 entitlement enforcement (issue #87), and no live availability is asserted here.
 
+**Scheduled discovery is advisory.** The WOOFDY
+`free-model-candidates.json` draft lists observed OpenCode candidates and
+curated deltas, while recording other supported providers as
+`not_assessed`. It does not replace the runtime evidence resolver, which
+requires fresh provider/credential-bound routes and role capability checks
+across provider boundaries. Nor does it guarantee no-charge inference;
+request-time enforcement is still tracked in #87.
+
 Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image
 fallback was removed after live image probes failed; local vision alternatives
 are appended when available. It does not send this preset's observer images to

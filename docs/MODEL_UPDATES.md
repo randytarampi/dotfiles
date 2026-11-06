@@ -135,75 +135,78 @@ model announcement that affects your presets; `make verify` warns when the
 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
 for the automated check.
 
-## Scheduled catalogue inventory
+## Scheduled free-model candidate review
 
-`refresh-model-catalogues.yml` runs weekly at 06:00 UTC Monday and can also be
-started with `workflow_dispatch`. Its read-only refresh job queries the
-authenticated OpenCode Console model list with `OPENCODE_API_KEY`; HTTP 401/403 and
-network failures produce an `unavailable` timestamped artefact and never modify
-an allowlist. Manual dispatches are restricted to the authenticated repository
-owner on the default branch, and the publisher validates the complete diff
-against that branch. The protected `model-catalogue-publish` environment gates
-publication, but does not protect the refresh secret; the actor and
-default-branch checks bound that secret exposure.
+The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday
+and also accepts owner-only `workflow_dispatch` with a trusted immutable
+default-branch SHA. An authenticated owner can post the exact comment
+`/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197).
+The existing actor, issue-number, default-branch and immutable-SHA checks
+protect the secret-bearing refresh and the WOOFDY publishing environment.
 
-A second, owner-only command route is available when the caller can comment on
-GitHub issues but cannot invoke GitHub's workflow-dispatch API: create a comment
-with the **exact** text `/refresh-model-catalogues` on
-[control issue #197](https://github.com/randytarampi/dotfiles/issues/197).
-This requires the linked GitHub identity to be `randytarampi`; it is not an
-anonymous or general bot trigger. The `issue_comment` event fires for new
-comments across the repository, including PRs, but its job-level gate skips
-the secret-bearing refresh job unless the owner posts the exact command on
-issue #197 (not a PR). Both validation steps independently recheck actor,
-issue, command and default-branch identity. It uses the immutable default-branch event
-SHA, not arbitrary commit text from a comment. The existing
-`workflow_dispatch` input and protected publication environment remain intact.
+The current collector observes the OpenCode Console cross-protocol model list
+at `https://opencode.ai/inference/v1/models` using `OPENCODE_API_KEY`.
+It joins exact model IDs against the `opencode` cost records in a fresh
+[models.dev snapshot](https://models.dev/api.json), requiring valid numeric
+zero prices for every reported cost tier. Missing/invalid pricing, an empty or
+malformed response, or HTTP 401/403 is **unavailable** or **incomplete**,
+never a false zero-model success; only `available` is publishable. The key
+must be a Console workspace key with read-only or **Models: Read** rights.
 
-OpenCode Console lists models at the documented authenticated
-`GET https://opencode.ai/inference/v1/models` endpoint. This is **not**
-`/inference/openai/v1/models`: generation uses separate OpenAI, Anthropic
-and Gemini protocol-specific endpoints. The list supplies serving IDs,
-not reliable pricing evidence for the existing candidate classifier. The refresher now joins those IDs (without fuzzy name matching)
-against the `opencode` provider's `cost` records from a fresh
-[`models.dev` snapshot](https://models.dev/api.json). It classifies a model
-as a review-only *zero-price candidate* only when `input`, `output` and
-every reported optional price tier are valid nonnegative numbers and zero.
-A nonzero cost is paid. Missing/invalid cost, a missing provider mapping, an
-unreachable metadata source, or an empty/malformed Console response is never
-interpreted as evidence that no free models exist.
+The schema-versioned review artifact is now
+`artifacts/model-catalogues/free-model-candidates.json`. It has the
+Console source, pricing provenance, observation and expiry times,
+classification counts, all-zero model candidates, and `review` sets
+relative to the curated `configs/opencode/opencode-models.json` registry:
 
-The artefact retains the historical
-`artifacts/model-catalogues/opencode-zen-free.json` filename for the
-workflow's path allowlist and existing bot PR. Its `source` field now
-identifies the Console inference model list. It includes
-both sources, observation times, classification counts, and exact free model
-IDs with their observed pricing. A partial join is marked `incomplete` with
-the unclassified IDs; unavailable sources are `unavailable`. Neither status
-can enter the protected publisher (only `available` can), though the run
-retains its downloadable artefact for diagnosis. Fresh third-party price
-metadata is not proof of account entitlement, capacity or sustained
-availability. Free-tier chat models are available only inside OpenCode,
-not automatically from external API callers; owner review is required
-before a model is promoted.
+- `new_candidates`: zero-priced and listed, but not in curated preferences
+- `already_curated`: zero-priced and already in the curated registry
+- `curated_not_listed`: currently curated but absent from the Console list
+- `curated_listed_not_zero`: listed but not currently zero-priced
 
-The Actions secret `OPENCODE_API_KEY` must contain a key accepted by the
-new OpenCode Console workspace. Use a Console read-only API key or a
-restricted key with **Models: Read** for this read-only inventory.
-Do not assume an existing legacy Zen-only key will work. HTTP 401/403
-produces an `unavailable` artifact without publishing or leaking the key.
-Other runtime consumers still use legacy Zen inference base URLs;
-migrate those independently with protocol-specific API and credential tests.
+Do not interpret `curated_not_listed` as automatic model retirement:
+a newer provider protocol or account entitlement may explain the difference.
+The `provider_coverage` map records the other configured provider families
+as `not_assessed`, **not** as unavailable, free, or paid. There is no
+additional credential or network probe for those families in this workflow.
 
-This is inventory for a human-reviewed update, not an allowlist writer: do
-not consume it by changing model catalogues, slim presets, Junie groups,
-CI configuration, or fallbacks without following this document's normal
-review flow. The generated draft PR must not be merged automatically. Once a bot draft
-exists, timestamp-only changes to the same source, classifications and
-zero-price candidates preserve the existing bot branch tip and PR. A changed
-price, candidate set or classification count still updates the draft via
-force-with-lease, and a missing/closed draft never suppresses publication.
+The general `free` tier already uses #119's separate dynamic,
+fresh-evidence resolver across eligible providers and the curated
+preferences from #139. Optional providers added by #142 (Groq, Mistral,
+Cloudflare Workers AI and NVIDIA NIM) remain opt-in candidates; enabling a
+credential does not establish zero-charge entitlement, tool capability,
+privacy suitability or permitted production use. The
+`omo-slim-opencode-zen-free` preset remains OpenCode-only. The hosted
+discovery artifact is **not** consumed by these generators. It does not
+change model registries, Slim role assignments, Junie groups, Pi models,
+LiteLLM aliases, rate limits or any request-time admission decision.
+Request-time strict-free enforcement remains [issue #87](https://github.com/randytarampi/dotfiles/issues/87).
 
+WOOFDY publishes one **draft** review PR on the existing
+`model-catalogue-bot/inventory` branch. It updates #200 on its next
+successful run rather than creating a second PR. Its only changed path
+relative to `main` is the renamed JSON artifact; the legacy
+`opencode-zen-free.json` on the old bot branch may be read as prior
+JSON **data** during the migration but must never be re-published.
+The generated PR follows `.github/PULL_REQUEST_TEMPLATE.md` and summarises
+newly discovered, already curated, no-longer-listed, repriced and
+unassessed-provider candidates. The verified WOOFDY App account
+`woofdy-randytarampi-ca[bot]` authors its Conventional Commit using its
+GitHub bot noreply identity. Source-code contributions and reviews remain
+attributed separately; automation never claims a CI or inference test it
+did not perform.
+
+A timestamp-only refresh preserves the bot branch and draft PR. A genuine
+candidate, cost, curated-registry or provider-coverage change updates the
+draft with the existing force-with-lease and exact-path safeguards. Only
+a **separately reviewed** curated configuration PR should promote a qualified
+model, using the usual [model update checklist](#update-flow), client-specific
+live inference, tool/image and cost/privacy checks, and owner sign-off.
+Do not auto-merge generated candidate PRs. If an additional provider is
+proposed for hosted discovery, first verify its *actual* listing protocol,
+account credential scope, trusted endpoint and price/entitlement semantics.
+Add it as an independent scoped producer, not by silently treating an
+allowlist or models.dev listing as observed account capacity.
 
 ### Publishing credentials and recovery
 
@@ -237,7 +240,7 @@ branch push or draft PR creation worked; inspect both operations in Actions.
 
 If either credential is unavailable, the publisher now fails with an
 explicit preflight error without printing either secret. The refresh job
-remains read-only and its uploaded inventory artefact remains available for
+remains read-only and its uploaded inventory artifact remains available for
 inspection. A successful refresh does not mean a draft PR was published.
 
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
