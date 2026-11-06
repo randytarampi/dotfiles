@@ -3,7 +3,8 @@
 
 Keep the native daemon bound to loopback. Caddy owns network-facing TLS and
 LAN/public policy; Paseo owns its password, API and WebSocket authentication.
-Never start a daemon, enable relay or overwrite user-owned concurrent changes.
+Never start a daemon or change relay without explicit owner-only --apply;
+never overwrite user-owned concurrent changes.
 """
 
 import argparse
