@@ -88,7 +88,15 @@ def test_misplaced_real_writer_is_blocked_before_write(tmp_path, monkeypatch):
             [{"client": "opencode"}], tmp_path / "service.env", False
         )
     assert sentinel.read_bytes() == b"unchanged"
-    assert sentinel.stat() == before
+    # Reading the sentinel updates atime on Linux (relatime); full
+    # os.stat_result equality is therefore platform-flaky even when the
+    # blocked write left the file untouched. Compare write-sensitive fields.
+    after = sentinel.stat()
+    assert (after.st_size, after.st_mode, after.st_mtime_ns) == (
+        before.st_size,
+        before.st_mode,
+        before.st_mtime_ns,
+    )
     assert not (tmp_path.parent / "forbidden-client-key").exists()
 
 
