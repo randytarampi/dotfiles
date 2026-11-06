@@ -17,10 +17,18 @@ continue using Paseo's native interactive setup, without exposing a listener.
 
 ## Read-only security check
 
-`python3 scripts/check-paseo-security.py --access localhost --json` reads
-only an existing private native Paseo configuration and checks the Caddy
+`python3 scripts/check-paseo-security.py --access localhost --json` first loads
+the canonical `~/.env` (refusing when unavailable), then reads only an existing
+private native Paseo configuration and checks the Caddy
 loopback listener, disabled relay, enabled Web UI, required localhost host,
-and owner-selected exposure mode. LAN/public require stored bcrypt. Merged #187 establishes `CADDY_ACCESS` as the Caddy exposure selector and retires `DOTFILES_PASEO_PUBLIC`. Merged #189 also requires `DOTFILES_PASEO_RELAY=0` for any Caddy route; declaring relay on (or an invalid relay value) must make this audit fail even when stored native relay is disabled. The audit
+and owner-selected exposure mode. The checker uses the same configured domain
+calculation as Caddy, including `paseo.local.*` aliases in localhost mode.
+LAN/public require stored bcrypt. Merged #187 establishes `CADDY_ACCESS`
+as the Caddy exposure selector and retires `DOTFILES_PASEO_PUBLIC`; there
+is no second public opt-in gate. Merged #189 also requires
+`DOTFILES_PASEO_RELAY=0` for any Caddy route; declaring relay on (or an
+invalid relay value) must make this audit fail even when stored native relay
+is disabled. The audit
 reports **daemon runtime, Caddy TLS and WebSockets as UNKNOWN**, because
 configuration is not a network acceptance test.
 

@@ -9,11 +9,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from paseo_web_policy import (  # noqa: E402
-    desired_hostnames,
-    domains_for_access,
-    read_proxy_config,
-)
+from env import load_env  # noqa: E402
+from paseo_web_policy import domains_for_access, read_proxy_config  # noqa: E402
 from paseo_security import audit  # noqa: E402
 
 
@@ -23,15 +20,16 @@ def main(argv=None):
     parser.add_argument("--access", choices=["localhost", "lan", "public"])
     args = parser.parse_args(argv)
     try:
+        # Match configure-caddy.py: inspect the repository's actual configured
+        # environment, not a shell's potentially incomplete exported subset.
+        if not load_env():
+            raise ValueError("canonical ~/.env unavailable; cannot audit Caddy")
         access = args.access or os.environ.get("CADDY_ACCESS", "localhost")
         caddy = os.environ.get("DOTFILES_RUN_CADDY_SETUP", "0") == "1"
-        # This read-only audit is not DNS/certificate discovery. The owner must
-        # verify concrete Caddy routes on the live machine.
-        required = (
-            desired_hostnames("localhost", [])
-            if access == "localhost"
-            else domains_for_access(access)
-        )
+        # Use the same generated host calculation as Caddy for every mode.
+        # Localhost can include paseo.local.* aliases from configured zones.
+        # This is not live DNS, TLS or certificate discovery.
+        required = domains_for_access(access)
         status = audit(
             read_proxy_config(),
             access,
