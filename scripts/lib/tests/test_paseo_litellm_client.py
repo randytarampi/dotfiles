@@ -62,9 +62,11 @@ def test_absent_paseo_alias_preview_has_no_post_and_no_key_file(monkeypatch, tmp
         "DOTFILES_RUN_XCODE_SETUP",
     ):
         monkeypatch.setenv(gate, "0")
-    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
     monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     service = tmp_path / "service.env"
     assert module.provision_app_keys("master", service, dry_run=True)
     assert calls and set(calls) == {"GET"}
@@ -84,6 +86,7 @@ def _load_provisioner(monkeypatch):
     monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
     monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     monkeypatch.setattr(module.shutil, "which", lambda _: "/fake/bin/paseo")
     return module
 
@@ -109,6 +112,25 @@ def test_paseo_provisioning_posts_once_materializes_private_key_and_repeats(
 
     monkeypatch.setattr(module, "_request_json", request)
     service = tmp_path / "service.env"
+    for row in CLIENT_REGISTRY:
+        for gate in row["setup_gates"]:
+            name, _, value = gate.partition("=")
+            if name not in (
+                "DOTFILES_RUN_LITELLM_SETUP",
+                "DOTFILES_RUN_OPENCODE_SETUP",
+                "DOTFILES_RUN_OPENWEBUI_SETUP",
+                "DOTFILES_RUN_JUNIE_CLI_SETUP",
+            ):
+                monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "0")
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
     assert module.provision_app_keys("master", service, strict=True)
     key_path = tmp_path / "clients/paseo.key"
     assert key_path.read_text() == "synthetic-paseo-key"
@@ -119,9 +141,91 @@ def test_paseo_provisioning_posts_once_materializes_private_key_and_repeats(
     assert posts.count("paseo") == 1
 
 
-def test_missing_paseo_cli_refuses_in_both_admission_modes(monkeypatch, tmp_path):
+def test_entrypoint_missing_paseo_cli_skips_paseo_without_gateway_failure(
+    monkeypatch, tmp_path
+):
+    module = _load_provisioner(monkeypatch)
+    monkeypatch.setattr(module, "load_env", lambda: True)
+    monkeypatch.setattr(module, "_database_url_configured", lambda: True)
+    monkeypatch.setattr(module, "validate_service_lane_runtime", lambda: True)
+    monkeypatch.setattr(module.litellm_config, "compute_model_list", lambda **_: [])
+    monkeypatch.setattr(module, "write_config", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        module, "_refresh_rates_snapshot", lambda *_args, **_kwargs: "unchanged"
+    )
+    monkeypatch.setattr(module, "_persist_generation_notes", lambda *_: None)
+    monkeypatch.setattr(module, "SERVICE_ENV_DEFAULT", str(tmp_path / "service.env"))
+    service = Path(module.SERVICE_ENV_DEFAULT)
+    service.write_bytes(b"LITELLM_OPENCODE_KEY='existing-opencode'\n")
+    clients = service.parent / "clients"
+    clients.mkdir()
+    opencode_key = clients / "opencode.key"
+    opencode_key.write_bytes(b"existing-opencode")
+    before = (service.read_bytes(), opencode_key.read_bytes())
+    for row in CLIENT_REGISTRY:
+        for gate in row["setup_gates"]:
+            name, _, _value = gate.partition("=")
+            if name not in (
+                "DOTFILES_RUN_LITELLM_SETUP",
+                "DOTFILES_RUN_OPENCODE_SETUP",
+                "DOTFILES_RUN_OPENWEBUI_SETUP",
+                "DOTFILES_RUN_JUNIE_CLI_SETUP",
+            ):
+                monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_PI_SETUP", "0")
+    monkeypatch.setenv("LITELLM_DATABASE_URL", "sqlite:///test.db")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "synthetic-master")
+    monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_OPENCODE_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_OPENWEBUI_SETUP", "0")
+    monkeypatch.setenv("DOTFILES_RUN_JUNIE_CLI_SETUP", "0")
+    monkeypatch.setattr(
+        module.shutil, "which", lambda name: None if name == "paseo" else "/fake/client"
+    )
+    posts = []
+
+    def request(url, method, _master_key, payload=None, **_kwargs):
+        if url.endswith("/key/generate"):
+            posts.append(payload["key_alias"])
+            return {"key": "synthetic-key"}
+        if "key/list" in url:
+            return {"keys": []}
+        return {"data": []}
+
+    monkeypatch.setattr(module, "_request_json", request)
+    monkeypatch.setattr(module.sys, "argv", ["configure-litellm.py"])
+    assert module.main() == 0
+    assert "paseo" not in posts
+    assert opencode_key.read_bytes() == before[1]
+
+
+def test_paseo_uses_cli_while_cursor_uses_bundle_identity(monkeypatch):
+    module = _load_provisioner(monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_CURSOR_SETUP", "1")
+    monkeypatch.setattr(module, "_ide_app_installed", lambda client: client == "cursor")
+    cursor = next(row for row in CLIENT_REGISTRY if row["client"] == "cursor")
+    paseo = next(row for row in CLIENT_REGISTRY if row["client"] == "paseo")
+    monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert module._client_provisioning_state(cursor) == (
+        True,
+        "credential provisioning eligible; transport UNVERIFIED",
+    )
+    assert module._client_provisioning_state(paseo) == (False, "not installed")
+
+
+def test_missing_paseo_cli_admission_differs_in_strict_mode(monkeypatch, tmp_path):
     module = _load_provisioner(monkeypatch)
     monkeypatch.setattr(module.shutil, "which", lambda _: None)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_RUN_PASEO_VOICE_SETUP", "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     assert module._client_provisioning_state(
         next(row for row in CLIENT_REGISTRY if row["client"] == "paseo"),
         strict_provisioning=True,

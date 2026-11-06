@@ -810,6 +810,21 @@ def test_stale_service_env_key_refuses_new_alias(tmp_path, monkeypatch, strict):
     assert not key_file.exists()
 
 
+def test_gate_off_preserves_other_clients_key_bytes(tmp_path, monkeypatch):
+    service_env = tmp_path / "service.env"
+    service_env.write_bytes(b"LITELLM_OPENCODE_KEY='existing-opencode'\n")
+    client_dir = tmp_path / "clients"
+    client_dir.mkdir()
+    key_file = client_dir / "opencode.key"
+    key_file.write_bytes(b"existing-opencode")
+    before = (service_env.read_bytes(), key_file.read_bytes())
+    calls = _fake_gateway(monkeypatch)
+    monkeypatch.setenv("DOTFILES_RUN_LITELLM_SETUP", "0")
+    assert configure_litellm.provision_app_keys("master", service_env) is True
+    assert not any(call[0].endswith("/key/generate") for call in calls)
+    assert (service_env.read_bytes(), key_file.read_bytes()) == before
+
+
 @pytest.mark.parametrize(
     "scenario", ["conflicting-sources", "dangling-key", "dangling-directory"]
 )
