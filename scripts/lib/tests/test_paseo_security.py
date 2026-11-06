@@ -1,10 +1,23 @@
 """Read-only Paseo security assessment checks."""
 
+import copy
+
 import pytest
 
 from paseo_security import audit
 
 BCRYPT = "$2b$12$" + "a" * 53
+
+
+@pytest.fixture(autouse=True)
+def isolated_relay_environment(monkeypatch):
+    for key in (
+        "DOTFILES_PASEO_RELAY",
+        "PASEO_RELAY_ENABLED",
+        "PASEO_LISTEN",
+        "PASEO_WEB_UI_ENABLED",
+    ):
+        monkeypatch.delenv(key, raising=False)
 
 
 def base():
@@ -85,3 +98,13 @@ def test_security_cli_requires_actual_lan_hostnames(monkeypatch, capsys):
     monkeypatch.setattr(module, "read_proxy_config", lambda: data)
     assert module.main(["--json"]) == 0
     assert '"access": "lan"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("intent", ("1", "true", "yes", "on", "unknown"))
+def test_audit_refuses_declared_relay_before_reporting_caddy_safe(monkeypatch, intent):
+    config = base()
+    before = copy.deepcopy(config)
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", intent)
+    with pytest.raises(ValueError, match="cannot coexist|DOTFILES_PASEO_RELAY"):
+        audit(config, "lan", required_hosts=["paseo.example.test"])
+    assert config == before
