@@ -18,7 +18,6 @@ from paseo_provider_write import apply_document  # noqa: E402
 GATE = "DOTFILES_RUN_PASEO_HERMES_ACP_SETUP"
 
 
-
 def provider(hermes_binary):
     """Use an absolute executable so the Paseo daemon needs no shell PATH."""
     return {
@@ -128,8 +127,13 @@ def main(argv=None):
         # Native config-set has no credential-safe value channel; use a private
         # staged file, Paseo schema check, atomic save and daemon reload.
         apply_document(
-            paseo, home, path, original, expected,
-            decode_config, same_config,
+            paseo,
+            home,
+            path,
+            original,
+            expected,
+            decode_config,
+            same_config,
         )
         print("Hermes ACP registered; validate a real local session in Paseo")
         return 0

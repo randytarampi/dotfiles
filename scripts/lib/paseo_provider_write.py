@@ -46,7 +46,9 @@ def apply_document(
     if not same_config(decode_config(before.decode("utf-8")), original):
         raise ValueError("Paseo config changed before preflight")
 
-    payload = (json.dumps(expected, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    payload = (
+        json.dumps(expected, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+    ).encode("utf-8")
     with tempfile.TemporaryDirectory(prefix="dotfiles-paseo-preflight-") as scratch:
         staged_home = Path(scratch)
         staged_file = staged_home / "config.json"
@@ -54,14 +56,18 @@ def apply_document(
         staged_file.chmod(0o600)
         try:
             check = _run(paseo, ["config", "get"], staged_home, timeout)
-        except subprocess.TimeoutExpired as error:
-            raise ValueError("Paseo staged config validation timed out; no live write") from None
+        except subprocess.TimeoutExpired:
+            raise ValueError(
+                "Paseo staged config validation timed out; no live write"
+            ) from None
         if check.returncode:
             raise ValueError(
                 f"Paseo staged config validation failed (exit {check.returncode}); "
                 "native output suppressed; no live write"
             )
-        if not same_config(decode_config(staged_file.read_text(encoding="utf-8")), expected):
+        if not same_config(
+            decode_config(staged_file.read_text(encoding="utf-8")), expected
+        ):
             raise ValueError("Paseo staged config changed unexpectedly; no live write")
 
     current_stat = source.stat()
@@ -85,7 +91,9 @@ def apply_document(
             os.unlink(temporary)
 
     if not same_config(decode_config(source.read_text(encoding="utf-8")), expected):
-        raise ValueError("Paseo saved config differs from candidate; no rollback attempted")
+        raise ValueError(
+            "Paseo saved config differs from candidate; no rollback attempted"
+        )
     try:
         result = _run(paseo, ["reload"], home, timeout)
     except subprocess.TimeoutExpired:
