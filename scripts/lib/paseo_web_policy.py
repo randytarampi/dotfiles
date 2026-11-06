@@ -1,8 +1,8 @@
 """Paseo Web UI policy shared by native config writes and Caddy routing.
 
 The CLI may write only to an existing private home. The daemon remains on
-loopback; Caddy owns TLS and network exposure. Relay settings are explicit;
-a Caddy site cannot be published while relay exposure is enabled.
+loopback; Caddy owns its route while a declared hosted relay may coexist only
+when the native daemon has a stored bcrypt password.
 """
 
 import json
@@ -33,18 +33,18 @@ def valid_daemon(config, *, allow_relay_drift=False):
         raise ValueError("PASEO_LISTEN would override the managed loopback listener")
     if daemon.get("listen", DEFAULT_LISTEN) != DEFAULT_LISTEN:
         raise ValueError("Paseo Caddy mode requires an unmodified loopback listener")
-    if os.environ.get("PASEO_RELAY_ENABLED", "").strip().lower() not in (
-        "",
-        "false",
-        "0",
+    declared_relay = desired_relay_state()
+    relay_override = os.environ.get("PASEO_RELAY_ENABLED", "").strip().lower()
+    if relay_override not in ("", "false", "0") or (
+        declared_relay and relay_override
     ):
-        raise ValueError("PASEO_RELAY_ENABLED could override relay isolation")
+        raise ValueError("PASEO_RELAY_ENABLED could override declared relay posture")
     relay = daemon.get("relay")
     native_relay = relay.get("enabled") if isinstance(relay, dict) else None
-    if desired_relay_state():
-        # Declared hosted-relay intent: the native state must at least be
-        # explicit; a reconciled non-loopback relay is owner-accepted.
-        if native_relay not in (True, False):
+    if declared_relay:
+        # Declared hosted-relay intent allows owner-only drift reconciliation,
+        # but the native setting must be an actual JSON boolean.
+        if not isinstance(native_relay, bool):
             raise ValueError(
                 "Paseo relay must explicitly declare daemon.relay.enabled "
                 "to combine it with a Caddy route"
@@ -80,7 +80,9 @@ def require_password(daemon):
     auth = daemon.get("auth")
     password = auth.get("password") if isinstance(auth, dict) else None
     if not isinstance(password, str) or not BCRYPT.fullmatch(password):
-        raise ValueError("Caddy LAN/public access requires a Paseo daemon password")
+        raise ValueError(
+            "Paseo hosted relay or Caddy LAN/public access requires a daemon password"
+        )
 
 
 def web_ui_features(config, *, require_enabled):
@@ -135,7 +137,9 @@ def validate_native_config(config, access):
     # Only the owner-run native writer may inspect persisted relay drift;
     # the apply reconciles it toward the declared DOTFILES_PASEO_RELAY posture.
     daemon = valid_daemon(config, allow_relay_drift=True)
-    if access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1":
+    if desired_relay_state() or (
+        access != "localhost" and os.environ.get("DOTFILES_RUN_CADDY_SETUP") == "1"
+    ):
         require_password(daemon)
     web_ui_features(config, require_enabled=False)
     return configured_hostnames(daemon)
@@ -181,7 +185,7 @@ def validate_proxy_config(access, domains):
     web_ui_features(data, require_enabled=True)
     if relay_state(data) and not desired_relay_state():
         raise ValueError("Paseo relay must be disabled before Caddy exposure")
-    if access != "localhost":
+    if access != "localhost" or desired_relay_state():
         require_password(daemon)
     required_hosts = set(desired_hostnames(access, domains))
     if not required_hosts.issubset(configured_hostnames(daemon)):

@@ -120,6 +120,36 @@ def test_audit_accepts_declared_relay_with_native_enabled(monkeypatch):
     assert result["relay"] == "enabled (declared)"
 
 
+@pytest.mark.parametrize("native_relay", (False, True))
+@pytest.mark.parametrize("password", (None, "plaintext"))
+def test_declared_hosted_relay_requires_bcrypt_even_on_localhost(
+    monkeypatch, native_relay, password
+):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    config = base()
+    config["daemon"]["relay"]["enabled"] = native_relay
+    config["daemon"]["auth"]["password"] = password
+    with pytest.raises(ValueError, match="password"):
+        audit(config, "localhost", required_hosts=["paseo.localhost"])
+
+
+@pytest.mark.parametrize("override", ("0", "false", "true"))
+def test_declared_relay_refuses_process_level_override(monkeypatch, override):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    monkeypatch.setenv("PASEO_RELAY_ENABLED", override)
+    with pytest.raises(ValueError, match="PASEO_RELAY_ENABLED"):
+        audit(base(), "localhost")
+
+
+@pytest.mark.parametrize("value", (0, 1, "true", None))
+def test_declared_relay_refuses_non_boolean_native_state(monkeypatch, value):
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    config = base()
+    config["daemon"]["relay"]["enabled"] = value
+    with pytest.raises(ValueError, match="explicitly declare"):
+        audit(config, "localhost")
+
+
 @pytest.mark.parametrize("intent", ("", "0", "false", "no", "off"))
 def test_audit_reports_disabled_relay_without_declared_intent(monkeypatch, intent):
     if intent:
