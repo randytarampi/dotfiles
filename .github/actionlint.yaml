@@ -1,0 +1,14 @@
+# actionlint v1.7.12 embeds obsolete actions/create-github-app-token@v3 metadata:
+# it requires deprecated app-id and does not recognize the supported client-id.
+# See https://github.com/rhysd/actionlint/issues/669
+# Remove these path-scoped exceptions after an actionlint release fixes #669.
+# The workflows and their tests still require the real client-id input.
+paths:
+  .github/workflows/refresh-model-catalogues.yml:
+    ignore:
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3"'
+  .github/workflows/agentic-review-fix.yml:
+    ignore:
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3"'
