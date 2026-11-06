@@ -47,10 +47,10 @@ def metadata_snapshot(models, *, observed="2026-11-06T18:58:00+00:00"):
     }
 
 
-def test_unavailable_refresh_writes_artefact_without_allowlist_changes(
+def test_unavailable_refresh_writes_artifact_without_allowlist_changes(
     tmp_path, monkeypatch
 ):
-    output = tmp_path / "artifacts/model-catalogues/opencode-zen-free.json"
+    output = tmp_path / "artifacts/model-catalogues/free-model-candidates.json"
     monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
     assert MODULE.refresh(output) == 1
     payload = json.loads(output.read_text(encoding="utf-8"))
@@ -150,6 +150,11 @@ def test_successful_refresh_joins_realistic_console_ids_to_exact_metadata(
         "big-pickle",
         "not-a-free-suffix",
     ]
+    assert payload["schema_version"] == 2
+    assert payload["provider_coverage"]["opencode"]["status"] == "observed"
+    assert payload["provider_coverage"]["groq"] == {"status": "not_assessed"}
+    assert payload["review"]["already_curated"] == ["big-pickle"]
+    assert payload["review"]["new_candidates"] == ["not-a-free-suffix"]
     assert payload["models"][0]["pricing"]["cache_read"] == 0
     assert "not-serving" not in [m["id"] for m in payload["models"]]
 

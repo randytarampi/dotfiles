@@ -20,9 +20,14 @@ sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 from cli_helpers import add_common_args  # noqa: E402
 from model_catalogues import get_catalogue  # noqa: E402
 from models_dev import MODELS_DEV_URL, fetch_models_dev_snapshot  # noqa: E402
+from catalogue_review import (  # noqa: E402
+    SCHEMA_VERSION,
+    provider_coverage,
+    registry_review,
+)
 
 CONSOLE_MODELS_URL = "https://opencode.ai/inference/v1/models"
-DEFAULT_OUTPUT = REPO_ROOT / "artifacts/model-catalogues/opencode-zen-free.json"
+DEFAULT_OUTPUT = REPO_ROOT / "artifacts/model-catalogues/free-model-candidates.json"
 
 
 def timestamp() -> str:
@@ -188,7 +193,11 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
             free_models.append({"id": model_id, "pricing": cost})
 
     models = normalize_models(free_models)
+    review = registry_review(models, ids)
     payload = {
+        "schema_version": SCHEMA_VERSION,
+        "provider_coverage": provider_coverage(CONSOLE_MODELS_URL),
+        "review": review,
         "status": "incomplete" if unclassified else "available",
         "source": CONSOLE_MODELS_URL,
         "pricing_source": MODELS_DEV_URL,
@@ -221,6 +230,9 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
             and previous.get("source") == payload["source"]
             and previous.get("pricing_source") == payload["pricing_source"]
             and previous.get("counts") == payload["counts"]
+            and previous.get("schema_version") == SCHEMA_VERSION
+            and previous.get("provider_coverage") == payload["provider_coverage"]
+            and previous.get("review") == payload["review"]
             and isinstance(previous.get("models"), list)
             and normalize_models(previous["models"]) == payload["models"]
         ):
