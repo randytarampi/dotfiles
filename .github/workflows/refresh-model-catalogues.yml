@@ -49,11 +49,17 @@ jobs:
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
             test -n "${TRUSTED_REF}"
-            [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
+            if [[ ${#TRUSTED_SHA} -ne 40 || "${TRUSTED_SHA}" == *[!0-9a-f]* ]]; then
+              echo "::error::Invalid manually supplied trusted_ref SHA" >&2
+              exit 1
+            fi
             # An arbitrary 40-hex PR SHA must not become secret-bearing code.
             default_sha="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${DEFAULT_BRANCH}" \
               --jq '.commit.sha')"
-            [[ "${default_sha}" =~ ^[0-9a-f]{40}$ ]]
+            if [[ ${#default_sha} -ne 40 || "${default_sha}" == *[!0-9a-f]* ]]; then
+              echo "::error::Invalid default-branch head SHA" >&2
+              exit 1
+            fi
             ancestry="$(gh api \
               "repos/${GITHUB_REPOSITORY}/compare/${TRUSTED_SHA}...${default_sha}" \
               --jq '.status')"
@@ -71,7 +77,10 @@ jobs:
             test -z "${TRUSTED_REF}"
             test "${TRUSTED_SHA}" = "${GITHUB_SHA}"
           fi
-          [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          if [[ ${#TRUSTED_SHA} -ne 40 || "${TRUSTED_SHA}" == *[!0-9a-f]* ]]; then
+            echo "::error::Invalid trusted checkout SHA" >&2
+            exit 1
+          fi
 
       - name: Check out the triggering commit
         uses: actions/checkout@v7
@@ -146,7 +155,10 @@ jobs:
             test -z "${TRUSTED_REF}"
             test "${TRUSTED_SHA}" = "${GITHUB_SHA}"
           fi
-          [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          if [[ ${#TRUSTED_SHA} -ne 40 || "${TRUSTED_SHA}" == *[!0-9a-f]* ]]; then
+            echo "::error::Invalid trusted publishing SHA" >&2
+            exit 1
+          fi
 
       - name: Check out the exact base commit
         uses: actions/checkout@v7
