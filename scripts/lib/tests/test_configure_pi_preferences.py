@@ -1324,5 +1324,61 @@ def test_pi_malformed_settings_json_refuses_write_and_preserves_user_overrides(
     assert '"ollama/foo"' in raw
 
 
+def test_gateway_default_prefers_resolved_orchestrator_over_entry_order():
+    """The role-resolved default wins even when unrelated helpers sort earlier."""
+    models = [
+        {"id": "omlx/MarkItDown"},
+        {"id": "omlx/Ornith-1.5-35B-A3B-MLX-4bit"},
+    ]
+    assert (
+        configure_pi.preferred_gateway_default(
+            "litellm/omlx/Ornith-1.5-35B-A3B-MLX-4bit", models
+        )
+        == "omlx/Ornith-1.5-35B-A3B-MLX-4bit"
+    )
+    # The canonical local identity shape resolves the same way.
+    assert (
+        configure_pi.preferred_gateway_default(
+            "omlx/Ornith-1.5-35B-A3B-MLX-4bit", models
+        )
+        == "omlx/Ornith-1.5-35B-A3B-MLX-4bit"
+    )
+
+
+def test_gateway_default_fallback_skips_specialized_families():
+    """Entry-order fallback must not demote the default to a helper app."""
+    models = [
+        {"id": "omlx/MarkItDown"},
+        {"id": "omlx/Whisper-large"},
+        {"id": "omlx/Ornith-1.5-35B-A3B-MLX-4bit"},
+    ]
+    assert (
+        configure_pi.preferred_gateway_default("litellm/omlx/no-default", models)
+        == "omlx/Ornith-1.5-35B-A3B-MLX-4bit"
+    )
+
+
+def test_gateway_default_without_conversational_alias_is_none():
+    models = [{"id": "omlx/MarkItDown"}]
+    assert configure_pi.preferred_gateway_default("litellm/omlx/xxx", models) is None
+    assert (
+        configure_pi.preferred_gateway_default(
+            "litellm/omlx/xxx", [{"id": "omlx/glm4:cloud"}]
+        )
+        is None
+    )
+
+
+def test_gateway_default_without_resolved_match_falls_back_to_first_regular():
+    models = [
+        {"id": "omlx/gemma4:31b"},
+        {"id": "omlx/Ornith-1.5-35B-A3B-MLX-4bit"},
+    ]
+    assert (
+        configure_pi.preferred_gateway_default("litellm/openai/gpt", models)
+        == "omlx/gemma4:31b"
+    )
+
+
 if __name__ == "__main__":
     unittest.main()

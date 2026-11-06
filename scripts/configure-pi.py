@@ -8,6 +8,41 @@ import tempfile
 
 CLOUD_TAG = ":cloud"
 
+
+def preferred_gateway_default(resolved_default, litellm_models):
+    """Return the top-level gateway default identity for Pi in gateway mode.
+
+    A role-resolved LOCAL identity (omlx/ or ollama/ family) wins whenever
+    the gateway serves a matching alias, so an unrelated helper app cannot
+    hijack the default by alphabetical order. When the resolved default is
+    remote (or unserved), the entry-order scan still prefers the first
+    gateway-served local alias, excluding cloud-stub spellings and
+    specialized families (e.g. omlx/MarkItDown).
+    """
+    litellm_models = litellm_models or []
+    canonical_default = (resolved_default or "").removeprefix("litellm/")
+    served = {entry.get("id") for entry in litellm_models}
+    if (
+        canonical_default.startswith(("omlx/", "ollama/"))
+        and canonical_default in served
+    ):
+        # The resolved orchestrator is itself a gateway-served local identity;
+        # keep it rather than whatever unrelated alias sorts first.
+        return canonical_default
+    for family in ("omlx/", "ollama/"):
+        for entry in litellm_models:
+            entry_id = entry.get("id", "")
+            if (
+                entry_id.startswith(family)
+                and CLOUD_TAG not in entry_id
+                and not entry_id.endswith("-cloud")
+                and "no-model-available" not in entry_id
+                and not is_specialized_model_name(entry_id.partition("/")[-1])
+            ):
+                return entry_id
+    return None
+
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
@@ -50,6 +85,7 @@ from local_engines import (  # noqa: E402 -- local import follows bootstrap.
     resolve_engine,
 )
 from litellm_aliases import resolve_alias  # noqa: E402
+from ai_models import is_specialized_model_name  # noqa: E402
 import tier_registry  # noqa: E402 -- local import follows bootstrap.
 import pi_profiles  # noqa: E402
 from free_preset_registry import PRESETS as DYNAMIC_FREE_PRESETS  # noqa: E402
@@ -1345,18 +1381,7 @@ def main():
         settings["defaultModel"] = model_id
     elif pi_litellm_proxy:
         litellm_models = providers.get("litellm", {}).get("models", [])
-        preferred = next(
-            (
-                entry["id"]
-                for family in ("omlx/", "ollama/")
-                for entry in litellm_models
-                if entry.get("id", "").startswith(family)
-                and CLOUD_TAG not in entry["id"]
-                and not entry["id"].endswith("-cloud")
-                and "no-model-available" not in entry["id"]
-            ),
-            None,
-        )
+        preferred = preferred_gateway_default(default, litellm_models)
         if preferred and settings["defaultProvider"] == "litellm":
             settings["defaultProvider"] = "litellm"
             settings["defaultModel"] = preferred
