@@ -734,7 +734,9 @@ def test_pi_cloud_aliases_advertise_exact_gateway_ids_once(tmp_path, monkeypatch
     )
 
 
-def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
+def _run_pi_main(
+    home, catalogue, monkeypatch, *, canary=True, key=True, local_models=None
+):
     agent_dir = Path(home) / "pi-agent"
     agent_dir.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
@@ -758,7 +760,9 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
     monkeypatch.setattr(
         configure_pi.tier_registry, "load_registry", lambda *_: registry
     )
-    monkeypatch.setattr(configure_pi, "list_local_ollama_models", lambda: [])
+    monkeypatch.setattr(
+        configure_pi, "list_local_ollama_models", lambda: local_models or []
+    )
     monkeypatch.setattr(
         configure_pi,
         "prepare_dynamic_free_registry",
@@ -794,9 +798,7 @@ def _run_pi_main(home, catalogue, monkeypatch, *, canary=True, key=True):
     monkeypatch.setattr(
         configure_pi, "_ensure_packages", lambda *_args, **_kwargs: None
     )
-    monkeypatch.setattr(
-        sys, "argv", ["configure-pi.py", "--preset", "pro-plus", "--no-local-fallbacks"]
-    )
+    monkeypatch.setattr(sys, "argv", ["configure-pi.py", "--preset", "pro-plus"])
     configure_pi.main()
     return agent_dir
 
@@ -839,6 +841,85 @@ def test_pi_main_emits_catalogued_nested_cloud_routes(tmp_path, monkeypatch):
     assert "litellm/google/models/gemini-3.8-flash" in settings["enabledModels"]
     assert "litellm/opencode/nemotron-3.5-lightning-free" in settings["enabledModels"]
     assert "fixture-secret" not in json.dumps([providers, settings, auth])
+
+
+def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOTFILES_RUN_OMLX_SETUP", "1")
+    monkeypatch.setenv("OMLX_API_KEY", "fixture-key")
+    monkeypatch.setattr(
+        configure_pi,
+        "resolve_engine",
+        lambda provider: {"provider_config": True} if provider == "omlx" else None,
+    )
+    monkeypatch.setattr(
+        configure_pi,
+        "local_chat_model_ids",
+        lambda models, provider: ["omlx-local"] if provider == "omlx" else [],
+    )
+    monkeypatch.setattr(
+        configure_pi,
+        "build_local_provider",
+        lambda provider, ids: (
+            {
+                "baseUrl": f"http://{provider}",
+                "api": "openai-completions",
+                "models": [{"id": f"{provider}-local"}],
+            }
+            if provider == "omlx"
+            else None
+        ),
+    )
+    out = _run_pi_main(
+        tmp_path,
+        {
+            "data": [
+                {"id": "ollama/remote"},
+                {"id": "omlx/Mellum2.1-12B-A2.5B-Thinking-6bit"},
+                {"id": "omlx/cloud:cloud"},
+                {"id": "opencode/big-pickle"},
+            ]
+        },
+        monkeypatch,
+        local_models=[{"name": "omlx-local", "provider": "omlx", "model_type": "llm"}],
+    )
+    providers = json.loads((out / "models.json").read_text())["providers"]
+    settings = json.loads((out / "settings.json").read_text())
+    assert {"ollama", "omlx", "litellm"} <= set(providers)
+    assert settings["defaultProvider"] == "litellm"
+    assert settings["defaultModel"] == "omlx/Mellum2.1-12B-A2.5B-Thinking-6bit"
+    assert "litellm/omlx/Mellum2.1-12B-A2.5B-Thinking-6bit" in settings["enabledModels"]
+    assert "omlx/omlx-local" in settings["enabledModels"]
+
+
+@pytest.mark.parametrize("value", ["litellm/not-present", "missing/provider-model"])
+def test_pi_default_model_override_validates_emitted_models(
+    tmp_path, monkeypatch, value
+):
+    monkeypatch.setenv("DOTFILES_PI_DEFAULT_MODEL", value)
+    with (
+        patch("sys.stderr"),
+        pytest.raises(ValueError, match="DOTFILES_PI_DEFAULT_MODEL"),
+    ):
+        _run_pi_main(
+            tmp_path,
+            {"data": [{"id": "omlx/model"}, {"id": "opencode/big-pickle"}]},
+            monkeypatch,
+        )
+
+
+def test_pi_default_model_override_changes_only_session_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOTFILES_PI_DEFAULT_MODEL", "litellm/omlx/model")
+    out = _run_pi_main(
+        tmp_path,
+        {"data": [{"id": "omlx/model"}, {"id": "opencode/big-pickle"}]},
+        monkeypatch,
+    )
+    settings = json.loads((out / "settings.json").read_text())
+    assert (settings["defaultProvider"], settings["defaultModel"]) == (
+        "litellm",
+        "omlx/model",
+    )
+    assert settings["subagents"]["defaultModel"] == "litellm/opencode/big-pickle"
 
 
 def test_pi_reviewer_preserves_existing_override_and_does_not_generate_new_one(
@@ -932,7 +1013,8 @@ def test_pi_main_keeps_gateway_wire_ids_and_qualified_settings_refs(
 
     assert [entry["id"] for entry in entries] == gateway_ids
     assert settings["defaultProvider"] == "litellm"
-    assert settings["defaultModel"] == "openrouter/vendor/twin:free"
+    # The proxy default ladder prefers a non-cloud omlx gateway alias first.
+    assert settings["defaultModel"] == "omlx/model"
     assert (
         settings["subagents"]["defaultModel"] == "litellm/openrouter/vendor/twin:free"
     )
