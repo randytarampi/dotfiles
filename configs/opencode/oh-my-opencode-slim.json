@@ -15,7 +15,7 @@
         ]
       },
       "oracle": {
-        "model": "ollama-cloud/kimi-k3",
+        "model": "ollama-cloud/kimi-k3.1-pro",
         "variant": "max",
         "skills": [
           "simplify"
@@ -988,7 +988,7 @@
           "model": "ollama-cloud/glm-5.3"
         },
         "gamma": {
-          "model": "ollama-cloud/kimi-k3"
+          "model": "ollama-cloud/kimi-k3.1-pro"
         }
       },
       "pro-plus": {
@@ -1125,7 +1125,7 @@
               "model": "ollama-cloud/glm-5.3"
             },
             "gamma": {
-              "model": "ollama-cloud/kimi-k3"
+              "model": "ollama-cloud/kimi-k3.1-pro"
             },
             "council": {
               "model": "ollama-cloud/glm-5.3",

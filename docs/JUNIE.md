@@ -220,7 +220,7 @@ belongs exclusively to the `mcps` step (`scripts/configure-mcps.py` or
 
 ## November 2026 model group additions
 
-The curated Junie groups include `openai-terra` (GPT-6.1 Terra), `ollama-cloud-mimo` (MiMo V2.6 Pro primary and Flash faster), and `ollama-cloud-kimi` (Kimi K3 primary and K2.7 Code faster). The general `openai` group now prefers Terra/Luna; dedicated `openai-sol` and `openai-astra` groups remain. The naming and primary/faster contract are part of `configs/junie/model-groups.json`; the generator must not assume a model is served based on a catalogue from another provider.
+The curated Junie groups include `openai-terra` (GPT-6.1 Terra), `ollama-cloud-mimo` (MiMo V2.6 Pro primary and Flash faster), and `ollama-cloud-kimi` (Kimi K3.1 Pro primary and K2.7 Code faster). Kimi K3 remains catalogued for explicit rollback, not as an automatic fallback. This paid group requires runtime qualification with the exact Ollama Cloud credentials. The general `openai` group now prefers Terra/Luna; dedicated `openai-sol` and `openai-astra` groups remain. The naming and primary/faster contract are part of `configs/junie/model-groups.json`; the generator must not assume a model is served based on a catalogue from another provider.
 
 `fasterModel` is a selection hint rather than a benchmark result: establish latency and tool-use success against both models in an installed Junie client before claiming performance improvement. With `DOTFILES_USE_LITELLM_PROXY=1`, the generator derives named `litellm-*` twins only where exact authenticated LiteLLM aliases are available, and must never fall back to direct credentials after a gateway failure.
 

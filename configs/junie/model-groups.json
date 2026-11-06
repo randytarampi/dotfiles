@@ -182,7 +182,7 @@
     },
     "ollama-cloud-kimi": {
       "provider": "ollama-cloud",
-      "primaryModel": "kimi-k3",
+      "primaryModel": "kimi-k3.1-pro",
       "fasterModel": "kimi-k2.7-code",
       "fasterProvider": "ollama-cloud"
     },

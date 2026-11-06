@@ -40,11 +40,11 @@ def test_junie_candidates_and_allowlists():
     assert groups["openai"]["primaryModel"] == "gpt-6.1-terra"
     assert groups["ollama-cloud-mimo"]["primaryModel"] == "mimo-v2.6-pro"
     assert groups["ollama-cloud-mimo"]["fasterModel"] == "mimo-v2.6-flash"
-    assert groups["ollama-cloud-kimi"]["primaryModel"] == "kimi-k3"
+    assert groups["ollama-cloud-kimi"]["primaryModel"] == "kimi-k3.1-pro"
     assert groups["ollama-cloud-kimi"]["fasterModel"] == "kimi-k2.7-code"
     for provider, models in {
         "openai": ("gpt-6.1-terra",),
-        "ollama-cloud": ("mimo-v2.6-pro", "mimo-v2.6-flash"),
+        "ollama-cloud": ("mimo-v2.6-pro", "mimo-v2.6-flash", "kimi-k3.1-pro"),
         "opencode": (
             "glm-5.3-flash-free",
             "deepseek-v4.1-flash-free",
@@ -66,3 +66,19 @@ def test_free_candidates_remain_fail_closed():
         not chain
         for chain in slim["_tiers"]["omo-slim-opencode-zen-free"]["fallback"].values()
     )
+
+
+def test_kimi_pro_replaces_only_paid_kimi_seats():
+    slim = load("configs/opencode/oh-my-opencode-slim.json")
+    pro_model = "ollama-cloud/kimi-k3.1-pro"
+    assert slim["presets"]["pro"]["oracle"]["model"] == pro_model
+    assert slim["council"]["presets"]["pro"]["gamma"]["model"] == pro_model
+    assert (
+        slim["_tiers"]["pro"]["council"]["presets"]["pro"]["gamma"]["model"]
+        == pro_model
+    )
+    assert "kimi-k3" in load("configs/opencode/ollama-cloud-models.json")["models"]
+    # Paid Ollama Cloud models must never enter the strict-free configurations.
+    for name in ("free", "omo-slim-opencode-zen-free"):
+        assert "kimi-k3.1-pro" not in json.dumps(slim["presets"][name])
+        assert "kimi-k3.1-pro" not in json.dumps(slim["_tiers"][name])
