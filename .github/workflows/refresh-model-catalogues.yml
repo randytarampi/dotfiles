@@ -49,6 +49,18 @@ jobs:
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
             test "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}"
             test -n "${TRUSTED_REF}"
+            [[ "${TRUSTED_SHA}" =~ ^[0-9a-f]{40}$ ]]
+            # An arbitrary 40-hex PR SHA must not become secret-bearing code.
+            default_sha="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${DEFAULT_BRANCH}" \
+              --jq '.commit.sha')"
+            [[ "${default_sha}" =~ ^[0-9a-f]{40}$ ]]
+            ancestry="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/compare/${TRUSTED_SHA}...${default_sha}" \
+              --jq '.status')"
+            if [[ "${ancestry}" != "ahead" && "${ancestry}" != "identical" ]]; then
+              echo "::error::Manual trusted_ref is not on default-branch history" >&2
+              exit 1
+            fi
           fi
           if [[ "${GITHUB_EVENT_NAME}" == "issue_comment" ]]; then
             test "${GITHUB_ACTOR}" = "${GITHUB_REPOSITORY_OWNER}"
@@ -238,12 +250,31 @@ jobs:
           # catalogue updates idempotent across sequential or concurrent runs.
           publish_branch="model-catalogue-bot/inventory"
           [[ "${publish_branch}" =~ ^model-catalogue-bot/[a-z0-9-]+$ ]]
+          # A bot branch can have a human-promoted or differently owned PR.
+          # Never republish into a non-draft, foreign or differently based PR.
+          existing_prs="$(gh pr list --head "${publish_branch}" --state open \
+            --limit 2 --json number,isDraft,baseRefName,headRefName,author)"
+          if (( $(jq 'length' <<< "${existing_prs}") > 1 )); then
+            echo "::error::Multiple open PRs found on catalogue branch" >&2
+            exit 1
+          fi
+          existing_pr="$(jq -r '.[0].number // empty' <<< "${existing_prs}")"
+          if [[ -n "${existing_pr}" ]] &&
+            ! jq -e --arg base "${DEFAULT_BRANCH}" \
+              --arg head "${publish_branch}" \
+              --arg author "woofdy-randytarampi-ca[bot]" \
+              '.[0] | (.isDraft == true) and (.baseRefName == $base) and
+                (.headRefName == $head) and (.author.login == $author)' \
+              <<< "${existing_prs}" >/dev/null; then
+            echo "::error::Refusing to update a non-draft or foreign catalogue PR" >&2
+            exit 1
+          fi
           # Preserve an existing draft when the only differences are observation times.
           # This check is deliberately after the exact artifact-path and gitlink
           # allowlists; do not skip those checks on repeated runs.
           if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
-            existing_pr="$(gh pr list --head "model-catalogue-bot/inventory" --state open --json number --jq '.[0].number')"
+            # existing_pr was validated before any no-op or publication.
             if [[ -n "${existing_pr}" ]] &&
               git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" 2>/dev/null; then
               old_semantics="$(git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" |
@@ -274,12 +305,12 @@ jobs:
           git -c credential.helper='!gh auth git-credential' push \
             --force-with-lease="refs/heads/${publish_branch}:${BOT_BRANCH_EXPECTED_TIP}" \
             origin "HEAD:refs/heads/${publish_branch}"
-          existing_pr="$(gh pr list --head "${publish_branch}" --state open --json number --jq '.[0].number')"
+          # Reuse the preflight-validated PR number; do not select another PR.
           review_body="${RUNNER_TEMP}/model-catalogue/review-pr.md"
           test -s "${review_body}"
           if [[ -n "${existing_pr}" ]]; then
             gh pr edit "${existing_pr}" --title "chore(agents): review free-model candidates" --body-file "${review_body}"
           else
-            gh pr create --draft --base main --head "${publish_branch}" \
+            gh pr create --draft --base "${DEFAULT_BRANCH}" --head "${publish_branch}" \
               --title "chore(agents): review free-model candidates" --body-file "${review_body}"
           fi

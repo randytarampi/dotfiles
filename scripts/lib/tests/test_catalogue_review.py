@@ -130,12 +130,13 @@ def test_comparison_reads_legacy_bot_inventory_and_protects_markdown():
             {"id": "removed", "pricing": {"input": 0, "output": 0}},
         ]
     }
-    current["models"][1]["id"] = "new|<script>"
-    current["review"]["new_candidates"] = ["new|<script>"]
+    current["models"][1]["id"] = "new|`<script>\n\u202e"
+    current["review"]["new_candidates"] = ["new|`<script>\n\u202e"]
     body = render_pr_body(current, old)
     assert "removed" in body
-    assert "new\\|&lt;script&gt;" in body
+    assert r"<code>new|&#96;&lt;script&gt;\u000a\u202e</code>" in body
     assert "<script>" not in body
+    assert "`<script>" not in body
 
 
 @pytest.mark.parametrize(
@@ -144,6 +145,22 @@ def test_comparison_reads_legacy_bot_inventory_and_protects_markdown():
         {"status": "incomplete"},
         {"schema_version": 1},
         {"provider_coverage": {"opencode": {"status": "not_assessed"}}},
+        {"source": "https://attacker.invalid/models"},
+        {"pricing_source": "https://attacker.invalid/pricing"},
+        {"counts": {"catalogue": 0, "classified": 0, "free": 2, "unclassified": 0}},
+        {"counts": {"catalogue": True, "classified": 1, "free": 2, "unclassified": 0}},
+        {"review": {
+            "new_candidates": [],
+            "already_curated": ["known"],
+            "curated_not_listed": ["not-listed"],
+            "curated_listed_not_zero": ["paid"],
+        }},
+        {"review": {
+            "new_candidates": ["new-model", "new-model"],
+            "already_curated": ["known"],
+            "curated_not_listed": ["not-listed"],
+            "curated_listed_not_zero": ["paid"],
+        }},
     ],
 )
 def test_renderer_rejects_unqualified_inventory(change):
@@ -174,3 +191,33 @@ def test_cli_renders_without_network_or_writing_source(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "new-model" in output_path.read_text(encoding="utf-8")
     assert json.loads(input_path.read_text()) == current
+
+
+
+def test_renderer_rejects_false_multi_provider_observation():
+    current = _inventory()
+    current["provider_coverage"]["mistral"] = {
+        "status": "observed",
+        "source": "https://api.mistral.ai/v1/models",
+    }
+    with pytest.raises(ValueError, match="coverage"):
+        render_pr_body(current)
+
+
+def test_renderer_rejects_inconsistent_curated_categories():
+    current = _inventory()
+    current["review"]["curated_not_listed"] = ["known"]
+    with pytest.raises(ValueError, match="overlapping"):
+        render_pr_body(current)
+
+
+def test_model_ids_are_not_truncated_or_interpreted_as_markdown():
+    current = _inventory()
+    precise = "model-" + "x" * 175
+    current["models"][1]["id"] = precise
+    current["review"]["new_candidates"] = [precise]
+    assert f"<code>{precise}</code>" in render_pr_body(current)
+    current["models"][1]["id"] = "x" * 257
+    current["review"]["new_candidates"] = ["x" * 257]
+    with pytest.raises(ValueError, match="too long"):
+        render_pr_body(current)

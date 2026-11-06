@@ -11,11 +11,13 @@ import html
 import json
 from pathlib import Path
 
+from models_dev import MODELS_DEV_URL
 from provider_endpoints import PROVIDER_ENDPOINTS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = REPO_ROOT / "configs/opencode/opencode-models.json"
 CONSOLE = "opencode"
+CONSOLE_SOURCE = "https://opencode.ai/inference/v1/models"
 SCHEMA_VERSION = 2
 
 
@@ -62,10 +64,15 @@ def registry_review(
 
 
 def _display(value: str) -> str:
-    """Escape model IDs before writing untrusted catalogue names to Markdown."""
-    safe = html.escape(value, quote=True).replace("|", "\\|")
-    safe = safe.replace("`", "\\`").replace("\n", "\\n")
-    return "`" + safe[:160] + ("…" if len(safe) > 160 else "") + "`"
+    """Use safe inline HTML; backslashes do not escape Markdown code spans."""
+    if not isinstance(value, str) or len(value) > 256:
+        raise ValueError("candidate name or provenance is too long or invalid")
+    printable = "".join(
+        character if character.isprintable() else f"\\u{ord(character):04x}"
+        for character in value
+    )
+    escaped = html.escape(printable, quote=True).replace("`", "&#96;")
+    return f"<code>{escaped}</code>"
 
 
 def _bullets(values: list[str], *, limit: int = 30) -> str:
@@ -119,15 +126,25 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         for key in required
     ):
         raise ValueError("inventory review fields are malformed")
-    if current["provider_coverage"].get(CONSOLE, {}).get("status") != "observed":
-        raise ValueError("Console evidence is not observed")
-    others = sorted(
-        name
-        for name, record in current["provider_coverage"].items()
-        if name != CONSOLE and record == {"status": "not_assessed"}
-    )
-    if len(others) != len(current["provider_coverage"]) - 1:
-        raise ValueError("other providers must not be represented as observed")
+    if current.get("source") != CONSOLE_SOURCE:
+        raise ValueError("model inventory must come from the Console model list")
+    if current.get("pricing_source") != MODELS_DEV_URL:
+        raise ValueError("model inventory has unexpected pricing provenance")
+    if current["provider_coverage"] != provider_coverage(CONSOLE_SOURCE):
+        raise ValueError("provider coverage does not match observed sources")
+    others = sorted(name for name in PROVIDER_ENDPOINTS if name != CONSOLE)
+    groups = {name: set(review[name]) for name in required}
+    zero = set(current_models)
+    if groups["new_candidates"] & groups["already_curated"]:
+        raise ValueError("review partitions overlap")
+    if groups["new_candidates"] | groups["already_curated"] != zero:
+        raise ValueError("review does not cover the zero-priced candidates")
+    if (
+        (groups["curated_not_listed"] | groups["curated_listed_not_zero"]) & zero
+        or groups["curated_not_listed"] & groups["curated_listed_not_zero"]
+        or any(len(groups[name]) != len(review[name]) for name in required)
+    ):
+        raise ValueError("review contains overlapping or repeated model IDs")
     added = sorted(set(current_models) - set(prior_models))
     removed = sorted(set(prior_models) - set(current_models))
     price_changed = sorted(
@@ -136,10 +153,17 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         if current_models[key] != prior_models[key]
     )
     counts = current.get("counts", {})
+    required_counts = ("catalogue", "classified", "free", "unclassified")
+    if not isinstance(counts, dict) or any(
+        type(counts.get(name)) is not int or counts[name] < 0
+        for name in required_counts
+    ):
+        raise ValueError("candidate counts are invalid")
     if (
-        not isinstance(counts, dict)
-        or counts.get("free") != len(current_models)
-        or counts.get("unclassified") != 0
+        counts["catalogue"] < 1
+        or counts["classified"] != counts["catalogue"]
+        or counts["free"] != len(current_models)
+        or counts["unclassified"] != 0
     ):
         raise ValueError("candidate counts or classification incomplete")
     return (

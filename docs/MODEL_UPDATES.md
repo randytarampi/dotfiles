@@ -139,7 +139,11 @@ for the automated check.
 
 The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday
 and also accepts owner-only `workflow_dispatch` with a trusted immutable
-default-branch SHA. An authenticated owner can post the exact comment
+default-branch SHA. The dispatch preflight queries the live default-branch
+head and GitHub commit comparison before checkout: the supplied SHA must
+be identical to or an ancestor of `main`, not merely 40 hex characters.
+This prevents accidentally checking out unreviewed PR code with
+`OPENCODE_API_KEY`. An authenticated owner can post the exact comment
 `/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197).
 The existing actor, issue-number, default-branch and immutable-SHA checks
 protect the secret-bearing refresh and the WOOFDY publishing environment.
@@ -182,9 +186,14 @@ change model registries, Slim role assignments, Junie groups, Pi models,
 LiteLLM aliases, rate limits or any request-time admission decision.
 Request-time strict-free enforcement remains [issue #87](https://github.com/randytarampi/dotfiles/issues/87).
 
-WOOFDY publishes one **draft** review PR on the existing
+Woofdy publishes one **draft** review PR on the existing
 `model-catalogue-bot/inventory` branch. It updates #200 on its next
-successful run rather than creating a second PR. Its only changed path
+successful run rather than creating a second PR. Before either a timestamp-only
+no-op or a branch push, publication verifies at most one open PR on that
+branch, with the expected default-branch base, a draft state and
+`woofdy-randytarampi-ca[bot]` as its author. A ready-for-review PR,
+unexpected author, changed base or duplicate open PR fails closed rather
+than being overwritten. Its only changed path
 relative to `main` is the renamed JSON artifact; the legacy
 `opencode-zen-free.json` on the old bot branch may be read as prior
 JSON **data** during the migration but must never be re-published.
