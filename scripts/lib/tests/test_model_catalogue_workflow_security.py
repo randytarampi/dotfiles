@@ -345,7 +345,6 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     assert "Catalogue unchanged" not in evaluate(price_changed, "200")
 
 
-
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     refresh, publish = workflow.split("  publish:\n", 1)
@@ -353,7 +352,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "Prepare a template-compliant candidate review" in publish
     assert "scripts/lib/catalogue_review.py" in publish
     assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
-    assert '353209076+${bot_login}@users.noreply.github.com' in publish
+    assert "353209076+${bot_login}@users.noreply.github.com" in publish
     assert 'git config user.name "${bot_login}"' in publish
     assert (
         'git commit -m "chore(agents): refresh free-model candidate inventory"'
@@ -374,5 +373,5 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     # The renamed source path is only accepted for reading old PR #200 data.
     allowed = publish.split('allowed_path="', 1)[1].split('"', 1)[0]
     assert allowed == "artifacts/model-catalogues/free-model-candidates.json"
-    assert "git add -- \"${allowed_path}\"" in publish
+    assert 'git add -- "${allowed_path}"' in publish
     assert "artefact" not in workflow

@@ -37,7 +37,8 @@ def registry_review(
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     configured = registry.get("models") if isinstance(registry, dict) else None
     if not isinstance(configured, dict) or any(
-        not isinstance(model, str) or not model.strip()
+        not isinstance(model, str)
+        or not model.strip()
         or not isinstance(configured[model], dict)
         for model in configured
     ):
