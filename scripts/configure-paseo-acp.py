@@ -102,8 +102,14 @@ def apply_entries(paseo, home, source, config, updates, helpers):
         providers[name] = value
     expected.setdefault("agents", {})["providers"] = providers
     apply_document(
-        paseo, home, source, config, expected,
-        helpers.decode_config, helpers.same_config, timeout=60,
+        paseo,
+        home,
+        source,
+        config,
+        expected,
+        helpers.decode_config,
+        helpers.same_config,
+        timeout=60,
     )
 
 

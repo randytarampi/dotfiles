@@ -120,7 +120,9 @@ def test_discovery_preserves_stable_executable_symlink(monkeypatch):
     assert found["gemini"]["command"][0] == "/stable/bin/gemini"
 
 
-def test_private_native_preflight_then_reload_preserves_other_keys(tmp_path, monkeypatch):
+def test_private_native_preflight_then_reload_preserves_other_keys(
+    tmp_path, monkeypatch
+):
     home = tmp_path / ".paseo"
     home.mkdir()
     target = home / "config.json"
@@ -177,8 +179,12 @@ def test_bad_staged_candidate_aborts_before_live_write(tmp_path, monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", refuse)
     with pytest.raises(ValueError, match="validation failed") as error:
         module.apply_entries(
-            "/bin/paseo", home, target, original,
-            {"gemini": {"extends": "acp", "label": "Gemini"}}, helpers,
+            "/bin/paseo",
+            home,
+            target,
+            original,
+            {"gemini": {"extends": "acp", "label": "Gemini"}},
+            helpers,
         )
     assert "private-canary-token" not in str(error.value)
     assert target.read_bytes() == before
@@ -207,8 +213,12 @@ def test_live_reload_damage_is_detected_without_rollback(tmp_path, monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     with pytest.raises(ValueError, match="no rollback attempted"):
         module.apply_entries(
-            "/bin/paseo", home, target, original,
-            {"gemini": {"extends": "acp", "label": "Gemini"}}, helpers,
+            "/bin/paseo",
+            home,
+            target,
+            original,
+            {"gemini": {"extends": "acp", "label": "Gemini"}},
+            helpers,
         )
     assert len(calls) == 2
     assert "user" not in json.loads(target.read_text())
@@ -252,7 +262,8 @@ def test_nonzero_reload_is_failure_even_after_correct_save(tmp_path, monkeypatch
     def fake_run(args, **kwargs):
         failed = args[2] == "reload"
         return module.subprocess.CompletedProcess(
-            args, 23 if failed else 0,
+            args,
+            23 if failed else 0,
             stdout="apiKey=private-canary-token",
             stderr="private path /Users/private",
         )
@@ -260,8 +271,12 @@ def test_nonzero_reload_is_failure_even_after_correct_save(tmp_path, monkeypatch
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     with pytest.raises(ValueError, match="config saved; daemon reload failed") as error:
         module.apply_entries(
-            "/bin/paseo", home, target, original,
-            {"gemini": {"extends": "acp", "label": "Gemini"}}, helpers,
+            "/bin/paseo",
+            home,
+            target,
+            original,
+            {"gemini": {"extends": "acp", "label": "Gemini"}},
+            helpers,
         )
     assert "no rollback attempted" in str(error.value)
     assert "private-canary-token" not in str(error.value)
