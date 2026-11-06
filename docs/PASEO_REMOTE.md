@@ -24,17 +24,18 @@ The CLI supports the locally installed provider binaries and their existing auth
 
 - Paseo **CLI installation** is part of the dev-tier `Brewfile.dev` package lane when packages setup is enabled; this follows the owner's `@latest` policy. The separate `install-paseo.sh` helper remains an explicit owner-run action. Paseo **daemon config and Web UI setup** are opt-in via their gates. No unattended session starts or CLI provider reconfiguration.
 - Missing/broken Tailscale, unprotected Paseo daemon, existing custom listener, enabled relay, missing CLI or config: refuse instead of widening access.
-- The separate Paseo Web UI lane serves its Caddy sites per `CADDY_ACCESS` when enabled and installed. Paseo's native password is the boundary in public mode. It requires a loopback-only Paseo daemon; direct-Tailscale binding is an alternative, not simultaneously served on loopback. No Cloudflare Tunnel, Tailscale Funnel or E2EE relay is enabled here. Direct Tailscale TCP access still requires Paseo's own password.
+- The separate Paseo Web UI lane serves its Caddy sites per `CADDY_ACCESS` when enabled and installed. A native password is required for public/LAN Caddy access and any declared hosted relay. The daemon remains loopback-only; direct-Tailscale binding is an alternative. No Cloudflare Tunnel or Tailscale Funnel is enabled. The hosted E2EE relay is owner-opt-in through `DOTFILES_PASEO_RELAY=1`, never automatic. Direct Tailscale TCP access still requires Paseo's own password.
 - Test denial for the wrong tailnet identity and wrong app password. Test session continuity after app suspension and after switching between Wi-Fi and cellular; confirm terminal, diff and approval surfaces.
 
 ## Bundled Web UI through Caddy
 
-Set a Paseo daemon password with `paseo daemon set-password` and explicitly
-disable relay in native configuration. Set `DOTFILES_PASEO_RELAY=0` (the default);
-a declared `DOTFILES_PASEO_RELAY=1` posture coexists with the Caddy Web UI
-route: the owner accepts that the daemon also becomes reachable from the
-internet through Paseo's hosted relay, where the native password is the only
-boundary. An explicit owner-only `configure-paseo-web.py --apply` reconciles
+Set a Paseo daemon password with `paseo daemon set-password`. For Caddy-only
+mode, explicitly disable native relay and set `DOTFILES_PASEO_RELAY=0` (the
+default). A declared `DOTFILES_PASEO_RELAY=1` posture coexists with the Caddy
+Web UI route: the owner accepts that the daemon also becomes reachable from
+the internet through Paseo's hosted relay. The native bcrypt password is
+mandatory for this posture, including `CADDY_ACCESS=localhost`, and adds
+admission protection beyond the relay's encrypted pairing handshake. An explicit owner-only `configure-paseo-web.py --apply` reconciles
 native relay drift in either direction toward the declared posture before
 Caddy is configured; Caddy still refuses an undeclared enabled relay or a
 process-level `PASEO_RELAY_ENABLED` override.
@@ -50,7 +51,7 @@ not a transactional concurrency guarantee (issue #173).
 configured `paseo.<domain>` hosts to private ranges; `public` serves them
 publicly. A gate-enabled, installed service follows `CADDY_ACCESS`; the Paseo
 native password is the boundary in public mode. The bcrypt password is
-required for LAN and public access. The native daemon remains loopback-only,
+required for LAN/public Caddy exposure and whenever hosted relay is declared. The native daemon remains loopback-only,
 and its hostname allowlist is extended through validated CLI writes and fails
 closed for unlisted hosts. Caddy terminates TLS and Paseo authenticates API
 and WebSocket clients.

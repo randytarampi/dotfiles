@@ -20,10 +20,10 @@ continue using Paseo's native interactive setup, without exposing a listener.
 `python3 scripts/check-paseo-security.py --access localhost --json` first loads
 the canonical `~/.env` (refusing when unavailable), then reads only an existing
 private native Paseo configuration and checks the Caddy
-loopback listener, disabled relay, enabled Web UI, required localhost host,
-and owner-selected exposure mode. The checker uses the same configured domain
+loopback listener, declared/native relay posture, enabled Web UI, required
+localhost host, and owner-selected exposure mode. The checker uses the same configured domain
 calculation as Caddy, including `paseo.local.*` aliases in localhost mode.
-LAN/public require stored bcrypt. Merged #187 establishes `CADDY_ACCESS`
+LAN/public **and any declared hosted relay** require stored bcrypt. Merged #187 establishes `CADDY_ACCESS`
 as the Caddy exposure selector and retires `DOTFILES_PASEO_PUBLIC`; there
 is no second public opt-in gate. Merged #189 originally forbade any
 `DOTFILES_PASEO_RELAY=1` intent on a Caddy route; the revised contract
@@ -32,7 +32,7 @@ to coexist with the Caddy Web UI route: the audit reports
 `relay: "enabled (declared)"` instead of refusing, and still fails closed
 on invalid relay values, an undeclared enabled native relay, loopback or
 `PASEO_LISTEN`/`PASEO_RELAY_ENABLED` conflicts, and missing bcrypt for
-lan/public. Hosted-relay reachability is owner-accepted, not verified
+LAN/public or declared hosted relay (including localhost Caddy mode). Hosted-relay reachability is owner-accepted, not verified
 here; the audit reports **daemon runtime, Caddy TLS and WebSockets as
 UNKNOWN**, because configuration is not a network acceptance test.
 
