@@ -149,18 +149,22 @@ def test_comparison_reads_legacy_bot_inventory_and_protects_markdown():
         {"pricing_source": "https://attacker.invalid/pricing"},
         {"counts": {"catalogue": 0, "classified": 0, "free": 2, "unclassified": 0}},
         {"counts": {"catalogue": True, "classified": 1, "free": 2, "unclassified": 0}},
-        {"review": {
-            "new_candidates": [],
-            "already_curated": ["known"],
-            "curated_not_listed": ["not-listed"],
-            "curated_listed_not_zero": ["paid"],
-        }},
-        {"review": {
-            "new_candidates": ["new-model", "new-model"],
-            "already_curated": ["known"],
-            "curated_not_listed": ["not-listed"],
-            "curated_listed_not_zero": ["paid"],
-        }},
+        {
+            "review": {
+                "new_candidates": [],
+                "already_curated": ["known"],
+                "curated_not_listed": ["not-listed"],
+                "curated_listed_not_zero": ["paid"],
+            }
+        },
+        {
+            "review": {
+                "new_candidates": ["new-model", "new-model"],
+                "already_curated": ["known"],
+                "curated_not_listed": ["not-listed"],
+                "curated_listed_not_zero": ["paid"],
+            }
+        },
     ],
 )
 def test_renderer_rejects_unqualified_inventory(change):
@@ -191,7 +195,6 @@ def test_cli_renders_without_network_or_writing_source(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "new-model" in output_path.read_text(encoding="utf-8")
     assert json.loads(input_path.read_text()) == current
-
 
 
 def test_renderer_rejects_false_multi_provider_observation():

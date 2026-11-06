@@ -399,6 +399,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert 'git add -- "${allowed_path}"' in publish
     assert "artefact" not in workflow
 
+
 def test_manual_dispatch_sha_must_be_default_branch_ancestor(tmp_path):
     import os
     import subprocess
@@ -409,20 +410,18 @@ def test_manual_dispatch_sha_must_be_default_branch_ancestor(tmp_path):
     )[1].split("      - name: Check out the triggering commit\n", 1)[0]
     run_block = section.split("        run: |\n", 1)[1]
     shell = "\n".join(
-        line[10:]
-        for line in run_block.splitlines()
-        if line.startswith("          ")
+        line[10:] for line in run_block.splitlines() if line.startswith("          ")
     )
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
     gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'case "$*" in\n'
         '  *branches/main*) printf "%s" "${MOCK_DEFAULT_SHA}" ;;\n'
         '  *compare/*) printf "%s" "${MOCK_ANCESTRY}" ;;\n'
-        '  *) exit 1 ;;\n'
-        'esac\n',
+        "  *) exit 1 ;;\n"
+        "esac\n",
         encoding="utf-8",
     )
     gh.chmod(0o755)
