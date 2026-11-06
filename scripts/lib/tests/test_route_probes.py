@@ -10,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 
 import route_probes
+import paseo_http
 from selected_service import Qualification
 
 
@@ -33,7 +34,7 @@ class FakeResponse:
 class RouteProbeTests(unittest.TestCase):
     def call(self, response, function, *args, **kwargs):
         with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
+            paseo_http, "open_credentialed", return_value=response
         ) as opened:
             result = function("http://engine/v1", "model", *args, **kwargs)
         return result, opened.call_args.args[0]
@@ -64,8 +65,8 @@ class RouteProbeTests(unittest.TestCase):
                 return_value=("http://engine/v1", "TTS_KEY"),
             ),
             patch.object(
-                route_probes.urllib.request,
-                "urlopen",
+                paseo_http,
+                "open_credentialed",
                 return_value=FakeResponse(body=b"audio", content_type="audio/wav"),
             ) as opened,
         ):
@@ -121,8 +122,8 @@ class RouteProbeTests(unittest.TestCase):
         )
         audio = FakeResponse(body=b"audio", content_type="audio/wav")
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=[error, audio],
         ) as opened:
             result = route_probes.probe_tts(
@@ -140,8 +141,8 @@ class RouteProbeTests(unittest.TestCase):
             content_type="application/json",
         )
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=[error],
         ):
             result = route_probes.probe_tts(
@@ -197,9 +198,7 @@ class RouteProbeTests(unittest.TestCase):
         self.assertEqual(
             route_probes.qualification_from_probe(result), Qualification.UNAVAILABLE
         )
-        with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=TimeoutError
-        ):
+        with patch.object(paseo_http, "open_credentialed", side_effect=TimeoutError):
             result = route_probes.probe_embeddings(
                 "http://engine/v1", "model", "KEY_REF"
             )
@@ -212,8 +211,8 @@ class RouteProbeTests(unittest.TestCase):
             with (
                 self.subTest(code=code),
                 patch.object(
-                    route_probes.urllib.request,
-                    "urlopen",
+                    paseo_http,
+                    "open_credentialed",
                     return_value=FakeResponse(status=code),
                 ),
             ):
@@ -223,16 +222,14 @@ class RouteProbeTests(unittest.TestCase):
                 expected = "unknown" if code in (401, 403) else "unavailable"
                 self.assertEqual(result.status, expected)
                 self.assertEqual(result.http_status, code)
-        with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=TimeoutError
-        ):
+        with patch.object(paseo_http, "open_credentialed", side_effect=TimeoutError):
             result = route_probes.probe_embeddings(
                 "http://engine/v1", "model", "KEY_REF"
             )
         self.assertEqual(result.status, "unknown")
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             return_value=FakeResponse(body=b'{"error":"unsupported"}'),
         ):
             result = route_probes.probe_embeddings(
@@ -265,9 +262,7 @@ class RouteProbeTests(unittest.TestCase):
         ok = FakeResponse(
             body=json.dumps({"data": [{"id": "b"}, {"id": "a"}]}).encode()
         )
-        with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=ok
-        ) as opened:
+        with patch.object(paseo_http, "open_credentialed", return_value=ok) as opened:
             ids = route_probes.fetch_gateway_models(
                 "http://gateway:4000/v1", "wire-key"
             )
@@ -281,15 +276,13 @@ class RouteProbeTests(unittest.TestCase):
             FakeResponse(body=b'{"data": "not-a-list"}'),
         ]
         for response in cases:
-            with patch.object(
-                route_probes.urllib.request, "urlopen", return_value=response
-            ):
+            with patch.object(paseo_http, "open_credentialed", return_value=response):
                 self.assertIsNone(
                     route_probes.fetch_gateway_models("http://gateway:4000/v1", "k")
                 )
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=route_probes.urllib.error.URLError("no route"),
         ):
             self.assertIsNone(
@@ -346,7 +339,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     def test_native_ollama_embed_uses_normalized_api_root_and_wire_shape(self):
         response = FakeResponse(body=b'{"model":"m","embeddings":[[0.5,0.25]]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
+            paseo_http, "open_credentialed", return_value=response
         ) as opened:
             obs = route_probes.probe_embedding_vector(
                 "http://localhost:11434/v1", "m", native_ollama=True
@@ -366,7 +359,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         )
         embed = FakeResponse(body=b'{"model":"m","embeddings":[[1.0]]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=[tags, show, embed]
+            paseo_http, "open_credentialed", side_effect=[tags, show, embed]
         ) as opened:
             obs = route_probes.discover_embedding_candidates(
                 ollama_url="http://localhost:11434/api"
@@ -387,7 +380,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     def test_ambiguous_gateway_route_does_not_post_embeddings_by_default(self):
         inventory = FakeResponse(body=b'{"data":[{"id":"ollama/m"}]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=inventory
+            paseo_http, "open_credentialed", return_value=inventory
         ) as opened:
             obs = route_probes.discover_embedding_candidates(
                 gateway_url="https://gateway.example/v1"
@@ -400,7 +393,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         inventory = FakeResponse(body=b'{"data":[{"id":"ollama/m"}]}')
         embedding = FakeResponse(body=b'{"data":[{"embedding":[1.0]}]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=[inventory, embedding]
+            paseo_http, "open_credentialed", side_effect=[inventory, embedding]
         ) as opened:
             obs = route_probes.discover_embedding_candidates(
                 gateway_url="http://127.0.0.1:4000/v1",
@@ -416,7 +409,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     def test_loopback_gateway_without_permission_is_unknown_without_post(self):
         inventory = FakeResponse(body=b'{"data":[{"id":"ollama/m"}]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=inventory
+            paseo_http, "open_credentialed", return_value=inventory
         ) as opened:
             obs = route_probes.discover_embedding_candidates(
                 gateway_url="http://127.0.0.1:4000/v1"
@@ -426,16 +419,14 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         self.assertEqual(obs[0].outcome, "unknown")
 
     def test_gateway_failure_is_unknown_but_empty_is_empty(self):
-        with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=TimeoutError
-        ):
+        with patch.object(paseo_http, "open_credentialed", side_effect=TimeoutError):
             failed = route_probes.discover_embedding_candidates(
                 gateway_url="http://gateway.example/v1"
             )
         self.assertEqual(len(failed), 1)
         self.assertEqual(failed[0].outcome, "unknown")
         empty = FakeResponse(body=b'{"data":[]}')
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=empty):
+        with patch.object(paseo_http, "open_credentialed", return_value=empty):
             self.assertEqual(
                 route_probes.discover_embedding_candidates(
                     gateway_url="http://gateway.example/v1"
@@ -447,9 +438,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         response = FakeResponse(
             body=b'{"data":[{"embedding":[1.0]}],"model":"ollama/m"}'
         )
-        with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
-        ):
+        with patch.object(paseo_http, "open_credentialed", return_value=response):
             obs = route_probes.probe_embedding_vector(
                 "https://gateway.example/v1", "ollama/m", native_ollama=False
             )
@@ -460,7 +449,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     ):
         response = FakeResponse(body=b'{"data":[{"embedding":[1.0]}]}')
         with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
+            paseo_http, "open_credentialed", return_value=response
         ) as opened:
             route_probes.probe_embedding_vector("http://localhost:11434/v1", "m")
         self.assertEqual(
@@ -477,11 +466,9 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
 
     def test_gateway_empty_inventory_is_distinct_from_failed_inventory(self):
         empty = FakeResponse(body=b'{"data":[]}')
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=empty):
+        with patch.object(paseo_http, "open_credentialed", return_value=empty):
             self.assertEqual(route_probes.fetch_gateway_models("http://gateway/v1"), [])
-        with patch.object(
-            route_probes.urllib.request, "urlopen", side_effect=TimeoutError
-        ):
+        with patch.object(paseo_http, "open_credentialed", side_effect=TimeoutError):
             self.assertIsNone(route_probes.fetch_gateway_models("http://gateway/v1"))
 
     def test_probe_embedding_vector_success(self):
@@ -489,7 +476,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             {"data": [{"embedding": [0.1, 0.2, 0.3]}], "model": "test-model"}
         ).encode()
         ok = FakeResponse(status=200, body=body)
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+        with patch.object(paseo_http, "open_credentialed", return_value=ok):
             obs = route_probes.probe_embedding_vector(
                 "http://ollama:11434/v1", "test-model", None, timeout=5
             )
@@ -505,7 +492,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         err = route_probes.urllib.error.HTTPError(
             "http://x/v1/embeddings", 503, "unavail", {}, io.BytesIO(b"")
         )
-        with patch.object(route_probes.urllib.request, "urlopen", side_effect=err):
+        with patch.object(paseo_http, "open_credentialed", side_effect=err):
             obs = route_probes.probe_embedding_vector(
                 "http://ollama:11434/v1", "test-model", None, timeout=5
             )
@@ -515,8 +502,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
 
     def test_probe_embedding_vector_connection_failure(self):
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=TimeoutError("timed out"),
         ):
             obs = route_probes.probe_embedding_vector(
@@ -528,7 +515,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     def test_probe_embedding_vector_shape_error(self):
         body = json.dumps({"data": [{"embedding": "not-a-list"}]}).encode()
         ok = FakeResponse(status=200, body=body)
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+        with patch.object(paseo_http, "open_credentialed", return_value=ok):
             obs = route_probes.probe_embedding_vector(
                 "http://ollama:11434/v1", "test-model", None, timeout=5
             )
@@ -546,7 +533,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             )
             with (
                 self.subTest(code=code),
-                patch.object(route_probes.urllib.request, "urlopen", side_effect=error),
+                patch.object(paseo_http, "open_credentialed", side_effect=error),
             ):
                 obs = route_probes.probe_embedding_vector(
                     "http://ollama:11434/v1", "test-model"
@@ -607,7 +594,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             {"models": [{"name": "b-model"}, {"name": "a-model"}]}
         ).encode()
         ok = FakeResponse(status=200, body=body)
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+        with patch.object(paseo_http, "open_credentialed", return_value=ok):
             tags = route_probes._fetch_ollama_tags(
                 "http://localhost:11434/api", None, timeout=5
             )
@@ -615,8 +602,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
 
     def test_fetch_ollama_tags_url_failure_returns_none(self):
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=TimeoutError("no route"),
         ):
             self.assertIsNone(
@@ -630,9 +617,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         response.read = lambda: (_ for _ in ()).throw(
             http.client.IncompleteRead(b'{"models":')
         )
-        with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
-        ):
+        with patch.object(paseo_http, "open_credentialed", return_value=response):
             self.assertIsNone(
                 route_probes._fetch_ollama_tag_records("http://localhost:11434/api")
             )
@@ -647,7 +632,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             }
         ).encode()
         ok = FakeResponse(status=200, body=body)
-        with patch.object(route_probes.urllib.request, "urlopen", return_value=ok):
+        with patch.object(paseo_http, "open_credentialed", return_value=ok):
             details = route_probes._fetch_ollama_show(
                 "http://localhost:11434/api", "embeddinggemma", None, timeout=5
             )
@@ -660,9 +645,7 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         response.read = lambda: (_ for _ in ()).throw(
             http.client.IncompleteRead(b'{"modelinfo":')
         )
-        with patch.object(
-            route_probes.urllib.request, "urlopen", return_value=response
-        ):
+        with patch.object(paseo_http, "open_credentialed", return_value=response):
             self.assertIsNone(
                 route_probes._fetch_ollama_show(
                     "http://localhost:11434/api", "embeddinggemma"
@@ -676,8 +659,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
         )
         with (
             patch.object(
-                route_probes.urllib.request,
-                "urlopen",
+                paseo_http,
+                "open_credentialed",
                 return_value=response,
             ),
             patch.object(
@@ -718,8 +701,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             ]
         )
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=lambda *a, **k: next(responses),
         ):
             obs = route_probes.discover_embedding_candidates(
@@ -757,8 +740,8 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
             ]
         )
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             side_effect=lambda *a, **k: next(responses),
         ):
             obs = route_probes.discover_embedding_candidates(
@@ -777,14 +760,14 @@ class H0EmbeddingCandidateTests(unittest.TestCase):
     def test_malformed_inventory_is_unknown_not_empty(self):
         for body in (b'{"data":[{}]}', b'{"data":[{"id":42}]}'):
             with patch.object(
-                route_probes.urllib.request,
-                "urlopen",
+                paseo_http,
+                "open_credentialed",
                 return_value=FakeResponse(body=body),
             ):
                 self.assertIsNone(route_probes.fetch_gateway_models("http://gateway"))
         with patch.object(
-            route_probes.urllib.request,
-            "urlopen",
+            paseo_http,
+            "open_credentialed",
             return_value=FakeResponse(body=b'{"models":[{}]}'),
         ):
             self.assertIsNone(route_probes._fetch_ollama_tag_records("http://ollama"))

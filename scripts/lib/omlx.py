@@ -13,7 +13,7 @@ import urllib.request
 
 import logger
 from constants import get_omlx_base_url
-from paseo_http import open_credentialed
+import paseo_http
 
 _STATUS_CACHE = {}
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -27,7 +27,7 @@ def _get_json(path, params=None):
     api_key = os.environ.get("OMLX_API_KEY", "").strip()
     if api_key:
         request.add_header("Authorization", f"Bearer {api_key}")
-    with open_credentialed(request, timeout=3) as response:
+    with paseo_http.open_credentialed(request, timeout=3) as response:
         payload = response.read(_MAX_RESPONSE_BYTES + 1)
         if len(payload) > _MAX_RESPONSE_BYTES:
             raise ValueError("oMLX response exceeds 5 MB limit")
