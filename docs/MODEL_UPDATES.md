@@ -126,6 +126,19 @@ against that branch. The protected `model-catalogue-publish` environment gates
 publication, but does not protect the refresh secret; the actor and
 default-branch checks bound that secret exposure.
 
+A second, owner-only command route is available when the caller can comment on
+GitHub issues but cannot invoke GitHub's workflow-dispatch API: create a comment
+with the **exact** text `/refresh-model-catalogues` on
+[control issue #197](https://github.com/randytarampi/dotfiles/issues/197).
+This requires the linked GitHub identity to be `randytarampi`; it is not an
+anonymous or general bot trigger. The `issue_comment` event fires for new
+comments across the repository, including PRs, but its job-level gate skips
+the secret-bearing refresh job unless the owner posts the exact command on
+issue #197 (not a PR). Both validation steps independently recheck actor,
+issue, command and default-branch identity. It uses the immutable default-branch event
+SHA, not arbitrary commit text from a comment. The existing
+`workflow_dispatch` input and protected publication environment remain intact.
+
 The refresh keeps only entries whose numeric pricing values are all zero and
 writes evidence to
 `artifacts/model-catalogues/opencode-zen-free.json`. This is inventory for a

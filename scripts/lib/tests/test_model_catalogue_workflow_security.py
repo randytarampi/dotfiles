@@ -163,3 +163,70 @@ def test_publication_push_uses_scoped_github_cli_app_credentials():
     assert "http.extraheader" not in publish
     assert "Authorization: Bearer" not in publish
     assert "x-access-token:${GH_TOKEN}" not in publish
+
+
+def test_owner_only_issue_comment_dispatch_keeps_secret_job_gated():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    refresh, publish = workflow.split("  publish:\n", 1)
+    assert "issue_comment:\n    types: [created]" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "schedule:" in workflow
+    required = (
+        "github.actor == github.repository_owner",
+        "github.event.issue.number == 197",
+        "github.event.issue.pull_request == null",
+        "github.event.comment.body == '/refresh-model-catalogues'",
+    )
+    for condition in required:
+        assert condition in refresh.split("    runs-on:", 1)[0]
+    assert refresh.count('test "${COMMENT_ISSUE}" = "197"') == 1
+    assert publish.count('test "${COMMENT_ISSUE}" = "197"') == 1
+    assert workflow.count('test "${TRUSTED_SHA}" = "${GITHUB_SHA}"') == 2
+    assert "GH_TOKEN: ${{ github.token }}" in refresh
+    assert "environment: model-catalogue-publish" in publish
+
+
+def test_owner_comment_validation_rejects_wrong_actor_issue_body_and_pr():
+    import subprocess
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    sha = "a" * 40
+    base_env = {
+        "GITHUB_EVENT_NAME": "issue_comment",
+        "GITHUB_ACTOR": "randytarampi",
+        "GITHUB_REPOSITORY_OWNER": "randytarampi",
+        "GITHUB_REF_NAME": "main",
+        "DEFAULT_BRANCH": "main",
+        "TRUSTED_SHA": sha,
+        "GITHUB_SHA": sha,
+        "TRUSTED_REF": "",
+        "COMMENT_ISSUE": "197",
+        "COMMENT_IS_PR": "false",
+        "COMMENT_BODY": "/refresh-model-catalogues",
+    }
+    cases = [
+        ({}, 0),
+        ({"GITHUB_ACTOR": "untrusted-user"}, 1),
+        ({"COMMENT_ISSUE": "198"}, 1),
+        ({"COMMENT_IS_PR": "true"}, 1),
+        ({"COMMENT_BODY": "/refresh-model-catalogues extra"}, 1),
+        ({"TRUSTED_REF": sha}, 1),
+        ({"TRUSTED_SHA": "b" * 40}, 1),
+        ({"GITHUB_REF_NAME": "feature"}, 1),
+    ]
+    for name in (
+        "Validate the trusted manual dispatch boundary",
+        "Validate publication inputs",
+    ):
+        block = workflow.split(f"      - name: {name}\n", 1)[1]
+        block = block.split("      - name:", 1)[0]
+        lines = block.split("        run: |\n", 1)[1].splitlines()
+        script = "\n".join(line[10:] for line in lines if line.startswith("          "))
+        for overrides, expected in cases:
+            outcome = subprocess.run(
+                ["bash", "-c", script],
+                env={**base_env, **overrides},
+                capture_output=True,
+                check=False,
+            )
+            assert outcome.returncode == expected, (name, overrides)
