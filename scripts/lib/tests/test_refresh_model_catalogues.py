@@ -58,9 +58,7 @@ def test_unavailable_refresh_writes_artefact_without_allowlist_changes(
     assert "fetched_at" in payload
 
 
-def test_console_listing_uses_documented_url_and_strict_auth(
-    tmp_path, monkeypatch
-):
+def test_console_listing_uses_documented_url_and_strict_auth(tmp_path, monkeypatch):
     output = tmp_path / "catalogue.json"
     monkeypatch.setenv("OPENCODE_API_KEY", "synthetic-console-key")
     observed = []
@@ -73,9 +71,7 @@ def test_console_listing_uses_documented_url_and_strict_auth(
     monkeypatch.setattr(
         MODULE,
         "fetch_models_dev_snapshot",
-        lambda: metadata_snapshot(
-            {"candidate": {"cost": {"input": 0, "output": 0}}}
-        ),
+        lambda: metadata_snapshot({"candidate": {"cost": {"input": 0, "output": 0}}}),
     )
     assert MODULE.refresh(output) == 0
     assert observed == [
