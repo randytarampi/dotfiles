@@ -265,9 +265,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         pytest.skip("Git and jq are required for the workflow-shell regression")
     workflow = WORKFLOW.read_text(encoding="utf-8")
     publish = workflow.split("  publish:\n", 1)[1]
-    start = publish.index(
-        "          # Preserve an existing draft when the only differences"
-    )
+    start = publish.index('          publish_branch="model-catalogue-bot/inventory"')
     end = publish.index('          bot_login="woofdy-randytarampi-ca[bot]"')
     shell = "\n".join(
         line[10:]
@@ -306,28 +304,41 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
-    gh.write_text('#!/bin/sh\nprintf "%s" "${GH_PR_NUMBER:-}"\n')
+    gh.write_text('#!/bin/sh\nprintf "%s" "${GH_PR_JSON:-[]}"\n')
     gh.chmod(0o755)
     env = os.environ.copy()
     env.update(
         {
             "PATH": f"{bin_dir}:{env['PATH']}",
+            "DEFAULT_BRANCH": "main",
             "BOT_BRANCH_EXISTS": "true",
             "BOT_BRANCH_EXPECTED_TIP": tip,
         }
     )
 
-    def evaluate(data, pr_number):
+    valid = {
+        "number": 200,
+        "isDraft": True,
+        "baseRefName": "main",
+        "headRefName": "model-catalogue-bot/inventory",
+        "author": {"login": "woofdy-randytarampi-ca[bot]"},
+    }
+
+    def evaluate(data, prs, *, success=True):
         path.write_text(json.dumps(data) + "\n", encoding="utf-8")
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c", shell],
             cwd=checkout,
-            env={**env, "GH_PR_NUMBER": pr_number},
+            env={**env, "GH_PR_JSON": json.dumps(prs)},
             capture_output=True,
             text=True,
             check=False,
         )
-        assert result.returncode == 0, result.stderr
+        if success:
+            assert result.returncode == 0, result.stderr
+        else:
+            assert result.returncode != 0, result.stdout
+            assert "Catalogue unchanged" not in result.stdout
         return result.stdout
 
     timestamp_only = {
@@ -336,13 +347,21 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "pricing_observed_at": "2026-11-06T19:01:00Z",
         "pricing_expires_at": "2026-11-07T19:01:00Z",
     }
-    assert "Catalogue unchanged" in evaluate(timestamp_only, "200")
-    assert "Catalogue unchanged" not in evaluate(timestamp_only, "")
+    assert "Catalogue unchanged" in evaluate(timestamp_only, [valid])
+    assert "Catalogue unchanged" not in evaluate(timestamp_only, [])
     price_changed = {
         **timestamp_only,
         "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 1}}],
     }
-    assert "Catalogue unchanged" not in evaluate(price_changed, "200")
+    assert "Catalogue unchanged" not in evaluate(price_changed, [valid])
+    for invalid in (
+        {**valid, "isDraft": False},
+        {**valid, "baseRefName": "other"},
+        {**valid, "headRefName": "other-branch"},
+        {**valid, "author": {"login": "someone-else"}},
+    ):
+        evaluate(timestamp_only, [invalid], success=False)
+    evaluate(timestamp_only, [valid, valid], success=False)
 
 
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
@@ -350,6 +369,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     refresh, publish = workflow.split("  publish:\n", 1)
     assert "free-model-candidates.json" in refresh
     assert "Prepare a template-compliant candidate review" in publish
+    assert "Refusing to update a non-draft or foreign catalogue PR" in publish
     assert "scripts/lib/catalogue_review.py" in publish
     assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
     assert "353209076+${bot_login}@users.noreply.github.com" in publish
@@ -358,7 +378,10 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
         'git commit -m "chore(agents): refresh free-model candidate inventory"'
         in publish
     )
-    assert 'gh pr create --draft --base main --head "${publish_branch}"' in publish
+    assert (
+        'gh pr create --draft --base "${DEFAULT_BRANCH}" '
+        '--head "${publish_branch}"' in publish
+    )
     assert 'gh pr edit "${existing_pr}"' in publish
     assert publish.count('--body-file "${review_body}"') == 2
     assert "model-catalogue-bot[bot]@users.noreply.github.com" not in publish
@@ -375,3 +398,77 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert allowed == "artifacts/model-catalogues/free-model-candidates.json"
     assert 'git add -- "${allowed_path}"' in publish
     assert "artefact" not in workflow
+
+def test_manual_dispatch_sha_must_be_default_branch_ancestor(tmp_path):
+    import os
+    import subprocess
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    section = workflow.split(
+        "      - name: Validate the trusted manual dispatch boundary\n", 1
+    )[1].split("      - name: Check out the triggering commit\n", 1)[0]
+    run_block = section.split("        run: |\n", 1)[1]
+    shell = "\n".join(
+        line[10:]
+        for line in run_block.splitlines()
+        if line.startswith("          ")
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(
+        '#!/bin/sh\n'
+        'case "$*" in\n'
+        '  *branches/main*) printf "%s" "${MOCK_DEFAULT_SHA}" ;;\n'
+        '  *compare/*) printf "%s" "${MOCK_ANCESTRY}" ;;\n'
+        '  *) exit 1 ;;\n'
+        'esac\n',
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
+    trusted = "a" * 40
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_ACTOR": "randytarampi",
+        "GITHUB_REPOSITORY_OWNER": "randytarampi",
+        "GITHUB_REPOSITORY": "randytarampi/dotfiles",
+        "GITHUB_REF_NAME": "main",
+        "DEFAULT_BRANCH": "main",
+        "TRUSTED_REF": trusted,
+        "TRUSTED_SHA": trusted,
+        "MOCK_DEFAULT_SHA": "b" * 40,
+        "GH_TOKEN": "synthetic-contents-read-token",
+    }
+    for status, expected in (
+        ("identical", 0),
+        ("ahead", 0),
+        ("diverged", 1),
+        ("behind", 1),
+        ("", 1),
+    ):
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", shell],
+            env={**env, "MOCK_ANCESTRY": status},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert (result.returncode == 0) == (expected == 0), status
+        if expected:
+            assert "not on default-branch history" in result.stderr
+    for changed in (
+        {"MOCK_DEFAULT_SHA": "bad"},
+        {"TRUSTED_SHA": "not-a-sha"},
+        {"GITHUB_ACTOR": "foreign"},
+        {"GITHUB_REF_NAME": "untrusted"},
+    ):
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", shell],
+            env={**env, **changed, "MOCK_ANCESTRY": "ahead"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0, changed
