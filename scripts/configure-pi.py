@@ -9,37 +9,36 @@ import tempfile
 CLOUD_TAG = ":cloud"
 
 
+def _is_gateway_chat_alias(identity):
+    """Exclude non-chat and cloud-stub aliases from local Pi defaults."""
+    if not isinstance(identity, str) or not identity.startswith(("omlx/", "ollama/")):
+        return False
+    if CLOUD_TAG in identity or identity.endswith("-cloud"):
+        return False
+    if "no-model-available" in identity:
+        return False
+    return not is_specialized_model_name(identity.partition("/")[-1])
+
+
 def preferred_gateway_default(resolved_default, litellm_models):
     """Return the top-level gateway default identity for Pi in gateway mode.
 
-    A role-resolved LOCAL identity (omlx/ or ollama/ family) wins whenever
-    the gateway serves a matching alias, so an unrelated helper app cannot
-    hijack the default by alphabetical order. When the resolved default is
-    remote (or unserved), the entry-order scan still prefers the first
-    gateway-served local alias, excluding cloud-stub spellings and
-    specialized families (e.g. omlx/MarkItDown).
+    A role-resolved, gateway-served local chat identity wins ahead of
+    alphabetical entry order. A resolved cloud stub or specialized helper is
+    not a usable chat default. When the resolved default is remote or unserved,
+    the existing family-order scan selects a qualifying local chat alias.
     """
     litellm_models = litellm_models or []
     canonical_default = (resolved_default or "").removeprefix("litellm/")
     served = {entry.get("id") for entry in litellm_models}
-    if (
-        canonical_default.startswith(("omlx/", "ollama/"))
-        and canonical_default in served
-    ):
-        # The resolved orchestrator is itself a gateway-served local identity;
-        # keep it rather than whatever unrelated alias sorts first.
+    if canonical_default in served and _is_gateway_chat_alias(canonical_default):
         return canonical_default
     for family in ("omlx/", "ollama/"):
         for entry in litellm_models:
-            entry_id = entry.get("id", "")
-            if (
-                entry_id.startswith(family)
-                and CLOUD_TAG not in entry_id
-                and not entry_id.endswith("-cloud")
-                and "no-model-available" not in entry_id
-                and not is_specialized_model_name(entry_id.partition("/")[-1])
-            ):
-                return entry_id
+            entry_id = entry.get("id")
+            if isinstance(entry_id, str) and entry_id.startswith(family):
+                if _is_gateway_chat_alias(entry_id):
+                    return entry_id
     return None
 
 
