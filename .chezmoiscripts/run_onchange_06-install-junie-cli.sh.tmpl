@@ -36,6 +36,7 @@ source "${LIB_DIR}/env.sh"
 # scripts/lib/free_route_catalogues.py: {{ include "scripts/lib/free_route_catalogues.py" | sha256sum }}
 # scripts/lib/models_dev.py: {{ include "scripts/lib/models_dev.py" | sha256sum }}
 # scripts/refresh-model-catalogues.py: {{ include "scripts/refresh-model-catalogues.py" | sha256sum }}
+# scripts/lib/catalogue_review.py: {{ include "scripts/lib/catalogue_review.py" | sha256sum }}
 
 # Load env before gate (DOTFILES_RUN_JUNIE_CLI_SETUP is in ~/.env)
 load_env || warn "\$HOME/.env not found, skipping env load"
