@@ -19,7 +19,7 @@ def audit(config, access, *, caddy_enabled=True, required_hosts=()):
         raise ValueError("Paseo config must be a JSON object")
     daemon = valid_daemon(config)
     web_ui_features(config, require_enabled=True)
-    if access != "localhost":
+    if access != "localhost" or desired_relay_state():
         require_password(daemon)
     hosts = configured_hostnames(daemon)
     if not set(required_hosts).issubset(hosts):

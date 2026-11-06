@@ -235,6 +235,23 @@ def test_caddy_publishes_declared_relay_and_refuses_drift(tmp_path, monkeypatch,
         caddy.validate_paseo_proxy_config(mode, [DOMAIN])
 
 
+def test_caddy_localhost_relay_requires_native_bcrypt(tmp_path, monkeypatch):
+    path, data = configured_home(tmp_path, monkeypatch, password=False)
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    for native_relay in (False, True):
+        data["daemon"]["relay"]["enabled"] = native_relay
+        path.write_text(json.dumps(data))
+        path.chmod(0o600)
+        with pytest.raises(ValueError, match="password"):
+            caddy.validate_paseo_proxy_config("localhost", [DOMAIN])
+    # Caddy's local-only route is still allowed without password if relay is off.
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "0")
+    data["daemon"]["relay"]["enabled"] = False
+    path.write_text(json.dumps(data))
+    path.chmod(0o600)
+    assert caddy.validate_paseo_proxy_config("localhost", [DOMAIN]) is None
+
+
 def test_caddy_refuses_unknown_relay_intent(tmp_path, monkeypatch):
     configured_home(tmp_path, monkeypatch)
     monkeypatch.setenv("DOTFILES_PASEO_RELAY", "typo")

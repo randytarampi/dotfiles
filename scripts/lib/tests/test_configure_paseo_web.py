@@ -210,6 +210,24 @@ def test_lan_public_require_native_password_when_caddy_active(tmp_path, monkeypa
     assert web.main(["--apply"]) == 1
 
 
+@pytest.mark.parametrize("caddy_gate", ("0", "1"))
+def test_relay_apply_without_native_bcrypt_refuses_before_writes(
+    tmp_path, monkeypatch, caddy_gate
+):
+    unprotected = copy.deepcopy(BASE_CONFIG)
+    unprotected["daemon"].pop("auth")
+    home = home_with_config(tmp_path, unprotected)
+    calls = install_stub(monkeypatch, home)
+    monkeypatch.setenv(web.GATE, "1")
+    monkeypatch.setenv("DOTFILES_PASEO_RELAY", "1")
+    monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", caddy_gate)
+    monkeypatch.setenv("CADDY_ACCESS", "localhost")
+    before = (home / "config.json").read_bytes()
+    assert web.main(["--apply"]) == 1
+    assert not calls
+    assert (home / "config.json").read_bytes() == before
+
+
 def test_lossy_preflight_refuses_live_write_without_rollback(tmp_path, monkeypatch):
     home = home_with_config(tmp_path)
     calls = install_stub(monkeypatch, home, rewrite_unrelated=True)
