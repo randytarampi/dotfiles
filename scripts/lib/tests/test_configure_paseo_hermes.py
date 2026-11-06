@@ -1,4 +1,3 @@
-import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -80,27 +79,22 @@ def test_apply_validates_acp_and_preserves_providers(monkeypatch, tmp_path):
 
     def fake_run(args, **kwargs):
         calls.append(args)
-        if args[1:] == ["acp", "--check"]:
-            return Mock(returncode=0)
-        assert args[4] == "agents.providers"
-        sent = json.loads(args[5])
-        assert sent["pi"] == original["agents"]["providers"]["pi"]
-        assert sent["hermes"] == PROVIDER
-        expected = copy.deepcopy(original)
-        expected["agents"]["providers"] = sent
-        target = Path(args[-1]) / "config.json"
-        target.write_text(json.dumps(expected))
+        assert "mine" not in " ".join(args)
         return Mock(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(paseo_hermes.subprocess, "run", fake_run)
     assert paseo_hermes.main(["--apply"]) == 0
     assert calls[0] == ["/bin/hermes", "acp", "--check"]
-    assert [call[0:5] for call in calls[1:]] == [
-        ["/bin/paseo", "daemon", "config", "set", "agents.providers"],
-        ["/bin/paseo", "daemon", "config", "set", "agents.providers"],
+    assert [call[1:4] for call in calls[1:]] == [
+        ["daemon", "config", "get"],
+        ["daemon", "reload", "--home"],
     ]
     assert calls[1][-1] != str(home)
     assert calls[2][-1] == str(home)
+    assert json.loads(path.read_text())["agents"]["providers"] == {
+        "pi": {"label": "mine"},
+        "hermes": PROVIDER,
+    }
 
 
 def test_missing_approval_never_launches_cli(monkeypatch, tmp_path):
@@ -131,9 +125,7 @@ def test_provider_keeps_stable_symlink_launcher():
     ]
 
 
-def test_hermes_preflight_rejects_lossy_cli_without_live_mutation(
-    monkeypatch, tmp_path
-):
+def test_hermes_schema_preflight_rejection_keeps_user_config(monkeypatch, tmp_path):
     home = tmp_path / ".paseo"
     home.mkdir()
     path = home / "config.json"
@@ -142,7 +134,7 @@ def test_hermes_preflight_rejects_lossy_cli_without_live_mutation(
         "agents": {"providers": {"pi": {"label": "user"}}},
         "user_setting": {"must_survive": True},
     }
-    path.write_text(json.dumps(original), encoding="utf-8")
+    path.write_text(json.dumps(original))
     path.chmod(0o600)
     before = path.read_bytes()
     monkeypatch.setenv("PASEO_HOME", str(home))
@@ -154,9 +146,7 @@ def test_hermes_preflight_rejects_lossy_cli_without_live_mutation(
         calls.append(args)
         if args[1:] == ["acp", "--check"]:
             return Mock(returncode=0)
-        staged = Path(args[-1]) / "config.json"
-        staged.write_text(json.dumps({"agents": {"providers": {"hermes": PROVIDER}}}))
-        return Mock(returncode=0, stdout="", stderr="")
+        return Mock(returncode=7, stdout="apiKey=private-canary-token", stderr="bad")
 
     monkeypatch.setattr(paseo_hermes.subprocess, "run", fake_run)
     assert paseo_hermes.main(["--apply"]) == 1
@@ -165,20 +155,31 @@ def test_hermes_preflight_rejects_lossy_cli_without_live_mutation(
     assert path.read_bytes() == before
 
 
-def test_native_set_failure_reports_redacted_cli_reason(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        paseo_hermes.subprocess,
-        "run",
-        lambda *args, **kwargs: Mock(
-            returncode=1,
-            stdout="api_key=private-canary-token",
-            stderr="Unknown configuration path under /Users/randy.tarampi/.paseo",
-        ),
-    )
-    with pytest.raises(ValueError, match="Unknown configuration path") as caught:
-        paseo_hermes.native_set("/bin/paseo", tmp_path, {})
-    assert "/Users/randy.tarampi" not in str(caught.value)
-    assert "private-canary-token" not in str(caught.value)
+def test_hermes_reload_failure_keeps_saved_config(monkeypatch, tmp_path):
+    home = tmp_path / ".paseo"
+    home.mkdir()
+    path = home / "config.json"
+    original = {"version": 1, "agents": {"providers": {"pi": {"label": "user"}}}}
+    path.write_text(json.dumps(original))
+    path.chmod(0o600)
+    monkeypatch.setenv("PASEO_HOME", str(home))
+    monkeypatch.setenv(paseo_hermes.GATE, "1")
+    monkeypatch.setattr(paseo_hermes.shutil, "which", lambda name: f"/bin/{name}")
+
+    def fake_run(args, **kwargs):
+        if args[1:] == ["acp", "--check"]:
+            return Mock(returncode=0)
+        return Mock(
+            returncode=4 if args[2] == "reload" else 0,
+            stdout="apiKey=private-canary-token",
+            stderr="private path /Users/private",
+        )
+
+    monkeypatch.setattr(paseo_hermes.subprocess, "run", fake_run)
+    assert paseo_hermes.main(["--apply"]) == 1
+    saved = json.loads(path.read_text())
+    assert saved["agents"]["providers"]["pi"] == {"label": "user"}
+    assert saved["agents"]["providers"]["hermes"] == PROVIDER
 
 
 def test_hermes_explicit_dry_run_never_runs_external_commands(monkeypatch, tmp_path):
