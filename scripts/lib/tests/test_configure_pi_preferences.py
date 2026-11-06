@@ -1345,6 +1345,28 @@ def test_gateway_default_prefers_resolved_orchestrator_over_entry_order():
     )
 
 
+@pytest.mark.parametrize(
+    "resolved",
+    (
+        "litellm/omlx/MarkItDown",
+        "litellm/omlx/Whisper-large",
+        "litellm/omlx/glm4:cloud",
+        "litellm/ollama/remote-cloud",
+        "litellm/ollama/no-model-available",
+    ),
+)
+def test_gateway_default_resolved_local_must_be_conversational(resolved):
+    """A served but non-chat resolved alias must not bypass fallback filters."""
+    models = [
+        {"id": resolved.removeprefix("litellm/")},
+        {"id": "omlx/Ornith-1.5-35B-A3B-MLX-4bit"},
+    ]
+    assert (
+        configure_pi.preferred_gateway_default(resolved, models)
+        == "omlx/Ornith-1.5-35B-A3B-MLX-4bit"
+    )
+
+
 def test_gateway_default_fallback_skips_specialized_families():
     """Entry-order fallback must not demote the default to a helper app."""
     models = [
