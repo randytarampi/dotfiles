@@ -376,6 +376,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "Prepare a template-compliant candidate review" in publish
     assert "Refusing to update a non-draft or foreign catalogue PR" in publish
     assert "scripts/lib/catalogue_review.py" in publish
+    assert "Invalid trusted publishing SHA" in publish
     assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
     assert "353209076+${bot_login}@users.noreply.github.com" in publish
     assert 'git config user.name "${bot_login}"' in publish
@@ -464,7 +465,9 @@ def test_manual_dispatch_sha_must_be_default_branch_ancestor(tmp_path):
             assert "not on default-branch history" in result.stderr
     for changed in (
         {"MOCK_DEFAULT_SHA": "bad"},
+        {"MOCK_DEFAULT_SHA": "z" * 40},
         {"TRUSTED_SHA": "not-a-sha"},
+        {"TRUSTED_SHA": "z" * 40},
         {"GITHUB_ACTOR": "foreign"},
         {"GITHUB_REF_NAME": "untrusted"},
     ):
