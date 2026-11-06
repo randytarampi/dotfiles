@@ -39,7 +39,8 @@ def test_discovered_modalities_are_exact_id_and_contained_from_chat():
         "ranker",
     }
     assert modalities <= by_name.keys()
-    assert not {"S3TokenizerV2"} & by_name.keys()
+    # Previously failing multilingual Chatterbox remains excluded; Turbo is qualified.
+    assert not {"chatterbox-multilingual-v3", "S3TokenizerV2"} & by_name.keys()
     assert by_name["MarkItDown"]["litellm_params"] == {
         "model": "openai/MarkItDown",
         "api_base": "http://127.0.0.1:11427/v1",
