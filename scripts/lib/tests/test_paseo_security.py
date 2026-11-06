@@ -86,6 +86,7 @@ def test_security_cli_requires_actual_lan_hostnames(monkeypatch, capsys):
 
     monkeypatch.setenv("CADDY_ACCESS", "lan")
     monkeypatch.setenv("DOTFILES_RUN_CADDY_SETUP", "1")
+    monkeypatch.setattr(module, "load_env", lambda: True)
     monkeypatch.setattr(module, "read_proxy_config", base)
     monkeypatch.setattr(
         module, "domains_for_access", lambda access: ["paseo.required.test"]
@@ -108,3 +109,68 @@ def test_audit_refuses_declared_relay_before_reporting_caddy_safe(monkeypatch, i
     with pytest.raises(ValueError, match="cannot coexist|DOTFILES_PASEO_RELAY"):
         audit(config, "lan", required_hosts=["paseo.example.test"])
     assert config == before
+
+
+def test_security_cli_uses_canonical_env_and_local_zone_aliases(
+    monkeypatch, tmp_path, capsys
+):
+    """Generated Caddy localhost aliases must exist in the native allowlist."""
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2] / "check-paseo-security.py"
+    spec = importlib.util.spec_from_file_location("paseo_security_env_test", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    home = tmp_path / ".paseo"
+    home.mkdir(mode=0o700)
+    config = home / "config.json"
+    state = base()
+    config.write_text(json.dumps(state), encoding="utf-8")
+    config.chmod(0o600)
+    zones = tmp_path / "ddns-zones.json"
+    zones.write_text(
+        json.dumps({"zones": [{"records": [{"name": "local.example.test"}]}]})
+    )
+    (tmp_path / ".env").write_text(
+        "CADDY_ACCESS=localhost\n"
+        "DOTFILES_RUN_CADDY_SETUP=1\n"
+        f"CADDY_ZONES_CONFIG={zones}\n"
+        f"PASEO_HOME={home}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key in (
+        "CADDY_ACCESS",
+        "DOTFILES_RUN_CADDY_SETUP",
+        "CADDY_ZONES_CONFIG",
+        "PASEO_HOME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    before = config.read_bytes()
+    assert module.main(["--json"]) == 1
+    assert "hostname" in capsys.readouterr().err
+    assert config.read_bytes() == before
+
+    state["daemon"]["hostnames"].append("paseo.local.example.test")
+    config.write_text(json.dumps(state), encoding="utf-8")
+    qualified = config.read_bytes()
+    assert module.main(["--json"]) == 0
+    output = capsys.readouterr().out
+    assert '"access": "localhost"' in output
+    assert config.read_bytes() == qualified
+
+
+def test_security_cli_refuses_missing_canonical_env(monkeypatch, tmp_path, capsys):
+    import importlib.util
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2] / "check-paseo-security.py"
+    spec = importlib.util.spec_from_file_location("paseo_security_no_env_test", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert module.main(["--json"]) == 1
+    assert "canonical ~/.env unavailable" in capsys.readouterr().err
