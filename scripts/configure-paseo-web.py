@@ -188,11 +188,13 @@ def configure(paseo_bin, home, original, desired, no_backup):
     _apply_changes(paseo_bin, home, original, changes)
     result = paseo_cli(paseo_bin, home, "reload")
     if result.returncode:
-        print("Paseo reload failed; restart the existing daemon to serve the Web UI")
-    else:
-        print(
-            "Paseo settings saved and reload requested; restart the daemon to serve the Web UI"
+        raise ValueError(
+            f"Paseo config saved; daemon reload failed (exit {result.returncode}); "
+            "native output suppressed; no rollback attempted; inspect and restart daemon"
         )
+    print(
+        "Paseo settings saved and reload requested; restart the daemon to serve the Web UI"
+    )
 
 
 def main(argv=None):
