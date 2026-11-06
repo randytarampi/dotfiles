@@ -117,9 +117,12 @@ def test_chatterbox_turbo_is_eligible_and_configurable_exclusion_still_works(
     ]
 
     assert ai_models.is_known_unqualified_tts("chatterbox-multilingual-v3")
-    assert eligible(
-        [{"name": "chatterbox-multilingual-v3", "model_type": "audio_tts"}], "tts"
-    ) == []
+    assert (
+        eligible(
+            [{"name": "chatterbox-multilingual-v3", "model_type": "audio_tts"}], "tts"
+        )
+        == []
+    )
 
     monkeypatch.setattr(ai_models, "KNOWN_UNQUALIFIED_TTS_PREFIXES", ("blocked-tts",))
     assert ai_models.is_known_unqualified_tts("blocked-tts-model")
