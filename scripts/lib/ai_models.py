@@ -70,7 +70,7 @@ SPECIALIZED_MODEL_NAME_PREFIXES = (
 # (conds.safetensors missing from the model directory). On 2026-11-06,
 # chatterbox-turbo-4bit qualified on oMLX 0.7.3 with a plain payload, HTTP 200,
 # and an approximately 52 KB WAV response.
-KNOWN_UNQUALIFIED_TTS_PREFIXES = ()
+KNOWN_UNQUALIFIED_TTS_PREFIXES = ("chatterbox-multilingual-v3",)
 
 
 def is_known_unqualified_tts(model_name):

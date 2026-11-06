@@ -171,13 +171,14 @@ def test_native_set_failure_reports_redacted_cli_reason(monkeypatch, tmp_path):
         "run",
         lambda *args, **kwargs: Mock(
             returncode=1,
-            stdout="",
+            stdout="api_key=private-canary-token",
             stderr="Unknown configuration path under /Users/randy.tarampi/.paseo",
         ),
     )
     with pytest.raises(ValueError, match="Unknown configuration path") as caught:
         paseo_hermes.native_set("/bin/paseo", tmp_path, {})
     assert "/Users/randy.tarampi" not in str(caught.value)
+    assert "private-canary-token" not in str(caught.value)
 
 
 def test_hermes_explicit_dry_run_never_runs_external_commands(monkeypatch, tmp_path):

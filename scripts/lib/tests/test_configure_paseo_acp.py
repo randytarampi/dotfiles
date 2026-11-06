@@ -303,12 +303,13 @@ def test_nonzero_native_cli_reason_is_reported(tmp_path, monkeypatch):
     result = module.subprocess.CompletedProcess(
         args=[],
         returncode=1,
-        stdout="",
+        stdout="api_key=private-canary-token",
         stderr="Unknown configuration path: agents.providers.gemini",
     )
     monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: result)
-    with pytest.raises(ValueError, match="Unknown configuration path"):
+    with pytest.raises(ValueError, match="Unknown configuration path") as error:
         module.run_set("/bin/paseo", tmp_path, {"gemini": {}})
+    assert "private-canary-token" not in str(error.value)
 
 
 def test_relative_paseo_binary_refused_even_in_apply_preview(monkeypatch, tmp_path):

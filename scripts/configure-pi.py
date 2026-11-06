@@ -6,6 +6,8 @@ from pathlib import Path
 import stat
 import tempfile
 
+CLOUD_TAG = ":cloud"
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(SCRIPT_DIR, "lib"))
@@ -1093,11 +1095,14 @@ def main():
         and "orchestrator" in dynamic_gateway_roles
     ):
         default = role_models["orchestrator"]
-    elif pi_litellm_proxy and isinstance(default, str) and "/" in default:
+    elif (
+        pi_litellm_proxy
+        and isinstance(default, str)
+        and "/" in default
+        and not os.environ.get("DOTFILES_PI_DEFAULT_MODEL", "").strip()
+    ):
         canonical_default = default.removeprefix("litellm/")
-        if os.environ.get("DOTFILES_PI_DEFAULT_MODEL", "").strip():
-            pass
-        elif canonical_default == "ollama/no-model-available":
+        if canonical_default == "ollama/no-model-available":
             raise RuntimeError("Pi default model has no advertised LiteLLM alias")
         elif canonical_default in cloud_routes.get("_available", set()):
             default = "litellm/" + canonical_default
@@ -1346,7 +1351,7 @@ def main():
                 for family in ("omlx/", "ollama/")
                 for entry in litellm_models
                 if entry.get("id", "").startswith(family)
-                and ":cloud" not in entry["id"]
+                and CLOUD_TAG not in entry["id"]
                 and "no-model-available" not in entry["id"]
             ),
             None,
@@ -1388,9 +1393,9 @@ def main():
         if mid.startswith(("google/models/", "openrouter/")):
             prefixes.add(f"litellm/{mid}")
             continue
-        if ":cloud" in mid:
+        if CLOUD_TAG in mid:
             # Strip ":cloud" suffix, then glob on the family prefix
-            base = mid.replace(":cloud", "")
+            base = mid.replace(CLOUD_TAG, "")
             parts = base.split("-", 1)
             if len(parts) == 2:
                 prefixes.add(f"{parts[0]}-*")

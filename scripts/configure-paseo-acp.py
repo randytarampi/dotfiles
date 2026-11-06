@@ -102,17 +102,21 @@ def run_set(binary, home, providers):
             str(home),
         ],
         capture_output=True,
+        text=True,
         timeout=60,
         check=False,
     )
     if result.returncode:
-        reason = f"{result.stdout or ''}\n{result.stderr or ''}"
-        reason = reason.replace("/Users/randy.tarampi", "<user>")
-        reason = reason.replace(str(home), "<home>")
-        reason = " ".join(reason.split())[:300]
+        # The native CLI may echo the entire providers JSON, including secrets.
+        # Disclose only a fixed diagnostic rather than untrusted CLI output.
+        output = str(result.stdout or "") + str(result.stderr or "")
+        detail = (
+            "Unknown configuration path: agents.providers"
+            if "Unknown configuration path" in output
+            else "native output suppressed to protect provider settings"
+        )
         raise ValueError(
-            f"Paseo config setter failed (exit {result.returncode})"
-            + (f": {reason}" if reason else "")
+            f"Paseo config setter failed (exit {result.returncode}): {detail}"
         )
     # The CLI may save and report a reload error; readback determines success.
     return result.returncode
