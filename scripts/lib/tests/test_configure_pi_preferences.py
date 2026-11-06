@@ -891,9 +891,7 @@ def test_pi_proxy_keeps_local_providers_and_prefers_gateway_omlx(tmp_path, monke
     assert "omlx/omlx-local" in settings["enabledModels"]
 
 
-def test_pi_proxy_default_skips_both_ollama_cloud_stub_suffixes(
-    tmp_path, monkeypatch
-):
+def test_pi_proxy_default_skips_both_ollama_cloud_stub_suffixes(tmp_path, monkeypatch):
     out = _run_pi_main(
         tmp_path,
         {
