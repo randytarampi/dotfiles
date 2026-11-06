@@ -1384,6 +1384,14 @@ def main():
         if preferred and settings["defaultProvider"] == "litellm":
             settings["defaultProvider"] = "litellm"
             settings["defaultModel"] = preferred
+        elif preferred is None and default.removeprefix("litellm/").startswith(
+            ("omlx/", "ollama/")
+        ):
+            # A resolved local non-chat/cloud alias must not remain Pi's chat
+            # default merely because there was no eligible fallback.
+            raise RuntimeError(
+                "Pi resolved local default has no eligible gateway chat alias"
+            )
     auth = {
         "anthropic": {"type": "api_key", "key": "$ANTHROPIC_API_KEY"},
         "openai": {"type": "api_key", "key": "$OPENAI_API_KEY"},

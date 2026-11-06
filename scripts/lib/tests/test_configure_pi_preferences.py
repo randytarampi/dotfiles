@@ -1324,6 +1324,42 @@ def test_pi_malformed_settings_json_refuses_write_and_preserves_user_overrides(
     assert '"ollama/foo"' in raw
 
 
+def test_pi_resolved_specialized_orchestrator_without_chat_fallback_fails_closed(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": "omlx/MarkItDown"},
+    )
+    with pytest.raises(RuntimeError, match="no eligible gateway chat alias"):
+        _run_pi_main(
+            tmp_path,
+            {"data": [{"id": "omlx/MarkItDown"}]},
+            monkeypatch,
+        )
+    assert not (tmp_path / "pi-agent" / "settings.json").exists()
+
+
+def test_pi_remote_orchestrator_survives_specialized_only_local_catalogue(
+    tmp_path, monkeypatch
+):
+    chosen = "openrouter/vendor/twin:free"
+    monkeypatch.setattr(
+        configure_pi.tier_registry,
+        "materialize_role_models",
+        lambda *_args, **_kwargs: {"orchestrator": chosen},
+    )
+    out = _run_pi_main(
+        tmp_path,
+        {"data": [{"id": "omlx/MarkItDown"}, {"id": chosen}]},
+        monkeypatch,
+    )
+    settings = json.loads((out / "settings.json").read_text())
+    assert settings["defaultProvider"] == "litellm"
+    assert settings["defaultModel"] == chosen
+
+
 def test_gateway_default_prefers_resolved_orchestrator_over_entry_order():
     """The role-resolved default wins even when unrelated helpers sort earlier."""
     models = [
