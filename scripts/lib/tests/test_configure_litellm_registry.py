@@ -40,6 +40,7 @@ def _isolate_client_gates(monkeypatch):
         "DOTFILES_RUN_JUNIE_CLI_SETUP",
         "DOTFILES_RUN_CODEX_SETUP",
         "DOTFILES_RUN_COPILOT_SETUP",
+        "DOTFILES_RUN_PASEO_VOICE_SETUP",
         "DOTFILES_USE_LITELLM_PROXY",
         "LITELLM_CLIENT_KEY_FILE",
         "DOTFILES_RUN_CODEX_SETUP",
@@ -55,6 +56,9 @@ def _isolate_client_gates(monkeypatch):
         "LITELLM_JETBRAINS_KEY",
         "LITELLM_VSCODE_KEY",
         "LITELLM_CURSOR_KEY",
+        "LITELLM_XCODE_KEY",
+        "LITELLM_MASTER_KEY",
+        "LITELLM_DATABASE_URL",
     ):
         monkeypatch.delenv(gate, raising=False)
 
