@@ -85,25 +85,24 @@ jobs:
     needs: real-gate
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
       - name: Download matrix results
+        continue-on-error: true  # Missing artifacts are marked DEGRADED in the reporter.
         uses: actions/download-artifact@v8
         with:
           pattern: nightly-result-*
           path: nightly-results
           merge-multiple: true
-      - name: Write summary
+      - name: Write truthful report (stabilization period)
         run: |
-          {
-            echo "## Nightly real-gate results"
-            echo
-            if compgen -G 'nightly-results/*.txt' >/dev/null; then
-              for result in nightly-results/*.txt; do
-                summary=$(tr '\n' ' ' < "$result")
-                echo "- $summary"
-              done
-            else
-              echo "- No matrix result files were collected."
-            fi
-            echo
-            echo "This lane is allow-failure while gate behaviour stabilizes; promotion to required is a future step."
-          } >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/lib/nightly_gate_report.py \
+            --results nightly-results \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --json "$RUNNER_TEMP/nightly-gate-report.json"
+      - name: Upload aggregate report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-aggregate-report
+          path: ${{ runner.temp }}/nightly-gate-report.json
+          if-no-files-found: error
