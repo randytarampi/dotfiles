@@ -53,7 +53,7 @@ def load_plugin_manifest(path=MANIFEST_PATH):
     if overlap:
         # A TUI-capable plugin must never be co-registered: plugins in
         # opencode.json auto-load in the TUI, and cli.json duplicates would
-        # double-load them (docs/OPENCODE.md).
+        # double-load them (docs/opencode.md).
         raise ValueError(
             "OpenCode plugin manifest must not repeat a package across plugins "
             f"and cli_plugins: {sorted(overlap)}"
@@ -91,7 +91,7 @@ def is_pinned_spec(spec: str) -> bool:
         # `opencode plugin update` (probed on the v2.2.5 CLI, 2026-10-31:
         # `plugin add` dedupes and does NOT refresh an existing resolution,
         # `plugin check` prints resolved concrete versions). Allowed
-        # deliberately; see CONVENTIONS.md.
+        # deliberately; see conventions.md.
         return True
     return bool(
         re.fullmatch(
