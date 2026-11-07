@@ -490,7 +490,7 @@ def test_publisher_checkout_has_full_history_for_three_dot_branch_guard():
     assert "fetch-depth: 1" in refresh_checkout
     assert "fetch-depth: 0" in publish_checkout
     assert 'prior_paths="$(git diff --name-only ' in publish
-    assert 'origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}' in publish
+    assert "origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}" in publish
 
 
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
