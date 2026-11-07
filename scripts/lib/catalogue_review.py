@@ -328,11 +328,11 @@ def main() -> int:
         if previous is None:
             parser.error("--check-freshness requires --previous")
         require_fresher_observations(current, previous)
-        return 0
-    if args.output is None:
-        parser.error("--output is required when rendering a report")
-    output = render_pr_body(current, previous)
-    args.output.write_text(output, encoding="utf-8")
+    else:
+        if args.output is None:
+            parser.error("--output is required when rendering a report")
+        output = render_pr_body(current, previous)
+        args.output.write_text(output, encoding="utf-8")
     return 0
 
 
