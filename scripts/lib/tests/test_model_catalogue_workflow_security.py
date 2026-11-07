@@ -310,8 +310,16 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "counts": {"catalogue": 1, "classified": 1, "free": 1, "unclassified": 0},
         "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 0}}],
     }
+    # The fixed bot branch must be exactly one JSON-only change from main.
+    subprocess.run(["git", "add", str(registry)], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "chore(agents): initialise registry"],
+        cwd=checkout,
+        check=True,
+    )
+    subprocess.run(["git", "branch", "main"], cwd=checkout, check=True)
     path.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
-    subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+    subprocess.run(["git", "add", str(path)], cwd=checkout, check=True)
     subprocess.run(
         [
             "git",
@@ -325,7 +333,6 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     tip_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
     ).strip()
-    subprocess.run(["git", "branch", "main"], cwd=checkout, check=True)
     subprocess.run(
         ["git", "remote", "add", "origin", str(checkout)],
         cwd=checkout,
@@ -451,6 +458,25 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     ).strip()
     evaluate(timestamp_only, [], tip=foreign_tip, success=False)
 
+    # Even a spoofed Git identity cannot authorise unrelated branch edits.
+    unrelated = checkout / "unexpected.txt"
+    unrelated.write_text("human note", encoding="utf-8")
+    subprocess.run(["git", "add", str(unrelated)], cwd=checkout, check=True)
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "-qm",
+            "chore(agents): refresh free-model candidate inventory",
+        ],
+        cwd=checkout,
+        check=True,
+    )
+    unexpected_tip = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+    ).strip()
+    evaluate(timestamp_only, [valid], tip=unexpected_tip, success=False)
+
 
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -461,6 +487,11 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "Catalogue branch has no open PR and an unrecognised commit" in publish
     assert "6fbf14bfeec1222b0ae376b500e1888384a26e4d" in publish
     assert "Curated model registry changed during refresh" in publish
+    assert "Catalogue branch contains unexpected source changes" in publish
+    assert "Catalogue branch inventory is not a regular file" in publish
+    assert "Catalogue branch tip was not produced with the expected bot" in publish
+    assert "group: model-catalogue-publish" in publish
+    assert "cancel-in-progress: false" in publish
     assert publish.index("Check the curated source before") < publish.index(
         "Preserve an existing draft when the only differences"
     )

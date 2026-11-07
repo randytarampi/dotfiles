@@ -205,6 +205,21 @@ GitHub bot noreply identity. Source-code contributions and reviews remain
 attributed separately; automation never claims a CI or inference test it
 did not perform.
 
+**Publication concurrency and branch ownership:** Jobs targeting the single
+catalogue bot branch are serialized; a force-with-lease alone cannot protect
+subsequent PR-body edits. Before any no-op or push, the publisher verifies
+that the fetched branch tip differs from the current default branch by
+exactly one regular JSON inventory file (new or one-time legacy path).
+New-format tips must use the expected Woofdy author, committer and
+Conventional Commit subject; the specific existing #200 tip is an
+immutable migration exception. The Git commit identity is a safeguard
+against accidental overwrites, **not cryptographic proof of the app's
+identity**; repository branch permissions remain the ultimate control.
+Unknown branch edits, foreign or non-draft PRs, missing provenance,
+unavailable source data and base-registry drift fail closed. An owner must
+investigate those cases rather than overriding the bot branch or changing
+the source allowlist.
+
 A timestamp-only refresh preserves the bot branch and draft PR. A genuine
 candidate, cost, curated-registry or provider-coverage change updates the
 draft with the existing force-with-lease and exact-path safeguards. Only
