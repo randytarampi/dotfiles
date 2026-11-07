@@ -11,6 +11,7 @@ from catalogue_review import (
     provider_coverage,
     registry_review,
     render_pr_body,
+    review_fingerprint,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -121,6 +122,21 @@ def test_generated_body_has_all_pr_template_sections_and_no_fake_ci_pass():
     assert "artefact" not in body.lower()
     assert "required CI: PASS" not in body
 
+
+
+
+def test_review_digest_recovers_stale_pr_metadata_without_timestamp_churn():
+    original = _inventory()
+    fingerprint = review_fingerprint(original)
+    body = render_pr_body(original)
+    assert f"<!-- free-model-review-sha256: {fingerprint} -->" in body
+    observed_later = json.loads(json.dumps(original))
+    observed_later["fetched_at"] = "2026-11-07T04:00:00Z"
+    observed_later["pricing_observed_at"] = "2026-11-07T04:00:00Z"
+    observed_later["pricing_expires_at"] = "2026-11-08T04:00:00Z"
+    assert review_fingerprint(observed_later) == fingerprint
+    observed_later["models"][0]["pricing"]["output"] = 0.01
+    assert review_fingerprint(observed_later) != fingerprint
 
 def test_comparison_reads_legacy_bot_inventory_and_protects_markdown():
     current = _inventory()

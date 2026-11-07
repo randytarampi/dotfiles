@@ -281,10 +281,17 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     checkout.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
     subprocess.run(
-        ["git", "config", "user.name", "CI fixture"], cwd=checkout, check=True
+        ["git", "config", "user.name", "model-catalogue-bot[bot]"],
+        cwd=checkout,
+        check=True,
     )
     subprocess.run(
-        ["git", "config", "user.email", "ci@example.invalid"],
+        [
+            "git",
+            "config",
+            "user.email",
+            "model-catalogue-bot[bot]@users.noreply.github.com",
+        ],
         cwd=checkout,
         check=True,
     )
@@ -302,14 +309,26 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     }
     path.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=checkout, check=True)
-    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=checkout, check=True)
-    tip = subprocess.check_output(
+    subprocess.run(
+        ["git", "commit", "-qm", "chore: refresh model catalogue artefact"],
+        cwd=checkout,
+        check=True,
+    )
+    tip_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
     ).strip()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
-    gh.write_text('#!/bin/sh\nprintf "%s" "${GH_PR_JSON:-[]}"\n')
+    gh.write_text(
+        '#!/bin/sh\n'
+        'case "$2" in\n'
+        '  list) printf "%s" "${GH_PR_JSON:-[]}" ;;\n'
+        '  view) printf "%s" "${GH_PR_DETAILS}" ;;\n'
+        '  edit) if [ "${GH_PR_EDIT_FAIL:-0}" = 1 ]; then exit 42; fi ;;\n'
+        '  *) exit 1 ;;\n'
+        'esac\n'
+    )
     gh.chmod(0o755)
     env = os.environ.copy()
     env.update(
@@ -317,7 +336,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
             "PATH": f"{bin_dir}:{env['PATH']}",
             "DEFAULT_BRANCH": "main",
             "BOT_BRANCH_EXISTS": "true",
-            "BOT_BRANCH_EXPECTED_TIP": tip,
+            "BOT_BRANCH_EXPECTED_TIP": tip_sha,
         }
     )
 
@@ -329,12 +348,32 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "author": {"login": "woofdy-randytarampi-ca[bot]"},
     }
 
-    def evaluate(data, prs, *, success=True):
+    report_dir = tmp_path / "model-catalogue"
+    report_dir.mkdir()
+    marker = "<!-- free-model-review-sha256: " + "a" * 64 + " -->"
+    (report_dir / "review-pr.md").write_text(marker + "\n", encoding="utf-8")
+    good_details = {
+        "title": "chore(agents): review free-model candidates",
+        "body": (
+            "## Outcome and scope\n## Contributors and roles\n"
+            "## Evidence\n## Review disposition\n## Risk and handoff\n"
+            + marker
+        ),
+    }
+
+    def evaluate(data, prs, *, success=True, details=None, tip=None, edit_fail=False):
         path.write_text(json.dumps(data) + "\n", encoding="utf-8")
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c", shell],
             cwd=checkout,
-            env={**env, "GH_PR_JSON": json.dumps(prs)},
+            env={
+                **env,
+                "GH_PR_JSON": json.dumps(prs),
+                "GH_PR_DETAILS": json.dumps(details or good_details),
+                "GH_PR_EDIT_FAIL": "1" if edit_fail else "0",
+                "RUNNER_TEMP": str(tmp_path),
+                "BOT_BRANCH_EXPECTED_TIP": tip or tip_sha,
+            },
             capture_output=True,
             text=True,
             check=False,
@@ -353,6 +392,14 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "pricing_expires_at": "2026-11-07T19:01:00Z",
     }
     assert "Catalogue unchanged" in evaluate(timestamp_only, [valid])
+    stale = dict(good_details, body="## Outcome and scope\nold evidence")
+    assert "Repaired stale catalogue PR metadata" in evaluate(
+        timestamp_only, [valid], details=stale
+    )
+    assert "Repaired stale catalogue PR metadata" in evaluate(
+        timestamp_only, [valid], details=dict(good_details, title="stale title")
+    )
+    evaluate(timestamp_only, [valid], details=stale, edit_fail=True, success=False)
     assert "Catalogue unchanged" not in evaluate(timestamp_only, [])
     price_changed = {
         **timestamp_only,
@@ -368,6 +415,28 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         evaluate(timestamp_only, [invalid], success=False)
     evaluate(timestamp_only, [valid, valid], success=False)
 
+    # A closed draft on a known bot tip can be re-opened, but a human-owned
+    # branch must not be destroyed by force-with-lease just because no PR exists.
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=human",
+            "-c",
+            "user.email=human@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "human-owned branch",
+        ],
+        cwd=checkout,
+        check=True,
+    )
+    foreign_tip = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+    ).strip()
+    evaluate(timestamp_only, [], tip=foreign_tip, success=False)
+
 
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -375,6 +444,10 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "free-model-candidates.json" in refresh
     assert "Prepare a template-compliant candidate review" in publish
     assert "Refusing to update a non-draft or foreign catalogue PR" in publish
+    assert "Catalogue branch has no open PR and an unrecognised commit" in publish
+    assert "Curated model registry changed during refresh" in publish
+    assert "Repaired stale catalogue PR metadata" in publish
+    assert "free-model-review-sha256" in publish
     assert "scripts/lib/catalogue_review.py" in publish
     assert "Invalid trusted publishing SHA" in publish
     assert 'bot_login="woofdy-randytarampi-ca[bot]"' in publish
@@ -389,7 +462,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
         '--head "${publish_branch}"' in publish
     )
     assert 'gh pr edit "${existing_pr}"' in publish
-    assert publish.count('--body-file "${review_body}"') == 2
+    assert publish.count('--body-file "${review_body}"') == 3
     assert "model-catalogue-bot[bot]@users.noreply.github.com" not in publish
     assert (
         'git show "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/'
