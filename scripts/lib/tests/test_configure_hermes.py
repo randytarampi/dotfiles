@@ -329,3 +329,76 @@ def test_concurrent_change_preserved(monkeypatch, tmp_path):
         "config.yaml",
         "config.yaml.bak",
     ]
+
+
+def test_active_model_selection_is_explicit_and_preserves_unrelated_yaml():
+    source = (
+        "model:\n"
+        "  provider: ollama-cloud  # operator choice\n"
+        "  default: glm-5.1\n"
+        "  max_tokens: 4096\n"
+        "auxiliary:\n"
+        "  title_generation:\n"
+        "    provider: auto\n"
+        "providers:\n"
+        "  user-local:\n"
+        "    api: http://127.0.0.1:11434/v1\n"
+    )
+    updated = hermes.reconcile(source, "current/gateway-model", "http://127.0.0.1:4000/v1")
+    assert yaml.safe_load(updated)["model"]["provider"] == "ollama-cloud"
+    selected = hermes.select_active_model(updated, "current/gateway-model")
+    parsed = yaml.safe_load(selected)
+    assert parsed["model"] == {
+        "provider": "custom:dotfiles-litellm",
+        "default": "current/gateway-model",
+        "max_tokens": 4096,
+    }
+    assert parsed["auxiliary"]["title_generation"]["provider"] == "auto"
+    assert parsed["providers"]["user-local"]["api"] == "http://127.0.0.1:11434/v1"
+    assert "# operator choice" in selected
+    assert hermes.select_active_model(selected, "current/gateway-model") == selected
+
+
+def test_active_model_adds_missing_block_without_switching_by_default():
+    source = "settings:\n  keep: value\n"
+    registered = hermes.reconcile(source, "served/model", "http://127.0.0.1:4000/v1")
+    assert "model" not in yaml.safe_load(registered)
+    selected = hermes.select_active_model(registered, "served/model")
+    assert yaml.safe_load(selected)["model"] == {
+        "provider": "custom:dotfiles-litellm",
+        "default": "served/model",
+    }
+    assert yaml.safe_load(selected)["settings"] == {"keep": "value"}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "model: old-model\n",
+        "model: {provider: ollama-cloud, default: old-model}\n",
+        "model:\n  provider: ollama-cloud\n",
+        "model:\n  default: old-model\n",
+        "model:\n  provider: ollama-cloud\n  default: |\n    multiline\n",
+    ],
+)
+def test_active_model_refuses_ambiguous_user_model_state(source):
+    with pytest.raises(ValueError, match="refusing"):
+        hermes.select_active_model(source, "served/model")
+
+
+def test_active_selection_requires_explicit_flag(monkeypatch, tmp_path):
+    root = tmp_path / "hermes"
+    root.mkdir()
+    path = root / "config.yaml"
+    path.write_text("model:\n  provider: ollama-cloud\n  default: glm-5.1\n")
+    monkeypatch.setenv("HERMES_HOME", str(root))
+    monkeypatch.setenv(hermes.GATE, "1")
+    monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
+    assert hermes.main(["--model", "served/model", "--dry-run", "--select-active-model"]) == 0
+    assert yaml.safe_load(path.read_text())["model"]["default"] == "glm-5.1"
+    assert hermes.main(["--model", "served/model"]) == 0
+    assert yaml.safe_load(path.read_text())["model"]["default"] == "glm-5.1"
+    assert hermes.main(["--model", "served/model", "--select-active-model"]) == 0
+    active = yaml.safe_load(path.read_text())["model"]
+    assert active == {"provider": "custom:dotfiles-litellm", "default": "served/model"}
+    assert hermes.main(["--model", "served/model", "--select-active-model"]) == 0
