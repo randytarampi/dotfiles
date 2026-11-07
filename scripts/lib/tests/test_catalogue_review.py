@@ -264,11 +264,20 @@ def test_prior_snapshot_observations_must_be_older():
     current["pricing_observed_at"] = "2026-11-06T20:01:00Z"
     require_fresher_observations(current, previous)
 
-    for field in ("fetched_at", "pricing_observed_at"):
-        too_old = json.loads(json.dumps(current))
-        too_old[field] = previous[field]
-        with pytest.raises(ValueError, match=f"stale {field}"):
-            require_fresher_observations(too_old, previous)
+    # A shared pricing cache may have the same observation time; a newer
+    # authenticated Console fetch with unchanged pricing remains valid.
+    same_pricing_observation = json.loads(json.dumps(current))
+    same_pricing_observation["pricing_observed_at"] = previous["pricing_observed_at"]
+    require_fresher_observations(same_pricing_observation, previous)
+
+    stale_fetch = json.loads(json.dumps(current))
+    stale_fetch["fetched_at"] = previous["fetched_at"]
+    with pytest.raises(ValueError, match="stale fetched_at"):
+        require_fresher_observations(stale_fetch, previous)
+    stale_pricing = json.loads(json.dumps(current))
+    stale_pricing["pricing_observed_at"] = "2026-11-06T19:59:00Z"
+    with pytest.raises(ValueError, match="stale pricing_observed_at"):
+        require_fresher_observations(stale_pricing, previous)
 
     for malformed in ("not-a-date", "2026-11-06T21:00:00", None):
         bad = json.loads(json.dumps(current))
