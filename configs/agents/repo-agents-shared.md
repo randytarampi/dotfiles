@@ -53,7 +53,7 @@ Credit substantive work by humans **and** AI agents at the point of delivery. Do
 - Retire unused agent-owned clean trees only under recorded teardown consent. Preserve unique committed branches.
 - Before removing dirty saved work, create a private verified archive with restore instructions and obtain explicit dirty-removal consent.
 - Never remove primary, user-owned or unknown trees; touch no user stashes, add no verification stash, and do not opportunistically prune worktrees or delete branches.
-- Directory access is not integration or deletion consent. Follow the existing worktree skill's nested `.slim/worktrees` default; dotfiles sibling worktrees need one explicit approved exception. See `docs/ORCHESTRATION.md` in the dotfiles repository for preflight/location details.
+- Directory access is not integration or deletion consent. Follow the existing worktree skill's nested `.slim/worktrees` default; dotfiles sibling worktrees need one explicit approved exception. See `docs/orchestration.md` in the dotfiles repository for preflight/location details.
 
 ### Writing and ambiguity
 

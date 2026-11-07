@@ -13,7 +13,7 @@
 5. Update `configs/opencode/anthropic-models.json` if adding new Anthropic model IDs
 6. Test: `scripts/configure-opencode-tier.py --preset <tier>`, then `/preset <name>` in OpenCode
 
-Use the required `--preset <tier>` flag; positional tier arguments are not supported. Tier details belong in [docs/TIERS.md](TIERS.md).
+Use the required `--preset <tier>` flag; positional tier arguments are not supported. Tier details belong in [docs/tiers.md](tiers.md).
 
 ### Adding a profile to the local family
 
@@ -70,7 +70,7 @@ These scripts are useful when you want to refresh runtime-generated files withou
 - `scripts/configure-meridian.py` — refreshes Meridian proxy config for OpenCode
 - `scripts/configure-jetbrains-ai.py` — regenerates JetBrains AI model profiles, dirs, and symlinks (MCPs are generated separately by the `mcps` step)
 
-See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the three-layer architecture and when to use these helpers.
+See [docs/orchestration.md](orchestration.md) for the three-layer architecture and when to use these helpers.
 
 ---
 
@@ -93,7 +93,7 @@ If a generated artifact is stale after a pull, check the relevant hash trigger f
 
 Review/CI-only assets (`.github/workflows/` helpers, `scripts/ci-*.sh`, `scripts/run-local-review.sh`, `configs/review/*`, `configs/opencode/ci/*`, `scripts/onboard-agentic-review.py`) must **not** get `run_onchange_16` hash triggers — they don't affect local OpenCode configuration, and attaching them causes false local re-runs. Track them in `configs/review/assets-manifest.json` instead (checked by `make check-ci-assets`; regenerate with `make update-ci-assets` after editing any listed asset).
 
-See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger policy.
+See [docs/orchestration.md](orchestration.md) for the canonical hash-trigger policy.
 
 ---
 
@@ -107,15 +107,15 @@ See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger pol
 6. Run `make check-hashes` to verify coverage
 7. Run `make verify` to confirm the new script fits the orchestration flow
 
-**Gate renames:** When renaming a gate, add a migration entry to `scripts/migrate-env-gates.py` `MIGRATIONS` list. See [docs/ORCHESTRATION.md](ORCHESTRATION.md) "Gate Migrations" section.
+**Gate renames:** When renaming a gate, add a migration entry to `scripts/migrate-env-gates.py` `MIGRATIONS` list. See [docs/orchestration.md](orchestration.md) "Gate Migrations" section.
 
 ### Adding a service-lane gate or environment variable
 
-Document new variables in `dot_dotfiles/shell/.env.example` and ensure `make check-env-coverage` passes. Register script capabilities and accepted flags in `scripts/lib/cli-contract.json`; irrelevant flags must remain rejected as usage errors. Follow [docs/CONVENTIONS.md](CONVENTIONS.md) for the CLI contract and run the relevant environment-coverage and CLI-contract checks.
+Document new variables in `dot_dotfiles/shell/.env.example` and ensure `make check-env-coverage` passes. Register script capabilities and accepted flags in `scripts/lib/cli-contract.json`; irrelevant flags must remain rejected as usage errors. Follow [docs/conventions.md](conventions.md) for the CLI contract and run the relevant environment-coverage and CLI-contract checks.
 
 ## Adding a Skills Category
 
-Create `configs/skills/skills.<name>.json` with a unique profile and its skill entries. Omit `gate` for always-on categories such as `core` and `mattpocock`. For opt-in categories, add the corresponding category skills setup gate to `dot_dotfiles/shell/.env.example` and the gate table in [ORCHESTRATION.md](ORCHESTRATION.md). Add the category file to the hash triggers in `.chezmoiscripts/run_onchange_28-configure-skills.sh.tmpl`, then run `make check-hashes` and `make verify`.
+Create `configs/skills/skills.<name>.json` with a unique profile and its skill entries. Omit `gate` for always-on categories such as `core` and `mattpocock`. For opt-in categories, add the corresponding category skills setup gate to `dot_dotfiles/shell/.env.example` and the gate table in [orchestration.md](orchestration.md). Add the category file to the hash triggers in `.chezmoiscripts/run_onchange_28-configure-skills.sh.tmpl`, then run `make check-hashes` and `make verify`.
 
 ## Project-Scoped Skills and Configuration
 
@@ -140,7 +140,7 @@ All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable;
 When adding a new agent tool to the fleet:
 
 1. **Fleet registry**: Add an entry to `scripts/lib/fleet-registry.json` with telemetry disposition, voice support, i18n mechanism, and guidance path.
-2. **Telemetry**: If the tool supports a local opt-out, add env vars to `dot_dotfiles/shell/.env.example` (uncommented if effective). Document the disposition in `docs/TELEMETRY.md`.
+2. **Telemetry**: If the tool supports a local opt-out, add env vars to `dot_dotfiles/shell/.env.example` (uncommented if effective). Document the disposition in `docs/telemetry.md`.
 3. **Guidance**: If the tool reads instruction files, add its path to `AGENT_FILES` in `scripts/configure-agent-guidance.py` and to the path list in `scripts/verify-config.py`.
-4. **Capability matrix**: Add a row to the table in `docs/CAPABILITY_MATRIX.md` including the new Telemetry, Voice, and i18n columns.
+4. **Capability matrix**: Add a row to the table in `docs/capability-matrix.md` including the new Telemetry, Voice, and i18n columns.
 5. **Verify**: Run `make check-fleet-coverage` to confirm the registry matches the actual repo state, then `make verify` for full validation.

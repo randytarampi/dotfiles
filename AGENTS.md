@@ -18,15 +18,15 @@ Credit substantive work by humans **and** AI agents at the point of delivery. Do
 
 `AGENTS.md` is authoritative **policy** only. Reference content lives in `docs/` and `README.md` — link, don't duplicate. When editing, check `docs/` first and link there.
 
-**Markdown prose is soft-wrapped.** Keep each ordinary paragraph or list-item sentence on one physical source line instead of inserting newlines at a column limit; let the editor wrap visually. Preserve deliberate hard breaks and structural lines (headings, lists, blockquotes, tables, fenced/indented code and front matter). See [Markdown layout](docs/CONVENTIONS.md#markdown-layout).
+**Markdown prose is soft-wrapped.** Keep each ordinary paragraph or list-item sentence on one physical source line instead of inserting newlines at a column limit; let the editor wrap visually. Preserve deliberate hard breaks and structural lines (headings, lists, blockquotes, tables, fenced/indented code and front matter). See [Markdown layout](docs/conventions.md#markdown-layout).
 
-The repo is a chezmoi source directory. For the full directory tree and script inventory, see [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md). For package management details, see `README.md`.
+The repo is a chezmoi source directory. For the full directory tree and script inventory, see [docs/orchestration.md](docs/orchestration.md). For package management details, see `README.md`.
 
 ---
 
 ## Installation
 
-See [docs/INSTALL.md](docs/INSTALL.md) for the complete installation, upgrade, and verification flow. In normal use, `make deploy` is the canonical entrypoint. Run it twice on first setup to surface idempotency gaps.
+See [docs/install.md](docs/install.md) for the complete installation, upgrade, and verification flow. In normal use, `make deploy` is the canonical entrypoint. Run it twice on first setup to surface idempotency gaps.
 
 ---
 
@@ -94,7 +94,7 @@ All scripts follow: parse args → load env → gate check → main logic → ok
 
 ### CLI Capability Contract
 
-All scripts must conform to the [CLI Capability Contract](docs/CONVENTIONS.md). Key requirements:
+All scripts must conform to the [CLI Capability Contract](docs/conventions.md). Key requirements:
 
 - **Public scripts** must accept `--help` (exit 0, side-effect-free).
 - **Mutator scripts** must accept `--dry-run` (skip writes, log what would be done).
@@ -117,7 +117,7 @@ Local-fallback flags (`--local-fallback-preset/role/placeholder`) forward explic
 
 ### Env-Var Taxonomy
 
-Environment variables follow an ownership-based taxonomy (see [docs/CONVENTIONS.md](docs/CONVENTIONS.md)):
+Environment variables follow an ownership-based taxonomy (see [docs/conventions.md](docs/conventions.md)):
 
 - `DOTFILES_*` — repo-owned (gates, tier settings, project vars)
 - Upstream-native — keep as-is (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_*`)
@@ -147,8 +147,8 @@ When adding a new script:
 - Layer 2: Chezmoi scripts bridge templates to runtime generation.
 - Layer 3: Configure scripts (`scripts/configure-*.py`, `configure-all.sh`) generate runtime-dependent config.
 - Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
-- Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
-- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and the Tokenscope plugin are documented in [docs/OPENCODE.md](docs/OPENCODE.md).
+- Canonical reference: [docs/orchestration.md](docs/orchestration.md).
+- `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and the Tokenscope plugin are documented in [docs/opencode.md](docs/opencode.md).
 
 ### Environment Gating
 
@@ -207,14 +207,14 @@ Recurring validation quirks — check these before diagnosing failures:
 - **Formatting:** black lives at `/opt/homebrew/bin/black` (bare `python3` has no `black` module). Run it on touched `.py` files **before** `git commit` — the pre-commit hook reformats and aborts the first commit otherwise.
 - **LSP noise:** import-resolution errors in `scripts/*.py` under the IDE are pre-existing runtime `PYTHONPATH` artifacts, not introduced breakage. Use `python3 -m py_compile <file>` for ground truth.
 - **Known doctor warnings (pre-existing, not yours):** stale backups `AGENTS.md.bak`, `tui.json.bak`, `opencode.json.bak`; `~/.ssh/config` mode 644. A clean `make verify` still shows them.
-- **Deploy aborts:** `make deploy` runs chezmoi scripts sequentially; one failure aborts before later `run_onchange` scripts. The Caddy installer now warns and skips when unattended sudo is unavailable; chezmoi can cache this skipped run, so retry it with `make caddy-setup` in an interactive terminal. See [docs/CADDY.md](docs/CADDY.md) for the full recovery flow. Other scripts can be checked with `bash -n <(chezmoi execute-template < .chezmoiscripts/run_onchange_XX-*.sh.tmpl)` and run standalone when necessary.
+- **Deploy aborts:** `make deploy` runs chezmoi scripts sequentially; one failure aborts before later `run_onchange` scripts. The Caddy installer now warns and skips when unattended sudo is unavailable; chezmoi can cache this skipped run, so retry it with `make caddy-setup` in an interactive terminal. See [docs/caddy.md](docs/caddy.md) for the full recovery flow. Other scripts can be checked with `bash -n <(chezmoi execute-template < .chezmoiscripts/run_onchange_XX-*.sh.tmpl)` and run standalone when necessary.
 - **Checkout discipline during deploy cycles:** diagnose a failed deploy script against the checkout the deploy actually consumed. A mid-session stash pop, rebase, or branch switch silently changes the deployed source and makes known behaviour look like a new bug (recorded on the 2026-11-02 v2 cutover: two deploys re-ran the pre-fix parser after a checkout revert). Freeze the lane checkout during deploy/diagnose cycles and confirm the tip with `git log --oneline -1` per deploy retry.
 - **Drift lane:** `make check-model-drift` loads `~/.env` and reports checked/skipped provider endpoints; auth failures (401/403/404) are skipped, never silent zeros.
 - **Env drift duplicates count placeholders:** the `~/.env` drift check counts a commented placeholder sharing an active key's name as a duplicate (a real `MERIDIAN_API_KEY` append at the file end failed `make verify` because a commented `# MERIDIAN_API_KEY=` placeholder existed). Add new keys in their documented section by replacing the commented placeholder, never by appending a second declaration.
 - **Secret file edits never enter context:** edit `~/.env` line-scoped (`sed`) after grepping key **names** only, back the file up to a session temp dir first, and never `cat` secrets into a transcript. The same discipline applies to config dumps from databases or admin APIs (e.g. `webui.db` or Open WebUI's `/openai/config`) and to any generated or tool-profile state that can embed credentials (junie/model profiles, LiteLLM client key files, auth configs, caddy auth confs): redact or omit any field whose name matches `key`, `token`, `secret`, `authorization`, or `apiKey` before printing — extract field names or checksums only. Two cutover-session leaks (an Ollama key and an embedded profile key) came from full-line or dict-body prints of generated state.
 - **Gate-consistent validation:** live service validation can leave LaunchAgents running while the corresponding `~/.env` gate is `0`; doctor's stale-LaunchAgent checks flag that drift. End every validation cycle by running the service's gate-off lifecycle (or re-running `make deploy`), and `unset DOTFILES_RUN_*` exports between validation commands — gate exports leak across shell invocations.
 - **launchd bootout is asynchronous:** `launchctl bootout` followed immediately by `bootstrap` can hit the teardown race and a `launchctl print` right after may still report the old state. Use the shared retry helper (`scripts/lib/openwebui_service.sh`: bootout → sleep → bootstrap → `launchctl print` loaded-check, ×3) for any new service, and verify service health after a delay, not instantly.
-- **LiteLLM restart listen-wait:** after `make litellm-restart` (or `launchctl kickstart`) the proxy needs roughly 20–40 s before it listens on :4000. An immediate curl returns exit 000 with ~0.001 s — that is "not yet listening", not a failure. Wait, re-curl `/health/liveliness`, and treat repeated instant `000`s as "still booting", not errors (see [docs/LITELLM.md](docs/LITELLM.md)).
+- **LiteLLM restart listen-wait:** after `make litellm-restart` (or `launchctl kickstart`) the proxy needs roughly 20–40 s before it listens on :4000. An immediate curl returns exit 000 with ~0.001 s — that is "not yet listening", not a failure. Wait, re-curl `/health/liveliness`, and treat repeated instant `000`s as "still booting", not errors (see [docs/litellm.md](docs/litellm.md)).
 - **Runner tooling parity:** CI runners have older tooling than local (`/bin/bash` 3.2 on macOS lacks `${var^^}`; shellcheck is 0.9.x vs local 0.11). Write bash-3.2-safe shell (`tr '[:lower:]' '[:upper:]'` instead of `${var^^}`) and old-shellcheck-safe patterns; verify with the oldest supported interpreter, not just the local one.
 - **Long commit chains under pre-commit hooks:** the hooks run `make lint` (~2 minutes per commit), so land per-concern chains **one commit per shell invocation with a ≥300 s timeout** — a shorter timeout aborts mid-chain and leaves staged-only state. If an interrupted commit auto-stashes unstaged work, recover the orphaned edit from the patch file under `~/.cache/pre-commit/patch*` (`git apply` it). Stage every file belonging to the concern before committing; a commit that missed its own tests can be repaired after the fact with `git commit --fixup=<sha>` plus a scripted `GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash --autostash <base>`.
 - **Credential probes check non-emptiness:** an empty-string env placeholder (e.g. `OPENAI_API_KEY=''`) counts as **absent** for capability, paid-route, and pilot gating — test the value's length, never mere presence. This session's Flex service-lane gate stayed honest only because the probe checked non-emptiness while the deployed `~/.env` carried an empty placeholder.
@@ -226,15 +226,15 @@ Recurring validation quirks — check these before diagnosing failures:
 
 ## Model Tiers
 
-Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/TIERS.md](docs/TIERS.md).
+Tier presets are defined in `configs/opencode/oh-my-opencode-slim.json` (source of truth), consumed via `scripts/lib/tier_registry.py`. For the full tier table, per-tier role/variant tables, local model classification, and fallback chains, see [docs/tiers.md](docs/tiers.md).
 
 The local resolution profiles are `local-quiet` / `local` / `local-loud`; `local` is the balanced profile and evolves in place. `local-solo` is a separate standalone tier, not a fourth profile. Profile policies rank candidates at resolution time and do not promise hardware fit, latency or concurrency. Do not introduce alias machinery for profile names. If a future deprecation is approved, the only permitted alias mechanism is one explicit alias map in `tier_registry.py`, used consistently by consumers.
 
-OpenAI service lanes are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are available only on the direct API-key route. They must not silently escalate from Flex to standard, and spend reporting must identify the tier actually served. See [docs/LITELLM.md](docs/LITELLM.md) for the operational contract.
+OpenAI service lanes are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are available only on the direct API-key route. They must not silently escalate from Flex to standard, and spend reporting must identify the tier actually served. See [docs/litellm.md](docs/litellm.md) for the operational contract.
 
 Switch tiers with `scripts/configure-opencode-tier.py --preset <tier>`; the local profile choices are `local-quiet`, `local` and `local-loud`.
 
-Model changes must preserve exact provider/endpoint model IDs, update every affected configured consumer and proxy alias together, and check selected IDs against refreshed provider catalogues. A missing credential, HTTP 401/403, or an unreachable catalogue is **unknown**, not evidence of availability. Follow [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) for the verification sequence; catalogue presence alone does not prove inference access.
+Model changes must preserve exact provider/endpoint model IDs, update every affected configured consumer and proxy alias together, and check selected IDs against refreshed provider catalogues. A missing credential, HTTP 401/403, or an unreachable catalogue is **unknown**, not evidence of availability. Follow [docs/model-updates.md](docs/model-updates.md) for the verification sequence; catalogue presence alone does not prove inference access.
 
 ---
 
@@ -272,7 +272,7 @@ Run `make help` for the full command list. For task-specific guidance, see the r
 - Check hash coverage: `make check-hashes`
 - Configure a project: `scripts/configure-project.py [--steps skills]`
 
-Project skills are defined in category files under `configs/skills/`; the canonical cache is `~/.local/share/dotfiles/skills/`. See [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) for the full workflow.
+Project skills are defined in category files under `configs/skills/`; the canonical cache is `~/.local/share/dotfiles/skills/`. See [docs/orchestration.md](docs/orchestration.md) for the full workflow.
 
 ---
 
@@ -292,29 +292,29 @@ Reply in the language and register the conversation is using. English prose uses
 
 | Doc | Content |
 |-----|---------|
-| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | CLI capability contract, arg forwarding, env-var taxonomy, cross-language parity, enforcement |
-| [docs/TELEMETRY.md](docs/TELEMETRY.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
-| [docs/TIERS.md](docs/TIERS.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
-| [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) | Model update and registry maintenance guidance |
-| [docs/MOZART.md](docs/MOZART.md) | Mozart router gateways, unified Ollama routing, provider overrides, and JSON config convention |
-| [docs/LITELLM.md](docs/LITELLM.md) | LiteLLM proxy gateway config, keys, env contract |
-| [docs/MERIDIAN.md](docs/MERIDIAN.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
-| [docs/VOICE.md](docs/VOICE.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
-| [docs/JUNIE.md](docs/JUNIE.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |
-| [docs/MULTIPLEXER.md](docs/MULTIPLEXER.md) | tmux/zellij side-by-side editing with OpenCode, configuration, launching, prerequisites |
-| [docs/DCP.md](docs/DCP.md) | Context compaction thresholds, OpenCode config paths |
-| [docs/ADDING.md](docs/ADDING.md) | Adding a new tier, an MCP server, configure script, gate, or hash trigger |
-| [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) | Three-layer architecture, script inventory, gates, dependency ordering, troubleshooting |
-| [docs/INSTALL.md](docs/INSTALL.md) | Full installation, upgrade, and verification instructions |
-| [docs/CADDY.md](docs/CADDY.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
-| [docs/PI.md](docs/PI.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
-| [docs/OPENCODE.md](docs/OPENCODE.md) | OpenCode configuration, ACP agent verification, Tokenscope plugin |
-| [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
-| [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
-| [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
-| [docs/CHAT_FRONTEND.md](docs/CHAT_FRONTEND.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
-| [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
-| [docs/UNMANAGED-CLIENTS.md](docs/UNMANAGED-CLIENTS.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
+| [docs/conventions.md](docs/conventions.md) | CLI capability contract, arg forwarding, env-var taxonomy, cross-language parity, enforcement |
+| [docs/telemetry.md](docs/telemetry.md) | Per-tool telemetry opt-out dispositions, env var reference, fleet registry |
+| [docs/tiers.md](docs/tiers.md) | Tier definitions, per-tier role/variant tables, local model classification, fallback chains, variant policy, Ollama Cloud models |
+| [docs/model-updates.md](docs/model-updates.md) | Model update and registry maintenance guidance |
+| [docs/mozart.md](docs/mozart.md) | Mozart router gateways, unified Ollama routing, provider overrides, and JSON config convention |
+| [docs/litellm.md](docs/litellm.md) | LiteLLM proxy gateway config, keys, env contract |
+| [docs/meridian.md](docs/meridian.md) | Meridian proxy, SDK feature toggles, Sonnet context tier, OpenCode/Meridian context sync |
+| [docs/voice.md](docs/voice.md) | Voice plugin, tier-aware STT/TTS, dependencies, model defaults, config locations |
+| [docs/junie.md](docs/junie.md) | Junie model groups ↔ Oh My OpenCode sync, mapping rules, temperature overrides, deployment |
+| [docs/multiplexer.md](docs/multiplexer.md) | tmux/zellij side-by-side editing with OpenCode, configuration, launching, prerequisites |
+| [docs/dcp.md](docs/dcp.md) | Context compaction thresholds, OpenCode config paths |
+| [docs/adding.md](docs/adding.md) | Adding a new tier, an MCP server, configure script, gate, or hash trigger |
+| [docs/orchestration.md](docs/orchestration.md) | Three-layer architecture, script inventory, gates, dependency ordering, troubleshooting |
+| [docs/install.md](docs/install.md) | Full installation, upgrade, and verification instructions |
+| [docs/caddy.md](docs/caddy.md) | Caddy, LAN exposure, certificates, and Plannotator integration |
+| [docs/pi.md](docs/pi.md) | Pi terminal coding agent, providers, MCP, ACP, and skills |
+| [docs/opencode.md](docs/opencode.md) | OpenCode configuration, ACP agent verification, Tokenscope plugin |
+| [docs/agentic-review.md](docs/agentic-review.md) | Agentic PR review GitHub Actions (OpenCode/Junie/Gemini/Copilot), labels, mentions, CI MCP, codegraph caching, free preset |
+| [docs/cortex.md](docs/cortex.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
+| [docs/capability-matrix.md](docs/capability-matrix.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
+| [docs/chat-frontend.md](docs/chat-frontend.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
+| [docs/modernization-roadmap.md](docs/modernization-roadmap.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
+| [docs/unmanaged-clients.md](docs/unmanaged-clients.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---
 

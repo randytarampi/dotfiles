@@ -14,14 +14,14 @@ Personal, cross-platform dotfiles managed by [chezmoi](https://chezmoi.io/). The
 
 ## Getting started
 
-Clone the repository, follow the [installation guide](docs/INSTALL.md) to seed your private `~/.env`, install prerequisites (including Poetry for managed Python tools), and initialise chezmoi. On a prepared macOS/Linux host:
+Clone the repository, follow the [installation guide](docs/install.md) to seed your private `~/.env`, install prerequisites (including Poetry for managed Python tools), and initialise chezmoi. On a prepared macOS/Linux host:
 
 ```bash
 make deploy
 make deploy  # First setup only: check idempotency
 ```
 
-The Makefile assumes Bash and Unix utilities. Windows uses winget/PowerShell for package installation but requires an appropriately prepared POSIX-compatible environment for Makefile targets; do not assume every target runs natively in PowerShell. See [installation and upgrading](docs/INSTALL.md) for the platform-specific sequence and recovery steps.
+The Makefile assumes Bash and Unix utilities. Windows uses winget/PowerShell for package installation but requires an appropriately prepared POSIX-compatible environment for Makefile targets; do not assume every target runs natively in PowerShell. See [installation and upgrading](docs/install.md) for the platform-specific sequence and recovery steps.
 
 **Secrets and user state:** Never commit credentials. The canonical environment example is [dot_dotfiles/shell/.env.example](dot_dotfiles/shell/.env.example); `~/.env` and runtime-generated credentials remain private. Gates default to off unless explicitly documented otherwise. Run a dry-run before changing an unfamiliar deployment.
 
@@ -62,15 +62,15 @@ AI clients share policy and discovery inputs where supported, but each has its o
 
 | Task | Canonical guide |
 | --- | --- |
-| Install, upgrade or troubleshoot the host | [Installation](docs/INSTALL.md) and [orchestration](docs/ORCHESTRATION.md) |
-| Add scripts, gates, MCP tools or skills | [Adding components](docs/ADDING.md) and [repository conventions](docs/CONVENTIONS.md) |
-| Understand AI presets and model updates | [Tiers](docs/TIERS.md), [model updates](docs/MODEL_UPDATES.md), [capability matrix](docs/CAPABILITY_MATRIX.md) |
-| Configure OpenCode, Pi, Junie or other clients | [OpenCode](docs/OPENCODE.md), [Pi](docs/PI.md), [Junie](docs/JUNIE.md), [unmanaged clients](docs/UNMANAGED-CLIENTS.md) |
-| Configure additional inference providers or the gateway | [Optional inference](docs/OPTIONAL_INFERENCE.md), [LiteLLM](docs/LITELLM.md), [Meridian](docs/MERIDIAN.md) |
-| Configure local engines, voice or memory | [oMLX](docs/OMLX.md), [voice](docs/VOICE.md), [Basic Memory](docs/BASIC_MEMORY.md) |
-| Configure remote access and web services | [Remote access](docs/REMOTE_ACCESS.md), [Caddy](docs/CADDY.md), [Open WebUI](docs/CHAT_FRONTEND.md) |
-| Configure Paseo | [Paseo remote](docs/PASEO_REMOTE.md), [security](docs/PASEO_SECURITY.md), [ACP](docs/PASEO_ACP.md), [MCP](docs/PASEO_MCP.md) |
-| Work on agentic PR reviews | [GitHub reviews and onboarding](docs/AGENTIC-REVIEW.md), [review method](configs/review/code-review-prompt.md) |
+| Install, upgrade or troubleshoot the host | [Installation](docs/install.md) and [orchestration](docs/orchestration.md) |
+| Add scripts, gates, MCP tools or skills | [Adding components](docs/adding.md) and [repository conventions](docs/conventions.md) |
+| Understand AI presets and model updates | [Tiers](docs/tiers.md), [model updates](docs/model-updates.md), [capability matrix](docs/capability-matrix.md) |
+| Configure OpenCode, Pi, Junie or other clients | [OpenCode](docs/opencode.md), [Pi](docs/pi.md), [Junie](docs/junie.md), [unmanaged clients](docs/unmanaged-clients.md) |
+| Configure additional inference providers or the gateway | [Optional inference](docs/optional-inference.md), [LiteLLM](docs/litellm.md), [Meridian](docs/meridian.md) |
+| Configure local engines, voice or memory | [oMLX](docs/omlx.md), [voice](docs/voice.md), [Basic Memory](docs/basic-memory.md) |
+| Configure remote access and web services | [Remote access](docs/remote-access.md), [Caddy](docs/caddy.md), [Open WebUI](docs/chat-frontend.md) |
+| Configure Paseo | [Paseo remote](docs/paseo-remote.md), [security](docs/paseo-security.md), [ACP](docs/paseo-acp.md), [MCP](docs/paseo-mcp.md) |
+| Work on agentic PR reviews | [GitHub reviews and onboarding](docs/agentic-review.md), [review method](configs/review/code-review-prompt.md) |
 
 [AGENTS.md](AGENTS.md) is the authoritative instruction source for contributions to this repository, and [home agent guidance](configs/agents/home-agents.md) is the source distributed to supported user agents. The documentation is a description of repo intent and implementation, not proof of an installed host's state.
 
@@ -78,10 +78,10 @@ AI clients share policy and discovery inputs where supported, but each has its o
 
 The package manifests are category-based. `.chezmoidata/categories.yaml` defines committed defaults, and optional machine-level category overrides belong in chezmoi's local configuration rather than edits to shared defaults. Use `make categories` to inspect the effective selection and `make brewfile-sync` / `make brewfile-diff` when maintaining package parity. Some packages or services are platform-specific, and a Brewfile entry does not imply an equivalent winget package.
 
-OpenCode v2 is managed by its [official installer path](docs/OPENCODE.md), not a Brewfile or winget package. Tool-specific gates, supported platforms, security boundaries and required owner actions belong in the linked operating guides, not in a manually duplicated package/model matrix here.
+OpenCode v2 is managed by its [official installer path](docs/opencode.md), not a Brewfile or winget package. Tool-specific gates, supported platforms, security boundaries and required owner actions belong in the linked operating guides, not in a manually duplicated package/model matrix here.
 
 ## Contributing and validation
 
 Follow [AGENTS.md](AGENTS.md), the [PR template](.github/PULL_REQUEST_TEMPLATE.md) and the [review rubric](configs/review/code-review-prompt.md). Run the relevant focused checks and record results against the actual revision; code/configuration changes require the integrated verification gate when a qualifying environment is available. Agent-created PRs are drafts until accepted by a human reviewer.
 
-Markdown prose should **soft-wrap in the editor** rather than being hard-wrapped at an arbitrary width. Preserve intentional Markdown structure, code blocks and hard breaks; see [documentation conventions](docs/CONVENTIONS.md).
+Markdown prose should **soft-wrap in the editor** rather than being hard-wrapped at an arbitrary width. Preserve intentional Markdown structure, code blocks and hard breaks; see [documentation conventions](docs/conventions.md).

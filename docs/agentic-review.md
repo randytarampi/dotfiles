@@ -66,7 +66,7 @@ The owned dispatcher is the sole exception: it invokes this repository's reusabl
 
 The generator runs `opencode run` directly with a read-only token and only edits its workspace. It installs OpenCode 2.2.5 through the official pinned install script (https://opencode.ai/v2/install with `--version`) and verifies both its executable and reported version; it does not commit, push, or create a PR. After the `agentic-review-fix` environment approval, the publisher creates the unique `agentic-review-bot/<run-id>` branch. On reruns it records the current remote tip and uses an exact-ref `--force-with-lease` update; a changed tip fails closed. It updates an existing open draft PR for that head or creates one when absent.
 
-The manual fix publisher uses the WOOFDY GitHub App, authenticated with repository Actions variable `WOOFDY_GITHUB_APP_CLIENT_ID` and the `WOOFDY_GITHUB_APP_PRIVATE_KEY` secret in the protected `agentic-review-fix` environment. The same private-key secret must also be configured in `model-catalogue-publish` for the catalogue publisher. Both publisher tokens request only Contents and Pull requests write permissions. See [publishing credentials](MODEL_UPDATES.md#publishing-credentials-and-recovery) for setup. The App private key is not available to the read-only generator job.
+The manual fix publisher uses the WOOFDY GitHub App, authenticated with repository Actions variable `WOOFDY_GITHUB_APP_CLIENT_ID` and the `WOOFDY_GITHUB_APP_PRIVATE_KEY` secret in the protected `agentic-review-fix` environment. The same private-key secret must also be configured in `model-catalogue-publish` for the catalogue publisher. Both publisher tokens request only Contents and Pull requests write permissions. See [publishing credentials](model-updates.md#publishing-credentials-and-recovery) for setup. The App private key is not available to the read-only generator job.
 
 ## Secrets
 
@@ -136,7 +136,7 @@ gitignored). Copilot reads equivalent guidance from repo instructions. Tweak the
 - designer `google/gemini-3.8-flash`
 - fixer `opencode/nemotron-3.5-lightning-free`
 
-Fallback chains cross providers (zen → google → openrouter), so a rate-limited free tier falls through to the next provider. Each provider consumes its own key, which is why all three keys are set in CI secrets. Rate-limit realities: OpenRouter caps `:free` models at 50 requests/day under $10 credits (1000/day at or above, 20 RPM); Gemini limits are per-project (see AI Studio); Zen free models have no published fixed limits (and contributor models carry privacy caveats). Refresh procedure: [`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md) and [docs/MODEL_UPDATES.md](MODEL_UPDATES.md).
+Fallback chains cross providers (zen → google → openrouter), so a rate-limited free tier falls through to the next provider. Each provider consumes its own key, which is why all three keys are set in CI secrets. Rate-limit realities: OpenRouter caps `:free` models at 50 requests/day under $10 credits (1000/day at or above, 20 RPM); Gemini limits are per-project (see AI Studio); Zen free models have no published fixed limits (and contributor models carry privacy caveats). Refresh procedure: [`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md) and [docs/model-updates.md](model-updates.md).
 
 ## Cron extension pattern
 
@@ -274,7 +274,7 @@ Use this compact receipt for each candidate head. Refresh it when the head or ta
 | Host boundary | Authorized host actions, remaining consent gates and CONFIG-ONLY/PROVISIONED/LIVE-VERIFIED status |
 | Delivery | Intended remote ref, original/new SHAs, publication permission and actual outcome; human merge authority remains separate |
 
-Run the existing `make worktree-ready` preflight from [ORCHESTRATION.md](ORCHESTRATION.md#delegated-worktree-readiness-preflight) rather than inventing another environment bootstrap. After parent PRs land, compare the aggregate against current main and the exact surviving parents. Prefer rebuilding an integration view from those reviewed parents plus its genuine residual delta over repeatedly replaying stale aggregate merge history. Preserve the previous head as a recovery reference; branch/worktree operations still need the existing permissions, and no checked-out user branch may be advanced behind its worktree.
+Run the existing `make worktree-ready` preflight from [orchestration.md](orchestration.md#delegated-worktree-readiness-preflight) rather than inventing another environment bootstrap. After parent PRs land, compare the aggregate against current main and the exact surviving parents. Prefer rebuilding an integration view from those reviewed parents plus its genuine residual delta over repeatedly replaying stale aggregate merge history. Preserve the previous head as a recovery reference; branch/worktree operations still need the existing permissions, and no checked-out user branch may be advanced behind its worktree.
 
 Attribution: ChatGPT, based on the owner-requested reflection of this session's handoff, rebase and verification failures (2026-10-31); complements the earlier Phase II retrospective and preserves its provenance.
 
