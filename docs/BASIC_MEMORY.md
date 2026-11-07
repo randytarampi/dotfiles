@@ -2,6 +2,8 @@
 
 **Status (reconciled 2026-11-07):** repository integration delivered in merged [PR #147](https://github.com/randytarampi/dotfiles/pull/147), with follow-on documentation [#148](https://github.com/randytarampi/dotfiles/pull/148). The owner reports Basic Memory working in daily use over recent days (2026-11-07; **owner-reported**, not independently replayed). [Issue #214](https://github.com/randytarampi/dotfiles/issues/214) is now narrowed to telemetry, isolation, offline failure and non-destructive rollback negative cases rather than requiring redundant daily-use proofs. The 2 November 2026 `main@5409ed2669b2` baseline and any original review/test statements below are historical, not current-head CI evidence. See the [modernization roadmap](MODERNIZATION_ROADMAP.md) for current status and deferrals.
 
+**Attribution (preserved):** Original 2 November 2026 Basic Memory research and repository implementation: ChatGPT (GPT-6); owner requirements and acceptance: Randy Tarampi. This 7 November 2026 status reconciliation is a subsequent documentation change, not a claim of newly performed runtime tests.
+
 ## Delivered repository contract and deliberate limitations
 
 - Basic Memory v1.0.0 is the one shared local Markdown knowledge system for tools configured through `configs/mcp/global-mcps.json`. All 15 managed *global* MCP registrations contain `basic-memory`. The per-project MCP registry remains independent to avoid duplicate registration.
