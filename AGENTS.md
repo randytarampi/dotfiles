@@ -1,65 +1,24 @@
 # AI Agent Guidance
 
-> **This is the authoritative repository policy.** Prefer the smallest independently verifiable change that satisfies the agreed contract. Address related defects necessary for correctness; defer unrelated improvements. See `configs/review/code-review-prompt.md` for blocking/advisory findings and dispositions.
-> For human-facing quick start, commands, and package management, see `README.md`.
-> For deep reference material, see the `docs/` directory.
+> **This is the authoritative repository policy.** Prefer the smallest independently verifiable change that satisfies the agreed contract. Address related defects necessary for correctness; defer unrelated improvements. See `configs/review/code-review-prompt.md` for blocking/advisory findings and dispositions. For human-facing quick start, commands, and package management, see `README.md`. For deep reference material, see the `docs/` directory.
 
 ## Contribution attribution
 
-Credit substantive work by humans **and** AI agents at the point of delivery.
-Do not erase earlier contributors when handing work to another model or agent.
+Credit substantive work by humans **and** AI agents at the point of delivery. Do not erase earlier contributors when handing work to another model or agent.
 
-- **Commits:** retain the actual Git author. For each additional person or agent
-  who materially designed, wrote or revised the committed change, add a
-  `Co-authored-by: Name <email>` trailer when a verified or approved attribution
-  identity is available; optionally include `(model)` after the name only
-  when the session reliably identifies its actual model. For ChatGPT use
-  `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified
-  session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base
-  identity of `Co-authored-by: opencode <opencode-agent[bot]@users.noreply.github.com>` with the model
-  derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <opencode-agent[bot]@users.noreply.github.com>`).
-  Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
-  runtime model in parentheses only when the session actually reports it
-  (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`).
-  For Pi sessions here, use `Co-authored-by: Pi <noreply@pi.dev>`; include the
-  runtime model in parentheses only when the session reports it
-  (e.g. `Co-authored-by: Pi (omlx/Ornith-1.5-35B-A3B-MLX-4bit) <noreply@pi.dev>`).
-  Do not guess a family or version. Use the contributor's own supported name/model/email for
-  other agents; never invent an email or impersonate a human or GitHub user. If
-  no suitable identity is available, acknowledge the agent and contribution in
-  the PR or document instead.
-- **Reviewed-by trailers:** when a PR or code review is attributed to an agent,
-  use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents
-  derive their model at time of review; if unavailable, use the base identity
-  `Reviewed-by: opencode <opencode-agent[bot]@users.noreply.github.com>`. For example,
-  `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`.
-  When an agent session hands off to another agent, both should be acknowledged
-  if they each contributed material review input.
-- **Pull requests:** include a short **Contributors and roles** section naming
-  significant human and agent implementers, drafters and reviewers, with the
-  specific work each did. Co-author trailers do not replace this record. Credit
-  reviewers for reviews; do not automatically call them code co-authors.
-- **Design docs, RFCs and handoffs:** identify the actual author(s),
-  collaborating agents, reviewers, date and their roles in a small attribution
-  note. Preserve existing provenance when revising a document. Do not add
-  boilerplate to every incidental note or generated file; credit substantial
-  contributions in the parent artifact or PR.
-- **Truth and consent:** attribute only work actually contributed, never claim
-  approvals, authorship, tool execution or tests not performed, and respect a
-  contributor's requested identity/privacy preference. If authorship is
-  uncertain, say so rather than guessing.
-- **History:** apply this prospectively. Do not rewrite existing/shared commit
-  history merely to add credit without explicit authorization and coordination;
-  an accurate PR acknowledgment is usually enough.
-- Put all `Co-authored-by` and `Reviewed-by` trailers in one contiguous block at
-  the end of the commit message, after one blank line from the body, with no
-  blank lines between trailers. Remove exact duplicate trailer entries while
-  preserving distinct contributors, models and roles; never claim unapproved
-  approval. Keep the actual Git author unchanged.
+- **Commits:** retain the actual Git author. For each additional person or agent who materially designed, wrote or revised the committed change, add a `Co-authored-by: Name <email>` trailer when a verified or approved attribution identity is available; optionally include `(model)` after the name only when the session reliably identifies its actual model. For ChatGPT use `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base identity of `Co-authored-by: opencode <opencode-agent[bot]@users.noreply.github.com>` with the model derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <opencode-agent[bot]@users.noreply.github.com>`). Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the runtime model in parentheses only when the session actually reports it (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`). For Pi sessions here, use `Co-authored-by: Pi <noreply@pi.dev>`; include the runtime model in parentheses only when the session reports it (e.g. `Co-authored-by: Pi (omlx/Ornith-1.5-35B-A3B-MLX-4bit) <noreply@pi.dev>`). Do not guess a family or version. Use the contributor's own supported name/model/email for other agents; never invent an email or impersonate a human or GitHub user. If no suitable identity is available, acknowledge the agent and contribution in the PR or document instead.
+- **Reviewed-by trailers:** when a PR or code review is attributed to an agent, use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents derive their model at time of review; if unavailable, use the base identity `Reviewed-by: opencode <opencode-agent[bot]@users.noreply.github.com>`. For example, `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`. When an agent session hands off to another agent, both should be acknowledged if they each contributed material review input.
+- **Pull requests:** include a short **Contributors and roles** section naming significant human and agent implementers, drafters and reviewers, with the specific work each did. Co-author trailers do not replace this record. Credit reviewers for reviews; do not automatically call them code co-authors.
+- **Design docs, RFCs and handoffs:** identify the actual author(s), collaborating agents, reviewers, date and their roles in a small attribution note. Preserve existing provenance when revising a document. Do not add boilerplate to every incidental note or generated file; credit substantial contributions in the parent artifact or PR.
+- **Truth and consent:** attribute only work actually contributed, never claim approvals, authorship, tool execution or tests not performed, and respect a contributor's requested identity/privacy preference. If authorship is uncertain, say so rather than guessing.
+- **History:** apply this prospectively. Do not rewrite existing/shared commit history merely to add credit without explicit authorization and coordination; an accurate PR acknowledgment is usually enough.
+- Put all `Co-authored-by` and `Reviewed-by` trailers in one contiguous block at the end of the commit message, after one blank line from the body, with no blank lines between trailers. Remove exact duplicate trailer entries while preserving distinct contributors, models and roles; never claim unapproved approval. Keep the actual Git author unchanged.
 
 ## Documentation Conventions
 
 `AGENTS.md` is authoritative **policy** only. Reference content lives in `docs/` and `README.md` — link, don't duplicate. When editing, check `docs/` first and link there.
+
+**Markdown prose is soft-wrapped.** Keep each ordinary paragraph or list-item sentence on one physical source line instead of inserting newlines at a column limit; let the editor wrap visually. Preserve deliberate hard breaks and structural lines (headings, lists, blockquotes, tables, fenced/indented code and front matter). See [Markdown layout](docs/CONVENTIONS.md#markdown-layout).
 
 The repo is a chezmoi source directory. For the full directory tree and script inventory, see [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md). For package management details, see `README.md`.
 
@@ -67,9 +26,7 @@ The repo is a chezmoi source directory. For the full directory tree and script i
 
 ## Installation
 
-See [docs/INSTALL.md](docs/INSTALL.md) for the complete installation, upgrade, and verification flow.
-In normal use, `make deploy` is the canonical entrypoint.
-Run it twice on first setup to surface idempotency gaps.
+See [docs/INSTALL.md](docs/INSTALL.md) for the complete installation, upgrade, and verification flow. In normal use, `make deploy` is the canonical entrypoint. Run it twice on first setup to surface idempotency gaps.
 
 ---
 
@@ -101,9 +58,7 @@ source "$LIB_DIR/common_args.sh"  # For --help, --dry-run, --no-backup support
 # Use scripts/lib/cli_helpers.py for add_common_args(), forward_common_args(), add_local_fallback_args()
 ```
 
-For Python scripts, use `cli_helpers.add_common_args(parser)` for `--dry-run` and `--no-backup`,
-and `cli_helpers.add_local_fallback_args(parser)` for `--local-fallback-*` flags. Use
-`allow_abbrev=False` in argparse to match Bash parser parity.
+For Python scripts, use `cli_helpers.add_common_args(parser)` for `--dry-run` and `--no-backup`, and `cli_helpers.add_local_fallback_args(parser)` for `--local-fallback-*` flags. Use `allow_abbrev=False` in argparse to match Bash parser parity.
 
 ### Naming
 
@@ -191,8 +146,7 @@ When adding a new script:
 - Layer 1: Chezmoi templates (`dot_*`, `private_*`) define static machine state.
 - Layer 2: Chezmoi scripts bridge templates to runtime generation.
 - Layer 3: Configure scripts (`scripts/configure-*.py`, `configure-all.sh`) generate runtime-dependent config.
-- Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with
-  `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
+- Project-scoped Layer 3 configuration uses `scripts/configure-project.py` with `.opencode/.env`; generated secrets go to `.opencode/.env.local`.
 - Canonical reference: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 - `scripts/configure-acp-agents.py` follows the `configure-*.py` convention and is invoked by `scripts/configure-opencode.py` during OpenCode generation (after the slim config copy, before tier switching). It is gated by `DOTFILES_RUN_OPENCODE_SETUP`, writes gitignored `configs/opencode/acp-agents.json`, and its hash trigger should cover the script itself rather than the generated output to avoid circular reruns. ACP agent verification and the Tokenscope plugin are documented in [docs/OPENCODE.md](docs/OPENCODE.md).
 
@@ -280,12 +234,7 @@ OpenAI service lanes are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `
 
 Switch tiers with `scripts/configure-opencode-tier.py --preset <tier>`; the local profile choices are `local-quiet`, `local` and `local-loud`.
 
-Model changes must preserve exact provider/endpoint model IDs, update every affected
-configured consumer and proxy alias together, and check selected IDs against
-refreshed provider catalogues. A missing credential, HTTP 401/403, or an
-unreachable catalogue is **unknown**, not evidence of availability. Follow
-[docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) for the verification sequence;
-catalogue presence alone does not prove inference access.
+Model changes must preserve exact provider/endpoint model IDs, update every affected configured consumer and proxy alias together, and check selected IDs against refreshed provider catalogues. A missing credential, HTTP 401/403, or an unreachable catalogue is **unknown**, not evidence of availability. Follow [docs/MODEL_UPDATES.md](docs/MODEL_UPDATES.md) for the verification sequence; catalogue presence alone does not prove inference access.
 
 ---
 
@@ -323,9 +272,7 @@ Run `make help` for the full command list. For task-specific guidance, see the r
 - Check hash coverage: `make check-hashes`
 - Configure a project: `scripts/configure-project.py [--steps skills]`
 
-Project skills are defined in category files under `configs/skills/`; the canonical
-cache is `~/.local/share/dotfiles/skills/`. See
-[docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) for the full workflow.
+Project skills are defined in category files under `configs/skills/`; the canonical cache is `~/.local/share/dotfiles/skills/`. See [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) for the full workflow.
 
 ---
 
@@ -339,10 +286,7 @@ Deepwork sessions keep progress state in `.slim/deepwork/<topic>.md` (git-local,
 
 ## Tone and Style
 
-Reply in the language and register the conversation is using. English prose
-uses Canadian English spelling; formal reports and reviews follow Canadian
-Press style (casual conversation stays casual). Full guidance lives in
-`configs/agents/home-agents.md` (distributed by `configure-agent-guidance.py`).
+Reply in the language and register the conversation is using. English prose uses Canadian English spelling; formal reports and reviews follow Canadian Press style (casual conversation stays casual). Full guidance lives in `configs/agents/home-agents.md` (distributed by `configure-agent-guidance.py`).
 
 ## Reference Docs Index
 

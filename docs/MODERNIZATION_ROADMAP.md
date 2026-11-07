@@ -1,48 +1,19 @@
 # Dotfiles modernization roadmap
 
-> **Status:** Productionalization roadmap, reconciled 2026-09-22
-> **Scope:** dotfiles productionalization, portability, local-model operations, governance and documentation
-> **Confidence:** `[verified]` is supported by repository files or a recorded check; `[believed]` is a bounded interpretation; `[aspirational]` is a target.
+> **Status:** Productionalization roadmap, reconciled 2026-09-22 **Scope:** dotfiles productionalization, portability, local-model operations, governance and documentation **Confidence:** `[verified]` is supported by repository files or a recorded check; `[believed]` is a bounded interpretation; `[aspirational]` is a target.
 
 ## 1. Document contract
 
-This is the durable plan for deferred work from the productionalization
-session. It is self-contained: every claim cites repository files or a
-recorded check, and durable documentation never depends on private session
-state.
-The roadmap does not authorize changes to tier configuration, package policy,
-secrets, or CI gates without a separate approved work item.
+This is the durable plan for deferred work from the productionalization session. It is self-contained: every claim cites repository files or a recorded check, and durable documentation never depends on private session state. The roadmap does not authorize changes to tier configuration, package policy, secrets, or CI gates without a separate approved work item.
 
-Effort estimates are relative implementation estimates: **S** is hours,
-**M** is one to two focused days, **L** is several days, and **XL** is a
-multi-session change. They are estimates, not recorded durations.
+Effort estimates are relative implementation estimates: **S** is hours, **M** is one to two focused days, **L** is several days, and **XL** is a multi-session change. They are estimates, not recorded durations.
 
 ## 2. Baseline and completed work
 
-- `[verified]` Phase 1 through Phase 4 are complete at `128125b`; rounds 1–2 of
-  follow-up work landed through `d0d5090`. The recorded validation is
-  `make verify`, `make test` (160+ tests), `make ci-verify`, `poetry check` and
-  actionlint; the production coverage measurement is 36% (branch-aware pytest;
-  Coveralls reports 33.71% line coverage at `9d05d65`) against a floor now
-  ratcheted to 27% (evidence: [pyproject.toml](../pyproject.toml) and CI run
-  35713182137, all-green including the required Windows lane).
-- `[verified]` The Windows deploy lane was **promoted to required** at
-  `288b410` after three consecutive green runs (`5e48340`, `389ab47`,
-  `f237cb6`); `continue-on-error` is removed from the deploy matrix.
-  [`.github/workflows/ci.yml`] The nightly lane runs OPENCODE, MCP and
-  AGENT_GUIDANCE with postconditions and remains allow-failure.
-  [.github/workflows/nightly-integration.yml]
-- `[completed-in-this-pass]` The orchestration range now names the actual
-  `run_onchange_04` through `run_onchange_29` scripts, and its inventory includes
-  `install-acp-adapters`. The `wingetfile.dev` cross-references now use the
-  corresponding Brewfile identifiers. [docs/ORCHESTRATION.md:62-66,165-198;
-  wingetfile.dev:1-38]
-- `[verified]` 2026-09-22 — dated coverage-semantics correction. Three numbers
-  circulated for the same floor: 32% (roadmap, superseded), 33% (branch-aware
-  pytest at `9d05d65`), 33.71% (Coveralls line coverage, build 81894625).
-  The authoritative internal gate is the branch-aware pytest measure; Coveralls
-  line coverage is the external report. The floor is 27%.
-  [pyproject.toml; CI run 35713182137]
+- `[verified]` Phase 1 through Phase 4 are complete at `128125b`; rounds 1–2 of follow-up work landed through `d0d5090`. The recorded validation is `make verify`, `make test` (160+ tests), `make ci-verify`, `poetry check` and actionlint; the production coverage measurement is 36% (branch-aware pytest; Coveralls reports 33.71% line coverage at `9d05d65`) against a floor now ratcheted to 27% (evidence: [pyproject.toml](../pyproject.toml) and CI run 35713182137, all-green including the required Windows lane).
+- `[verified]` The Windows deploy lane was **promoted to required** at `288b410` after three consecutive green runs (`5e48340`, `389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix. [`.github/workflows/ci.yml`] The nightly lane runs OPENCODE, MCP and AGENT_GUIDANCE with postconditions and remains allow-failure. [.github/workflows/nightly-integration.yml]
+- `[completed-in-this-pass]` The orchestration range now names the actual `run_onchange_04` through `run_onchange_29` scripts, and its inventory includes `install-acp-adapters`. The `wingetfile.dev` cross-references now use the corresponding Brewfile identifiers. [docs/ORCHESTRATION.md:62-66,165-198; wingetfile.dev:1-38]
+- `[verified]` 2026-09-22 — dated coverage-semantics correction. Three numbers circulated for the same floor: 32% (roadmap, superseded), 33% (branch-aware pytest at `9d05d65`), 33.71% (Coveralls line coverage, build 81894625). The authoritative internal gate is the branch-aware pytest measure; Coveralls line coverage is the external report. The floor is 27%. [pyproject.toml; CI run 35713182137]
 
 | Item | Status | Evidence |
 |---|---|---|
@@ -54,125 +25,53 @@ multi-session change. They are estimates, not recorded durations.
 
 ### 1. Close the cross-platform deploy probe
 
-**Priority:** High · **Effort:** L · **Dependencies:** Phase 4 Windows failures,
-the audit inventory below, and a reproducible Windows runner.
+**Priority:** High · **Effort:** L · **Dependencies:** Phase 4 Windows failures, the audit inventory below, and a reproducible Windows runner.
 
-Fix only failures demonstrated by the Windows deploy lane. The audit identifies
-`readlink -f`, `mapfile`, Homebrew paths, LaunchAgents, `launchctl`, and
-platform-specific doctor checks; it is not permission for a broad rewrite
-(see the shell-to-Python inventory below for script-level evidence).
+Fix only failures demonstrated by the Windows deploy lane. The audit identifies `readlink -f`, `mapfile`, Homebrew paths, LaunchAgents, `launchctl`, and platform-specific doctor checks; it is not permission for a broad rewrite (see the shell-to-Python inventory below for script-level evidence).
 
-**Status:** `[completed-in-this-pass]` The Windows lane was **promoted to
-required** at `288b410` after three consecutive green runs (`5e48340`,
-`389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix,
-and every promotion fix was demonstrated and bounded (script-exec interpreters
-chain, cygpath forward-slash, deploy-effective no-op check).
-[.github/workflows/ci.yml; runs 35713182137, 35696345590]
-**Residual (deliberate):** `make doctor` remains Unix-gated in CI
+**Status:** `[completed-in-this-pass]` The Windows lane was **promoted to required** at `288b410` after three consecutive green runs (`5e48340`, `389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix, and every promotion fix was demonstrated and bounded (script-exec interpreters chain, cygpath forward-slash, deploy-effective no-op check). [.github/workflows/ci.yml; runs 35713182137, 35696345590] **Residual (deliberate):** `make doctor` remains Unix-gated in CI
   ([.github/workflows/ci.yml:184-189]); making doctor meaningful on Windows is
 the next Windows extension, backlogged.
 
-**Acceptance criteria:** the Windows lane has a documented result for every
-failure; bounded fixes pass the Windows deploy, second-deploy idempotency and
-chezmoi verification checks; residual macOS-only paths are explicitly gated;
-and `continue-on-error` is removed once the lane is stable and required.
+**Acceptance criteria:** the Windows lane has a documented result for every failure; bounded fixes pass the Windows deploy, second-deploy idempotency and chezmoi verification checks; residual macOS-only paths are explicitly gated; and `continue-on-error` is removed once the lane is stable and required.
 
 ### 2. Promote the nightly real-gate lane
 
-**Priority:** High · **Effort:** L · **Dependencies:** item 1 stability, pinned
-prerequisites and per-gate artefacts.
+**Priority:** High · **Effort:** L · **Dependencies:** item 1 stability, pinned prerequisites and per-gate artefacts.
 
-Keep the scheduled lane allow-failure while it proves meaningful postconditions.
-Package-install families are intentionally absent today: PI, MOZART and
-CODEGRAPH need approved, pinned prerequisites rather than warning-and-return-zero
-behaviour. [.github/workflows/nightly-integration.yml]
+Keep the scheduled lane allow-failure while it proves meaningful postconditions. Package-install families are intentionally absent today: PI, MOZART and CODEGRAPH need approved, pinned prerequisites rather than warning-and-return-zero behaviour. [.github/workflows/nightly-integration.yml]
 
-**Acceptance criteria:** each enabled gate has an installed prerequisite,
-deterministic artefacts and a failure assertion; service, security and system
-default gates remain excluded from shared runners; the report distinguishes
-skipped, failed and passed gates; then `continue-on-error` is removed and the
-workflow is made required after an observed stabilization period.
+**Acceptance criteria:** each enabled gate has an installed prerequisite, deterministic artefacts and a failure assertion; service, security and system default gates remain excluded from shared runners; the report distinguishes skipped, failed and passed gates; then `continue-on-error` is removed and the workflow is made required after an observed stabilization period.
 
-**Status:** `[in-progress]` Promotion semantics corrected 2026-09-22: this is a
-schedule-only workflow, so it can **never be a required pull-request check**.
-Promotion means removing `continue-on-error` so scheduled failures are truthful,
-with failure notification/issue ownership. Decision date: on or after
-2026-09-29, gated on roughly seven consecutive green scheduled runs on the
-current logic (two scheduled green runs observed by 2026-10-07; still short of
-the threshold). [.github/workflows/nightly-integration.yml]
+**Status:** `[in-progress]` Promotion semantics corrected 2026-09-22: this is a schedule-only workflow, so it can **never be a required pull-request check**. Promotion means removing `continue-on-error` so scheduled failures are truthful, with failure notification/issue ownership. Decision date: on or after 2026-09-29, gated on roughly seven consecutive green scheduled runs on the current logic (two scheduled green runs observed by 2026-10-07; still short of the threshold). [.github/workflows/nightly-integration.yml]
 
 ### 3. Add oMLX audio-upload validation and normalization
 
-**Priority:** High · **Effort:** M · **Dependencies:** the existing
-`configure-omlx` scripts and the oMLX service restart path.
+**Priority:** High · **Effort:** M · **Dependencies:** the existing `configure-omlx` scripts and the oMLX service restart path.
 
-The machine-side `~/.omlx/settings.json` value
-`server.max_audio_upload_size` was the unitless string `128`, meaning 128 bytes;
-it caused STT HTTP 413 responses. It was corrected machine-side to `128MB`,
-after which the transcription endpoint returned HTTP 200. This was true before
-this pass; the value is now validated by the configure and doctor paths below.
+The machine-side `~/.omlx/settings.json` value `server.max_audio_upload_size` was the unitless string `128`, meaning 128 bytes; it caused STT HTTP 413 responses. It was corrected machine-side to `128MB`, after which the transcription endpoint returned HTTP 200. This was true before this pass; the value is now validated by the configure and doctor paths below.
 
-**Status:** `[completed-in-this-pass]` The validator exists and is tested
-([scripts/lib/local_engines.py](../scripts/lib/local_engines.py):
-`_max_audio_upload_size`, wired into `merge_omlx_settings` with an
-`OMLX_MAX_AUDIO_UPLOAD_SIZE` override; doctor check in
+**Status:** `[completed-in-this-pass]` The validator exists and is tested ([scripts/lib/local_engines.py](../scripts/lib/local_engines.py): `_max_audio_upload_size`, wired into `merge_omlx_settings` with an `OMLX_MAX_AUDIO_UPLOAD_SIZE` override; doctor check in
   [scripts/verify-config.py](../scripts/verify-config.py); seven hermetic cases in
-[scripts/lib/tests/test_omlx_settings.py](../scripts/lib/tests/test_omlx_settings.py)).
-Decided semantics (2026-09-22): unitless values are **refused at write time**
-(bytes-accurate; no MB reinterpretation — the `'128'`-bytes incident is
-encoded), invalid values warn-and-preserve rather than abort the deploy, and
-`validate_omlx_settings` remains the hard structural gate. [docs/OMLX.md]
-**Residual (open):** no pre-STT runtime effective-limit check exists; the
-acceptance criterion "verifies the effective limit before STT use" is not met
-and stays open rather than being silently dropped.
+[scripts/lib/tests/test_omlx_settings.py](../scripts/lib/tests/test_omlx_settings.py)). Decided semantics (2026-09-22): unitless values are **refused at write time** (bytes-accurate; no MB reinterpretation — the `'128'`-bytes incident is encoded), invalid values warn-and-preserve rather than abort the deploy, and `validate_omlx_settings` remains the hard structural gate. [docs/OMLX.md] **Residual (open):** no pre-STT runtime effective-limit check exists; the acceptance criterion "verifies the effective limit before STT use" is not met and stays open rather than being silently dropped.
 
 ### 4. Ratchet production coverage modestly
 
-**Priority:** Medium · **Effort:** M per quarter · **Dependencies:** the
-measured production baseline and subprocess coverage already in place.
+**Priority:** Medium · **Effort:** M per quarter · **Dependencies:** the measured production baseline and subprocess coverage already in place.
 
-The production floor was 27%; the measured result is 36% (branch-aware pytest;
-Coveralls reports 33.71% line coverage). On 2026-09-22 the floor was ratcheted
+The production floor was 27%; the measured result is 36% (branch-aware pytest; Coveralls reports 33.71% line coverage). On 2026-09-22 the floor was ratcheted
   to **27%** ([pyproject.toml](../pyproject.toml)), keeping ~9 points of headroom
-so one flaky test cannot break `main`; 30+ is gated on representative tests
-(orchestration, failed/partial deploy paths), not wrapper-test padding.
-[pyproject.toml; Makefile test target] Raise the floor in small
-quarterly increments only when new coverage is representative, rather than
-targeting 100%.
+so one flaky test cannot break `main`; 30+ is gated on representative tests (orchestration, failed/partial deploy paths), not wrapper-test padding. [pyproject.toml; Makefile test target] Raise the floor in small quarterly increments only when new coverage is representative, rather than targeting 100%.
 
-**Status:** `[updated 2026-10-07]` Local branch-aware pytest now measures
-**52.70–54%** (e.g. `make test` runs during the LiteLLM gateway pass), with the
-floor deliberately still 27
-([pyproject.toml](../pyproject.toml) `fail_under = 27`). The measured value grew
-by the gateway-session test lanes; the ratchet has not moved — the next
-increment is gated on the same representative-test criteria as before, not on
-the raw number.
+**Status:** `[updated 2026-10-07]` Local branch-aware pytest now measures **52.70–54%** (e.g. `make test` runs during the LiteLLM gateway pass), with the floor deliberately still 27 ([pyproject.toml](../pyproject.toml) `fail_under = 27`). The measured value grew by the gateway-session test lanes; the ratchet has not moved — the next increment is gated on the same representative-test criteria as before, not on the raw number.
 
-**Acceptance criteria:** each ratchet records the measured production baseline,
-the new threshold and the tests that justify it; subprocess and shell behaviour
-remain included; and `make verify` fails below the ratchet without counting test
-files as production coverage.
+**Acceptance criteria:** each ratchet records the measured production baseline, the new threshold and the tests that justify it; subprocess and shell behaviour remain included; and `make verify` fails below the ratchet without counting test files as production coverage.
 
 ### 5. Port only proven shell candidates to Python
 
-**Priority:** High for the first group, otherwise Medium · **Effort:** M per
-script · **Dependencies:** a failing or materially constrained Windows probe;
-CLI capability contracts and regression tests.
+**Priority:** High for the first group, otherwise Medium · **Effort:** M per script · **Dependencies:** a failing or materially constrained Windows probe; CLI capability contracts and regression tests.
 
-Apply the criteria **logic-heavy, weakly tested and platform-sensitive** to the
-Phase 4 inventory. These are quality-driven port candidates, not Windows-
-necessary work: Git Bash resolved the Windows probe without ports.
-**Status:** `[completed-in-this-pass]` Tranche 1 (the first three candidates)
-is delivered with parity tests and thin compatibility shims:
-[scripts/setup-bin-symlinks.py](../scripts/setup-bin-symlinks.py) +
-[scripts/lib/tests/test_setup_bin_symlinks.py](../scripts/lib/tests/test_setup_bin_symlinks.py),
-[scripts/update-nvm-globals.py](../scripts/update-nvm-globals.py) (single-shell
-nvm flow with structured markers, after a post-review fix),
-[scripts/install-acp-adapters.py](../scripts/install-acp-adapters.py).
-Tranche 2 stays **evidence-gated**: `run-local-review.sh` ports only on a
-demonstrated Bash/path failure or materially untestable change;
-`configure-all.sh` is high-risk (sourced-library semantics) and is not ported
-speculatively.
+Apply the criteria **logic-heavy, weakly tested and platform-sensitive** to the Phase 4 inventory. These are quality-driven port candidates, not Windows- necessary work: Git Bash resolved the Windows probe without ports. **Status:** `[completed-in-this-pass]` Tranche 1 (the first three candidates) is delivered with parity tests and thin compatibility shims: [scripts/setup-bin-symlinks.py](../scripts/setup-bin-symlinks.py) + [scripts/lib/tests/test_setup_bin_symlinks.py](../scripts/lib/tests/test_setup_bin_symlinks.py), [scripts/update-nvm-globals.py](../scripts/update-nvm-globals.py) (single-shell nvm flow with structured markers, after a post-review fix), [scripts/install-acp-adapters.py](../scripts/install-acp-adapters.py). Tranche 2 stays **evidence-gated**: `run-local-review.sh` ports only on a demonstrated Bash/path failure or materially untestable change; `configure-all.sh` is high-risk (sourced-library semantics) and is not ported speculatively.
 
 | Order | Candidate | Evidence and bounded acceptance |
 |---|---|---|
@@ -182,23 +81,13 @@ speculatively.
 | Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Deferred pending evidence. Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
 | Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Deferred pending evidence; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
 
-**Acceptance criteria for every port:** the shell implementation is not removed
-until the Python replacement has parity tests, `--help`/dry-run behaviour where
-applicable, platform evidence and a clean `make verify`; macOS-bound scripts
-remain shell when a port would only disguise an operating-system boundary.
+**Acceptance criteria for every port:** the shell implementation is not removed until the Python replacement has parity tests, `--help`/dry-run behaviour where applicable, platform evidence and a clean `make verify`; macOS-bound scripts remain shell when a port would only disguise an operating-system boundary.
 
 ### 6. Decide the audited tool configuration boundary
 
-**Priority:** High for the first four tools, Medium for the next eight, Low for
-the final seven · **Effort:** M · **Dependencies:** package ownership and
-machine-specific credentials.
+**Priority:** High for the first four tools, Medium for the next eight, Low for the final seven · **Effort:** M · **Dependencies:** package ownership and machine-specific credentials.
 
-The following is analysis and recommendation only. Each tool must either gain a
-minimal, gated configuration surface or be documented as intentionally absent;
-no credentials are added by this roadmap. Two states are distinguished:
-**already packaged, not configured** (package entries exist in a Brewfile or
-wingetfile but no gate generates configuration) versus **package missing**
-(no package entry anywhere).
+The following is analysis and recommendation only. Each tool must either gain a minimal, gated configuration surface or be documented as intentionally absent; no credentials are added by this roadmap. Two states are distinguished: **already packaged, not configured** (package entries exist in a Brewfile or wingetfile but no gate generates configuration) versus **package missing** (no package entry anywhere).
 
 | Priority | Tool | Why it matters | Recommended action |
 |---|---|---|---|
@@ -222,38 +111,19 @@ wingetfile but no gate generates configuration) versus **package missing**
 | Low | ffuf | No current security workflow invokes web fuzzing. | Document intentionally absent until an owned, gated workflow exists. |
 | Low | heroku | No active deployment path targets Heroku. | Document intentionally absent. |
 
-The inventory derives from the unconfigured-tools audit and its stated partial
-AWS/MongoDB/skills coverage, cross-checked against the package manifests
-([Brewfile](../Brewfile), [Brewfile.dev](../Brewfile.dev),
-[Brewfile.desktop.dev](../Brewfile.desktop.dev),
-[Brewfile.dev.ops](../Brewfile.dev.ops), [wingetfile.dev](../wingetfile.dev),
-[wingetfile.dev.ops](../wingetfile.dev.ops)).
+The inventory derives from the unconfigured-tools audit and its stated partial AWS/MongoDB/skills coverage, cross-checked against the package manifests ([Brewfile](../Brewfile), [Brewfile.dev](../Brewfile.dev), [Brewfile.desktop.dev](../Brewfile.desktop.dev), [Brewfile.dev.ops](../Brewfile.dev.ops), [wingetfile.dev](../wingetfile.dev), [wingetfile.dev.ops](../wingetfile.dev.ops)).
 
 ### 7. Refresh council policy — completed in this pass
 
 **Priority:** completed · **Effort:** — · **Dependencies:** resolved.
 
-The model policy was decided and implemented in the same session at
-`7030950`: `pro` keeps an Ollama Cloud-only council; `pro-plus` mixes Ollama
-Cloud and OpenAI; `pro-plus-anthropic` adds Anthropic; `nemotron-3-ultra` was
-replaced by `deepseek-v4.1-flash` (diversity over the marginally higher
-`glm-5.3-flash` aggregate score); synthesizers stay `glm-5.3` (max) on all
-three tiers. Tier docs, registry tests and configuration were updated together
-([docs/TIERS.md](TIERS.md), `oh-my-opencode-slim.json`,
-`scripts/lib/tests/test_tier_registry.py`).
+The model policy was decided and implemented in the same session at `7030950`: `pro` keeps an Ollama Cloud-only council; `pro-plus` mixes Ollama Cloud and OpenAI; `pro-plus-anthropic` adds Anthropic; `nemotron-3-ultra` was replaced by `deepseek-v4.1-flash` (diversity over the marginally higher `glm-5.3-flash` aggregate score); synthesizers stay `glm-5.3` (max) on all three tiers. Tier docs, registry tests and configuration were updated together ([docs/TIERS.md](TIERS.md), `oh-my-opencode-slim.json`, `scripts/lib/tests/test_tier_registry.py`).
 
 ### 8. Governance closure: aggregate checks, branch protection and merge flow — NEW 2026-09-22
 
-**Priority:** High · **Effort:** M · **Dependencies:** the stable aggregate
-checks delivered in this pass ([.github/workflows/ci.yml](../.github/workflows/ci.yml)
-`ci/required`; [.github/workflows/codeql.yml](../.github/workflows/codeql.yml)
-`security/required`); a fresh pull request observing the exact emitted check
-context names.
+**Priority:** High · **Effort:** M · **Dependencies:** the stable aggregate checks delivered in this pass ([.github/workflows/ci.yml](../.github/workflows/ci.yml) `ci/required`; [.github/workflows/codeql.yml](../.github/workflows/codeql.yml) `security/required`); a fresh pull request observing the exact emitted check context names.
 
-This repository serves privileged workflows to six downstream repositories
-(`.github/workflows/agentic-review.yml@main`, consumed with
-`secrets: inherit` and write permissions), so changes to `main` are
-fleet-significant and deserve staged governance.
+This repository serves privileged workflows to six downstream repositories (`.github/workflows/agentic-review.yml@main`, consumed with `secrets: inherit` and write permissions), so changes to `main` are fleet-significant and deserve staged governance.
 
 **Staged model (target: a governed trunk, not ceremonial branch-and-merge):**
 
@@ -285,83 +155,31 @@ fleet-significant and deserve staged governance.
     fixes enabled (version updates already configured; auto-merge stays off
     until the dependency policy lands).
 
-**Decision record (2026-09-22, final):** the pilot proved the aggregates and
-the PR-first flow on PR #7; the transition is now complete — **PR-required is
-the rule, not the habit** (ruleset id 23837328). Break-glass semantics are
-unchanged: admin bypass only, never routine; record the reason; restore
-normal flow immediately after. The action-SHA policy is recorded in the §2
-table: required/security/deployment lanes are pinned; agent-review lanes
-float by documented design and are the enumerated gap.
-**[verified 2026-09-22]** Stage-1 ruleset live: "main history protection"
-(ruleset id 23831217, enforcement active) — deletion + non-fast-forward
-blocked on `refs/heads/main`, bypass actor RepositoryRole admin
+**Decision record (2026-09-22, final):** the pilot proved the aggregates and the PR-first flow on PR #7; the transition is now complete — **PR-required is the rule, not the habit** (ruleset id 23837328). Break-glass semantics are unchanged: admin bypass only, never routine; record the reason; restore normal flow immediately after. The action-SHA policy is recorded in the §2 table: required/security/deployment lanes are pinned; agent-review lanes float by documented design and are the enumerated gap. **[verified 2026-09-22]** Stage-1 ruleset live: "main history protection" (ruleset id 23831217, enforcement active) — deletion + non-fast-forward blocked on `refs/heads/main`, bypass actor RepositoryRole admin
  (bypass mode `always`). Pilot PR #7: https://github.com/randytarampi/dotfiles/pull/7.
 
-**Owner decisions (2026-09-22):** the actionlint download script and
-`get.chezmoi.io` installers remain deliberately unpinned so update-system and
-fresh installs pull the latest tool versions; this is an accepted supply-chain
-trade-off. The d0d5090 break-glass record is retained here: direct push to main
-after ruleset activation was a docs-only follow-through of the reflect round,
-using the admin bypass once; subsequent work returns to PR-first. Live merge
-settings are rebase-only; squash is disabled.
+**Owner decisions (2026-09-22):** the actionlint download script and `get.chezmoi.io` installers remain deliberately unpinned so update-system and fresh installs pull the latest tool versions; this is an accepted supply-chain trade-off. The d0d5090 break-glass record is retained here: direct push to main after ruleset activation was a docs-only follow-through of the reflect round, using the admin bypass once; subsequent work returns to PR-first. Live merge settings are rebase-only; squash is disabled.
 
 ### 9. LiteLLM gateway unification — completed in this pass (2026-10-05…07)
 
-**Priority:** High · **Effort:** XL · **Dependencies:** resolved (all five
-phases gate-approved; Oracle reviews at each boundary).
+**Priority:** High · **Effort:** XL · **Dependencies:** resolved (all five phases gate-approved; Oracle reviews at each boundary).
 
-All home-managed AI traffic routes through the local LiteLLM proxy
-(`127.0.0.1:4000`) when opted in, with per-client virtual keys for spend
-attribution. **Status:** `[completed-in-this-pass]` across five gated phases.
-Reference: [docs/LITELLM.md](LITELLM.md), [docs/UNMANAGED-CLIENTS.md](UNMANAGED-CLIENTS.md),
-[.env.example](../dot_dotfiles/shell/.env.example).
+All home-managed AI traffic routes through the local LiteLLM proxy (`127.0.0.1:4000`) when opted in, with per-client virtual keys for spend attribution. **Status:** `[completed-in-this-pass]` across five gated phases. Reference: [docs/LITELLM.md](LITELLM.md), [docs/UNMANAGED-CLIENTS.md](UNMANAGED-CLIENTS.md), [.env.example](../dot_dotfiles/shell/.env.example).
 
-- Routing contract: single `DOTFILES_USE_LITELLM_PROXY` gate (default `0`) with
-  gateway-only semantics when `1` — generator-side hard errors instead of
-  silent direct fallbacks, `RUN=0`+`USE=1` is a configuration error. The four
-  per-client canaries (`DOTFILES_{OPENWEBUI,OPENCODE,PI,JUNIE}_USE_LITELLM`)
-  and `DOTFILES_USE_OLLAMA_CLOUD_PROXY` were retired via
-  [scripts/migrate-env-gates.py](../scripts/migrate-env-gates.py) OR-migration;
-  `0` is canonical direct routing (`ollama-cloud/<id>` → `https://ollama.com/v1`).
-- Transport mapping at the client boundary ([scripts/lib/litellm_aliases.py](../scripts/lib/litellm_aliases.py));
-  canonical identities invariant across modes; tier registry untouched.
-- Provider expansion: Meridian (Claude; root Anthropic base, not `/v1`),
-  Cohere, Hugging Face, Cerebras, OpenRouter, OpenCode Zen, Ollama Cloud direct,
-  oMLX (repo default aligned to the upstream `8000` port; per-machine
-  override via `OMLX_PORT`); GitHub Copilot + ChatGPT via supervised
-  OAuth bootstrap ([scripts/litellm-oauth.py](../scripts/litellm-oauth.py)) that
-  probes each upstream ID and persists verified/deferred model files.
-- Service contract: `LITELLM_DATABASE_URL` user-facing rename
-  (service-side `DATABASE_URL` unchanged), provider-key reconciliation, spend
-  CLI [scripts/litellm-costs.py](../scripts/litellm-costs.py),
-  `LITELLM_DISABLE_ADMIN_UI` / `DOTFILES_LITELLM_UI_EXPOSED` kept distinct.
-- Listing performance: `/v1/models` cold latency reduced from ~29 s to ~0.14 s
-  (138 serial synchronous Hugging Face metadata GETs per listing; fix is an
-  idempotent sentinel-guarded venv bypass applied at deploy by
-  [scripts/configure-litellm-venv.py](../scripts/configure-litellm-venv.py),
-  plus `DEFAULT_MAX_LRU_CACHE_SIZE=4096` in the service environment). Doctor
-  reports patch status; the `.orig-dotfiles` backup is the first saved original.
-  Upgrade discipline: reinstall LiteLLM → re-run deploy → the patcher re-applies
-  or fails closed; upstream fix tracked via perf issue #33721 reference.
-- Known honest deferrals (documented, not bugs): `openai/gpt-5.3-codex` is
-  refused by the OpenAI Codex backend for ChatGPT accounts (needs a real
-  `OPENAI_API_KEY`); Cerebras and Hugging Face inference are
-  quota/credit-exhausted (entitlement class); the Copilot cached token carries a
-  near-expiry `MATCH-candidate` doctor row.
+- Routing contract: single `DOTFILES_USE_LITELLM_PROXY` gate (default `0`) with gateway-only semantics when `1` — generator-side hard errors instead of silent direct fallbacks, `RUN=0`+`USE=1` is a configuration error. The four per-client canaries (`DOTFILES_{OPENWEBUI,OPENCODE,PI,JUNIE}_USE_LITELLM`) and `DOTFILES_USE_OLLAMA_CLOUD_PROXY` were retired via [scripts/migrate-env-gates.py](../scripts/migrate-env-gates.py) OR-migration; `0` is canonical direct routing (`ollama-cloud/<id>` → `https://ollama.com/v1`).
+- Transport mapping at the client boundary ([scripts/lib/litellm_aliases.py](../scripts/lib/litellm_aliases.py)); canonical identities invariant across modes; tier registry untouched.
+- Provider expansion: Meridian (Claude; root Anthropic base, not `/v1`), Cohere, Hugging Face, Cerebras, OpenRouter, OpenCode Zen, Ollama Cloud direct, oMLX (repo default aligned to the upstream `8000` port; per-machine override via `OMLX_PORT`); GitHub Copilot + ChatGPT via supervised OAuth bootstrap ([scripts/litellm-oauth.py](../scripts/litellm-oauth.py)) that probes each upstream ID and persists verified/deferred model files.
+- Service contract: `LITELLM_DATABASE_URL` user-facing rename (service-side `DATABASE_URL` unchanged), provider-key reconciliation, spend CLI [scripts/litellm-costs.py](../scripts/litellm-costs.py), `LITELLM_DISABLE_ADMIN_UI` / `DOTFILES_LITELLM_UI_EXPOSED` kept distinct.
+- Listing performance: `/v1/models` cold latency reduced from ~29 s to ~0.14 s (138 serial synchronous Hugging Face metadata GETs per listing; fix is an idempotent sentinel-guarded venv bypass applied at deploy by [scripts/configure-litellm-venv.py](../scripts/configure-litellm-venv.py), plus `DEFAULT_MAX_LRU_CACHE_SIZE=4096` in the service environment). Doctor reports patch status; the `.orig-dotfiles` backup is the first saved original. Upgrade discipline: reinstall LiteLLM → re-run deploy → the patcher re-applies or fails closed; upstream fix tracked via perf issue #33721 reference.
+- Known honest deferrals (documented, not bugs): `openai/gpt-5.3-codex` is refused by the OpenAI Codex backend for ChatGPT accounts (needs a real `OPENAI_API_KEY`); Cerebras and Hugging Face inference are quota/credit-exhausted (entitlement class); the Copilot cached token carries a near-expiry `MATCH-candidate` doctor row.
 
-**Residual (open):** none beyond the documented entitlement deferrals; the
-pinned `1.102.1` patch assumes the installed function signature, guarded by the
-deploy-time shape check.
+**Residual (open):** none beyond the documented entitlement deferrals; the pinned `1.102.1` patch assumes the installed function signature, guarded by the deploy-time shape check.
 
 ## 4. Local-model analysis
 
 ### Unified local AI — ordered approved work
 
-The delivery order is: PR1 containment and documentation truth → PR2 Junie
-normalization → audio slice → gateway modality exposure → embeddings → retrieval
-and document ingestion → memory extraction → AMD Vulkan. The detailed contract
-and evidence live in [TIERS](TIERS.md), [JUNIE](JUNIE.md), [VOICE](VOICE.md),
-[LiteLLM](LITELLM.md) and [oMLX](OMLX.md); this roadmap tracks ordering only.
+The delivery order is: PR1 containment and documentation truth → PR2 Junie normalization → audio slice → gateway modality exposure → embeddings → retrieval and document ingestion → memory extraction → AMD Vulkan. The detailed contract and evidence live in [TIERS](TIERS.md), [JUNIE](JUNIE.md), [VOICE](VOICE.md), [LiteLLM](LITELLM.md) and [oMLX](OMLX.md); this roadmap tracks ordering only.
 
 ### Decision summary
 
@@ -374,23 +192,14 @@ and evidence live in [TIERS](TIERS.md), [JUNIE](JUNIE.md), [VOICE](VOICE.md),
 | `whisper-cli` fallback model | **Defer as fallback** | The generic whisper-cli fallback (approximately 1.6 GB) is useful when oMLX is unavailable, but it should not displace the working local primary. Keep installation/discovery bounded and test fallback selection. |
 | Provider-specific STT override variable | **Defer** | The phase decision explicitly rejected pinning model names and deferred a repository-owned STT model override until override semantics are requested. |
 
-The trade-off is therefore deliberate: local vision/observer work favours
-privacy, availability and machine-side latency; cloud A/V judgement favours a
-separate quality ceiling and broader judgement capability. The 128 GB M3 Max
-assessment is `[believed]` capacity reasoning from the machine inventory, not a
-measured throughput or quality result. The use counts above are session data,
-not a quality score. Any claim that one path is more accurate is speculation and
-requires a controlled benchmark.
+The trade-off is therefore deliberate: local vision/observer work favours privacy, availability and machine-side latency; cloud A/V judgement favours a separate quality ceiling and broader judgement capability. The 128 GB M3 Max assessment is `[believed]` capacity reasoning from the machine inventory, not a measured throughput or quality result. The use counts above are session data, not a quality score. Any claim that one path is more accurate is speculation and requires a controlled benchmark.
 
 ## 5. Residual risks and promotion gates
 
 1. **Windows promotion:** promoted to required after three consecutive green
     runs; the remaining Windows extension is the deliberately Unix-gated doctor
     check. [.github/workflows/ci.yml; item 1]
-2. **Nightly promotion:** keep allow-failure until prerequisites, artefacts and
-   postconditions make failures meaningful. PI, MOZART and CODEGRAPH package
-   installation are not silently promoted into a configuration-only lane.
-   [.github/workflows/nightly-integration.yml]
+2. **Nightly promotion:** keep allow-failure until prerequisites, artefacts and postconditions make failures meaningful. PI, MOZART and CODEGRAPH package installation are not silently promoted into a configuration-only lane. [.github/workflows/nightly-integration.yml]
 3. **Coverage:** the 27% production floor is a ratchet starting point; the
     current measured value is 36%, not a promise of 100%. [pyproject.toml]
     Dated correction (2026-10-07): local `make test` now measures 52.70–54%;
@@ -405,11 +214,6 @@ requires a controlled benchmark.
 
 ## 6. Traceability and update rules
 
-This document is self-contained: claims cite repository files and recorded
-checks. Update one concern at a time, preserve verified
-versus proposed language, and add acceptance evidence when an item closes. Do
-not duplicate tier tables or orchestration inventories here; link to
-[`docs/TIERS.md`](TIERS.md) and [`docs/ORCHESTRATION.md`](ORCHESTRATION.md).
+This document is self-contained: claims cite repository files and recorded checks. Update one concern at a time, preserve verified versus proposed language, and add acceptance evidence when an item closes. Do not duplicate tier tables or orchestration inventories here; link to [`docs/TIERS.md`](TIERS.md) and [`docs/ORCHESTRATION.md`](ORCHESTRATION.md).
 
-Key evidence: [`docs/ORCHESTRATION.md`](ORCHESTRATION.md),
-[`docs/VOICE.md`](VOICE.md), and the [Phase 4 CI workflow](../.github/workflows/ci.yml).
+Key evidence: [`docs/ORCHESTRATION.md`](ORCHESTRATION.md), [`docs/VOICE.md`](VOICE.md), and the [Phase 4 CI workflow](../.github/workflows/ci.yml).

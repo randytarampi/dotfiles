@@ -33,14 +33,10 @@ Skills are linked to `~/.snowflake/cortex/skills/` and can also be project-local
 
 ## Usage patterns
 
-- Use Cortex as the Snowflake specialist for SQL, schemas, warehouses, and
-  Cortex features—not as a general provider-agnostic coding agent.
-- Delegate from OpenCode with the native ACP entry, `@cortex`, when a task
-  needs Snowflake credentials or Snowflake-aware execution.
-- Use the Snowflake-specific skills in `~/.snowflake/cortex/skills/` and add
-  Snowflake tools through Cortex's native MCP commands.
-- Prefer general agents for non-Snowflake coding, broad research, and tasks
-  that need multiple cloud providers or local fallback models.
+- Use Cortex as the Snowflake specialist for SQL, schemas, warehouses, and Cortex features—not as a general provider-agnostic coding agent.
+- Delegate from OpenCode with the native ACP entry, `@cortex`, when a task needs Snowflake credentials or Snowflake-aware execution.
+- Use the Snowflake-specific skills in `~/.snowflake/cortex/skills/` and add Snowflake tools through Cortex's native MCP commands.
+- Prefer general agents for non-Snowflake coding, broad research, and tasks that need multiple cloud providers or local fallback models.
 
 Common tasks:
 

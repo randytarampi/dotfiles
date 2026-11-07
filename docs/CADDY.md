@@ -1,12 +1,10 @@
 # Caddy LAN Exposure
 
-> Caddy reverse proxy for LAN-safe exposure of local AI tools.
-> See [AGENTS.md](../AGENTS.md) for repo-wide agent guidance.
+> Caddy reverse proxy for LAN-safe exposure of local AI tools. See [AGENTS.md](../AGENTS.md) for repo-wide agent guidance.
 
 ## Overview
 
-Caddy publishes selected local AI services to `localhost`, the LAN, or public domains with real TLS, host allowlisting, and `basic_auth`.
-It is the front door for:
+Caddy publishes selected local AI services to `localhost`, the LAN, or public domains with real TLS, host allowlisting, and `basic_auth`. It is the front door for:
 
 - Ollama inference
 - Meridian `/v1`
@@ -43,12 +41,9 @@ flowchart LR
 
 ## Multi-domain + multi-zone
 
-`~/.config/caddy/ddns-zones.json` is the machine-local source of truth for DDNS.
-It replaces the old `ROUTE53_HOSTED_ZONE_ID` / `DDNS_RECORD_NAME` / `DDNS_RECORD_TTL`
-environment-variable setup.
+`~/.config/caddy/ddns-zones.json` is the machine-local source of truth for DDNS. It replaces the old `ROUTE53_HOSTED_ZONE_ID` / `DDNS_RECORD_NAME` / `DDNS_RECORD_TTL` environment-variable setup.
 
-`configure-ddns.py` reads that file and writes one LaunchAgent per zone/record set,
-so one machine can keep multiple domains updated without duplicating repo config.
+`configure-ddns.py` reads that file and writes one LaunchAgent per zone/record set, so one machine can keep multiple domains updated without duplicating repo config.
 
 Typical zone entries include:
 
@@ -67,41 +62,21 @@ Typical zone entries include:
 | `lan` | LAN hostnames with real TLS, `remote_ip private_ranges`, and DDNS updates. |
 | `public` | Public hostnames with real TLS and DDNS updates; no LAN-only IP restriction. |
 
-`localhost` is the safest default. Use `lan` when you want private-network access,
-and `public` when you intentionally want internet-reachable exposure.
+`localhost` is the safest default. Use `lan` when you want private-network access, and `public` when you intentionally want internet-reachable exposure.
 
-`CADDY_HTTPS_PORT` defaults to `443` for the root LaunchDaemon. When set to
-`443`, site addresses render as `https://host` (no explicit port).
+`CADDY_HTTPS_PORT` defaults to `443` for the root LaunchDaemon. When set to `443`, site addresses render as `https://host` (no explicit port).
 
 ### Paseo Web UI
 
-With `DOTFILES_RUN_PASEO_WEB_SETUP=1`, Caddy serves `paseo.localhost`
-in `CADDY_ACCESS=localhost` (plus loopback local-domain aliases). For `lan`
-or `public`, it serves `paseo.<domain>` with the same real TLS and access
-semantics as Open WebUI. A gate-enabled, installed service is served per
-`CADDY_ACCESS`; Paseo's native password is the additional boundary in public
-mode. The native Paseo daemon remains on `127.0.0.1:6767`.
+With `DOTFILES_RUN_PASEO_WEB_SETUP=1`, Caddy serves `paseo.localhost` in `CADDY_ACCESS=localhost` (plus loopback local-domain aliases). For `lan` or `public`, it serves `paseo.<domain>` with the same real TLS and access semantics as Open WebUI. A gate-enabled, installed service is served per `CADDY_ACCESS`; Paseo's native password is the additional boundary in public mode. The native Paseo daemon remains on `127.0.0.1:6767`.
 
-The entire origin, including API and WebSockets, is forwarded. Caddy Basic
-Auth is not stacked over Paseo's own password and API authentication. Native
-password authentication, explicit relay disablement, and the correct
-hostnames allowlist are required for external access. The opt-in setup script
-preflights its native config mutations and does not start a daemon.
+The entire origin, including API and WebSockets, is forwarded. Caddy Basic Auth is not stacked over Paseo's own password and API authentication. Native password authentication, explicit relay disablement, and the correct hostnames allowlist are required for external access. The opt-in setup script preflights its native config mutations and does not start a daemon.
 
 ### LiteLLM administration UI
 
-`DOTFILES_LITELLM_UI_EXPOSED` defaults to `0`. When enabled with
-`CADDY_ACCESS=lan` or `public`, Caddy serves the LiteLLM UI at
-`litellm.<domain>` for each configured `local.*` and `shush.*` domain. The site
-uses the existing Caddy Basic Auth users and keeps the `@not_lan` abort in LAN
-mode. Only `/ui`, `/ui/*` and `/logo/*` are proxied to LiteLLM. `/v1`, `/v1/*`,
-`/key/*` and `/health/*` return 403; other paths are not proxied. In
-`localhost` mode no LiteLLM site is generated.
+`DOTFILES_LITELLM_UI_EXPOSED` defaults to `0`. When enabled with `CADDY_ACCESS=lan` or `public`, Caddy serves the LiteLLM UI at `litellm.<domain>` for each configured `local.*` and `shush.*` domain. The site uses the existing Caddy Basic Auth users and keeps the `@not_lan` abort in LAN mode. Only `/ui`, `/ui/*` and `/logo/*` are proxied to LiteLLM. `/v1`, `/v1/*`, `/key/*` and `/health/*` return 403; other paths are not proxied. In `localhost` mode no LiteLLM site is generated.
 
-The DDNS generator adds wildcard A/AAAA record sets for `*.local.*` and
-`*.shush.*` alongside those zone apexes. Managed `/etc/hosts` entries map the
-four `litellm.*` hosts to loopback only while this UI gate is enabled in `lan` or
-`public` mode.
+The DDNS generator adds wildcard A/AAAA record sets for `*.local.*` and `*.shush.*` alongside those zone apexes. Managed `/etc/hosts` entries map the four `litellm.*` hosts to loopback only while this UI gate is enabled in `lan` or `public` mode.
 
 ## Machine-local config files
 
@@ -116,9 +91,7 @@ Both paths are exposed as env vars so scripts can be pointed at alternate locati
 
 ## Multi-user auth
 
-`~/.config/caddy/caddy-auth.conf` is a machine-local Caddy snippet that can be
-imported into one or more site blocks. It is the only auth source for Caddy v2;
-env vars are not used for basic auth.
+`~/.config/caddy/caddy-auth.conf` is a machine-local Caddy snippet that can be imported into one or more site blocks. It is the only auth source for Caddy v2; env vars are not used for basic auth.
 
 Typical content looks like:
 
@@ -129,8 +102,7 @@ basic_auth {
 }
 ```
 
-Generate password hashes with `caddy hash-password`; add `user:hash` entries
-directly to `caddy-auth.conf`.
+Generate password hashes with `caddy hash-password`; add `user:hash` entries directly to `caddy-auth.conf`.
 
 ## Security model
 
@@ -142,13 +114,9 @@ Caddy exposure is layered:
 
 ## Localhost access
 
-When `CADDY_ACCESS=localhost`, Caddy serves `https://localhost` and uses
-`tls internal` so the local machine can trust its own certificate authority.
-This mode skips DDNS and Route 53 entirely and is useful for development-only
-web UIs.
+When `CADDY_ACCESS=localhost`, Caddy serves `https://localhost` and uses `tls internal` so the local machine can trust its own certificate authority. This mode skips DDNS and Route 53 entirely and is useful for development-only web UIs.
 
-Trust the local root CA with `caddy trust`, or install the root certificate
-manually if you prefer to manage Keychain trust yourself.
+Trust the local root CA with `caddy trust`, or install the root certificate manually if you prefer to manage Keychain trust yourself.
 
 ## Exposed services
 
@@ -197,36 +165,13 @@ manually if you prefer to manage Keychain trust yourself.
 
 Compatibility note: `ROUTE53_AWS_ACCESS_KEY_ID` and `ROUTE53_AWS_SECRET_ACCESS_KEY` can be populated from the existing `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` values if you prefer a single credential source in `~/.env`.
 
-The Route 53 zone ID, record names, and TTL now live in
-`~/.config/caddy/ddns-zones.json` instead of `~/.env`.
+The Route 53 zone ID, record names, and TTL now live in `~/.config/caddy/ddns-zones.json` instead of `~/.env`.
 
 ### OpenCode web
 
-OpenCode external Caddy routes require a Caddy auth entry named `opencode`.
-Only this user is included in the OpenCode site; additional users in the
-shared auth snippet remain available to other Caddy sites, not OpenCode.
-Caddy stores only the generated hash.
-Provision the same plaintext password separately as `OPENCODE_PASSWORD` in
-`~/.env`, which launchd passes to OpenCode; Caddy forwards the browser's
-`Authorization` header, so the two password values must match. The hash cannot
-be used as the backend password. Localhost routes remain unauthenticated by
-the generated Caddy config; backend localhost auth behaviour is **UNKNOWN**
-until checked against the deployed binary.
+OpenCode external Caddy routes require a Caddy auth entry named `opencode`. Only this user is included in the OpenCode site; additional users in the shared auth snippet remain available to other Caddy sites, not OpenCode. Caddy stores only the generated hash. Provision the same plaintext password separately as `OPENCODE_PASSWORD` in `~/.env`, which launchd passes to OpenCode; Caddy forwards the browser's `Authorization` header, so the two password values must match. The hash cannot be used as the backend password. Localhost routes remain unauthenticated by the generated Caddy config; backend localhost auth behaviour is **UNKNOWN** until checked against the deployed binary.
 
-OpenCode v2 serves the GUI as an SPA catch-all; `/health` and `/global/health`
-return HTML and are not valid health checks. `GET /api/info` returns JSON
-ServerInfo and requires HTTP Basic authentication (username `opencode` by
-default). Health probes require `application/json` and a semantic version.
-Configure canonical `OPENCODE_PASSWORD` (legacy fallback
-`OPENCODE_SERVER_PASSWORD` remains accepted); never print or log these
-credentials. Caddy forwards `Authorization` to OpenCode:
-the credential a browser sends is Caddy's basic-auth password, and it must
-equal `OPENCODE_PASSWORD` for the forwarded request to authenticate — keep
-the two in sync and do not treat browser success as independent server
-evidence (doctor probes `127.0.0.1` directly). The LaunchAgent starts
-`opencode serve` on `OPENCODE_SERVER_PORT` (default 4096); launchd owns the
-`com.opencode.web` unit (script 26 writes the plist; configure-all and the
-Makefile bootout/bootstrap/kickstart it).
+OpenCode v2 serves the GUI as an SPA catch-all; `/health` and `/global/health` return HTML and are not valid health checks. `GET /api/info` returns JSON ServerInfo and requires HTTP Basic authentication (username `opencode` by default). Health probes require `application/json` and a semantic version. Configure canonical `OPENCODE_PASSWORD` (legacy fallback `OPENCODE_SERVER_PASSWORD` remains accepted); never print or log these credentials. Caddy forwards `Authorization` to OpenCode: the credential a browser sends is Caddy's basic-auth password, and it must equal `OPENCODE_PASSWORD` for the forwarded request to authenticate — keep the two in sync and do not treat browser success as independent server evidence (doctor probes `127.0.0.1` directly). The LaunchAgent starts `opencode serve` on `OPENCODE_SERVER_PORT` (default 4096); launchd owns the `com.opencode.web` unit (script 26 writes the plist; configure-all and the Makefile bootout/bootstrap/kickstart it).
 
 ### Plannotator
 
@@ -251,17 +196,7 @@ The repo uses the upstream Plannotator paste env var names directly.
 5. Run `make caddy-validate` to verify the generated Caddyfile.
 6. If you use `tls internal`, run `caddy trust` once (or install the root CA manually) so browsers trust the local CA.
 
-If an unattended deploy has no passwordless sudo, Caddy's privileged setup
-warns and skips without blocking later scripts. Chezmoi can cache that skipped
-run; a subsequent ordinary `make deploy` may not retry it. From an interactive
-terminal, run `make caddy-setup` to rerender and retry only the privileged
-Caddy installer, including managed `/etc/hosts` entries and its LaunchDaemon.
-If this explicit retry is still noninteractive and passwordless sudo is
-unavailable, the target fails nonzero instead of reporting success. With the
-Caddy gate off it remains a no-op; `DRY_RUN=1` only previews the retry and does
-not render or execute the installer.
-`make caddy-deploy` regenerates and restarts an existing installation but does
-not perform those setup steps.
+If an unattended deploy has no passwordless sudo, Caddy's privileged setup warns and skips without blocking later scripts. Chezmoi can cache that skipped run; a subsequent ordinary `make deploy` may not retry it. From an interactive terminal, run `make caddy-setup` to rerender and retry only the privileged Caddy installer, including managed `/etc/hosts` entries and its LaunchDaemon. If this explicit retry is still noninteractive and passwordless sudo is unavailable, the target fails nonzero instead of reporting success. With the Caddy gate off it remains a no-op; `DRY_RUN=1` only previews the retry and does not render or execute the installer. `make caddy-deploy` regenerates and restarts an existing installation but does not perform those setup steps.
 
 ## Migration notes
 
@@ -272,22 +207,15 @@ The migration step decommissions the legacy dedicated-user setup:
 - `/etc/ddns-route53`
 - old LaunchDaemons for ACME / DDNS automation
 
-The new setup runs as a root LaunchDaemon, but Caddy's `HOME` is set to the real
-user home so its PKI store remains under the user Library tree.
+The new setup runs as a root LaunchDaemon, but Caddy's `HOME` is set to the real user home so its PKI store remains under the user Library tree.
 
-`make caddy-deploy` restarts the daemon with `sudo launchctl bootout/bootstrap`
-and `make caddy-reload` uses `sudo` for the reload command.
-`make caddy-restart` does a full service restart (distinct from `caddy-reload`).
+`make caddy-deploy` restarts the daemon with `sudo launchctl bootout/bootstrap` and `make caddy-reload` uses `sudo` for the reload command. `make caddy-restart` does a full service restart (distinct from `caddy-reload`).
 
 ### Linux
 
-On Linux, Caddy runs as a systemd system service (`/etc/systemd/system/caddy.service`).
-The install script (`run_onchange_24`) handles binary installation, Caddyfile
-generation, `/etc/hosts` management, and service enablement. Restart with
-`make caddy-restart` (calls `sudo systemctl restart caddy`).
+On Linux, Caddy runs as a systemd system service (`/etc/systemd/system/caddy.service`). The install script (`run_onchange_24`) handles binary installation, Caddyfile generation, `/etc/hosts` management, and service enablement. Restart with `make caddy-restart` (calls `sudo systemctl restart caddy`).
 
-`make migrate` handles the env-var rename/cleanup, while `make caddy-migrate`
-removes the old dedicated-user runtime pieces.
+`make migrate` handles the env-var rename/cleanup, while `make caddy-migrate` removes the old dedicated-user runtime pieces.
 
 ## Troubleshooting
 

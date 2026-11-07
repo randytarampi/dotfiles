@@ -1,20 +1,10 @@
 # oMLX Integration
 
-oMLX is an Apple-Silicon MLX model server for macOS. It exposes OpenAI-compatible
-and Anthropic-compatible APIs, including `/v1/chat/completions`, `/v1/responses`,
-`/v1/messages`, embeddings, reranking, and audio endpoints. It is **not** an
-Ollama-wire-compatible server: it has no `/api/*` routes and no `pull` CLI.
-Models are MLX-converted safetensors directories under `~/.omlx/models`, managed
-through the Hugging Face admin UI.
+oMLX is an Apple-Silicon MLX model server for macOS. It exposes OpenAI-compatible and Anthropic-compatible APIs, including `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, embeddings, reranking, and audio endpoints. It is **not** an Ollama-wire-compatible server: it has no `/api/*` routes and no `pull` CLI. Models are MLX-converted safetensors directories under `~/.omlx/models`, managed through the Hugging Face admin UI.
 
 ## Platform and gate
 
-The local oMLX service is supported when script 29's actual gate passes: Darwin
-on arm64 (Apple Silicon); script 29 skips other platforms. The Homebrew formula builds from source and is
-declared unconditionally in `Brewfile.dev`, alongside other development tools.
-The gate controls settings/service setup and consumer/provider generation. A
-configured remote oMLX endpoint may be consumed on other platforms when gated;
-that is an intentional, platform-agnostic remote-server path.
+The local oMLX service is supported when script 29's actual gate passes: Darwin on arm64 (Apple Silicon); script 29 skips other platforms. The Homebrew formula builds from source and is declared unconditionally in `Brewfile.dev`, alongside other development tools. The gate controls settings/service setup and consumer/provider generation. A configured remote oMLX endpoint may be consumed on other platforms when gated; that is an intentional, platform-agnostic remote-server path.
 
 The integration gate is:
 
@@ -22,9 +12,7 @@ The integration gate is:
 DOTFILES_RUN_OMLX_SETUP=1
 ```
 
-The default is `0`. With the gate off there are no oMLX providers, routes,
-discovery results, or generated consumer entries; installation itself remains
-managed by the unconditional Brewfile entry.
+The default is `0`. With the gate off there are no oMLX providers, routes, discovery results, or generated consumer entries; installation itself remains managed by the unconditional Brewfile entry.
 
 ## Installation and service
 
@@ -35,23 +23,9 @@ tap "jundot/omlx", "https://github.com/jundot/omlx"
 brew "jundot/omlx/omlx"
 ```
 
-History: the tap and its upstream repository were temporarily removed
-upstream in September 2026 (a moderation takedown, later reversed); the
-formula briefly lived outside the Brewfile during the removal. As of
-2026-09-22 the repository is restored and the Brewfile entry is active again.
-If the tap ever disappears again, the installed bundle persists in
-`/opt/homebrew/Cellar/omlx` and reinstall/upgrade is a manual step
-(see the repository's release page; the service plist is
-`~/Library/LaunchAgents/sh.brew.omlx.plist`, binary
-`/opt/homebrew/opt/omlx/bin/omlx`).
+History: the tap and its upstream repository were temporarily removed upstream in September 2026 (a moderation takedown, later reversed); the formula briefly lived outside the Brewfile during the removal. As of 2026-09-22 the repository is restored and the Brewfile entry is active again. If the tap ever disappears again, the installed bundle persists in `/opt/homebrew/Cellar/omlx` and reinstall/upgrade is a manual step (see the repository's release page; the service plist is `~/Library/LaunchAgents/sh.brew.omlx.plist`, binary `/opt/homebrew/opt/omlx/bin/omlx`).
 
-`run_onchange_29-configure-omlx.sh.tmpl` writes and merges
-`~/.omlx/settings.json`, then starts the service with `brew services`. The
-persisted settings use the nested oMLX schema:
-`server`, `model`, `memory`, `scheduler`, `cache`, `auth`, and `huggingface`.
-The Homebrew service plist does not inherit `~/.env`, so API authentication is
-persisted as `auth.api_key` when configured. The settings file and backups use
-0600 permissions.
+`run_onchange_29-configure-omlx.sh.tmpl` writes and merges `~/.omlx/settings.json`, then starts the service with `brew services`. The persisted settings use the nested oMLX schema: `server`, `model`, `memory`, `scheduler`, `cache`, `auth`, and `huggingface`. The Homebrew service plist does not inherit `~/.env`, so API authentication is persisted as `auth.api_key` when configured. The settings file and backups use 0600 permissions.
 
 ```sh
 make omlx-restart
@@ -72,57 +46,28 @@ make services-restart
 | `OMLX_MAX_CONCURRENT_REQUESTS` | `8` | Scheduler concurrency. |
 | `OMLX_MAX_AUDIO_UPLOAD_SIZE` | — | Audio upload limit; use an explicit unit such as `128MB` because oMLX treats unitless values as bytes. Invalid values are warned about and preserved at write time; the doctor flags the error. |
 | `OMLX_API_KEY` | _(unset)_ | Intentionally unset on deployed machines: with no key oMLX sets
-  `skip_api_key_verification` and binds loopback only, so it is reached solely
-  through Caddy's `/omlx/*` route. Set it to restore external server aliases +
+  `skip_api_key_verification` and binds loopback only, so it is reached solely through Caddy's `/omlx/*` route. Set it to restore external server aliases +
   per-key auth. |
 | `OMLX_HF_ENDPOINT` | — | Optional Hugging Face endpoint; persisted when set. |
 | `OMLX_LOG_LEVEL` | `info` | CLI/environment input; persisted as `server.log_level`. |
 | `DOTFILES_APPLY_OMLX_WIRED_LIMIT` | `0` | Apply the wired limit and install a boot LaunchDaemon when `DOTFILES_RUN_OMLX_SETUP=1`. |
 | `OMLX_WIRED_LIMIT_MB` | unset | Optional Metal wired limit in MB; when unset, falls back to the script default of 40960 MB. `configure-omlx-wired-limit.py` is a no-op by default; with `DOTFILES_RUN_OMLX_SETUP=1` and the apply gate unset it only reports; applying additionally requires `DOTFILES_APPLY_OMLX_WIRED_LIMIT=1`. Targets above 90% of physical RAM are refused. |
 
-`OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an
-origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
+`OMLX_BASE_URL` takes precedence over `OMLX_HOST`/`OMLX_PORT`. Its value is an origin such as `http://127.0.0.1:8000`; consumers append `/v1` themselves.
 
 ### Env-authoritative vs admin-UI-managed keys
 
-`merge_omlx_settings` (Script 29) writes a fixed set of **env-authoritative**
-keys into `~/.omlx/settings.json`; all other keys are preserved from the
-on-disk file and remain **admin-UI-managed** (tuned in the dashboard).
+`merge_omlx_settings` (Script 29) writes a fixed set of **env-authoritative** keys into `~/.omlx/settings.json`; all other keys are preserved from the on-disk file and remain **admin-UI-managed** (tuned in the dashboard).
 
-**Env-authoritative** (the repo `~/.env` value wins on every deploy):
-`server.host`, `server.port`, `server.log_level`, `memory.*`,
-`scheduler.max_concurrent_requests`, `cache.*`, `mcp.expose_tools`, and
-`model.model_dirs` (via `OMLX_MODEL_DIR`).
+**Env-authoritative** (the repo `~/.env` value wins on every deploy): `server.host`, `server.port`, `server.log_level`, `memory.*`, `scheduler.max_concurrent_requests`, `cache.*`, `mcp.expose_tools`, and `model.model_dirs` (via `OMLX_MODEL_DIR`).
 
-**Admin-UI-managed** (preserved as-is): `mcp.config_path`,
-`huggingface.endpoint`, per-model `model_settings.json` (TurboQuant KV), and any
-oMLX key not listed above.
+**Admin-UI-managed** (preserved as-is): `mcp.config_path`, `huggingface.endpoint`, per-model `model_settings.json` (TurboQuant KV), and any oMLX key not listed above.
 
-**No-API-key mode (loopback only):** when `OMLX_API_KEY` is unset, the writer
-also forces `server.skip_api_key_verification = true` and restricts
-`server.server_aliases` to `["127.0.0.1", "localhost"]` with empty
-`server.cors_origins`, so the admin UI and API are reachable only through Caddy's
-`/omlx/*` route — never directly on an external alias. Restoring `OMLX_API_KEY`
-re-enables external server aliases and per-key auth (both then admin-UI-managed).
+**No-API-key mode (loopback only):** when `OMLX_API_KEY` is unset, the writer also forces `server.skip_api_key_verification = true` and restricts `server.server_aliases` to `["127.0.0.1", "localhost"]` with empty `server.cors_origins`, so the admin UI and API are reachable only through Caddy's `/omlx/*` route — never directly on an external alias. Restoring `OMLX_API_KEY` re-enables external server aliases and per-key auth (both then admin-UI-managed).
 
 ### Cache parity
 
-The oMLX `CacheSettings` block is the MLX equivalent of Ollama cache tuning.
-MLX has no global KV-cache quantization knob, but TurboQuant KV is per-model
-(`~/.omlx/model_settings.json`, engine-construction field — reload/restart to
-apply). `OLLAMA_KV_CACHE_TYPE` drives both daemons from one canonical name:
-`q8_0` enables TurboQuant at 8 bits, `q4_0` at 4 bits, and `f16`/unset leaves
-per-model settings untouched (admin-UI managed). For a requested q8/q4 policy,
-the sync seeds settings for every discovered model ID, including newly installed
-models, and is idempotent. Discovery failure (`None`) is distinct from a
-successful empty catalogue: failure does not seed settings. The sync preserves
-`turboquant_skip_last=true` by default, leaving the last layer uncompressed as a
-quality safeguard. The doctor reports `applied X of Y discovered models`; when
-discovery is unavailable, it reports `UNKNOWN`, and with no requested q8/q4
-policy it reports a neutral status. Persistent SSD and optional
-hot-cache settings provide the comparable residency and reuse controls. The
-service plist does not inherit `~/.env`, so these values are persisted in
-`~/.omlx/settings.json`.
+The oMLX `CacheSettings` block is the MLX equivalent of Ollama cache tuning. MLX has no global KV-cache quantization knob, but TurboQuant KV is per-model (`~/.omlx/model_settings.json`, engine-construction field — reload/restart to apply). `OLLAMA_KV_CACHE_TYPE` drives both daemons from one canonical name: `q8_0` enables TurboQuant at 8 bits, `q4_0` at 4 bits, and `f16`/unset leaves per-model settings untouched (admin-UI managed). For a requested q8/q4 policy, the sync seeds settings for every discovered model ID, including newly installed models, and is idempotent. Discovery failure (`None`) is distinct from a successful empty catalogue: failure does not seed settings. The sync preserves `turboquant_skip_last=true` by default, leaving the last layer uncompressed as a quality safeguard. The doctor reports `applied X of Y discovered models`; when discovery is unavailable, it reports `UNKNOWN`, and with no requested q8/q4 policy it reports a neutral status. Persistent SSD and optional hot-cache settings provide the comparable residency and reuse controls. The service plist does not inherit `~/.env`, so these values are persisted in `~/.omlx/settings.json`.
 
 | Environment variable | Settings key | Default |
 |----------------------|--------------|---------|
@@ -135,57 +80,22 @@ service plist does not inherit `~/.env`, so these values are persisted in
 
 ### Wired-limit lifecycle
 
-Behaviour is staged: with `DOTFILES_RUN_OMLX_SETUP` unset or `0` (the default)
-the utility exits before reading RAM or the wired limit; with the setup gate
-`1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT` unset or `0` it reports current state
-without changing anything; with both gates `1` it applies.
-`OMLX_WIRED_LIMIT_MB` overrides its computed target; values above 90% of
-physical RAM are refused. An applied value is installed in a boot LaunchDaemon.
-To revert, disable the apply gate, remove/unload the LaunchDaemon and restore
-the prior sysctl value. Reboot is not a rollback while the boot LaunchDaemon
-remains installed. This is per-host tuning, not a universal 40960 MB
-recommendation: 16 GB hosts refuse that value under the safety guard, and M3/M5
-hardware needs vary.
+Behaviour is staged: with `DOTFILES_RUN_OMLX_SETUP` unset or `0` (the default) the utility exits before reading RAM or the wired limit; with the setup gate `1` and `DOTFILES_APPLY_OMLX_WIRED_LIMIT` unset or `0` it reports current state without changing anything; with both gates `1` it applies. `OMLX_WIRED_LIMIT_MB` overrides its computed target; values above 90% of physical RAM are refused. An applied value is installed in a boot LaunchDaemon. To revert, disable the apply gate, remove/unload the LaunchDaemon and restore the prior sysctl value. Reboot is not a rollback while the boot LaunchDaemon remains installed. This is per-host tuning, not a universal 40960 MB recommendation: 16 GB hosts refuse that value under the safety guard, and M3/M5 hardware needs vary.
 
 ### MCP
 
-oMLX can act as an MCP aggregator: it loads MCP servers from an `mcp.json`
-(configured in the dashboard under Settings → MCP, persisted as
-`mcp.config_path`) and serves them at `/v1/mcp/tools`, `/v1/mcp/servers`, and
-`/v1/mcp/execute`. There are two independent consumers of that backend:
+oMLX can act as an MCP aggregator: it loads MCP servers from an `mcp.json` (configured in the dashboard under Settings → MCP, persisted as `mcp.config_path`) and serves them at `/v1/mcp/tools`, `/v1/mcp/servers`, and `/v1/mcp/execute`. There are two independent consumers of that backend:
 
-- The dashboard Chat UI is its own MCP client: it fetches `/v1/mcp/tools` and
-  executes calls via `/v1/mcp/execute` directly. It does **not** depend on the
-  expose toggle, so configuring the Config Path gives Chat UI tools without
-  exposing anything to API clients.
-- API clients receive backend MCP tools merged into completions only when
-  `mcp.expose_tools` is true (the upstream default is `true`).
+- The dashboard Chat UI is its own MCP client: it fetches `/v1/mcp/tools` and executes calls via `/v1/mcp/execute` directly. It does **not** depend on the expose toggle, so configuring the Config Path gives Chat UI tools without exposing anything to API clients.
+- API clients receive backend MCP tools merged into completions only when `mcp.expose_tools` is true (the upstream default is `true`).
 
-The repository pins `mcp.expose_tools = false` in the managed settings writer
-(unconditional — a first-run file or an admin flip converges back to off):
-every fleet consumer (OpenCode, Codex, ACP, Junie, Pi, Gemini) already runs
-its own MCP client, and backend-merged tools would duplicate entries and
-muddle tool selection on every completion. Escape hatch:
-`OMLX_MCP_EXPOSE_TOOLS=1`. `mcp.config_path` stays admin-UI-managed — set it
-in the dashboard to a file such as `~/.omlx/mcp.json` (format: `{"servers":
-{...}}`, Claude Desktop `mcpServers` also accepted; requires a server
-restart). Security: the Caddy LAN route blocks `/admin*` and `/v1/mcp/*`
-(`scripts/lib/local_engines.py`), so MCP execution stays loopback-only.
+The repository pins `mcp.expose_tools = false` in the managed settings writer (unconditional — a first-run file or an admin flip converges back to off): every fleet consumer (OpenCode, Codex, ACP, Junie, Pi, Gemini) already runs its own MCP client, and backend-merged tools would duplicate entries and muddle tool selection on every completion. Escape hatch: `OMLX_MCP_EXPOSE_TOOLS=1`. `mcp.config_path` stays admin-UI-managed — set it in the dashboard to a file such as `~/.omlx/mcp.json` (format: `{"servers": {...}}`, Claude Desktop `mcpServers` also accepted; requires a server restart). Security: the Caddy LAN route blocks `/admin*` and `/v1/mcp/*` (`scripts/lib/local_engines.py`), so MCP execution stays loopback-only.
 
 ## Provider integration
 
 ### Engine-agnostic local pool
 
-“Local” means the combined pool of all models served by configured local engines;
-selection does not distinguish Ollama from oMLX. Adding another engine such as
-LM Studio requires a discovery module plus one `LOCAL_ENGINES` registry entry
-covering its endpoint, metadata, audio, and Caddy contracts, plus hash triggers,
-tests, and any relevant allowlists; consumers iterate
-those registry contracts and remain unchanged. Model drift checking is also
-automatically covered by the registry dispatch. Per-engine app pinning belongs
-to that engine's launcher, for example `omlx launch codex`, `omlx launch claude`,
-or `omlx launch hermes`. Generated provider blocks remain separate because each
-endpoint needs its own base URL.
+“Local” means the combined pool of all models served by configured local engines; selection does not distinguish Ollama from oMLX. Adding another engine such as LM Studio requires a discovery module plus one `LOCAL_ENGINES` registry entry covering its endpoint, metadata, audio, and Caddy contracts, plus hash triggers, tests, and any relevant allowlists; consumers iterate those registry contracts and remain unchanged. Model drift checking is also automatically covered by the registry dispatch. Per-engine app pinning belongs to that engine's launcher, for example `omlx launch codex`, `omlx launch claude`, or `omlx launch hermes`. Generated provider blocks remain separate because each endpoint needs its own base URL.
 
 | Tool | oMLX integration |
 |------|------------------|
@@ -200,28 +110,15 @@ endpoint needs its own base URL.
 
 ## Caddy
 
-When enabled, `/omlx/*` is a read-only reverse proxy to the local oMLX service.
-Administrative and mutating endpoints are blocked. The route is gated by
-`DOTFILES_RUN_OMLX_SETUP=1`. With no `OMLX_API_KEY` configured, oMLX binds
-loopback only and skips its own API key, so Caddy is the sole external entry
-point and carries `basic_auth` for `lan`/`public` access modes.
+When enabled, `/omlx/*` is a read-only reverse proxy to the local oMLX service. Administrative and mutating endpoints are blocked. The route is gated by `DOTFILES_RUN_OMLX_SETUP=1`. With no `OMLX_API_KEY` configured, oMLX binds loopback only and skips its own API key, so Caddy is the sole external entry point and carries `basic_auth` for `lan`/`public` access modes.
 
 ## Capability mapping
 
 ### Typed discovery and audio endpoint evidence
 
-Discovery uses typed `model_type` metadata where available: LLM/VLM entries
-receive chat capabilities, audio model types are classified as audio, and
-embedding/reranker/unknown types are excluded from chat role pools. This is
-classification, not proof that every advertised operation works end to end.
+Discovery uses typed `model_type` metadata where available: LLM/VLM entries receive chat capabilities, audio model types are classified as audio, and embedding/reranker/unknown types are excluded from chat role pools. This is classification, not proof that every advertised operation works end to end.
 
-Audio-service reality check: the benchmark artifact records measured oMLX
-inference runs for chat models only; its Ollama comparison rows use the Ollama
-OpenAI-compatible endpoint. These rows do not prove an oMLX STT or TTS operation.
-An audio endpoint is PROVEN only when its request/response operation has been
-exercised against that endpoint; metadata-discovered STT/TTS entries alone are
-ASSERTED capability, not end-to-end service evidence. See the [benchmark
-artifact](../../.slim/deepwork/local-ai-unification/bench-m3max-m5pro.md).
+Audio-service reality check: the benchmark artifact records measured oMLX inference runs for chat models only; its Ollama comparison rows use the Ollama OpenAI-compatible endpoint. These rows do not prove an oMLX STT or TTS operation. An audio endpoint is PROVEN only when its request/response operation has been exercised against that endpoint; metadata-discovered STT/TTS entries alone are ASSERTED capability, not end-to-end service evidence. See the [benchmark artifact](../../.slim/deepwork/local-ai-unification/bench-m3max-m5pro.md).
 
 | oMLX metadata | Repository capability |
 |---------------|-----------------------|
@@ -232,9 +129,7 @@ artifact](../../.slim/deepwork/local-ai-unification/bench-m3max-m5pro.md).
 | `embedding`, `reranker`, or unknown type | Fail-closed: excluded from chat role pools |
 | Missing `is_moe` metadata | Unknown-safe density ranking; names with an `A#B` marker are treated as MoE, otherwise dense. |
 
-Tool support is optimistic for language and vision models because their served
-API is tool-capable; this has a documented false-positive risk when upstream
-metadata does not expose an override field.
+Tool support is optimistic for language and vision models because their served API is tool-capable; this has a documented false-positive risk when upstream metadata does not expose an override field.
 
 ## oMLX and Ollama parity
 
@@ -252,18 +147,14 @@ metadata does not expose an override field.
 
 ## Model management
 
-Keep oMLX and Ollama model sets **disjoint**. Both services can coexist under
-the oMLX gate, but duplicating large models increases memory contention on a
-128 GB workstation. oMLX models are MLX safetensors directories, not GGUF files:
+Keep oMLX and Ollama model sets **disjoint**. Both services can coexist under the oMLX gate, but duplicating large models increases memory contention on a 128 GB workstation. oMLX models are MLX safetensors directories, not GGUF files:
 
 ```text
 ~/.omlx/models/<model>/config.json
 ~/.omlx/models/<model>/*.safetensors
 ```
 
-Download and manage models through the admin UI at
-`http://<OMLX_HOST>:<OMLX_PORT>/admin` or the supported Hugging Face workflow.
-The repository does not pull models or manage model directories.
+Download and manage models through the admin UI at `http://<OMLX_HOST>:<OMLX_PORT>/admin` or the supported Hugging Face workflow. The repository does not pull models or manage model directories.
 
 ## Not managed
 
@@ -277,11 +168,4 @@ Existing installs: persisted `server.port` wins when `OMLX_PORT` is unset; align
 
 ## Splash (external engine)
 
-oMLX 0.7.1rc1 launches Splash — an external Metal engine serving Qwen3.8 and
-Qwen3.6 models with DFlash2 speculative decoding — as a separate process on
-the same model list, API and dashboard; vision checkpoints accept images. The
-brewfile installs it from `incoai/tap` next to the oMLX tap. Splash-served
-models appear in discovery with upstream's own typing (batched engine
-records); the specialized-name guard keeps non-chat entries out of chat
-candidates. Install notes: the formula is `incoai/tap/splash`
-(`/opt/homebrew`-agnostic via the shared Brewfile flow).
+oMLX 0.7.1rc1 launches Splash — an external Metal engine serving Qwen3.8 and Qwen3.6 models with DFlash2 speculative decoding — as a separate process on the same model list, API and dashboard; vision checkpoints accept images. The brewfile installs it from `incoai/tap` next to the oMLX tap. Splash-served models appear in discovery with upstream's own typing (batched engine records); the specialized-name guard keeps non-chat entries out of chat candidates. Install notes: the formula is `incoai/tap/splash` (`/opt/homebrew`-agnostic via the shared Brewfile flow).

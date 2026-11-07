@@ -6,24 +6,11 @@ Use this playbook when adding or changing models, switching tiers, or updating p
 
 ## 6 November 2026: Kimi K3.1 Pro replacement (paid Ollama Cloud)
 
-Ollama publishes `kimi-k3.1-pro` at
-https://ollama.com/library/kimi-k3.1-pro with a 1M-token context window,
-text/image input, tool calling and thinking. Published rates per million
-tokens are $2 input, $0.20 cached input and $10 output, versus Kimi K3 at
-$3, $0.30 and $15 respectively (https://ollama.com/pricing, 2026-11-06).
+Ollama publishes `kimi-k3.1-pro` at https://ollama.com/library/kimi-k3.1-pro with a 1M-token context window, text/image input, tool calling and thinking. Published rates per million tokens are $2 input, $0.20 cached input and $10 output, versus Kimi K3 at $3, $0.30 and $15 respectively (https://ollama.com/pricing, 2026-11-06).
 
-The direct Ollama Cloud ID is `kimi-k3.1-pro`; a local Ollama daemon's
-cloud stub may be `kimi-k3.1-pro:cloud` and is not interchangeable.
-Replace K3 in the `pro` oracle and council gamma and Junie's curated
-`ollama-cloud-kimi` primary. Keep K2.7 Code as the cheaper secondary.
-Retain K3 in the allowlist for manual rollback, never in strict-free
-fallbacks; subscription usage credits do not mean zero-charge inference.
+The direct Ollama Cloud ID is `kimi-k3.1-pro`; a local Ollama daemon's cloud stub may be `kimi-k3.1-pro:cloud` and is not interchangeable. Replace K3 in the `pro` oracle and council gamma and Junie's curated `ollama-cloud-kimi` primary. Keep K2.7 Code as the cheaper secondary. Retain K3 in the allowlist for manual rollback, never in strict-free fallbacks; subscription usage credits do not mean zero-charge inference.
 
-Before promotion, verify authenticated model discovery and real tool calls
-from OpenCode's oracle/council, Junie primary/faster and its LiteLLM twin,
-with scoped credentials, latency, cost and user-config preservation.
-Public listing is not evidence of account-specific access. Runtime
-qualification remains UNKNOWN until owner-host tests are recorded.
+Before promotion, verify authenticated model discovery and real tool calls from OpenCode's oracle/council, Junie primary/faster and its LiteLLM twin, with scoped credentials, latency, cost and user-config preservation. Public listing is not evidence of account-specific access. Runtime qualification remains UNKNOWN until owner-host tests are recorded.
 
 ## November 2026 model-refresh validation
 
@@ -38,12 +25,7 @@ Rollback: restore the previous registry/allowlist/group versions, regenerate thr
 
 ## Optional inference provider onboarding — November 2026
 
-Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and
-NVIDIA NIM. These model IDs establish neither tool-call compatibility nor
-recurring free capacity. The default cross-provider free fallback chains are
-unchanged pending account-level evidence; GitHub review action selection is
-trusted and opt-in. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md)
-for setup, verification and rollback.
+Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM. These model IDs establish neither tool-call compatibility nor recurring free capacity. The default cross-provider free fallback chains are unchanged pending account-level evidence; GitHub review action selection is trusted and opt-in. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for setup, verification and rollback.
 
 ## Update Flow
 
@@ -97,8 +79,7 @@ Catalogue `MATCH` means only that an exact model ID appeared in the authenticate
 
 ## 2026-09-01: Anthropic/Ollama Cloud Equivalence Alignment
 
-The approved cost-tier alignment maps Anthropic model families to Ollama Cloud
-IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
+The approved cost-tier alignment maps Anthropic model families to Ollama Cloud IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
 
 | Anthropic | Ollama Cloud | Use |
 |-----------|--------------|-----|
@@ -108,150 +89,44 @@ IDs (OpenCode convention, without the local proxy's `:cloud` suffix):
 | `claude-haiku-4.5` | `gemma4:31b` | Librarian, explorer, fixer |
 | `claude-sonnet-4.6` | `deepseek-v4.1-flash` | Utility |
 
-The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer,
-`kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4.1-flash`
-for fixer, and `glm-5.3` for council synthesis. This is cost-tier alignment,
-not proven capability parity. GLM-5.3-Flash and Gemma4 benchmark claims are
-vendor-reported. The pricing basis used was OpenRouter per-million-token
-pricing: GLM-5.3 `$1.40/$4.40`, Kimi K3 `$3/$15`, GLM-5.3-Flash
-`$0.075/$0.25`, and DeepSeek V4 Flash approximately `$0.05/$0.10`, compared
-with Opus 5 at `$5/$25` (input/output).
+The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer, `kimi-k3` for oracle, `gemma4:31b` for librarian/explorer, `deepseek-v4.1-flash` for fixer, and `glm-5.3` for council synthesis. This is cost-tier alignment, not proven capability parity. GLM-5.3-Flash and Gemma4 benchmark claims are vendor-reported. The pricing basis used was OpenRouter per-million-token pricing: GLM-5.3 `$1.40/$4.40`, Kimi K3 `$3/$15`, GLM-5.3-Flash `$0.075/$0.25`, and DeepSeek V4 Flash approximately `$0.05/$0.10`, compared with Opus 5 at `$5/$25` (input/output).
 
 ## Drift check & sync reminder
 
-`make check-model-drift` validates checked-in model allowlists, live local
-Ollama models, and deployed Junie profile endpoints and model IDs. Its live
-Junie comparison retains complete wire IDs and endpoint/credential identity;
-`google/models/gemini-3.8-flash` is not interchangeable with
-`google/gemini-3.8-flash` in LiteLLM, even if another provider offers the same
-leaf. A known missing alias is drift; missing keys, 401/403 and unreachable
-endpoints are reported as unknown, not accepted as a pass. The offline CI
-invariant cannot establish live catalogue access or inference entitlement.
+`make check-model-drift` validates checked-in model allowlists, live local Ollama models, and deployed Junie profile endpoints and model IDs. Its live Junie comparison retains complete wire IDs and endpoint/credential identity; `google/models/gemini-3.8-flash` is not interchangeable with `google/gemini-3.8-flash` in LiteLLM, even if another provider offers the same leaf. A known missing alias is drift; missing keys, 401/403 and unreachable endpoints are reported as unknown, not accepted as a pass. The offline CI invariant cannot establish live catalogue access or inference entitlement.
 
-Successful profile generation by `scripts/generate-jetbrains-profiles.py`
-writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`.
-The stamp is considered stale after 14 days. Re-run `make deploy` after any
-model announcement that affects your presets; `make verify` warns when the
-14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory)
-for the automated check.
+Successful profile generation by `scripts/generate-jetbrains-profiles.py` writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`. The stamp is considered stale after 14 days. Re-run `make deploy` after any model announcement that affects your presets; `make verify` warns when the 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory) for the automated check.
 
 ## Scheduled free-model candidate review
 
-The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday
-and also accepts owner-only `workflow_dispatch` with a trusted immutable
-default-branch SHA. The dispatch preflight queries the live default-branch
-head and GitHub commit comparison before checkout: the supplied SHA must
-be identical to or an ancestor of `main`, not merely 40 hex characters.
-This prevents accidentally checking out unreviewed PR code with
-`OPENCODE_API_KEY`. An authenticated owner can post the exact comment
-`/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197).
-The existing actor, issue-number, default-branch and immutable-SHA checks
-protect the secret-bearing refresh and the WOOFDY publishing environment.
+The weekly `Refresh model catalogues` workflow runs at 06:00 UTC on Monday and also accepts owner-only `workflow_dispatch` with a trusted immutable default-branch SHA. The dispatch preflight queries the live default-branch head and GitHub commit comparison before checkout: the supplied SHA must be identical to or an ancestor of `main`, not merely 40 hex characters. This prevents accidentally checking out unreviewed PR code with `OPENCODE_API_KEY`. An authenticated owner can post the exact comment `/refresh-model-catalogues` on [control issue #197](https://github.com/randytarampi/dotfiles/issues/197). The existing actor, issue-number, default-branch and immutable-SHA checks protect the secret-bearing refresh and the WOOFDY publishing environment.
 
-The current collector observes the OpenCode Console cross-protocol model list
-at `https://opencode.ai/inference/v1/models` using `OPENCODE_API_KEY`.
-It joins exact model IDs against the `opencode` cost records in a fresh
-[models.dev snapshot](https://models.dev/api.json), requiring valid numeric
-zero prices for every reported cost tier. Missing/invalid pricing, an empty or
-malformed response, or HTTP 401/403 is **unavailable** or **incomplete**,
-never a false zero-model success; only `available` is publishable. The key
-must be a Console workspace key with read-only or **Models: Read** rights.
+The current collector observes the OpenCode Console cross-protocol model list at `https://opencode.ai/inference/v1/models` using `OPENCODE_API_KEY`. It joins exact model IDs against the `opencode` cost records in a fresh [models.dev snapshot](https://models.dev/api.json), requiring valid numeric zero prices for every reported cost tier. Missing/invalid pricing, an empty or malformed response, or HTTP 401/403 is **unavailable** or **incomplete**, never a false zero-model success; only `available` is publishable. The key must be a Console workspace key with read-only or **Models: Read** rights.
 
-The schema-versioned review artifact is now
-`artifacts/model-catalogues/free-model-candidates.json`. It has the
-Console source, pricing provenance, observation and expiry times,
-classification counts, all-zero model candidates, and `review` sets
-relative to the curated `configs/opencode/opencode-models.json` registry:
+The schema-versioned review artifact is now `artifacts/model-catalogues/free-model-candidates.json`. It has the Console source, pricing provenance, observation and expiry times, classification counts, all-zero model candidates, and `review` sets relative to the curated `configs/opencode/opencode-models.json` registry:
 
 - `new_candidates`: zero-priced and listed, but not in curated preferences
 - `already_curated`: zero-priced and already in the curated registry
 - `curated_not_listed`: currently curated but absent from the Console list
 - `curated_listed_not_zero`: listed but not currently zero-priced
 
-Do not interpret `curated_not_listed` as automatic model retirement:
-a newer provider protocol or account entitlement may explain the difference.
-The `provider_coverage` map records the other configured provider families
-as `not_assessed`, **not** as unavailable, free, or paid. There is no
-additional credential or network probe for those families in this workflow.
+Do not interpret `curated_not_listed` as automatic model retirement: a newer provider protocol or account entitlement may explain the difference. The `provider_coverage` map records the other configured provider families as `not_assessed`, **not** as unavailable, free, or paid. There is no additional credential or network probe for those families in this workflow.
 
-The general `free` tier already uses #119's separate dynamic,
-fresh-evidence resolver across eligible providers and the curated
-preferences from #139. Optional providers added by #142 (Groq, Mistral,
-Cloudflare Workers AI and NVIDIA NIM) remain opt-in candidates; enabling a
-credential does not establish zero-charge entitlement, tool capability,
-privacy suitability or permitted production use. The
-`omo-slim-opencode-zen-free` preset remains OpenCode-only. The hosted
-discovery artifact is **not** consumed by these generators. It does not
-change model registries, Slim role assignments, Junie groups, Pi models,
-LiteLLM aliases, rate limits or any request-time admission decision.
-Request-time strict-free enforcement remains [issue #87](https://github.com/randytarampi/dotfiles/issues/87).
+The general `free` tier already uses #119's separate dynamic, fresh-evidence resolver across eligible providers and the curated preferences from #139. Optional providers added by #142 (Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM) remain opt-in candidates; enabling a credential does not establish zero-charge entitlement, tool capability, privacy suitability or permitted production use. The `omo-slim-opencode-zen-free` preset remains OpenCode-only. The hosted discovery artifact is **not** consumed by these generators. It does not change model registries, Slim role assignments, Junie groups, Pi models, LiteLLM aliases, rate limits or any request-time admission decision. Request-time strict-free enforcement remains [issue #87](https://github.com/randytarampi/dotfiles/issues/87).
 
-Woofdy publishes one **draft** review PR on the existing
-`model-catalogue-bot/inventory` branch. It updates #200 on its next
-successful run rather than creating a second PR. Before either a timestamp-only
-no-op or a branch push, publication verifies at most one open PR on that
-branch, with the expected default-branch base, a draft state and
-`woofdy-randytarampi-ca[bot]` as its author. A ready-for-review PR,
-unexpected author, changed base or duplicate open PR fails closed rather
-than being overwritten. Its only changed path
-relative to `main` is the renamed JSON artifact; the legacy
-`opencode-zen-free.json` on the old bot branch may be read as prior
-JSON **data** during the migration but must never be re-published.
-The generated PR follows `.github/PULL_REQUEST_TEMPLATE.md` and summarises
-newly discovered, already curated, no-longer-listed, repriced and
-unassessed-provider candidates. The verified WOOFDY App account
-`woofdy-randytarampi-ca[bot]` authors its Conventional Commit using its
-GitHub bot noreply identity. Source-code contributions and reviews remain
-attributed separately; automation never claims a CI or inference test it
-did not perform.
+Woofdy publishes one **draft** review PR on the existing `model-catalogue-bot/inventory` branch. It updates #200 on its next successful run rather than creating a second PR. Before either a timestamp-only no-op or a branch push, publication verifies at most one open PR on that branch, with the expected default-branch base, a draft state and `woofdy-randytarampi-ca[bot]` as its author. A ready-for-review PR, unexpected author, changed base or duplicate open PR fails closed rather than being overwritten. Its only changed path relative to `main` is the renamed JSON artifact; the legacy `opencode-zen-free.json` on the old bot branch may be read as prior JSON **data** during the migration but must never be re-published. The generated PR follows `.github/PULL_REQUEST_TEMPLATE.md` and summarises newly discovered, already curated, no-longer-listed, repriced and unassessed-provider candidates. The verified WOOFDY App account `woofdy-randytarampi-ca[bot]` authors its Conventional Commit using its GitHub bot noreply identity. Source-code contributions and reviews remain attributed separately; automation never claims a CI or inference test it did not perform.
 
-The publisher checkout uses `fetch-depth: 0`: its safety preflight
-compares the existing bot branch with the current default branch via a
-three-dot Git diff, which needs their common ancestor. A shallow one-commit
-checkout can fail with `no merge base` when main has advanced since the
-bot commit. The read-only catalogue refresh checkout remains shallow.
-This is a publishing correctness requirement, not an expansion of which
-files or refs may be executed.
+The publisher checkout uses `fetch-depth: 0`: its safety preflight compares the existing bot branch with the current default branch via a three-dot Git diff, which needs their common ancestor. A shallow one-commit checkout can fail with `no merge base` when main has advanced since the bot commit. The read-only catalogue refresh checkout remains shallow. This is a publishing correctness requirement, not an expansion of which files or refs may be executed.
 
-**Publication concurrency and branch ownership:** Jobs targeting the single
-catalogue bot branch are serialized; a force-with-lease alone cannot protect
-subsequent PR-body edits. Before any no-op or push, the publisher verifies
-that the fetched branch tip differs from the current default branch by
-exactly one regular JSON inventory file (new or one-time legacy path).
-New-format tips must use the expected Woofdy author, committer and
-Conventional Commit subject; the specific existing #200 tip is an
-immutable migration exception. The Git commit identity is a safeguard
-against accidental overwrites, **not cryptographic proof of the app's
-identity**; repository branch permissions remain the ultimate control.
-Unknown branch edits, foreign or non-draft PRs, missing provenance,
-unavailable source data and base-registry drift fail closed. An owner must
-investigate those cases rather than overriding the bot branch or changing
-the source allowlist.
+**Publication concurrency and branch ownership:** Jobs targeting the single catalogue bot branch are serialized; a force-with-lease alone cannot protect subsequent PR-body edits. Before any no-op or push, the publisher verifies that the fetched branch tip differs from the current default branch by exactly one regular JSON inventory file (new or one-time legacy path). New-format tips must use the expected Woofdy author, committer and Conventional Commit subject; the specific existing #200 tip is an immutable migration exception. The Git commit identity is a safeguard against accidental overwrites, **not cryptographic proof of the app's identity**; repository branch permissions remain the ultimate control. Unknown branch edits, foreign or non-draft PRs, missing provenance, unavailable source data and base-registry drift fail closed. An owner must investigate those cases rather than overriding the bot branch or changing the source allowlist.
 
-If Woofdy publishes a new bot commit but the subsequent PR edit fails,
-the next matching refresh can repair the PR title and template without
-rewriting the branch. Its current tip no longer contains a **distinct**
-previous inventory, so the repaired report explicitly says that historical
-delta cannot be reconstructed; it must not invent a zero-change history.
-The authoritative current comparison with curated preferences remains
-available in the JSON and draft PR.
+If Woofdy publishes a new bot commit but the subsequent PR edit fails, the next matching refresh can repair the PR title and template without rewriting the branch. Its current tip no longer contains a **distinct** previous inventory, so the repaired report explicitly says that historical delta cannot be reconstructed; it must not invent a zero-change history. The authoritative current comparison with curated preferences remains available in the JSON and draft PR.
 
-A timestamp-only refresh preserves the bot branch and draft PR. A genuine
-candidate, cost, curated-registry or provider-coverage change updates the
-draft with the existing force-with-lease and exact-path safeguards. Only
-a **separately reviewed** curated configuration PR should promote a qualified
-model, using the usual [model update checklist](#update-flow), client-specific
-live inference, tool/image and cost/privacy checks, and owner sign-off.
-Do not auto-merge generated candidate PRs. If an additional provider is
-proposed for hosted discovery, first verify its *actual* listing protocol,
-account credential scope, trusted endpoint and price/entitlement semantics.
-Add it as an independent scoped producer, not by silently treating an
-allowlist or models.dev listing as observed account capacity.
+A timestamp-only refresh preserves the bot branch and draft PR. A genuine candidate, cost, curated-registry or provider-coverage change updates the draft with the existing force-with-lease and exact-path safeguards. Only a **separately reviewed** curated configuration PR should promote a qualified model, using the usual [model update checklist](#update-flow), client-specific live inference, tool/image and cost/privacy checks, and owner sign-off. Do not auto-merge generated candidate PRs. If an additional provider is proposed for hosted discovery, first verify its *actual* listing protocol, account credential scope, trusted endpoint and price/entitlement semantics. Add it as an independent scoped producer, not by silently treating an allowlist or models.dev listing as observed account capacity.
 
 ### Publishing credentials and recovery
 
-The `publish` job authenticates with a GitHub App, not the workflow's
-read-only `GITHUB_TOKEN`. To enable catalogue PR publication:
+The `publish` job authenticates with a GitHub App, not the workflow's read-only `GITHUB_TOKEN`. To enable catalogue PR publication:
 
 1. Install an appropriate GitHub App on `randytarampi/dotfiles` with
     **Contents: Read and write** and **Pull requests: Read and write**
@@ -269,19 +144,9 @@ read-only `GITHUB_TOKEN`. To enable catalogue PR publication:
     from the default branch. Re-running a previous failed attempt does not
     automatically incorporate subsequent workflow changes.
 
-When publishing, both the catalogue and agentic-review fix workflows pass the
-WOOFDY installation token to GitHub CLI as `GH_TOKEN` and use the scoped
-`gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw
-`Authorization: Bearer` Git header (which previously failed at push time),
-keeps the token out of Git command arguments and persistent checkout credentials,
-and disables interactive credential prompts. No additional WOOFDY permissions
-or secret copies are required. A successful token mint does not prove the bot
-branch push or draft PR creation worked; inspect both operations in Actions.
+When publishing, both the catalogue and agentic-review fix workflows pass the WOOFDY installation token to GitHub CLI as `GH_TOKEN` and use the scoped `gh auth git-credential` helper for Git-over-HTTPS pushes. This avoids a raw `Authorization: Bearer` Git header (which previously failed at push time), keeps the token out of Git command arguments and persistent checkout credentials, and disables interactive credential prompts. No additional WOOFDY permissions or secret copies are required. A successful token mint does not prove the bot branch push or draft PR creation worked; inspect both operations in Actions.
 
-If either credential is unavailable, the publisher now fails with an
-explicit preflight error without printing either secret. The refresh job
-remains read-only and its uploaded inventory artifact remains available for
-inspection. A successful refresh does not mean a draft PR was published.
+If either credential is unavailable, the publisher now fails with an explicit preflight error without printing either secret. The refresh job remains read-only and its uploaded inventory artifact remains available for inspection. A successful refresh does not mean a draft PR was published.
 
 ## 2026-09-12: Ollama Cloud + OpenAI catalogue refresh
 
@@ -321,25 +186,11 @@ inspection. A successful refresh does not mean a draft PR was published.
 
 ## free preset (cross-provider free tier)
 
-The `free` preset distributes work across free offerings from three
-providers: OpenCode Zen free contributor models, the Google Gemini free tier,
-and OpenRouter models with the `:free` suffix. It is intended for
-cross-provider resilience and cost-free operation, not guaranteed capability
-parity.
+The `free` preset distributes work across free offerings from three providers: OpenCode Zen free contributor models, the Google Gemini free tier, and OpenRouter models with the `:free` suffix. It is intended for cross-provider resilience and cost-free operation, not guaranteed capability parity.
 
-Free access has practical limits. OpenRouter allows 50 requests/day with less
-than $10 in credits or 1,000 requests/day with at least $10 in credits, with a
-20 RPM limit reported by `GET /api/v1/key`. Gemini limits are per project and
-there is no universal RPM/RPD table; daily quotas reset at midnight Pacific
-Time. OpenCode Zen contributor models should be reviewed for the applicable
-privacy caveat before use.
+Free access has practical limits. OpenRouter allows 50 requests/day with less than $10 in credits or 1,000 requests/day with at least $10 in credits, with a 20 RPM limit reported by `GET /api/v1/key`. Gemini limits are per project and there is no universal RPM/RPD table; daily quotas reset at midnight Pacific Time. OpenCode Zen contributor models should be reviewed for the applicable privacy caveat before use.
 
-When refreshing the preset, update the Google and OpenRouter allowlist files
-first, then update `presets`, `council.presets`, and `_tiers` together. These
-three locations must contain the same preset name. Keep fallback arrays
-provider-deduplicated, avoid the role primary in its fallback, and leave the
-council fallback empty. The repeatable workflow is in
-[`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md).
+When refreshing the preset, update the Google and OpenRouter allowlist files first, then update `presets`, `council.presets`, and `_tiers` together. These three locations must contain the same preset name. Keep fallback arrays provider-deduplicated, avoid the role primary in its fallback, and leave the council fallback empty. The repeatable workflow is in [`configs/skills/free-preset/SKILL.md`](../configs/skills/free-preset/SKILL.md).
 
 
 ## 2026-09-30 — Wave 4 model registry update

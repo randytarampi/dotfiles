@@ -1,15 +1,10 @@
 # Claude Desktop third-party LiteLLM gateway pilot
 
-**Status: repo-side scaffold only; owner host and live inference NOT RUN.**
-The existing `scripts/claude-litellm` is for standalone Claude CLI, not Desktop.
+**Status: repo-side scaffold only; owner host and live inference NOT RUN.** The existing `scripts/claude-litellm` is for standalone Claude CLI, not Desktop.
 
 ## Opt-in contract
 
-Anthropic documents a developer-mode gateway configuration UI and an optional
-managed profile. Gateways must implement `POST /v1/messages` with streaming
-and tools; the optional `GET /v1/models` is replaced by explicit model IDs in
-the profile. Model identity, cache fields, compaction and tool fidelity are not
-guaranteed merely by exposing a LiteLLM OpenAI-compatible route.
+Anthropic documents a developer-mode gateway configuration UI and an optional managed profile. Gateways must implement `POST /v1/messages` with streaming and tools; the optional `GET /v1/models` is replaced by explicit model IDs in the profile. Model identity, cache fields, compaction and tool fidelity are not guaranteed merely by exposing a LiteLLM OpenAI-compatible route.
 
 Sources:
 - https://claude.com/docs/third-party/claude-desktop/gateway
@@ -84,28 +79,15 @@ Sources:
 
 ## Acceptance and negative cases (owner-only)
 
-- Capture actual Desktop version, endpoint/model selection, private-key
-  readback (identity/permissions only), and a gateway request receipt.
+- Capture actual Desktop version, endpoint/model selection, private-key readback (identity/permissions only), and a gateway request receipt.
 - Chat: streaming, multi-turn turns and model-picker mapping.
-- Cowork and Code: tool calls, follow-up, prompt-cache/usage fidelity,
-  errors, model changes and effective context.
-- Negative cases: absent/unsafe/rotated key, symlinked directory, unsupported
-  served alias, gateway down, failure handling, hosted-mode return path,
-  no changes to other Claude profiles, sessions, or client state.
-- Keep install and rollback manual; a helper test is not live transport proof.
-  Classify every result VERIFIED / OWNER-REPORTED / NOT RUN / UNKNOWN.
-- Diagnostic report: Help → Troubleshooting → Generate Diagnostic Report;
-  redact secrets before placing any evidence in a PR.
+- Cowork and Code: tool calls, follow-up, prompt-cache/usage fidelity, errors, model changes and effective context.
+- Negative cases: absent/unsafe/rotated key, symlinked directory, unsupported served alias, gateway down, failure handling, hosted-mode return path, no changes to other Claude profiles, sessions, or client state.
+- Keep install and rollback manual; a helper test is not live transport proof. Classify every result VERIFIED / OWNER-REPORTED / NOT RUN / UNKNOWN.
+- Diagnostic report: Help → Troubleshooting → Generate Diagnostic Report; redact secrets before placing any evidence in a PR.
 
-**Rollback:** restore the original Desktop deployment mode/settings and
-remove a test managed profile only with explicit consent. Never delete key
-material or local history automatically.
+**Rollback:** restore the original Desktop deployment mode/settings and remove a test managed profile only with explicit consent. Never delete key material or local history automatically.
 
-**Review/maintenance:** confirm current Anthropic configuration field names,
-test exact executable path in Desktop's GUI process context, inspect scope/
-permissions, run focused tests + `make verify`, check current-head CI, then
-perform the separately authorised owner-host acceptance. No issue #82 closure
-is claimed.
+**Review/maintenance:** confirm current Anthropic configuration field names, test exact executable path in Desktop's GUI process context, inspect scope/ permissions, run focused tests + `make verify`, check current-head CI, then perform the separately authorised owner-host acceptance. No issue #82 closure is claimed.
 
-**Attribution:** drafted by ChatGPT (GPT-6), 2026-11-03. No external review,
-owner-machine tests, credential issuance, or GUI configuration were performed.
+**Attribution:** drafted by ChatGPT (GPT-6), 2026-11-03. No external review, owner-machine tests, credential issuance, or GUI configuration were performed.
