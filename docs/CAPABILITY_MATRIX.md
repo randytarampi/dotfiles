@@ -1,15 +1,9 @@
 # Agent Tool Capability Matrix
 
 
-Optional inference: OpenCode, Pi, Junie and LiteLLM support explicitly
-credentialed Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM routes;
-GitHub's OpenCode review workflow provides trusted single-model selection
-with the existing Big Pickle default. This does not imply that other tools
-have runtime 429 fallback. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+Optional inference: OpenCode, Pi, Junie and LiteLLM support explicitly credentialed Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM routes; GitHub's OpenCode review workflow provides trusted single-model selection with the existing Big Pickle default. This does not imply that other tools have runtime 429 fallback. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
 
-This matrix records the supported integration surface for each agent. “Native”
-means the tool consumes the configuration directly; “adapter” means an ACP
-bridge or compatibility layer is used.
+This matrix records the supported integration surface for each agent. “Native” means the tool consumes the configuration directly; “adapter” means an ACP bridge or compatibility layer is used.
 
 | Tool | Providers | MCP | ACP | Skills | Presets | Guidance | Meridian | Local Fallback | Telemetry | Voice | i18n |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -28,34 +22,16 @@ bridge or compatibility layer is used.
 | cline | Cline-configured providers | native/config varies by extension | `cline --acp` | yes, shared skill distribution | no | yes | no | N/A | env var (Cline OTel) | none | env-vars |
 | agy | Antigravity-configured providers | native `~/.gemini/config/mcp_config.json` | native `agy-acp` bridge | yes, `~/.gemini/antigravity-cli/skills` | no | yes | no | N/A | no local opt-out | none | env-vars |
 
-ChatGPT Desktop Chat and Work are distinct from the standalone Codex CLI and
-have no repo-verified custom LiteLLM inference endpoint. The Codex CLI has
-an opt-in gateway profile only with explicit `DOTFILES_CODEX_LITELLM_MODEL`;
-whether ChatGPT Desktop's Codex surface consumes it is UNKNOWN. See
-[ChatGPT Desktop surface qualification](CHATGPT-DESKTOP.md).
+ChatGPT Desktop Chat and Work are distinct from the standalone Codex CLI and have no repo-verified custom LiteLLM inference endpoint. The Codex CLI has an opt-in gateway profile only with explicit `DOTFILES_CODEX_LITELLM_MODEL`; whether ChatGPT Desktop's Codex surface consumes it is UNKNOWN. See [ChatGPT Desktop surface qualification](CHATGPT-DESKTOP.md).
 
-Claude Desktop gateway support is an explicit export scaffold only:
-`scripts/export-claude-desktop-gateway.py` prints a secret-free profile to
-stdout. Owner installation/application, credential delivery, and live
-compatibility remain UNKNOWN. Desktop Chat, Cowork, and Code acceptance are
-tracked separately; this is not the Claude CLI environment-variable route.
+Claude Desktop gateway support is an explicit export scaffold only: `scripts/export-claude-desktop-gateway.py` prints a secret-free profile to stdout. Owner installation/application, credential delivery, and live compatibility remain UNKNOWN. Desktop Chat, Cowork, and Code acceptance are tracked separately; this is not the Claude CLI environment-variable route.
 
 ## Tier families and service lanes
 
-- The registry contains 17 tiers: three local resolution profiles
-  (`local-quiet`, `local`, `local-loud`) plus standalone `local-solo`; see
-  [TIERS.md](TIERS.md) for the canonical table. The verifier derives the count
-  from the registry.
-- OpenCode also supports `local-solo`, selected with
-  `scripts/configure-opencode-tier.py --preset`.
-  Junie and Pi receive the selected family through their generators.
-- OpenAI Flex/Fast lane aliases are gated by
-  `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`). Clients receive aliases
-  only when the gate is enabled and the genuine direct OpenAI API-key route is
-  active. See [LiteLLM Proxy](LITELLM.md#openai-service-lanes-flexfast).
-- Pi's local effective context window is capped at the minimum of native
-  context, when known, and client cap; unknown native context has a 32768
-  fallback floor. The default client cap is 131072. See [Pi](PI.md#effective-context-window).
+- The registry contains 17 tiers: three local resolution profiles (`local-quiet`, `local`, `local-loud`) plus standalone `local-solo`; see [TIERS.md](TIERS.md) for the canonical table. The verifier derives the count from the registry.
+- OpenCode also supports `local-solo`, selected with `scripts/configure-opencode-tier.py --preset`. Junie and Pi receive the selected family through their generators.
+- OpenAI Flex/Fast lane aliases are gated by `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`). Clients receive aliases only when the gate is enabled and the genuine direct OpenAI API-key route is active. See [LiteLLM Proxy](LITELLM.md#openai-service-lanes-flexfast).
+- Pi's local effective context window is capped at the minimum of native context, when known, and client cap; unknown native context has a 32768 fallback floor. The default client cap is 131072. See [Pi](PI.md#effective-context-window).
 
 ## Local-service fleet disposition
 
@@ -74,32 +50,12 @@ tracked separately; this is not the Claude CLI environment-variable route.
 
 ## Configuration notes
 
-- The opt-in VibeGuard scanner pilot is exposed as `make vibeguard-audit`; its
-  wrapper pins the scanner and rejects mutating flags. It is separate from
-  request-time redaction and does not replace it.
+- The opt-in VibeGuard scanner pilot is exposed as `make vibeguard-audit`; its wrapper pins the scanner and rejects mutating flags. It is separate from request-time redaction and does not replace it.
 
-- Providers use each tool's native environment/config format. The OpenCode tier
-  registry is reused by Pi, Junie, and local fallback generation where useful.
-- `configs/mcp/global-mcps.json` contains templates for the eleven registry
-  targets. The Pi template is present in each target; Cortex MCP remains
-  deliberately native and is not merged into the global registry.
-- `scripts/configure-acp-agents.py` detects installed ACP commands with
-  `shutil.which` and generates ordinary wrappers only. It does **not** emit
-  `--local` ACP variants. Local model selection remains with each supported
-  native client/provider/profile; Gemini has no repo-managed local fallback.
-- `scripts/configure-skills.py` reconciles the canonical store into all target
-  directories, including Pi, Cortex, Antigravity, and Junie's resolved `~/.ai`.
-- Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through
-  its generated `models.json`; tools marked “no” have no direct Meridian wiring.
-  Mozart routes provider traffic and is not an additional per-tool ACP target.
-- Xcode's LiteLLM integration is credential-only: an installed, identity-checked
-  app and all three opt-in gates permit a private `xcode.key`. IDE consumption,
-  effective authentication and routed inference remain UNKNOWN. Keys are
-  per client, not per operating system; see [LITELLM.md](LITELLM.md).
-- `scripts/configure-hermes.py` adds `providers.dotfiles-litellm` to
-  `$HERMES_HOME/config.yaml` only when `DOTFILES_RUN_HERMES_SETUP=1` and
-  `DOTFILES_USE_LITELLM_PROXY=1`; choose it explicitly with
-  `hermes --provider dotfiles-litellm --model <served-alias>`. It does not
-  change Hermes' default provider. On the inspected Hermes 0.22.4 installation,
-  custom-provider `key_env` may be superseded by saved provider-pool credentials;
-  credential delivery and live transport are not qualified.
+- Providers use each tool's native environment/config format. The OpenCode tier registry is reused by Pi, Junie, and local fallback generation where useful.
+- `configs/mcp/global-mcps.json` contains templates for the eleven registry targets. The Pi template is present in each target; Cortex MCP remains deliberately native and is not merged into the global registry.
+- `scripts/configure-acp-agents.py` detects installed ACP commands with `shutil.which` and generates ordinary wrappers only. It does **not** emit `--local` ACP variants. Local model selection remains with each supported native client/provider/profile; Gemini has no repo-managed local fallback.
+- `scripts/configure-skills.py` reconciles the canonical store into all target directories, including Pi, Cortex, Antigravity, and Junie's resolved `~/.ai`.
+- Meridian is an OpenCode plugin and provider endpoint. Pi consumes it through its generated `models.json`; tools marked “no” have no direct Meridian wiring. Mozart routes provider traffic and is not an additional per-tool ACP target.
+- Xcode's LiteLLM integration is credential-only: an installed, identity-checked app and all three opt-in gates permit a private `xcode.key`. IDE consumption, effective authentication and routed inference remain UNKNOWN. Keys are per client, not per operating system; see [LITELLM.md](LITELLM.md).
+- `scripts/configure-hermes.py` adds `providers.dotfiles-litellm` to `$HERMES_HOME/config.yaml` only when `DOTFILES_RUN_HERMES_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`; choose it explicitly with `hermes --provider dotfiles-litellm --model <served-alias>`. It does not change Hermes' default provider. On the inspected Hermes 0.22.4 installation, custom-provider `key_env` may be superseded by saved provider-pool credentials; credential delivery and live transport are not qualified.

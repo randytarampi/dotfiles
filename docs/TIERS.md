@@ -1,14 +1,9 @@
 # Model Tiers & Selection Strategy
 
 
-**Optional provider capacity:** Groq, Mistral, Cloudflare Workers AI and
-NVIDIA NIM are selectable as explicitly enabled inference routes, but they
-are not automatically additional models in the strict-free preset. See
-[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for exact entitlement,
-LiteLLM scope and fallback constraints. The Zen-only tier remains Zen-only.
+**Optional provider capacity:** Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM are selectable as explicitly enabled inference routes, but they are not automatically additional models in the strict-free preset. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for exact entitlement, LiteLLM scope and fallback constraints. The Zen-only tier remains Zen-only.
 
-> Deep reference for tier definitions, model classification, fallback chains, and variant policy.
-> For the quick summary, see the Model Tiers section in [AGENTS.md](../AGENTS.md).
+> Deep reference for tier definitions, model classification, fallback chains, and variant policy. For the quick summary, see the Model Tiers section in [AGENTS.md](../AGENTS.md).
 
 ---
 
@@ -45,20 +40,11 @@ The tier count is derived from the tier registry in `configs/opencode/oh-my-open
 | **local-quiet** | Local profile — quiet candidate ranking | Prefers Mellum-class code-gen and small reasoning models; ranks one candidate per category without hardware or latency guarantees |
 | **local-loud** | Local profile — quality-first ranking | Ranks MoE/Ornith, dense Qwen and Gemma vision candidates; no hardware-fit, latency or concurrency guarantee |
 
-These profile tiers share the same placeholder map: orchestrator/designer/fixer
-use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer
-use `_local:lightweight`, and observer uses `_local:vision`. Profile policy ranks
-and admits discovered models at resolution time; the placeholders remain the
-configuration contract.
+These profile tiers share the same placeholder map: orchestrator/designer/fixer use `_local:code-gen`, oracle/council use `_local:reasoning`, librarian/explorer use `_local:lightweight`, and observer uses `_local:vision`. Profile policy ranks and admits discovered models at resolution time; the placeholders remain the configuration contract.
 
-Quiet, balanced (`local`) and loud are resolution-time ranking policies over
-the same `_local:<category>` placeholders. They do not guarantee hardware fit,
-latency or concurrency (see Measured Local Profile Contracts below).
+Quiet, balanced (`local`) and loud are resolution-time ranking policies over the same `_local:<category>` placeholders. They do not guarantee hardware fit, latency or concurrency (see Measured Local Profile Contracts below).
 
-The loud council aims for three distinct residents: dense reasoning alpha, MoE
-code-gen beta and secondary code-gen gamma via the indexed `_N` placeholder
-grammar. Quiet's documented posture remains two residents; balanced resolution
-is unchanged and remains the strict-equality anchor.
+The loud council aims for three distinct residents: dense reasoning alpha, MoE code-gen beta and secondary code-gen gamma via the indexed `_N` placeholder grammar. Quiet's documented posture remains two residents; balanced resolution is unchanged and remains the strict-equality anchor.
 
 ### Measured Local Profile Contracts
 
@@ -69,17 +55,9 @@ is unchanged and remains the strict-equality anchor.
 | M5 Pro 48GB, Ornith-1.5-35B | Measured to 64K only; 128K unverified ([M5 Pro artifact](https://omlx.ai/my/4b5e53c6eea9410263de24d08b9dbf2d7f68f5674d46f0a7cab62b664d60540a)) |
 | Other hardware / model paths | UNKNOWN |
 
-> [!NOTE]
-> When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
+> [!NOTE] When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
-Benchmark rows use oMLX Auto except the Ollama endpoint comparisons, which use
-`http://127.0.0.1:11434/v1` (External OpenAI-compatible endpoint); all use Code
-(Mixed), tg128. On 2026-10-17, Ornith-1.5-35B MLX 4-bit at 131072 on M3 Max
-measured TTFT 225.95 s / 26.4 tok/s / 23.59 GB peak; M5 Pro 35B was measured
-to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b-mlx` via the Ollama endpoint were
-slower, with architecture-confounded comparisons. The full
-`bench-m3max-m5pro.md` is a local-only session artifact and is not in this
-repository.
+Benchmark rows use oMLX Auto except the Ollama endpoint comparisons, which use `http://127.0.0.1:11434/v1` (External OpenAI-compatible endpoint); all use Code (Mixed), tg128. On 2026-10-17, Ornith-1.5-35B MLX 4-bit at 131072 on M3 Max measured TTFT 225.95 s / 26.4 tok/s / 23.59 GB peak; M5 Pro 35B was measured to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b-mlx` via the Ollama endpoint were slower, with architecture-confounded comparisons. The full `bench-m3max-m5pro.md` is a local-only session artifact and is not in this repository.
 
 | Model / host | Context and observed results |
 |---|---|
@@ -90,29 +68,15 @@ repository.
 | M5 Pro `gemma4:12b-mxfp8` via Ollama | 131072 (actual pp132538): TTFT 269.49 s / tg 15.2 |
 | M5 Pro `qwen3.8:27b-mlx` via Ollama | Measured to 64K only (actual pp63016): TTFT 176.85 s / tg 22.0 |
 
-The M3 Max Ornith-35B 131072 run is verified by its linked artifact; M5 Pro
-Ornith-35B has no 131072 row and remains unverified at that context. These
-measurements do not establish guarantees for other hosts or concurrent loads.
-q8 KV-cache settings describe cache precision, not model weight quantization.
+The M3 Max Ornith-35B 131072 run is verified by its linked artifact; M5 Pro Ornith-35B has no 131072 row and remains unverified at that context. These measurements do not establish guarantees for other hosts or concurrent loads. q8 KV-cache settings describe cache precision, not model weight quantization.
 
 ### OpenAI Service Lanes (Flex/Fast)
 
-OpenAI service-lane aliases are opt-in through
-`DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are published only on the
-genuine direct `OPENAI_API_KEY` route, never OAuth or ChatGPT routes. Lane
-pricing starts from curated `gpt-6.1-sol` rates: Flex is 0.5× and Fast is 2×,
-with cached-input rate fields preserved. Spend reports identify the tier
-actually served. There is no automatic Flex-to-standard fallback. For lane
-configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
+OpenAI service-lane aliases are opt-in through `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are published only on the genuine direct `OPENAI_API_KEY` route, never OAuth or ChatGPT routes. Lane pricing starts from curated `gpt-6.1-sol` rates: Flex is 0.5× and Fast is 2×, with cached-input rate fields preserved. Spend reports identify the tier actually served. There is no automatic Flex-to-standard fallback. For lane configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models. Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
 
-Every preset defines an explicit observer. `image_routing: "auto"` routes image
-attachments to the observer: the hook strips images from the main conversation
-and saves them to disk, so orchestrators never receive image bytes and
-accumulated-image payloads stay out of the main conversation (mitigating
-[anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)).
-Observers may be Ollama Cloud models.
+Every preset defines an explicit observer. `image_routing: "auto"` routes image attachments to the observer: the hook strips images from the main conversation and saves them to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Observers may be Ollama Cloud models.
 
 ### OpenAI Tier (`omo-slim-openai`)
 
@@ -201,14 +165,7 @@ Fallback chains: each role falls back to the other Laguna size (`_tiers.poolside
 
 ### OpenCode Zen Free Tier (`omo-slim-opencode-zen-free`)
 
-This preset is dynamically composed from fresh catalogue snapshots and route
-evidence at generation time; it is not a static archived selection. Missing,
-stale, malformed or unqualified evidence causes selection to fail closed rather
-than silently substituting a paid route. Free classification is provenance and
-catalogue policy metadata, not a request-time zero-charge guarantee. This update
-does not assert that live catalogues or routes were verified. `opencode/big-pickle`
-is a dated owner-authorized always-free exception (2026-10-27), not a
-name-based rule:
+This preset is dynamically composed from fresh catalogue snapshots and route evidence at generation time; it is not a static archived selection. Missing, stale, malformed or unqualified evidence causes selection to fail closed rather than silently substituting a paid route. Free classification is provenance and catalogue policy metadata, not a request-time zero-charge guarantee. This update does not assert that live catalogues or routes were verified. `opencode/big-pickle` is a dated owner-authorized always-free exception (2026-10-27), not a name-based rule:
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -220,40 +177,17 @@ name-based rule:
 | observer | `nemotron-3.5-super-vl-free` | low, temp 0.2 |
 | council | `big-pickle` | max (α big-pickle, β glm-5.3-flash-free, γ deepseek-v4.1-flash-free) |
 
-The configured fallback chains for this preset are empty (`[]`). The
-new free-model entries are **candidate preferences**, not evidence of
-authenticated inference, free billing or actual tool/image support. The
-dynamic-free resolver requires fresh endpoint-scoped classification and
-capability evidence before adopting them.
+The configured fallback chains for this preset are empty (`[]`). The new free-model entries are **candidate preferences**, not evidence of authenticated inference, free billing or actual tool/image support. The dynamic-free resolver requires fresh endpoint-scoped classification and capability evidence before adopting them.
 
-Historical probes of MiMo 2.6 image requests failed or timed out; it is no
-longer assigned to designer/council. Muse is a Meta **contributor tier**
-that may train on supplied data; it is no longer selected here. Do not
-send confidential code or screenshots to contributor routes without
-explicit acceptance (see [docs/OPENCODE.md](OPENCODE.md)).
+Historical probes of MiMo 2.6 image requests failed or timed out; it is no longer assigned to designer/council. Muse is a Meta **contributor tier** that may train on supplied data; it is no longer selected here. Do not send confidential code or screenshots to contributor routes without explicit acceptance (see [docs/OPENCODE.md](OPENCODE.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
-The `free` preset is dynamically composed from fresh catalogue snapshots and
-route evidence at generation time. It selects qualifying candidates across
-supported providers, with upstream-deduplicated role fallbacks. Refresh
-IDs through the [`free-preset` skill](../configs/skills/free-preset/SKILL.md).
-Missing, stale, malformed or unqualified evidence refuses selection; it does
-not silently exempt or replace a route. This is not request-time billing or
-entitlement enforcement (issue #87), and no live availability is asserted here.
+The `free` preset is dynamically composed from fresh catalogue snapshots and route evidence at generation time. It selects qualifying candidates across supported providers, with upstream-deduplicated role fallbacks. Refresh IDs through the [`free-preset` skill](../configs/skills/free-preset/SKILL.md). Missing, stale, malformed or unqualified evidence refuses selection; it does not silently exempt or replace a route. This is not request-time billing or entitlement enforcement (issue #87), and no live availability is asserted here.
 
-**Scheduled discovery is advisory.** The WOOFDY
-`free-model-candidates.json` draft lists observed OpenCode candidates and
-curated deltas, while recording other supported providers as
-`not_assessed`. It does not replace the runtime evidence resolver, which
-requires fresh provider/credential-bound routes and role capability checks
-across provider boundaries. Nor does it guarantee no-charge inference;
-request-time enforcement is still tracked in #87.
+**Scheduled discovery is advisory.** The WOOFDY `free-model-candidates.json` draft lists observed OpenCode candidates and curated deltas, while recording other supported providers as `not_assessed`. It does not replace the runtime evidence resolver, which requires fresh provider/credential-bound routes and role capability checks across provider boundaries. Nor does it guarantee no-charge inference; request-time enforcement is still tracked in #87.
 
-Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image
-fallback was removed after live image probes failed; local vision alternatives
-are appended when available. It does not send this preset's observer images to
-a contributor-tier model.
+Its explicit observer is `google/gemini-3.8-flash`. The former Zen MiMo image fallback was removed after live image probes failed; local vision alternatives are appended when available. It does not send this preset's observer images to a contributor-tier model.
 
 | Role | Model | Variant / Temp |
 |------|-------|----------------|
@@ -281,18 +215,9 @@ Ollama Cloud budget preset using the approved Anthropic-to-Ollama Cloud cost-tie
 | observer | `gemma4:31b` | low |
 | council | `glm-5.3` | max |
 
-Kimi K3.1 Pro replaces K3 in the oracle and council-gamma seats. Ollama's
-published pricing is $2 input / $0.20 cached / $10 output per million tokens,
-versus K3 at $3 / $0.30 / $15. Ollama advertises 1M context, text/image input
-and tools, but installed OpenCode inference and gateway twins still require
-authenticated checks. K3 remains catalogued for manual rollback; it is
-not a strict-free or automatic fallback.
+Kimi K3.1 Pro replaces K3 in the oracle and council-gamma seats. Ollama's published pricing is $2 input / $0.20 cached / $10 output per million tokens, versus K3 at $3 / $0.30 / $15. Ollama advertises 1M context, text/image input and tools, but installed OpenCode inference and gateway twins still require authenticated checks. K3 remains catalogued for manual rollback; it is not a strict-free or automatic fallback.
 
-Fallbacks are provider-deduplicated and retain one best alternative per role.
-The `pro` observer is `gemma4:31b`; the `pro-plus` observer is
-`openai/gpt-6-luna`, both with low variant. Pro fallbacks are `glm-5.3` for
-orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
-`deepseek-v4.1-flash` for fixer, and `glm-5.3-flash` for observer.
+Fallbacks are provider-deduplicated and retain one best alternative per role. The `pro` observer is `gemma4:31b`; the `pro-plus` observer is `openai/gpt-6-luna`, both with low variant. Pro fallbacks are `glm-5.3` for orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer, `deepseek-v4.1-flash` for fixer, and `glm-5.3-flash` for observer.
 
 ### Pro-Plus Tier (`pro-plus`)
 
@@ -306,12 +231,7 @@ orchestrator/oracle, `deepseek-v4.1-flash` for librarian/explorer/designer,
 | observer | `gpt-6-luna` | low |
 | council | `glm-5.3` | max |
 
-Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
-`openai/gpt-6.1-sol`, and γ `openai/gpt-6-luna` (model-default variants).
-Fallbacks are `openai/gpt-6.1-sol` for orchestrator,
-`ollama-cloud/glm-5.3` for oracle, `ollama-cloud/deepseek-v4.1-flash` for
-librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
-`ollama-cloud/glm-5.3-flash` for designer/observer.
+Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β `openai/gpt-6.1-sol`, and γ `openai/gpt-6-luna` (model-default variants). Fallbacks are `openai/gpt-6.1-sol` for orchestrator, `ollama-cloud/glm-5.3` for oracle, `ollama-cloud/deepseek-v4.1-flash` for librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and `ollama-cloud/glm-5.3-flash` for designer/observer.
 
 ### Pro-Plus-Anthropic Tier (`pro-plus-anthropic`)
 
@@ -326,14 +246,7 @@ librarian/explorer, `ollama-cloud/kimi-k2.7-code` for fixer, and
 | observer | `claude-haiku-5-5` | low |
 | council | `glm-5.3` | max |
 
-Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β
-`openai/gpt-6.1-sol`, and γ `anthropic/claude-sonnet-5-5` (model-default
-variants). Fallbacks follow the configured cross-provider chains: `gpt-6.1-sol` then
-Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku 5.5 then
-`ollama-cloud/deepseek-v4.1-flash` for librarian; Luna then
-`ollama-cloud/deepseek-v4.1-flash` for explorer; Haiku 5.5 then
-`ollama-cloud/kimi-k2.7-code` for fixer; Luna then Flash for designer; and
-Luna then Flash for observer.
+Council seats are α `ollama-cloud/deepseek-v4.1-flash`, β `openai/gpt-6.1-sol`, and γ `anthropic/claude-sonnet-5-5` (model-default variants). Fallbacks follow the configured cross-provider chains: `gpt-6.1-sol` then Flash for orchestrator; Sol then `ollama-cloud/glm-5.3` for oracle; Haiku 5.5 then `ollama-cloud/deepseek-v4.1-flash` for librarian; Luna then `ollama-cloud/deepseek-v4.1-flash` for explorer; Haiku 5.5 then `ollama-cloud/kimi-k2.7-code` for fixer; Luna then Flash for designer; and Luna then Flash for observer.
 
 ### Anthropic Tier (`anthropic`)
 
@@ -418,28 +331,15 @@ Single-model preset using one omnicapable model for all roles:
 
 Council synthesizer: `_local:solo`, max. Individual councillors α `_local:solo`, β `_local:solo`, γ `_local:solo`: no variant override (model default). If no solo model exists, falls back to code-gen + vision.
 
-> [!NOTE]
-> Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use `local`.
+> [!NOTE] Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use `local`.
 
 ### MoE Code-Gen Reuse Across Tools
 
-For every `local*` tier, OpenCode (via `configure-opencode-tier.py`), Junie
-(via `generate-jetbrains-profiles.py`), and Pi (via `configure-pi.py`) pass
-`moe_codegen_reuse=True` to `resolve_roles_from_list`. When the selected
-code-gen model is MoE and vision-capable (for example,
-`ornith-1.5:35b`), one model serves code-gen, lightweight, and vision roles.
-Thus librarian, explorer, and observer — along with Pi's researcher and scout
-built-ins — use the same MoE model. Pi's code reviewer inherits the configured
-Pi default in fresh configurations (existing reviewer overrides are
-preserved). It is not a vision agent.
+For every `local*` tier, OpenCode (via `configure-opencode-tier.py`), Junie (via `generate-jetbrains-profiles.py`), and Pi (via `configure-pi.py`) pass `moe_codegen_reuse=True` to `resolve_roles_from_list`. When the selected code-gen model is MoE and vision-capable (for example, `ornith-1.5:35b`), one model serves code-gen, lightweight, and vision roles. Thus librarian, explorer, and observer — along with Pi's researcher and scout built-ins — use the same MoE model. Pi's code reviewer inherits the configured Pi default in fresh configurations (existing reviewer overrides are preserved). It is not a vision agent.
 
-In Junie's local groups, `fasterModel: _local:lightweight` consequently
-resolves to the code-gen model under reuse, so primary and faster model can be
-the same. This is intentional: it minimizes the number of loaded models.
+In Junie's local groups, `fasterModel: _local:lightweight` consequently resolves to the code-gen model under reuse, so primary and faster model can be the same. This is intentional: it minimizes the number of loaded models.
 
-The optional `--min-reasoning-embedding N` filter is forwarded consistently to
-OpenCode, Junie, and Pi, excluding reasoning models with thinner embeddings
-than `N`. It can also be set with `DOTFILES_MIN_REASONING_EMBEDDING`.
+The optional `--min-reasoning-embedding N` filter is forwarded consistently to OpenCode, Junie, and Pi, excluding reasoning models with thinner embeddings than `N`. It can also be set with `DOTFILES_MIN_REASONING_EMBEDDING`.
 
 ---
 
@@ -492,8 +392,7 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 | vision | subset of lightweight with `vision` capability | `tools` + `vision` | observer |
 | audio | subset of lightweight with `audio` capability | `tools` + `audio` | — |
 
-> [!TIP]
-> `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
+> [!TIP] `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
 
 ---
 
@@ -571,27 +470,17 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
 
-> [!NOTE]
-> A project `opencode.json` is written only when the project actually overrides global defaults: a preset that differs from the active global tier (`preset` key in `~/.config/opencode/oh-my-opencode-slim.json`), or any `--local-fallback-*` inputs. Runs with no preset (or a same-tier preset) skip the file entirely and inherit the global config as-is. Per-key overrides (a single `model`, plugin, or permission) remain available as hand-authored minimal `opencode.json` files, which OpenCode merges over global.
+> [!NOTE] A project `opencode.json` is written only when the project actually overrides global defaults: a preset that differs from the active global tier (`preset` key in `~/.config/opencode/oh-my-opencode-slim.json`), or any `--local-fallback-*` inputs. Runs with no preset (or a same-tier preset) skip the file entirely and inherit the global config as-is. Per-key overrides (a single `model`, plugin, or permission) remain available as hand-authored minimal `opencode.json` files, which OpenCode merges over global.
 
-> [!IMPORTANT]
-> If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
+> [!IMPORTANT] If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
 
 ---
 
 ## Ollama Cloud Models
 
-Ollama Cloud presets use `deepseek-v4.1-flash`,
-`gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the
-exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama
-Cloud Pro accounts
-have a 3-slot concurrency limit (3 concurrent requests per account, regardless
-of how many distinct models are used). Model lists are not hardcoded in
-mozart-router config — the GenericOpenAIAdapter auto-discovers available
-models from each gateway's `/v1/models` endpoint.
+Ollama Cloud presets use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
-> [!IMPORTANT]
-> All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
+> [!IMPORTANT] All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
 
 ## OpenAI Models (gpt-6 Generation)
 
@@ -620,13 +509,7 @@ Model catalogs are not stable. Two churn classes have bitten this repo already:
 
 ### Detection
 
-The LiteLLM generator defaults to a **free catalogue scope**
-(`DOTFILES_LITELLM_CATALOGUE_SCOPE=free`): it enumerates curated catalogue
-selections plus OpenRouter `:free` ids. This catalogue scope is distinct from
-the disabled `free` preset and does not enable its selector choices or prove
-request-time cost. Set the scope to `full` to
-enumerate whole live catalogues (≈758 entries) instead of the free-scope set
-(≈180–220).
+The LiteLLM generator defaults to a **free catalogue scope** (`DOTFILES_LITELLM_CATALOGUE_SCOPE=free`): it enumerates curated catalogue selections plus OpenRouter `:free` ids. This catalogue scope is distinct from the disabled `free` preset and does not enable its selector choices or prove request-time cost. Set the scope to `full` to enumerate whole live catalogues (≈758 entries) instead of the free-scope set (≈180–220).
 
 1. `make check-model-drift` — validates slim.json references against checked-in allowlists, probes live local Ollama and deployed Junie profile endpoints, and warns when the sync stamp is >14 days old (run as part of `make verify`; excluded from `ci-verify` because it needs live endpoints).
 2. `opencode models <provider> --refresh` — the only authoritative view of a provider's *current* catalog (models.dev pages and OpenCode's local cache lag; both have shown stale IDs).

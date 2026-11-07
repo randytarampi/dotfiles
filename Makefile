@@ -26,8 +26,8 @@ endef
 lint: ## Run repository lint and syntax checks
 	@echo "Checking for merge conflicts..."
 	@git grep -n '^<<<<<<<' -- '*.*' 2>/dev/null && { echo "Merge conflict markers found!"; exit 1; } || true
-	@echo "Checking for trailing whitespace..."
-	@git grep -I -n '[[:space:]]$$' -- '*.*' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
+	@echo "Checking for trailing whitespace (excluding Markdown hard breaks)..."
+	@git grep -I -n '[[:space:]]$$' -- '*.*' ':(exclude,glob)**/*.md' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
 	@echo "Checking for large files (> 500KB)..."
 	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './bin/*' -size +500k 2>/dev/null | while IFS= read -r f; do git check-ignore -q -- "$$f" 2>/dev/null || printf '%s\n' "$$f"; done); \
 	if [ -n "$$large_files" ]; then \
@@ -61,7 +61,7 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking Python formatting with black (dry-run)..."
 	@poetry run black --check --diff scripts/ scripts/lib/
 
-fix: ## Format shell and Python files and normalize text files
+fix: ## Format shell and Python files and normalize non-Markdown text files
 	@if [ -n "$(SHFMT)" ]; then \
 		"$(SHFMT)" -i 2 -w scripts/*.sh scripts/lib/*.sh dot_dotfiles/shell/*.sh; \
 	else \
@@ -76,7 +76,7 @@ fix: ## Format shell and Python files and normalize text files
 	fi
 	@echo "Stripping trailing whitespaces and fixing EOF newlines..."
 	@python3 -c 'exec("import sys, glob, os\n" \
-	"for ext in [\"*.py\", \"*.sh\", \"*.json\", \"*.tmpl\", \"*.yml\", \"*.yaml\", \"*.md\"]:\n" \
+	"for ext in [\"*.py\", \"*.sh\", \"*.json\", \"*.tmpl\", \"*.yml\", \"*.yaml\"]:\n" \
 	"    for root, dirs, files in os.walk(\".\"):\n" \
 	"        if \"node_modules\" in root or \".git\" in root or \".venv\" in root: continue\n" \
 	"        for f in glob.glob(os.path.join(root, ext)):\n" \

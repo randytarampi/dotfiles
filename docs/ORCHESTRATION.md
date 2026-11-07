@@ -1,27 +1,13 @@
 # Dotfiles Orchestration Architecture
 
 
-Optional inference provider generation preserves the existing three-layer
-contract: `provider_endpoints.py` defines trusted endpoints and account
-binding; OpenCode/Pi/Junie consume enabled, credentialed routes; LiteLLM
-exposes separate opt-in full-scope aliases. Hosted review actions use direct
-provider selection, not local loopback LiteLLM. See
-[OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+Optional inference provider generation preserves the existing three-layer contract: `provider_endpoints.py` defines trusted endpoints and account binding; OpenCode/Pi/Junie consume enabled, credentialed routes; LiteLLM exposes separate opt-in full-scope aliases. Hosted review actions use direct provider selection, not local loopback LiteLLM. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
 
-> This document is the canonical reference for the dotfiles orchestration architecture.
-> All changes to scripts, Makefile targets, or configure scripts must be evaluated
-> against the principles documented here.
+> This document is the canonical reference for the dotfiles orchestration architecture. All changes to scripts, Makefile targets, or configure scripts must be evaluated against the principles documented here.
 
 ## Overview
 
-The dotfiles repo uses a three-layer architecture to manage machine configuration,
-with project-scoped configuration as the project-facing extension of Layer 3.
-`make deploy` is the single command that reconciles a machine — it runs `chezmoi apply`
-(templates + scripts) followed by `configure-all.sh` (AI tool config generators).
-The OpenCode web LaunchAgent is generated and owned by that flow; its process
-entry point is `opencode serve --port`, and its start/stop/restart targets are
-the explicit `make opencode-start`, `make opencode-stop` and
-`make opencode-restart` commands (not `opencode service` subcommands).
+The dotfiles repo uses a three-layer architecture to manage machine configuration, with project-scoped configuration as the project-facing extension of Layer 3. `make deploy` is the single command that reconciles a machine — it runs `chezmoi apply` (templates + scripts) followed by `configure-all.sh` (AI tool config generators). The OpenCode web LaunchAgent is generated and owned by that flow; its process entry point is `opencode serve --port`, and its start/stop/restart targets are the explicit `make opencode-start`, `make opencode-stop` and `make opencode-restart` commands (not `opencode service` subcommands).
 
 ## Three-Layer Architecture
 
@@ -82,9 +68,7 @@ flowchart TD
 - Excluded from chezmoi via `.chezmoiignore`
 - Called by Layer 2 scripts AND by `configure-all.sh` (Makefile orchestration)
 - Do runtime discovery (Ollama models, API keys, JetBrains paths) that templates can't
-- `configure-project.py` is the unified project orchestrator. It reads
-  `.opencode/.env` and runs selected project steps; generated secrets go to
-  `.opencode/.env.local`.
+- `configure-project.py` is the unified project orchestrator. It reads `.opencode/.env` and runs selected project steps; generated secrets go to `.opencode/.env.local`.
 
 ## Execution Flow
 
@@ -122,65 +106,19 @@ sequenceDiagram
 
 ### Executed orchestration checks
 
-For shared-data mutations, record which fields the change owns and which
-unrelated or native metadata must survive. Validate the result as its actual
-consumer interprets it, not merely by confirming generated state exists (for
-example, rates versus protocol mode, or a key file versus successful
-authentication).
+For shared-data mutations, record which fields the change owns and which unrelated or native metadata must survive. Validate the result as its actual consumer interprets it, not merely by confirming generated state exists (for example, rates versus protocol mode, or a key file versus successful authentication).
 
-For gateway/client ordering, demonstrate a stubbed fresh-state execution in
-which readiness and provisioning precede client writes; readiness or
-provisioning failure must prevent those writes. Also check repeat-run key and
-environment-file byte stability, and that dry-run and explicit skip remain
-bounded. Relevant evidence lives in
-[`test_gateway_orchestration.py`](../scripts/lib/tests/test_gateway_orchestration.py),
-[`test_configure_litellm_readiness.py`](../scripts/lib/tests/test_configure_litellm_readiness.py),
-and [`test_litellm_venv_patch.py`](../scripts/lib/tests/test_litellm_venv_patch.py),
-alongside the existing `dotfiles-verify` and verification-planning policies.
+For gateway/client ordering, demonstrate a stubbed fresh-state execution in which readiness and provisioning precede client writes; readiness or provisioning failure must prevent those writes. Also check repeat-run key and environment-file byte stability, and that dry-run and explicit skip remain bounded. Relevant evidence lives in [`test_gateway_orchestration.py`](../scripts/lib/tests/test_gateway_orchestration.py), [`test_configure_litellm_readiness.py`](../scripts/lib/tests/test_configure_litellm_readiness.py), and [`test_litellm_venv_patch.py`](../scripts/lib/tests/test_litellm_venv_patch.py), alongside the existing `dotfiles-verify` and verification-planning policies.
 
-Label stubbed fresh-state traces separately from validation on a real,
-already-installed host: the former proves the tested orchestration path, not
-physical first-install behaviour on a fresh machine.
+Label stubbed fresh-state traces separately from validation on a real, already-installed host: the former proves the tested orchestration path, not physical first-install behaviour on a fresh machine.
 
 ### Delegated worktree readiness preflight
 
-Use separate dispatch fields for PR number, absolute working directory, branch,
-expected HEAD, base SHA, owned paths, validation owner and permissions. Record
-expected dirty paths and upstream divergence explicitly. Require a final receipt
-with actual HEAD, changed paths, merge/rebase state, checks and unfinished work;
-a partial run is not completion. The preflight below checks the environment,
-not whether a specialist fulfilled that contract.
+Use separate dispatch fields for PR number, absolute working directory, branch, expected HEAD, base SHA, owned paths, validation owner and permissions. Record expected dirty paths and upstream divergence explicitly. Require a final receipt with actual HEAD, changed paths, merge/rebase state, checks and unfinished work; a partial run is not completion. The preflight below checks the environment, not whether a specialist fulfilled that contract.
 
-Before handing implementation to a child in an existing checkout, run
-`make worktree-ready WORKTREE="/absolute/path/to/worktree"`. The helper verifies
-that the path is the root of this dotfiles Git project, reports its branch,
-HEAD and dirty paths without changing them, and checks that Poetry can import
-`yaml`, `pytest` and `black`. A dirty worktree is reported and refused unless
-the caller explicitly uses `ALLOW_DIRTY=1`; no files are cleaned, stashed or
-reset. Supply `EXPECTED_BASE` (a full SHA available locally) and/or
-`EXPECTED_BRANCH` when the task requires them; base validation never fetches
-remotes.
+Before handing implementation to a child in an existing checkout, run `make worktree-ready WORKTREE="/absolute/path/to/worktree"`. The helper verifies that the path is the root of this dotfiles Git project, reports its branch, HEAD and dirty paths without changing them, and checks that Poetry can import `yaml`, `pytest` and `black`. A dirty worktree is reported and refused unless the caller explicitly uses `ALLOW_DIRTY=1`; no files are cleaned, stashed or reset. Supply `EXPECTED_BASE` (a full SHA available locally) and/or `EXPECTED_BRANCH` when the task requires them; base validation never fetches remotes.
 
-Check-only is the default and fails when tooling is missing. To explicitly
-prepare the target checkout, use `INSTALL=1` to run
-`poetry install --no-root --with tooling,test`. `INSTALL=1 DRY_RUN=1` previews
-that install without invoking it or writing files. The helper reports the
-Poetry interpreter's actual executable/version alongside the checkout's
-`.python-version` request and does not change pyenv/global pins. The runtime must
-satisfy the project's `requires-python` range and match the pin's major/minor
-family. Patch drift within that family is allowed with an explicit warning,
-including when a Homebrew-linked pyenv entry resolves to a newer patch. A family
-mismatch fails before dependency installation; install mode does not select a
-different interpreter automatically. It does not
-inspect environment variables or credentials. Sibling worktrees are supported
-only when explicitly authorized by the parent task for this dotfiles/chezmoi
-repository; this helper does not create nested worktrees or alter other
-checkouts. See [shared repository guidance](../configs/agents/repo-agents-shared.md)
-for lane ownership, worktree location, consent, preservation and retirement
-policy. This preflight does not grant sibling-worktree creation or cleanup
-consent; obtain approval in the lane before creating one. The existing worktree
-skill's nested `.slim/worktrees` location remains the default where applicable;
-chezmoi tasks using sibling worktrees require an explicit approved exception.
+Check-only is the default and fails when tooling is missing. To explicitly prepare the target checkout, use `INSTALL=1` to run `poetry install --no-root --with tooling,test`. `INSTALL=1 DRY_RUN=1` previews that install without invoking it or writing files. The helper reports the Poetry interpreter's actual executable/version alongside the checkout's `.python-version` request and does not change pyenv/global pins. The runtime must satisfy the project's `requires-python` range and match the pin's major/minor family. Patch drift within that family is allowed with an explicit warning, including when a Homebrew-linked pyenv entry resolves to a newer patch. A family mismatch fails before dependency installation; install mode does not select a different interpreter automatically. It does not inspect environment variables or credentials. Sibling worktrees are supported only when explicitly authorized by the parent task for this dotfiles/chezmoi repository; this helper does not create nested worktrees or alter other checkouts. See [shared repository guidance](../configs/agents/repo-agents-shared.md) for lane ownership, worktree location, consent, preservation and retirement policy. This preflight does not grant sibling-worktree creation or cleanup consent; obtain approval in the lane before creating one. The existing worktree skill's nested `.slim/worktrees` location remains the default where applicable; chezmoi tasks using sibling worktrees require an explicit approved exception.
 
 Example (replace the illustrative SHA with a locally available full commit ID):
 
@@ -192,10 +130,7 @@ make worktree-ready WORKTREE="/tmp/dotfiles-task" INSTALL=1 \
 
 ## Repository agent guidance
 
-`configs/agents/repo-agents-shared.md` is the source for the common policy
-section stamped into repository `AGENTS.md` files. The generated section is
-bounded by `DOTFILES_REPO_GUIDANCE_START` and `DOTFILES_REPO_GUIDANCE_END`.
-Everything outside those markers is repository-owned and is preserved.
+`configs/agents/repo-agents-shared.md` is the source for the common policy section stamped into repository `AGENTS.md` files. The generated section is bounded by `DOTFILES_REPO_GUIDANCE_START` and `DOTFILES_REPO_GUIDANCE_END`. Everything outside those markers is repository-owned and is preserved.
 
 Opt a repository in by running:
 
@@ -203,15 +138,11 @@ Opt a repository in by running:
 make stamp-repo-guidance REPO_PATH=/path/to/repository
 ```
 
-The script creates a missing `AGENTS.md`, or appends/replaces only the marked
-section in an existing file. Keep repository-specific guidance below the
-shared section. Use `make check-repo-guidance REPO_PATH=/path/to/repository`
-to detect drift, and `--dry-run` to preview a stamp.
+The script creates a missing `AGENTS.md`, or appends/replaces only the marked section in an existing file. Keep repository-specific guidance below the shared section. Use `make check-repo-guidance REPO_PATH=/path/to/repository` to detect drift, and `--dry-run` to preview a stamp.
 
 ### Cross-repo stamping procedure
 
-Use the [`make stamp-repo-guidance` target](../Makefile) with each companion
-repository:
+Use the [`make stamp-repo-guidance` target](../Makefile) with each companion repository:
 
 ```sh
 make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/lwip
@@ -222,15 +153,9 @@ make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/
 make stamp-repo-guidance REPO_PATH=/Users/randytarampi/Development/randytarampi/me
 ```
 
-The target applies the [shared guidance source](../configs/agents/repo-agents-shared.md)
-and rewrites only the `DOTFILES_REPO_GUIDANCE`-marked block; repo-owned prose
-above and below those markers is never touched.
+The target applies the [shared guidance source](../configs/agents/repo-agents-shared.md) and rewrites only the `DOTFILES_REPO_GUIDANCE`-marked block; repo-owned prose above and below those markers is never touched.
 
-The companion stamps predate the current shared guidance and still describe
-stash-based verification. Also, `slamscan`, `pseudoimage`, and `pseudolocalize`
-have `AGENTS.md` line 3 referring to Yarn 4.17 while their `package.json` and
-`.yarnrc.yml` specify 4.18.0. That stale line is repo-owned prose outside the
-stamped block and must be fixed separately by each repository maintainer.
+The companion stamps predate the current shared guidance and still describe stash-based verification. Also, `slamscan`, `pseudoimage`, and `pseudolocalize` have `AGENTS.md` line 3 referring to Yarn 4.17 while their `package.json` and `.yarnrc.yml` specify 4.18.0. That stale line is repo-owned prose outside the stamped block and must be fixed separately by each repository maintainer.
 
 ## Makefile Targets
 
@@ -320,19 +245,10 @@ stamped block and must be fixed separately by each repository maintainer.
 
 ### LiteLLM client transport modes
 
-`DOTFILES_USE_LITELLM_PROXY=0` is canonical direct routing; `=1` is
-gateway-only and requires the LiteLLM setup gate, client key files and exact
-aliases. Client generators map canonical model identities at the boundary
-through `scripts/lib/litellm_aliases.py`, not in tier materialization. The four
-legacy client canaries migrate with OR semantics only: any truthy old value
-sets the new gate to `1` only when it is absent; explicit new values win.
-Ollama Cloud direct mode uses the provider endpoint/key, while daemon `:cloud`
-pull stubs remain independent consumers and do not rewrite model identities.
+`DOTFILES_USE_LITELLM_PROXY=0` is canonical direct routing; `=1` is gateway-only and requires the LiteLLM setup gate, client key files and exact aliases. Client generators map canonical model identities at the boundary through `scripts/lib/litellm_aliases.py`, not in tier materialization. The four legacy client canaries migrate with OR semantics only: any truthy old value sets the new gate to `1` only when it is absent; explicit new values win. Ollama Cloud direct mode uses the provider endpoint/key, while daemon `:cloud` pull stubs remain independent consumers and do not rewrite model identities.
 | lib | model_stamp.py | library | Records model synchronization age for staleness reminders | — |
 
-`configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py`
-remains the global Junie-model path; project Junie work is delegated by
-the unified script. Both consume the shared tier registry via `scripts/lib/tier_registry.py`.
+`configure-project.py` is the unified project-scoped entrypoint. `configure-jetbrains-ai.py` remains the global Junie-model path; project Junie work is delegated by the unified script. Both consume the shared tier registry via `scripts/lib/tier_registry.py`.
 
 ### Skills catalog
 
@@ -346,9 +262,7 @@ The skills manifest uses category files rather than a monolithic profile:
 | `configs/skills/skills.mongodb.json` | `mongodb` | `DOTFILES_RUN_SKILLS_MONGODB_SETUP` |
 | `configs/skills/skills.prisma.json` | `prisma` | `DOTFILES_RUN_SKILLS_PRISMA_SETUP` |
 
-`configs/skills/skills.json` remains the index for `preinstalled` and `repo_local`.
-The canonical fetched-skill cache is `~/.local/share/dotfiles/skills/`, outside
-OpenCode discovery paths; `~/.agents/skills/` contains active discovery links.
+`configs/skills/skills.json` remains the index for `preinstalled` and `repo_local`. The canonical fetched-skill cache is `~/.local/share/dotfiles/skills/`, outside OpenCode discovery paths; `~/.agents/skills/` contains active discovery links.
 
 ## Gate Reference
 

@@ -1,6 +1,5 @@
 # Mozart Router & Provider Configuration
-> Mozart AI router gateways, unified Ollama routing, provider overrides, and JSON config conventions.
-> See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
+> Mozart AI router gateways, unified Ollama routing, provider overrides, and JSON config conventions. See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
 
 ## Mozart Router Gateways
 
@@ -35,14 +34,7 @@ Local services (Ollama, Meridian) support host/port env var overrides. Use `scri
 
 ### Canonical Ollama Cloud routing
 
-Ollama Cloud model identities use the separate `ollama-cloud/<id>` provider and
-route directly to `https://ollama.com/v1` with `OLLAMA_API_KEY` in direct mode.
-When `DOTFILES_USE_LITELLM_PROXY=1`, a client adapter maps that unchanged
-identity to its exact LiteLLM alias; missing gateway setup, key or alias is a
-configuration error, not a direct fallback. `check_ollama_daemon()` remains a
-daemon-health/sign-in probe for consumers that genuinely use installed local
-`:cloud` models (notably the voice exception); it no longer changes provider
-routing. Cloud stub pulls remain managed by the install script.
+Ollama Cloud model identities use the separate `ollama-cloud/<id>` provider and route directly to `https://ollama.com/v1` with `OLLAMA_API_KEY` in direct mode. When `DOTFILES_USE_LITELLM_PROXY=1`, a client adapter maps that unchanged identity to its exact LiteLLM alias; missing gateway setup, key or alias is a configuration error, not a direct fallback. `check_ollama_daemon()` remains a daemon-health/sign-in probe for consumers that genuinely use installed local `:cloud` models (notably the voice exception); it no longer changes provider routing. Cloud stub pulls remain managed by the install script.
 
 ### Provider Base-URL Overrides
 

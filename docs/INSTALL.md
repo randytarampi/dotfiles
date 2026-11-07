@@ -1,7 +1,6 @@
 # Initial Installation & Run Instructions
 
-> Step-by-step deployment and verification for new environments.
-> See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
+> Step-by-step deployment and verification for new environments. See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
 
 ## Initial Installation & Run Instructions
 
@@ -38,13 +37,7 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
 
-The Codex configuration step in `make deploy` requires Poetry and this
-repository's locked production Python dependencies. Install Poetry using your
-platform's package manager or Poetry's official installer, then run
-`poetry install --only main --no-root` from the dotfiles checkout. Deployment
-does not install Poetry or Python packages automatically. If Poetry or the
-locked TOML parser is unavailable, Codex configuration stops with an
-installation instruction rather than falling back to bare Python.
+The Codex configuration step in `make deploy` requires Poetry and this repository's locked production Python dependencies. Install Poetry using your platform's package manager or Poetry's official installer, then run `poetry install --only main --no-root` from the dotfiles checkout. Deployment does not install Poetry or Python packages automatically. If Poetry or the locked TOML parser is unavailable, Codex configuration stops with an installation instruction rather than falling back to bare Python.
 
 - **macOS / Linux:**
   ```bash
@@ -65,8 +58,7 @@ On first setup, run `make deploy` twice. The second pass should be a no-op, but 
 
 ### Project Setup (Optional)
 
-For project-specific AI configuration, create `.opencode/.env` in the project
-(see [project-env.example](project-env.example)), then run:
+For project-specific AI configuration, create `.opencode/.env` in the project (see [project-env.example](project-env.example)), then run:
 
 ```bash
 scripts/configure-project.py
@@ -75,10 +67,7 @@ scripts/configure-project.py
 scripts/configure-project.py --steps skills
 ```
 
-Project configuration values select the tier, skills, MCPs, ACP agents, CodeGraph,
-JetBrains, Junie, and project secrets. `.opencode/.env` is the user-authored
-declaration; generated secrets go to the gitignored `.opencode/.env.local`.
-CLI arguments take precedence over project and global environment values.
+Project configuration values select the tier, skills, MCPs, ACP agents, CodeGraph, JetBrains, Junie, and project secrets. `.opencode/.env` is the user-authored declaration; generated secrets go to the gitignored `.opencode/.env.local`. CLI arguments take precedence over project and global environment values.
 
 ### Step 4: Verification & Local Linting (Optional)
 To verify repository and script health offline:
