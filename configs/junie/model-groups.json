@@ -80,6 +80,16 @@
       "baseUrl": "https://integrate.api.nvidia.com/v1",
       "apiType": "OpenAICompletion",
       "apiKeyEnv": "NVIDIA_NIM_API_KEY"
+    },
+    "cohere": {
+      "baseUrl": "https://api.cohere.ai/compatibility/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "COHERE_API_KEY"
+    },
+    "poolside": {
+      "baseUrl": "https://inference.poolside.ai/v1",
+      "apiType": "OpenAICompletion",
+      "apiKeyEnv": "POOLSIDE_API_KEY"
     }
   },
   "modelTemperatures": {
@@ -203,6 +213,14 @@
     "nvidia-nim-gpt-oss": {
       "provider": "nvidia-nim",
       "primaryModel": "openai/gpt-oss-20b"
+    },
+    "cohere": {
+      "provider": "cohere",
+      "primaryModel": "command-a-03-2025"
+    },
+    "poolside": {
+      "provider": "poolside",
+      "primaryModel": "poolside/laguna-s-2.1"
     }
   },
   "sharedPresets": {

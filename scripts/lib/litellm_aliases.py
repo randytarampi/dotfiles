@@ -19,6 +19,8 @@ LITELLM_ROUTED_PROVIDERS = frozenset(
         "mistral",
         "cloudflare",
         "nvidia-nim",
+        "cohere",
+        "poolside",
     }
 )
 
