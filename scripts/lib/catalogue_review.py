@@ -11,6 +11,7 @@ import hashlib
 import html
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 from models_dev import MODELS_DEV_URL
@@ -102,6 +103,27 @@ def _as_models(payload: dict) -> dict:
             raise ValueError("previous inventory contains malformed model evidence")
         result[model["id"]] = model["pricing"]
     return result
+
+
+def _observation_time(payload: dict, key: str) -> datetime:
+    """Parse both legacy and new RFC 3339 UTC/offset observation timestamps."""
+    raw = payload.get(key)
+    if not isinstance(raw, str):
+        raise ValueError(f"inventory {key} timestamp is missing")
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"inventory {key} timestamp is malformed") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"inventory {key} timestamp must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def require_fresher_observations(current: dict, previous: dict) -> None:
+    """A queued older refresh cannot replace newer published model evidence."""
+    for field in ("fetched_at", "pricing_observed_at"):
+        if _observation_time(current, field) <= _observation_time(previous, field):
+            raise ValueError(f"stale {field} would overwrite newer bot evidence")
 
 
 def _all_zero_price_values(value: object) -> bool:
@@ -293,7 +315,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--current", type=Path, required=True)
     parser.add_argument("--previous", type=Path)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--check-freshness", action="store_true")
     args = parser.parse_args()
     current = json.loads(args.current.read_text(encoding="utf-8"))
     previous = (
@@ -301,6 +324,13 @@ def main() -> int:
         if args.previous and args.previous.is_file()
         else None
     )
+    if args.check_freshness:
+        if previous is None:
+            parser.error("--check-freshness requires --previous")
+        require_fresher_observations(current, previous)
+        return 0
+    if args.output is None:
+        parser.error("--output is required when rendering a report")
     output = render_pr_body(current, previous)
     args.output.write_text(output, encoding="utf-8")
     return 0

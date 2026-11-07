@@ -12,6 +12,7 @@ from catalogue_review import (
     registry_review,
     render_pr_body,
     review_fingerprint,
+    require_fresher_observations,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -254,6 +255,52 @@ def test_renderer_rejects_more_free_models_than_listed():
     current["counts"]["classified"] = 1
     with pytest.raises(ValueError, match="exceed the Console listing"):
         render_pr_body(current)
+
+
+def test_prior_snapshot_observations_must_be_older():
+    previous = _inventory()
+    current = json.loads(json.dumps(previous))
+    current["fetched_at"] = "2026-11-06T20:01:00+00:00"
+    current["pricing_observed_at"] = "2026-11-06T20:01:00Z"
+    require_fresher_observations(current, previous)
+
+    for field in ("fetched_at", "pricing_observed_at"):
+        too_old = json.loads(json.dumps(current))
+        too_old[field] = previous[field]
+        with pytest.raises(ValueError, match=f"stale {field}"):
+            require_fresher_observations(too_old, previous)
+
+    for malformed in ("not-a-date", "2026-11-06T21:00:00", None):
+        bad = json.loads(json.dumps(current))
+        bad["fetched_at"] = malformed
+        with pytest.raises(ValueError, match="timestamp"):
+            require_fresher_observations(bad, previous)
+
+
+def test_freshness_cli_rejects_older_queued_result(tmp_path):
+    previous = _inventory()
+    current = json.loads(json.dumps(previous))
+    current["fetched_at"] = "2026-11-06T19:00:00Z"
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(json.dumps(previous), encoding="utf-8")
+    after.write_text(json.dumps(current), encoding="utf-8")
+    outcome = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/lib/catalogue_review.py"),
+            "--current",
+            str(after),
+            "--previous",
+            str(before),
+            "--check-freshness",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert outcome.returncode != 0
+    assert "stale fetched_at" in outcome.stderr
 
 
 def test_renderer_rejects_false_multi_provider_observation():
