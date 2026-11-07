@@ -1,13 +1,13 @@
 # ChatGPT Desktop and Codex CLI: custom inference qualification
 
-**Status (2026-11-03):** documentation and an explicitly selected standalone Codex CLI model alias. **No ChatGPT Desktop Chat, Work or Codex-panel custom-inference qualification is claimed.**
+**Status (owner update 2026-11-07):** Codex CLI's LiteLLM route is **owner-reported working for several days**; its original finite acceptance issue [#82](https://github.com/randytarampi/dotfiles/issues/82) was closed. [LiteLLM's Codex-in-ChatGPT-Desktop guide](https://docs.litellm.ai/docs/proxy/client_setup/codex_chatgpt_desktop) now explicitly documents the shared `~/.codex/config.toml`. **The Codex desktop panel remains independently unverified** and is tracked by [#216](https://github.com/randytarampi/dotfiles/issues/216). Ordinary ChatGPT Chat and Work do not use this gateway configuration.
 
 ## Separate the products and consumers
 
 - **ChatGPT Desktop Chat:** repo does not have a supported setting to replace the hosted ChatGPT model endpoint with the local LiteLLM gateway. Do not edit application internals or install a blanket TLS proxy.
 - **ChatGPT Work:** a different product surface; Codex CLI `config.toml` does not establish an inference endpoint for Work.
 - **Codex CLI:** supports `~/.codex/config.toml`, named profiles, provider base URLs and Responses wire API. The existing `configure-codex.py` provides a local `[model_providers.litellm]` only when the owner enables `DOTFILES_RUN_CODEX_SETUP=1` and `DOTFILES_USE_LITELLM_PROXY=1`.
-- **Codex within the ChatGPT Desktop app:** inspect the installed version and effective configuration separately. Whether it honours a named CLI profile is UNKNOWN until verified through the actual GUI process.
+- **Codex within the ChatGPT Desktop app:** LiteLLM's documented app path reads `~/.codex/config.toml` and can use a named LiteLLM provider/Responses alias; GUI launch environment, `~/.codex/.env` key access, model picker and actual task receipts are **UNKNOWN until owner verified**. Do not infer desktop proof from CLI success; see #216.
 
 ## Standalone Codex CLI opt-in qualification
 
@@ -37,7 +37,7 @@
     Record selected model, actual `/v1/responses` request, streaming,
     tool calls, cost/usage and gateway receipt. Preserve the direct
     OpenAI default and test switch-back.
-5. Test Codex inside **ChatGPT Desktop** independently. Inspect effective
+5. Test Codex inside **ChatGPT Desktop** independently ([#216](https://github.com/randytarampi/dotfiles/issues/216)). Inspect effective
     app version, selected model/provider and requests. If it does not
     honour the CLI profile, record UNSUPPORTED or UNKNOWN, not a fabricated
     desktop launcher or inference override.
