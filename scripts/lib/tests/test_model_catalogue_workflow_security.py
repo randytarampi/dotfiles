@@ -393,8 +393,14 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     }
 
     def evaluate(
-        data, prs, *, success=True, details=None, tip=None,
-        edit_fail=False, rest_details=None,
+        data,
+        prs,
+        *,
+        success=True,
+        details=None,
+        tip=None,
+        edit_fail=False,
+        rest_details=None,
     ):
         path.write_text(json.dumps(data) + "\n", encoding="utf-8")
         discovered = prs[0] if prs else valid
@@ -472,10 +478,13 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         {**canonical_valid, "state": "closed"},
         {**canonical_valid, "draft": False},
         {**canonical_valid, "user": {**canonical_valid["user"], "id": 987}},
-        {**canonical_valid, "head": {
-            **canonical_valid["head"],
-            "repo": {"full_name": "other/fork"},
-        }},
+        {
+            **canonical_valid,
+            "head": {
+                **canonical_valid["head"],
+                "repo": {"full_name": "other/fork"},
+            },
+        },
         {},
     ):
         evaluate(timestamp_only, [valid], rest_details=changed, success=False)
