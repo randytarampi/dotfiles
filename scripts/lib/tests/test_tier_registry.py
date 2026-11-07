@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -208,8 +209,16 @@ class TierRegistryTests(unittest.TestCase):
     def test_deprecated_tier_aliases_are_documented_and_absent_from_registry(self):
         data = registry()
         aliases = set(tier_registry.DEPRECATED_TIER_ALIASES)
-        readme = (Path(__file__).resolve().parents[3] / "README.md").read_text()
-        self.assertIn(f"{len(data['presets'])} presets", readme)
+        # TIERS.md owns the public tier inventory; README.md is deliberately
+        # a short entry point and must not duplicate a drifting preset count.
+        tiers_doc = (Path(__file__).resolve().parents[3] / "docs" / "TIERS.md").read_text()
+        tier_table = tiers_doc.split("| Tier | Providers | Best For |", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        documented = set(re.findall(r"^\| \*\*([^*]+)\*\* \|", tier_table, re.MULTILINE))
+        self.assertEqual(documented, set(data["presets"]))
+        for alias in aliases:
+            self.assertIn(alias, tiers_doc)
         self.assertEqual(aliases, {"local-pro", "local-mini", "local-nano"})
         self.assertTrue(aliases.isdisjoint(data["presets"]))
         self.assertTrue(aliases.isdisjoint(data["_tiers"]))
