@@ -118,50 +118,78 @@ def review_fingerprint(current: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def render_pr_body(current: dict, previous: dict | None = None) -> str:
-    """Emit the repository PR template and distinguish evidence from entitlement."""
-    if (
-        not isinstance(current, dict)
-        or current.get("schema_version") != SCHEMA_VERSION
-        or current.get("status") != "available"
-        or not isinstance(current.get("review"), dict)
-        or not isinstance(current.get("provider_coverage"), dict)
-    ):
-        raise ValueError("only an available, provider-scoped inventory may publish")
-    current_models = _as_models(current)
-    prior_models = _as_models(previous) if previous is not None else {}
-    review = current["review"]
+def _validated_review_partitions(review: dict, zero: set[str]) -> None:
     required = (
         "new_candidates",
         "already_curated",
         "curated_not_listed",
         "curated_listed_not_zero",
     )
-    if any(
-        not isinstance(review.get(key), list)
-        or any(not isinstance(item, str) for item in review[key])
-        for key in required
-    ):
-        raise ValueError("inventory review fields are malformed")
-    if current.get("source") != CONSOLE_SOURCE:
-        raise ValueError("model inventory must come from the Console model list")
-    if current.get("pricing_source") != MODELS_DEV_URL:
-        raise ValueError("model inventory has unexpected pricing provenance")
-    if current["provider_coverage"] != provider_coverage(CONSOLE_SOURCE):
-        raise ValueError("provider coverage does not match observed sources")
-    others = sorted(name for name in PROVIDER_ENDPOINTS if name != CONSOLE)
+    for key in required:
+        members = review.get(key)
+        if not isinstance(members, list):
+            raise ValueError("inventory review fields are malformed")
+        if any(not isinstance(item, str) for item in members):
+            raise ValueError("inventory review fields are malformed")
+        if len(members) != len(set(members)):
+            raise ValueError("review contains repeated model IDs")
+
     groups = {name: set(review[name]) for name in required}
-    zero = set(current_models)
     if groups["new_candidates"] & groups["already_curated"]:
         raise ValueError("review partitions overlap")
     if groups["new_candidates"] | groups["already_curated"] != zero:
         raise ValueError("review does not cover the zero-priced candidates")
-    if (
-        (groups["curated_not_listed"] | groups["curated_listed_not_zero"]) & zero
-        or groups["curated_not_listed"] & groups["curated_listed_not_zero"]
-        or any(len(groups[name]) != len(review[name]) for name in required)
-    ):
-        raise ValueError("review contains overlapping or repeated model IDs")
+    if (groups["curated_not_listed"] | groups["curated_listed_not_zero"]) & zero:
+        raise ValueError("review contains overlapping model IDs")
+    if groups["curated_not_listed"] & groups["curated_listed_not_zero"]:
+        raise ValueError("review partitions overlap")
+
+
+def _validated_counts(counts: dict, free_count: int) -> None:
+    if not isinstance(counts, dict):
+        raise ValueError("candidate counts are invalid")
+    for field in ("catalogue", "classified", "free", "unclassified"):
+        if type(counts.get(field)) is not int or counts[field] < 0:
+            raise ValueError("candidate counts are invalid")
+    if counts["catalogue"] < 1:
+        raise ValueError("empty catalogue is not publishable")
+    if counts["classified"] != counts["catalogue"]:
+        raise ValueError("candidate classifications are incomplete")
+    if counts["free"] != free_count:
+        raise ValueError("candidate free count disagrees with models")
+    if counts["unclassified"] != 0:
+        raise ValueError("candidate counts or classification incomplete")
+
+
+def _validated_current(current: dict) -> tuple[dict, dict, list[str], dict]:
+    if not isinstance(current, dict):
+        raise ValueError("only a provider-scoped inventory may publish")
+    if current.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("unknown candidate inventory schema")
+    if current.get("status") != "available":
+        raise ValueError("only an available inventory may publish")
+    if current.get("source") != CONSOLE_SOURCE:
+        raise ValueError("model inventory must come from the Console model list")
+    if current.get("pricing_source") != MODELS_DEV_URL:
+        raise ValueError("model inventory has unexpected pricing provenance")
+    if current.get("provider_coverage") != provider_coverage(CONSOLE_SOURCE):
+        raise ValueError("provider coverage does not match observed sources")
+
+    current_models = _as_models(current)
+    review = current.get("review")
+    if not isinstance(review, dict):
+        raise ValueError("inventory review fields are malformed")
+    _validated_review_partitions(review, set(current_models))
+    counts = current.get("counts")
+    _validated_counts(counts, len(current_models))
+    others = sorted(name for name in PROVIDER_ENDPOINTS if name != CONSOLE)
+    return current_models, review, others, counts
+
+
+def render_pr_body(current: dict, previous: dict | None = None) -> str:
+    """Emit the repository PR template and distinguish evidence from entitlement."""
+    current_models, review, others, counts = _validated_current(current)
+    prior_models = _as_models(previous) if previous is not None else {}
     added = sorted(set(current_models) - set(prior_models))
     removed = sorted(set(prior_models) - set(current_models))
     price_changed = sorted(
@@ -169,20 +197,6 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         for key in set(current_models) & set(prior_models)
         if current_models[key] != prior_models[key]
     )
-    counts = current.get("counts", {})
-    required_counts = ("catalogue", "classified", "free", "unclassified")
-    if not isinstance(counts, dict) or any(
-        type(counts.get(name)) is not int or counts[name] < 0
-        for name in required_counts
-    ):
-        raise ValueError("candidate counts are invalid")
-    if (
-        counts["catalogue"] < 1
-        or counts["classified"] != counts["catalogue"]
-        or counts["free"] != len(current_models)
-        or counts["unclassified"] != 0
-    ):
-        raise ValueError("candidate counts or classification incomplete")
     return (
         "## Outcome and scope\n\n"
         "Review-only free-model *candidates* from an authenticated Console "

@@ -336,3 +336,24 @@ def test_unsafe_full_url_override_is_rejected(monkeypatch):
         monkeypatch.setenv("OPENAI_BASE_URL", value)
         with pytest.raises(ValueError):
             CATALOGUES._validate_catalogue_url(value)
+
+
+def test_malformed_existing_inventory_does_not_break_comparison():
+    payload = {
+        "status": "available",
+        "source": MODULE.CONSOLE_MODELS_URL,
+        "pricing_source": MODULE.MODELS_DEV_URL,
+        "schema_version": MODULE.SCHEMA_VERSION,
+        "provider_coverage": {"opencode": {"status": "observed"}},
+        "review": {"new_candidates": []},
+        "counts": {"catalogue": 1, "classified": 1, "free": 1, "unclassified": 0},
+        "models": [{"id": "candidate", "pricing": {"input": 0, "output": 0}}],
+    }
+    assert MODULE._semantically_unchanged(payload, payload)
+    malformed = {**payload, "models": [{}]}
+    assert not MODULE._semantically_unchanged(malformed, payload)
+    assert not MODULE._semantically_unchanged({**payload, "models": "bad"}, payload)
+    assert not MODULE._semantically_unchanged(
+        {**payload, "review": {"new_candidates": ["changed"]}}, payload
+    )
+

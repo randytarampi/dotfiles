@@ -84,6 +84,32 @@ def normalize_models(models: list[dict]) -> list[dict]:
     return sorted(models, key=lambda model: model["id"])
 
 
+def _semantically_unchanged(previous: dict | None, payload: dict) -> bool:
+    """Only observation timestamps may differ from a trusted prior snapshot."""
+    if not isinstance(previous, dict):
+        return False
+    if previous.get("status") not in {"available", "unchanged"}:
+        return False
+    fields = (
+        "source",
+        "pricing_source",
+        "counts",
+        "schema_version",
+        "provider_coverage",
+        "review",
+    )
+    for field in fields:
+        if previous.get(field) != payload[field]:
+            return False
+    old_models = previous.get("models")
+    if not isinstance(old_models, list):
+        return False
+    try:
+        return normalize_models(old_models) == payload["models"]
+    except (KeyError, TypeError):
+        return False
+
+
 def write_artifact(path: Path, payload: dict, *, dry_run: bool = False) -> None:
     if dry_run:
         return
@@ -224,18 +250,7 @@ def refresh(output: Path = DEFAULT_OUTPUT, *, dry_run: bool = False) -> int:
             previous = json.loads(output.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             previous = None
-        if (
-            isinstance(previous, dict)
-            and previous.get("status") in {"available", "unchanged"}
-            and previous.get("source") == payload["source"]
-            and previous.get("pricing_source") == payload["pricing_source"]
-            and previous.get("counts") == payload["counts"]
-            and previous.get("schema_version") == SCHEMA_VERSION
-            and previous.get("provider_coverage") == payload["provider_coverage"]
-            and previous.get("review") == payload["review"]
-            and isinstance(previous.get("models"), list)
-            and normalize_models(previous["models"]) == payload["models"]
-        ):
+        if _semantically_unchanged(previous, payload):
             payload["status"] = "unchanged"
     write_artifact(output, payload, dry_run=dry_run)
     return 0

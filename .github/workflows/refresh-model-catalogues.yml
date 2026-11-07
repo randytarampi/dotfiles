@@ -121,6 +121,10 @@ jobs:
   publish:
     needs: refresh
     if: needs.refresh.result == 'success' && needs.refresh.outputs.status == 'available'
+    # A force-with-lease cannot protect gh pr edit from another overlapping run.
+    concurrency:
+      group: model-catalogue-publish
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: model-catalogue-publish
     permissions:
@@ -305,6 +309,39 @@ jobs:
           # A stale trusted commit cannot publish or preserve an outdated
           # classification after main changes its OpenCode model registry.
           git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+          # Do not overwrite a human-modified branch merely because a PR
+          # was originally opened by Woofdy. Verify the fetched branch tip,
+          # not just the open PR's author and last-known SHA.
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            prior_paths="$(git diff --name-only "origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}")"
+            case "${prior_paths}" in
+              "artifacts/model-catalogues/opencode-zen-free.json" | \
+              "artifacts/model-catalogues/free-model-candidates.json") ;;
+              *)
+                echo "::error::Catalogue branch contains unexpected source changes" >&2
+                exit 1
+                ;;
+            esac
+            prior_mode="$(git ls-tree "${BOT_BRANCH_EXPECTED_TIP}" -- "${prior_paths}" | awk '{print $1}')"
+            if [[ "${prior_mode}" != "100644" ]]; then
+              echo "::error::Catalogue branch inventory is not a regular file" >&2
+              exit 1
+            fi
+            legacy_tip="6fbf14bfeec1222b0ae376b500e1888384a26e4d"
+            if [[ "${BOT_BRANCH_EXPECTED_TIP}" != "${legacy_tip}" ]]; then
+              expected_email="353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+              expected_subject="chore(agents): refresh free-model candidate inventory"
+              old_author="$(git show -s --format='%ae' "${BOT_BRANCH_EXPECTED_TIP}")"
+              old_committer="$(git show -s --format='%ce' "${BOT_BRANCH_EXPECTED_TIP}")"
+              old_subject="$(git show -s --format='%s' "${BOT_BRANCH_EXPECTED_TIP}")"
+              if [[ "${old_author}" != "${expected_email}" ||
+                    "${old_committer}" != "${expected_email}" ||
+                    "${old_subject}" != "${expected_subject}" ]]; then
+                echo "::error::Catalogue branch tip was not produced with the expected bot identity" >&2
+                exit 1
+              fi
+            fi
+          fi
           trusted_registry="$(git rev-parse HEAD:configs/opencode/opencode-models.json)"
           latest_registry="$(git rev-parse "origin/${DEFAULT_BRANCH}:configs/opencode/opencode-models.json")"
           if [[ "${trusted_registry}" != "${latest_registry}" ]]; then
