@@ -205,6 +205,14 @@ GitHub bot noreply identity. Source-code contributions and reviews remain
 attributed separately; automation never claims a CI or inference test it
 did not perform.
 
+The publisher checkout uses `fetch-depth: 0`: its safety preflight
+compares the existing bot branch with the current default branch via a
+three-dot Git diff, which needs their common ancestor. A shallow one-commit
+checkout can fail with `no merge base` when main has advanced since the
+bot commit. The read-only catalogue refresh checkout remains shallow.
+This is a publishing correctness requirement, not an expansion of which
+files or refs may be executed.
+
 **Publication concurrency and branch ownership:** Jobs targeting the single
 catalogue bot branch are serialized; a force-with-lease alone cannot protect
 subsequent PR-body edits. Before any no-op or push, the publisher verifies

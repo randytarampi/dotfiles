@@ -169,7 +169,9 @@ jobs:
         with:
           ref: ${{ env.TRUSTED_SHA }}
           persist-credentials: false
-          fetch-depth: 1
+          # Bot branch validation uses a three-dot diff against main and
+          # needs a real merge base, even when main advanced after the bot PR.
+          fetch-depth: 0
 
       - name: Download the catalogue artifact
         uses: actions/download-artifact@v8

@@ -478,6 +478,21 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     evaluate(timestamp_only, [valid], tip=unexpected_tip, success=False)
 
 
+def test_publisher_checkout_has_full_history_for_three_dot_branch_guard():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    refresh, publish = workflow.split("  publish:\n", 1)
+    refresh_checkout = refresh.split(
+        "      - name: Check out the triggering commit\n", 1
+    )[1].split("      - name:", 1)[0]
+    publish_checkout = publish.split(
+        "      - name: Check out the exact base commit\n", 1
+    )[1].split("      - name:", 1)[0]
+    assert "fetch-depth: 1" in refresh_checkout
+    assert "fetch-depth: 0" in publish_checkout
+    assert 'prior_paths="$(git diff --name-only ' in publish
+    assert 'origin/${DEFAULT_BRANCH}...${BOT_BRANCH_EXPECTED_TIP}' in publish
+
+
 def test_candidate_report_uses_template_and_woofdy_commit_identity():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     refresh, publish = workflow.split("  publish:\n", 1)
