@@ -54,6 +54,22 @@ def test_optional_probe_does_not_send_credentials_or_assume_inference():
     assert len(calls) == 1
 
 
+def test_loopback_redirect_handler_refuses_offhost_and_any_redirect():
+    handler = MODULE._RefuseRedirect()
+    assert (
+        handler.redirect_request(
+            None, None, 302, "redirect", {}, "http://169.254.169.254/latest"
+        )
+        is None
+    )
+    assert (
+        handler.redirect_request(
+            None, None, 302, "redirect", {}, "http://localhost:4001/other"
+        )
+        is None
+    )
+
+
 def test_auth_errors_are_not_consumer_proof():
     def auth_error(request, timeout):
         raise HTTPError(request.full_url, 401, "unauthorized", {}, None)
