@@ -1641,7 +1641,7 @@ def main():
     # Write cli.json — but never create it when there is no route to install:
     # upstream migrates supported global tui.json settings into cli.json on
     # the first v2 TUI start ONLY while cli.json is absent, so creating an
-    # empty cli.json would strand those settings (docs/VOICE.md).
+    # empty cli.json would strand those settings (docs/voice.md).
     if not cli_existed and not route_installed:
         logger.info(
             "cli.json not created: no voice route resolved; the upstream "

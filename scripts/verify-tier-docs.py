@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 from litellm_aliases import resolve_canonical_identity  # noqa: E402
 
 SLIM_PATH = ROOT / "configs" / "opencode" / "oh-my-opencode-slim.json"
-DOCS_PATH = ROOT / "docs" / "TIERS.md"
+DOCS_PATH = ROOT / "docs" / "tiers.md"
 
 HEADING = re.compile(r"^### .* Tier(?: \(`[^`]+`\))?\s*$")
 TABLE_ROW = re.compile(r"^\|\s*[^|]+\|\s*([^|]+)\|.*$")
@@ -89,9 +89,9 @@ def drift_messages(registry: dict, document: str) -> list[str]:
     extra = sorted(docs_set - registry_set)
     messages = []
     if missing:
-        messages.append("Missing from docs/TIERS.md tier tables: " + ", ".join(missing))
+        messages.append("Missing from docs/tiers.md tier tables: " + ", ".join(missing))
     if extra:
-        messages.append("Extra in docs/TIERS.md tier tables: " + ", ".join(extra))
+        messages.append("Extra in docs/tiers.md tier tables: " + ", ".join(extra))
     return messages
 
 
