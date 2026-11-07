@@ -10,7 +10,6 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[3]
 DOCUMENTS = (
     "AGENTS.md",
