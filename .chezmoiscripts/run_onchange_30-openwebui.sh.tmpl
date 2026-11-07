@@ -108,7 +108,7 @@ INSTALLED_VERSION="$("$VENV_DIR/bin/python" -c 'import importlib.metadata as m; 
 # An empty metadata lookup still means the following pip install may migrate an
 # existing database, so treat unknown as backup-required rather than skip.
 if [[ -f "$DATA_DIR/webui.db" && (-z "$INSTALLED_VERSION" || "$INSTALLED_VERSION" != "$VERSION") ]]; then
-  # Version changes migrate webui.db irreversibly (see docs/CHAT_FRONTEND.md);
+  # Version changes migrate webui.db irreversibly (see docs/chat-frontend.md);
   # stop the service, snapshot the database (+ WAL/SHM), then upgrade. Use
   # SQLite's online backup if the service remains active. The
   # service is restarted by the wiring below, so a brief outage is expected.
