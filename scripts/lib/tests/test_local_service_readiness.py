@@ -71,8 +71,14 @@ def test_inventory_is_nonmutating_and_gated(monkeypatch):
         MODULE,
         "LOCAL_ENGINES",
         {
-            "ollama": {"base_url": lambda: "http://localhost:11434/v1", "gate_env": None},
-            "omlx": {"base_url": lambda: "http://127.0.0.1:8000/v1", "gate_env": "DOTFILES_RUN_OMLX_SETUP"},
+            "ollama": {
+                "base_url": lambda: "http://localhost:11434/v1",
+                "gate_env": None,
+            },
+            "omlx": {
+                "base_url": lambda: "http://127.0.0.1:8000/v1",
+                "gate_env": "DOTFILES_RUN_OMLX_SETUP",
+            },
         },
     )
     env = {"DOTFILES_RUN_OMLX_SETUP": "0"}
