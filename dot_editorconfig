@@ -23,6 +23,8 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+# Markdown list and code-block indentation is structural, not a fixed multiple.
+indent_size = unset
 # Markdown prose is soft-wrapped; trailing double spaces can encode hard breaks.
 max_line_length = off
 
