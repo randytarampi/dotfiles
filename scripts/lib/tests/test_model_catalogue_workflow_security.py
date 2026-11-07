@@ -295,6 +295,9 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         cwd=checkout,
         check=True,
     )
+    registry = checkout / "configs/opencode/opencode-models.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text('{"models":{"big-pickle":{}}}', encoding="utf-8")
     path = checkout / "artifacts/model-catalogues/free-model-candidates.json"
     path.parent.mkdir(parents=True)
     baseline = {
@@ -322,6 +325,13 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     tip_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
     ).strip()
+    subprocess.run(["git", "branch", "main"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(checkout)],
+        cwd=checkout,
+        check=True,
+    )
+
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
@@ -451,6 +461,9 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "Catalogue branch has no open PR and an unrecognised commit" in publish
     assert "6fbf14bfeec1222b0ae376b500e1888384a26e4d" in publish
     assert "Curated model registry changed during refresh" in publish
+    assert publish.index("Check the curated source before") < publish.index(
+        "Preserve an existing draft when the only differences"
+    )
     assert "Repaired stale catalogue PR metadata" in publish
     assert "free-model-review-sha256" in publish
     assert "scripts/lib/catalogue_review.py" in publish
@@ -557,3 +570,74 @@ def test_manual_dispatch_sha_must_be_default_branch_ancestor(tmp_path):
             check=False,
         )
         assert result.returncode != 0, changed
+
+
+def test_curated_registry_drift_gate_rejects_stale_snapshot(tmp_path):
+    import os
+    import subprocess
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    publish = workflow.split("  publish:\n", 1)[1]
+    section = publish.split(
+        "          # Check the curated source before", 1
+    )[1].split(
+        "          # Preserve an existing draft when", 1
+    )[0]
+    block = section.splitlines()
+    start = next(i for i, line in enumerate(block) if "trusted_registry=" in line)
+    script = "\n".join(
+        line[10:] for line in block[start:] if line.startswith("          ")
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "ci@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "CI fixture"],
+        cwd=repo,
+        check=True,
+    )
+    registry = repo / "configs/opencode/opencode-models.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text('{"models":{"a":{}}}', encoding="utf-8")
+    subprocess.run(["git", "add", str(registry)], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "baseline"], cwd=repo, check=True)
+    base = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+    ).strip()
+
+    def run():
+        return subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", script],
+            cwd=repo,
+            env={**os.environ, "DEFAULT_BRANCH": "main"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/main", base],
+        cwd=repo,
+        check=True,
+    )
+    assert run().returncode == 0
+    registry.write_text('{"models":{"b":{}}}', encoding="utf-8")
+    subprocess.run(["git", "add", str(registry)], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "updated registry"], cwd=repo, check=True)
+    new_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+    ).strip()
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/main", new_head],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", "--detach", base], cwd=repo, check=True)
+    outcome = run()
+    assert outcome.returncode != 0
+    assert "Curated model registry changed during refresh" in outcome.stderr

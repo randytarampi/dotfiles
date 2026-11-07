@@ -301,6 +301,16 @@ jobs:
             echo "::error::Refusing to update a non-draft or foreign catalogue PR" >&2
             exit 1
           fi
+          # Check the curated source before the timestamp-only no-op exit.
+          # A stale trusted commit cannot publish or preserve an outdated
+          # classification after main changes its OpenCode model registry.
+          git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+          trusted_registry="$(git rev-parse HEAD:configs/opencode/opencode-models.json)"
+          latest_registry="$(git rev-parse "origin/${DEFAULT_BRANCH}:configs/opencode/opencode-models.json")"
+          if [[ "${trusted_registry}" != "${latest_registry}" ]]; then
+            echo "::error::Curated model registry changed during refresh; rerun against current main" >&2
+            exit 1
+          fi
           # Preserve an existing draft when the only differences are observation times.
           # This check is deliberately after the exact artifact-path and gitlink
           # allowlists; do not skip those checks on repeated runs.
