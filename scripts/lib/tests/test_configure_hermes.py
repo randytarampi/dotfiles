@@ -344,7 +344,9 @@ def test_active_model_selection_is_explicit_and_preserves_unrelated_yaml():
         "  user-local:\n"
         "    api: http://127.0.0.1:11434/v1\n"
     )
-    updated = hermes.reconcile(source, "current/gateway-model", "http://127.0.0.1:4000/v1")
+    updated = hermes.reconcile(
+        source, "current/gateway-model", "http://127.0.0.1:4000/v1"
+    )
     assert yaml.safe_load(updated)["model"]["provider"] == "ollama-cloud"
     selected = hermes.select_active_model(updated, "current/gateway-model")
     parsed = yaml.safe_load(selected)
@@ -394,7 +396,10 @@ def test_active_selection_requires_explicit_flag(monkeypatch, tmp_path):
     monkeypatch.setenv("HERMES_HOME", str(root))
     monkeypatch.setenv(hermes.GATE, "1")
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
-    assert hermes.main(["--model", "served/model", "--dry-run", "--select-active-model"]) == 0
+    assert (
+        hermes.main(["--model", "served/model", "--dry-run", "--select-active-model"])
+        == 0
+    )
     assert yaml.safe_load(path.read_text())["model"]["default"] == "glm-5.1"
     assert hermes.main(["--model", "served/model", "--select-active-model"]) == 0
     active = yaml.safe_load(path.read_text())["model"]
