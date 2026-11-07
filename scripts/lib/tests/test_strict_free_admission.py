@@ -1,4 +1,5 @@
 """Account-bound admission fixtures: no real credentials, network or files."""
+
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import pytest
@@ -6,11 +7,28 @@ import pytest
 from strict_free_admission import Decision, Evidence, Route, admit, admit_chain
 
 NOW = datetime(2026, 11, 7, 20, tzinfo=timezone.utc)
-ROUTE = Route("provider", "https://example.invalid/api", "served-model", "backend-a",
-              "account-a", "a" * 64, "private")
-PROOF = Evidence(ROUTE, "account_billing_api", "account-specific-record",
-                 NOW - timedelta(seconds=15), NOW + timedelta(seconds=60),
-                 "recurring_account_free", "active", "0", 3, 4096, False)
+ROUTE = Route(
+    "provider",
+    "https://example.invalid/api",
+    "served-model",
+    "backend-a",
+    "account-a",
+    "a" * 64,
+    "private",
+)
+PROOF = Evidence(
+    ROUTE,
+    "account_billing_api",
+    "account-specific-record",
+    NOW - timedelta(seconds=15),
+    NOW + timedelta(seconds=60),
+    "recurring_account_free",
+    "active",
+    "0",
+    3,
+    4096,
+    False,
+)
 
 
 def check(route=ROUTE, proof=PROOF, tokens=256, privacy=frozenset({"private"})):
@@ -19,7 +37,9 @@ def check(route=ROUTE, proof=PROOF, tokens=256, privacy=frozenset({"private"})):
 
 def test_accepts_only_current_account_bound_zero_charge():
     assert check() == Decision(True, "account-qualified")
-    assert check(proof=replace(PROOF, entitlement="account_included_zero_marginal")).allowed
+    assert check(
+        proof=replace(PROOF, entitlement="account_included_zero_marginal")
+    ).allowed
 
 
 @pytest.mark.parametrize(
@@ -43,11 +63,17 @@ def test_denies_unproven_or_paid_account(field, value, reason):
     assert check(proof=replace(PROOF, **{field: value})).reason == reason
 
 
-@pytest.mark.parametrize("changed", [
-    {"provider": "different"}, {"endpoint": "https://other.invalid"},
-    {"model": "same-name-other-model"}, {"backend_id": "backend-b"},
-    {"account_id": "account-b"}, {"credential_fingerprint": "b" * 64},
-])
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"provider": "different"},
+        {"endpoint": "https://other.invalid"},
+        {"model": "same-name-other-model"},
+        {"backend_id": "backend-b"},
+        {"account_id": "account-b"},
+        {"credential_fingerprint": "b" * 64},
+    ],
+)
 def test_exact_identity_required(changed):
     assert check(route=replace(ROUTE, **changed)).reason == "route-or-credential-drift"
 
@@ -56,12 +82,24 @@ def test_privacy_and_fallback_guards():
     assert check(privacy=frozenset({"public"})).reason == "privacy-boundary"
     assert check(proof=None).reason == "missing-account-evidence"
     other = replace(ROUTE, backend_id="backend-b")
-    assert not admit_chain((ROUTE, other), (PROOF, None), now=NOW,
-                           tokens=1, privacy_classes=frozenset({"private"})).allowed
-    assert admit_chain((ROUTE, other), (PROOF, replace(PROOF, route=other)), now=NOW,
-                       tokens=1, privacy_classes=frozenset({"private"})).allowed
+    assert not admit_chain(
+        (ROUTE, other),
+        (PROOF, None),
+        now=NOW,
+        tokens=1,
+        privacy_classes=frozenset({"private"}),
+    ).allowed
+    assert admit_chain(
+        (ROUTE, other),
+        (PROOF, replace(PROOF, route=other)),
+        now=NOW,
+        tokens=1,
+        privacy_classes=frozenset({"private"}),
+    ).allowed
 
 
 def test_unknown_budget_and_boolean_quota_fail_closed():
     assert check(tokens=0).reason == "invalid-request-budget"
-    assert check(proof=replace(PROOF, remaining_requests=True)).reason == "unknown-quota"
+    assert (
+        check(proof=replace(PROOF, remaining_requests=True)).reason == "unknown-quota"
+    )
