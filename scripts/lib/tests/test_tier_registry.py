@@ -211,11 +211,15 @@ class TierRegistryTests(unittest.TestCase):
         aliases = set(tier_registry.DEPRECATED_TIER_ALIASES)
         # TIERS.md owns the public tier inventory; README.md is deliberately
         # a short entry point and must not duplicate a drifting preset count.
-        tiers_doc = (Path(__file__).resolve().parents[3] / "docs" / "TIERS.md").read_text()
+        tiers_doc = (
+            Path(__file__).resolve().parents[3] / "docs" / "TIERS.md"
+        ).read_text()
         tier_table = tiers_doc.split("| Tier | Providers | Best For |", 1)[1].split(
             "\n\n", 1
         )[0]
-        documented = set(re.findall(r"^\| \*\*([^*]+)\*\* \|", tier_table, re.MULTILINE))
+        documented = set(
+            re.findall(r"^\| \*\*([^*]+)\*\* \|", tier_table, re.MULTILINE)
+        )
         self.assertEqual(documented, set(data["presets"]))
         for alias in aliases:
             self.assertIn(alias, tiers_doc)
