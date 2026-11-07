@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Opt-in Gemini CLI launcher using a private LiteLLM Gemini-native route.
+
+This does not change ~/.gemini settings, OAuth state or hosted review workflows.
+"""
+
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import sys
+from urllib.parse import urlsplit
+
+MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+PORT_RE = re.compile(r"[1-9][0-9]{0,4}")
+
+
+def validate_endpoint(value):
+    try:
+        url = urlsplit(value)
+        if (
+            url.scheme != "http"
+            or url.hostname not in ("127.0.0.1", "localhost")
+            or not url.port
+            or not PORT_RE.fullmatch(str(url.port))
+            or url.port > 65535
+            or url.path not in ("", "/")
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError("endpoint must be a loopback origin without path")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("invalid LiteLLM Gemini-native origin") from exc
+    return value.rstrip("/")
+
+
+def read_private_key(path):
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Gemini LiteLLM key is missing or unsafe")
+    info = path.stat()
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+        raise ValueError("Gemini LiteLLM key must be user-owned and mode 0600")
+    value = path.read_text(encoding="utf-8").strip()
+    if not value or any(c.isspace() for c in value):
+        raise ValueError("Gemini LiteLLM key is empty or malformed")
+    return value
+
+
+def prepare(environ, *, key=None):
+    for name in (
+        "DOTFILES_RUN_GEMINI_SETUP",
+        "DOTFILES_RUN_LITELLM_SETUP",
+        "DOTFILES_USE_LITELLM_PROXY",
+    ):
+        if environ.get(name) != "1":
+            raise ValueError(f"{name}=1 required for the opt-in Gemini gateway")
+    model = environ.get("DOTFILES_GEMINI_LITELLM_MODEL", "")
+    if not MODEL_RE.fullmatch(model):
+        raise ValueError("DOTFILES_GEMINI_LITELLM_MODEL must be an explicit safe model alias")
+    port = environ.get("LITELLM_PORT", "4000")
+    if not PORT_RE.fullmatch(port) or int(port) > 65535:
+        raise ValueError("invalid LITELLM_PORT")
+    endpoint = validate_endpoint(
+        environ.get("DOTFILES_GEMINI_LITELLM_BASE_URL", f"http://127.0.0.1:{port}")
+    )
+    if environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("true", "1"):
+        raise ValueError("Vertex AI auth selection conflicts with this Gemini API route")
+    if key is None:
+        return model, endpoint, None
+    if environ.get("GEMINI_API_KEY") not in (None, "", key):
+        raise ValueError("Existing GEMINI_API_KEY conflicts with the scoped gateway key")
+    result = dict(environ)
+    result["GEMINI_API_KEY"] = key
+    result["GOOGLE_GEMINI_BASE_URL"] = endpoint
+    result["GEMINI_MODEL"] = model
+    return model, endpoint, result
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true", help="validate nonsecret routing only")
+    args, forwarded = parser.parse_known_args(argv)
+    if any(a in ("--model", "-m") or a.startswith("--model=") for a in forwarded):
+        parser.error("model selection is controlled by DOTFILES_GEMINI_LITELLM_MODEL")
+    try:
+        model, endpoint, _ = prepare(os.environ)
+        if args.dry_run:
+            print(f"Gemini LiteLLM dry run: model={model}, endpoint={endpoint}; "
+                  "key, actual served alias, and installed auth mode UNKNOWN")
+            return 0
+        gemini = shutil.which("gemini")
+        if not gemini:
+            raise ValueError("Gemini CLI is not installed")
+        key_path = Path.home() / ".local/share/litellm/clients/gemini.key"
+        key = read_private_key(key_path)
+        _, _, child_env = prepare(os.environ, key=key)
+        os.execvpe(gemini, [gemini, "--model", model, *forwarded], child_env)
+        return 0
+    except (ValueError, OSError) as exc:
+        print(f"gemini-litellm: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
