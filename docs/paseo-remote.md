@@ -1,6 +1,6 @@
 # Paseo: private remote coding-agent sessions
 
-**Status:** CLI package managed by the dev-tier Brewfile at npm `@latest`; daemon/network configuration remains an opt-in pilot. Does not enable a public listener, relay, or daemon automatically. Read [REMOTE_ACCESS.md](REMOTE_ACCESS.md) first.
+**Status:** CLI package managed by the dev-tier Brewfile at npm `@latest`; daemon/network configuration remains an opt-in pilot. Does not enable a public listener, relay, or daemon automatically. Read [remote-access.md](remote-access.md) first.
 
 ## Owner-run setup
 
