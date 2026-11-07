@@ -4,10 +4,11 @@ import unittest
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "dot_dotfiles/shell/.env.example"
-# Baseline protects remaining environment keys and defaults while retired
-# access gates are checked separately.
+# Baseline protects ordered environment keys and defaults while retired
+# access gates are checked separately. Refreshed for the single commented,
+# empty DOTFILES_GEMINI_LITELLM_MODEL opt-in on 2026-11-07.
 BASELINE_ASSIGNMENTS_SHA256 = (
-    "9529a2e3415063d81c8a9422187d9b00786dad17e8a65da1da7adafb17bdb6d2"
+    "163effd9fa2bb223343547efc049355ba81fc4232f587c8844b4992207c13138"
 )
 ASSIGNMENT = re.compile(rb"^\s*(#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*$")
 
