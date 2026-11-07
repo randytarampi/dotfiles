@@ -71,28 +71,32 @@ def targets(environ=None):
         except (OSError, ValueError):
             base = ""
         origin = loopback_origin(base)
-        result.append({
-            "service": name,
-            "configured": enabled,
-            "origin": origin or "UNKNOWN_OR_NOT_LOOPBACK",
-            "health_path": "/api/tags" if name == "ollama" else "/health",
-            "model_ready": "UNKNOWN",
-            "consumer_ready": "UNKNOWN",
-        })
+        result.append(
+            {
+                "service": name,
+                "configured": enabled,
+                "origin": origin or "UNKNOWN_OR_NOT_LOOPBACK",
+                "health_path": "/api/tags" if name == "ollama" else "/health",
+                "model_ready": "UNKNOWN",
+                "consumer_ready": "UNKNOWN",
+            }
+        )
     if (
         env.get("DOTFILES_RUN_LITELLM_SETUP") == "1"
         and env.get("DOTFILES_USE_LITELLM_PROXY") == "1"
     ):
         port = env.get("LITELLM_PORT", "4000")
         origin = loopback_origin(f"http://127.0.0.1:{port}")
-        result.append({
-            "service": "litellm",
-            "configured": True,
-            "origin": origin or "UNKNOWN_OR_NOT_LOOPBACK",
-            "health_path": "/v1/models",
-            "model_ready": "UNKNOWN",
-            "consumer_ready": "UNKNOWN",
-        })
+        result.append(
+            {
+                "service": "litellm",
+                "configured": True,
+                "origin": origin or "UNKNOWN_OR_NOT_LOOPBACK",
+                "health_path": "/v1/models",
+                "model_ready": "UNKNOWN",
+                "consumer_ready": "UNKNOWN",
+            }
+        )
     return result
 
 
@@ -117,14 +121,17 @@ def collect(*, probe=False, environ=None, opener=urlopen):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--probe", action="store_true", help="opt-in anonymous local GET")
-    parser.add_argument("--strict", action="store_true", help="exit nonzero on unknown enabled route")
+    parser.add_argument(
+        "--probe", action="store_true", help="opt-in anonymous local GET"
+    )
+    parser.add_argument(
+        "--strict", action="store_true", help="exit nonzero on unknown enabled route"
+    )
     args = parser.parse_args()
     report = collect(probe=args.probe)
     print(json.dumps({"checks": report}, indent=2, sort_keys=True))
     if args.strict and any(
-        r["configured"]
-        and r["observation"] != "REACHABLE_NOT_INFERENCE_QUALIFIED"
+        r["configured"] and r["observation"] != "REACHABLE_NOT_INFERENCE_QUALIFIED"
         for r in report
     ):
         return 2
