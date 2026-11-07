@@ -13,7 +13,7 @@ SPEC.loader.exec_module(MODULE)
 
 def _write_fixtures(tmp_path):
     slim = tmp_path / "slim.json"
-    docs = tmp_path / "TIERS.md"
+    docs = tmp_path / "tiers.md"
     slim.write_text(
         json.dumps({"presets": {"test": {"orchestrator": {"model": "openai/alpha"}}}}),
         encoding="utf-8",
@@ -33,8 +33,8 @@ def test_checker_reports_bogus_documentation_model(tmp_path, capsys):
 
     assert MODULE.check(slim, docs) == 2
     output = capsys.readouterr().err
-    assert "Missing from docs/TIERS.md tier tables: alpha" in output
-    assert "Extra in docs/TIERS.md tier tables: bogus" in output
+    assert "Missing from docs/tiers.md tier tables: alpha" in output
+    assert "Extra in docs/tiers.md tier tables: bogus" in output
 
 
 def test_checker_reports_bogus_registry_model(tmp_path, capsys):
@@ -45,7 +45,7 @@ def test_checker_reports_bogus_registry_model(tmp_path, capsys):
 
     assert MODULE.check(slim, docs) == 2
     output = capsys.readouterr().err
-    assert "Missing from docs/TIERS.md tier tables: bogus" in output
+    assert "Missing from docs/tiers.md tier tables: bogus" in output
 
 
 def test_litellm_wrapped_tier_identity_matches_direct_documentation():
