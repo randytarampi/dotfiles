@@ -2,9 +2,7 @@
 
 Cortex Code is Snowflake's specialist terminal agent configured in `~/.snowflake/cortex/`; use it for Snowflake-specific work, not general provider-agnostic tasks.
 
-Configured agent tools are OpenCode, Codex, Junie, Pi, Cortex, Claude,
-Copilot, Gemini, Cursor, Cline, and Antigravity. Their integration details
-are documented in `docs/CAPABILITY_MATRIX.md` in the dotfiles repository.
+Configured agent tools are OpenCode, Codex, Junie, Pi, Cortex, Claude, Copilot, Gemini, Cursor, Cline, and Antigravity. Their integration details are documented in `docs/CAPABILITY_MATRIX.md` in the dotfiles repository.
 
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
@@ -25,56 +23,15 @@ These apply to every repo, every session.
 
 ### Contribution attribution
 
-Credit substantive work by humans **and** AI agents at the point of delivery.
-Do not erase earlier contributors when handing work to another model or agent.
+Credit substantive work by humans **and** AI agents at the point of delivery. Do not erase earlier contributors when handing work to another model or agent.
 
-- **Commits:** retain the actual Git author. For each additional person or agent
-  who materially designed, wrote or revised the committed change, add a
-  `Co-authored-by: Name <email>` trailer when a verified or approved attribution
-  identity is available; optionally include `(model)` after the name only
-  when the session reliably identifies its actual model. For ChatGPT use
-  `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified
-  session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base
-  identity of `Co-authored-by: opencode <opencode-agent[bot]@users.noreply.github.com>` with the model
-  derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <opencode-agent[bot]@users.noreply.github.com>`).
-  Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the
-  runtime model in parentheses only when the session actually reports it
-  (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`).
-  For Pi sessions here, use `Co-authored-by: Pi <noreply@pi.dev>`; include the
-  runtime model in parentheses only when the session reports it
-  (e.g. `Co-authored-by: Pi (omlx/Ornith-1.5-35B-A3B-MLX-4bit) <noreply@pi.dev>`).
-  Do not guess a family or version. Use the contributor's own supported name/model/email for
-  other agents; never invent an email or impersonate a human or GitHub user. If
-  no suitable identity is available, acknowledge the agent and contribution in
-  the PR or document instead.
-- **Reviewed-by trailers:** when a PR or code review is attributed to an agent,
-  use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents
-  derive their model at time of review; if unavailable, use the base identity
-  `Reviewed-by: opencode <opencode-agent[bot]@users.noreply.github.com>`. For example,
-  `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`.
-  When an agent session hands off to another agent, both should be acknowledged
-  if they each contributed material review input.
-- **Pull requests:** include a short **Contributors and roles** section naming
-  significant human and agent implementers, drafters and reviewers, with the
-  specific work each did. Co-author trailers do not replace this record. Credit
-  reviewers for reviews; do not automatically call them code co-authors.
-- **Design docs, RFCs and handoffs:** identify the actual author(s),
-  collaborating agents, reviewers, date and their roles in a small attribution
-  note. Preserve existing provenance when revising a document. Do not add
-  boilerplate to every incidental note or generated file; credit substantial
-  contributions in the parent artifact or PR.
-- **Truth and consent:** attribute only work actually contributed, never claim
-  approvals, authorship, tool execution or tests not performed, and respect a
-  contributor's requested identity/privacy preference. If authorship is
-  uncertain, say so rather than guessing.
-- **History:** apply this prospectively. Do not rewrite existing/shared commit
-  history merely to add credit without explicit authorization and coordination;
-  an accurate PR acknowledgment is usually enough.
-- Put all `Co-authored-by` and `Reviewed-by` trailers in one contiguous block at
-  the end of the commit message, after one blank line from the body, with no
-  blank lines between trailers. Remove exact duplicate trailer entries while
-  preserving distinct contributors, models and roles; never claim unapproved
-  approval. Keep the actual Git author unchanged.
+- **Commits:** retain the actual Git author. For each additional person or agent who materially designed, wrote or revised the committed change, add a `Co-authored-by: Name <email>` trailer when a verified or approved attribution identity is available; optionally include `(model)` after the name only when the session reliably identifies its actual model. For ChatGPT use `Co-authored-by: ChatGPT <noreply@openai.com>` by default; a verified session may use `ChatGPT (gpt-6)` or its actual model. OpenCode agents use a base identity of `Co-authored-by: opencode <opencode-agent[bot]@users.noreply.github.com>` with the model derived dynamically at commit time (e.g. `Co-authored-by: opencode (poolside/laguna-xs-2.1) <opencode-agent[bot]@users.noreply.github.com>`). Junie sessions use `Co-authored-by: Junie <junie@jetbrains.com>`; include the runtime model in parentheses only when the session actually reports it (e.g. `Co-authored-by: Junie (grok-4.6) <junie@jetbrains.com>`). For Pi sessions here, use `Co-authored-by: Pi <noreply@pi.dev>`; include the runtime model in parentheses only when the session reports it (e.g. `Co-authored-by: Pi (omlx/Ornith-1.5-35B-A3B-MLX-4bit) <noreply@pi.dev>`). Do not guess a family or version. Use the contributor's own supported name/model/email for other agents; never invent an email or impersonate a human or GitHub user. If no suitable identity is available, acknowledge the agent and contribution in the PR or document instead.
+- **Reviewed-by trailers:** when a PR or code review is attributed to an agent, use `Reviewed-by: Name (model) <email>` with the same conventions. OpenCode agents derive their model at time of review; if unavailable, use the base identity `Reviewed-by: opencode <opencode-agent[bot]@users.noreply.github.com>`. For example, `Reviewed-by: Claude (anthropic/claude-opus-5-5) <claude@anthropic.com>`. When an agent session hands off to another agent, both should be acknowledged if they each contributed material review input.
+- **Pull requests:** include a short **Contributors and roles** section naming significant human and agent implementers, drafters and reviewers, with the specific work each did. Co-author trailers do not replace this record. Credit reviewers for reviews; do not automatically call them code co-authors.
+- **Design docs, RFCs and handoffs:** identify the actual author(s), collaborating agents, reviewers, date and their roles in a small attribution note. Preserve existing provenance when revising a document. Do not add boilerplate to every incidental note or generated file; credit substantial contributions in the parent artifact or PR.
+- **Truth and consent:** attribute only work actually contributed, never claim approvals, authorship, tool execution or tests not performed, and respect a contributor's requested identity/privacy preference. If authorship is uncertain, say so rather than guessing.
+- **History:** apply this prospectively. Do not rewrite existing/shared commit history merely to add credit without explicit authorization and coordination; an accurate PR acknowledgment is usually enough.
+- Put all `Co-authored-by` and `Reviewed-by` trailers in one contiguous block at the end of the commit message, after one blank line from the body, with no blank lines between trailers. Remove exact duplicate trailer entries while preserving distinct contributors, models and roles; never claim unapproved approval. Keep the actual Git author unchanged.
 
 ### Verifying before declaring success
 
@@ -99,6 +56,8 @@ Do not erase earlier contributors when handing work to another model or agent.
 - **Mirror the conversation.** Nominally reply in the language and register the engagement is using; don't force a switch.
 - **Canadian English for English prose.** Use Canadian spellings and usage (colour, centre, labelled, analytics-style -ize) in everything you write in English.
 - **Canadian Press style for formal artifacts.** Reports, reviews, PR summaries, and other formal documents follow Canadian Press style (spelling, numerals, capitalization, punctuation). Casual conversation stays casual — don't formalize chat.
+
+- **Markdown source layout.** Do not hard-wrap prose at 80 or 100 columns. Use one source line per ordinary paragraph or list-item sentence and let the editor wrap visually. Keep Markdown-significant line breaks, fences, tables and generated-file boundaries intact.
 
 ### Semantic ambiguity
 

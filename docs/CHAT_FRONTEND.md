@@ -1,45 +1,19 @@
 # Unified Multi-Provider Chat Frontend (Open WebUI)
 
-> **Status: implemented (Phases 4a–4f).** This document is the research-backed design
-> for a unified chat frontend over the repo's local engines and cloud providers.
-> The reconciler (`scripts/lib/openwebui.py`), configure script
-> (`scripts/configure-openwebui.py`), and deployment wiring
-> (`.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl`, LaunchAgent
-> `com.openwebui.web`, Caddy `chat.<domain>`) are committed and live-validated
-> against `open-webui==0.11.4` (venv 2.3 GB, ~800 MB RSS, 612 models discovered
-> in the pilot reconciliation). Gate it on with `DOTFILES_RUN_OPENWEBUI_SETUP=1`
-> in `~/.env` + `make deploy`; see `.env.example` for the full variable set.
+> **Status: implemented (Phases 4a–4f).** This document is the research-backed design for a unified chat frontend over the repo's local engines and cloud providers. The reconciler (`scripts/lib/openwebui.py`), configure script (`scripts/configure-openwebui.py`), and deployment wiring (`.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl`, LaunchAgent `com.openwebui.web`, Caddy `chat.<domain>`) are committed and live-validated against `open-webui==0.11.4` (venv 2.3 GB, ~800 MB RSS, 612 models discovered in the pilot reconciliation). Gate it on with `DOTFILES_RUN_OPENWEBUI_SETUP=1` in `~/.env` + `make deploy`; see `.env.example` for the full variable set.
 
 ## TL;DR
 
-**Recommendation: Open WebUI, adopted in stages**, integrated the same way every
-optional service in this repo is integrated — a gate, a generated LaunchAgent, a
-Caddy route, and local-provider connections generated from the existing
-`LOCAL_ENGINES` registry (cloud providers are reconciler-managed when their
-upstream-native keys are present). It is the best ecosystem fit for the requested breadth, but
-**no candidate today satisfies breadth, maturity, simplicity and strong
-isolation simultaneously**, so adoption is staged and reversible:
+**Recommendation: Open WebUI, adopted in stages**, integrated the same way every optional service in this repo is integrated — a gate, a generated LaunchAgent, a Caddy route, and local-provider connections generated from the existing `LOCAL_ENGINES` registry (cloud providers are reconciler-managed when their upstream-native keys are present). It is the best ecosystem fit for the requested breadth, but **no candidate today satisfies breadth, maturity, simplicity and strong isolation simultaneously**, so adoption is staged and reversible:
 
-1. **Core multi-provider chat pilot** — the only piece recommended for the
-   initial build.
-2. **Open Terminal** — an additional privileged runtime in the same ecosystem;
-   separate security/reliability pilot before it is enabled anywhere.
-3. **Open WebUI Computer (`cptr`)** — a separately installed and operated
-   application, not a feature of the chat UI; its own experimental decision.
+1. **Core multi-provider chat pilot** — the only piece recommended for the initial build.
+2. **Open Terminal** — an additional privileged runtime in the same ecosystem; separate security/reliability pilot before it is enabled anywhere.
+3. **Open WebUI Computer (`cptr`)** — a separately installed and operated application, not a feature of the chat UI; its own experimental decision.
 
-- The licence is non-OSI since v0.6.6 ([licence](https://docs.openwebui.com/license/),
-  [licence history](https://docs.openwebui.com/license/history/)) but fine for a
-  personal deployment (≤50-user exemption; keep branding).
-- The unified-frontend goal itself is **not an anti-pattern** — it is the
-  well-established "personal AI gateway" pattern — as long as it is scoped to
-  **API-accessible models**. Consumer subscriptions (ChatGPT Plus, Claude Pro)
-  are *not* APIs and must stay in their vendor apps.
-- The runner-up is **LibreChat** (MIT, lighter, strong agents/MCP) — the
-  documented fallback if the core chat pilot shows Open WebUI's breadth or
-  release velocity undermining intuitiveness and reliability.
-- **egoist/waku is not a chat frontend** — it is a native coding-agent cockpit
-  (Claude Code, OpenCode, Pi, …); wrong category, but worth tracking separately
-  for the agent-fleet side.
+- The licence is non-OSI since v0.6.6 ([licence](https://docs.openwebui.com/license/), [licence history](https://docs.openwebui.com/license/history/)) but fine for a personal deployment (≤50-user exemption; keep branding).
+- The unified-frontend goal itself is **not an anti-pattern** — it is the well-established "personal AI gateway" pattern — as long as it is scoped to **API-accessible models**. Consumer subscriptions (ChatGPT Plus, Claude Pro) are *not* APIs and must stay in their vendor apps.
+- The runner-up is **LibreChat** (MIT, lighter, strong agents/MCP) — the documented fallback if the core chat pilot shows Open WebUI's breadth or release velocity undermining intuitiveness and reliability.
+- **egoist/waku is not a chat frontend** — it is a native coding-agent cockpit (Claude Code, OpenCode, Pi, …); wrong category, but worth tracking separately for the agent-fleet side.
 
 ## Requirements recap
 
@@ -52,9 +26,7 @@ isolation simultaneously**, so adoption is staged and reversible:
 
 ## Research summary (2026-09-24)
 
-Three parallel research lanes (Open WebUI ecosystem; alternatives landscape;
-gateway/abstraction patterns). Sources tagged to retrieval date; primary sources
-preferred over marketing pages.
+Three parallel research lanes (Open WebUI ecosystem; alternatives landscape; gateway/abstraction patterns). Sources tagged to retrieval date; primary sources preferred over marketing pages.
 
 ### Is a unified frontend a common want? Yes — and it has a name
 
@@ -73,20 +45,10 @@ optional local gateway (LiteLLM)     ← only when needed
         └── OpenRouter / Google / …
 ```
 
-- OpenAI-compatible Chat Completions is the lingua franca; Anthropic
-  `/v1/messages` is the strong second protocol. Winning designs are dual-protocol.
-- The pattern is **not an anti-pattern** when the objective is *one history and
-  one control surface for API-accessible models*.
-- It **is** an anti-pattern when the objective is one interface that transparently
-  inherits every vendor's consumer subscription, private context, native tool
-  ecosystem, and quota. **ChatGPT Plus ≠ OpenAI API credit; Claude Pro ≠ Anthropic
-  API credit.** Vendor apps stay vendor apps; browser-session/cookie proxies are
-  brittle, account-risky, and violate Anthropic's consumer terms (effective
-  2025-10-08, which explicitly prohibit automated access and credential sharing).
-- Documented failure modes to respect: provider semantics are not uniform despite
-  a shared request shape (tool schemas, streaming, vision, reasoning controls,
-  caching, context limits); context does not transfer between vendor apps; every
-  extra gateway adds latency, an outage domain, and a translation-loss risk.
+- OpenAI-compatible Chat Completions is the lingua franca; Anthropic `/v1/messages` is the strong second protocol. Winning designs are dual-protocol.
+- The pattern is **not an anti-pattern** when the objective is *one history and one control surface for API-accessible models*.
+- It **is** an anti-pattern when the objective is one interface that transparently inherits every vendor's consumer subscription, private context, native tool ecosystem, and quota. **ChatGPT Plus ≠ OpenAI API credit; Claude Pro ≠ Anthropic API credit.** Vendor apps stay vendor apps; browser-session/cookie proxies are brittle, account-risky, and violate Anthropic's consumer terms (effective 2025-10-08, which explicitly prohibit automated access and credential sharing).
+- Documented failure modes to respect: provider semantics are not uniform despite a shared request shape (tool schemas, streaming, vision, reasoning controls, caching, context limits); context does not transfer between vendor apps; every extra gateway adds latency, an outage domain, and a translation-loss risk.
 
 ### Candidate verdicts
 
@@ -101,38 +63,16 @@ optional local gateway (LiteLLM)     ← only when needed
 
 ### What about Open WebUI's own `/alternatives/` pages?
 
-First-party marketing, not neutral evaluations — unusually positive toward
-competitors, consistently positioning Open WebUI as the broadest platform. The
-competitor facts they state (LibreChat = focused multi-provider chat, MIT;
-AnythingLLM = workspace-centred document Q&A; Jan = local-first desktop, Apache
-2.0) check out against each project's own docs, so the pages are usable as
-orientation but not as benchmarks. Their own feature counts drift between pages
-(9 vs 13 vector databases) — treat claims as snapshots.
+First-party marketing, not neutral evaluations — unusually positive toward competitors, consistently positioning Open WebUI as the broadest platform. The competitor facts they state (LibreChat = focused multi-provider chat, MIT; AnythingLLM = workspace-centred document Q&A; Jan = local-first desktop, Apache 2.0) check out against each project's own docs, so the pages are usable as orientation but not as benchmarks. Their own feature counts drift between pages (9 vs 13 vector databases) — treat claims as snapshots.
 
 ### Agentic sessions from a web UI — honest maturity read
 
-- Open Terminal ([docs](https://docs.openwebui.com/ecosystem/open-terminal)):
-  real, stateful workspaces (files/shell/packages/processes) — runs in Docker or
-  on host; treat as **privileged infrastructure**, not a hardened boundary. The
-  isolated multi-user "Terminals" product is a separate, enterprise-gated
-  offering — not the community Open Terminal runtime discussed here.
-- Open WebUI Computer (`cptr`,
-  [docs](https://docs.openwebui.com/ecosystem/computer/)): real but explicitly
-  "cutting-edge" — signed-in users get keyboard-equivalent power over the
-  machine; docs compare exposure to SSH and recommend private-network access.
-  Treat as experimental.
+- Open Terminal ([docs](https://docs.openwebui.com/ecosystem/open-terminal)): real, stateful workspaces (files/shell/packages/processes) — runs in Docker or on host; treat as **privileged infrastructure**, not a hardened boundary. The isolated multi-user "Terminals" product is a separate, enterprise-gated offering — not the community Open Terminal runtime discussed here.
+- Open WebUI Computer (`cptr`, [docs](https://docs.openwebui.com/ecosystem/computer/)): real but explicitly "cutting-edge" — signed-in users get keyboard-equivalent power over the machine; docs compare exposure to SSH and recommend private-network access. Treat as experimental.
 - LibreChat workspaces: labelled "highly experimental" by the project itself.
-- Industry-wide, a self-hosted web UI that reliably manages persistent arbitrary
-  CLI agent sessions (resumability, multiplexing, permissions, audit) does not
-  exist yet as an interoperable standard.
+- Industry-wide, a self-hosted web UI that reliably manages persistent arbitrary CLI agent sessions (resumability, multiplexing, permissions, audit) does not exist yet as an interoperable standard.
 
-**Implication:** the "manage multiple agentic tooling sessions" itch is better
-served by this repo's existing fleet (11 CLI agents + OpenCode web on :4096)
-than by bolting agent orchestration onto a chat UI in 2026. Open WebUI Computer
-is worth adopting as an *opt-in* experiment when we get to it — it is genuinely
-useful (git worktrees, diffs, terminals per project) but is a separate
-application/runtime with its own access boundary, not a toggle inside the chat
-frontend.
+**Implication:** the "manage multiple agentic tooling sessions" itch is better served by this repo's existing fleet (11 CLI agents + OpenCode web on :4096) than by bolting agent orchestration onto a chat UI in 2026. Open WebUI Computer is worth adopting as an *opt-in* experiment when we get to it — it is genuinely useful (git worktrees, diffs, terminals per project) but is a separate application/runtime with its own access boundary, not a toggle inside the chat frontend.
 
 ## Recommended architecture
 
@@ -152,106 +92,16 @@ frontend.
 
 ### Design principles (mapped to repo patterns)
 
-1. **`LOCAL_ENGINES` is the source of truth for *local* connection metadata.**
-   Local-provider connections are *generated*, never hand-entered in the admin
-   UI. The configure script emits
-   `OPENAI_API_BASE_URLS` / `OPENAI_API_KEYS` / `OPENAI_API_CONFIGS` and
-   `OLLAMA_BASE_URLS` (semicolon-separated, parallel order — verified against
-   the [Open WebUI env-configuration reference](https://docs.openwebui.com/reference/env-configuration/),
-   2026-09-24) from `active_engines()` + `local_endpoint_for()`.
-   **Config ownership model (explicit):** these are Open WebUI `ConfigVar`s —
-   under the default `ENABLE_PERSISTENT_CONFIG=True`, generated environment
-   values only seed a fresh installation; database values take precedence
-   from then on.
-   **The design is database-authoritative with idempotent API reconciliation**
-   (default `ENABLE_PERSISTENT_CONFIG=True` retained). Setting
-   `ENABLE_PERSISTENT_CONFIG=False` was rejected on source-verified grounds:
-   it disables persistence for the *entire* config table — not just managed
-   connections — including the config-table keys that hold admin-created
-   cloud connections (`openai.api_keys` / `openai.api_base_urls` /
-   `openai.api_configs` / `ollama.api_configs` — Open WebUI v0.11.4 source,
-   `backend/open_webui/config.py:2827-2831` and `models/config.py`
-   `upsert()`/`get()`), so named cloud integrations would not survive a
-   restart under that mode. Instead, the configure script reconciles managed
-   local connections idempotently through Open WebUI's API. **The
-   reconciler's computed desired state is the runtime authority** — `~/.env`
-   and `LOCAL_ENGINES` are its inputs, not the authority itself. Lifecycle:
+1. **`LOCAL_ENGINES` is the source of truth for *local* connection metadata.** Local-provider connections are *generated*, never hand-entered in the admin UI. The configure script emits `OPENAI_API_BASE_URLS` / `OPENAI_API_KEYS` / `OPENAI_API_CONFIGS` and `OLLAMA_BASE_URLS` (semicolon-separated, parallel order — verified against the [Open WebUI env-configuration reference](https://docs.openwebui.com/reference/env-configuration/), 2026-09-24) from `active_engines()` + `local_endpoint_for()`. **Config ownership model (explicit):** these are Open WebUI `ConfigVar`s — under the default `ENABLE_PERSISTENT_CONFIG=True`, generated environment values only seed a fresh installation; database values take precedence from then on. **The design is database-authoritative with idempotent API reconciliation** (default `ENABLE_PERSISTENT_CONFIG=True` retained). Setting `ENABLE_PERSISTENT_CONFIG=False` was rejected on source-verified grounds: it disables persistence for the *entire* config table — not just managed connections — including the config-table keys that hold admin-created cloud connections (`openai.api_keys` / `openai.api_base_urls` / `openai.api_configs` / `ollama.api_configs` — Open WebUI v0.11.4 source, `backend/open_webui/config.py:2827-2831` and `models/config.py` `upsert()`/`get()`), so named cloud integrations would not survive a restart under that mode. Instead, the configure script reconciles managed local connections idempotently through Open WebUI's API. **The reconciler's computed desired state is the runtime authority** — `~/.env` and `LOCAL_ENGINES` are its inputs, not the authority itself. Lifecycle:
    1. Generated env values may seed a fresh installation.
-   2. `make deploy` computes the desired managed connection set from
-      `active_engines()` + `local_endpoint_for()`.
-   3. Once Open WebUI is available, reconciliation reads the current
-      database connection config, merges managed entries, and writes through
-      the API.
-   4. Ordinary service restarts retain database state and do **not**
-      regenerate; reconciliation happens only on deploy.
-  Managed-entry ownership is collision-safe: managed entries carry a
-  `managed_by: dotfiles` marker in each connection's `api_configs` entry,
-  plus a registry-derived `prefix_id`. Reconciliation adopts an unmarked
-  entry when its catalogue identity and prefix match, updates or deletes a
-  marked entry only when its endpoint/connection type matches the expected
-  values, and fails closed on ownership collisions (report and abort rather
-  than delete an unrelated connection). Unmanaged admin-created entries are
-  preserved via read-merge-write.
-  Admin-UI connection changes persist in the database until the next
-  reconciliation, which may then overwrite managed entries — never
-  unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply
-  per-connection `prefix_id` (stable model-ID prefixes) and
-  `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and
-  OpenAI-protocol clouds stay unambiguous; the current prefix and picker-ID
-  contract is recorded below.
-   Plug/unplug a *gated* engine = flip its `DOTFILES_RUN_*` gate + `make
-   deploy`; **Ollama is the exception — it has no gate** (`LOCAL_ENGINES`
-   entry `gate_env: None`), so it is treated as always-present and its entry
-   is deduplicated out of the OpenAI-protocol array (Ollama connects via the
-   native `OLLAMA_BASE_URLS` path only, not also as an OpenAI-protocol
-   endpoint — the dedup choice is resolved here, not left open). The same
-   registry already feeds OpenCode providers, Mozart, Caddy, and Junie — this
-   adds one more consumer, not a new source of truth.
-   **Offline engines:** `active_engines()` checks gates, not reachability. An
-   enabled-but-offline engine keeps its configured connection; its model list
-   loads only if/when the endpoint answers — discovery may time out or be
-   delayed, and behaviour is treated as degraded, not guaranteed-empty. To
-   suppress a connection outright (e.g. ungated Ollama), set the canonical
-   `~/.env` adapter setting the reconciler honours (a per-engine disable
-   list; concrete variable name chosen at implementation) — admin-UI
-   `enable` flips persist in the database until the next reconciliation, so
-   that `~/.env` input, not the admin UI, is authoritative for this toggle.
- 2. **Gate + LaunchAgent + Caddy, like every optional service.**
-    `DOTFILES_RUN_OPENWEBUI_SETUP` (default 0), documented in
-    `.env.example` (check-env-coverage), Layer-2 script
-    `run_onchange_30-openwebui.sh.tmpl` (hash-triggered on the configure
-    script + `openwebui.py` + `local_engines.py` + `provider_endpoints.py`),
-    LaunchAgent `com.openwebui.web` (mirrors `com.opencode.web`), Caddy site on
-    a **dedicated host/subdomain** (`chat.<domain>`) behind the existing LAN
-    allowlist — **no Caddy `basic_auth` on this site** (Open WebUI's own
-    session auth is the application layer; Caddy basic auth and app Bearer
-    both use the `Authorization` header, so double-layering is avoided by
-    design). A dedicated host is the default because a path prefix
-    (`/webui/*`) can break root-relative assets, redirects and WebSocket
-    URLs; subpath serving would need local verification first and is not
-    assumed. When gate-enabled and installed, `chat.<domain>` follows
-    `CADDY_ACCESS`; Open WebUI app auth is the boundary in public mode. The
-    former `DOTFILES_OPENWEBUI_PUBLIC` per-service public key is retired.
- 3. **Cloud providers are reconciler-managed when their keys exist.** The
-    reconciler (`scripts/lib/openwebui.py`) includes repo-known cloud
-    providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama
-    Cloud) in the desired state whenever their upstream-native API key is set
-    in `~/.env` — the same marker-based ownership, collision and preservation
-    rules as local engines; key rotation surfaces as an update action and
-    removing a key removes the managed entry on the next deploy. Providers
-    without keys are simply skipped. Anthropic-protocol connections are
-    URL-based in Open WebUI (the connection points at an
-    Anthropic-compatible base URL with `x-api-key`); `connection_type` is
-    metadata, not a protocol selector — verified live against 0.11.4.
-    Meridian (Anthropic-compatible `:3456/v1`) is **included by explicit
-    user authorization** (recorded during Phase 4 planning — third consumer
-    after OpenCode/Mozart) as a reconciler-managed `meridian` connection
-    whenever `is_meridian_configured()` reports it available
-    (`MERIDIAN_API_KEY` / `ANTHROPIC_BASE_URL`); absent that, no entry is
-    created. It is still **not** a general subscription-to-API bridge: the
-    authorization covers this specific OAuth-backed deployment.
-4. **No subscription proxying. Ever.** ChatGPT Plus / Claude Pro sessions are not
-   API backends; they stay in their vendor apps.
+   2. `make deploy` computes the desired managed connection set from `active_engines()` + `local_endpoint_for()`.
+   3. Once Open WebUI is available, reconciliation reads the current database connection config, merges managed entries, and writes through the API.
+   4. Ordinary service restarts retain database state and do **not** regenerate; reconciliation happens only on deploy.
+  Managed-entry ownership is collision-safe: managed entries carry a `managed_by: dotfiles` marker in each connection's `api_configs` entry, plus a registry-derived `prefix_id`. Reconciliation adopts an unmarked entry when its catalogue identity and prefix match, updates or deletes a marked entry only when its endpoint/connection type matches the expected values, and fails closed on ownership collisions (report and abort rather than delete an unrelated connection). Unmanaged admin-created entries are preserved via read-merge-write. Admin-UI connection changes persist in the database until the next reconciliation, which may then overwrite managed entries — never unmanaged state. `OPENAI_API_CONFIGS` / `OLLAMA_API_CONFIGS` supply per-connection `prefix_id` (stable model-ID prefixes) and `enable`/`connection_type` so duplicate model IDs across Ollama, oMLX and OpenAI-protocol clouds stay unambiguous; the current prefix and picker-ID contract is recorded below.
+   Plug/unplug a *gated* engine = flip its `DOTFILES_RUN_*` gate + `make deploy`; **Ollama is the exception — it has no gate** (`LOCAL_ENGINES` entry `gate_env: None`), so it is treated as always-present and its entry is deduplicated out of the OpenAI-protocol array (Ollama connects via the native `OLLAMA_BASE_URLS` path only, not also as an OpenAI-protocol endpoint — the dedup choice is resolved here, not left open). The same registry already feeds OpenCode providers, Mozart, Caddy, and Junie — this adds one more consumer, not a new source of truth. **Offline engines:** `active_engines()` checks gates, not reachability. An enabled-but-offline engine keeps its configured connection; its model list loads only if/when the endpoint answers — discovery may time out or be delayed, and behaviour is treated as degraded, not guaranteed-empty. To suppress a connection outright (e.g. ungated Ollama), set the canonical `~/.env` adapter setting the reconciler honours (a per-engine disable list; concrete variable name chosen at implementation) — admin-UI `enable` flips persist in the database until the next reconciliation, so that `~/.env` input, not the admin UI, is authoritative for this toggle.
+ 2. **Gate + LaunchAgent + Caddy, like every optional service.** `DOTFILES_RUN_OPENWEBUI_SETUP` (default 0), documented in `.env.example` (check-env-coverage), Layer-2 script `run_onchange_30-openwebui.sh.tmpl` (hash-triggered on the configure script + `openwebui.py` + `local_engines.py` + `provider_endpoints.py`), LaunchAgent `com.openwebui.web` (mirrors `com.opencode.web`), Caddy site on a **dedicated host/subdomain** (`chat.<domain>`) behind the existing LAN allowlist — **no Caddy `basic_auth` on this site** (Open WebUI's own session auth is the application layer; Caddy basic auth and app Bearer both use the `Authorization` header, so double-layering is avoided by design). A dedicated host is the default because a path prefix (`/webui/*`) can break root-relative assets, redirects and WebSocket URLs; subpath serving would need local verification first and is not assumed. When gate-enabled and installed, `chat.<domain>` follows `CADDY_ACCESS`; Open WebUI app auth is the boundary in public mode. The former `DOTFILES_OPENWEBUI_PUBLIC` per-service public key is retired.
+ 3. **Cloud providers are reconciler-managed when their keys exist.** The reconciler (`scripts/lib/openwebui.py`) includes repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama Cloud) in the desired state whenever their upstream-native API key is set in `~/.env` — the same marker-based ownership, collision and preservation rules as local engines; key rotation surfaces as an update action and removing a key removes the managed entry on the next deploy. Providers without keys are simply skipped. Anthropic-protocol connections are URL-based in Open WebUI (the connection points at an Anthropic-compatible base URL with `x-api-key`); `connection_type` is metadata, not a protocol selector — verified live against 0.11.4. Meridian (Anthropic-compatible `:3456/v1`) is **included by explicit user authorization** (recorded during Phase 4 planning — third consumer after OpenCode/Mozart) as a reconciler-managed `meridian` connection whenever `is_meridian_configured()` reports it available (`MERIDIAN_API_KEY` / `ANTHROPIC_BASE_URL`); absent that, no entry is created. It is still **not** a general subscription-to-API bridge: the authorization covers this specific OAuth-backed deployment.
+4. **No subscription proxying. Ever.** ChatGPT Plus / Claude Pro sessions are not API backends; they stay in their vendor apps.
 5. **Security boundaries stay separate.** The chat frontend is the only
     Caddy-exposed piece: LAN-accessible via the repo's LAN allowlist with no
     Caddy basic auth. When gate-enabled and installed, it follows
@@ -267,427 +117,135 @@ frontend.
     separately installed application with its own auth. "Localhost-only"
     (loopback) and "private network" (Tailscale/LAN) are distinct exposure
     modes and never conflated.
-6. **LiteLLM gateway is opt-in, not default.** Direct provider connections
-   remain the default path (oMLX is registered OpenAI-only; Ollama is native).
-   With `DOTFILES_USE_LITELLM_PROXY=1` and LiteLLM setup enabled, the reconciler
-   collapses to one managed gateway connection — see the reconciler contract
-   below. Leave the proxy off unless catalogue aliasing or multi-client gateway
-   behaviour is actually needed; Mozart already covers OpenCode-side routing.
-7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs
-   an immutable versioned release — exact pip version or a digest-pinned
-   image, updated deliberately. Moving tags (`main`, `main-slim`) are *not*
-   pins and are not used.
+6. **LiteLLM gateway is opt-in, not default.** Direct provider connections remain the default path (oMLX is registered OpenAI-only; Ollama is native). With `DOTFILES_USE_LITELLM_PROXY=1` and LiteLLM setup enabled, the reconciler collapses to one managed gateway connection — see the reconciler contract below. Leave the proxy off unless catalogue aliasing or multi-client gateway behaviour is actually needed; Mozart already covers OpenCode-side routing.
+7. **Pin immutable releases.** Open WebUI moves fast; the LaunchAgent installs an immutable versioned release — exact pip version or a digest-pinned image, updated deliberately. Moving tags (`main`, `main-slim`) are *not* pins and are not used.
 
 ### Reconciler contract (2026-09-27 rework)
 
-The reconciler manages bare provider-name prefixes: `ollama` (native), `omlx`,
-`openai`, `google`, `openrouter`, `opencode`, `ollama-cloud`, `meridian`, and
-`anthropic`. The old `dw-*` namespace is retired. Ownership is identified by
-`managed_by: dotfiles` in each connection's `api_configs` entry, not by the
-prefix. An unmarked entry with a catalogue-matching identity and prefix is
-adopted and marked on the next reconcile. A legacy `dw-*` entry is migrated in
-place — prefix rewritten and marker added — when its endpoint and connection
-type match the catalogue; a legacy entry matching nothing is removed. Other
-unmanaged entries remain untouched.
+The reconciler manages bare provider-name prefixes: `ollama` (native), `omlx`, `openai`, `google`, `openrouter`, `opencode`, `ollama-cloud`, `meridian`, and `anthropic`. The old `dw-*` namespace is retired. Ownership is identified by `managed_by: dotfiles` in each connection's `api_configs` entry, not by the prefix. An unmarked entry with a catalogue-matching identity and prefix is adopted and marked on the next reconcile. A legacy `dw-*` entry is migrated in place — prefix rewritten and marker added — when its endpoint and connection type match the catalogue; a legacy entry matching nothing is removed. Other unmanaged entries remain untouched.
 
-oMLX is reconciled as an OpenAI-compatible connection only; it no longer gets
-an Anthropic-facing connection. Local engine endpoints are canonicalized to
-`127.0.0.1`, not `localhost`. The `ollama-cloud` connection is always pinned
-to `https://ollama.com/v1`; setting `OLLAMA_API_KEY` no longer substitutes the
-local Ollama proxy URL.
+oMLX is reconciled as an OpenAI-compatible connection only; it no longer gets an Anthropic-facing connection. Local engine endpoints are canonicalized to `127.0.0.1`, not `localhost`. The `ollama-cloud` connection is always pinned to `https://ollama.com/v1`; setting `OLLAMA_API_KEY` no longer substitutes the local Ollama proxy URL.
 
-With `DOTFILES_USE_LITELLM_PROXY=1` (gateway-only mode) the desired state
-converges on exactly one managed OpenAI connection — the owned `litellm`
-prefix — and Open WebUI lists only the LiteLLM catalogue through it. The
-per-provider rewrites it replaces kept every provider connection pointed at
-the same proxy endpoint, each re-exporting the entire catalogue under its own
-Prefix ID (the 539-model listing: 77 model IDs × 7 connections). In proxy
-mode the reconciler also prunes upstream's no-key `https://api.openai.com/v1`
-default entry (prefix `openai` or none, empty stored key) as a duplicate seed
-next to the managed gateway connection; key-bearing or otherwise customised
-unmanaged entries are never touched. Direct mode keeps the per-provider
-topology described above, and both directions round-trip through the
-previous-mode catalogue.
+With `DOTFILES_USE_LITELLM_PROXY=1` (gateway-only mode) the desired state converges on exactly one managed OpenAI connection — the owned `litellm` prefix — and Open WebUI lists only the LiteLLM catalogue through it. The per-provider rewrites it replaces kept every provider connection pointed at the same proxy endpoint, each re-exporting the entire catalogue under its own Prefix ID (the 539-model listing: 77 model IDs × 7 connections). In proxy mode the reconciler also prunes upstream's no-key `https://api.openai.com/v1` default entry (prefix `openai` or none, empty stored key) as a duplicate seed next to the managed gateway connection; key-bearing or otherwise customised unmanaged entries are never touched. Direct mode keeps the per-provider topology described above, and both directions round-trip through the previous-mode catalogue.
 
-Managed-connection reconciliation is regression protection: it must preserve
-unmanaged admin-created connections, update only entries it owns, and fail
-closed on ownership collisions. Regression coverage should verify that both
-managed and unmanaged state survive a read-merge-write cycle and that changing
-direct/proxy mode does not duplicate connections or silently rewrite chat IDs.
+Managed-connection reconciliation is regression protection: it must preserve unmanaged admin-created connections, update only entries it owns, and fail closed on ownership collisions. Regression coverage should verify that both managed and unmanaged state survive a read-merge-write cycle and that changing direct/proxy mode does not duplicate connections or silently rewrite chat IDs.
 
-The model IDs in the picker consequently change with the prefix migration.
-Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`,
-`google.models/gemini-...`, `openrouter.vendor/model`, and
-`ollama.gemma4:12b-mxfp8`.
-This is safe to do before chats exist: on a fresh machine, the first reconcile
-converges before any chat history is created. Existing chats may refer to the
-old IDs and should be treated as a migration concern rather than silently
-rewritten.
+The model IDs in the picker consequently change with the prefix migration. Examples include `omlx.Ornith-1.5-35B-A3B-MLX-4bit`, `google.models/gemini-...`, `openrouter.vendor/model`, and `ollama.gemma4:12b-mxfp8`. This is safe to do before chats exist: on a fresh machine, the first reconcile converges before any chat history is created. Existing chats may refer to the old IDs and should be treated as a migration concern rather than silently rewritten.
 
-Open WebUI's generated service environment also sets `DEFAULT_LOCALE` through
-`openwebui_default_locale()`: `OPENWEBUI_DEFAULT_LOCALE` wins; otherwise the
-first entry from `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, or `LANG` is used.
-Values such as `xx_YY.charset` are normalized to `xx-YY` and resolved against
-the pinned frontend's supported-locale list: exact matches pass through, bare
-codes snap to the first region-qualified bundle in that file's order, and
-unknown values fall back to `en-US`. This works
-around open-webui 0.11.4 upstream bug [#30348](https://github.com/open-webui/open-webui/issues/30348),
-where bare `en` and `en-CA` produce raw i18n keys such as
-`settings.admin.connections.title`. Upstream fix PR [#30354](https://github.com/open-webui/open-webui/pull/30354)
-is merged to `dev`, but no v0.11.5 release contains it yet; the environment
-variable is therefore the durable workaround for now.
+Open WebUI's generated service environment also sets `DEFAULT_LOCALE` through `openwebui_default_locale()`: `OPENWEBUI_DEFAULT_LOCALE` wins; otherwise the first entry from `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, or `LANG` is used. Values such as `xx_YY.charset` are normalized to `xx-YY` and resolved against the pinned frontend's supported-locale list: exact matches pass through, bare codes snap to the first region-qualified bundle in that file's order, and unknown values fall back to `en-US`. This works around open-webui 0.11.4 upstream bug [#30348](https://github.com/open-webui/open-webui/issues/30348), where bare `en` and `en-CA` produce raw i18n keys such as `settings.admin.connections.title`. Upstream fix PR [#30354](https://github.com/open-webui/open-webui/pull/30354) is merged to `dev`, but no v0.11.5 release contains it yet; the environment variable is therefore the durable workaround for now.
 
 ### What Open WebUI gives us beyond chat (staged, opt-in)
 
 - Model selector across all configured connections; multi-model chats
 - Workspace models (wrap a base model with instructions/tools/knowledge)
-- MCP tool servers (Streamable HTTP, admin-configured) — pairs with the repo's
-  MCP registry; stdio/SSE servers need the upstream `mcpo` bridge (document as a
-  limitation, not a workaround we build)
+- MCP tool servers (Streamable HTTP, admin-configured) — pairs with the repo's MCP registry; stdio/SSE servers need the upstream `mcpo` bridge (document as a limitation, not a workaround we build)
 - RAG/knowledge bases (hybrid BM25 + vector), web search, scheduled automations
 - Open Terminal — separate security/reliability pilot, disabled by default
-- Open WebUI Computer — separately installed and operated application, own
-  experimental decision with its own access boundary
+- Open WebUI Computer — separately installed and operated application, own experimental decision with its own access boundary
 
 #### Open Terminal (Phase 4c)
 
-Open Terminal runs as a separate, opt-in `com.openwebui.terminal` LaunchAgent,
-bound to `127.0.0.1` with no Caddy route. It requires both Open WebUI gates and
-uses a mode-600 terminal env/key plus an isolated workspace root; that root is
-only a UI hint, not a filesystem sandbox. Bare-metal Open Terminal is
-user-privilege-equivalent (full shell/filesystem access), so treat it as a
-privileged runtime. Under the amended threat model, the chat connection is
-registered through the verified
-`/api/v1/configs/terminal_servers` admin API using `OPENWEBUI_API_KEY`; terminal/provider keys never enter the
-chat plist or inherited provider environment. Enterprise per-user Terminals
-are out of scope.
+Open Terminal runs as a separate, opt-in `com.openwebui.terminal` LaunchAgent, bound to `127.0.0.1` with no Caddy route. It requires both Open WebUI gates and uses a mode-600 terminal env/key plus an isolated workspace root; that root is only a UI hint, not a filesystem sandbox. Bare-metal Open Terminal is user-privilege-equivalent (full shell/filesystem access), so treat it as a privileged runtime. Under the amended threat model, the chat connection is registered through the verified `/api/v1/configs/terminal_servers` admin API using `OPENWEBUI_API_KEY`; terminal/provider keys never enter the chat plist or inherited provider environment. Enterprise per-user Terminals are out of scope.
 
 #### Open WebUI Computer (Phase 4d)
 
-`cptr` is a separately installed and operated, SSH-equivalent runtime with
-full host filesystem and shell privileges; it is not a sandbox and must be
-treated as user-privilege-equivalent. It uses a dedicated venv, `CPTR_DATA_DIR`,
-localhost-only LaunchAgent, port 8124, and no Caddy route. Its sub-gate is
-independent but requires the main chat gate. Expose-as-provider is deliberately
-OFF: creating a cptr gateway key and adding an Open WebUI OpenAI connection are
-manual admin-UI steps reserved for a later security decision; no key or
-provider registration is automated.
+`cptr` is a separately installed and operated, SSH-equivalent runtime with full host filesystem and shell privileges; it is not a sandbox and must be treated as user-privilege-equivalent. It uses a dedicated venv, `CPTR_DATA_DIR`, localhost-only LaunchAgent, port 8124, and no Caddy route. Its sub-gate is independent but requires the main chat gate. Expose-as-provider is deliberately OFF: creating a cptr gateway key and adding an Open WebUI OpenAI connection are manual admin-UI steps reserved for a later security decision; no key or provider registration is automated.
 
 #### LiteLLM Gateway (Wave 6 L3)
 
-LiteLLM is an **optional, gate-off-by-default** gateway
-(`DOTFILES_RUN_LITELLM_SETUP`; nothing consumes it unless a client is
-explicitly pointed at it): a separate, loopback-only OpenAI-compatible
-  gateway on port 4000 for other local clients. Open WebUI, OpenCode and Pi each
-  have independent canary gates, each requiring the main LiteLLM gate. The
-  generated routing table includes prefixed and bare aliases for local Ollama
-  and oMLX models, allowing clients that use bare local IDs to route through the
-  proxy. After its health check succeeds, configuration idempotently provisions
-  `opencode`, `pi`, `openwebui` and `junie` virtual keys by alias and records
-  them in the mode-600 `~/.local/share/litellm/service.env` as
-  `LITELLM_OPENCODE_KEY`, `LITELLM_PI_KEY`, `LITELLM_OPENWEBUI_KEY` and
-`LITELLM_JUNIE_KEY`. WebUI uses the master key only until its per-app key is
-provisioned. There is no Caddy route; only local clients consume the proxy.
+LiteLLM is an **optional, gate-off-by-default** gateway (`DOTFILES_RUN_LITELLM_SETUP`; nothing consumes it unless a client is explicitly pointed at it): a separate, loopback-only OpenAI-compatible
+  gateway on port 4000 for other local clients. Open WebUI, OpenCode and Pi each have independent canary gates, each requiring the main LiteLLM gate. The generated routing table includes prefixed and bare aliases for local Ollama and oMLX models, allowing clients that use bare local IDs to route through the proxy. After its health check succeeds, configuration idempotently provisions `opencode`, `pi`, `openwebui` and `junie` virtual keys by alias and records them in the mode-600 `~/.local/share/litellm/service.env` as `LITELLM_OPENCODE_KEY`, `LITELLM_PI_KEY`, `LITELLM_OPENWEBUI_KEY` and
+`LITELLM_JUNIE_KEY`. WebUI uses the master key only until its per-app key is provisioned. There is no Caddy route; only local clients consume the proxy.
 
-The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping
-is the canary path: verify one client, then roll back by setting its gate to `0`
-for direct provider routing. LiteLLM is never a Mozart gateway. The proxy API stays
-loopback-only; an optional Caddy site can expose only its authenticated UI when
-`DOTFILES_LITELLM_UI_EXPOSED=1` and `CADDY_ACCESS` is `lan` or `public`.
+The generated routing table rejects Mozart and LiteLLM self-targets. Gate flipping is the canary path: verify one client, then roll back by setting its gate to `0` for direct provider routing. LiteLLM is never a Mozart gateway. The proxy API stays loopback-only; an optional Caddy site can expose only its authenticated UI when `DOTFILES_LITELLM_UI_EXPOSED=1` and `CADDY_ACCESS` is `lan` or `public`.
 
-Telemetry is explicitly disabled: upstream defaults `litellm.telemetry=True`
-(anonymous PostHog usage events), and the generated config sets
-`litellm_settings.telemetry: false` (verified opt-out; disposition recorded in
-the fleet registry). Provider API keys reach the process through the mode-600
-service environment allowlist (sourced inside the scrubbed non-login wrapper),
-never through YAML, argv, or the plist.
+Telemetry is explicitly disabled: upstream defaults `litellm.telemetry=True` (anonymous PostHog usage events), and the generated config sets `litellm_settings.telemetry: false` (verified opt-out; disposition recorded in the fleet registry). Provider API keys reach the process through the mode-600 service environment allowlist (sourced inside the scrubbed non-login wrapper), never through YAML, argv, or the plist.
 
-OpenCode's LiteLLM canary reads its app key from the mode-600 file
-`~/.local/share/litellm/clients/opencode.key`, atomically derived from the
-`LITELLM_OPENCODE_KEY` assignment in `service.env`. The service environment
-remains the generated-secret authority; this file is a narrowly scoped
-OpenCode delivery mechanism pending canonical-ownership review. Restart
-OpenCode after enabling the canary or rotating the key.
+OpenCode's LiteLLM canary reads its app key from the mode-600 file `~/.local/share/litellm/clients/opencode.key`, atomically derived from the `LITELLM_OPENCODE_KEY` assignment in `service.env`. The service environment remains the generated-secret authority; this file is a narrowly scoped OpenCode delivery mechanism pending canonical-ownership review. Restart OpenCode after enabling the canary or rotating the key.
 
-Pi's LiteLLM canary reads its app key from the mode-600 file
-`~/.local/share/litellm/clients/pi.key`, atomically derived from the
-`LITELLM_PI_KEY` assignment in the same generated `service.env` authority. Pi's
-provider config uses a command-backed API key (`!cat <absolute-key-file-path>`),
-so the secret is delivered to Pi without exporting it into the shell environment.
-If the private key file is absent or unsafe, Pi configuration fails before
-writing generated config; it does not emit direct Google/OpenRouter routes or
-auth entries as a fallback. Existing files remain untouched on that pre-write
-failure. An unknown/unavailable LiteLLM catalogue omits unconfirmed cloud
-aliases and their role overrides rather than generating direct providers. Re-run
-`make deploy` after enabling the canary or rotating the key, then restart Pi to
-load the updated provider config.
+Pi's LiteLLM canary reads its app key from the mode-600 file `~/.local/share/litellm/clients/pi.key`, atomically derived from the `LITELLM_PI_KEY` assignment in the same generated `service.env` authority. Pi's provider config uses a command-backed API key (`!cat <absolute-key-file-path>`), so the secret is delivered to Pi without exporting it into the shell environment. If the private key file is absent or unsafe, Pi configuration fails before writing generated config; it does not emit direct Google/OpenRouter routes or auth entries as a fallback. Existing files remain untouched on that pre-write failure. An unknown/unavailable LiteLLM catalogue omits unconfirmed cloud aliases and their role overrides rather than generating direct providers. Re-run `make deploy` after enabling the canary or rotating the key, then restart Pi to load the updated provider config.
 
-Junie's LiteLLM canary derives `clients/junie.key` from the Junie app-key entry
-in `service.env`. The Junie profile generator reads only that private key file
-and emits the literal Junie virtual key only into atomically written mode-600
-profiles in the shared mode-700 `~/.junie/models/` (`~/.ai/models/`) directory
-used by both Junie CLI and the IntelliJ IDE. This generated-profile location is
-an intentional credential-bearing runtime artifact; tracked
-`configs/junie/model-groups.json` contains only the key environment selector.
-When the canary is enabled, generated tier and local-pool profiles for supported
-providers use only exact aliases advertised by the authenticated LiteLLM model
-catalogue. Unavailable primary aliases omit the generated profile rather than
-falling back to a direct endpoint; unavailable faster aliases omit only the
-faster model. Meridian and Copilot retain their protocol/authentication
-exceptions, and gate-off generation retains direct routing.
-After enabling/disabling the canary or rotating its key, run `make deploy`,
-restart Junie CLI sessions and reload/restart IntelliJ to consume regenerated
-profiles. Other providers keep their native environment-variable references;
-the complete LiteLLM `service.env` is never sourced into general shells.
+Junie's LiteLLM canary derives `clients/junie.key` from the Junie app-key entry in `service.env`. The Junie profile generator reads only that private key file and emits the literal Junie virtual key only into atomically written mode-600 profiles in the shared mode-700 `~/.junie/models/` (`~/.ai/models/`) directory used by both Junie CLI and the IntelliJ IDE. This generated-profile location is an intentional credential-bearing runtime artifact; tracked `configs/junie/model-groups.json` contains only the key environment selector. When the canary is enabled, generated tier and local-pool profiles for supported providers use only exact aliases advertised by the authenticated LiteLLM model catalogue. Unavailable primary aliases omit the generated profile rather than falling back to a direct endpoint; unavailable faster aliases omit only the faster model. Meridian and Copilot retain their protocol/authentication exceptions, and gate-off generation retains direct routing. After enabling/disabling the canary or rotating its key, run `make deploy`, restart Junie CLI sessions and reload/restart IntelliJ to consume regenerated profiles. Other providers keep their native environment-variable references; the complete LiteLLM `service.env` is never sourced into general shells.
 
-DB-less diagnostics retain the historical no-DB 400 classification for old
-deployments, but new gate-on deployments require `LITELLM_DATABASE_URL`.
-Loopback-only binding limits exposure.
+DB-less diagnostics retain the historical no-DB 400 classification for old deployments, but new gate-on deployments require `LITELLM_DATABASE_URL`. Loopback-only binding limits exposure.
 
 #### Platform completion (Phase 4f)
 
-Streamable-HTTP MCP registration uses Open WebUI's verified admin tool-server
-API (`/api/v1/configs/tool_servers`) for qualifying `configs/mcp/*.json` URL
-entries; stdio/SSE entries remain excluded. Curated cloud model defaults,
-pinned models, and ordering are reconciled through the verified
-`/api/v1/configs/models` admin API from the repo allowlists.
-The optional daily backup timer retains the newest five local snapshots;
-off-machine export is intentionally out of scope. Linux gets a systemd user
-unit for the chat service following the repo's existing user-unit patterns;
-terminal/cptr remain macOS-priority
-integrations. The only Caddy route this phase adds is the `chat.<domain>`
-Open WebUI host, created when `DOTFILES_RUN_OPENWEBUI_SETUP` is enabled
-(dedicated host, LAN-only by default; see `docs/CADDY.md`).
+Streamable-HTTP MCP registration uses Open WebUI's verified admin tool-server API (`/api/v1/configs/tool_servers`) for qualifying `configs/mcp/*.json` URL entries; stdio/SSE entries remain excluded. Curated cloud model defaults, pinned models, and ordering are reconciled through the verified `/api/v1/configs/models` admin API from the repo allowlists. The optional daily backup timer retains the newest five local snapshots; off-machine export is intentionally out of scope. Linux gets a systemd user unit for the chat service following the repo's existing user-unit patterns; terminal/cptr remain macOS-priority integrations. The only Caddy route this phase adds is the `chat.<domain>` Open WebUI host, created when `DOTFILES_RUN_OPENWEBUI_SETUP` is enabled (dedicated host, LAN-only by default; see `docs/CADDY.md`).
 
 Two security notes for MCP registration (accepted, documented boundaries):
 
-1. **Credential persistence:** resolved MCP auth headers (e.g. `Bearer
-   ${GH_TOKEN}` expanded from `~/.env`) are stored server-side in Open
-   WebUI's config-table database via the admin API — the same durability
-   class as connection credentials. Consequently, `make openwebui-backup`
-   snapshots contain these credentials; handle backup archives with the same
-   care as secret material.
-2. **Remote MCP = trusted data-egress/tool-execution boundary:** registering
-   a remote MCP server grants it prompt-driven tool execution and data
-   egress per its own contract (the prompt-to-data-exfiltration path this
-   integration accepts deliberately). Only registry-vetted Streamable-HTTP
-   servers from `configs/mcp/*.json` are registered; servers whose
-   credentials are absent are skipped.
+1. **Credential persistence:** resolved MCP auth headers (e.g. `Bearer ${GH_TOKEN}` expanded from `~/.env`) are stored server-side in Open WebUI's config-table database via the admin API — the same durability class as connection credentials. Consequently, `make openwebui-backup` snapshots contain these credentials; handle backup archives with the same care as secret material.
+2. **Remote MCP = trusted data-egress/tool-execution boundary:** registering a remote MCP server grants it prompt-driven tool execution and data egress per its own contract (the prompt-to-data-exfiltration path this integration accepts deliberately). Only registry-vetted Streamable-HTTP servers from `configs/mcp/*.json` are registered; servers whose credentials are absent are skipped.
 
 ### Operations snapshot (from upstream docs, Sept 2026)
 
-- Default SQLite + local ChromaDB is fine for one user; **not** for network
-  filesystems or multi-worker. Postgres/Redis only if scaling later.
-- Install via pip-in-venv (exact pinned version) or digest-pinned image; the
-  slim image family (~175 MB, omits local embeddings/speech/rerank/extraction)
-  is right for cloud/local-API-only use. Personal footprint is plausibly
-  2–4 GB RAM without local RAG/embedding workloads — **unvalidated planning
-  estimate**, not an official minimum; treat every sizing figure as an
-  estimate until measured.
-- Set a persistent `WEBUI_SECRET_KEY` (in `~/.env`; required for stable
-  sessions/OAuth token decryption across restarts).
-- Model lists are discovered live through each connection's **native
-  model-list mechanism** (Ollama via its native API, OpenAI-protocol
-  connections via `/v1/models`); no checked-in chat catalogue exists, unlike
-  OpenCode's catalogs. Admin pin/hide/order preferences are persisted Open
-  WebUI state (config-table rows); they coexist with reconciliation because
-  reconciliation touches only registry-derived managed connection entries,
-  but this interaction must be validated during implementation.
-  Documented refresh flow: run `make deploy` — it recomputes desired state
-  and reconciles managed connections. An ordinary service restart reloads
-  database state and does **not** reconcile.
+- Default SQLite + local ChromaDB is fine for one user; **not** for network filesystems or multi-worker. Postgres/Redis only if scaling later.
+- Install via pip-in-venv (exact pinned version) or digest-pinned image; the slim image family (~175 MB, omits local embeddings/speech/rerank/extraction) is right for cloud/local-API-only use. Personal footprint is plausibly 2–4 GB RAM without local RAG/embedding workloads — **unvalidated planning estimate**, not an official minimum; treat every sizing figure as an estimate until measured.
+- Set a persistent `WEBUI_SECRET_KEY` (in `~/.env`; required for stable sessions/OAuth token decryption across restarts).
+- Model lists are discovered live through each connection's **native model-list mechanism** (Ollama via its native API, OpenAI-protocol connections via `/v1/models`); no checked-in chat catalogue exists, unlike OpenCode's catalogs. Admin pin/hide/order preferences are persisted Open WebUI state (config-table rows); they coexist with reconciliation because reconciliation touches only registry-derived managed connection entries, but this interaction must be validated during implementation. Documented refresh flow: run `make deploy` — it recomputes desired state and reconciles managed connections. An ordinary service restart reloads database state and does **not** reconcile.
 
 ## Maintenance guidance
 
 ### Adding a new local engine (e.g. a future local server)
 
-1. Add an entry to `LOCAL_ENGINES` (`scripts/lib/local_engines.py`) with
-   `gate_env` (or explicit no-gate, like Ollama — document which and why),
-   `api` (must include an OpenAI-compatible protocol), base URL,
-   `health_check`, and `caddy_route` if LAN-exposed.
-2. The chat-frontend configure script picks it up automatically (it consumes
-   `active_engines()` like every other consumer). Document the resulting
-   model-ID prefixing (`prefix_id` in `*_API_CONFIGS`) and the
-   enabled-but-offline behaviour (connection stays configured; discovery is
-   degraded — the model list loads only when the endpoint answers and may
-   time out or be delayed).
+1. Add an entry to `LOCAL_ENGINES` (`scripts/lib/local_engines.py`) with `gate_env` (or explicit no-gate, like Ollama — document which and why), `api` (must include an OpenAI-compatible protocol), base URL, `health_check`, and `caddy_route` if LAN-exposed.
+2. The chat-frontend configure script picks it up automatically (it consumes `active_engines()` like every other consumer). Document the resulting model-ID prefixing (`prefix_id` in `*_API_CONFIGS`) and the enabled-but-offline behaviour (connection stays configured; discovery is degraded — the model list loads only when the endpoint answers and may time out or be delayed).
 3. Document the gate in `.env.example`; run `make verify`.
 
 ### Adding a cloud provider
 
-Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode
-Zen, Ollama Cloud) are **reconciler-managed**: set the provider's
-upstream-native API key in `~/.env` and the next `make deploy` adds/updates
-the bare `<provider>` connection with the same ownership guarantees as local
-engines. No admin-UI entry is needed for these. A brand-new provider that the
-reconciler does not know yet needs a small `compute_desired_state()` /
-ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic
-test) — keep the Open WebUI-adjacent registry there rather than genericizing
-`scripts/lib/provider_endpoints.py`, which remains the OpenCode-side registry
-(Google, OpenRouter, OpenCode entries with `api` protocols and allowlist
-files; extending it carries OpenCode catalogue and `MODEL_UPDATES.md`
-obligations).
+Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama Cloud) are **reconciler-managed**: set the provider's upstream-native API key in `~/.env` and the next `make deploy` adds/updates the bare `<provider>` connection with the same ownership guarantees as local engines. No admin-UI entry is needed for these. A brand-new provider that the reconciler does not know yet needs a small `compute_desired_state()` / ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic test) — keep the Open WebUI-adjacent registry there rather than genericizing `scripts/lib/provider_endpoints.py`, which remains the OpenCode-side registry (Google, OpenRouter, OpenCode entries with `api` protocols and allowlist files; extending it carries OpenCode catalogue and `MODEL_UPDATES.md` obligations).
 
 1. Set the provider's API key in `~/.env` (upstream-native name).
-2. If it is a new provider for the reconciler: add its chat-connection
-   metadata to `scripts/lib/openwebui.py` + test; document any new env var in
-   `.env.example`.
+2. If it is a new provider for the reconciler: add its chat-connection metadata to `scripts/lib/openwebui.py` + test; document any new env var in `.env.example`.
 3. Run `make deploy`; verify with `scripts/configure-openwebui.py --check`.
 
 ### Secrets precedence and rotation
 
-The service environment files (`service.env`, `terminal.env`,
-`litellm/…/service.env`) are **derived state**; `~/.env` is user-authored
-input. Each reconciliation sources `~/.env` first, then the persisted service
-file, then applies non-empty `~/.env` overrides — so an empty `~/.env`
-assignment never clobbers a generated secret, and a non-empty user-set value
-always wins.
+The service environment files (`service.env`, `terminal.env`, `litellm/…/service.env`) are **derived state**; `~/.env` is user-authored input. Each reconciliation sources `~/.env` first, then the persisted service file, then applies non-empty `~/.env` overrides — so an empty `~/.env` assignment never clobbers a generated secret, and a non-empty user-set value always wins.
 
-- **Rotation:** set the new value (non-empty) in `~/.env`; the template's
-  secret digest fingerprint fires and the next `make deploy` rewrites the
-  service env and restarts the service.
-- **Deletion:** to drop a generated secret entirely, remove it from both
-  `~/.env` and the service file — the reconciler regenerates on the next run.
-- **Bootstrap-only credentials:** `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD`
-  are consumed by upstream when creating the *first* account. Rotating them
-  later does **not** change the stored login — regenerate via Open WebUI's
-  own account settings instead.
-- **Recovery:** if stored credentials become undecryptable (e.g. the
-  `WEBUI_SECRET_KEY` was rotated while entries existed), restore the
-  previous `WEBUI_SECRET_KEY` from the pre-change backup, or re-register the
-  affected connections after a deploy.
+- **Rotation:** set the new value (non-empty) in `~/.env`; the template's secret digest fingerprint fires and the next `make deploy` rewrites the service env and restarts the service.
+- **Deletion:** to drop a generated secret entirely, remove it from both `~/.env` and the service file — the reconciler regenerates on the next run.
+- **Bootstrap-only credentials:** `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` are consumed by upstream when creating the *first* account. Rotating them later does **not** change the stored login — regenerate via Open WebUI's own account settings instead.
+- **Recovery:** if stored credentials become undecryptable (e.g. the `WEBUI_SECRET_KEY` was rotated while entries existed), restore the previous `WEBUI_SECRET_KEY` from the pre-change backup, or re-register the affected connections after a deploy.
 
 ### Backups — scope and ownership state
 
-`make openwebui-backup` archives the whole `data/` directory, which includes
-both the SQLite `webui.db` (via a live-safe `sqlite3 .backup` copy) **and**
-the reconciler's ownership-state files (`data/managed-mcp.json`,
-`data/managed-models.json`). Restoring a backup therefore restores both the
-chat data and the ownership history that tells the reconciler which entries
-are repo-managed. Keep backup archives with secret material — they contain
-connection and MCP credentials.
+`make openwebui-backup` archives the whole `data/` directory, which includes both the SQLite `webui.db` (via a live-safe `sqlite3 .backup` copy) **and** the reconciler's ownership-state files (`data/managed-mcp.json`, `data/managed-models.json`). Restoring a backup therefore restores both the chat data and the ownership history that tells the reconciler which entries are repo-managed. Keep backup archives with secret material — they contain connection and MCP credentials.
 
 ### Model preset refresh
 
 ### Open WebUI audio settings bundle (0.12.0)
 
-On hosts where the oMLX engine gate is active and audio discovery returns
-qualified models, deploy reconciles an owned audio bundle through the authenticated
-API. Owned keys are `stt.ENGINE`, `stt.OPENAI_API_BASE_URL`,
-`stt.OPENAI_API_REQUEST_FORMAT`, `stt.MODEL`, `stt.OPENAI_API_KEY`, and the
-corresponding TTS `ENGINE`, `OPENAI_API_BASE_URL`, `MODEL`, `VOICE`, and
-`OPENAI_API_KEY`. The API key is updated only when `OMLX_API_KEY` is non-empty;
-otherwise stored keys remain untouched. All other audio settings, including realtime, Whisper,
-Azure and Mistral fields, remain operator-managed and are preserved.
+On hosts where the oMLX engine gate is active and audio discovery returns qualified models, deploy reconciles an owned audio bundle through the authenticated API. Owned keys are `stt.ENGINE`, `stt.OPENAI_API_BASE_URL`, `stt.OPENAI_API_REQUEST_FORMAT`, `stt.MODEL`, `stt.OPENAI_API_KEY`, and the corresponding TTS `ENGINE`, `OPENAI_API_BASE_URL`, `MODEL`, `VOICE`, and `OPENAI_API_KEY`. The API key is updated only when `OMLX_API_KEY` is non-empty; otherwise stored keys remain untouched. All other audio settings, including realtime, Whisper, Azure and Mistral fields, remain operator-managed and are preserved.
 
-STT and TTS model IDs come from oMLX audio discovery in discovery order: the
-first `audio_stt` and first qualified `audio_tts` models are selected.
+STT and TTS model IDs come from oMLX audio discovery in discovery order: the first `audio_stt` and first qualified `audio_tts` models are selected.
 
-Three evidence levels apply to audio routing (and qualify every claim made
-elsewhere in this document):
+Three evidence levels apply to audio routing (and qualify every claim made elsewhere in this document):
 
-- **Delivered** — the reconciler rendered, wrote and readback-verified the
-  configuration. This is the default guarantee of every reconcile.
-- **Probe-qualified** — an opt-in `--probe-routes` run attached
-  `PROTOCOL_PROBED` evidence to candidates (real multipart STT, binary TTS
-  and shape-checked embedding requests; auth failures never qualify).
-  Without a probe run, discovery evidence stays `DISCOVERED`.
-- **Consumer-verified** — a real consumer outcome was served through the
-  configured route (transcription, speech or retrieval). Gateway audio is
-  consumer-verified: WebUI's STT and TTS routes resolve to the LiteLLM
-  gateway with a scoped key reference, and live transcription/speech
-  outcomes were captured through that route (see the acceptance ledger).
-`chatterbox` is excluded by a shared family predicate: its 2026-10-16 probe
-failed without voice-cloning conditionals. A chatterbox-only discovery omits
-TTS and warns; STT may still be reconciled. Qwen3-TTS receives the configured
-speaker (`DOTFILES_VOICE_TTS_VOICE`, default `serena`); other TTS families do
-not inherit a Qwen speaker. The OpenAI-compatible local-engine bundle does not
-write cloud voice settings. `OMLX_API_KEY`, when non-empty, supplies both audio
-API keys; otherwise stored keys are preserved.
+- **Delivered** — the reconciler rendered, wrote and readback-verified the configuration. This is the default guarantee of every reconcile.
+- **Probe-qualified** — an opt-in `--probe-routes` run attached `PROTOCOL_PROBED` evidence to candidates (real multipart STT, binary TTS and shape-checked embedding requests; auth failures never qualify). Without a probe run, discovery evidence stays `DISCOVERED`.
+- **Consumer-verified** — a real consumer outcome was served through the configured route (transcription, speech or retrieval). Gateway audio is consumer-verified: WebUI's STT and TTS routes resolve to the LiteLLM gateway with a scoped key reference, and live transcription/speech outcomes were captured through that route (see the acceptance ledger).
+`chatterbox` is excluded by a shared family predicate: its 2026-10-16 probe failed without voice-cloning conditionals. A chatterbox-only discovery omits TTS and warns; STT may still be reconciled. Qwen3-TTS receives the configured speaker (`DOTFILES_VOICE_TTS_VOICE`, default `serena`); other TTS families do not inherit a Qwen speaker. The OpenAI-compatible local-engine bundle does not write cloud voice settings. `OMLX_API_KEY`, when non-empty, supplies both audio API keys; otherwise stored keys are preserved.
 
-The owned projection is stored privately at
-`~/.local/share/openwebui/data/managed-audio.json` (mode 600). First adoption
-requires owned identity fields to be at their Open WebUI defaults; customized
-owned settings are refused and logged rather than silently adopted. Once
-adopted, any administrator change to the recorded projection is refused.
-Before each write, the reconciler re-reads audio configuration and checks the
-projection, then reads back and verifies the write. Gate-off restores only
-projected owned fields to the documented OpenAI/multipart defaults and clears
-the projection; realtime, Whisper, Azure, Mistral and other settings are never
-owned or touched.
+The owned projection is stored privately at `~/.local/share/openwebui/data/managed-audio.json` (mode 600). First adoption requires owned identity fields to be at their Open WebUI defaults; customized owned settings are refused and logged rather than silently adopted. Once adopted, any administrator change to the recorded projection is refused. Before each write, the reconciler re-reads audio configuration and checks the projection, then reads back and verifies the write. Gate-off restores only projected owned fields to the documented OpenAI/multipart defaults and clears the projection; realtime, Whisper, Azure, Mistral and other settings are never owned or touched.
 
-The external audio engine path shells out to `ffmpeg`/`ffprobe`. The WebUI
-LaunchAgent PATH includes the Homebrew binary directory (added
-homebrew-agnostically in the install template), so the server can find them;
-without `ffprobe` the speech endpoint fails with
-`No such file or directory: 'ffprobe'` (observed 2026-10-16, fixed in the same
-install).
+The external audio engine path shells out to `ffmpeg`/`ffprobe`. The WebUI LaunchAgent PATH includes the Homebrew binary directory (added homebrew-agnostically in the install template), so the server can find them; without `ffprobe` the speech endpoint fails with `No such file or directory: 'ffprobe'` (observed 2026-10-16, fixed in the same install).
 
-Reads use `GET /api/v1/audio/config`; writes use `POST
-/api/v1/audio/config/update`. The similarly named `/api/v1/configs/audio` path
-is not a config endpoint. API writes run only during deploy (no live POST from
-tests). As elsewhere, persistent database settings are authoritative and are
-reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately
-modelled in this reconciler.
+Reads use `GET /api/v1/audio/config`; writes use `POST /api/v1/audio/config/update`. The similarly named `/api/v1/configs/audio` path is not a config endpoint. API writes run only during deploy (no live POST from tests). As elsewhere, persistent database settings are authoritative and are reconciled on deploy; `ENABLE_PERSISTENT_CONFIG` behaviour is not separately modelled in this reconciler.
 
 ### Open WebUI retrieval embeddings (H1a identity and safety)
 
-The reconciler owns only `RAG_EMBEDDING_ENGINE` and
-`RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama
-target. It never reads credentials into the ownership projection and never
-changes `ollama_config.key`, `openai_config`, or `azure_openai_config`.
-First adoption without a ledger is refused: an absent file is not evidence of
-an empty vector store. Existing explicitly acknowledged transitions retain
-their legacy validation; this is not a representation-aware migration executor.
-The separate mode-600 state is
-`~/.local/share/openwebui/data/managed-embedding.json`.
+The reconciler owns only `RAG_EMBEDDING_ENGINE` and `RAG_EMBEDDING_MODEL`, plus `ollama_config.url` while applying the Ollama target. It never reads credentials into the ownership projection and never changes `ollama_config.key`, `openai_config`, or `azure_openai_config`. First adoption without a ledger is refused: an absent file is not evidence of an empty vector store. Existing explicitly acknowledged transitions retain their legacy validation; this is not a representation-aware migration executor. The separate mode-600 state is `~/.local/share/openwebui/data/managed-embedding.json`.
 
-The configured route identity is represented by engine, model ID and output
-dimensions. Read-only route probes can report observed vector width and, when
-a caller supplies an authoritative expected width, compare it; a mismatch
-remains UNKNOWN and does not select an alternate route. No production call
-site supplies an expected width yet — the comparison is an optional probe
-precondition, not an enforced configured-content check. Probes do not
-establish model revision, pooling, template/task prefix, normalization or
-provenance; those identity fields remain UNKNOWN.
-Any readback against the owner-approved host is owner-gated. No live host
-readback, embedding/index inspection or retrieval run is implied by repository
-tests or this documentation.
+The configured route identity is represented by engine, model ID and output dimensions. Read-only route probes can report observed vector width and, when a caller supplies an authoritative expected width, compare it; a mismatch remains UNKNOWN and does not select an alternate route. No production call site supplies an expected width yet — the comparison is an optional probe precondition, not an enforced configured-content check. Probes do not establish model revision, pooling, template/task prefix, normalization or provenance; those identity fields remain UNKNOWN. Any readback against the owner-approved host is owner-gated. No live host readback, embedding/index inspection or retrieval run is implied by repository tests or this documentation.
 
-Embedding reconciliation fails closed when this ledger is absent or unreadable:
-it does not infer an empty vector store or adopt the first-run default. Existing
-valid legacy projections and pending acknowledgement records remain readable.
-Acknowledgements still undergo the transition-specific checks documented below;
-merely having a ledger does not authorize a change. Gateway, native and gate-off
-paths share this safety check. No automated inventory, reset or reindex is
-performed. Positive index inventory, full representation identity and
-representation/migration work (H1b/H2) are deferred by owner decision; no
-dimension or route match alone establishes representation parity.
+Embedding reconciliation fails closed when this ledger is absent or unreadable: it does not infer an empty vector store or adopt the first-run default. Existing valid legacy projections and pending acknowledgement records remain readable. Acknowledgements still undergo the transition-specific checks documented below; merely having a ledger does not authorize a change. Gateway, native and gate-off paths share this safety check. No automated inventory, reset or reindex is performed. Positive index inventory, full representation identity and representation/migration work (H1b/H2) are deferred by owner decision; no dimension or route match alone establishes representation parity.
 
-Changing from the built-in MiniLM model (384 dimensions) to
-`embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the
-vector representation. The reconciler refuses that migration until an operator
-has used Open WebUI's own data-management paths to reset/re-embed the vector
-store. In v0.12.0, `open_webui/routers/retrieval.py` implements the admin
-`POST /api/v1/retrieval/reset/db` handler (`reset_vector_db`) and
-`open_webui/routers/knowledge.py` implements `POST /api/v1/knowledge/reindex`
-(`reindex_knowledge_files`) for processing knowledge documents again. These
-operations are not called by dotfiles; determine the appropriate reset/reindex
-sequence in WebUI and confirm the resulting vector store before consenting.
+Changing from the built-in MiniLM model (384 dimensions) to `embeddinggemma-2:740m-mxfp8` on the Ollama daemon (768 dimensions) changes the vector representation. The reconciler refuses that migration until an operator has used Open WebUI's own data-management paths to reset/re-embed the vector store. In v0.12.0, `open_webui/routers/retrieval.py` implements the admin `POST /api/v1/retrieval/reset/db` handler (`reset_vector_db`) and `open_webui/routers/knowledge.py` implements `POST /api/v1/knowledge/reindex` (`reindex_knowledge_files`) for processing knowledge documents again. These operations are not called by dotfiles; determine the appropriate reset/reindex sequence in WebUI and confirm the resulting vector store before consenting.
 
-After the operator action, edit the acknowledgement in the state file. The
-`projection` (if present) is reconciler-owned; the operator-maintained sibling
-`acknowledgement` is the explicit consent affordance. The acknowledgement is
-validated against the transition the reconciler will perform, so the
-`previous_*` fields must equal the live identity observed at apply time and
-`new_*` must equal the reconciler's target. The common first-run sequence is:
-migrate the identity through WebUI's own paths (direct Ollama engine with the
-bare model id — the 384→768 data migration), reset/re-embed, then acknowledge
-the gateway adoption with the engine-aware shape. Under proxy mode the
-reconciler's target is the gateway route (`engine: openai`,
-canonical namespaced alias `ollama/<model>`), and a legacy acknowledgement
-without `new_engine` cannot authorize a gateway switch
-(`test_gateway_embedding_switch_requires_acknowledgement`):
+After the operator action, edit the acknowledgement in the state file. The `projection` (if present) is reconciler-owned; the operator-maintained sibling `acknowledgement` is the explicit consent affordance. The acknowledgement is validated against the transition the reconciler will perform, so the `previous_*` fields must equal the live identity observed at apply time and `new_*` must equal the reconciler's target. The common first-run sequence is: migrate the identity through WebUI's own paths (direct Ollama engine with the bare model id — the 384→768 data migration), reset/re-embed, then acknowledge the gateway adoption with the engine-aware shape. Under proxy mode the reconciler's target is the gateway route (`engine: openai`, canonical namespaced alias `ollama/<model>`), and a legacy acknowledgement without `new_engine` cannot authorize a gateway switch (`test_gateway_embedding_switch_requires_acknowledgement`):
 
 ```json
 {
@@ -702,86 +260,34 @@ without `new_engine` cannot authorize a gateway switch
 }
 ```
 
-`previous_output_dims` must equal the dimensions the reconciler derives: 384
-while the built-in MiniLM default is still live, the recorded projection's
-baseline when a projection exists, or omitted (`null`) once the operator has
-migrated the identity through WebUI's own paths with no projection recorded.
-The pre-switch direct-Ollama transition (engine `ollama`, bare model id)
-accepts the original legacy shape with no `new_engine` field.
+`previous_output_dims` must equal the dimensions the reconciler derives: 384 while the built-in MiniLM default is still live, the recorded projection's baseline when a projection exists, or omitted (`null`) once the operator has migrated the identity through WebUI's own paths with no projection recorded. The pre-switch direct-Ollama transition (engine `ollama`, bare model id) accepts the original legacy shape with no `new_engine` field.
 
-The first refusal names the old/new models and dimensions and instructs the
-operator to reset/re-embed using WebUI's mechanisms, then edit this exact state
-path with the acknowledgement. Dimensions are captured when the projection is
-recorded; mismatch between the acknowledgement and current model identity or
-dimensions blocks the switch. Gate-off restores the pre-switch engine/model
-and any recorded Ollama URL, then clears only this projection. It never touches
-vector data. CodeGraph continues to use native embeddings; this slice does not
-alter CodeGraph embedding behaviour.
+The first refusal names the old/new models and dimensions and instructs the operator to reset/re-embed using WebUI's mechanisms, then edit this exact state path with the acknowledgement. Dimensions are captured when the projection is recorded; mismatch between the acknowledgement and current model identity or dimensions blocks the switch. Gate-off restores the pre-switch engine/model and any recorded Ollama URL, then clears only this projection. It never touches vector data. CodeGraph continues to use native embeddings; this slice does not alter CodeGraph embedding behaviour.
 
-> **Document conversion**: WebUI document ingestion does NOT route through
-> MarkItDown (protocol mismatch with the external document loader; see
-> docs/LITELLM.md). MarkItDown remains available as a gateway or direct
-> conversion model for unmanaged consumers.
+> **Document conversion**: WebUI document ingestion does NOT route through MarkItDown (protocol mismatch with the external document loader; see docs/LITELLM.md). MarkItDown remains available as a gateway or direct conversion model for unmanaged consumers.
 
-Rollback from Ollama embeddings is also a dimension-changing data migration:
-if 768-dimension vectors may have been created, returning to 384-dimension
-MiniLM is refused until the operator resets/re-embeds the vector store and
-records a matching reverse acknowledgement in the same state file. The
-acknowledgement fields describe the actual direction: current owned Ollama
-model/engine/dimensions in `previous_*`, and restored MiniLM identity and 384
-dimensions in `new_*`. The recorded Ollama URL is checked for drift before
-no-op, switch, or rollback; rollback URL restoration is readback-verified
-before ownership state is cleared.
+Rollback from Ollama embeddings is also a dimension-changing data migration: if 768-dimension vectors may have been created, returning to 384-dimension MiniLM is refused until the operator resets/re-embeds the vector store and records a matching reverse acknowledgement in the same state file. The acknowledgement fields describe the actual direction: current owned Ollama model/engine/dimensions in `previous_*`, and restored MiniLM identity and 384 dimensions in `new_*`. The recorded Ollama URL is checked for drift before no-op, switch, or rollback; rollback URL restoration is readback-verified before ownership state is cleared.
 
-Reads use `GET /api/v1/retrieval/embedding`; writes use `POST
-/api/v1/retrieval/embedding/update`. The v0.12.0 router validates a complete
-`EmbeddingModelUpdateForm`: engine/model, batch size, async flag, concurrent
-requests and optional provider config blocks. Its handler updates Ollama URL
-only when the selected engine is `ollama` and an `ollama_config` is supplied;
-keys are not part of the ownership projection. Endpoint tests use fixtures and
-never issue a live write.
+Reads use `GET /api/v1/retrieval/embedding`; writes use `POST /api/v1/retrieval/embedding/update`. The v0.12.0 router validates a complete `EmbeddingModelUpdateForm`: engine/model, batch size, async flag, concurrent requests and optional provider config blocks. Its handler updates Ollama URL only when the selected engine is `ollama` and an `ollama_config` is supplied; keys are not part of the ownership projection. Endpoint tests use fixtures and never issue a live write.
 
-- **Local engines:** models are discovered live through each connection's
-  native model-list mechanism (Ollama native API; `/v1/models` for
-  OpenAI-protocol connections). Nothing to check in; add/remove a model in
-  Ollama/oMLX and it appears. The existing `check-model-drift` gate continues
-  to cover OpenCode catalogs only.
-- **OpenCode tier presets are unchanged** — this system is a parallel consumer of
-  the same engines, not a replacement for the slim.json tier registry.
-- Update pinned Open WebUI releases deliberately (change
-  `DOTFILES_OPENWEBUI_VERSION`; the default lives at
-  `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.13.0 is the target;
-  0.12.5 is the last live-verified release. Rehearse before deployment.
-  change; check release notes for security fixes first). Since 0.12.0 the
-  deploy template stops the service and backs up `webui.db` (+ WAL/SHM)
-  automatically whenever the pinned version changes, before the upgrade runs.
-  SQLite data is not always backward-compatible across versions: the first
-  boot of a newer release migrates the database irreversibly, so rollback
-  means restoring a pre-upgrade backup from the data directory.
+- **Local engines:** models are discovered live through each connection's native model-list mechanism (Ollama native API; `/v1/models` for OpenAI-protocol connections). Nothing to check in; add/remove a model in Ollama/oMLX and it appears. The existing `check-model-drift` gate continues to cover OpenCode catalogs only.
+- **OpenCode tier presets are unchanged** — this system is a parallel consumer of the same engines, not a replacement for the slim.json tier registry.
+- Update pinned Open WebUI releases deliberately (change `DOTFILES_OPENWEBUI_VERSION`; the default lives at `.chezmoiscripts/run_onchange_30-openwebui.sh.tmpl` — 0.13.0 is the target; 0.12.5 is the last live-verified release. Rehearse before deployment. change; check release notes for security fixes first). Since 0.12.0 the deploy template stops the service and backs up `webui.db` (+ WAL/SHM) automatically whenever the pinned version changes, before the upgrade runs. SQLite data is not always backward-compatible across versions: the first boot of a newer release migrates the database irreversibly, so rollback means restoring a pre-upgrade backup from the data directory.
 
 ### Documentation duties when touching this area
 
-- Update this doc for architecture changes; keep `docs-drift` green (link from
-  `AGENTS.md`/`README.md`).
+- Update this doc for architecture changes; keep `docs-drift` green (link from `AGENTS.md`/`README.md`).
 - New gates → `.env.example` + `docs/ORCHESTRATION.md`.
 - New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
-- Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354);
-  0.13.0 postdates the fix's merge to `dev`; after the upgrade rehearsal, the
-  `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if
-  titles such as `settings.admin.connections.title` render correctly.
+- Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354); 0.13.0 postdates the fix's merge to `dev`; after the upgrade rehearsal, the `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if titles such as `settings.admin.connections.title` render correctly.
 
 ## Explicit non-goals
 
 - No subscription-proxying of ChatGPT Plus/Claude Pro (ToS + fragility).
-- No Meridian-as-chat-backend unless both the technical and authorization
-  conditions in the design principles pass.
-- No forced LiteLLM/OpenRouter gateway — direct mode stays the default; the
-  proxy is an explicit opt-in (design principle 6 and the reconciler contract).
-- No direct Open Terminal socket or Caddy route; its registered chat access is
-  the explicit app-authenticated LAN decision. Computer remains separately
-  installed and independently exposed, if adopted.
-- No replacement of the OpenCode tier system — this is a parallel consumer of
-  `LOCAL_ENGINES`, not a new abstraction over it.
+- No Meridian-as-chat-backend unless both the technical and authorization conditions in the design principles pass.
+- No forced LiteLLM/OpenRouter gateway — direct mode stays the default; the proxy is an explicit opt-in (design principle 6 and the reconciler contract).
+- No direct Open Terminal socket or Caddy route; its registered chat access is the explicit app-authenticated LAN decision. Computer remains separately installed and independently exposed, if adopted.
+- No replacement of the OpenCode tier system — this is a parallel consumer of `LOCAL_ENGINES`, not a new abstraction over it.
 
 ## Sources (primary, retrieved 2026-09-24)
 
@@ -791,67 +297,31 @@ never issue a live write.
 |---|---|
 | Containment; Junie derivation and Meridian twins; voice STT with fail-closed behaviour and descope; WebUI audio ownership; guarded WebUI embedding switch; gateway modality exposure including MarkItDown and namespaced-name guard; pinned memory extraction schema; Open WebUI 0.12.3 | AMD Vulkan qualification; WebUI ingestion through a MarkItDown adapter; voice HTTP TTS (unsupported by plugin); local-AI doctor; WebUI TASK_MODEL wiring |
 
-- Open WebUI docs: main, connect-a-provider, env-configuration reference,
-  MCP (`/features/extensibility/mcp`), Open Terminal, Computer, licence +
-  LICENSE_HISTORY, alternatives pages (LibreChat/AnythingLLM/Jan), v0.11.4 release
-- Open WebUI env-configuration reference re-verified 2026-09-24 during
-  review remediation: `ENABLE_PERSISTENT_CONFIG` (default `True`; env only
-  wins when `False`), `*_API_CONFIGS` (`prefix_id`, `connection_type`,
-  `enable`, `model_ids`), `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD`
-  bootstrap (auto-disables signup), no Anthropic-type env-var path
+- Open WebUI docs: main, connect-a-provider, env-configuration reference, MCP (`/features/extensibility/mcp`), Open Terminal, Computer, licence + LICENSE_HISTORY, alternatives pages (LibreChat/AnythingLLM/Jan), v0.11.4 release
+- Open WebUI env-configuration reference re-verified 2026-09-24 during review remediation: `ENABLE_PERSISTENT_CONFIG` (default `True`; env only wins when `False`), `*_API_CONFIGS` (`prefix_id`, `connection_type`, `enable`, `model_ids`), `WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD` bootstrap (auto-disables signup), no Anthropic-type env-var path
 - LibreChat docs: ai_endpoints (incl. LiteLLM page), features, quick start
-- AnythingLLM docs: LLM configuration (incl. oMLX page), model router, MCP,
-  Agent Flows, scheduled jobs, telemetry note
+- AnythingLLM docs: LLM configuration (incl. oMLX page), model router, MCP, Agent Flows, scheduled jobs, telemetry note
 - Jan README (features, OpenAI-compatible server, mlx-server)
 - egoist/waku README + GitHub API metadata
-- LiteLLM docs: proxy quick start, configs and endpoint matrix;
-  licence (MIT core / enterprise dir)
+- LiteLLM docs: proxy quick start, configs and endpoint matrix; licence (MIT core / enterprise dir)
 - OpenRouter docs: pricing (5.5% platform fee), BYOK, privacy/provider-logging
 - Anthropic Consumer Terms (effective 2025-10-08)
-- Community signals: HN threads on the 2025 licence change (limited independent
-  benchmarking evidence exists; Reddit sampling blocked during research — flagged
-  as residual uncertainty on community sentiment, not on documented facts)
+- Community signals: HN threads on the 2025 licence change (limited independent benchmarking evidence exists; Reddit sampling blocked during research — flagged as residual uncertainty on community sentiment, not on documented facts)
 
 ## Implementation record (Phase 4, resolved)
 
-All former open questions were resolved during implementation and
-live-validated against `open-webui==0.11.4`:
+All former open questions were resolved during implementation and live-validated against `open-webui==0.11.4`:
 
-1. **Meridian:** included by explicit user authorization (Phase 4 planning)
-   as a reconciler-managed `meridian` connection whenever
-   `is_meridian_configured()` reports availability; no entry is created
-   otherwise. Not a general subscription-to-API bridge.
-2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.13.0}`
-   in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback;
-   3.14 unsupported upstream). LaunchAgent behaviour verified live
-   (KeepAlive respawn works; see the bootout/bootstrap retry note below).
-   Early Phase 4 validation was against 0.11.4; the pinned default is
-   0.13.0 (target; live deployment verified on 0.12.5; upgrade rehearsal required before deployment).
+1. **Meridian:** included by explicit user authorization (Phase 4 planning) as a reconciler-managed `meridian` connection whenever `is_meridian_configured()` reports availability; no entry is created otherwise. Not a general subscription-to-API bridge.
+2. **pip-in-venv** chosen: `open-webui==${DOTFILES_OPENWEBUI_VERSION:-0.13.0}` in `~/.local/share/openwebui/venv` (Python 3.11 preferred; 3.12 fallback; 3.14 unsupported upstream). LaunchAgent behaviour verified live (KeepAlive respawn works; see the bootout/bootstrap retry note below). Early Phase 4 validation was against 0.11.4; the pinned default is 0.13.0 (target; live deployment verified on 0.12.5; upgrade rehearsal required before deployment).
 3. **Port** `OPENWEBUI_PORT` (default 8080, CLI option); Caddy host is
     `chat.<CADDY_DOMAIN>` follows `CADDY_ACCESS` when the service is
     gate-enabled and installed; app auth is the public-mode boundary.
-4. **Reconciliation API surface verified live:** reads are
-   `GET /openai/config` + `GET /ollama/config`; writes are
-   `POST /openai/config/update` + `POST /ollama/config/update`; envelopes are
-   `{ENABLE_*_API, *_BASE_URLS: list, *_API_KEYS: list, *_API_CONFIGS:
-   dict[index→config]}`. Anthropic support is URL-based; `connection_type` is
-   metadata, not protocol selection. Unrelated persisted state (model
-   ordering, admin-created entries) is untouched by reconciliation — enforced
-   by verbatim unmanaged-entry preservation with snapshot verification.
-   Live pilot: `add=7, keep=2, collisions=0`, then idempotent
-   `keep=9, collisions=0`; 612 models discovered. One live-only bug was found
-   and fixed during validation: 0.11.4 seeds default connections with an
-   **empty `prefix_id`**, which the reconciler's add-guard previously
-   mis-indexed (first-character vs full-string comparison); it now compares
-   full strings and preserves empty-prefix seed entries verbatim. The
-   LaunchAgent wiring also absorbed an upstream launchd quirk: `bootout` is
-   asynchronous, so the bootstrap step retries with a bounded backoff.
+4. **Reconciliation API surface verified live:** reads are `GET /openai/config` + `GET /ollama/config`; writes are `POST /openai/config/update` + `POST /ollama/config/update`; envelopes are `{ENABLE_*_API, *_BASE_URLS: list, *_API_KEYS: list, *_API_CONFIGS: dict[index→config]}`. Anthropic support is URL-based; `connection_type` is metadata, not protocol selection. Unrelated persisted state (model ordering, admin-created entries) is untouched by reconciliation — enforced by verbatim unmanaged-entry preservation with snapshot verification. Live pilot: `add=7, keep=2, collisions=0`, then idempotent `keep=9, collisions=0`; 612 models discovered. One live-only bug was found and fixed during validation: 0.11.4 seeds default connections with an **empty `prefix_id`**, which the reconciler's add-guard previously mis-indexed (first-character vs full-string comparison); it now compares full strings and preserves empty-prefix seed entries verbatim. The LaunchAgent wiring also absorbed an upstream launchd quirk: `bootout` is asynchronous, so the bootstrap step retries with a bounded backoff.
 
 ## Acceptance ledger (local-AI unification PR)
 
-Recorded at PR review closure. Each row names the review gate that raised the
-item and how it is disposed: **satisfied** by evidence in this change, or a
-**limitation** explicitly carried forward instead of being silent.
+Recorded at PR review closure. Each row names the review gate that raised the item and how it is disposed: **satisfied** by evidence in this change, or a **limitation** explicitly carried forward instead of being silent.
 
 | Item | Origin | Disposition |
 |---|---|---|
@@ -882,11 +352,6 @@ item and how it is disposed: **satisfied** by evidence in this change, or a
 | CodeQL alert-18 exposure determination | GPT-6 round-2 annotation 6 | Satisfied as a signal disposition — the credential-bearing outputs and staging are owner-only (`0600` files in `0700` staging dirs, committed regression tests), so no secret is readable by another local user; the alert's flow was classified (not silenced) in the PR body register; final-head CI is the independent check. |
 | Smoke harness | GPT-6 round-2 annotation 16; R8 P0.4 | Satisfied as shipped (`scripts/verify-local-ai-smoke.py`, R8 contract split) — the hermetic **retention** mode reports skipped-with-reason honestly, and the **acceptance** mode drives the cold-start contract against injected fixtures with an asserted fail-closed network hook, an empty-`--home` requirement, an allowlisted subprocess environment and dry-run-before-write. The acceptance mode proves the fixture-driven contract; real cold-start host evidence remains the owner's deploy proof, not a script claim. |
 
-Merge preconditions: final-head CI green and owner verification of gateway
-mode on the release host. Both are tracked in the PR; the PR is currently
-**not in draft on GitHub** — the gates apply regardless of the draft flag.
+Merge preconditions: final-head CI green and owner verification of gateway mode on the release host. Both are tracked in the PR; the PR is currently **not in draft on GitHub** — the gates apply regardless of the draft flag.
 
-Evidence vocabulary — **delivered** (reconciled and readback-verified),
-**probe-qualified** (`PROTOCOL_PROBED` from an opt-in `--probe-routes` run),
-**consumer-verified** (a real consumer outcome served through the configured
-route) — applies to every claim in this document.
+Evidence vocabulary — **delivered** (reconciled and readback-verified), **probe-qualified** (`PROTOCOL_PROBED` from an opt-in `--probe-routes` run), **consumer-verified** (a real consumer outcome served through the configured route) — applies to every claim in this document.

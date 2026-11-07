@@ -48,53 +48,20 @@ Voice capture submits speech immediately to STT; unlike the editable v1 composer
 
 **Local Ollama model selection**: All `local-*` tiers reuse the shared tier registry (`scripts/lib/tier_registry.py`) model discovery — they pick the best local model for voice based on capability heuristics (preferring audio/vision-capable models). Cloud tiers respect `DOTFILES_USE_LOCAL_OLLAMA` (default: true) to control whether local models replace the cloud LLM endpoint.
 
-**Normalization LLM selection** uses the shared local pool when the applicable
-local-selection policy allows it. STT selection is separate: when enabled and
-reachable, discovery selects an oMLX `audio_stt` model. `DOTFILES_USE_LOCAL_OMLX=false`
-opts out of the oMLX STT path.
+**Normalization LLM selection** uses the shared local pool when the applicable local-selection policy allows it. STT selection is separate: when enabled and reachable, discovery selects an oMLX `audio_stt` model. `DOTFILES_USE_LOCAL_OMLX=false` opts out of the oMLX STT path.
 
-The installed `opencode-voice` consumer (0.11.5) keeps Piper as its default TTS
-engine. The voice script's endpoint, model and API-key options configure LLM
-text normalization, not synthesis; it does not emit HTTP TTS settings and logs
-this limitation honestly. (The earlier 0.5.0–0.6.0 consumers registered no TTS
-options at all; the 0.11.5 consumer's exact synthesis surface still needs live
-revalidation after migration — recorded in the migration plan as a machine phase
-check.) Local HTTP TTS is consumed by the separate Open WebUI audio bundle;
-`DOTFILES_VOICE_TTS_VOICE` is its named-speaker input, defaulting to `serena`
-(used only for Qwen3-TTS-family models). The bundle uses the first discovered
-`audio_tts` model that is not known-unqualified. Discovery or a successful
-probe alone does not establish a consumer outcome; see the acceptance ledger
-in [CHAT_FRONTEND.md](CHAT_FRONTEND.md) for the delivered, probe-qualified and
-consumer-verified distinctions. Chatterbox multilingual v3 requires voice-
-cloning conditionals and is not default-selected. Piper cannot be configured
-away with this voice consumer; the config reflects its unavoidable Piper use.
-The detailed audio probe record is local-only session evidence and is not
-tracked; the committed acceptance ledger in [CHAT_FRONTEND.md](CHAT_FRONTEND.md)
-records the shareable outcome and evidence status.
+The installed `opencode-voice` consumer (0.11.5) keeps Piper as its default TTS engine. The voice script's endpoint, model and API-key options configure LLM text normalization, not synthesis; it does not emit HTTP TTS settings and logs this limitation honestly. (The earlier 0.5.0–0.6.0 consumers registered no TTS options at all; the 0.11.5 consumer's exact synthesis surface still needs live revalidation after migration — recorded in the migration plan as a machine phase check.) Local HTTP TTS is consumed by the separate Open WebUI audio bundle; `DOTFILES_VOICE_TTS_VOICE` is its named-speaker input, defaulting to `serena` (used only for Qwen3-TTS-family models). The bundle uses the first discovered `audio_tts` model that is not known-unqualified. Discovery or a successful probe alone does not establish a consumer outcome; see the acceptance ledger in [CHAT_FRONTEND.md](CHAT_FRONTEND.md) for the delivered, probe-qualified and consumer-verified distinctions. Chatterbox multilingual v3 requires voice- cloning conditionals and is not default-selected. Piper cannot be configured away with this voice consumer; the config reflects its unavoidable Piper use. The detailed audio probe record is local-only session evidence and is not tracked; the committed acceptance ledger in [CHAT_FRONTEND.md](CHAT_FRONTEND.md) records the shareable outcome and evidence status.
 
 ### Submission and insertion behaviour on OpenCode v2 (from the 0.11.5 README)
 
-- **Streaming dictation** inserts the completed text exactly once at finalize —
-  the editable composer insertion path (live text appearing in the input field
-  as you speak) is lost under v2.
-- **Batch STT** inserts at the focused editable field. Immediate submission is
-  available via the `/stt-submit` command or the `sttAutoSubmit` option
-  (default `false`), which the writer leaves untouched so the tier selection
-  stays opt-in for the user.
+- **Streaming dictation** inserts the completed text exactly once at finalize — the editable composer insertion path (live text appearing in the input field as you speak) is lost under v2.
+- **Batch STT** inserts at the focused editable field. Immediate submission is available via the `/stt-submit` command or the `sttAutoSubmit` option (default `false`), which the writer leaves untouched so the tier selection stays opt-in for the user.
 
-Microphone transport is an explicit policy independent of coding-tier model
-selection. The current transport remains the default, preserving existing
-behaviour; changing tiers does not implicitly change microphone transport. Pi
-continues to use sherpa-onnx.
+Microphone transport is an explicit policy independent of coding-tier model selection. The current transport remains the default, preserving existing behaviour; changing tiers does not implicitly change microphone transport. Pi continues to use sherpa-onnx.
 
-With `configure-opencode-voice.py`, `--stt-transport local` or
-`--stt-transport openai` saves that choice across tier changes. Omitting the
-flag preserves the saved transport. Explicit `--stt-transport auto` reapplies
-`DOTFILES_USE_LITELLM_PROXY` (`1` selects OpenAI; `0` selects local); if the
-gate is unset, it uses the saved transport or defaults to local.
+With `configure-opencode-voice.py`, `--stt-transport local` or `--stt-transport openai` saves that choice across tier changes. Omitting the flag preserves the saved transport. Explicit `--stt-transport auto` reapplies `DOTFILES_USE_LITELLM_PROXY` (`1` selects OpenAI; `0` selects local); if the gate is unset, it uses the saved transport or defaults to local.
 
-The `free` tier is explicitly excluded from Ollama Cloud fallback handling; it
-does not require `OLLAMA_API_KEY` or a local Ollama daemon for voice.
+The `free` tier is explicitly excluded from Ollama Cloud fallback handling; it does not require `OLLAMA_API_KEY` or a local Ollama daemon for voice.
 
 ---
 
@@ -159,35 +126,20 @@ Voice deps in `run_onchange_07-install-opencode-plugins.sh.tmpl` are gated on `D
 
 ## Sharing voice infrastructure across tools
 
-Voice plugins are tool-specific — each tool requires its own plugin and cannot
-reuse another tool's voice runtime. However, the underlying services and models
-can be shared:
+Voice plugins are tool-specific — each tool requires its own plugin and cannot reuse another tool's voice runtime. However, the underlying services and models can be shared:
 
 ### Whisper models (STT)
 
-Pi uses a fixed sherpa-onnx Whisper model under `~/.pi/models/whisper-base/`.
-The OpenCode voice plugin uses a separate whisper-cli/whisper-cpp model and
-format. The two runtimes cannot practically share model files due to different
-model formats and fixed paths.
+Pi uses a fixed sherpa-onnx Whisper model under `~/.pi/models/whisper-base/`. The OpenCode voice plugin uses a separate whisper-cli/whisper-cpp model and format. The two runtimes cannot practically share model files due to different model formats and fixed paths.
 
 ### Piper TTS
 
-Piper is currently OpenCode-only (via `@renjfk/opencode-voice`). No other tool
-in this repo has Piper integration. The Piper voice model is configured via
-`DOTFILES_PIPER_VOICE` and managed by `scripts/configure-opencode-voice.py`.
+Piper is currently OpenCode-only (via `@renjfk/opencode-voice`). No other tool in this repo has Piper integration. The Piper voice model is configured via `DOTFILES_PIPER_VOICE` and managed by `scripts/configure-opencode-voice.py`.
 
 ### i18n / locale
 
-No tool in this repo has dedicated i18n plugin support beyond Pi's `@juicesharp/rpiv-i18n`
-plugin. Locale behaviour for all other tools falls back to the standard `LANG`
-and `LC_ALL` environment variables (see `dot_dotfiles/shell/.env.example`).
-Note: `LANG`/`LC_ALL` provide OS locale input to processes; they do not guarantee
-that each tool's UI is translated. Pi's i18n plugin only localizes participating
-`rpiv-*` extension UI.
+No tool in this repo has dedicated i18n plugin support beyond Pi's `@juicesharp/rpiv-i18n` plugin. Locale behaviour for all other tools falls back to the standard `LANG` and `LC_ALL` environment variables (see `dot_dotfiles/shell/.env.example`). Note: `LANG`/`LC_ALL` provide OS locale input to processes; they do not guarantee that each tool's UI is translated. Pi's i18n plugin only localizes participating `rpiv-*` extension UI.
 
 ### Why voice can't be shared like guidance
 
-Agent guidance (`AGENTS.md`) is plain markdown that any tool can read. Voice
-plugins are binary/integrated runtimes — a Whisper process, audio capture, TTS
-engine — that must run inside the host tool's process. There is no protocol for
-cross-tool voice sharing, unlike MCP/ACP which are designed for inter-tool communication.
+Agent guidance (`AGENTS.md`) is plain markdown that any tool can read. Voice plugins are binary/integrated runtimes — a Whisper process, audio capture, TTS engine — that must run inside the host tool's process. There is no protocol for cross-tool voice sharing, unlike MCP/ACP which are designed for inter-tool communication.

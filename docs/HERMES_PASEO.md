@@ -6,11 +6,7 @@
 
 The repository's `scripts/configure-hermes.py` is a separate LiteLLM provider scaffold gated by `DOTFILES_RUN_HERMES_SETUP` and `DOTFILES_USE_LITELLM_PROXY`. It is not a Hermes install/ACP/gateway manager. It has an explicit unresolved credential-delivery warning. Do not broaden that gate or claim functional LiteLLM routing without an authenticated model request.
 
-Hermes reads its own provider credentials from user-owned `~/.hermes` state. Paseo's `~/.paseo/config.json` is also user-owned. This integration registers only the missing `agents.providers.hermes` entry using a private staged config validated by Paseo's native `config get`,
-then an atomic file save and native `daemon reload`. The `config set`
-value argument cannot safely carry user-owned provider keys. A divergent
-existing Hermes entry is refused; a failed reload leaves the saved state
-intact for owner inspection and no rollback is attempted.
+Hermes reads its own provider credentials from user-owned `~/.hermes` state. Paseo's `~/.paseo/config.json` is also user-owned. This integration registers only the missing `agents.providers.hermes` entry using a private staged config validated by Paseo's native `config get`, then an atomic file save and native `daemon reload`. The `config set` value argument cannot safely carry user-owned provider keys. A divergent existing Hermes entry is refused; a failed reload leaves the saved state intact for owner inspection and no rollback is attempted.
 
 ## Owner-run setup
 

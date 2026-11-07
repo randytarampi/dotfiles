@@ -1,8 +1,6 @@
 # Historical contribution attribution: controlled Git history migration
 
-**Status:** preparation only; this document grants no force-push, PR-edit or clean-up permission.
-**Baseline inspected:** 3 November 2026, `main` at `8f69bb95615129d795011d179a75a339dce365c6`.
-**Scope:** `randytarampi/dotfiles` plus approved downstream SHA consumers; re-enumerate everything at execution time.
+**Status:** preparation only; this document grants no force-push, PR-edit or clean-up permission. **Baseline inspected:** 3 November 2026, `main` at `8f69bb95615129d795011d179a75a339dce365c6`. **Scope:** `randytarampi/dotfiles` plus approved downstream SHA consumers; re-enumerate everything at execution time.
 
 This runbook is for a *local migration operator* (Pi, OpenCode, Claude Code, Codex, Junie or a human) taking over after normal development has stopped. The selected programme is **A + E + C**: reconcile attribution in GitHub PR bodies (A); make one controlled rewrite of explicitly approved Git refs (E); reconcile divergent / still-open branches not already covered (C). Source code behaviour must not change. This is not permission to create fictitious contributors or retroactive GitHub approvals.
 

@@ -1,15 +1,10 @@
 # Telemetry Opt-Out Dispositions
 
-This document records the telemetry opt-out mechanism for each agent tool in
-the dotfiles fleet. The env vars below are set (effective, not commented) in
-`dot_dotfiles/shell/.env.example`. For existing installations, `make migrate`
-inserts these keys as commented entries in `~/.env`; uncomment them in `~/.env`
-to activate.
+This document records the telemetry opt-out mechanism for each agent tool in the dotfiles fleet. The env vars below are set (effective, not commented) in `dot_dotfiles/shell/.env.example`. For existing installations, `make migrate` inserts these keys as commented entries in `~/.env`; uncomment them in `~/.env` to activate.
 
 ## Env var approach (primary)
 
-Most tools are controlled via environment variables loaded from `~/.env` at
-shell startup. These are the canonical opt-out levers:
+Most tools are controlled via environment variables loaded from `~/.env` at shell startup. These are the canonical opt-out levers:
 
 | Tool | Env var(s) | Config file | Disposition |
 |---|---|---|---|
@@ -30,10 +25,7 @@ shell startup. These are the canonical opt-out levers:
 | cptr | — | — | no telemetry observed in installed 0.9.21 source |
 | litellm | — | `~/.local/share/litellm/config.yaml` | config opt-out: generated `litellm_settings.telemetry: false` (installed default is enabled) |
 
-Codex note: `OTEL_SDK_DISABLED=true` suppresses the OTel SDK but does not fully
-disable Codex analytics. Codex requires `config.toml` settings
-(`[analytics] enabled = false` and `[otel] exporter = "none"`) for a complete
-opt-out.
+Codex note: `OTEL_SDK_DISABLED=true` suppresses the OTel SDK but does not fully disable Codex analytics. Codex requires `config.toml` settings (`[analytics] enabled = false` and `[otel] exporter = "none"`) for a complete opt-out.
 
 ## General-purpose env vars
 
@@ -48,8 +40,7 @@ These are not tool-specific and affect multiple tools:
 
 ## Pi config-file injection
 
-Pi is the only tool where telemetry is also disabled via config-file injection
-(not just env vars). The `scripts/configure-pi.py` script sets:
+Pi is the only tool where telemetry is also disabled via config-file injection (not just env vars). The `scripts/configure-pi.py` script sets:
 
 ```json
 {
@@ -62,8 +53,7 @@ in `~/.pi/agent/settings.json` when `DOTFILES_RUN_PI_SETUP=1`.
 
 ## Tools with no env-manageable opt-out
 
-Copilot, Cursor, Antigravity, Junie, and Cortex do not expose an env-var-based
-opt-out. Some have local UI settings or account-level controls:
+Copilot, Cursor, Antigravity, Junie, and Cortex do not expose an env-var-based opt-out. Some have local UI settings or account-level controls:
 
 - **Copilot**: GitHub org/enterprise policy (no local opt-out)
 - **Cursor**: Cursor account dashboard Privacy Mode (no local opt-out)
@@ -73,6 +63,4 @@ opt-out. Some have local UI settings or account-level controls:
 
 ## Verification
 
-Run `make check-fleet-coverage` to validate that every tool in the fleet
-registry has a documented telemetry disposition and that env vars in
-`.env.example` match the registry.
+Run `make check-fleet-coverage` to validate that every tool in the fleet registry has a documented telemetry disposition and that env vars in `.env.example` match the registry.

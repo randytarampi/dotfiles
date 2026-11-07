@@ -8,9 +8,7 @@ For Mozart router config (a separate component), see [MOZART.md](MOZART.md).
 
 Meridian persists per-adapter SDK feature toggles in `~/.config/meridian/sdk-features.json`. The OpenCode adapter is configured with:
 
-After successful `meridian setup --v2`, the repository reconciles these two
-OpenCode values while preserving unrelated keys; the setup binary's ownership
-of this policy is not established here.
+After successful `meridian setup --v2`, the repository reconciles these two OpenCode values while preserving unrelated keys; the setup binary's ownership of this policy is not established here.
 
 ```json
 {

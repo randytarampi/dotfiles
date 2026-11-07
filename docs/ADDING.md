@@ -17,20 +17,11 @@ Use the required `--preset <tier>` flag; positional tier arguments are not suppo
 
 ### Adding a profile to the local family
 
-1. Add the family preset and its `_tiers` entry in
-   `configs/opencode/oh-my-opencode-slim.json`. Keep both council surfaces in
-   member parity: nested `council.presets` and top-level `council.presets`.
-   Profile tiers require dict-valued councils, and each council's
-   `default_preset` must name an available preset for that tier.
-2. Add `profile.name` to `_tiers`, then update policy hooks in
-   `scripts/lib/tier_registry.py` and `scripts/lib/tier_resolve.py` as needed.
-   Check every consumer of the tier family.
-3. Run `scripts/verify-slim-invariants.py` and the profile tests
-   `test_tier_resolve_profiles.py` and `test_configure_opencode_tier.py`.
+1. Add the family preset and its `_tiers` entry in `configs/opencode/oh-my-opencode-slim.json`. Keep both council surfaces in member parity: nested `council.presets` and top-level `council.presets`. Profile tiers require dict-valued councils, and each council's `default_preset` must name an available preset for that tier.
+2. Add `profile.name` to `_tiers`, then update policy hooks in `scripts/lib/tier_registry.py` and `scripts/lib/tier_resolve.py` as needed. Check every consumer of the tier family.
+3. Run `scripts/verify-slim-invariants.py` and the profile tests `test_tier_resolve_profiles.py` and `test_configure_opencode_tier.py`.
 
-There is no alias or deprecation mechanism for tier names. If a deprecation is
-approved, introduce one explicit alias map in `tier_registry.py` and have all
-consumers honour it; do not scatter renames among consumers.
+There is no alias or deprecation mechanism for tier names. If a deprecation is approved, introduce one explicit alias map in `tier_registry.py` and have all consumers honour it; do not scatter renames among consumers.
 
 ---
 
@@ -100,13 +91,7 @@ If a generated artifact is stale after a pull, check the relevant hash trigger f
 
 ### CI/local-only review assets
 
-Review/CI-only assets (`.github/workflows/` helpers, `scripts/ci-*.sh`,
-`scripts/run-local-review.sh`, `configs/review/*`, `configs/opencode/ci/*`,
-`scripts/onboard-agentic-review.py`) must **not** get `run_onchange_16` hash
-triggers — they don't affect local OpenCode configuration, and attaching them
-causes false local re-runs. Track them in `configs/review/assets-manifest.json`
-instead (checked by `make check-ci-assets`; regenerate with
-`make update-ci-assets` after editing any listed asset).
+Review/CI-only assets (`.github/workflows/` helpers, `scripts/ci-*.sh`, `scripts/run-local-review.sh`, `configs/review/*`, `configs/opencode/ci/*`, `scripts/onboard-agentic-review.py`) must **not** get `run_onchange_16` hash triggers — they don't affect local OpenCode configuration, and attaching them causes false local re-runs. Track them in `configs/review/assets-manifest.json` instead (checked by `make check-ci-assets`; regenerate with `make update-ci-assets` after editing any listed asset).
 
 See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger policy.
 
@@ -126,26 +111,15 @@ See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the canonical hash-trigger pol
 
 ### Adding a service-lane gate or environment variable
 
-Document new variables in `dot_dotfiles/shell/.env.example` and ensure
-`make check-env-coverage` passes. Register script capabilities and accepted
-flags in `scripts/lib/cli-contract.json`; irrelevant flags must remain rejected
-as usage errors. Follow [docs/CONVENTIONS.md](CONVENTIONS.md) for the CLI
-contract and run the relevant environment-coverage and CLI-contract checks.
+Document new variables in `dot_dotfiles/shell/.env.example` and ensure `make check-env-coverage` passes. Register script capabilities and accepted flags in `scripts/lib/cli-contract.json`; irrelevant flags must remain rejected as usage errors. Follow [docs/CONVENTIONS.md](CONVENTIONS.md) for the CLI contract and run the relevant environment-coverage and CLI-contract checks.
 
 ## Adding a Skills Category
 
-Create `configs/skills/skills.<name>.json` with a unique profile and its skill
-entries. Omit `gate` for always-on categories such as `core` and `mattpocock`.
-For opt-in categories, add the corresponding category skills setup gate to
-`dot_dotfiles/shell/.env.example` and the gate table in
-[ORCHESTRATION.md](ORCHESTRATION.md). Add the category file to the hash triggers
-in `.chezmoiscripts/run_onchange_28-configure-skills.sh.tmpl`, then run
-`make check-hashes` and `make verify`.
+Create `configs/skills/skills.<name>.json` with a unique profile and its skill entries. Omit `gate` for always-on categories such as `core` and `mattpocock`. For opt-in categories, add the corresponding category skills setup gate to `dot_dotfiles/shell/.env.example` and the gate table in [ORCHESTRATION.md](ORCHESTRATION.md). Add the category file to the hash triggers in `.chezmoiscripts/run_onchange_28-configure-skills.sh.tmpl`, then run `make check-hashes` and `make verify`.
 
 ## Project-Scoped Skills and Configuration
 
-Create `.opencode/.env` in a project and select categories independently of global
-gates:
+Create `.opencode/.env` in a project and select categories independently of global gates:
 
 ```bash
 DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb
@@ -153,40 +127,20 @@ DOTFILES_PROJECT_SKILLS=plannotator-review
 DOTFILES_PROJECT_SKIP_SKILLS=handoff
 ```
 
-Run `scripts/configure-project.py --steps skills`. CLI flags override the project
-file. Selected skills are symlinked from the canonical cache into
-`.opencode/skills/`, and stale project links are removed.
+Run `scripts/configure-project.py --steps skills`. CLI flags override the project file. Selected skills are symlinked from the canonical cache into `.opencode/skills/`, and stale project links are removed.
 
-`.opencode/.env` is user-authored project configuration and is never overwritten.
-Generated secrets go to `.opencode/.env.local` (gitignored), loaded after `.env`.
-See [project-env.example](project-env.example) for the complete template.
+`.opencode/.env` is user-authored project configuration and is never overwritten. Generated secrets go to `.opencode/.env.local` (gitignored), loaded after `.env`. See [project-env.example](project-env.example) for the complete template.
 
-`configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`,
-`jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Defaults to
-`opencode,codegraph,skills,jetbrains,junie`; use `--steps` to run any subset,
-`DOTFILES_PROJECT_STEPS` to override the default set from `.opencode/.env`, or
-the per-step `DOTFILES_PROJECT_*` variables to opt individual default steps out
-(set them false-y, e.g. `DOTFILES_PROJECT_JUNIE=0`). JetBrains and Junie project
-work delegates to the existing scripts.
+`configure-project.py` supports `opencode`, `tier`, `codegraph`, `mcps`, `skills`, `jetbrains`, `junie`, `acp-agents`, and `secrets` steps. Defaults to `opencode,codegraph,skills,jetbrains,junie`; use `--steps` to run any subset, `DOTFILES_PROJECT_STEPS` to override the default set from `.opencode/.env`, or the per-step `DOTFILES_PROJECT_*` variables to opt individual default steps out (set them false-y, e.g. `DOTFILES_PROJECT_JUNIE=0`). JetBrains and Junie project work delegates to the existing scripts.
 
-All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable;
-use it to omit named steps such as `mcps`. `configure-all.sh` also accepts
-`--local-fallback-preset`, `--role-model`, `--category-model`, `--preset`, `--mode`, and
-`--min-reasoning-embedding`.
+All configure scripts use the `--skip STEP[,STEP...]` umbrella where applicable; use it to omit named steps such as `mcps`. `configure-all.sh` also accepts `--local-fallback-preset`, `--role-model`, `--category-model`, `--preset`, `--mode`, and `--min-reasoning-embedding`.
 
 ## Adding a new agent tool
 
 When adding a new agent tool to the fleet:
 
-1. **Fleet registry**: Add an entry to `scripts/lib/fleet-registry.json` with
-   telemetry disposition, voice support, i18n mechanism, and guidance path.
-2. **Telemetry**: If the tool supports a local opt-out, add env vars to
-   `dot_dotfiles/shell/.env.example` (uncommented if effective). Document the
-   disposition in `docs/TELEMETRY.md`.
-3. **Guidance**: If the tool reads instruction files, add its path to
-   `AGENT_FILES` in `scripts/configure-agent-guidance.py` and to the path list
-   in `scripts/verify-config.py`.
-4. **Capability matrix**: Add a row to the table in `docs/CAPABILITY_MATRIX.md`
-   including the new Telemetry, Voice, and i18n columns.
-5. **Verify**: Run `make check-fleet-coverage` to confirm the registry matches
-   the actual repo state, then `make verify` for full validation.
+1. **Fleet registry**: Add an entry to `scripts/lib/fleet-registry.json` with telemetry disposition, voice support, i18n mechanism, and guidance path.
+2. **Telemetry**: If the tool supports a local opt-out, add env vars to `dot_dotfiles/shell/.env.example` (uncommented if effective). Document the disposition in `docs/TELEMETRY.md`.
+3. **Guidance**: If the tool reads instruction files, add its path to `AGENT_FILES` in `scripts/configure-agent-guidance.py` and to the path list in `scripts/verify-config.py`.
+4. **Capability matrix**: Add a row to the table in `docs/CAPABILITY_MATRIX.md` including the new Telemetry, Voice, and i18n columns.
+5. **Verify**: Run `make check-fleet-coverage` to confirm the registry matches the actual repo state, then `make verify` for full validation.

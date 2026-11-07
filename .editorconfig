@@ -11,6 +11,8 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+# Markdown prose is soft-wrapped; trailing double spaces can encode hard breaks.
+max_line_length = off
 
 [*.json]
 indent_size = 2

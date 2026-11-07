@@ -29,41 +29,9 @@ The CLI supports the locally installed provider binaries and their existing auth
 
 ## Bundled Web UI through Caddy
 
-Set a Paseo daemon password with `paseo daemon set-password`. For Caddy-only
-mode, explicitly disable native relay and set `DOTFILES_PASEO_RELAY=0` (the
-default). A declared `DOTFILES_PASEO_RELAY=1` posture coexists with the Caddy
-Web UI route: the owner accepts that the daemon also becomes reachable from
-the internet through Paseo's hosted relay. The native bcrypt password is
-mandatory for this posture, including `CADDY_ACCESS=localhost`, and adds
-admission protection beyond the relay's encrypted pairing handshake. An explicit owner-only `configure-paseo-web.py --apply` reconciles
-native relay drift in either direction toward the declared posture before
-Caddy is configured; Caddy still refuses an undeclared enabled relay or a
-process-level `PASEO_RELAY_ENABLED` override.
-With a loopback daemon, set
-`DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`.
-`make deploy` **only checks** the native Web UI settings; it does not apply
-changes to Paseo config. First inspect with `make paseo-web-check`, then make
-a private backup and ensure no Paseo daemon, UI, CLI or other settings writer
-is running before explicitly calling `make paseo-web-apply`. Run `make deploy`
-afterward to generate/reload the Caddy routing. This is an operator procedure,
-not a transactional concurrency guarantee (issue #173).
-`CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves
-configured `paseo.<domain>` hosts to private ranges; `public` serves them
-publicly. A gate-enabled, installed service follows `CADDY_ACCESS`; the Paseo
-native password is the boundary in public mode. The bcrypt password is
-required for LAN/public Caddy exposure and whenever hosted relay is declared. The native daemon remains loopback-only,
-and its hostname allowlist is extended through validated CLI writes and fails
-closed for unlisted hosts. Caddy terminates TLS and Paseo authenticates API
-and WebSocket clients.
+Set a Paseo daemon password with `paseo daemon set-password`. For Caddy-only mode, explicitly disable native relay and set `DOTFILES_PASEO_RELAY=0` (the default). A declared `DOTFILES_PASEO_RELAY=1` posture coexists with the Caddy Web UI route: the owner accepts that the daemon also becomes reachable from the internet through Paseo's hosted relay. The native bcrypt password is mandatory for this posture, including `CADDY_ACCESS=localhost`, and adds admission protection beyond the relay's encrypted pairing handshake. An explicit owner-only `configure-paseo-web.py --apply` reconciles native relay drift in either direction toward the declared posture before Caddy is configured; Caddy still refuses an undeclared enabled relay or a process-level `PASEO_RELAY_ENABLED` override. With a loopback daemon, set `DOTFILES_RUN_PASEO_WEB_SETUP=1` and `DOTFILES_RUN_CADDY_SETUP=1`. `make deploy` **only checks** the native Web UI settings; it does not apply changes to Paseo config. First inspect with `make paseo-web-check`, then make a private backup and ensure no Paseo daemon, UI, CLI or other settings writer is running before explicitly calling `make paseo-web-apply`. Run `make deploy` afterward to generate/reload the Caddy routing. This is an operator procedure, not a transactional concurrency guarantee (issue #173). `CADDY_ACCESS=localhost` serves `https://paseo.localhost`; `lan` serves configured `paseo.<domain>` hosts to private ranges; `public` serves them publicly. A gate-enabled, installed service follows `CADDY_ACCESS`; the Paseo native password is the boundary in public mode. The bcrypt password is required for LAN/public Caddy exposure and whenever hosted relay is declared. The native daemon remains loopback-only, and its hostname allowlist is extended through validated CLI writes and fails closed for unlisted hosts. Caddy terminates TLS and Paseo authenticates API and WebSocket clients.
 
-The script preflights edits in a private home and does not automatically
-install or start Paseo. Native config writes are not a multi-writer transaction
-(see issue #173): never run concurrent Paseo UI, daemon, or CLI config writers.
-A green read-only check or Caddy configuration is not live browser/WebSocket
-acceptance. Keep the public exposure opt-in and verify the actual listener,
-TLS, wrong-password rejection, WebSocket upgrade and hostname allowlist.
-A daemon listening on a direct-Tailscale IP is not simultaneously available on
-127.0.0.1; treat direct tailnet binding as an alternative topology.
+The script preflights edits in a private home and does not automatically install or start Paseo. Native config writes are not a multi-writer transaction (see issue #173): never run concurrent Paseo UI, daemon, or CLI config writers. A green read-only check or Caddy configuration is not live browser/WebSocket acceptance. Keep the public exposure opt-in and verify the actual listener, TLS, wrong-password rejection, WebSocket upgrade and hostname allowlist. A daemon listening on a direct-Tailscale IP is not simultaneously available on 127.0.0.1; treat direct tailnet binding as an alternative topology.
 
 ## Rollback
 
