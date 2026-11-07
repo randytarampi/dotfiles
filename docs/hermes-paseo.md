@@ -29,4 +29,4 @@ Reject missing ACP extra, malformed Paseo JSON, user-authored Hermes entry, abse
 
 Messaging, cron delivery, WhatsApp/Telegram, generic remote computer control, and a Hermes-to-Paseo broker remain deliberately out of scope.
 
-References: [Hermes ACP](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp), [Paseo custom providers](https://paseo.sh/docs/custom-providers), [Paseo configuration](https://paseo.sh/docs/configuration), [Paseo remote access](PASEO_REMOTE.md).
+References: [Hermes ACP](https://hermes-agent.nousresearch.com/docs/user-guide/features/acp), [Paseo custom providers](https://paseo.sh/docs/custom-providers), [Paseo configuration](https://paseo.sh/docs/configuration), [Paseo remote access](paseo-remote.md).
