@@ -511,6 +511,10 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
         "Preserve an existing draft when the only differences"
     )
     assert "Repaired stale catalogue PR metadata" in publish
+    assert "--check-freshness" in publish
+    assert publish.index("--check-freshness") < publish.index(
+        "Preserve an existing draft when"
+    )
     assert "free-model-review-sha256" in publish
     assert "scripts/lib/catalogue_review.py" in publish
     assert "Invalid trusted publishing SHA" in publish

@@ -350,6 +350,16 @@ jobs:
             echo "::error::Curated model registry changed during refresh; rerun against current main" >&2
             exit 1
           fi
+          # Publish jobs are serialized, but refresh jobs can finish out of
+          # order. A queued older artifact must not overwrite a newer tip.
+          # Check both authenticated Console and independent pricing clocks.
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" ]]; then
+            previous="${RUNNER_TEMP}/previous-candidates.json"
+            test -s "${previous}"
+            python3 scripts/lib/catalogue_review.py \
+              --current artifacts/model-catalogues/free-model-candidates.json \
+              --previous "${previous}" --check-freshness
+          fi
           # Preserve an existing draft when the only differences are observation times.
           # This check is deliberately after the exact artifact-path and gitlink
           # allowlists; do not skip those checks on repeated runs.
