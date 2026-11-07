@@ -297,15 +297,24 @@ jobs:
               exit 1
             fi
           fi
-          if [[ -n "${existing_pr}" ]] &&
-            ! jq -e --arg base "${DEFAULT_BRANCH}" \
+          if [[ -n "${existing_pr}" ]]; then
+            # Use gh pr list for discovery only. The canonical REST response
+            # verifies bot identity, since GraphQL App login display can differ.
+            existing_pr_data="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${existing_pr}")"
+            if ! jq -e --arg base "${DEFAULT_BRANCH}" \
               --arg head "${publish_branch}" \
+              --arg repo "${GITHUB_REPOSITORY}" \
               --arg author "woofdy-randytarampi-ca[bot]" \
-              '.[0] | (.isDraft == true) and (.baseRefName == $base) and
-                (.headRefName == $head) and (.author.login == $author)' \
-              <<< "${existing_prs}" >/dev/null; then
-            echo "::error::Refusing to update a non-draft or foreign catalogue PR" >&2
-            exit 1
+              --argjson author_id 353209076 \
+              --argjson pr_number "${existing_pr}" \
+              '(.number == $pr_number) and (.state == "open") and
+                (.draft == true) and (.base.ref == $base) and
+                (.head.ref == $head) and (.head.repo.full_name == $repo) and
+                (.user.login == $author) and (.user.id == $author_id)' \
+              <<< "${existing_pr_data}" >/dev/null; then
+              echo "::error::Refusing to update a non-draft or foreign catalogue PR" >&2
+              exit 1
+            fi
           fi
           # Check the curated source before the timestamp-only no-op exit.
           # A stale trusted commit cannot publish or preserve an outdated
