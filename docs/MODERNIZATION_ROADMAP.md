@@ -1,219 +1,126 @@
-# Dotfiles modernization roadmap
+# Dotfiles modernization and operational acceptance roadmap
 
-> **Status:** Productionalization roadmap, reconciled 2026-09-22 **Scope:** dotfiles productionalization, portability, local-model operations, governance and documentation **Confidence:** `[verified]` is supported by repository files or a recorded check; `[believed]` is a bounded interpretation; `[aspirational]` is a target.
+> **Reconciled:** 2026-11-07 · **Inspected baseline:** `main@edf24eb40a53ffd553a94805d300967f07b11e8e` · **Status:** foundational modernization delivered; runtime acceptance, safety and selected maintenance remain open. This document supersedes the standalone Paseo follow-up implementation plan dated 2026-11-05. The source of truth for executable tasks is the linked GitHub issue; component-specific documentation owns technical detail.
 
-## 1. Document contract
+## 1. Contract and evidence standard
 
-This is the durable plan for deferred work from the productionalization session. It is self-contained: every claim cites repository files or a recorded check, and durable documentation never depends on private session state. The roadmap does not authorize changes to tier configuration, package policy, secrets, or CI gates without a separate approved work item.
+This is a decision and dependency map, not permission to change model tiers, credentials, packages, account entitlements, native user state, exposure policy, CI gates or branch rules. Such changes require separate approved work. Historical results are dated evidence, never claims about the current installed host. A successful unit test, generator, deployment, protocol probe, authenticated request and user-facing operation are different levels of evidence.
 
-Effort estimates are relative implementation estimates: **S** is hours, **M** is one to two focused days, **L** is several days, and **XL** is a multi-session change. They are estimates, not recorded durations.
+- **`delivered`:** implementation merged to `main` with source/test evidence; **`ci-verified`:** the relevant exact-head required checks succeeded; **`host-verified`:** the stated installed-version operation succeeded on the intended host; **`owner-reported`:** an owner reported a test that was not independently performed here; **`partial`:** explicit remaining acceptance; **`deferred`:** a prerequisite or owner decision blocks the next step; **`superseded`:** later approved policy replaces the earlier plan; **`ongoing`:** a recurring control, not a finishable issue; **`unknown`:** no usable observation. These labels are not interchangeable and may describe different dimensions of the same work.
+- **Acceptance provenance:** cite the exact PR/commit, installed versions, consumer route and operation, redacted result, CI run (if known), owner approval, rollback and failure/negative case. Do not translate an unobserved host outcome into PASS. Source/test verification here does not mean this document's edit ran `make verify`.
+- **Authority:** [AGENTS.md](../AGENTS.md) and [CONVENTIONS.md](CONVENTIONS.md) govern repository behavior; [TIERS.md](TIERS.md) is the model-selection authority; [LITELLM.md](LITELLM.md) owns gateway setup; [ORCHESTRATION.md](ORCHESTRATION.md) owns script/gate inventory; [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md) owns consumer capabilities; [PASEO_SECURITY.md](PASEO_SECURITY.md) owns Paseo security specifics. This roadmap does not duplicate generated inventories.
 
-## 2. Baseline and completed work
+## 2. Delivered foundations and subsequent changes
 
-- `[verified]` Phase 1 through Phase 4 are complete at `128125b`; rounds 1–2 of follow-up work landed through `d0d5090`. The recorded validation is `make verify`, `make test` (160+ tests), `make ci-verify`, `poetry check` and actionlint; the production coverage measurement is 36% (branch-aware pytest; Coveralls reports 33.71% line coverage at `9d05d65`) against a floor now ratcheted to 27% (evidence: [pyproject.toml](../pyproject.toml) and CI run 35713182137, all-green including the required Windows lane).
-- `[verified]` The Windows deploy lane was **promoted to required** at `288b410` after three consecutive green runs (`5e48340`, `389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix. [`.github/workflows/ci.yml`] The nightly lane runs OPENCODE, MCP and AGENT_GUIDANCE with postconditions and remains allow-failure. [.github/workflows/nightly-integration.yml]
-- `[completed-in-this-pass]` The orchestration range now names the actual `run_onchange_04` through `run_onchange_29` scripts, and its inventory includes `install-acp-adapters`. The `wingetfile.dev` cross-references now use the corresponding Brewfile identifiers. [docs/ORCHESTRATION.md:62-66,165-198; wingetfile.dev:1-38]
-- `[verified]` 2026-09-22 — dated coverage-semantics correction. Three numbers circulated for the same floor: 32% (roadmap, superseded), 33% (branch-aware pytest at `9d05d65`), 33.71% (Coveralls line coverage, build 81894625). The authoritative internal gate is the branch-aware pytest measure; Coveralls line coverage is the external report. The floor is 27%. [pyproject.toml; CI run 35713182137]
-
-| Item | Status | Evidence |
+| Milestone | Recorded status | Evidence and boundary |
 |---|---|---|
-| Licence | `[completed-in-this-pass]` | Unlicense (public-domain dedication) is recorded in [`LICENSE`](../LICENSE) and linked from the README badge. |
-| qlty | `[completed-in-this-pass]` — integrated 2026-09-22 | The earlier "no credential-free way to verify a qlty Cloud project" claim was **disproven** (me/'s OIDC pattern), and the follow-up work item has now landed: minimal [qlty.toml](../qlty.toml) (release checks opted out) plus a supplemental coverage upload in [ci.yml](../.github/workflows/ci.yml), isolated from the required gate (step-level `continue-on-error`, success-gated). Coveralls remains the primary report by design. |
-| Action-SHA pinning | `[completed-in-this-pass]` — policy recorded | Required/security/deployment workflows (ci, nightly, codeql) pin verified immutable full SHAs; write-capable agent review workflows float by documented design ([docs/AGENTIC-REVIEW.md](AGENTIC-REVIEW.md): moving major tags) and remain an **enumerated gap**, not a settled exception. No repo-wide `sha_pinning_required` is proposed while those lanes float. |
+| Original productionalization Phases 1–4 | **delivered (2026-09)** | Original closeout at `128125b` and follow-ups through `d0d5090`. `make verify`, tests, `make ci-verify`, Poetry and actionlint were recorded then; do not treat historical counts as current. |
+| Required cross-platform deploy | **delivered** | Windows deployment became required at `288b410` after three green runs; `continue-on-error` was removed from the deploy matrix. [CI](../.github/workflows/ci.yml). Windows `make doctor` remains separately Unix-gated. |
+| PR-first governance | **delivered** | Stable `ci/required` and `security/required` aggregate contexts, active main-history and required-check rulesets (23831217, 23837328), rebase-only merge flow and admin break-glass. See [CI](../.github/workflows/ci.yml), [CodeQL](../.github/workflows/codeql.yml). Do not use break-glass routinely. |
+| Licensing and quality reporting | **delivered** | [LICENSE](../LICENSE) uses the Unlicense; Coveralls remains the primary external coverage report and Qlty upload is supplemental/allow-failure. Advisory Qlty local checks are not automatically required. [Conventions](CONVENTIONS.md). |
+| First shell-to-Python tranche | **delivered** | `setup-bin-symlinks`, `update-nvm-globals`, `install-acp-adapters` migrated with parity tests. Retain Bash where it represents a real operating-system boundary; further ports require evidence. |
+| Audited AWS/Docker baselines | **delivered** | Gated create/preserve configurations with no generated credentials. Other CLI configuration candidates are intentionally workload- and ownership-gated (`7). |
+| Original council refresh | **delivered historically** | September decision at `7030950` was implemented, but is not the current list of model IDs. [TIERS.md](TIERS.md), [MODEL_UPDATES.md](MODEL_UPDATES.md) and the current registry replace that frozen snapshot. |
+| LiteLLM core five-phase gateway | **delivered** | `DOTFILES_USE_LITELLM_PROXY`, exact client aliases, guarded per-client keys, optional provider routes, database-backed spend and OAuth bootstrap, fail-closed generator behavior. **Not a blanket claim that every app uses or has verified this route.** [LITELLM.md](LITELLM.md), [#82](https://github.com/randytarampi/dotfiles/issues/82). |
+| Open WebUI local/cloud frontend | **delivered core; partial operational scope** | Reconciled connections, live gateway audio/retrieval outcomes and index-preservation checks. MarkItDown external document-loader adapter and broader-platform runtime parity are deferred. [CHAT_FRONTEND.md](CHAT_FRONTEND.md). |
+| OpenCode v2 and private access | **delivered repo integration; host-specific acceptance** | Native v2 installer/config cutover [#141](https://github.com/randytarampi/dotfiles/pull/141), guarded tailnet access [#149](https://github.com/randytarampi/dotfiles/pull/149), post-cutover fixes [#170](https://github.com/randytarampi/dotfiles/pull/170). A green deploy does not replace real provider-egress and client acceptance. [OPENCODE.md](OPENCODE.md). |
+| Shared Basic Memory | **delivered repo integration; host acceptance open** | `opencode-mem` retired from managed plugin setup; shared local MCP memory added [#147](https://github.com/randytarampi/dotfiles/pull/147). Cross-client retrieval, telemetry and offline acceptance tracked by [#214](https://github.com/randytarampi/dotfiles/issues/214). [BASIC_MEMORY.md](BASIC_MEMORY.md). |
+| Model catalogue publishing | **delivered operational control; ongoing** | Owner-comment refresh and protected WOOFDY draft publication [#199](https://github.com/randytarampi/dotfiles/pull/199), pricing/provenance [#201](https://github.com/randytarampi/dotfiles/pull/201), review-only candidates [#204](https://github.com/randytarampi/dotfiles/pull/204), canonical PR ownership [#205](https://github.com/randytarampi/dotfiles/pull/205). [#197](https://github.com/randytarampi/dotfiles/issues/197) intentionally stays open as a control channel. A $0 listing is not admission/entitlement proof. |
+| Documentation consolidation | **delivered 2026-11-07** | [#206](https://github.com/randytarampi/dotfiles/pull/206) soft wrapping and [#207](https://github.com/randytarampi/dotfiles/pull/207) canonical-guide cleanup. This reconciliation is a separate reviewable change. |
 
-## 3. Ordered work items
+The gateway deploy template currently defaults to **LiteLLM 1.106.6** ([installer](../.chezmoiscripts/run_onchange_15-litellm.sh.tmpl)), not the roadmap's former 1.102.1. The model-list enrichment bypass remains upgrade-sensitive ([configure-litellm-venv.py](../scripts/configure-litellm-venv.py)); the historical cold-listing improvement and old patch signature are not a current-version benchmark. Version upgrades require exact installed-source/shape and latency verification rather than blindly asserting patch compatibility.
 
-### 1. Close the cross-platform deploy probe
+**Security policy correction:** downstream agent-review onboarding now pins immutable trusted workflow/asset SHAs; only the owned dispatcher has a narrow documented `@main` exception. External agent-review action versions deliberately use verified floating major tags under scoped tests. This is a trade-off, not universal full-SHA pinning. [AGENTIC-REVIEW.md](AGENTIC-REVIEW.md).
 
-**Priority:** High · **Effort:** L · **Dependencies:** Phase 4 Windows failures, the audit inventory below, and a reproducible Windows runner.
+## 3. Active backlog: finite tasks and dependencies
 
-Fix only failures demonstrated by the Windows deploy lane. The audit identifies `readlink -f`, `mapfile`, Homebrew paths, LaunchAgents, `launchctl`, and platform-specific doctor checks; it is not permission for a broad rewrite (see the shell-to-Python inventory below for script-level evidence).
-
-**Status:** `[completed-in-this-pass]` The Windows lane was **promoted to required** at `288b410` after three consecutive green runs (`5e48340`, `389ab47`, `f237cb6`); `continue-on-error` is removed from the deploy matrix, and every promotion fix was demonstrated and bounded (script-exec interpreters chain, cygpath forward-slash, deploy-effective no-op check). [.github/workflows/ci.yml; runs 35713182137, 35696345590] **Residual (deliberate):** `make doctor` remains Unix-gated in CI
-  ([.github/workflows/ci.yml:184-189]); making doctor meaningful on Windows is
-the next Windows extension, backlogged.
-
-**Acceptance criteria:** the Windows lane has a documented result for every failure; bounded fixes pass the Windows deploy, second-deploy idempotency and chezmoi verification checks; residual macOS-only paths are explicitly gated; and `continue-on-error` is removed once the lane is stable and required.
-
-### 2. Promote the nightly real-gate lane
-
-**Priority:** High · **Effort:** L · **Dependencies:** item 1 stability, pinned prerequisites and per-gate artefacts.
-
-Keep the scheduled lane allow-failure while it proves meaningful postconditions. Package-install families are intentionally absent today: PI, MOZART and CODEGRAPH need approved, pinned prerequisites rather than warning-and-return-zero behaviour. [.github/workflows/nightly-integration.yml]
-
-**Acceptance criteria:** each enabled gate has an installed prerequisite, deterministic artefacts and a failure assertion; service, security and system default gates remain excluded from shared runners; the report distinguishes skipped, failed and passed gates; then `continue-on-error` is removed and the workflow is made required after an observed stabilization period.
-
-**Status:** `[in-progress]` Promotion semantics corrected 2026-09-22: this is a schedule-only workflow, so it can **never be a required pull-request check**. Promotion means removing `continue-on-error` so scheduled failures are truthful, with failure notification/issue ownership. Decision date: on or after 2026-09-29, gated on roughly seven consecutive green scheduled runs on the current logic (two scheduled green runs observed by 2026-10-07; still short of the threshold). [.github/workflows/nightly-integration.yml]
-
-### 3. Add oMLX audio-upload validation and normalization
-
-**Priority:** High · **Effort:** M · **Dependencies:** the existing `configure-omlx` scripts and the oMLX service restart path.
-
-The machine-side `~/.omlx/settings.json` value `server.max_audio_upload_size` was the unitless string `128`, meaning 128 bytes; it caused STT HTTP 413 responses. It was corrected machine-side to `128MB`, after which the transcription endpoint returned HTTP 200. This was true before this pass; the value is now validated by the configure and doctor paths below.
-
-**Status:** `[completed-in-this-pass]` The validator exists and is tested ([scripts/lib/local_engines.py](../scripts/lib/local_engines.py): `_max_audio_upload_size`, wired into `merge_omlx_settings` with an `OMLX_MAX_AUDIO_UPLOAD_SIZE` override; doctor check in
-  [scripts/verify-config.py](../scripts/verify-config.py); seven hermetic cases in
-[scripts/lib/tests/test_omlx_settings.py](../scripts/lib/tests/test_omlx_settings.py)). Decided semantics (2026-09-22): unitless values are **refused at write time** (bytes-accurate; no MB reinterpretation — the `'128'`-bytes incident is encoded), invalid values warn-and-preserve rather than abort the deploy, and `validate_omlx_settings` remains the hard structural gate. [docs/OMLX.md] **Residual (open):** no pre-STT runtime effective-limit check exists; the acceptance criterion "verifies the effective limit before STT use" is not met and stays open rather than being silently dropped.
-
-### 4. Ratchet production coverage modestly
-
-**Priority:** Medium · **Effort:** M per quarter · **Dependencies:** the measured production baseline and subprocess coverage already in place.
-
-The production floor was 27%; the measured result is 36% (branch-aware pytest; Coveralls reports 33.71% line coverage). On 2026-09-22 the floor was ratcheted
-  to **27%** ([pyproject.toml](../pyproject.toml)), keeping ~9 points of headroom
-so one flaky test cannot break `main`; 30+ is gated on representative tests (orchestration, failed/partial deploy paths), not wrapper-test padding. [pyproject.toml; Makefile test target] Raise the floor in small quarterly increments only when new coverage is representative, rather than targeting 100%.
-
-**Status:** `[updated 2026-10-07]` Local branch-aware pytest now measures **52.70–54%** (e.g. `make test` runs during the LiteLLM gateway pass), with the floor deliberately still 27 ([pyproject.toml](../pyproject.toml) `fail_under = 27`). The measured value grew by the gateway-session test lanes; the ratchet has not moved — the next increment is gated on the same representative-test criteria as before, not on the raw number.
-
-**Acceptance criteria:** each ratchet records the measured production baseline, the new threshold and the tests that justify it; subprocess and shell behaviour remain included; and `make verify` fails below the ratchet without counting test files as production coverage.
-
-### 5. Port only proven shell candidates to Python
-
-**Priority:** High for the first group, otherwise Medium · **Effort:** M per script · **Dependencies:** a failing or materially constrained Windows probe; CLI capability contracts and regression tests.
-
-Apply the criteria **logic-heavy, weakly tested and platform-sensitive** to the Phase 4 inventory. These are quality-driven port candidates, not Windows- necessary work: Git Bash resolved the Windows probe without ports. **Status:** `[completed-in-this-pass]` Tranche 1 (the first three candidates) is delivered with parity tests and thin compatibility shims: [scripts/setup-bin-symlinks.py](../scripts/setup-bin-symlinks.py) + [scripts/lib/tests/test_setup_bin_symlinks.py](../scripts/lib/tests/test_setup_bin_symlinks.py), [scripts/update-nvm-globals.py](../scripts/update-nvm-globals.py) (single-shell nvm flow with structured markers, after a post-review fix), [scripts/install-acp-adapters.py](../scripts/install-acp-adapters.py). Tranche 2 stays **evidence-gated**: `run-local-review.sh` ports only on a demonstrated Bash/path failure or materially untestable change; `configure-all.sh` is high-risk (sourced-library semantics) and is not ported speculatively.
-
-| Order | Candidate | Evidence and bounded acceptance |
-|---|---|---|
-| Tranche 1 · 1 | `scripts/setup-bin-symlinks.sh` | **Done** — Python port + parity tests + thin `.sh` shim; wired by `run_onchange_05`. |
-| Tranche 1 · 2 | `scripts/update-nvm-globals.sh` | **Done** — Python port + parity tests; wired by `update-system.sh`. |
-| Tranche 1 · 3 | `scripts/install-acp-adapters.py` | **Done** — Python port + parity tests; consumed directly by `run_onchange_10` (the former `.sh` wrapper was deleted in `af1c1f5`). |
-| Tranche 2 · 4 | `scripts/run-local-review.sh` (`readlink -f`, `mapfile`) | Deferred pending evidence. Preserve review stages and exit statuses; add a fixture for the Bash-version-sensitive input path. [scripts/run-local-review.sh] |
-| Tranche 2 · 5 | `scripts/configure-all.sh` (`readlink -f`) | Deferred pending evidence; design the interaction with sourced `common.sh`, `tier_args.sh` and `env.sh` before porting. [scripts/configure-all.sh; scripts/lib/common.sh; scripts/lib/tier_args.sh; scripts/lib/env.sh] |
-
-**Acceptance criteria for every port:** the shell implementation is not removed until the Python replacement has parity tests, `--help`/dry-run behaviour where applicable, platform evidence and a clean `make verify`; macOS-bound scripts remain shell when a port would only disguise an operating-system boundary.
-
-### 6. Decide the audited tool configuration boundary
-
-**Priority:** High for the first four tools, Medium for the next eight, Low for the final seven · **Effort:** M · **Dependencies:** package ownership and machine-specific credentials.
-
-The following is analysis and recommendation only. Each tool must either gain a minimal, gated configuration surface or be documented as intentionally absent; no credentials are added by this roadmap. Two states are distinguished: **already packaged, not configured** (package entries exist in a Brewfile or wingetfile but no gate generates configuration) versus **package missing** (no package entry anywhere).
-
-| Priority | Tool | Why it matters | Recommended action |
+| Priority | Issue / workstream | Remaining contract (not what has already shipped) | Gate or dependency |
 |---|---|---|---|
-| High | Docker | Package and deploy paths expect Docker-compatible local workflows and defaults. | `[completed-in-this-pass]` Gated, non-secret `~/.docker/config.json` baseline shipped: [scripts/configure-docker.py](../scripts/configure-docker.py) (`DOTFILES_RUN_DOCKER_CONFIG_SETUP`, create-only-if-missing, JSON parse-verify of existing, malformed → error-not-clobber), wired into `configure-all.sh` after the AWS step, documented in `.env.example` + [docs/ORCHESTRATION.md](ORCHESTRATION.md), five hermetic tests incl. the credsStore-absent case (credential helper detection). |
-| High | AWS CLI | AWS profiles are an expected operator boundary for cloud scripts; credentials remain user-owned. | `[completed-in-this-pass]` Gated, non-secret `~/.aws/config` baseline shipped: [scripts/configure-aws.py](../scripts/configure-aws.py) (`DOTFILES_RUN_AWS_CONFIG_SETUP`, create-only-if-missing, configparser verify of existing), wired into `configure-all.sh`, documented in `.env.example` + [docs/ORCHESTRATION.md](ORCHESTRATION.md), four hermetic tests in [scripts/lib/tests/test_configure_aws.py](../scripts/lib/tests/test_configure_aws.py). |
-| High | kubectl | Kubernetes operations need an explicit CLI and opt-in kubeconfig handling. | Package missing: add package coverage and a gated, non-secret kubeconfig/default-context policy; never generate credentials. Deferred until a real workload exists. |
-| High | Pulumi | Infrastructure work needs backend and organisation defaults, while state and secrets are sensitive. | **Scope corrected 2026-09-22:** configure the Pulumi *CLI* if a dotfiles surface needs it, but never set a repository-level default backend/org — `me` owns its backend (`me/infrastructure/Pulumi.yaml`), and a dotfiles default would create a second owner. Decision deferred to the `me` governance programme. |
-| Medium | gcloud | Cloud tooling is useful but no active repo workload currently requires a generated profile. | Package missing: add package coverage only if a gate-backed workload is identified; otherwise document intentionally absent. |
-| Medium | mongosh / Compass | MongoDB is partially covered through skills and MCP; the CLI/app boundary is not configured. | Add package coverage and optional shell defaults only for an approved MongoDB workflow; otherwise document the partial coverage. |
-| Medium | psql | Database troubleshooting benefits from a client and `.psqlrc`, but no current gate requires it. | Add package coverage and a small gated `.psqlrc` when a supported workflow exists; otherwise document absent. |
-| Medium | Snyk | Security tooling is a possible policy gate, but no current verification target invokes it. | Document intentionally absent until a repository gate and authentication-free policy path exist. |
-| Medium | Stripe CLI | Stripe development uses a CLI where local webhook workflows are enabled. | Already packaged, not configured (`Brewfile.dev` `stripe-cli`, `wingetfile.dev` `Stripe.StripeCli`): document login/webhook setup; add a gate only with a testable local workflow. |
-| Medium | 1Password CLI | Password-manager access is sensitive and must not become an implicit deploy dependency. | Document intentionally absent from unattended gates; provide human-run installation guidance only if needed. |
-| Medium | ClamAV | Malware scanning is service- and signature-update-dependent, so a package alone is not a truthful gate. | Document intentionally absent from shared CI; add an opt-in service/freshclam configuration only with an owner. |
-| Medium | pyenv | Python version selection affects the scripts and cross-platform setup. | Add package coverage and shell hooks only if Poetry/system Python cannot satisfy the supported matrix. |
-| Low | rbenv | No current repository gate requires Ruby version management. | Document intentionally absent. |
-| Low | tfenv | Pulumi is the identified infrastructure tool; no Terraform gate is recorded. | Document intentionally absent unless a Terraform workload is approved. |
-| Low | fastfetch | It is a convenience utility, not a verification dependency. | Keep package entries where already present; do not add configuration or gates. |
-| Low | emacs | No orchestration or verification path expects Emacs. | Document intentionally absent. |
-| Low | glances / htop / nvtop | Monitoring utilities are useful interactively but have no repo-owned gate. | Document intentionally absent from automation; users may install locally. |
-| Low | ffuf | No current security workflow invokes web fuzzing. | Document intentionally absent until an owned, gated workflow exists. |
-| Low | heroku | No active deployment path targets Heroku. | Document intentionally absent. |
+| P0 | [#173 Paseo native write concurrency](https://github.com/randytarampi/dotfiles/issues/173) | Prove a shared native lock/CAS with disjoint-key race and interruption tests, or formally retain operator-only quiescence. | Upstream/native writers; no unattended apply. |
+| P0 | [#87 Strict-free E1.0 policy](https://github.com/randytarampi/dotfiles/issues/87) | Define executable no-charge/entitlement/freshness and privacy boundary with pure negative tests. | Owner-authoritative account evidence. |
+| P0 (after #87) | [#211 Strict-free request executor](https://github.com/randytarampi/dotfiles/issues/211) | Admission before all primary/fallback calls; installed OMO-Slim failure/retry/council proof and paid-route spies. | Accepted E1.0 semantics, owner-consented host proof. |
+| P1 | [#82 Codex CLI transport](https://github.com/randytarampi/dotfiles/issues/82) | Installed Responses, tool, auth/streaming and two-deploy marker preservation. | Dedicated key and approved live task. |
+| P1 | [#83 Junie groups](https://github.com/randytarampi/dotfiles/issues/83) | Approved group matrix and real per-group picker/routed readback; alias sunset and Cohere/Poolside choice. | #87 for strict-free claims; live Junie/account evidence. |
+| P1 | [#85 Embedding H1 identity](https://github.com/randytarampi/dotfiles/issues/85) | Read-only actual representation fingerprint/index inventory; preserve UNKNOWN and user-pinned state. | No H2 write/reset without later per-collection approval. |
+| P1 | [#209 Claude client acceptance](https://github.com/randytarampi/dotfiles/issues/209) | Standalone CLI and Desktop Chat/Cowork/Code separately qualified or explicitly unsupported. | Installed client/policy/keys; cost approval. |
+| P1 | [#210 Remaining client classification](https://github.com/randytarampi/dotfiles/issues/210) | Gemini, Hermes, Junie transport, Cursor, Copilot, IDE and ChatGPT Desktop acceptance/unsupported matrix. | No invented endpoints or public LiteLLM exposure. |
+| P1 | [#213 Paseo installed-host matrix](https://github.com/randytarampi/dotfiles/issues/213) | ACP, MCP/Xcode, speech, metadata, authentication, Caddy/tailnet readback and negative tests. | #173 safe operation, owner approval. |
+| P2 | [#86 User .env migration I2](https://github.com/randytarampi/dotfiles/issues/86) | Explicit preview-first, literal-only, backed-up, value-equivalent user migration. | Disposable-home tests; real apply owner-only. |
+| P2 | [#212 Nightly truthfulness](https://github.com/randytarampi/dotfiles/issues/212) | Prerequisites, artifacts, failure alerts, sustained green stabilization and removal of allow-failure. | Schedule cannot become required PR check. |
+| P2 | [#214 Basic Memory host acceptance](https://github.com/randytarampi/dotfiles/issues/214) | Real cross-client recall, local reranking/telemetry negative tests and safe rollback. | Disposable project and owner/host version. |
+| Operational, not backlog | [#197 Catalogue refresh control](https://github.com/randytarampi/dotfiles/issues/197) | Keep open for the owner-only command route; review every generated draft, never auto-promote candidates. | Ongoing; explicitly exempt from finite-issue completion counts. |
 
-The inventory derives from the unconfigured-tools audit and its stated partial AWS/MongoDB/skills coverage, cross-checked against the package manifests ([Brewfile](../Brewfile), [Brewfile.dev](../Brewfile.dev), [Brewfile.desktop.dev](../Brewfile.desktop.dev), [Brewfile.dev.ops](../Brewfile.dev.ops), [wingetfile.dev](../wingetfile.dev), [wingetfile.dev.ops](../wingetfile.dev.ops)).
+**#84 is closed for its owner-approved outcome:** private, unselected Pi saved-profile generation and safe preservation are delivered (#103/#108); the owner rejected automated coordinated loading in favor of explicit backup + manual `/subagents-load-profile` + readback on 2026-10-26 (#120). This is **not** an automatic user-state preservation guarantee. Reopen with a new explicit decision only if the owner changes that policy. [PI.md](PI.md).
 
-### 7. Refresh council policy — completed in this pass
+**Milestone accounting:** a completed PR should update its exact acceptance row; it does not imply all sibling clients, every model group or an entire umbrella is done. Keep issues to one owner-verifiable result with positive and negative cases. Close when every remaining required row is accepted, intentionally ruled out or moved to a newly scoped issue with a link. No project board is required for this small, dependency-linked backlog; revisit only if concurrent owners or iteration planning make it useful.
 
-**Priority:** completed · **Effort:** — · **Dependencies:** resolved.
+## 4. Paseo implementation and acceptance (absorbed from the 2026-11-05 follow-up plan)
 
-The model policy was decided and implemented in the same session at `7030950`: `pro` keeps an Ollama Cloud-only council; `pro-plus` mixes Ollama Cloud and OpenAI; `pro-plus-anthropic` adds Anthropic; `nemotron-3-ultra` was replaced by `deepseek-v4.1-flash` (diversity over the marginally higher `glm-5.3-flash` aggregate score); synthesizers stay `glm-5.3` (max) on all three tiers. Tier docs, registry tests and configuration were updated together ([docs/TIERS.md](TIERS.md), `oh-my-opencode-slim.json`, `scripts/lib/tests/test_tier_registry.py`).
+**Current posture:** source changes in [#175–#185](https://github.com/randytarampi/dotfiles/pulls?q=175+176+177+178+179+180+181+182+183+184+185), [#187](https://github.com/randytarampi/dotfiles/pull/187), [#195](https://github.com/randytarampi/dotfiles/pull/195) and [#202](https://github.com/randytarampi/dotfiles/pull/202) have merged. The former standalone plan described D–H as proposed or in draft; **that status is superseded**. The repo integrations do not by themselves prove private daemon, installed ACP, real TTS/STT, Xcode, policy or public network behavior. The single acceptance tracker is [#213](https://github.com/randytarampi/dotfiles/issues/213); cross-process data safety is independent [#173](https://github.com/randytarampi/dotfiles/issues/173).
 
-### 8. Governance closure: aggregate checks, branch protection and merge flow — NEW 2026-09-22
-
-**Priority:** High · **Effort:** M · **Dependencies:** the stable aggregate checks delivered in this pass ([.github/workflows/ci.yml](../.github/workflows/ci.yml) `ci/required`; [.github/workflows/codeql.yml](../.github/workflows/codeql.yml) `security/required`); a fresh pull request observing the exact emitted check context names.
-
-This repository serves privileged workflows to six downstream repositories (`.github/workflows/agentic-review.yml@main`, consumed with `secrets: inherit` and write permissions), so changes to `main` are fleet-significant and deserve staged governance.
-
-**Staged model (target: a governed trunk, not ceremonial branch-and-merge):**
-
-1. `[completed-in-this-pass]` Stable aggregates `ci/required` (gates on
-    verify, the deploy matrix including the required Windows lane, and Coveralls
-     finalization) and `security/required` (both CodeQL legs). The aggregates
-     always run (`if: always()`) and gate explicitly on every predecessor's
-     result — unlike `finish`, whose `always()` run asserts nothing. An
-     unconditional `always()` job that asserts nothing is disqualified as a
-     required check.
-    [Makefile: `check-ci-assets` also added to `ci-verify` so asset drift
-    cannot ship silently.]
-2. `[completed-in-this-pass]` History protection on `main`: block deletion and
-    non-fast-forward; bypass actor = repository admin, bypass mode `always`
-    (the pattern proven in `me/infrastructure/src/github/rulesets.ts:30-32`).
-    Zero workflow prerequisites; safe regardless of push flow; imports cleanly
-    into the Pulumi governance stack later.
-3. `[completed-in-this-pass 2026-09-22]` Required-check enforcement: the
-    exact check context names were observed on PR #7 (`ci/required`,
-    `security/required`) and the ruleset now requires them (ruleset id
-    23837328, active): pull requests required before merge on
-    `refs/heads/main`, status checks `ci/required` + `security/required`
-    mandatory, admin bypass retained as break-glass only. Zero approving
-    reviews (a solo operator cannot independently approve); agent review
-    workflows are never required checks; direct push to `main` is no longer
-    the default flow — use PRs, with admin break-glass documented in the
-    decision record below.
-4. `[completed-in-this-pass]` Dependabot vulnerability alerts and security
-    fixes enabled (version updates already configured; auto-merge stays off
-    until the dependency policy lands).
-
-**Decision record (2026-09-22, final):** the pilot proved the aggregates and the PR-first flow on PR #7; the transition is now complete — **PR-required is the rule, not the habit** (ruleset id 23837328). Break-glass semantics are unchanged: admin bypass only, never routine; record the reason; restore normal flow immediately after. The action-SHA policy is recorded in the §2 table: required/security/deployment lanes are pinned; agent-review lanes float by documented design and are the enumerated gap. **[verified 2026-09-22]** Stage-1 ruleset live: "main history protection" (ruleset id 23831217, enforcement active) — deletion + non-fast-forward blocked on `refs/heads/main`, bypass actor RepositoryRole admin
- (bypass mode `always`). Pilot PR #7: https://github.com/randytarampi/dotfiles/pull/7.
-
-**Owner decisions (2026-09-22):** the actionlint download script and `get.chezmoi.io` installers remain deliberately unpinned so update-system and fresh installs pull the latest tool versions; this is an accepted supply-chain trade-off. The d0d5090 break-glass record is retained here: direct push to main after ruleset activation was a docs-only follow-through of the reflect round, using the admin bypass once; subsequent work returns to PR-first. Live merge settings are rebase-only; squash is disabled.
-
-### 9. LiteLLM gateway unification — completed in this pass (2026-10-05…07)
-
-**Priority:** High · **Effort:** XL · **Dependencies:** resolved (all five phases gate-approved; Oracle reviews at each boundary).
-
-All home-managed AI traffic routes through the local LiteLLM proxy (`127.0.0.1:4000`) when opted in, with per-client virtual keys for spend attribution. **Status:** `[completed-in-this-pass]` across five gated phases. Reference: [docs/LITELLM.md](LITELLM.md), [docs/UNMANAGED-CLIENTS.md](UNMANAGED-CLIENTS.md), [.env.example](../dot_dotfiles/shell/.env.example).
-
-- Routing contract: single `DOTFILES_USE_LITELLM_PROXY` gate (default `0`) with gateway-only semantics when `1` — generator-side hard errors instead of silent direct fallbacks, `RUN=0`+`USE=1` is a configuration error. The four per-client canaries (`DOTFILES_{OPENWEBUI,OPENCODE,PI,JUNIE}_USE_LITELLM`) and `DOTFILES_USE_OLLAMA_CLOUD_PROXY` were retired via [scripts/migrate-env-gates.py](../scripts/migrate-env-gates.py) OR-migration; `0` is canonical direct routing (`ollama-cloud/<id>` → `https://ollama.com/v1`).
-- Transport mapping at the client boundary ([scripts/lib/litellm_aliases.py](../scripts/lib/litellm_aliases.py)); canonical identities invariant across modes; tier registry untouched.
-- Provider expansion: Meridian (Claude; root Anthropic base, not `/v1`), Cohere, Hugging Face, Cerebras, OpenRouter, OpenCode Zen, Ollama Cloud direct, oMLX (repo default aligned to the upstream `8000` port; per-machine override via `OMLX_PORT`); GitHub Copilot + ChatGPT via supervised OAuth bootstrap ([scripts/litellm-oauth.py](../scripts/litellm-oauth.py)) that probes each upstream ID and persists verified/deferred model files.
-- Service contract: `LITELLM_DATABASE_URL` user-facing rename (service-side `DATABASE_URL` unchanged), provider-key reconciliation, spend CLI [scripts/litellm-costs.py](../scripts/litellm-costs.py), `LITELLM_DISABLE_ADMIN_UI` / `DOTFILES_LITELLM_UI_EXPOSED` kept distinct.
-- Listing performance: `/v1/models` cold latency reduced from ~29 s to ~0.14 s (138 serial synchronous Hugging Face metadata GETs per listing; fix is an idempotent sentinel-guarded venv bypass applied at deploy by [scripts/configure-litellm-venv.py](../scripts/configure-litellm-venv.py), plus `DEFAULT_MAX_LRU_CACHE_SIZE=4096` in the service environment). Doctor reports patch status; the `.orig-dotfiles` backup is the first saved original. Upgrade discipline: reinstall LiteLLM → re-run deploy → the patcher re-applies or fails closed; upstream fix tracked via perf issue #33721 reference.
-- Known honest deferrals (documented, not bugs): `openai/gpt-5.3-codex` is refused by the OpenAI Codex backend for ChatGPT accounts (needs a real `OPENAI_API_KEY`); Cerebras and Hugging Face inference are quota/credit-exhausted (entitlement class); the Copilot cached token carries a near-expiry `MATCH-candidate` doctor row.
-
-**Residual (open):** none beyond the documented entitlement deferrals; the pinned `1.102.1` patch assumes the installed function signature, guarded by the deploy-time shape check.
-
-## 4. Local-model analysis
-
-### Unified local AI — ordered approved work
-
-The delivery order is: PR1 containment and documentation truth → PR2 Junie normalization → audio slice → gateway modality exposure → embeddings → retrieval and document ingestion → memory extraction → AMD Vulkan. The detailed contract and evidence live in [TIERS](TIERS.md), [JUNIE](JUNIE.md), [VOICE](VOICE.md), [LiteLLM](LITELLM.md) and [oMLX](OMLX.md); this roadmap tracks ordering only.
-
-### Decision summary
-
-| Component | Disposition | Rationale and acceptance |
+| Lane | Delivered on main | Honest remaining acceptance |
 |---|---|---|
-| oMLX local vision/observer (discovered model) | **Keep** | Session data records 15 uses. On an M3 Max with 128 GB unified memory, the local path is a credible low-latency/private observer capacity. This is a capacity assessment, not a benchmark claim. Keep while it remains responsive and its outputs are treated as observation rather than final judgement. |
-| Cloud audio/vision judgement (discovered model) | **Keep** | Session data records seven uses. Cloud judgement provides a separate capability and avoids treating a local observer as an authority; retain it for cases where quality or multimodal judgement matters more than local privacy/latency. |
-| oMLX model pool | **Keep, document** | The live pi inventory records seven oMLX LLM models plus an oMLX-discovered STT model. Keep discovery generic and do not hard-code model names in repo tests or docs. |
-| oMLX-discovered STT model | **Keep as primary** | The live voice configuration already discovers an oMLX STT endpoint, and the corrected upload limit produced HTTP 200. Add validation for the upload limit rather than replacing the primary model. |
-| `whisper-cli` fallback model | **Defer as fallback** | The generic whisper-cli fallback (approximately 1.6 GB) is useful when oMLX is unavailable, but it should not displace the working local primary. Keep installation/discovery bounded and test fallback selection. |
-| Provider-specific STT override variable | **Defer** | The phase decision explicitly rejected pinning model names and deferred a repository-owned STT model override until override semantics are requested. |
+| Original stack #175–#178 | Unattended native Web UI writes disabled, oMLX pinned/favourite *ranking* without auto-qualification, owner-gated plugins, documented D–H plan. | Actual installed package/plugin versions, permissions, error/denial and no unowned writes. |
+| D — ACP #179 | Discover, classify and explicitly owner-register existing/native-capable providers; preservation and unsupported results. [PASEO_ACP.md](PASEO_ACP.md). | Installed exact ACP args, initialise, stream, tool authorization/denial, cancellation/reconnect and recovery. ACP is not proof of model inference routing (#82/#210). |
+| E1/E2 — MCP #180–#181 | Owner-only Paseo MCP service activation (without default agent injection) and opt-in Xcode bridge from canonical registry. [PASEO_MCP.md](PASEO_MCP.md), [XCODE_MCP.md](XCODE_MCP.md). | Owner-gated read-only tool operation, denied unauthorized action/termination, no involuntary injection; Xcode permission and actual stdio handshake. |
+| F1/F2 — speech #182–#183 | Dedicated `paseo.key` LiteLLM virtual key and guarded STT/TTS discovery/adapter, split by protocol. [PASEO_VOICE.md](PASEO_VOICE.md). | Exact qualified model/alias and key readback; real dictation, STT, TTS, wrong-key/401/404/429/500, restart/env precedence and no direct/paid fallback. A generated private env file is not proof Paseo actually loads it. |
+| G — local Pi metadata #184 | Guarded selection of an actual Pi-visible local orchestrator for metadata. [PASEO_METADATA.md](PASEO_METADATA.md). | Real local metadata task and receipt; failure-path egress proof. Paseo may fall through to other models: Pi-first configuration alone is **not strict-local**. |
+| H — security #185 and Caddy #187/#202 | Read-only native password/relay/Caddy audits; unified `CADDY_ACCESS=localhost|lan|public` policy and documented hosted-relay coexistence checks. [PASEO_SECURITY.md](PASEO_SECURITY.md), [PASEO_REMOTE.md](PASEO_REMOTE.md). | Actual daemon password origin and right/wrong credentials, host allowlist, TLS/WebSocket/DNS, Caddy reload, relay and unintended listener negative tests. The earlier `DOTFILES_PASEO_PUBLIC` plan was superseded. |
 
-The trade-off is therefore deliberate: local vision/observer work favours privacy, availability and machine-side latency; cloud A/V judgement favours a separate quality ceiling and broader judgement capability. The 128 GB M3 Max assessment is `[believed]` capacity reasoning from the machine inventory, not a measured throughput or quality result. The use counts above are session data, not a quality score. Any claim that one path is more accurate is speculation and requires a controlled benchmark.
+### Paseo safety and owner-only runbook
 
-## 5. Residual risks and promotion gates
+The native Paseo CLI, daemon/UI and wrappers currently do not share a verified transaction primitive. `paseo daemon config set` performs an atomic file replacement, not a cross-writer CAS; a wrapper-level lock or post-write comparison does not prevent lost updates. **No unattended native apply.** With explicit owner permission, take a private backup and operate in a quiescent Paseo home; do not run concurrent UI/CLI/daemon setting changes. If no upstream shared primitive exists, the operator-only procedure is an accepted **limitation**, not a claim of race freedom. Close #173 only after two disjoint writers preserve both changes or reject a stale writer *before* overwriting unrelated state, including crash/interruption tests. Never roll back over a newer unrelated writer.
 
-1. **Windows promotion:** promoted to required after three consecutive green
-    runs; the remaining Windows extension is the deliberately Unix-gated doctor
-    check. [.github/workflows/ci.yml; item 1]
-2. **Nightly promotion:** keep allow-failure until prerequisites, artefacts and postconditions make failures meaningful. PI, MOZART and CODEGRAPH package installation are not silently promoted into a configuration-only lane. [.github/workflows/nightly-integration.yml]
-3. **Coverage:** the 27% production floor is a ratchet starting point; the
-    current measured value is 36%, not a promise of 100%. [pyproject.toml]
-    Dated correction (2026-10-07): local `make test` now measures 52.70–54%;
-    see item 4. [pyproject.toml → `fail_under = 27`]
-4. **Machine state:** the oMLX upload-limit correction was machine-side; future
-    configure scripts must validate it without assuming that this repository owns
-    every upstream setting. [docs/VOICE.md]
-5. **LiteLLM venv patch:** the listing bypass is keyed to the pinned
-    `1.102.1` install; a LiteLLM upgrade removes it and the deploy-time shape
-    check fails closed until the patcher is re-anchored to the new upstream
-    source. [item 9; scripts/configure-litellm-venv.py]
+For each row in #213, record exact installed versions, live daemon process and config owner, gate-off behavior, an isolated-HOME refusal fixture, service restart/readback, one authorized real request where allowed, one denied/failed path, second deploy idempotency and reversal. Owner authorization is required before native config writes, private-key use, Xcode permission changes, public/tailnet listeners, cloud charges, plugin execution or Docker/process actions. No secrets or user-data exports in PR comments. Caddy may be localhost, LAN or public only under the explicitly configured exposure/auth contract; never publish local LiteLLM/oMLX/Xcode merely to make an incompatible client work. Native `PASEO_PASSWORD` must reach the *actual daemon process* to count; a value in `~/.env` is not evidence of daemon consumption.
 
-## 6. Traceability and update rules
+**Deferred Paseo features:** direct Telegram/WhatsApp broker, public gateway/local engine/MCP exposure, native cross-process rollback, Basic Memory migration, embedding H2, new inference tiers, or unqualified machine-status integration. These require a concrete use case and independent owner decision.
 
-This document is self-contained: claims cite repository files and recorded checks. Update one concern at a time, preserve verified versus proposed language, and add acceptance evidence when an item closes. Do not duplicate tier tables or orchestration inventories here; link to [`docs/TIERS.md`](TIERS.md) and [`docs/ORCHESTRATION.md`](ORCHESTRATION.md).
+## 5. Local-model, data and client boundaries
 
-Key evidence: [`docs/ORCHESTRATION.md`](ORCHESTRATION.md), [`docs/VOICE.md`](VOICE.md), and the [Phase 4 CI workflow](../.github/workflows/ci.yml).
+- **Audio and vision:** oMLX typed STT/vision and separate cloud judgement are intentionally distinct. The original machine-side `server.max_audio_upload_size=128` incident meant 128 **bytes**; validated explicit units such as `128MB` are now supported in configuration and doctor ([OMLX.md](OMLX.md)). The originally promised **pre-STT runtime effective-limit check** has not been shown as delivered; it is a deferred bounded follow-up until a reproducible operational need warrants an issue. Do not treat the newer Metal wired-memory-limit utility as that audio-upload check.
+- **Client transports:** model alias generation, key provisioning, installed consumer selection, streaming/tools, live routing and budget attribution must be separately qualified. The gateway is opt-in (default direct); exceptions and genuine unsupported consumers are documented in [LITELLM.md](LITELLM.md), [CHATGPT-DESKTOP.md](CHATGPT-DESKTOP.md), [CLAUDE-DESKTOP.md](CLAUDE-DESKTOP.md) and [UNMANAGED-CLIENTS.md](UNMANAGED-CLIENTS.md). Do not reintroduce “all clients route through LiteLLM” as a universal assertion.
+- **Strict-free:** catalogue price and server-of-record classification can generate candidate routes, not enforce account-level entitlement or request-time fallback policy. E1.0 [#87](https://github.com/randytarampi/dotfiles/issues/87) precedes executor [#211](https://github.com/randytarampi/dotfiles/issues/211). Candidate reports and the persistent [#197](https://github.com/randytarampi/dotfiles/issues/197) publisher are intentionally review-only.
+- **Embeddings:** H0 discovery, ledger fail-closed behavior and dimension mismatch → UNKNOWN are delivered (#100/#107/#124); H1 representation and index inventory remain [#85](https://github.com/randytarampi/dotfiles/issues/85). No change of model/engine or per-collection destructive reindex without an authoritative representation fingerprint, private backup, explicit collection consent and real disposable upload→retrieve parity. H2 is deferred, not a silent acceptance criterion for H1. [CHAT_FRONTEND.md](CHAT_FRONTEND.md).
+- **Retrieval and ingestion:** Open WebUI has a proven existing upload/retrieval path. The separate MarkItDown external document loader remains unwired because WebUI's raw-document loader protocol differs from the available conversion endpoint. An adapter is demand-gated, not automatic unfinished work. [CHAT_FRONTEND.md](CHAT_FRONTEND.md), [LITELLM.md](LITELLM.md).
+- **Memory:** Basic Memory is integrated for managed MCP clients, but real host-local cross-client recall, reranking and telemetry acceptance is [#214](https://github.com/randytarampi/dotfiles/issues/214). No automatic historic `opencode-mem` conversion, HTTP/Caddy MCP exposure, cross-host synchronization or session capture; preserve old user data. [BASIC_MEMORY.md](BASIC_MEMORY.md).
+- **AMD Vulkan / broader host parity:** historical research goal; no verified AMD/Linux local-inference acceptance matrix. Windows deploy CI is not equivalent to inference parity. Defer until a supported machine and owner-backed test plan exist.
+
+## 6. Reliability work and evidence-gated maintenance
+
+**Nightly:** [nightly-integration.yml](../.github/workflows/nightly-integration.yml) remains schedule/dispatch-only with `continue-on-error: true`. The old roadmap incorrectly described making it a required PR check before correcting itself. Promotion means meaningful prerequisites, deterministic per-gate PASS/FAIL/SKIP artifacts, owner notification/ownership, observed fresh green stabilization, then removing allow-failure. No schedule-only job can become a required PR check. Track this as [#212](https://github.com/randytarampi/dotfiles/issues/212); OPENCODE/MCP/AGENT_GUIDANCE gates and PI/MOZART/CODEGRAPH installation prerequisites must not be silently conflated.
+
+**Production coverage:** `pyproject.toml` still sets `fail_under = 27`. The 2026-09 branch-aware 36% and 2026-10 local 52.70–54% are historical measurements; #117 later reported 61.67% on a particular verified tree. Do not claim any of these as the measured baseline of this revision. Re-run branch-aware `make test` on exact `main` (with subprocess/shell coverage, test modules excluded), record result and representative fail/partial deploy tests, then approve a modest quarterly ratchet only when CI demonstrates headroom. Avoid wrapper-test padding and a 100% target.
+
+**Windows:** required deployment, second-deploy idempotence and chezmoi checks stay enforced. `make doctor` remains Unix-gated; improve only when an actual Windows host need and meaningful doctor contract are identified. Do not reopen the completed deploy promotion or speculatively port macOS-only scripts.
+
+**Shell candidates:** first tranche done. `run-local-review.sh` can be reconsidered on a demonstrated `readlink -f`/`mapfile` failure or materially untestable change; `configure-all.sh` requires a sourced-library design before any port. Accept shell/Python coexistence where it clarifies platform boundaries; parity fixtures and `make verify` are mandatory before any replacement.
+
+**Tool audit disposition:** Docker and AWS CLI non-secret baseline are delivered; kubectl and Pulumi CLI depend on a real workload (Pulumi backend/org belongs to the separate `me` infrastructure owner); gcloud, mongosh/Compass, psql, Stripe CLI and pyenv require concrete gated workflows. Snyk, 1Password CLI, ClamAV, rbenv, tfenv, fastfetch, emacs, glances/htop/nvtop, ffuf and Heroku are intentionally absent from unattended configuration unless an explicit owner and testable need arise. Packaged-but-unconfigured is not necessarily a defect. Do not generate kube, cloud, password-manager or Pulumi credentials.
+
+**Supply chain/quality:** required security/deploy action refs follow the pinned policy; agent-review actions deliberately float major refs with guardrails ([AGENTIC-REVIEW.md](AGENTIC-REVIEW.md)). Installer/latest decisions for actionlint and chezmoi are recorded trade-offs; avoid a repo-wide SHA rule that contradicts documented exceptions. The local Qlty CLI is advisory; do not enable format/lint gates repo-wide without isolated parity qualification ([CONVENTIONS.md](CONVENTIONS.md)).
+
+## 7. Decisions and explicitly superseded plans
+
+| Earlier intention | Current decision / trigger for reconsideration |
+|---|---|
+| Automatic coordinated Pi `/subagents-load-profile`, rollback and preservation framework | **Superseded 2026-10-26:** owner accepts manual, private backup and `/subagents-models` readback. Detached profiles are delivered. This does not intercept the installed loader. [PI.md](PI.md), completed [#84](https://github.com/randytarampi/dotfiles/issues/84). |
+| Change embeddings automatically when discovery offers a better model | **Rejected by preservation contract:** H1 read-only; H2 reset/reindex only after owner approval, empty-index proof or per-collection backup/consent. |
+| Promote scheduled nightly workflow to a required PR check | **Inapplicable:** schedule-only lane may be made failure-truthful, never PR-required. [#212](https://github.com/randytarampi/dotfiles/issues/212). |
+| New broad shell/Python portability rewrite | **Evidence-gated:** Windows passed via Git Bash and bounded fixes. Further ports require demonstrated constraints. |
+| Repo-level Pulumi backend/org or automatic tool-default generation | **Not authorized:** infrastructure and credentials remain with their owner; do not establish a second source of truth. |
+| Publish discovery candidates directly to active free presets | **Not authorized:** review-only publisher and separate request-time eligibility, fallback/privacy and owner entitlement proofs. [#197](https://github.com/randytarampi/dotfiles/issues/197), [#87](https://github.com/randytarampi/dotfiles/issues/87). |
+| Paseo D–H planned PR stack | **Delivered as source PRs:** #175–#185, #187, #195, #202. Remaining task is [#213](https://github.com/randytarampi/dotfiles/issues/213) installed-host acceptance, with concurrency independently [#173](https://github.com/randytarampi/dotfiles/issues/173). |
+| Broad automatic endpoint exposure for CLI/IDE clients | **Not authorized:** default gateway is loopback/private. Explicitly classify unsupported server-originated clients rather than broadening attack surface without separate review. |
+
+## 8. Update and issue hygiene rules
+
+1. **One executable outcome per open issue.** Each must state delivered baseline, exact residual, positive and negative acceptance, permitted host scope, dependencies, evidence owner and closure criteria. Avoid keeping a completed implementation open because a different feature was appended later.
+2. **Split by acceptance surface, not by code file.** After #82 was narrowed to Codex CLI, Claude is [#209](https://github.com/randytarampi/dotfiles/issues/209) and other clients [#210](https://github.com/randytarampi/dotfiles/issues/210). After #87 was narrowed to policy, executor proof is [#211](https://github.com/randytarampi/dotfiles/issues/211). #83/#85/#86 stay narrow. Do not infer acceptance for all model groups or clients from one smoke test.
+3. **Close superseded work explicitly.** #84's automated-loader requirement was rejected by owner policy, not left indefinitely open; keep the manual safety warning and historic evidence. Operational-control #197 stays deliberately open and is excluded from completion metrics. Defer research-only ambitions without opening decorative tickets.
+4. **No silent deployment/document claims.** A merged PR updates `delivered`; only exact CI outcomes update `ci-verified`; an authorized installed test updates `host-verified`. Date each result, update component guides before changing broad architecture summaries and maintain issue⇄roadmap links.
+5. **Change safety first:** never convert a roadmap-only edit into tier changes, destructive file edits, CI promotion, external calls or credential/secret access. Run `make check-cli-contract`, `make check-env-coverage`, `make check-hashes`, `make check-mcp-parity`, focused tests and `make verify` where applicable; report any NOT RUN honestly.
+6. **Work estimates:** S = hours, M = 1–2 focused days, L = several days, XL = multi-session. Historical estimates are not time measurements; do not automatically treat all deferred items as funded work.
+
+### Historical evidence preserved by Git
+
+Original September phase decisions and dated source observations remain recoverable in the history of this file; the retired 2026-11-05 Paseo follow-up plan remains available at its original commit `526d582a01619d5604ecb25e81893efdbceb89a3`. Relevant contemporary guides are [ORCHESTRATION.md](ORCHESTRATION.md), [VOICE.md](VOICE.md), [OMLX.md](OMLX.md), [CHAT_FRONTEND.md](CHAT_FRONTEND.md), [LITELLM.md](LITELLM.md), [PASEO_SECURITY.md](PASEO_SECURITY.md) and [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md). Do not reintroduce duplicated live tier tables, orchestration ranges or migration proposals into this summary.
