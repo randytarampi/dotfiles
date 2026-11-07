@@ -133,3 +133,7 @@ When adding a script:
 See the [orchestration reference](orchestration.md) and [adding components guide](adding.md) for implementation details.
 
 The shell test suite intentionally does not use kcov: version 43.1 hangs while wrapping bats on macOS arm64 (verified 2026-09-22). The bats suite is therefore validated through normal execution rather than kcov.
+
+## User environment section migrations
+
+Issue [#86](https://github.com/randytarampi/dotfiles/issues/86) is separately scoped from the existing deprecated-key rename mechanism. `scripts/migrate-env-sections.py` is **preview-only by default**, opt-in `--apply`, POSIX owner/mode/parent validated, literal assignments only, and always creates a private exclusive `.i2.bak` before atomic replacement. It relocates known active keys into sections specified by the canonical `.env.example` while preserving the effective values of all active variables. Refuse uncertain shells, ambiguous comments, duplicates, symlinks and concurrent changes rather than interpreting a private config file. Only the owner may apply it to their real home. See [orchestration](orchestration.md#opt-in-i2-section-migration-for-user-owned-env-86) for the detailed runbook.
