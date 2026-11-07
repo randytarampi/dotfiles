@@ -3,7 +3,7 @@
 from pathlib import Path
 import importlib.util
 
-SCRIPT = Path(__file__).resolve().parents[1] / "nightly_gate_report.py"
+SCRIPT = Path(__file__).resolve().parents[3] / ".github/scripts/nightly_gate_report.py"
 spec = importlib.util.spec_from_file_location("nightly_gate_report", SCRIPT)
 report = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(report)
