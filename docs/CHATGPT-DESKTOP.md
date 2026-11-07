@@ -50,10 +50,10 @@
 
 ## Reviewer handoff
 
-Run `pytest -q scripts/lib/tests/test_configure_codex.py`, `make check-env-coverage`, `make verify`, then inspect exact-head GitHub CI. Test the installed Codex CLI separately (owner-only). A static TOML profile does not qualify the desktop GUI.
+Run `pytest -q scripts/lib/tests/test_configure_codex.py`, `make check-env-coverage`, `make verify`, then inspect exact-head GitHub CI. The owner reports the installed Codex CLI gateway route working (2026-11-07, not independently replayed); recheck the CLI only after a relevant change or regression. A static TOML profile still does not qualify the desktop GUI; #216 is the independent acceptance task.
 
 **Upgrade:** without an explicit model, this change retires an older managed `[profiles.litellm]` and emits a warning. If you depend on the existing profile, set `DOTFILES_CODEX_LITELLM_MODEL` to its still-served alias before regeneration. Review the private config backup before rollback.
 
 **Rollback:** unset `DOTFILES_CODEX_LITELLM_MODEL` and regenerate the marked profile with an approved backup. Never delete private Codex configuration, tokens, history or existing sessions automatically.
 
-**Attribution:** ChatGPT (GPT-6), 2026-11-03. No actual ChatGPT Desktop operation, Codex CLI inference, owner credentials or independent review were performed.
+**Attribution:** Original ChatGPT (GPT-6) drafting, 2026-11-03. No actual ChatGPT Desktop operation, Codex CLI inference or owner credentials were exercised **by that drafting session**. The subsequent owner-reported Codex CLI success on 2026-11-07 is recorded above; Desktop remains unverified.
