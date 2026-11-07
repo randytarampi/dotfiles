@@ -279,11 +279,28 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     assert "TRUSTED_SHA" not in shell
     checkout = tmp_path / "repo"
     checkout.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    # GitHub runners export neither a custom initial-branch default nor
+    # GIT_* identity overrides. Pin the sandbox branch and strip ambient
+    # identity overrides so the bot-identity fixture is portable.
+    git_env = {
+        key: value
+        for key, value in os.environ.items()
+        if key
+        not in {
+            "GIT_AUTHOR_NAME",
+            "GIT_AUTHOR_EMAIL",
+            "GIT_COMMITTER_NAME",
+            "GIT_COMMITTER_EMAIL",
+        }
+    }
+    subprocess.run(
+        ["git", "init", "-q", "-b", "master"], cwd=checkout, check=True, env=git_env
+    )
     subprocess.run(
         ["git", "config", "user.name", "woofdy-randytarampi-ca[bot]"],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
     subprocess.run(
         [
@@ -294,6 +311,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         ],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
     registry = checkout / "configs/opencode/opencode-models.json"
     registry.parent.mkdir(parents=True)
@@ -311,15 +329,16 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "models": [{"id": "big-pickle", "pricing": {"input": 0, "output": 0}}],
     }
     # The fixed bot branch must be exactly one JSON-only change from main.
-    subprocess.run(["git", "add", str(registry)], cwd=checkout, check=True)
+    subprocess.run(["git", "add", str(registry)], cwd=checkout, check=True, env=git_env)
     subprocess.run(
         ["git", "commit", "-qm", "chore(agents): initialise registry"],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
-    subprocess.run(["git", "branch", "main"], cwd=checkout, check=True)
+    subprocess.run(["git", "branch", "main"], cwd=checkout, check=True, env=git_env)
     path.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
-    subprocess.run(["git", "add", str(path)], cwd=checkout, check=True)
+    subprocess.run(["git", "add", str(path)], cwd=checkout, check=True, env=git_env)
     subprocess.run(
         [
             "git",
@@ -329,6 +348,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         ],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
     tip_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
