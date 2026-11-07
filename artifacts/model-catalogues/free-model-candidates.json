@@ -1,0 +1,139 @@
+{
+  "schema_version": 2,
+  "provider_coverage": {
+    "cerebras": {
+      "status": "not_assessed"
+    },
+    "cloudflare": {
+      "status": "not_assessed"
+    },
+    "cohere": {
+      "status": "not_assessed"
+    },
+    "google": {
+      "status": "not_assessed"
+    },
+    "groq": {
+      "status": "not_assessed"
+    },
+    "huggingface": {
+      "status": "not_assessed"
+    },
+    "mistral": {
+      "status": "not_assessed"
+    },
+    "nvidia-nim": {
+      "status": "not_assessed"
+    },
+    "opencode": {
+      "status": "observed",
+      "source": "https://opencode.ai/inference/v1/models"
+    },
+    "openrouter": {
+      "status": "not_assessed"
+    },
+    "poolside": {
+      "status": "not_assessed"
+    }
+  },
+  "review": {
+    "new_candidates": [
+      "beam-free",
+      "flint-40b-free"
+    ],
+    "already_curated": [
+      "big-pickle",
+      "deepseek-v4.1-flash-free",
+      "glm-5.3-flash-free",
+      "mimo-v2.6-flash-free",
+      "nemotron-3.5-lightning-free",
+      "nemotron-3.5-super-vl-free"
+    ],
+    "curated_not_listed": [
+      "gemini-3.5-flash",
+      "gpt-5.6-luna",
+      "gpt-5.6-terra",
+      "muse-spark-1.3-contributor-free"
+    ],
+    "curated_listed_not_zero": []
+  },
+  "status": "available",
+  "source": "https://opencode.ai/inference/v1/models",
+  "pricing_source": "https://models.dev/api.json",
+  "fetched_at": "2026-11-07T09:44:35.918993Z",
+  "pricing_observed_at": "2026-11-07T09:44:36.180124+00:00",
+  "pricing_expires_at": "2026-11-08T09:44:36.180124+00:00",
+  "counts": {
+    "catalogue": 8,
+    "classified": 8,
+    "free": 8,
+    "unclassified": 0
+  },
+  "models": [
+    {
+      "id": "beam-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "big-pickle",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0
+      }
+    },
+    {
+      "id": "deepseek-v4.1-flash-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "flint-40b-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "glm-5.3-flash-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "mimo-v2.6-flash-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "nemotron-3.5-lightning-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    },
+    {
+      "id": "nemotron-3.5-super-vl-free",
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0
+      }
+    }
+  ]
+}
