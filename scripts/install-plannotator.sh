@@ -21,7 +21,7 @@ fi
 source "$LIB_DIR/env.sh"
 
 # Floating tracking follows the repo's @latest dependency policy
-# (docs/CONVENTIONS.md, OpenCode plugins subsection): resolve the newest
+# (docs/conventions.md, OpenCode plugins subsection): resolve the newest
 # release at run time. When resolution fails (offline etc.), fall back to the
 # installed marker version so a healthy install is never churned.
 PLANNOTATOR_VERSION="$(gh api repos/backnotprop/plannotator/releases/latest --jq .tag_name 2>/dev/null || true)"

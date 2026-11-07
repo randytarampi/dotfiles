@@ -1,6 +1,6 @@
 """Pure desired-state and collision-safe Open WebUI reconciliation.
 
-The contract in ``docs/CHAT_FRONTEND.md`` principle 1 makes the database
+The contract in ``docs/chat-frontend.md`` principle 1 makes the database
 runtime authority: environment values and ``LOCAL_ENGINES`` are inputs, while
 deployment reconciliation reads and merges managed entries into that database.
 Managed ownership is registry-derived and stable even when a provider is

@@ -72,7 +72,7 @@ resolve_latest_version() {
 }
 
 # Floating tracking follows the repo's @latest dependency policy
-# (docs/CONVENTIONS.md, OpenCode plugins subsection): resolve the newest
+# (docs/conventions.md, OpenCode plugins subsection): resolve the newest
 # release at run time instead of pinning a version here.
 
 install_plannotator() {
