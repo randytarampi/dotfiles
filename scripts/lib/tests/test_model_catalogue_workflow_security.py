@@ -253,7 +253,7 @@ def test_publish_noop_is_scoped_to_an_open_pr_and_timestamp_only_diffs():
     assert "git -c credential.helper='!gh auth git-credential' push" in after
 
 
-def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
+def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path, monkeypatch):
     import json
     import os
     import shutil
@@ -277,6 +277,15 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     )
     assert "existing_prs=" in shell
     assert "TRUSTED_SHA" not in shell
+    # Reproduce both workstation-only failures in CI: the user's branch
+    # preference and author/committer exports must not alter the fixture.
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "init.defaultBranch")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "main")
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "ambient author")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "ambient-author@example.invalid")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "ambient committer")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "ambient-committer@example.invalid")
     checkout = tmp_path / "repo"
     checkout.mkdir()
     # GitHub runners export neither a custom initial-branch default nor
@@ -351,13 +360,24 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         env=git_env,
     )
     tip_sha = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True, env=git_env
     ).strip()
     subprocess.run(
         ["git", "remote", "add", "origin", str(checkout)],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
+
+    # A contaminated calling environment must not silently forge the bot tip.
+    bot_email = "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+    tip_identity = subprocess.check_output(
+        ["git", "show", "-s", "--format=%ae%n%ce", "HEAD"],
+        cwd=checkout,
+        text=True,
+        env=git_env,
+    ).splitlines()
+    assert tip_identity == [bot_email, bot_email]
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -381,7 +401,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     (tmp_path / "previous-candidates.json").write_text(
         json.dumps(baseline) + "\n", encoding="utf-8"
     )
-    env = os.environ.copy()
+    env = git_env.copy()
     env.update(
         {
             "PATH": f"{bin_dir}:{env['PATH']}",
@@ -547,16 +567,19 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         ],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
     foreign_tip = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True, env=git_env
     ).strip()
     evaluate(timestamp_only, [], tip=foreign_tip, success=False)
 
     # Even a spoofed Git identity cannot authorise unrelated branch edits.
     unrelated = checkout / "unexpected.txt"
     unrelated.write_text("human note", encoding="utf-8")
-    subprocess.run(["git", "add", str(unrelated)], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "add", str(unrelated)], cwd=checkout, check=True, env=git_env
+    )
     subprocess.run(
         [
             "git",
@@ -566,9 +589,10 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         ],
         cwd=checkout,
         check=True,
+        env=git_env,
     )
     unexpected_tip = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True
+        ["git", "rev-parse", "HEAD"], cwd=checkout, text=True, env=git_env
     ).strip()
     evaluate(timestamp_only, [valid], tip=unexpected_tip, success=False)
 
