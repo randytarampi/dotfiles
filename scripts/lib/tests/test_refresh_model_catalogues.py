@@ -356,4 +356,3 @@ def test_malformed_existing_inventory_does_not_break_comparison():
     assert not MODULE._semantically_unchanged(
         {**payload, "review": {"new_candidates": ["changed"]}}, payload
     )
-
