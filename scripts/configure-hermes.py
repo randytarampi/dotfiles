@@ -207,9 +207,9 @@ def select_active_model(source, model):
     target = {"provider": f"custom:{PROVIDER}", "default": model}
     if "model" not in data:
         prefix = (
-            'model:\n'
+            "model:\n"
             f'  provider: {json.dumps(target["provider"])}\n'
-            f'  default: {json.dumps(model)}\n'
+            f"  default: {json.dumps(model)}\n"
         )
         result = prefix + source
     else:
@@ -233,7 +233,9 @@ def select_active_model(source, model):
                     raise ValueError("refusing complex Hermes model field")
                 fields[key.value] = value
         if set(fields) != set(target):
-            raise ValueError("refusing incomplete Hermes model mapping; use 'hermes model' to establish it")
+            raise ValueError(
+                "refusing incomplete Hermes model mapping; use 'hermes model' to establish it"
+            )
         replacements = [
             (node.start_mark.index, node.end_mark.index, json.dumps(target[name]))
             for name, node in fields.items()
@@ -246,7 +248,9 @@ def select_active_model(source, model):
     expected = dict(data)
     expected["model"] = dict(data.get("model", {}), **target)
     if updated != expected:
-        raise ValueError("refusing active model selection that changes unrelated config")
+        raise ValueError(
+            "refusing active model selection that changes unrelated config"
+        )
     return result
 
 
