@@ -68,6 +68,14 @@ Orchestrating scripts declare `failure_policy`: `aggregate` (continue on child f
 
 Config shadowing is prohibited: two variables must not represent the same concept without a documented relationship.
 
+## Markdown file names
+
+All non-platform-owned Markdown filenames must be **lowercase kebab case**: `name.md`, `name-with-parts.md`. An underscore, uppercase letter or mixed-case extension is invalid. This applies to `docs/`, configuration documentation and `.github/ISSUE_TEMPLATE/` templates. Rename a Markdown file and its consumers together, including relative links, absolute repository links pointing at current files, literal paths in scripts, fixture expectations and workflows. Keep immutable historical GitHub commit links pointing to their *historical* filename.
+
+**Reserved filenames:** `AGENTS.md` (agent discovery), `README.md` (repository landing), `SKILL.md` within skill directories (agent skill discovery), `.github/PULL_REQUEST_TEMPLATE.md` (GitHub's PR template), and the existing plugin-owned `dot_config/opencode/oh-my-opencode-slim/orchestrator_append.md` (upstream-managed configuration surface). These are exact exceptions, not a general permission to use snake case.
+
+Run `make check-markdown-names` after additions or renames. It checks all Git-tracked Markdown filenames and locally linked Markdown documents; `make verify` and CI invoke it. Untracked personal files, downloaded dependencies and generated host assets are outside this repository naming contract. Preserve Git's recorded executable bit and verify affected consumers rather than treating Git's rename detection as proof of application compatibility.
+
 ## Naming Conventions
 
 Script naming and lifecycle policy is defined in the [Scripting Conventions section of `AGENTS.md`](../AGENTS.md), including `configure-*.py/sh`, `install-*.sh`, `verify-*.py`, `check-*.py`, `detect-*.py`, `generate-*.py`, and `get-*.py`. That section also specifies boilerplate, `run_once` versus `run_onchange`, gates, and hash triggers.
