@@ -66,7 +66,10 @@ def test_declared_public_mode_requires_real_bcrypt():
         audit(current, "public", required_hosts=["paseo.localhost"])
 
 
-@pytest.mark.parametrize("providers", [[], [{"provider": "claude", "model": "remote"}], ["pi"], {"pi": "model"}])
+@pytest.mark.parametrize(
+    "providers",
+    [[], [{"provider": "claude", "model": "remote"}], ["pi"], {"pi": "model"}],
+)
 def test_metadata_manual_list_does_not_replace_user_provider_choices(providers):
     current = {"agents": {"metadataGeneration": {"providers": providers}}}
     before = copy.deepcopy(current)
@@ -90,7 +93,9 @@ def test_canonical_deploy_does_not_apply_native_paseo_settings():
     assert len(before) == 2
     lane = before[1].split("# 8b. Caddy config", 1)
     assert len(lane) == 2
-    commands = [line for line in lane[0].splitlines() if "configure-paseo-web.py" in line]
+    commands = [
+        line for line in lane[0].splitlines() if "configure-paseo-web.py" in line
+    ]
     assert len(commands) == 1
     assert "--apply" not in commands[0]
     assert "owner-only apply" in lane[0]
