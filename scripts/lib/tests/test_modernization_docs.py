@@ -13,19 +13,19 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 DOCUMENTS = (
     "AGENTS.md",
-    "docs/BASIC_MEMORY.md",
-    "docs/CAPABILITY_MATRIX.md",
-    "docs/CHATGPT-DESKTOP.md",
-    "docs/CLAUDE-DESKTOP.md",
-    "docs/JUNIE.md",
-    "docs/LITELLM.md",
-    "docs/MODERNIZATION_ROADMAP.md",
-    "docs/PASEO_METADATA.md",
-    "docs/PASEO_SECURITY.md",
-    "docs/UNMANAGED-CLIENTS.md",
-    "docs/VOICE.md",
+    "docs/basic-memory.md",
+    "docs/capability-matrix.md",
+    "docs/chatgpt-desktop.md",
+    "docs/claude-desktop.md",
+    "docs/junie.md",
+    "docs/litellm.md",
+    "docs/modernization-roadmap.md",
+    "docs/paseo-metadata.md",
+    "docs/paseo-security.md",
+    "docs/unmanaged-clients.md",
+    "docs/voice.md",
 )
-ROADMAP = "docs/MODERNIZATION_ROADMAP.md"
+ROADMAP = "docs/modernization-roadmap.md"
 RETIRED_PLAN = "PASEO-FOLLOWUP-PLAN.md"
 
 
@@ -85,18 +85,18 @@ def test_consolidated_roadmap_preserves_paseo_component_navigation():
     """The replacement must still lead to each absorbed lane's detailed guide."""
     links = set(_links((ROOT / ROADMAP).read_text(encoding="utf-8")))
     assert {
-        "PASEO_ACP.md",
-        "PASEO_MCP.md",
-        "XCODE_MCP.md",
-        "PASEO_VOICE.md",
-        "PASEO_METADATA.md",
-        "PASEO_SECURITY.md",
+        "paseo-acp.md",
+        "paseo-mcp.md",
+        "xcode-mcp.md",
+        "paseo-voice.md",
+        "paseo-metadata.md",
+        "paseo-security.md",
     } <= links
     assert any(RETIRED_PLAN in target for target in links)
 
 
 @pytest.mark.parametrize(
-    "relative_path", ("AGENTS.md", "docs/BASIC_MEMORY.md", "docs/CAPABILITY_MATRIX.md")
+    "relative_path", ("AGENTS.md", "docs/basic-memory.md", "docs/capability-matrix.md")
 )
 def test_status_entry_points_link_to_canonical_roadmap(relative_path):
     document = ROOT / relative_path

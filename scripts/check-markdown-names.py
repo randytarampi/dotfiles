@@ -84,10 +84,16 @@ def main() -> int:
             violations += 1
         document = ROOT / filename
         for line, target in markdown_link_failures(document, ROOT):
-            print(f"Broken local Markdown link: {filename}:{line}: {target}", file=sys.stderr)
+            print(
+                f"Broken local Markdown link: {filename}:{line}: {target}",
+                file=sys.stderr,
+            )
             violations += 1
     if violations:
-        print(f"Markdown convention check failed: {violations} finding(s)", file=sys.stderr)
+        print(
+            f"Markdown convention check failed: {violations} finding(s)",
+            file=sys.stderr,
+        )
         return 1
     print("Markdown naming and local-link checks passed")
     return 0

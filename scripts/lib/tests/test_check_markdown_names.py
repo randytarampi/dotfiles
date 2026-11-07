@@ -45,9 +45,7 @@ def test_local_links_and_code_fences(tmp_path):
         "Inline " + chr(96) + "[example](not-link.md)" + chr(96) + " is not a link.\n",
         encoding="utf-8",
     )
-    assert check.markdown_link_failures(document, tmp_path) == [
-        (4, "old_link.md")
-    ]
+    assert check.markdown_link_failures(document, tmp_path) == [(4, "old_link.md")]
 
 
 def test_hidden_markdown_does_not_bypass_naming_policy():
