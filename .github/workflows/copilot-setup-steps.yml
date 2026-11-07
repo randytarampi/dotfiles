@@ -2,7 +2,7 @@
 # MCP servers must also be configured in Settings → Copilot → MCP servers
 # (GitHub-managed), including the local command `codegraph serve --mcp`.
 # Secrets must use the COPILOT_MCP_* prefix. Settings instructions live in
-# docs/AGENTIC-REVIEW.md.
+# docs/agentic-review.md.
 
 name: Copilot setup steps
 
