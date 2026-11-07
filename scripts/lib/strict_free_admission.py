@@ -3,6 +3,7 @@
 Only a trusted account-authorised collector may populate this evidence.
 A caller-provided evidence object is not proof that the provider issued it.
 """
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -45,7 +46,11 @@ class Decision:
 
 
 def _time_ok(value):
-    return isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
+    return (
+        isinstance(value, datetime)
+        and value.tzinfo is not None
+        and value.utcoffset() is not None
+    )
 
 
 def admit(route, evidence, *, now, tokens, privacy_classes):
@@ -54,11 +59,19 @@ def admit(route, evidence, *, now, tokens, privacy_classes):
         return Decision(False, "invalid-clock")
     if not isinstance(tokens, int) or isinstance(tokens, bool) or tokens <= 0:
         return Decision(False, "invalid-request-budget")
-    identity = (route.provider, route.endpoint, route.model,
-                route.backend_id, route.account_id, route.privacy_class)
+    identity = (
+        route.provider,
+        route.endpoint,
+        route.model,
+        route.backend_id,
+        route.account_id,
+        route.privacy_class,
+    )
     if any(not isinstance(x, str) or not x or x != x.strip() for x in identity):
         return Decision(False, "invalid-route-identity")
-    if not isinstance(route.credential_fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", route.credential_fingerprint):
+    if not isinstance(route.credential_fingerprint, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", route.credential_fingerprint
+    ):
         return Decision(False, "invalid-credential-binding")
     if route.privacy_class not in privacy_classes:
         return Decision(False, "privacy-boundary")
@@ -77,7 +90,10 @@ def admit(route, evidence, *, now, tokens, privacy_classes):
         return Decision(False, "stale-or-future-evidence")
     if evidence.account_status != "active":
         return Decision(False, "inactive-account")
-    if evidence.entitlement not in ("recurring_account_free", "account_included_zero_marginal"):
+    if evidence.entitlement not in (
+        "recurring_account_free",
+        "account_included_zero_marginal",
+    ):
         return Decision(False, "paid-trial-or-unknown-entitlement")
     try:
         price = Decimal(evidence.max_billable_usd)
@@ -100,7 +116,9 @@ def admit_chain(routes, evidence, *, now, tokens, privacy_classes):
     if not routes or len(routes) != len(evidence):
         return Decision(False, "unknown-fallback-backends")
     for index, (route, proof) in enumerate(zip(routes, evidence)):
-        decision = admit(route, proof, now=now, tokens=tokens, privacy_classes=privacy_classes)
+        decision = admit(
+            route, proof, now=now, tokens=tokens, privacy_classes=privacy_classes
+        )
         if not decision.allowed:
             return Decision(False, f"backend-{index}:{decision.reason}")
     return Decision(True, "every-backend-qualified")
