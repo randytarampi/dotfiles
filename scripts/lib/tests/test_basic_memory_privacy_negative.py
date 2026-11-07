@@ -85,7 +85,11 @@ def test_private_memory_collision_rejected_without_filesystem_mutation(
 
 def test_identical_memory_registration_is_idempotent():
     canonical = json.loads(TEMPLATE.read_text(encoding="utf-8"))
-    record = {"command": canonical["command"], "args": canonical["args"], "env": canonical["env"]}
+    record = {
+        "command": canonical["command"],
+        "args": canonical["args"],
+        "env": canonical["env"],
+    }
     previous = {"mcpServers": {"basic-memory": record}}
     generated = {"mcpServers": {"basic-memory": dict(record)}}
     assert ensure_basic_memory_ownership(previous, generated, "mcpServers") is None
