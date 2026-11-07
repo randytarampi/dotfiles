@@ -246,7 +246,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${HAS_APP_CLIENT_ID}" != "true" || "${HAS_APP_PRIVATE_KEY}" != "true" ]]; then
-            echo "::error title=Missing GitHub App publication credentials::Configure WOOFDY_GITHUB_APP_CLIENT_ID as an Actions variable and WOOFDY_GITHUB_APP_PRIVATE_KEY as an environment secret for model-catalogue-publish. See docs/MODEL_UPDATES.md#publishing-credentials-and-recovery."
+            echo "::error title=Missing GitHub App publication credentials::Configure WOOFDY_GITHUB_APP_CLIENT_ID as an Actions variable and WOOFDY_GITHUB_APP_PRIVATE_KEY as an environment secret for model-catalogue-publish. See docs/model-updates.md#publishing-credentials-and-recovery."
             exit 1
           fi
 
