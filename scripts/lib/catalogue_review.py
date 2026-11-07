@@ -7,6 +7,7 @@ not a verified free entitlement, capability test or request-time admission.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -99,6 +100,24 @@ def _as_models(payload: dict) -> dict:
             raise ValueError("previous inventory contains malformed model evidence")
         result[model["id"]] = model["pricing"]
     return result
+
+
+OBSERVATION_FIELDS = frozenset(
+    {"fetched_at", "pricing_observed_at", "pricing_expires_at"}
+)
+
+
+def review_fingerprint(current: dict) -> str:
+    """Fingerprint candidate evidence without its observation timestamps."""
+    stable = {
+        key: value
+        for key, value in current.items()
+        if key not in OBSERVATION_FIELDS
+    }
+    canonical = json.dumps(
+        stable, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def render_pr_body(current: dict, previous: dict | None = None) -> str:
@@ -222,6 +241,7 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         "#119, curated preferences from #139 and opt-in provider limits from "
         "#142. Request-time no-charge enforcement remains tracked in #87. "
         "Rollback by closing this draft, not by rewriting deployed configs.\n"
+        + f"\n<!-- free-model-review-sha256: {review_fingerprint(current)} -->\n"
     )
 
 

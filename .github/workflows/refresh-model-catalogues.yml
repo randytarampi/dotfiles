@@ -271,6 +271,26 @@ jobs:
             exit 1
           fi
           existing_pr="$(jq -r '.[0].number // empty' <<< "${existing_prs}")"
+          # A closed draft may be recreated only from a known bot-produced tip.
+          # Never force-overwrite a human-owned branch with no open PR.
+          if [[ "${BOT_BRANCH_EXISTS}" == "true" && -z "${existing_pr}" ]]; then
+            bot_email="$(git show -s --format='%ae' "${BOT_BRANCH_EXPECTED_TIP}")"
+            bot_subject="$(git show -s --format='%s' "${BOT_BRANCH_EXPECTED_TIP}")"
+            case "${bot_email}:${bot_subject}" in
+              "model-catalogue-bot[bot]@users.noreply.github.com:chore: refresh model catalogue artefact" | \
+              "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com:chore(agents): refresh free-model candidate inventory")
+                ;;
+              *)
+                echo "::error::Catalogue branch has no open PR and an unrecognised commit" >&2
+                exit 1
+                ;;
+            esac
+            if ! git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" 2>/dev/null &&
+              ! git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" 2>/dev/null; then
+              echo "::error::Catalogue branch has no recognised inventory" >&2
+              exit 1
+            fi
+          fi
           if [[ -n "${existing_pr}" ]] &&
             ! jq -e --arg base "${DEFAULT_BRANCH}" \
               --arg head "${publish_branch}" \
@@ -293,7 +313,27 @@ jobs:
                 jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)')"
               new_semantics="$(jq -cS 'del(.fetched_at, .pricing_observed_at, .pricing_expires_at)'                 artifacts/model-catalogues/free-model-candidates.json)"
               if [[ "${old_semantics}" == "${new_semantics}" ]]; then
-                echo "Catalogue unchanged apart from observation times; preserving existing draft PR."
+                # A previous push may have succeeded before gh pr edit failed.
+                # Repair stale PR metadata without changing the branch SHA.
+                review_body="${RUNNER_TEMP}/model-catalogue/review-pr.md"
+                expected_title="chore(agents): review free-model candidates"
+                expected_marker="$(grep -E '^<!-- free-model-review-sha256: [0-9a-f]{64} -->$' "${review_body}")"
+                test -n "${expected_marker}"
+                actual_pr="$(gh pr view "${existing_pr}" --json title,body)"
+                if jq -e --arg title "${expected_title}" --arg marker "${expected_marker}" '
+                  .title == $title and (.body |
+                    contains($marker) and
+                    contains("## Outcome and scope") and
+                    contains("## Contributors and roles") and
+                    contains("## Evidence") and
+                    contains("## Review disposition") and
+                    contains("## Risk and handoff"))
+                ' <<< "${actual_pr}" >/dev/null; then
+                  echo "Catalogue unchanged apart from observation times; preserving existing draft PR."
+                else
+                  gh pr edit "${existing_pr}" --title "${expected_title}" --body-file "${review_body}"
+                  echo "Repaired stale catalogue PR metadata without changing the bot branch."
+                fi
                 exit 0
               fi
             fi
@@ -307,6 +347,14 @@ jobs:
             [[ "${BOT_BRANCH_EXPECTED_TIP}" =~ ^[0-9a-f]{40}$ ]]
           fi
           git fetch --no-tags origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+          # Candidate partitions are computed from the trusted commit's registry.
+          # Fail closed if main changed it before this bot PR is published.
+          trusted_registry="$(git rev-parse HEAD:configs/opencode/opencode-models.json)"
+          latest_registry="$(git rev-parse "origin/${DEFAULT_BRANCH}:configs/opencode/opencode-models.json")"
+          if [[ "${trusted_registry}" != "${latest_registry}" ]]; then
+            echo "::error::Curated model registry changed during refresh; rerun against current main" >&2
+            exit 1
+          fi
           mapfile -t published_paths < <(git diff --name-only "origin/${DEFAULT_BRANCH}...HEAD")
           ((${#published_paths[@]} == 1))
           [[ "${published_paths[0]}" == "artifacts/model-catalogues/free-model-candidates.json" ]]
