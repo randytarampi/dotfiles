@@ -578,9 +578,7 @@ def test_curated_registry_drift_gate_rejects_stale_snapshot(tmp_path):
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     publish = workflow.split("  publish:\n", 1)[1]
-    section = publish.split(
-        "          # Check the curated source before", 1
-    )[1].split(
+    section = publish.split("          # Check the curated source before", 1)[1].split(
         "          # Preserve an existing draft when", 1
     )[0]
     block = section.splitlines()
