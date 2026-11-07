@@ -281,7 +281,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     checkout.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
     subprocess.run(
-        ["git", "config", "user.name", "model-catalogue-bot[bot]"],
+        ["git", "config", "user.name", "woofdy-randytarampi-ca[bot]"],
         cwd=checkout,
         check=True,
     )
@@ -290,7 +290,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
             "git",
             "config",
             "user.email",
-            "model-catalogue-bot[bot]@users.noreply.github.com",
+            "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com",
         ],
         cwd=checkout,
         check=True,
@@ -310,7 +310,12 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     path.write_text(json.dumps(baseline) + "\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=checkout, check=True)
     subprocess.run(
-        ["git", "commit", "-qm", "chore: refresh model catalogue artefact"],
+        [
+            "git",
+            "commit",
+            "-qm",
+            "chore(agents): refresh free-model candidate inventory",
+        ],
         cwd=checkout,
         check=True,
     )
@@ -444,6 +449,7 @@ def test_candidate_report_uses_template_and_woofdy_commit_identity():
     assert "Prepare a template-compliant candidate review" in publish
     assert "Refusing to update a non-draft or foreign catalogue PR" in publish
     assert "Catalogue branch has no open PR and an unrecognised commit" in publish
+    assert "6fbf14bfeec1222b0ae376b500e1888384a26e4d" in publish
     assert "Curated model registry changed during refresh" in publish
     assert "Repaired stale catalogue PR metadata" in publish
     assert "free-model-review-sha256" in publish
