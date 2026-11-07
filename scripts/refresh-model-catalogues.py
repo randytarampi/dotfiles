@@ -102,10 +102,10 @@ def _semantically_unchanged(previous: dict | None, payload: dict) -> bool:
         if previous.get(field) != payload[field]:
             return False
     old_models = previous.get("models")
-    if not isinstance(old_models, list):
-        return False
     try:
-        return normalize_models(old_models) == payload["models"]
+        return isinstance(old_models, list) and (
+            normalize_models(old_models) == payload["models"]
+        )
     except (KeyError, TypeError):
         return False
 

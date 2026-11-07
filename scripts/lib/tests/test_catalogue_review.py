@@ -212,6 +212,23 @@ def test_cli_renders_without_network_or_writing_source(tmp_path):
     assert json.loads(input_path.read_text()) == current
 
 
+def test_pr_repair_does_not_invent_historical_model_deltas():
+    current = _inventory()
+    repaired = render_pr_body(current, current)
+    assert "earlier distinct baseline cannot be recovered" in repaired
+    assert "First known bot inventory" not in repaired
+    assert "Compared with the preceding bot inventory" not in repaired
+    previous = {
+        "models": [
+            {"id": "known", "pricing": {"input": 0, "output": 0}},
+        ]
+    }
+    initial = render_pr_body(current, previous)
+    assert "Compared with the preceding bot inventory" in initial
+    assert "new-model" in initial
+    assert "separate read-only refresh job" in initial
+
+
 def test_renderer_rejects_false_multi_provider_observation():
     current = _inventory()
     current["provider_coverage"]["mistral"] = {
