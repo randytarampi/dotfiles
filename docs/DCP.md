@@ -49,4 +49,5 @@ Since v3.1.13, DCP ships a TUI panel entrypoint (`./tui`) alongside its server e
 
 `scripts/configure-opencode-dcp.py` no longer registers DCP anywhere: it only removes stale DCP entries it previously managed in `tui.json`, and only after confirming that `opencode.json` actually registers DCP (the dcp.jsonc/dcp.json configuration file is deployed by chezmoi and is not touched by this writer). Voice (now in `cli.json`) and all other entries are preserved.
 
-> [!NOTE] On v2 the only shared plugin files are `opencode.json` (server + TUI-capable plugins via the manifest) and `cli.json` (global TUI-client-only plugins); `tui.json` remains user-owned. See [VOICE.md](VOICE.md) for the voice plugin's `cli.json` entry.
+> [!NOTE]
+> On v2 the only shared plugin files are `opencode.json` (server + TUI-capable plugins via the manifest) and `cli.json` (global TUI-client-only plugins); `tui.json` remains user-owned. See [VOICE.md](VOICE.md) for the voice plugin's `cli.json` entry.

@@ -55,7 +55,8 @@ The loud council aims for three distinct residents: dense reasoning alpha, MoE c
 | M5 Pro 48GB, Ornith-1.5-35B | Measured to 64K only; 128K unverified ([M5 Pro artifact](https://omlx.ai/my/4b5e53c6eea9410263de24d08b9dbf2d7f68f5674d46f0a7cab62b664d60540a)) |
 | Other hardware / model paths | UNKNOWN |
 
-> [!NOTE] When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
+> [!NOTE]
+> When both `OLLAMA_API_KEY` and `ANTHROPIC_API_KEY` are set (but not `OPENAI_API_KEY`), auto-detection returns `pro-plus-anthropic`. The tier name implies OpenAI is also present, but the preset works correctly without it — Ollama Cloud handles orchestrator and Anthropic handles oracle.
 
 Benchmark rows use oMLX Auto except the Ollama endpoint comparisons, which use `http://127.0.0.1:11434/v1` (External OpenAI-compatible endpoint); all use Code (Mixed), tg128. On 2026-10-17, Ornith-1.5-35B MLX 4-bit at 131072 on M3 Max measured TTFT 225.95 s / 26.4 tok/s / 23.59 GB peak; M5 Pro 35B was measured to 64K only. `gemma4:12b-mxfp8` and `qwen3.8:27b-mlx` via the Ollama endpoint were slower, with architecture-confounded comparisons. The full `bench-m3max-m5pro.md` is a local-only session artifact and is not in this repository.
 
@@ -331,7 +332,8 @@ Single-model preset using one omnicapable model for all roles:
 
 Council synthesizer: `_local:solo`, max. Individual councillors α `_local:solo`, β `_local:solo`, γ `_local:solo`: no variant override (model default). If no solo model exists, falls back to code-gen + vision.
 
-> [!NOTE] Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use `local`.
+> [!NOTE]
+> Solo models require all four capabilities: completion + thinking + tools + vision. This maximizes per-request quality but needs enough VRAM. Users with limited VRAM should use `local`.
 
 ### MoE Code-Gen Reuse Across Tools
 
@@ -392,7 +394,8 @@ Default preset: auto-detected from available API keys during OpenCode configurat
 | vision | subset of lightweight with `vision` capability | `tools` + `vision` | observer |
 | audio | subset of lightweight with `audio` capability | `tools` + `audio` | — |
 
-> [!TIP] `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
+> [!TIP]
+> `reasoning` and `solo` use density-aware sorting: dense (non-MoE) models outrank MoE models, and higher `embedding_length` wins ties. Use `--min-reasoning-embedding N` to hard-exclude thin-embedding MoE models. `code-gen` and `lightweight` keep the param-count sort.
 
 ---
 
@@ -470,9 +473,11 @@ The OpenCode configure script forwards these env vars to `configure-opencode.py`
 
 This makes project presets **orthogonal** to the global tier: a project using `--preset anthropic` works whether the global tier is `pro-plus-anthropic` (a superset) or `pro` (which globally disables Anthropic). The project config also resets `disabled_providers: []` so an unrelated global tier's `disabled_providers` cannot suppress the project's providers.
 
-> [!NOTE] A project `opencode.json` is written only when the project actually overrides global defaults: a preset that differs from the active global tier (`preset` key in `~/.config/opencode/oh-my-opencode-slim.json`), or any `--local-fallback-*` inputs. Runs with no preset (or a same-tier preset) skip the file entirely and inherit the global config as-is. Per-key overrides (a single `model`, plugin, or permission) remain available as hand-authored minimal `opencode.json` files, which OpenCode merges over global.
+> [!NOTE]
+> A project `opencode.json` is written only when the project actually overrides global defaults: a preset that differs from the active global tier (`preset` key in `~/.config/opencode/oh-my-opencode-slim.json`), or any `--local-fallback-*` inputs. Runs with no preset (or a same-tier preset) skip the file entirely and inherit the global config as-is. Per-key overrides (a single `model`, plugin, or permission) remain available as hand-authored minimal `opencode.json` files, which OpenCode merges over global.
 
-> [!IMPORTANT] If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
+> [!IMPORTANT]
+> If you run `configure-opencode-tier.py` alone in a project (skipping the `opencode` step), the project-root `opencode.json` is not refreshed and may be missing providers the preset references. Always run `configure-project.py` (default steps include `opencode`) when switching to a preset orthogonal to the global tier.
 
 ---
 
@@ -480,7 +485,8 @@ This makes project presets **orthogonal** to the global tier: a project using `-
 
 Ollama Cloud presets use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` — the exact set varies by tier and is defined in `oh-my-opencode-slim.json`. Ollama Cloud Pro accounts have a 3-slot concurrency limit (3 concurrent requests per account, regardless of how many distinct models are used). Model lists are not hardcoded in mozart-router config — the GenericOpenAIAdapter auto-discovers available models from each gateway's `/v1/models` endpoint.
 
-> [!IMPORTANT] All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
+> [!IMPORTANT]
+> All presets define an explicit observer, and observers may use Ollama Cloud models. `image_routing: "auto"` routes image attachments to the observer: the hook strips them from the main conversation and saves files to disk, so orchestrators never receive image bytes and accumulated-image payloads stay out of the main conversation (mitigating [anomalyco/opencode#43119](https://github.com/anomalyco/opencode/issues/43119)). Ollama Cloud catalog modalities are preserved for observer sessions.
 
 ## OpenAI Models (gpt-6 Generation)
 
