@@ -344,10 +344,11 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     gh = bin_dir / "gh"
     gh.write_text(
         "#!/bin/sh\n"
-        'case "$2" in\n'
-        '  list) printf "%s" "${GH_PR_JSON:-[]}" ;;\n'
-        '  view) printf "%s" "${GH_PR_DETAILS}" ;;\n'
-        '  edit) if [ "${GH_PR_EDIT_FAIL:-0}" = 1 ]; then exit 42; fi ;;\n'
+        'case "$1:$2" in\n'
+        '  pr:list) printf "%s" "${GH_PR_JSON:-[]}" ;;\n'
+        '  pr:view) printf "%s" "${GH_PR_DETAILS}" ;;\n'
+        '  pr:edit) if [ "${GH_PR_EDIT_FAIL:-0}" = 1 ]; then exit 42; fi ;;\n'
+        '  api:repos/randytarampi/dotfiles/pulls/200) printf "%s" "${GH_API_PR}" ;;\n'
         "  *) exit 1 ;;\n"
         "esac\n"
     )
@@ -365,6 +366,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         {
             "PATH": f"{bin_dir}:{env['PATH']}",
             "DEFAULT_BRANCH": "main",
+            "GITHUB_REPOSITORY": "randytarampi/dotfiles",
             "BOT_BRANCH_EXISTS": "true",
             "BOT_BRANCH_EXPECTED_TIP": tip_sha,
         }
@@ -390,14 +392,39 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         ),
     }
 
-    def evaluate(data, prs, *, success=True, details=None, tip=None, edit_fail=False):
+    def evaluate(
+        data, prs, *, success=True, details=None, tip=None,
+        edit_fail=False, rest_details=None,
+    ):
         path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+        discovered = prs[0] if prs else valid
+        canonical = {
+            "number": 200,
+            "state": "open",
+            "draft": discovered["isDraft"],
+            "base": {"ref": discovered["baseRefName"]},
+            "head": {
+                "ref": discovered["headRefName"],
+                "repo": {"full_name": "randytarampi/dotfiles"},
+            },
+            "user": {
+                "login": discovered["author"]["login"],
+                "id": (
+                    353209076
+                    if discovered["author"]["login"] == "woofdy-randytarampi-ca[bot]"
+                    else 123
+                ),
+            },
+        }
+        if rest_details is not None:
+            canonical = rest_details
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c", shell],
             cwd=checkout,
             env={
                 **env,
                 "GH_PR_JSON": json.dumps(prs),
+                "GH_API_PR": json.dumps(canonical),
                 "GH_PR_DETAILS": json.dumps(details or good_details),
                 "GH_PR_EDIT_FAIL": "1" if edit_fail else "0",
                 "RUNNER_TEMP": str(tmp_path),
@@ -421,6 +448,37 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "pricing_expires_at": "2026-11-07T19:01:00Z",
     }
     assert "Catalogue unchanged" in evaluate(timestamp_only, [valid])
+    canonical_valid = {
+        "number": 200,
+        "state": "open",
+        "draft": True,
+        "base": {"ref": "main"},
+        "head": {
+            "ref": "model-catalogue-bot/inventory",
+            "repo": {"full_name": "randytarampi/dotfiles"},
+        },
+        "user": {"login": "woofdy-randytarampi-ca[bot]", "id": 353209076},
+    }
+    # A GraphQL App login representation must not veto a canonical REST
+    # record validated against WOOFDY's numeric GitHub identity.
+    graphql_alias = {**valid, "author": {"login": "woofdy-randytarampi-ca"}}
+    assert "Catalogue unchanged" in evaluate(
+        timestamp_only, [graphql_alias], rest_details=canonical_valid
+    )
+    # Verify that invalid REST state, identity and repo cannot be masked by
+    # an apparently valid PR-list entry.
+    for changed in (
+        {**canonical_valid, "number": 201},
+        {**canonical_valid, "state": "closed"},
+        {**canonical_valid, "draft": False},
+        {**canonical_valid, "user": {**canonical_valid["user"], "id": 987}},
+        {**canonical_valid, "head": {
+            **canonical_valid["head"],
+            "repo": {"full_name": "other/fork"},
+        }},
+        {},
+    ):
+        evaluate(timestamp_only, [valid], rest_details=changed, success=False)
     stale = dict(good_details, body="## Outcome and scope\nold evidence")
     assert "Repaired stale catalogue PR metadata" in evaluate(
         timestamp_only, [valid], details=stale
