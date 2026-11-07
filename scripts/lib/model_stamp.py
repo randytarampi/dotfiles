@@ -41,5 +41,5 @@ def notice_message() -> str | None:
     if not stale:
         return None
     if age is None:
-        return "NOTE: model assignments never synced — run configure scripts after reviewing docs/MODEL_UPDATES.md"
-    return f"NOTE: model assignments last synced {age:.0f} days ago — consider re-running configure scripts (docs/MODEL_UPDATES.md)"
+        return "NOTE: model assignments never synced — run configure scripts after reviewing docs/model-updates.md"
+    return f"NOTE: model assignments last synced {age:.0f} days ago — consider re-running configure scripts (docs/model-updates.md)"
