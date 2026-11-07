@@ -1,7 +1,7 @@
 # Model Tiers & Selection Strategy
 
 
-**Optional provider capacity:** Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM are selectable as explicitly enabled inference routes, but they are not automatically additional models in the strict-free preset. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for exact entitlement, LiteLLM scope and fallback constraints. The Zen-only tier remains Zen-only.
+**Optional provider capacity:** Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM are selectable as explicitly enabled inference routes, but they are not automatically additional models in the strict-free preset. See [optional-inference.md](optional-inference.md) for exact entitlement, LiteLLM scope and fallback constraints. The Zen-only tier remains Zen-only.
 
 > Deep reference for tier definitions, model classification, fallback chains, and variant policy. For the quick summary, see the Model Tiers section in [AGENTS.md](../AGENTS.md).
 
@@ -73,7 +73,7 @@ The M3 Max Ornith-35B 131072 run is verified by its linked artifact; M5 Pro Orni
 
 ### OpenAI Service Lanes (Flex/Fast)
 
-OpenAI service-lane aliases are opt-in through `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are published only on the genuine direct `OPENAI_API_KEY` route, never OAuth or ChatGPT routes. Lane pricing starts from curated `gpt-6.1-sol` rates: Flex is 0.5× and Fast is 2×, with cached-input rate fields preserved. Spend reports identify the tier actually served. There is no automatic Flex-to-standard fallback. For lane configuration and operational details, see [docs/LITELLM.md](LITELLM.md).
+OpenAI service-lane aliases are opt-in through `DOTFILES_USE_OPENAI_SERVICE_LANES` (default `0`) and are published only on the genuine direct `OPENAI_API_KEY` route, never OAuth or ChatGPT routes. Lane pricing starts from curated `gpt-6.1-sol` rates: Flex is 0.5× and Fast is 2×, with cached-input rate fields preserved. Spend reports identify the tier actually served. There is no automatic Flex-to-standard fallback. For lane configuration and operational details, see [docs/litellm.md](litellm.md).
 
 Cloud presets (pro, pro-plus, pro-plus-anthropic) use `deepseek-v4.1-flash`, `gemma4:31b`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, and `kimi-k2.7-code` as active Ollama Cloud assignments. `nemotron-3-ultra` is no longer used by these tiers; remaining catalogue entries are legacy or catalogue-only. The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI and Anthropic models without Ollama Cloud. The `anthropic` preset uses only Anthropic models. The `local` preset uses reasoning + code-gen + lightweight + vision for a balanced 3-party council. The `local-solo` preset uses a single omnicapable model (completion+thinking+tools+vision) for all roles, with council diversity from variants rather than different models. Deprecated local-pro, local-mini and local-nano names resolve to `local` through `tier_registry.py`.
 
@@ -180,7 +180,7 @@ This preset is dynamically composed from fresh catalogue snapshots and route evi
 
 The configured fallback chains for this preset are empty (`[]`). The new free-model entries are **candidate preferences**, not evidence of authenticated inference, free billing or actual tool/image support. The dynamic-free resolver requires fresh endpoint-scoped classification and capability evidence before adopting them.
 
-Historical probes of MiMo 2.6 image requests failed or timed out; it is no longer assigned to designer/council. Muse is a Meta **contributor tier** that may train on supplied data; it is no longer selected here. Do not send confidential code or screenshots to contributor routes without explicit acceptance (see [docs/OPENCODE.md](OPENCODE.md)).
+Historical probes of MiMo 2.6 image requests failed or timed out; it is no longer assigned to designer/council. Muse is a Meta **contributor tier** that may train on supplied data; it is no longer selected here. Do not send confidential code or screenshots to contributor routes without explicit acceptance (see [docs/opencode.md](opencode.md)).
 
 ### Free Cross-Provider Tier (`free`)
 
@@ -298,7 +298,7 @@ OpenAI-only preset with Terra orchestration and design, and Sol oracle and counc
 
 The **primary oracle is `openai/gpt-6.1-sol`**, not Astra. If the oracle fails, its configured fallback is `openai/gpt-6-astra`. Separately, the Terra orchestrator falls back to Sol, and Terra designer/observer fall back to Luna. Other chains are defined per role in `oh-my-opencode-slim.json`.
 
-Local-tier variants follow the repo-wide variant policy (TIERS.md:479-490), calibrated 2026-09-12; oracle/council retain max. Local Qwen3.8 reasoning remains enabled (mandatory for Qwen3.8 — JetBrains evidence, [blog.jetbrains.com/junie/2026/08/qwen-for-junie/](https://blog.jetbrains.com/junie/2026/08/qwen-for-junie/)).
+Local-tier variants follow the repo-wide variant policy (tiers.md:479-490), calibrated 2026-09-12; oracle/council retain max. Local Qwen3.8 reasoning remains enabled (mandatory for Qwen3.8 — JetBrains evidence, [blog.jetbrains.com/junie/2026/08/qwen-for-junie/](https://blog.jetbrains.com/junie/2026/08/qwen-for-junie/)).
 
 ### Local Tier (`local`)
 
@@ -525,9 +525,9 @@ The LiteLLM generator defaults to a **free catalogue scope** (`DOTFILES_LITELLM_
 
 1. Confirm the exact model ID against the live catalogue for its provider (`opencode models <provider> --refresh`); a 401/403 or unavailable endpoint is **unknown**, not a match. Keep inner slashes and distinguish direct-provider IDs from LiteLLM aliases and local `:cloud`/`-cloud` stubs.
 2. Match the role's capability profile, not just the name tier: context window, output cap, vision input, tool/reasoning support. Verify real inference, especially image input for observers. (Historical/retired example: `ling-3.0-flash-fin-free` had a 32K output cap and text-only input; MiMo 2.6 advertised image input but failed live probes, whereas Muse 1.3 accepted a harmless image.)
-3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, Junie/Pi/LiteLLM mappings, tier-registry tests, and the tier docs; see the complete [model update checklist](MODEL_UPDATES.md#checklist).
+3. Update in lockstep: `oh-my-opencode-slim.json` (preset + fallbacks + council), the provider allowlist JSON, Junie/Pi/LiteLLM mappings, tier-registry tests, and the tier docs; see the complete [model update checklist](model-updates.md#checklist).
 4. Re-run `make check-slim-invariants test-tier-registry check-model-drift`, inspect `check-model-drift.py --json` for unknowns, and dry-run `configure-opencode.py` for the affected preset. A matching catalogue listing still needs a harmless inference probe.
-5. Record the churn event in [docs/MODEL_UPDATES.md](MODEL_UPDATES.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
+5. Record the churn event in [docs/model-updates.md](model-updates.md) (dated) — the removal history is the evidence base for judging how much trust a free tier deserves.
 
 ### Stability expectations by tier class
 
@@ -541,7 +541,7 @@ The LiteLLM generator defaults to a **free catalogue scope** (`DOTFILES_LITELLM_
 
 - Invariant 1 keeps a primary out of its own chain, invariant 3 prevents repeats within a chain, and invariant 7 permits at most one fallback entry per provider. Chains may be empty, in which case static degraded mode is unavailable without local fallbacks; runtime local alternatives are appended by default.
 - Free-tier roles degrade to paid capacity rather than breaking.
-- `muse-spark-1.3-contributor-free` and other contributor tiers may train on prompts, images and completions upstream — documented in the tier section above and [docs/OPENCODE.md](OPENCODE.md); treat contributor presets as non-confidential workflows.
+- `muse-spark-1.3-contributor-free` and other contributor tiers may train on prompts, images and completions upstream — documented in the tier section above and [docs/opencode.md](opencode.md); treat contributor presets as non-confidential workflows.
 
 ## Council Synthesizers
 
