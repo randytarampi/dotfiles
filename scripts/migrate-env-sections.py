@@ -157,8 +157,13 @@ def guarded_file(path):
 
 def identity(info):
     return (
-        info.st_dev, info.st_ino, info.st_uid, info.st_mode,
-        info.st_nlink, info.st_mtime_ns, info.st_size,
+        info.st_dev,
+        info.st_ino,
+        info.st_uid,
+        info.st_mode,
+        info.st_nlink,
+        info.st_mtime_ns,
+        info.st_size,
     )
 
 
