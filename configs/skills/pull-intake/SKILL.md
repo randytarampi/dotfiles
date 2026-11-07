@@ -20,11 +20,11 @@ Standard pre-deploy review for a newly pulled commit range.
 3. **Migration**: note what `make migrate` does for this range (renames, OR
   migrations, appended keys) and that project `.opencode/.env` files are deliberately excluded.
 4. **Opt-in ledger**: classify opt-ins with the repo's own risk language and
-  cite the doc that defines the contract (e.g. `docs/LITELLM.md`, `docs/TIERS.md`). Flag contradictions the doctor enforces (for example: exposing the Admin UI requires the service to actually serve it) before they become verify failures.
+  cite the doc that defines the contract (e.g. `docs/litellm.md`, `docs/tiers.md`). Flag contradictions the doctor enforces (for example: exposing the Admin UI requires the service to actually serve it) before they become verify failures.
 5. **Machine-state cross-check**: verify the pulled gates against this
   machine — service status (`launchctl list`), credentials present (names only, never values), oMLX/port overrides, and tier servability under gateway-only mode (`scripts/detect-tier-coverage.py`).
 6. **Model retargets**: when model ids changed, consult
-  `docs/MODEL_UPDATES.md` history and check live provider catalogues before declaring anything "fixed"; a listed id is not proof of inference access.
+  `docs/model-updates.md` history and check live provider catalogues before declaring anything "fixed"; a listed id is not proof of inference access.
 7. **Report shape**: What's going on · ~/.env changes (required / optional /
   deprecated-no-op) · how to opt in · what NOT to opt into · fixes worth knowing. Offer, but never run, `make migrate` / `make deploy` without the user's go-ahead.
 
