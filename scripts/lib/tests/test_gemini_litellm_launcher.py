@@ -51,8 +51,11 @@ def test_endpoint_refuses_nonlocal_or_invalid(invalid):
 
 
 def test_conflicts_and_gate_fail_closed():
-    for name in ("DOTFILES_RUN_GEMINI_SETUP", "DOTFILES_RUN_LITELLM_SETUP",
-                 "DOTFILES_USE_LITELLM_PROXY"):
+    for name in (
+        "DOTFILES_RUN_GEMINI_SETUP",
+        "DOTFILES_RUN_LITELLM_SETUP",
+        "DOTFILES_USE_LITELLM_PROXY",
+    ):
         env = good()
         env[name] = "0"
         with pytest.raises(ValueError):
