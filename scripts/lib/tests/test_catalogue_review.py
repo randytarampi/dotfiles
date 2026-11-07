@@ -229,6 +229,33 @@ def test_pr_repair_does_not_invent_historical_model_deltas():
     assert "separate read-only refresh job" in initial
 
 
+@pytest.mark.parametrize(
+    "pricing",
+    [
+        {"input": 0, "output": 0.001},
+        {"input": 0, "output": "nan"},
+        {"input": 0, "output": float("inf")},
+        {"input": 0, "output": False},
+        {"input": 0, "output": 0, "cache_read": -1},
+        {"input": 0, "output": 0, "cache_write": {}},
+        {"input": 0},
+    ],
+)
+def test_renderer_rejects_nonzero_or_malformed_candidate_prices(pricing):
+    current = _inventory()
+    current["models"][0]["pricing"] = pricing
+    with pytest.raises(ValueError, match="invalid pricing evidence"):
+        render_pr_body(current)
+
+
+def test_renderer_rejects_more_free_models_than_listed():
+    current = _inventory()
+    current["counts"]["catalogue"] = 1
+    current["counts"]["classified"] = 1
+    with pytest.raises(ValueError, match="exceed the Console listing"):
+        render_pr_body(current)
+
+
 def test_renderer_rejects_false_multi_provider_observation():
     current = _inventory()
     current["provider_coverage"]["mistral"] = {

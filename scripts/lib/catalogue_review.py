@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import html
 import json
+import math
 from pathlib import Path
 
 from models_dev import MODELS_DEV_URL
@@ -103,6 +104,21 @@ def _as_models(payload: dict) -> dict:
     return result
 
 
+def _all_zero_price_values(value: object) -> bool:
+    """Independently reject nonzero or malformed prices in a published report."""
+    if isinstance(value, dict):
+        return bool(value) and all(
+            _all_zero_price_values(child) for child in value.values()
+        )
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return False
+    try:
+        amount = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(amount) and amount == 0
+
+
 OBSERVATION_FIELDS = frozenset(
     {"fetched_at", "pricing_observed_at", "pricing_expires_at"}
 )
@@ -158,6 +174,8 @@ def _validated_counts(counts: dict, free_count: int) -> None:
         raise ValueError("candidate classifications are incomplete")
     if counts["free"] != free_count:
         raise ValueError("candidate free count disagrees with models")
+    if free_count > counts["catalogue"]:
+        raise ValueError("zero-priced candidates exceed the Console listing")
     if counts["unclassified"] != 0:
         raise ValueError("candidate counts or classification incomplete")
 
@@ -177,6 +195,13 @@ def _validated_current(current: dict) -> tuple[dict, dict, list[str], dict]:
         raise ValueError("provider coverage does not match observed sources")
 
     current_models = _as_models(current)
+    if any(
+        "input" not in pricing
+        or "output" not in pricing
+        or not _all_zero_price_values(pricing)
+        for pricing in current_models.values()
+    ):
+        raise ValueError("zero-priced candidates contain invalid pricing evidence")
     review = current.get("review")
     if not isinstance(review, dict):
         raise ValueError(INVALID_REVIEW)
