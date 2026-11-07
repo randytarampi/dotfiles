@@ -400,3 +400,15 @@ The `MIGRATIONS` list is the single source of truth for gate rename history.
 | `make deploy` is slow (30+ seconds) | All configure scripts running | This is expected for full rebuild. Use `make diff` to preview |
 | `configure-all.sh` fails on tier detection | `tier_detect.sh` needs `common.sh` | `configure-all.sh` sources both — if error, check lib paths |
 | `make doctor` reports missing files | Gate enabled but configure script didn't run | Run `make configure` to regenerate, then `make doctor` again |
+
+## Opt-in I2 section migration for user-owned ~/.env (#86)
+
+The canonical `dot_dotfiles/shell/.env.example` declares section ownership. The existing `make migrate` / `scripts/migrate-env-gates.py` continue to own retired-key renames and missing-placeholder synchronization. A **separate** `python3 scripts/migrate-env-sections.py` command previews relocation of active, literal-only, template-known assignments into their canonical sections. It never interprets shell statements, prints values, adds or removes effective keys or changes the default deploy path. Unknown keys, unrelated comments and opt-in switches remain untouched.
+
+1. Prepare a separately owned, private `~/.env` backup and confirm the existing file is mode 0600, a single regular file, with an owned non-world-writable parent and no symlink in its path. Avoid printing full lines or tokens to a terminal, PR or chat.
+2. Run `python3 scripts/migrate-env-sections.py --dry-run` (preview is also the default). Review only **key names and destination section headings**. The command refuses nonliteral shell statements, duplicate active names, ambiguous attached comments, mixed/newline-less files and unsupported quoting rather than guessing.
+3. In an owner-approved maintenance window, run `python3 scripts/migrate-env-sections.py --apply`. It first creates `~/.env.i2.bak` with O_EXCL and mode 0600, rechecks the original file's identity/bytes before atomic replacement, and refuses a pre-existing backup. No `--no-backup` mode is provided.
+4. Review the resulting file privately; compare effective values and run `make check-env-coverage`, the existing gate-migration preview and `make verify` before explicitly deploying. Run the new command twice to prove a second invocation is a no-op. Do not automatically source the file while reviewing.
+5. On failure after creating a backup, do **not** automatically restore an old snapshot over a concurrently changed file; stop and reconcile current bytes/owner state. The owner alone chooses recovery from the retained private backup.
+
+This migration intentionally rejects complex shell syntax, attached hand-written comments and non-private files. Such cases remain manual, not an excuse to loosen the parser. No automatic `make deploy`, `make migrate` or user home changes are introduced by this P2 PR.
