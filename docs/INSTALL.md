@@ -1,8 +1,6 @@
-# Initial Installation & Run Instructions
+# Installation and upgrading
 
-> Step-by-step deployment and verification for new environments. See [AGENTS.md](../AGENTS.md) for the lean agent guidance index.
-
-## Initial Installation & Run Instructions
+> Step-by-step deployment and verification for new environments. See [AGENTS.md](../AGENTS.md) for repository policy.
 
 AI agents should adhere to the following sequence for deploying and verifying the repository across different environments:
 
@@ -14,7 +12,7 @@ AI agents should adhere to the following sequence for deploying and verifying th
 Clone the repository to your local development workspace (standard target is `~/Development/dotfiles` or `$HOME\Development\dotfiles`):
 ```bash
 mkdir -p ~/Development
-git clone https://github.com/<username>/dotfiles.git ~/Development/dotfiles
+git clone https://github.com/randytarampi/dotfiles.git ~/Development/dotfiles
 cd ~/Development/dotfiles
 ```
 
@@ -36,6 +34,8 @@ The single source of truth for secrets and toggles is `~/.env` (or `$HOME\.env` 
 
 ### Step 3: Makefile + chezmoi Orchestration
 Initialize chezmoi, then use `make deploy` so `~/.env` is loaded in the same shell process as each chezmoi command:
+
+**Windows qualification:** The Makefile invokes Bash and Unix utilities. Winget/PowerShell can bootstrap packages, but Makefile targets require a prepared POSIX-compatible environment (such as Git Bash or WSL with appropriate paths, Make and the required CLI tools). Native PowerShell alone is not a proven deployment or verification path. Validate the installed host rather than assuming cross-shell parity.
 
 The Codex configuration step in `make deploy` requires Poetry and this repository's locked production Python dependencies. Install Poetry using your platform's package manager or Poetry's official installer, then run `poetry install --only main --no-root` from the dotfiles checkout. Deployment does not install Poetry or Python packages automatically. If Poetry or the locked TOML parser is unavailable, Codex configuration stops with an installation instruction rather than falling back to bare Python.
 

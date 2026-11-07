@@ -1,7 +1,5 @@
 # Agentic Review on GitHub
 
-For the November 2026 recovery investigation, the linear draft-PR stack, six-repository re-onboarding contract, variable/secret distinction, and owner acceptance/rollback plan, see [Agentic review recovery and downstream rollout](AGENTIC-REVIEW-RECOVERY-2026-11-02.md).
-
 Agentic PR review for this repo and downstream repos (`me`, `pwa`, `pseudoimage`, `pseudolocalize`, `lwip`, `slamscan`), built on the three official agentic GitHub Actions plus GitHub Copilot's native reviewer. All reviewer triggers are opt-in (labels or mentions) — nothing runs on every push.
 
 The shared review prompt lives in `configs/review/code-review-prompt.md` and is used by both the GitHub Actions and local review lanes.
@@ -160,7 +158,7 @@ jobs:
 
 ## Known limitations
 
-Reviewer jobs execute with default tool permissions. A stricter CI permission profile is follow-up work; dispatcher gating is the primary control.
+The native OpenCode action, Junie and Gemini use different execution and publication paths. Trust, tool and shell restrictions are scoped by the checked-in workflow and the exact installed CLI/action versions; a documented restriction is not evidence that a live agent refused a forbidden operation. Verify actual permissions and publication separately when changing a reviewer.
 
 ## Publication acceptance and known limitations
 
@@ -206,10 +204,18 @@ The supplied immutable SHA seeds the Copilot workflow's automatic default; manua
 
 > **Dispatcher recovery note:** The dispatcher is currently hand-unpinned: `uses:` tracks `@main`, while `trusted_ref:` is SHA-anchored to a recent main revision (check `.github/workflows/agent-review.yml` and `.github/workflows/copilot-setup-steps.yml` for the current values). The original pin captured `357760a` from the deleted `fix/review-trust-refactor` branch, making every dispatch fail with 0 jobs. The dispatcher intentionally uses the reusable workflow at `@main`; `trusted_ref` independently pins the trusted review assets to an immutable commit. Run `make anchor-review-ref` from the local `main` branch to fetch `origin/main` and update the dispatcher `trusted_ref` and Copilot setup's trusted SHA default and automatic-run fallback together. The fetched commit must be reachable from local `main`; fetch/ancestry failures stop without changing either workflow. This deliberately does not require the fetched commit to equal `HEAD`, since the anchoring change itself advances `HEAD`. Use `make anchor-review-ref DRY_RUN=1` to preview; dry-run does not fetch or modify Git refs and fails with guidance if the remote commit is not already available locally. The helper never changes the `uses: ...@main` dispatcher pin; do not use the onboarding generator to update this repository's dispatcher.
 
+### Downstream recovery and acceptance
+
+For `me`, `pwa`, `pseudoimage`, `pseudolocalize`, `lwip` and `slamscan`, use `scripts/onboard-agentic-review.py --repo <path> --ref <verified-40-hex-main-sha> --dry-run` before applying any file writes. Re-check the target repo's current workflow and worktree; never manually duplicate a stale dispatcher. The caller must pin a matching immutable `uses` reference and `trusted_ref`, pass `event_json` and `secrets: inherit`, and grant only the documented `contents: read`, `id-token: write`, `pull-requests: write` and `issues: write` permissions. The self-dispatcher in dotfiles deliberately follows `@main` while pinning trusted assets separately; do not use the downstream generator against this repository.
+
+GitHub Actions **variables** (such as reviewer model or App IDs) and **secrets** (provider keys or App private keys) must be inventoried and provisioned independently for each repository. `secrets: inherit` within a reusable workflow does not transfer credentials between independent repositories. Do not copy variables indiscriminately or publish secret values. Verify the reviewer App is actually installed with the required permissions.
+
+An owner-controlled disposable PR should exercise a real authorised review through parser, model execution, OIDC/App publication and a correct PR-head reference. Also prove unauthorised/bot/label-only skip, missing/ineligible App, failure on 429/503 and empty model output, no unintended push, and repeat invocation semantics. `startup_failure`, a successful parser with skipped jobs or green CI without a published review is not operational acceptance. For background and attribution, refer to the closed historical PR discussions rather than a dated, potentially stale rollout handoff.
+
 ## What this does not cover
 
 - PR-Agent (optional fourth reviewer) — add later as another job on the same labels if wanted.
-- Distribution to the other repos — copy `agent-review.yml` there and point `uses:` at this repo; secrets must be set per repo.
+- Automatic downstream rollout after changing the trusted workflow — each destination still needs an independently reviewed caller PR and owner-supplied credentials.
 - OpenCode App installation is required for the OIDC action; downstream repos must install the app and grant their dispatcher `id-token: write`.
 
 ### Official OpenCode action prompt compatibility

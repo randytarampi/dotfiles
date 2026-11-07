@@ -1,6 +1,14 @@
 # Model catalogue snapshot — 2026-10-22
 
-**Snapshot captured at:** 2026-10-23 00:05 CEST, from the checked-out repository. This is a point-in-time configuration capture for PR E review; it does not assert live provider availability. **Filename provenance:** `2026-10-22` in the filename is the planning-cycle date the snapshot was commissioned; the operational capture/probe timestamps in these documents are the authoritative times. **Live provider probes:** see the separate probe dates in [the E2 provider spike findings](../../docs/e2-cohere-poolside-spike-2026-10-22.md); those observations are not part of this snapshot.
+**Snapshot captured at:** 2026-10-23 00:05 CEST, from the checked-out repository. This is a point-in-time configuration capture for PR E review; it does not assert live provider availability. **Filename provenance:** `2026-10-22` in the filename is the planning-cycle date the snapshot was commissioned; the operational capture/probe timestamps in these documents are the authoritative times. **Historical provider probes:** the 23 October 2026 observations are summarised below and are distinct from this configuration snapshot. Neither establishes current entitlement, model availability or pricing.
+
+## Historical direct-provider probe summary (23 October 2026)
+
+These were performed with non-empty account credentials and 15-second timeouts, recording only response status/shape and selected non-secret headers. They are **point-in-time live observations**, not a current provider qualification or an assertion that a route is free.
+
+- **Cohere:** `GET /v1/models` returned HTTP 200 and 20 models (558 ms). `command-a-03-2025` on the compatibility chat endpoint returned HTTP 200 with one choice (13,748 ms). Trial/monthly rate-limit headers were present, but entitlement, ongoing cost and tool-call support remained **UNKNOWN**; observed rate headers do not prove free billing.
+- **Poolside:** `GET /v1/models` returned HTTP 200 with `poolside/laguna-xs-2.1` and `poolside/laguna-s-2.1` (676 ms). A `poolside/laguna-xs-2.1` chat request returned HTTP 200 with one choice (562 ms). A 60-request rate-limit header was observed; pricing, entitlement and tool-call behaviour remained **UNKNOWN**.
+- **Recovery/acceptance:** Re-query exact current provider endpoints and model IDs, inspect account-level entitlement separately, and prove actual tool/inference behaviour before promoting a candidate into a generated client or strict-free preset. See [optional inference guidance](../../docs/OPTIONAL_INFERENCE.md).
 
 ## Oh My OpenCode preset roles
 

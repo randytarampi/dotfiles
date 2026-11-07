@@ -105,6 +105,12 @@ Dependabot covers both (`github-actions` weekly floating-major, `pip` weekly); G
 
 Rationale: the ecosystems differ deliberately. OpenCode plugin specs are user-preference floating (`@latest`, accepted breaking risk); Pi packages are unversioned names reconciled only by a deliberate human `pi update`. Neither is "verified non-breaking" — they are "latest, possibly breaking", an accepted trade for current releases without manual bump churn. Where update semantics must stay fully controlled (GitHub Actions majors, guard-testable dependencies), pins or guarded floats remain the rule.
 
+## Qlty quality checks and formatter scope
+
+The root `qlty.toml` configures Qlty Cloud; it is not a locally generated `.qlty/qlty.toml`. The Makefile exposes **advisory** `make qlty-check` (changed-file analysis) and `make qlty-smells` (repository-wide smells). Neither belongs to required `make verify` or pre-commit while local plugin/version and Windows/macOS/Linux parity remain unqualified. Both commands fail when the Qlty CLI is absent.
+
+Do not run `qlty init` unattended or introduce repository-wide Prettier/Markdownlint settings solely to make an initial formatter report green: those can activate rules over unrelated historical code and prose. Assess a deterministic changed-file subset in an isolated worktree. Verify that known-invalid and known-valid fixtures discriminate correctly (including Ruff import checks and EditorConfig precedence), track false positives, and use targeted suppressions with reasons. Qlty Cloud checks, local CLI checks, integrated verification and installed-client acceptance are separate evidence types.
+
 ## Convention Enforcement
 
 `make verify` runs `check-cli-contract` (manifest-driven CLI surface validation) and `check-env-coverage` (environment-variable documentation, ownership, and alias/deprecation tracking).

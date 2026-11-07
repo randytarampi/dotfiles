@@ -5,7 +5,7 @@ tap "jundot/omlx", "https://github.com/jundot/omlx"
 tap "qltysh/tap"
 
 # OpenCode is managed by its official installer, not Homebrew.
-# See docs/OPENCODE-V2-MIGRATION-PLAN.md for channel and cutover policy.
+# See docs/OPENCODE.md for the current installer and host-qualification policy.
 
 # --- Languages & build ---
 brew "alpine"
