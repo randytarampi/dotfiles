@@ -352,6 +352,14 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "esac\n"
     )
     gh.chmod(0o755)
+    # The extracted publisher invokes the real freshness CLI from its
+    # checkout. Make that source available to the isolated Git fixture.
+    scripts_dir = checkout / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "lib").symlink_to(ROOT / "scripts/lib", target_is_directory=True)
+    (tmp_path / "previous-candidates.json").write_text(
+        json.dumps(baseline) + "\n", encoding="utf-8"
+    )
     env = os.environ.copy()
     env.update(
         {
@@ -629,7 +637,7 @@ def test_curated_registry_drift_gate_rejects_stale_snapshot(tmp_path):
     workflow = WORKFLOW.read_text(encoding="utf-8")
     publish = workflow.split("  publish:\n", 1)[1]
     section = publish.split("          # Check the curated source before", 1)[1].split(
-        "          # Preserve an existing draft when", 1
+        "          # Publish jobs are serialized, but refresh jobs", 1
     )[0]
     block = section.splitlines()
     start = next(i for i, line in enumerate(block) if "trusted_registry=" in line)

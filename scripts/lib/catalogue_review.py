@@ -121,9 +121,16 @@ def _observation_time(payload: dict, key: str) -> datetime:
 
 def require_fresher_observations(current: dict, previous: dict) -> None:
     """A queued older refresh cannot replace newer published model evidence."""
-    for field in ("fetched_at", "pricing_observed_at"):
-        if _observation_time(current, field) <= _observation_time(previous, field):
-            raise ValueError(f"stale {field} would overwrite newer bot evidence")
+    if _observation_time(current, "fetched_at") <= _observation_time(
+        previous, "fetched_at"
+    ):
+        raise ValueError("stale fetched_at would overwrite newer bot evidence")
+    # Pricing can come from an unexpired shared cache and have an unchanged
+    # observation clock even when the authenticated Console list was refreshed.
+    if _observation_time(current, "pricing_observed_at") < _observation_time(
+        previous, "pricing_observed_at"
+    ):
+        raise ValueError("stale pricing_observed_at would overwrite newer bot evidence")
 
 
 def _all_zero_price_values(value: object) -> bool:
