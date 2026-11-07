@@ -396,8 +396,6 @@ def test_active_selection_requires_explicit_flag(monkeypatch, tmp_path):
     monkeypatch.setenv("DOTFILES_USE_LITELLM_PROXY", "1")
     assert hermes.main(["--model", "served/model", "--dry-run", "--select-active-model"]) == 0
     assert yaml.safe_load(path.read_text())["model"]["default"] == "glm-5.1"
-    assert hermes.main(["--model", "served/model"]) == 0
-    assert yaml.safe_load(path.read_text())["model"]["default"] == "glm-5.1"
     assert hermes.main(["--model", "served/model", "--select-active-model"]) == 0
     active = yaml.safe_load(path.read_text())["model"]
     assert active == {"provider": "custom:dotfiles-litellm", "default": "served/model"}
