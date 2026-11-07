@@ -123,7 +123,6 @@ def test_generated_body_has_all_pr_template_sections_and_no_fake_ci_pass():
     assert "required CI: PASS" not in body
 
 
-
 def test_review_digest_recovers_stale_pr_metadata_without_timestamp_churn():
     original = _inventory()
     fingerprint = review_fingerprint(original)

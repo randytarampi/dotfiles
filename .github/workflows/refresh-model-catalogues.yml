@@ -276,15 +276,15 @@ jobs:
           if [[ "${BOT_BRANCH_EXISTS}" == "true" && -z "${existing_pr}" ]]; then
             bot_email="$(git show -s --format='%ae' "${BOT_BRANCH_EXPECTED_TIP}")"
             bot_subject="$(git show -s --format='%s' "${BOT_BRANCH_EXPECTED_TIP}")"
-            case "${bot_email}:${bot_subject}" in
-              "model-catalogue-bot[bot]@users.noreply.github.com:chore: refresh model catalogue artefact" | \
-              "353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com:chore(agents): refresh free-model candidate inventory")
-                ;;
-              *)
-                echo "::error::Catalogue branch has no open PR and an unrecognised commit" >&2
-                exit 1
-                ;;
-            esac
+            # Historical #200 revision is a one-time, immutable exception.
+            legacy_tip="6fbf14bfeec1222b0ae376b500e1888384a26e4d"
+            current_bot="353209076+woofdy-randytarampi-ca[bot]@users.noreply.github.com"
+            current_subject="chore(agents): refresh free-model candidate inventory"
+            if [[ "${BOT_BRANCH_EXPECTED_TIP}" != "${legacy_tip}" ]] &&
+              [[ "${bot_email}:${bot_subject}" != "${current_bot}:${current_subject}" ]]; then
+              echo "::error::Catalogue branch has no open PR and an unrecognised commit" >&2
+              exit 1
+            fi
             if ! git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/free-model-candidates.json" 2>/dev/null &&
               ! git cat-file -e "${BOT_BRANCH_EXPECTED_TIP}:artifacts/model-catalogues/opencode-zen-free.json" 2>/dev/null; then
               echo "::error::Catalogue branch has no recognised inventory" >&2
