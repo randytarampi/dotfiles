@@ -91,6 +91,14 @@
   },
   "scripts": [
     {
+      "path": "scripts/migrate-env-sections.py",
+      "capabilities": ["mutates", "inspect"],
+      "enforcement": "strict",
+      "accepted_flags": ["--help", "--dry-run", "--apply", "--env", "--example"],
+      "positional_operand": null,
+      "child_scripts": []
+    },
+    {
       "path": "scripts/check-paseo-security.py",
       "capabilities": ["public", "inspect"],
       "enforcement": "strict",
