@@ -95,7 +95,7 @@ jobs:
           merge-multiple: true
       - name: Write truthful report (stabilization period)
         run: |
-          python3 scripts/lib/nightly_gate_report.py \
+          python3 .github/scripts/nightly_gate_report.py \
             --results nightly-results \
             --summary "$GITHUB_STEP_SUMMARY" \
             --json "$RUNNER_TEMP/nightly-gate-report.json"
