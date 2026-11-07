@@ -48,8 +48,14 @@ def summarize(directory: Path, expected=GATES):
                 receipts[gate] = result
     missing = [gate for gate in expected if gate not in receipts]
     states = {gate: receipts.get(gate, "MISSING") for gate in expected}
-    healthy = not errors and not missing and all(v == "success" for v in states.values())
-    return {"overall": "PASS" if healthy else "DEGRADED", "gates": states, "errors": errors}
+    healthy = (
+        not errors and not missing and all(v == "success" for v in states.values())
+    )
+    return {
+        "overall": "PASS" if healthy else "DEGRADED",
+        "gates": states,
+        "errors": errors,
+    }
 
 
 def markdown(result):
@@ -76,7 +82,9 @@ def markdown(result):
         ]
     )
     if result["errors"]:
-        lines.extend(["", "Receipt errors (no secrets): " + ", ".join(result["errors"])])
+        lines.extend(
+            ["", "Receipt errors (no secrets): " + ", ".join(result["errors"])]
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -90,7 +98,9 @@ def main(argv=None):
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     with args.summary.open("a", encoding="utf-8") as output:
         output.write(markdown(result))
-    args.json.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.json.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     # No hard failure during the accepted stabilization period. The report
     # clearly labels DEGRADED and survives missing matrix artifacts.
     return 0
