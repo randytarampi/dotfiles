@@ -209,10 +209,10 @@ class TierRegistryTests(unittest.TestCase):
     def test_deprecated_tier_aliases_are_documented_and_absent_from_registry(self):
         data = registry()
         aliases = set(tier_registry.DEPRECATED_TIER_ALIASES)
-        # TIERS.md owns the public tier inventory; README.md is deliberately
+        # tiers.md owns the public tier inventory; README.md is deliberately
         # a short entry point and must not duplicate a drifting preset count.
         tiers_doc = (
-            Path(__file__).resolve().parents[3] / "docs" / "TIERS.md"
+            Path(__file__).resolve().parents[3] / "docs" / "tiers.md"
         ).read_text()
         tier_table = tiers_doc.split("| Tier | Providers | Best For |", 1)[1].split(
             "\n\n", 1

@@ -88,7 +88,7 @@ def test_publication_credentials_are_checked_before_app_token_creation():
         '"${HAS_APP_CLIENT_ID}" != "true" || "${HAS_APP_PRIVATE_KEY}" != "true"'
         in preflight
     )
-    assert "docs/MODEL_UPDATES.md#publishing-credentials-and-recovery" in preflight
+    assert "docs/model-updates.md#publishing-credentials-and-recovery" in preflight
     assert "client-id: ${{ vars.WOOFDY_GITHUB_APP_CLIENT_ID }}" in publish
     assert "private-key: ${{ secrets.WOOFDY_GITHUB_APP_PRIVATE_KEY }}" in publish
     assert "app-id:" not in publish
