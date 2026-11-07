@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Opt in to a Hermes LiteLLM custom-provider configuration scaffold."""
+"""Opt in to a Hermes LiteLLM provider and optional explicit model selection."""
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -198,6 +199,57 @@ def reconcile(source, model, endpoint):
     return result
 
 
+def select_active_model(source, model):
+    """Explicitly select the named gateway provider without reserializing user YAML."""
+    if not model or not MODEL.fullmatch(model):
+        raise ValueError("invalid exact model alias")
+    data, root = _parse_config(source)
+    target = {"provider": f"custom:{PROVIDER}", "default": model}
+    if "model" not in data:
+        prefix = (
+            'model:\n'
+            f'  provider: {json.dumps(target["provider"])}\n'
+            f'  default: {json.dumps(model)}\n'
+        )
+        result = prefix + source
+    else:
+        current = data["model"]
+        if not isinstance(current, dict):
+            raise ValueError("refusing non-mapping Hermes model setting")
+        node = next(
+            (
+                value
+                for key, value in root.value
+                if isinstance(key, yaml.ScalarNode) and key.value == "model"
+            ),
+            None,
+        )
+        if not isinstance(node, yaml.MappingNode) or node.flow_style:
+            raise ValueError("refusing non-block Hermes model setting")
+        fields = {}
+        for key, value in node.value:
+            if isinstance(key, yaml.ScalarNode) and key.value in target:
+                if not isinstance(value, yaml.ScalarNode) or value.style in ("|", ">"):
+                    raise ValueError("refusing complex Hermes model field")
+                fields[key.value] = value
+        if set(fields) != set(target):
+            raise ValueError("refusing incomplete Hermes model mapping; use 'hermes model' to establish it")
+        replacements = [
+            (node.start_mark.index, node.end_mark.index, json.dumps(target[name]))
+            for name, node in fields.items()
+            if current[name] != target[name]
+        ]
+        result = source
+        for start, end, replacement in sorted(replacements, reverse=True):
+            result = result[:start] + replacement + result[end:]
+    updated, _ = _parse_config(result)
+    expected = dict(data)
+    expected["model"] = dict(data.get("model", {}), **target)
+    if updated != expected:
+        raise ValueError("refusing active model selection that changes unrelated config")
+    return result
+
+
 def checked_path(path):
     path = path.absolute()
     # macOS exposes its system temporary directory through this fixed alias.
@@ -219,6 +271,11 @@ def main(argv=None):
         "--endpoint",
         default=f"http://127.0.0.1:{os.environ.get('LITELLM_PORT', '4000')}/v1",
         help="Loopback LiteLLM OpenAI-compatible endpoint",
+    )
+    parser.add_argument(
+        "--select-active-model",
+        action="store_true",
+        help="Explicitly select the named LiteLLM provider as the active Hermes model",
     )
     args = parser.parse_args(argv)
     if (
@@ -256,6 +313,8 @@ def main(argv=None):
         except UnicodeDecodeError:
             raise ValueError("refusing non-UTF-8 Hermes config") from None
         updated = reconcile(source, args.model, endpoint)
+        if args.select_active_model:
+            updated = select_active_model(updated, args.model)
         if updated == source:
             logger.info("Hermes LiteLLM provider already configured: %s", path)
             return 0
