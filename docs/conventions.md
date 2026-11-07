@@ -74,7 +74,7 @@ All non-platform-owned Markdown filenames must be **lowercase kebab case**: `nam
 
 **Reserved filenames:** `AGENTS.md` (agent discovery), `README.md` (repository landing), `SKILL.md` within skill directories (agent skill discovery), `.github/PULL_REQUEST_TEMPLATE.md` (GitHub's PR template), and the existing plugin-owned `dot_config/opencode/oh-my-opencode-slim/orchestrator_append.md` (upstream-managed configuration surface). These are exact exceptions, not a general permission to use snake case.
 
-Run `make check-markdown-names` after additions or renames. It checks all Git-tracked Markdown filenames and locally linked Markdown documents; `make verify` and CI invoke it. Untracked personal files, downloaded dependencies and generated host assets are outside this repository naming contract. Preserve Git's recorded executable bit and verify affected consumers rather than treating Git's rename detection as proof of application compatibility.
+Review new or renamed Markdown paths and affected consumers in the PR. Run existing `make check-docs-drift`, relevant source/fixture tests and `make verify` as appropriate; these do not independently enforce filename casing or validate every Markdown link. No dedicated filename or link parser is installed. Untracked personal files, downloaded dependencies and generated host assets are outside this repository naming convention. Preserve Git's recorded executable bit and verify affected consumers rather than treating Git's rename detection as proof of application compatibility.
 
 ## Naming Conventions
 

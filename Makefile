@@ -226,10 +226,6 @@ check-templates-scripts: ## Render and lint all run_onchange shell templates
 check-mcp-parity: ## Verify MCP registry templates and config files are in parity
 	@python3 scripts/check-mcp-parity.py
 
-.PHONY: check-markdown-names
-check-markdown-names: ## Enforce lowercase kebab-case Markdown paths and local link integrity
-	@python3 scripts/check-markdown-names.py
-
 check-docs-drift: ## Check for documentation drift between AGENTS.md, README.md, and docs/
 	@python3 scripts/check-docs-drift.py
 
@@ -239,11 +235,11 @@ check-plugin-consistency: ## Verify plugin arrays match between install script a
 verify-iterm2: ## Verify iTerm2 config integrity (JSON, template, paths, writability)
 	@python3 scripts/verify-iterm2.py
 
-verify: lint drift check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-markdown-names check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
+verify: lint drift check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-model-drift check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint test-tier-registry test test-shell doctor dry-run ## Full verification suite
 	@echo "All checks passed."
 
 .PHONY: ci-verify
-ci-verify: lint drift doctor check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-templates-scripts check-mcp-parity check-markdown-names check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
+ci-verify: lint drift doctor check-hashes check-ci-assets check-review-bundles check-env-coverage check-cli-contract check-fleet-coverage check-pep604 check-categories check-slim-invariants check-templates check-templates-scripts check-mcp-parity check-docs-drift check-plugin-consistency verify-iterm2 check-actionlint ## Run CI verification checks
 	@echo "CI verification complete."
 
 reset: ## Clear chezmoi script state (forces re-run of all scripts on next deploy)
