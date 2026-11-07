@@ -92,52 +92,98 @@
   "scripts": [
     {
       "path": "scripts/check-paseo-security.py",
-      "capabilities": ["public", "inspect"],
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--json", "--access"],
+      "accepted_flags": [
+        "--help",
+        "--json",
+        "--access"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-paseo-metadata.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply", "--preset"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--preset"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-paseo-voice.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
       "accepted_flags": [
-        "--help", "--dry-run", "--apply",
-        "--probe-routes", "--stt-model", "--tts-model", "--voice"
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--probe-routes",
+        "--stt-model",
+        "--tts-model",
+        "--voice"
       ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-paseo-mcp.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/configure-paseo-acp.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply", "--agents"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--agents"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
     {
       "path": "scripts/install-paseo-plugins.py",
-      "capabilities": ["public", "mutates"],
+      "capabilities": [
+        "public",
+        "mutates"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--dry-run", "--apply", "--codexbar-daemon-verified"],
+      "accepted_flags": [
+        "--help",
+        "--dry-run",
+        "--apply",
+        "--codexbar-daemon-verified"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -175,9 +221,15 @@
     },
     {
       "path": "scripts/claude-desktop-credential-helper.py",
-      "capabilities": ["public"],
+      "capabilities": [
+        "public"
+      ],
       "enforcement": "strict",
-      "accepted_flags": ["--help", "--check", "--wrapper"],
+      "accepted_flags": [
+        "--help",
+        "--check",
+        "--wrapper"
+      ],
       "positional_operand": null,
       "child_scripts": []
     },
@@ -1183,7 +1235,8 @@
         "--dry-run",
         "--no-backup",
         "--model",
-        "--endpoint"
+        "--endpoint",
+        "--select-active-model"
       ],
       "positional_operand": null,
       "child_scripts": []
