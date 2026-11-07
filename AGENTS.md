@@ -313,7 +313,7 @@ Reply in the language and register the conversation is using. English prose uses
 | [docs/CORTEX.md](docs/CORTEX.md) | Snowflake Cortex Code specialist, MCP, ACP, and skills |
 | [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) | Per-tool providers, MCP, ACP, skills, presets, guidance, Meridian, and local fallback support |
 | [docs/CHAT_FRONTEND.md](docs/CHAT_FRONTEND.md) | Unified multi-provider chat frontend (Open WebUI, implemented) — reconciler, deployment wiring, maintenance guidance |
-| [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Ordered modernization work items, portability risks, tool recommendations and local-model analysis |
+| [docs/MODERNIZATION_ROADMAP.md](docs/MODERNIZATION_ROADMAP.md) | Delivered modernization, active issue/acceptance map, consolidated Paseo follow-up, safety decisions and deferred platform work |
 | [docs/UNMANAGED-CLIENTS.md](docs/UNMANAGED-CLIENTS.md) | LiteLLM integration reference for Cursor, Gemini CLI, Claude Desktop Cowork, and VS Code Copilot |
 
 ---
