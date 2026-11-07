@@ -9,7 +9,7 @@ The dotfiles repo uses a three-layer architecture to manage machine configuratio
 
 ### Provider-generation boundary
 
-Optional inference providers follow this same three-layer contract: `provider_endpoints.py` defines trusted endpoints and account binding; OpenCode, Pi and Junie consume enabled routes through their respective adapters; LiteLLM exposes separately gated aliases. Hosted GitHub reviewer actions select direct providers, not the workstation's loopback LiteLLM. See [Optional inference](OPTIONAL_INFERENCE.md).
+Optional inference providers follow this same three-layer contract: `provider_endpoints.py` defines trusted endpoints and account binding; OpenCode, Pi and Junie consume enabled routes through their respective adapters; LiteLLM exposes separately gated aliases. Hosted GitHub reviewer actions select direct providers, not the workstation's loopback LiteLLM. See [Optional inference](optional-inference.md).
 
 ## Three-Layer Architecture
 

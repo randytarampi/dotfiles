@@ -25,7 +25,7 @@ These community plugins are **unsandboxed daemon code**, not OpenCode plugins or
 
 Missing Paseo, no daemon-verified PATH CodexBar, absent/old Node, unsupported versions or platforms, missing owner gate, invalid version probe and failed plugin installs are explicit outcomes. The plan never enables automatic installs in `make deploy`; no credentials or plaintext config are written by this script. A plugin may independently store/update its own state or make network requests; plugin installation is not a zero-side-effect operation and should not be treated as safe simply because CI passes.
 
-Rollback is plugin-specific via the native Paseo plugin UI/CLI after inspecting whether it owns generated state. Do not delete `~/.paseo` or an agent's progress files. See [Paseo remote](PASEO_REMOTE.md) for the private listener / public access policy.
+Rollback is plugin-specific via the native Paseo plugin UI/CLI after inspecting whether it owns generated state. Do not delete `~/.paseo` or an agent's progress files. See [Paseo remote](paseo-remote.md) for the private listener / public access policy.
 
 ## Verification handoff
 
