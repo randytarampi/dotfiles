@@ -27,7 +27,7 @@ lint: ## Run repository lint and syntax checks
 	@echo "Checking for merge conflicts..."
 	@git grep -n '^<<<<<<<' -- '*.*' 2>/dev/null && { echo "Merge conflict markers found!"; exit 1; } || true
 	@echo "Checking for trailing whitespace (excluding Markdown hard breaks)..."
-	@git grep -I -n '[[:space:]]$' -- '*.*' ':(exclude,glob)**/*.md' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
+	@git grep -I -n '[[:space:]]$$' -- '*.*' ':(exclude,glob)**/*.md' 2>/dev/null && { echo "Trailing whitespace found!"; exit 1; } || true
 	@echo "Checking for large files (> 500KB)..."
 	@large_files=$$(find . -type f -not -path '*/.*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './bin/*' -size +500k 2>/dev/null | while IFS= read -r f; do git check-ignore -q -- "$$f" 2>/dev/null || printf '%s\n' "$$f"; done); \
 	if [ -n "$$large_files" ]; then \
