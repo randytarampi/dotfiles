@@ -78,6 +78,23 @@ Sources:
     does not install anything or prove the installed Desktop build accepts it.
     Managed preferences may override user-local settings.
 
+## P0 installed-consumer evidence ledger (#209)
+
+**As of 2026-11-07: UNSUPPORTED is not yet established and the actual Chat, Cowork and Code LiteLLM paths remain UNKNOWN.** The exported profile, private helper and passing fixture tests are useful source evidence, not proof the installed application has selected the gateway. The owner has approved targeted integration checks when requested but has not reported separate successful Desktop Chat/Cowork/Code requests.
+
+For the first acceptance session, prefer the vendor-supported **Developer Mode → Configure Third-Party Inference → Gateway / Static API key** UI over installing a generated managed profile. Keep the base URL at the local root (no trailing /v1), use a separately scoped Desktop virtual key and a currently served model supporting Anthropic Messages tools and streaming. Under the current [LiteLLM Desktop guide](https://docs.litellm.ai/docs/proxy/client_setup/claude_desktop), the discovered picker may filter model IDs without claude/anthropic; explicit inferenceModels can supply the exact served aliases instead. Do not silently rename aliases or claim Chat Completions support proves Messages support.
+
+| Surface | Required live receipt and negative case | Status on this PR |
+|---|---|---|
+| Desktop Chat | Selected third-party deployment, model, streamed multi-turn message, key usage receipt; bad key and gateway-down fail visibly | UNKNOWN |
+| Desktop Cowork | Tools and follow-up, permissions/prompt cache; rejected tool and failed gateway must not silently use hosted account | UNKNOWN |
+| Desktop Code session | Same deployed endpoint confirmed on a real Code task with correct model/tool schema; restart and switch-back | UNKNOWN |
+| Optional LiteLLM MCP connector | Owner-selected read-only tool permission and correct connector identity; unauthorised tool denied | NOT REQUESTED |
+
+**Evidence record for the implementer:** installed app build, gateway build, exact alias and protocol (never token value), model picker/display, UI deployment selection, redacted request ID and per-key attribution, streaming/tool outcome, wrong-key/offline negative result, rollback and whether observed directly or owner-reported. Redact diagnostic exports before GitHub publication.
+
+**Safe stopping points:** if the app version does not support loopback HTTP, the selected model has no native Messages support, the GUI ignores the dedicated key, or switching modes risks user history, stop with a precise UNKNOWN/UNSUPPORTED state. Do not patch Desktop internals, add a public tunnel, install a profile automatically or reuse the CLI credential. The source-only steps in this PR do not require a host restart.
+
 ## Acceptance and negative cases (owner-only)
 
 - Capture actual Desktop version, endpoint/model selection, private-key readback (identity/permissions only), and a gateway request receipt.
