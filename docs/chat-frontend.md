@@ -171,7 +171,7 @@ DB-less diagnostics retain the historical no-DB 400 classification for old deplo
 
 #### Platform completion (Phase 4f)
 
-Streamable-HTTP MCP registration uses Open WebUI's verified admin tool-server API (`/api/v1/configs/tool_servers`) for qualifying `configs/mcp/*.json` URL entries; stdio/SSE entries remain excluded. Curated cloud model defaults, pinned models, and ordering are reconciled through the verified `/api/v1/configs/models` admin API from the repo allowlists. The optional daily backup timer retains the newest five local snapshots; off-machine export is intentionally out of scope. Linux gets a systemd user unit for the chat service following the repo's existing user-unit patterns; terminal/cptr remain macOS-priority integrations. The only Caddy route this phase adds is the `chat.<domain>` Open WebUI host, created when `DOTFILES_RUN_OPENWEBUI_SETUP` is enabled (dedicated host, LAN-only by default; see `docs/CADDY.md`).
+Streamable-HTTP MCP registration uses Open WebUI's verified admin tool-server API (`/api/v1/configs/tool_servers`) for qualifying `configs/mcp/*.json` URL entries; stdio/SSE entries remain excluded. Curated cloud model defaults, pinned models, and ordering are reconciled through the verified `/api/v1/configs/models` admin API from the repo allowlists. The optional daily backup timer retains the newest five local snapshots; off-machine export is intentionally out of scope. Linux gets a systemd user unit for the chat service following the repo's existing user-unit patterns; terminal/cptr remain macOS-priority integrations. The only Caddy route this phase adds is the `chat.<domain>` Open WebUI host, created when `DOTFILES_RUN_OPENWEBUI_SETUP` is enabled (dedicated host, LAN-only by default; see `docs/caddy.md`).
 
 Two security notes for MCP registration (accepted, documented boundaries):
 
@@ -195,7 +195,7 @@ Two security notes for MCP registration (accepted, documented boundaries):
 
 ### Adding a cloud provider
 
-Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama Cloud) are **reconciler-managed**: set the provider's upstream-native API key in `~/.env` and the next `make deploy` adds/updates the bare `<provider>` connection with the same ownership guarantees as local engines. No admin-UI entry is needed for these. A brand-new provider that the reconciler does not know yet needs a small `compute_desired_state()` / ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic test) — keep the Open WebUI-adjacent registry there rather than genericizing `scripts/lib/provider_endpoints.py`, which remains the OpenCode-side registry (Google, OpenRouter, OpenCode entries with `api` protocols and allowlist files; extending it carries OpenCode catalogue and `MODEL_UPDATES.md` obligations).
+Repo-known cloud providers (OpenAI, Anthropic, Google, OpenRouter, OpenCode Zen, Ollama Cloud) are **reconciler-managed**: set the provider's upstream-native API key in `~/.env` and the next `make deploy` adds/updates the bare `<provider>` connection with the same ownership guarantees as local engines. No admin-UI entry is needed for these. A brand-new provider that the reconciler does not know yet needs a small `compute_desired_state()` / ownership-catalogue addition in `scripts/lib/openwebui.py` (plus a hermetic test) — keep the Open WebUI-adjacent registry there rather than genericizing `scripts/lib/provider_endpoints.py`, which remains the OpenCode-side registry (Google, OpenRouter, OpenCode entries with `api` protocols and allowlist files; extending it carries OpenCode catalogue and `model-updates.md` obligations).
 
 1. Set the provider's API key in `~/.env` (upstream-native name).
 2. If it is a new provider for the reconciler: add its chat-connection metadata to `scripts/lib/openwebui.py` + test; document any new env var in `.env.example`.
@@ -267,7 +267,7 @@ After the operator action, edit the acknowledgement in the state file. The `proj
 
 The first refusal names the old/new models and dimensions and instructs the operator to reset/re-embed using WebUI's mechanisms, then edit this exact state path with the acknowledgement. Dimensions are captured when the projection is recorded; mismatch between the acknowledgement and current model identity or dimensions blocks the switch. Gate-off restores the pre-switch engine/model and any recorded Ollama URL, then clears only this projection. It never touches vector data. CodeGraph continues to use native embeddings; this slice does not alter CodeGraph embedding behaviour.
 
-> **Document conversion**: WebUI document ingestion does NOT route through MarkItDown (protocol mismatch with the external document loader; see docs/LITELLM.md). MarkItDown remains available as a gateway or direct conversion model for unmanaged consumers.
+> **Document conversion**: WebUI document ingestion does NOT route through MarkItDown (protocol mismatch with the external document loader; see docs/litellm.md). MarkItDown remains available as a gateway or direct conversion model for unmanaged consumers.
 
 Rollback from Ollama embeddings is also a dimension-changing data migration: if 768-dimension vectors may have been created, returning to 384-dimension MiniLM is refused until the operator resets/re-embeds the vector store and records a matching reverse acknowledgement in the same state file. The acknowledgement fields describe the actual direction: current owned Ollama model/engine/dimensions in `previous_*`, and restored MiniLM identity and 384 dimensions in `new_*`. The recorded Ollama URL is checked for drift before no-op, switch, or rollback; rollback URL restoration is readback-verified before ownership state is cleared.
 
@@ -280,8 +280,8 @@ Reads use `GET /api/v1/retrieval/embedding`; writes use `POST /api/v1/retrieval/
 ### Documentation duties when touching this area
 
 - Update this doc for architecture changes; keep `docs-drift` green (link from `AGENTS.md`/`README.md`).
-- New gates → `.env.example` + `docs/ORCHESTRATION.md`.
-- New Caddy route → `docs/CADDY.md` + `scripts/configure-caddy.py`.
+- New gates → `.env.example` + `docs/orchestration.md`.
+- New Caddy route → `docs/caddy.md` + `scripts/configure-caddy.py`.
 - Watch Open WebUI releases for a version containing upstream fix [#30354](https://github.com/open-webui/open-webui/pull/30354); 0.13.0 postdates the fix's merge to `dev`; after the upgrade rehearsal, the `DEFAULT_LOCALE` workaround below can be re-tested in the UI and removed if titles such as `settings.admin.connections.title` render correctly.
 
 ## Explicit non-goals

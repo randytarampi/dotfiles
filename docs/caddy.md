@@ -226,5 +226,5 @@ On Linux, Caddy runs as a systemd system service (`/etc/systemd/system/caddy.ser
 
 ## Links
 
-- [docs/TIERS.md](TIERS.md)
+- [docs/tiers.md](tiers.md)
 - [AGENTS.md](../AGENTS.md)
