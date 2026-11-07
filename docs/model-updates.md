@@ -25,7 +25,7 @@ Rollback: restore the previous registry/allowlist/group versions, regenerate thr
 
 ## Optional inference provider onboarding — November 2026
 
-Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM. These model IDs establish neither tool-call compatibility nor recurring free capacity. The default cross-provider free fallback chains are unchanged pending account-level evidence; GitHub review action selection is trusted and opt-in. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md) for setup, verification and rollback.
+Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM. These model IDs establish neither tool-call compatibility nor recurring free capacity. The default cross-provider free fallback chains are unchanged pending account-level evidence; GitHub review action selection is trusted and opt-in. See [optional-inference.md](optional-inference.md) for setup, verification and rollback.
 
 ## Update Flow
 
@@ -33,9 +33,9 @@ Candidate provider families added: Groq, Mistral, Cloudflare Workers AI and NVID
 flowchart LR
   A[Edit model JSONs: ollama-cloud-models.json / anthropic-models.json / openai-models.json / opencode-models.json / github-copilot-models.json] --> B[oh-my-opencode-slim.json: presets, _tiers, council]
   B --> C[scripts/lib/tier_registry.py: tier definitions, role/variant tables]
-  C --> D[docs/TIERS.md: tier table, fallback chains, local classification]
+  C --> D[docs/tiers.md: tier table, fallback chains, local classification]
   D --> E[README.md: tier table if present]
-  E --> F[AGENTS.md: link to docs/TIERS.md, do NOT duplicate the table]
+  E --> F[AGENTS.md: link to docs/tiers.md, do NOT duplicate the table]
   F --> G[configs/junie/model-groups.json: sync model groups]
   G --> H[make verify: lint + drift + doctor + check-hashes + dry-run]
   H --> I[make deploy: rebuild configs]
@@ -48,9 +48,9 @@ flowchart LR
 - [ ] Update `scripts/lib/tier_registry.py` for tier registry access, role mappings, variants, or local placeholder behavior.
 - [ ] Update `scripts/configure-opencode-tier.py` when tier switch logic, cloud proxy, or role assignment overrides change.
 - [ ] Update `scripts/configure-opencode.py` when provider inclusion, tier validation, or model catalog loading changes.
-- [ ] Update `docs/TIERS.md` with the tier table, role/variant details, fallback chains, and local classification rules.
+- [ ] Update `docs/tiers.md` with the tier table, role/variant details, fallback chains, and local classification rules.
 - [ ] Update `README.md` tier information, if a tier table or model summary is present.
-- [ ] Update `AGENTS.md` links/reference entries as needed; link to `docs/TIERS.md` rather than duplicating its tier table.
+- [ ] Update `AGENTS.md` links/reference entries as needed; link to `docs/tiers.md` rather than duplicating its tier table.
 - [ ] Sync `configs/junie/model-groups.json` providers, groups, primary/faster models, and temperature coverage.
 - [ ] Check every changed **wire ID** in the refreshed catalogue for its actual endpoint and credential scope. Keep configured IDs a curated subset of available IDs; do not copy the full catalogue. Preserve inner slashes, tags, and Ollama's distinct `:cloud`/`-cloud` installed stub names. Do not use another provider's matching leaf as evidence.
 - [ ] Check all consumers of that selection: OpenCode roles/council/fallbacks and provider blocks, Pi defaults/subagents/provider models, Junie direct and LiteLLM primary/faster profiles, LiteLLM aliases, Open WebUI curated models, Codex profiles and ACP model arguments. For Claude Code, Gemini CLI, Cursor, VS Code Copilot, Copilot CLI, Cline and Antigravity, record any concrete repo-managed selectors; do not invent model IDs for native defaults. Cortex uses a separate provider catalogue.
@@ -63,7 +63,7 @@ flowchart LR
 
 > [!WARNING]
 > - Forgetting to sync `configs/junie/model-groups.json` (changed 16× and often correlated with model updates).
-> - Duplicating the tier table in `AGENTS.md` instead of linking to `docs/TIERS.md`.
+> - Duplicating the tier table in `AGENTS.md` instead of linking to `docs/tiers.md`.
 > - Forgetting to update `.env.example` when introducing a new `DOTFILES_*` environment variable.
 > - Not running `make check-hashes` after adding config inputs.
 > - Treating a checked-in allowlist, an unauthenticated 401/403, or a model-list entry as proof that an inference request works. A successful catalogue check proves membership only; test a harmless request (including image input for observer candidates) before calling a model usable.
@@ -95,7 +95,7 @@ The `pro` tier now uses `glm-5.3-flash` for orchestrator and designer, `kimi-k3`
 
 `make check-model-drift` validates checked-in model allowlists, live local Ollama models, and deployed Junie profile endpoints and model IDs. Its live Junie comparison retains complete wire IDs and endpoint/credential identity; `google/models/gemini-3.8-flash` is not interchangeable with `google/gemini-3.8-flash` in LiteLLM, even if another provider offers the same leaf. A known missing alias is drift; missing keys, 401/403 and unreachable endpoints are reported as unknown, not accepted as a pass. The offline CI invariant cannot establish live catalogue access or inference entitlement.
 
-Successful profile generation by `scripts/generate-jetbrains-profiles.py` writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`. The stamp is considered stale after 14 days. Re-run `make deploy` after any model announcement that affects your presets; `make verify` warns when the 14-day cadence has elapsed. See the [orchestration script inventory](ORCHESTRATION.md#script-inventory) for the automated check.
+Successful profile generation by `scripts/generate-jetbrains-profiles.py` writes the last-sync stamp to `~/.local/share/dotfiles/model-sync-stamp`. The stamp is considered stale after 14 days. Re-run `make deploy` after any model announcement that affects your presets; `make verify` warns when the 14-day cadence has elapsed. See the [orchestration script inventory](orchestration.md#script-inventory) for the automated check.
 
 ## Scheduled free-model candidate review
 
