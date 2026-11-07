@@ -11,10 +11,10 @@ from pathlib import Path
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from local_engines import LOCAL_ENGINES, engine_gate_active  # noqa: E402
+from local_engines import LOCAL_ENGINES  # noqa: E402
 
 
 def loopback_origin(value):
@@ -38,13 +38,26 @@ def loopback_origin(value):
         return None
 
 
-def probe_http(url, *, opener=urlopen):
+class _RefuseRedirect(HTTPRedirectHandler):
+    """Never follow a loopback HTTP redirect to a different network origin."""
+
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):
+        return None
+
+
+def _open_without_redirects(request, timeout):
+    return build_opener(_RefuseRedirect()).open(request, timeout=timeout)
+
+
+def probe_http(url, *, opener=None):
     """Read only one anonymous local health/catalogue route; never send keys."""
     origin = loopback_origin(url)
     if not origin:
         return "REFUSED_NON_LOOPBACK"
     try:
-        response = opener(Request(url, method="GET"), timeout=1)
+        response = (opener or _open_without_redirects)(
+            Request(url, method="GET"), timeout=1
+        )
         with response:
             code = response.status
             response.read(1024)
@@ -100,7 +113,7 @@ def targets(environ=None):
     return result
 
 
-def collect(*, probe=False, environ=None, opener=urlopen):
+def collect(*, probe=False, environ=None, opener=None):
     report = []
     for item in targets(environ=environ):
         entry = dict(item)
