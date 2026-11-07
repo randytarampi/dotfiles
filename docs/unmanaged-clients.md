@@ -1,6 +1,6 @@
 # Unmanaged LiteLLM Clients
 
-These clients are configured outside this repository or require a separate owner opt-in. The presence of a provisioned virtual key does **not** prove that the actual client selected LiteLLM. Replace `<gateway>` with a URL reachable by the *actual requesting process*, use exact served gateway aliases, and preserve user-owned settings and existing provider defaults. See [LITELLM.md](LITELLM.md) for gateway/key handling and the [modernization roadmap](MODERNIZATION_ROADMAP.md) for current tool-family work.
+These clients are configured outside this repository or require a separate owner opt-in. The presence of a provisioned virtual key does **not** prove that the actual client selected LiteLLM. Replace `<gateway>` with a URL reachable by the *actual requesting process*, use exact served gateway aliases, and preserve user-owned settings and existing provider defaults. See [litellm.md](litellm.md) for gateway/key handling and the [modernization roadmap](modernization-roadmap.md) for current tool-family work.
 
 ## Cursor
 

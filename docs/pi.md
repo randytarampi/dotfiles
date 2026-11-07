@@ -1,7 +1,7 @@
 # Pi Coding Agent
 
 
-Pi supports the optional Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM direct provider pool when enabled and credentialed, or advertised LiteLLM aliases in proxy mode. Missing credentials omit the optional model families. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
+Pi supports the optional Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM direct provider pool when enabled and credentialed, or advertised LiteLLM aliases in proxy mode. Missing credentials omit the optional model families. See [optional-inference.md](optional-inference.md).
 
 Pi is earendil-works' terminal coding-agent harness: multi-provider, extensible, and configured from the shared OpenCode tier registry.
 
@@ -17,7 +17,7 @@ Pi is earendil-works' terminal coding-agent harness: multi-provider, extensible,
 
 Set `PI_CODING_AGENT_DIR` to override the directory. Pi maps DEFAULT to orchestrator, FAST to librarian, MEDIUM to fixer, and STRONG to oracle. Local models use the shared tier resolver; providers include Ollama, oMLX, Ollama Cloud, Meridian, OpenAI, Google, OpenRouter, and OpenCode Zen. Cloud provider models are emitted only when their API key is configured; missing dynamic providers are warned about and skipped (Ollama Cloud is always emitted, with a runtime `$OLLAMA_API_KEY` reference). Keyless-capable local engines (oMLX) are different: pi treats a provider without an `apiKey` as unauthenticated and drops it from model resolution, so `configure-pi.py` emits a literal placeholder apiKey (`"omlx"`) for engines marked `api_key_optional` when their key env var is unset — oMLX no-key mode accepts any bearer token. oMLX itself stays loopback-only in no-key mode; Caddy owns external exposure. When the key env var is set, the provider block references it (`$OMLX_API_KEY`).
 
-Set `DOTFILES_USE_LITELLM_PROXY=1` to route through the LiteLLM gateway. This is a gateway routing switch: `DOTFILES_RUN_LITELLM_SETUP=1`, Pi's client key file, and the required exact gateway aliases must be available; missing prerequisites are errors, with no direct-provider fallback. See [LiteLLM Proxy](LITELLM.md) for setup and client-key requirements. Google models disable Pi's `store` compatibility field; this setting is Google-specific.
+Set `DOTFILES_USE_LITELLM_PROXY=1` to route through the LiteLLM gateway. This is a gateway routing switch: `DOTFILES_RUN_LITELLM_SETUP=1`, Pi's client key file, and the required exact gateway aliases must be available; missing prerequisites are errors, with no direct-provider fallback. See [LiteLLM Proxy](litellm.md) for setup and client-key requirements. Google models disable Pi's `store` compatibility field; this setting is Google-specific.
 
 Set `DOTFILES_PI_DEFAULT_MODEL` to pin the top-level Pi default as `<provider>/<model-id>` exactly as emitted in `models.json`. LiteLLM-proxied aliases use the `litellm/omlx/<model>` gateway-alias shape. This does not alter subagent role defaults.
 
@@ -62,7 +62,7 @@ Installation runs in phase 10 and configuration in phase 18, after OpenCode. Bot
 
 ## Project-scoped configuration
 
-Run `scripts/configure-project.py --steps pi` or set `DOTFILES_PROJECT_PI=1` to run `configure-pi.py --mode project` in the project root. It writes `.pi/agent/settings.json`, `.pi/agent/models.json`, and `.pi/agent/auth.json` relative to the project; `auth.json` contains environment-variable references only, not secrets. Global plugin configuration seeding is skipped in project mode. These files are machine-specific, so projects may want `.pi/` in `.gitignore`. Regeneration re-syncs the tier snapshot, which can drift after a global tier switch until the project configuration is regenerated. See [docs/ORCHESTRATION.md](ORCHESTRATION.md) for the project configuration flow.
+Run `scripts/configure-project.py --steps pi` or set `DOTFILES_PROJECT_PI=1` to run `configure-pi.py --mode project` in the project root. It writes `.pi/agent/settings.json`, `.pi/agent/models.json`, and `.pi/agent/auth.json` relative to the project; `auth.json` contains environment-variable references only, not secrets. Global plugin configuration seeding is skipped in project mode. These files are machine-specific, so projects may want `.pi/` in `.gitignore`. Regeneration re-syncs the tier snapshot, which can drift after a global tier switch until the project configuration is regenerated. See [docs/orchestration.md](orchestration.md) for the project configuration flow.
 
 ## Usage patterns
 
@@ -74,7 +74,7 @@ Run `scripts/configure-project.py --steps pi` or set `DOTFILES_PROJECT_PI=1` to 
 
 `configure-pi.py` derives every model from the preset — no hardcoded model names. The default model is the preset's `orchestrator` role; the `FAST`/`MEDIUM`/`STRONG` slots resolve through `ROLE_TO_BUILTIN` → the shared `resolve_roles_from_list()` tier resolver.
 
-For `local*` presets, `moe_codegen_reuse=True` is passed to the resolver. When the code-gen model is MoE and vision-capable (e.g. `ornith-1.5:35b`), it serves code-gen, lightweight, and vision roles — so `researcher` and `scout` built-ins share the chosen MoE model. Pi's code `reviewer` instead inherits `subagents.defaultModel` unless an explicit user override is applied. See [docs/TIERS.md](TIERS.md) for the full reuse rules.
+For `local*` presets, `moe_codegen_reuse=True` is passed to the resolver. When the code-gen model is MoE and vision-capable (e.g. `ornith-1.5:35b`), it serves code-gen, lightweight, and vision roles — so `researcher` and `scout` built-ins share the chosen MoE model. Pi's code `reviewer` instead inherits `subagents.defaultModel` unless an explicit user override is applied. See [docs/tiers.md](tiers.md) for the full reuse rules.
 
 `--category-model`, `--role-model`, and `--local-fallback-preset` override resolved categories after classification; user overrides always win over MoE-reuse defaults. The resolver logs `Classified local models:` on every run, matching `configure-opencode-tier.py` and `generate-jetbrains-profiles.py`. All three consume the shared tier registry via `scripts/lib/tier_registry.py`.
 

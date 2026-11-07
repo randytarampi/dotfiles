@@ -24,7 +24,7 @@ Inspect `tailscale serve status` and the current configuration first. To remove 
 
 Maintainer evidence: source host/CLI version, enrolled/denied identities (redacted), OpenCode v2 version, successful authenticated `/api/info`, mobile streaming/reconnect, failed unauthorised access, and localhost/LAN regression check. Document anything not exercised as **UNKNOWN**.
 
-References: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve), [OpenCode v2](OPENCODE.md), [Caddy](CADDY.md).
+References: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve), [OpenCode v2](opencode.md), [Caddy](caddy.md).
 ### Safety notes (review remediation)
 
 The read-only check and the pre-apply check reject populated service-level and foreground Serve configurations rather than guessing ownership. Tailscale's JSON omits empty `AllowFunnel` fields, so absence of that field alone is not evidence of a public route. The script re-reads Serve configuration immediately before mutation; the native CLI performs its own ETag-aware update, but an external process could still change the route between those two operations. Do not run concurrent Serve writers during owner-approved setup. Use `--dry-run` for a no-write preview.
