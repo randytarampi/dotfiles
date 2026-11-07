@@ -891,7 +891,7 @@ def test_registry_identities_have_exact_qualified_aliases(monkeypatch):
 
     independent_walk(junie)
     independent_walk(slim)
-    docs = (root / "docs/TIERS.md").read_text()
+    docs = (root / "docs/tiers.md").read_text()
     import re
 
     in_tier_table = False
