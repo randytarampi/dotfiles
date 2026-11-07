@@ -1,4 +1,6 @@
-```plain text
+# Dotfiles
+
+```text
 eeeeee eeeee eeeee eeee e  e     eeee eeeee
 8   8 8  88   8   8    8  8     8    8   "
 8e  8 8   8   8e  8eee 8e 8e    8eee 8eeee
@@ -6,733 +8,80 @@ eeeeee eeeee eeeee eeee e  e     eeee eeeee
 88ee8 8eee8   88  88   88 88eee 88ee 8ee88
 ```
 
-[![CI](https://img.shields.io/github/actions/workflow/status/randytarampi/dotfiles/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/randytarampi/dotfiles/actions/workflows/ci.yml) [![CodeQL](https://img.shields.io/github/actions/workflow/status/randytarampi/dotfiles/codeql.yml?branch=main&style=flat-square&label=CodeQL)](https://github.com/randytarampi/dotfiles/security/code-scanning) [![Coverage status](https://img.shields.io/coveralls/randytarampi/dotfiles.svg?branch=main&style=flat-square)](https://coveralls.io/github/randytarampi/dotfiles?branch=main) [![Issues](https://img.shields.io/github/issues/randytarampi/dotfiles?style=flat-square)](https://github.com/randytarampi/dotfiles/issues) [![Pull requests](https://img.shields.io/github/issues-pr/randytarampi/dotfiles?style=flat-square)](https://github.com/randytarampi/dotfiles/pulls) [![License](https://img.shields.io/badge/license-unlicense-blue?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/randytarampi/dotfiles/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/randytarampi/dotfiles/actions/workflows/ci.yml) [![CodeQL](https://img.shields.io/github/actions/workflow/status/randytarampi/dotfiles/codeql.yml?branch=main&style=flat-square&label=CodeQL)](https://github.com/randytarampi/dotfiles/security/code-scanning) [![Coverage](https://img.shields.io/coveralls/randytarampi/dotfiles.svg?branch=main&style=flat-square)](https://coveralls.io/github/randytarampi/dotfiles?branch=main) [![License](https://img.shields.io/badge/license-unlicense-blue?style=flat-square)](LICENSE)
 
-[@randytarampi](https://github.com/randytarampi)'s [`dotfiles`](https://github.com/randytarampi/dotfiles) managed by [`chezmoi`](https://chezmoi.io/).
+Personal, cross-platform dotfiles managed by [chezmoi](https://chezmoi.io/). The repository manages shell/editor configuration, package manifests, AI coding tools, model routing, MCP integrations and selected local services. Individual integrations are opt-in; committing a configuration does not mean it has been installed or qualified on every host.
 
+## Getting started
 
-For opt-in Groq, Mistral, Cloudflare Workers AI and NVIDIA NIM setup (including LiteLLM and GitHub review-action settings), see [optional inference providers](docs/OPTIONAL_INFERENCE.md).
-
-## Quick Start
+Clone the repository, follow the [installation guide](docs/INSTALL.md) to seed your private `~/.env`, install prerequisites (including Poetry for managed Python tools), and initialise chezmoi. On a prepared macOS/Linux host:
 
 ```bash
-# Apply all dotfiles and run runtime config generation
 make deploy
+make deploy  # First setup only: check idempotency
 ```
 
-On first setup, run `make deploy` twice. The second pass should be a no-op, but it helps surface any idempotency gaps.
+The Makefile assumes Bash and Unix utilities. Windows uses winget/PowerShell for package installation but requires an appropriately prepared POSIX-compatible environment for Makefile targets; do not assume every target runs natively in PowerShell. See [installation and upgrading](docs/INSTALL.md) for the platform-specific sequence and recovery steps.
 
-## Architecture
+**Secrets and user state:** Never commit credentials. The canonical environment example is [dot_dotfiles/shell/.env.example](dot_dotfiles/shell/.env.example); `~/.env` and runtime-generated credentials remain private. Gates default to off unless explicitly documented otherwise. Run a dry-run before changing an unfamiliar deployment.
 
-- AI model selection and local-service routing use one shared policy across multiple consumers (OpenCode, Junie, Pi and other configured clients); each consumer keeps its own adapter. The local tiers are maintained once in [docs/TIERS.md](docs/TIERS.md), rather than duplicated here.
-- Canonical orchestration doc: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)
-- Agent capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md)
-- Pi terminal coding agent: [docs/PI.md](docs/PI.md)
-- Snowflake Cortex Code specialist: [docs/CORTEX.md](docs/CORTEX.md)
-- Repo-level agent guidance: [AGENTS.md](AGENTS.md)
-- Home-level agent guidance source: [configs/agents/home-agents.md](configs/agents/home-agents.md)
+## Common commands
 
-## Initial Installation & Run Instructions
+| Command | Purpose |
+| --- | --- |
+| `make help` | Show available targets |
+| `make diff` / `make dry-run` | Preview chezmoi changes without applying them |
+| `make deploy` | Apply managed dotfiles and run configuration orchestration |
+| `make configure` | Regenerate runtime configuration without a chezmoi apply |
+| `make doctor` | Inspect deployed configuration/host drift |
+| `make verify` | Run the integrated validation suite (may require host tooling and services) |
+| `make ci-verify` | Run the CI-oriented verification subset |
+| `make drift` / `make migrate-preview` | Inspect private environment drift and proposed gate migration |
+| `make check-hashes` / `make check-cli-contract` | Check deployment inputs and public script interfaces |
 
-### Prerequisites
-- **macOS / Linux:** Homebrew (`brew`)
-- **Windows:** PowerShell 7 (`pwsh`), Windows Package Manager (`winget`)
+Run `make help` for the current list, rather than relying on a copied list of scripts or flags. `make verify` does not substitute for actual installed-client, authenticated-inference or live-service acceptance.
 
----
+## How the repository is organised
 
-### Step 1: Clone the Repository
-Clone the repository to your local development directory (by default, `~/Development/dotfiles` or `$HOME\Development\dotfiles`):
-```bash
-mkdir -p ~/Development
-git clone https://github.com/<username>/dotfiles.git ~/Development/dotfiles
-cd ~/Development/dotfiles
-```
+| Source | Responsibility |
+| --- | --- |
+| `dot_*`, `private_*` and `.chezmoi.toml.tmpl` | Home files and chezmoi templates |
+| `.chezmoiscripts/` | Opt-in installation/deployment lifecycle and hash-triggered updates |
+| `scripts/` and `scripts/lib/` | Orchestration, generators, shared models, checks and tests |
+| `configs/opencode/oh-my-opencode-slim.json` | Shared AI role/preset selection |
+| `configs/junie/model-groups.json` | Junie-specific model groups and provider metadata |
+| `configs/mcp/global-mcps.json` | Canonical MCP registry and per-tool consumers |
+| `configs/opencode/opencode-plugins.json` | Managed OpenCode plugins and TUI-only plugins |
+| `configs/agents/` and `AGENTS.md` | Distributed and repository-specific agent guidance |
+| `Brewfile*`, `wingetfile*`, `.chezmoidata/categories.yaml` | Package categories and platform manifests |
+| `docs/` | Maintained installation, operating and integration guidance |
 
----
+AI clients share policy and discovery inputs where supported, but each has its own configuration generator and transport contract. A listed model or provider is not evidence of credential access, tool-call support, free entitlement or live readiness. Consult the active manifests and corresponding tests before changing defaults.
 
-### Step 2: Seed the Local Environment (`.env`)
-Local configuration toggles and secrets are managed through `~/.env` (on Windows, `$HOME\.env` or `%USERPROFILE%\.env`):
-1. Copy the canonical template to your home directory:
-   - **macOS / Linux:**
-     ```bash
-     cp dot_dotfiles/shell/.env.example ~/.env
-     ```
-   - **Windows (PowerShell):**
-     ```powershell
-     copy dot_dotfiles\shell\.env.example $HOME\.env
-     ```
-2. Open the file in your preferred editor and populate your API keys (such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) and toggle gates. To enable automatic package installation during setup, ensure:
-   ```env
-   DOTFILES_RUN_PACKAGES_SETUP=1
-   ```
+## Documentation by task
 
----
+| Task | Canonical guide |
+| --- | --- |
+| Install, upgrade or troubleshoot the host | [Installation](docs/INSTALL.md) and [orchestration](docs/ORCHESTRATION.md) |
+| Add scripts, gates, MCP tools or skills | [Adding components](docs/ADDING.md) and [repository conventions](docs/CONVENTIONS.md) |
+| Understand AI presets and model updates | [Tiers](docs/TIERS.md), [model updates](docs/MODEL_UPDATES.md), [capability matrix](docs/CAPABILITY_MATRIX.md) |
+| Configure OpenCode, Pi, Junie or other clients | [OpenCode](docs/OPENCODE.md), [Pi](docs/PI.md), [Junie](docs/JUNIE.md), [unmanaged clients](docs/UNMANAGED-CLIENTS.md) |
+| Configure additional inference providers or the gateway | [Optional inference](docs/OPTIONAL_INFERENCE.md), [LiteLLM](docs/LITELLM.md), [Meridian](docs/MERIDIAN.md) |
+| Configure local engines, voice or memory | [oMLX](docs/OMLX.md), [voice](docs/VOICE.md), [Basic Memory](docs/BASIC_MEMORY.md) |
+| Configure remote access and web services | [Remote access](docs/REMOTE_ACCESS.md), [Caddy](docs/CADDY.md), [Open WebUI](docs/CHAT_FRONTEND.md) |
+| Configure Paseo | [Paseo remote](docs/PASEO_REMOTE.md), [security](docs/PASEO_SECURITY.md), [ACP](docs/PASEO_ACP.md), [MCP](docs/PASEO_MCP.md) |
+| Work on agentic PR reviews | [GitHub reviews and onboarding](docs/AGENTIC-REVIEW.md), [review method](configs/review/code-review-prompt.md) |
 
-### Step 3: Initialize and Apply via Makefile + chezmoi
-We use `chezmoi` to manage all symlinks, templates, and setup run scripts. The Makefile is the canonical local entrypoint because it loads `~/.env` in the same shell process as each chezmoi command:
-- **macOS / Linux:**
-  ```bash
-  # Ensure chezmoi is installed
-  command -v chezmoi >/dev/null 2>&1 || brew install chezmoi
+[AGENTS.md](AGENTS.md) is the authoritative instruction source for contributions to this repository, and [home agent guidance](configs/agents/home-agents.md) is the source distributed to supported user agents. The documentation is a description of repo intent and implementation, not proof of an installed host's state.
 
-  # Initialize source, then apply
-  chezmoi init --source ~/Development/dotfiles
-  make deploy
-  ```
-- **Windows (PowerShell 7):**
-  ```powershell
-  # Ensure chezmoi is installed
-  if (-not (Get-Command chezmoi -ErrorAction SilentlyContinue)) {
-      winget install twpayne.chezmoi
-  }
+## Packaging and platforms
 
-  # Initialize source and apply templates
-  chezmoi init --source "$HOME\Development\dotfiles"
-  make deploy
-  ```
+The package manifests are category-based. `.chezmoidata/categories.yaml` defines committed defaults, and optional machine-level category overrides belong in chezmoi's local configuration rather than edits to shared defaults. Use `make categories` to inspect the effective selection and `make brewfile-sync` / `make brewfile-diff` when maintaining package parity. Some packages or services are platform-specific, and a Brewfile entry does not imply an equivalent winget package.
 
----
+OpenCode v2 is managed by its [official installer path](docs/OPENCODE.md), not a Brewfile or winget package. Tool-specific gates, supported platforms, security boundaries and required owner actions belong in the linked operating guides, not in a manually duplicated package/model matrix here.
 
-### Step 4: Setup Offline/Local Linting Tools & Verification (Optional)
-To verify files and run offline/local check suites using the project's central `Makefile` and `pre-commit` hook setup:
-- **macOS / Linux:**
-  ```bash
-  # Install linting & formatting packages from Brewfile.dev (black, shellcheck, shfmt, pre-commit)
-  brew bundle --file Brewfile.dev
+## Contributing and validation
 
-  # Install git pre-commit hooks in the repository
-  pre-commit install
+Follow [AGENTS.md](AGENTS.md), the [PR template](.github/PULL_REQUEST_TEMPLATE.md) and the [review rubric](configs/review/code-review-prompt.md). Run the relevant focused checks and record results against the actual revision; code/configuration changes require the integrated verification gate when a qualifying environment is available. Agent-created PRs are drafts until accepted by a human reviewer.
 
-  # Run standard offline code verification checks
-  make verify
-  # Or via pre-commit:
-  pre-commit run --all-files
-  ```
-- **Windows (PowerShell 7 / Git Bash):** Windows users can run these checks inside POSIX-compatible environments such as Git Bash, WSL, or MSYS2, or natively:
-  ```powershell
-  # Ensure all CLI linting packages are installed via winget
-  # (Automatic if DOTFILES_RUN_PACKAGES_SETUP=1 was enabled in ~/.env on chezmoi apply)
-  # Or install manually via winget:
-  winget install GnuWin32.Make OpenJS.NodeJS Python.Python.3.12 psf.black koalaman.shellcheck mvdan.shfmt
-
-  # Install pre-commit using Python pip
-  pip install pre-commit
-  pre-commit install
-
-  # Run verification checks natively or inside Git Bash / WSL for Unix utility compatibility
-  pre-commit run --all-files
-  ```
-
-## Commands
-
-```bash
-_dot--update-system     # Cross-platform daily update: brew/winget/apt, npm, uv, pipx, pi, opencode, junie, ollama
-make deploy             # Apply all dotfiles and regenerate runtime configs
-make configure          # Rebuild runtime configs only
-make dry-run            # Dry-run apply with ~/.env loaded
-make diff               # Preview pending changes with ~/.env loaded
-make doctor             # Read-only drift checks
-make verify             # Lint, env drift, doctor, hashes, CLI contract, env coverage, and dry run
-make check-hashes       # Hash trigger coverage audit
-make check-cli-contract # Verify CLI interfaces match the capability manifest
-make check-env-coverage # Verify env vars are documented in .env.example
-make reset        # Clear chezmoi script state
-make clean-backups       # Remove stale .bak files from ~/.config/opencode/
-make drift               # Report ~/.env drift from dot_dotfiles/shell/.env.example
-make migrate-preview     # Preview deprecated gate migration without writing
-make migrate             # Apply migration + append missing template keys to ~/.env
-chezmoi edit ~/.bashrc  # Edit a managed dotfile
-scripts/configure-opencode-tier.py --preset pro-plus   # Switch AI model tier
-scripts/configure-all.sh [options]            # --preset, --mode, --skip, --local-fallback-*, --min-reasoning-embedding
-scripts/configure-opencode-voice.py --preset <tier>  # Configure voice plugin (cli.json)
-scripts/configure-mcps.py                  # Regenerate MCP configs
-scripts/configure-opencode.py       # Regenerate OpenCode config
-scripts/configure-acp-agents.py --preset <tier>  # Regenerate ACP agent config
-scripts/configure-skills.py                  # Distribute skills to all agent directories
-scripts/configure-project.py                 # Configure project-scoped AI tooling (default: opencode,codegraph,skills,jetbrains,junie)
-make opencode-restart                        # Restart OpenCode Web service
-make opencode-stop                           # Stop OpenCode Web service
-make opencode-start                          # Start OpenCode Web service
-make meridian-restart                        # Restart Meridian proxy service
-make ddns-restart                            # Restart all ddns-route53 agents
-make caddy-restart                           # Restart Caddy service (system-level)
-make caddy-reload                            # Hot-reload Caddy config
-make plannotator-restart                     # Restart Plannotator paste service
-make ollama-env-restart                      # Re-apply Ollama daemon env vars
-make services-restart                        # Restart all managed services
-make ci-verify                               # CI verification (lint + drift + doctor + check-hashes, no dry-run)
-```
-
-### ACP Agents
-
-`acpAgents` in `oh-my-opencode-slim.json` auto-exposes ACP-capable tools as sandboxed wrapper subagents.
-
-- Auto-detected agents: `opencode`, `gemini`, `antigravity`, `claude`, `codex`, `junie`, `cursor`, `cline`, `copilot`, `pi`, and `cortex`.
-- `scripts/configure-opencode.py` runs `scripts/configure-acp-agents.py` during OpenCode config generation, gated by `DOTFILES_RUN_OPENCODE_SETUP=1`, and only emits entries for binaries found on `PATH`.
-- `opencode` is included only when the `opencode` binary is on `PATH`, which enables recursive delegation via ACP.
-- Install adapter prerequisites with `scripts/install-acp-adapters.py` (`brew install copilot-cli`, `npm i -g @agentclientprotocol/claude-agent-acp`, `npm i -g @agentclientprotocol/codex-acp`), then sign in to each agent separately.
-- After the first install, run `make brewfile-sync` to capture the new npm globals in the Brewfiles.
-- Regenerate with `scripts/configure-acp-agents.py --preset <tier>`.
-
-## Conventions
-
-- **Commits:** `feat/fix/refactor/chore/docs` with scopes: `dotfiles`, `brew`, `secrets`, `scripts`, `templates`, `infra`, `agents`
-- **Shell scripts:** `#!/usr/bin/env bash`, `set -euo pipefail`, source `lib/common.sh`
-- **Templates:** `{{ env "VAR" }}` syntax, `private_` prefix for 600 perms
-- **Run scripts:** `run_once_*` for one-time ops only, `run_onchange_*` for everything else with hash triggers
-- **Env vars:** `DOTFILES_` prefix for dotfiles-system toggles, `DOTFILES_RUN_*_SETUP` for script gates
-- **Secrets:** Never committed. `~/.env` is single source of truth. No age/GPG encryption (local repo).
-- **Shell indent:** 2-space (not tabs), enforced by `.editorconfig` + `shfmt`
-- **Lint/format:** `shellcheck`, `shfmt`, `pre-commit` (runs local/offline `make lint`), `black`, JSON/YAML/Large files validation via `Makefile`
-- **Cross-platform:** `brew --prefix` pattern for all Homebrew paths (Intel/ARM agnostic). Network failures in `chezmoi apply` scripts warn, never abort.
-
-### Project-scoped configuration
-
-In a project, put user-authored project settings in `.opencode/.env`, then run `scripts/configure-project.py` (default steps: `opencode,codegraph,skills,jetbrains,junie`; use `--steps skills` for skills only). Without `DOTFILES_PROJECT_PRESET` the project inherits the global tier as-is and no `opencode.json` is written; the file is generated only when the project overrides the global tier or sets local-fallback inputs. For per-key overrides, hand-author a minimal `opencode.json` — OpenCode merges it over the global config. Select categories with `DOTFILES_PROJECT_SKILL_PROFILES=core,aws,mongodb`; use `DOTFILES_PROJECT_SKILLS` and `DOTFILES_PROJECT_SKIP_SKILLS` for individual overrides. Generated secrets go to `.opencode/.env.local`, leaving `.env` intact. See [docs/project-env.example](docs/project-env.example). To undo project configuration, run `make project-cleanup PROJECT_ROOT=<project-dir>` (`DRY_RUN=1` to preview; add `FORCE=1` to skip the confirmation prompt). It removes artifacts generated by `configure-project.py` and never touches user-authored files (`.opencode/.env`, `.ai/plans/`, hand-authored configs, runtime files under `.opencode/`).
-
-## Toggles
-
-Set in `~/.env` (0 = skip, 1 = run):
-
-| Toggle | Purpose | Default |
-|--------|---------|---------|
-| `DOTFILES_RUN_PACKAGES_SETUP` | Homebrew + winget package installs | 0 |
-| `DOTFILES_RUN_MCP_SETUP` | MCP config deployment | 0 |
-| `DOTFILES_RUN_OPENCODE_SETUP` | OpenCode secrets + tier config | 0 |
-| `DOTFILES_RUN_MACOS_DEFAULTS_SETUP` | macOS user preferences | 0 |
-| `DOTFILES_RUN_MACOS_SECURITY_SETUP` | macOS security defaults (firewall, FileVault, etc.) | 0 |
-| `DOTFILES_RUN_MERIDIAN_SETUP` | Meridian launchd plist | 0 |
-| `DOTFILES_RUN_CADDY_SETUP` | Caddy LAN exposure + Plannotator | 0 |
-| `DOTFILES_RUN_OPENCODE_WEB_SETUP` | Optional OpenCode web LaunchAgent | 0 |
-| `DOTFILES_RUN_OPENCODE_TOOLS_SETUP` | OpenCode plugins + CLI tools | 0 |
-| `DOTFILES_RUN_VOICE_SETUP` | Voice STT/TTS dependencies (whisper.cpp, sox, piper, models) | 0 |
-| `DOTFILES_RUN_PLANNOTATOR_SETUP` | Plannotator install/update | 0 |
-| `DOTFILES_RUN_JUNIE_CLI_SETUP` | Junie CLI EAP install | 0 |
-| `DOTFILES_RUN_ANTIGRAVITY_ACP_SETUP` | antigravity-acp bridge (agy-acp) install | 0 |
-| `DOTFILES_RUN_MOZART_SETUP` | Mozart router config | 0 |
-| `DOTFILES_RUN_CODEGRAPH_SETUP` | CodeGraph MCP registration | 0 |
-| `DOTFILES_RUN_AGENT_GUIDANCE_SETUP` | Agent guidance distribution | 0 |
-| `DOTFILES_RUN_SECRETS_SETUP` | Secrets distribution helper | 0 |
-| `DOTFILES_RUN_SKILLS_SETUP` | Skills distribution to all agent directories | 0 |
-| `DOTFILES_RUN_SKILLS_AWS_SETUP` | Global AWS skills category | 0 |
-| `DOTFILES_RUN_SKILLS_MONGODB_SETUP` | Global MongoDB skills category | 0 |
-| `DOTFILES_RUN_SKILLS_PRISMA_SETUP` | Global Prisma skills category | 0 |
-| `DOTFILES_RUN_OLLAMA_DAEMON_SETUP` | Ollama daemon env config | 0 |
-| `DOTFILES_RUN_OMLX_SETUP` | oMLX service, settings, and provider wiring (macOS Apple Silicon only) | 0 |
-| `DOTFILES_USE_LITELLM_PROXY` | Unified LiteLLM routing, replacing four per-client canaries; `1` is gateway-only, `0` keeps canonical direct routing ([details](docs/LITELLM.md)) | 0 |
-| `DOTFILES_LITELLM_OAUTH_PROVIDERS` | Opt in to LiteLLM OAuth-backed provider routes ([details](docs/LITELLM.md#oauth-providers-opt-in)) | 0 |
-| `DOTFILES_LITELLM_UI_EXPOSED` | Caddy LiteLLM UI-only hostname sites; requires `CADDY_ACCESS=lan\|public` ([details](docs/LITELLM.md#ui-exposure)) | 0 |
-| `LITELLM_DISABLE_ADMIN_UI` | Service override; set `False` to serve the Admin UI ([details](docs/LITELLM.md#ui-exposure)) | True (disabled) |
-| `LITELLM_DATABASE_URL` | User-facing Postgres URL translated to service-side `DATABASE_URL` ([details](docs/LITELLM.md)) | unset |
-| `DOTFILES_USE_LOCAL_OLLAMA` | Include local Ollama in OpenCode | 1 |
-| `DOTFILES_MIN_REASONING_EMBEDDING` | Min embedding_length for reasoning/solo (0 = disabled) | 0 |
-| `OPENSPEC_TELEMETRY` | OpenSpec telemetry opt-out | 0 |
-| `DO_NOT_TRACK` | Global telemetry opt-out | 1 |
-
-See [docs/OMLX.md](docs/OMLX.md) for oMLX installation, settings, provider integration, model management, and platform-gating details.
-
-LiteLLM's Caddy UI exposure and serving are separate: `DOTFILES_LITELLM_UI_EXPOSED=1` exposes the UI host, while `LITELLM_DISABLE_ADMIN_UI=False` is also required to serve it. See [docs/LITELLM.md](docs/LITELLM.md) for the full environment contract.
-
-## Structure
-
-```
-~/Development/dotfiles/           # chezmoi source directory
-├── .chezmoi.toml.tmpl            # chezmoi config (sourceDir, minimumVersion)
-├── .chezmoiignore                # ignore patterns (scripts/, configs/, macOS-only)
-├── .chezmoidata/
-│   └── categories.yaml           # Brewfile + wingetfile category toggles
-├── .github/                        # GitHub templates, workflows, dependabot
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   ├── ISSUE_TEMPLATE/
-│   ├── workflows/ci.yml
-│   └── dependabot.yml
-├── .chezmoiscripts/              # 32 scripts: four run_once (01-03, 21) + 28 run_onchange_04-29 (hash-triggered)
-│   ├── # Phase 1: One-time setup (01-03, 21)
-│   ├── # Phase 2: Package/CLI installs (04-11)
-│   └── # Phase 3: Tool configuration (12-20, 22-29)
-├── AGENTS.md                  # AI agent guidance (authoritative — scripts, tiers, MCP, symlinks)
-├── dot_bashrc                     # Bash config
-├── dot_zshrc                      # Zsh config
-├── dot_emacs                      # Emacs config (agent-shell + ACP)
-├── dot_gitconfig.tmpl            # Git identity + settings (env var-driven)
-├── dot_gitignore                 # Global gitignore
-├── dot_nvmrc                     # Default Node.js version (24)
-├── dot_config/
-│   ├── bat/config                # bat theme/config
-│   ├── direnv/direnvrc           # direnv config
-│   ├── gh/config.yml.tmpl        # GitHub CLI config
-│   ├── git/ignore                # Global gitignore rules
-│   ├── opencode/
-│   │   └── dcp.jsonc             # DCP context compaction (percentage thresholds)
-│   ├── ripgrep/config            # ripgrep defaults
-│   └── starship.toml.tmpl        # Starship prompt
-├── dot_dotfiles/                 # Managed shell configs (→ ~/.dotfiles/shell/)
-│   └── shell/
-│       ├── .env.example           # Canonical template for ~/.env
-│       ├── acme.sh                # acme.sh env sourcing
-│       ├── aliases.sh             # Shell aliases (dynamic neofetch)
-│       ├── bun.sh                 # Bun env + completions
-│       ├── completions.bash       # Bash/zsh-aware completions
-│       ├── completions.zsh        # → completions.bash
-│       ├── paths.sh               # PATH setup (brew --prefix first, Intel/ARM fallback)
-│       ├── prompt.sh              # Shell prompt (starship with fallback)
-│       └── variables.sh           # Non-secret env vars
-├── private_dot_aws/credentials.tmpl        # AWS credentials (2 profiles)
-├── private_dot_gnupg/
-│   ├── gpg.conf.tmpl              # GPG config (default-key from env)
-│   └── gpg-agent.conf             # GPG agent config
-├── private_dot_npmrc.tmpl        # npm auth tokens and remote-fetch policy
-├── private_dot_ssh/config        # SSH config
-├── private_dot_vuescanrc.tmpl    # VueScan license
-├── Brewfile*                     # 16 composable Brewfiles (macOS/Linux)
-├── wingetfile*                   # Category-based wingetfiles (Windows)
-├── configs/
-│   ├── junie/model-groups.json   # Junie model profile definitions
-│   ├── mcp/                      # MCP server configs
-│   │   ├── betterstack.json
-│   │   ├── github.json
-│   │   ├── global-mcps.json       # Tool→template registry
-│   │   ├── idea.json              # JetBrains MCP — SSE transport (stdio via IJ_MCP_TRANSPORT=stdio)
-│   │   ├── mongodb.json
-│   │   ├── notion.json
-│   │   ├── sentry.json            # Passes SENTRY_ACCESS_TOKEN via env, not CLI args
-│   │   ├── shortcut.json
-│   │   ├── codegraph.json          # CodeGraph — local-first semantic code index (stdio MCP)
-│   │   └── templates/            # Symlinks → ../ for configure-mcp-tool.sh
-│   ├── iterm2/Default.json.tmpl   # iTerm2 Dynamic Profile template (tmux command, rewritable, default)
-│   ├── mozart-router/mozart.json # Mozart AI router gateway config
-│   └── opencode/
-│       ├── oh-my-opencode-slim.json  # Presets, council, fallbacks, tier overrides
-│       ├── anthropic-models.json     # Relocated
-│       ├── openai-models.json        # New
-│       └── ollama-cloud-models.json  # New
-│   ├── skills/                       # Skill source files (distributed to all agent dirs)
-│   │   └── iamhumans/SKILL.md        # Humanization skill for LLM conversations
-├── ~/.dotfiles/scripts -> ~/Development/dotfiles/scripts  # helper-script symlink on PATH
-└── scripts/                      # Utility scripts + lib/
-    ├── lib/                       # Shared helpers
-    │   ├── common.sh              # Standardized logging & ERR trap stack traces
-    │   ├── env.sh                 # load_env(), alias_github_token() for shell bootstrap
-    │   ├── logger.py              # Central Python logging module
-    │   ├── env.py                 # load_env() and token aliases in Python
-    │   ├── ai_mcps.py             # Filter template globs in Python
-    │   ├── ai_dirs.py             # Python-ported platform-independent directory setups
-    │   ├── ai_models.py           # Python-ported model prefix mappings & temperatures
-    │   ├── idea.py                # Resolve IntelliJ app paths, java, and MCP classpaths in Python
-    │   ├── discover_models.py     # Local Ollama discovery to JSON in Python
-    │   ├── constants.py           # BASE_URLS, provider URLs, Meridian/Ollama helpers
-    │   ├── file_utils.py          # backup_file(), write_text_file()
-    │   ├── opencode_config.py     # get_available_tiers(), build_tier_args()
-    │   ├── tier_detect.sh         # Shared tier auto-detection (detect_tier)
-    │   └── tier_args.sh           # Shared local fallback arg forwarding
-    ├── configure-mcps.py       # Generate MCP configs for all AI tools
-    ├── configure-jetbrains-ai.py  # JetBrains AI: model profiles, dirs, symlinks
-    ├── configure-mozart-router.py # Configure Mozart AI router
-    ├── configure-secrets.py            # Resolve paths/secrets for AI tool .env files
-    ├── configure-all.sh           # Full orchestration wrapper (rebuild configs)
-    ├── configure-skills.py          # Distribute skills to all agent skill directories
-    ├── verify-config.py           # Verify generated config presence and freshness
-    ├── check-hashes.py            # Audit hash trigger coverage
-    ├── verify-brewfile-completeness.py # Verify Brewfile completeness
-    ├── detect-ij-mcp.py           # Detect JetBrains MCP server paths (SSE default)
-    ├── configure-mcp-tool.py      # Generate MCP config for a single tool
-    ├── configure-meridian.py      # Add Meridian proxy to OpenCode config
-    ├── configure-opencode.py      # Write OpenCode config (local ollama default)
-    ├── configure-opencode-tier.py # Switch active preset tier (--preset required)
-    ├── configure-opencode-voice.py # Write voice plugin config (cli.json, tier-aware)
-    ├── get-tools.py               # Get MCP tool registry keys
-    ├── install-acp-adapters.py    # Install ACP adapters (Copilot, Claude, Codex, Antigravity)
-    ├── install-nvm-lts.sh         # Reinstall all LTS node versions
-    ├── meridian-launch.sh         # Launch wrapper for meridian (Keychain-aware)
-    └── generate-jetbrains-profiles.py # Generate model profiles JSON files
-```
-
-## Secrets Management
-
-All secrets live in `~/.env` using `KEY='VALUE'` format. Templates use `{{ env "VAR" }}` syntax.
-
-**`.env.example`** in the repo documents all available keys. Run `make drift` to report drift, `make migrate-preview` to preview deprecated gate renames, then `make migrate` to apply them and append newly documented keys to `~/.env` as commented examples without overwriting secrets.
-
-**Load env manually only for ad hoc raw chezmoi commands:** `set -a; source ~/.env; set +a`. Prefer `make diff`, `make dry-run`, and `make deploy` for normal work.
-
-### Migrating old `~/.credentials.sh` files
-
-Old sourced credentials files used shell exports such as `export GH_TOKEN=...`. Convert them into `~/.env` assignments without `export`:
-
-| Old sourced-file pattern | New `~/.env` entry |
-|--------------------------|--------------------|
-| `export GH_TOKEN=...` or `export GITHUB_TOKEN=...` | `GH_TOKEN='...'` |
-| `export OPENAI_API_KEY=...` | `OPENAI_API_KEY='...'` |
-| `export ANTHROPIC_API_KEY=...` | `ANTHROPIC_API_KEY='...'` |
-| `export AWS_ACCESS_KEY_ID=...` | `AWS_ACCESS_KEY_ID='...'` |
-| `export AWS_SECRET_ACCESS_KEY=...` | `AWS_SECRET_ACCESS_KEY='...'` |
-| `export NPM_TOKEN=...` | `NPM_TOKEN='...'` |
-| `export SENTRY_ACCESS_TOKEN=...` | `SENTRY_AUTH_TOKEN='...'` |
-
-`GH_TOKEN` is canonical for GitHub. `SENTRY_AUTH_TOKEN` is canonical for the user env file; MCP generation maps it into the `SENTRY_ACCESS_TOKEN` environment expected by the Sentry MCP server.
-
-**Key template files:**
-- `dot_gitconfig.tmpl` — `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GPG_SIGNING_KEY`, `GITHUB_USER`, `GH_TOKEN`
-- `private_dot_npmrc.tmpl` — `NPM_TOKEN`, `GH_TOKEN`, `allow-remote=all`
-- `private_dot_aws/credentials.tmpl` — `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-- `private_dot_vuescanrc.tmpl` — `VUESCAN_USER_ID`, `VUESCAN_LICENSE`, `VUESCAN_CUSTOMER`, `VUESCAN_EMAIL`
-- `private_dot_gnupg/gpg.conf.tmpl` — `GPG_SIGNING_KEY`
-
-### Provider Base-URL Overrides
-
-Official SDK environment variables override hardcoded provider URLs across all scripts. When set, these take priority over `BASE_URLS` defaults in `constants.py`:
-
-| Env Var | Provider | Default | Notes |
-|---------|----------|---------|-------|
-| `ANTHROPIC_BASE_URL` | Anthropic | `https://api.anthropic.com/v1` | Also signals Meridian usage when set |
-| `OPENAI_BASE_URL` | OpenAI | `https://api.openai.com/v1` | OpenAI SDK standard |
-| `OLLAMA_HOST` | Ollama (local) | `http://localhost:11434` | Scheme+host[:port]; overrides `OLLAMA_LOCAL_HOST`/`PORT` |
-| `OLLAMA_CLOUD_BASE_URL` | Ollama Cloud | `https://ollama.com/v1` | Non-standard (our env var, not official SDK) |
-
-### Local Service Host/Port Overrides
-
-Local services (Ollama, Meridian) support host/port env var overrides:
-
-| Service | Host Env Var | Port Env Var | Default |
-|---------|-------------|-------------|---------|
-| Local Ollama | `OLLAMA_LOCAL_HOST` | `OLLAMA_LOCAL_PORT` | `localhost:11434` |
-| Official Ollama | `OLLAMA_HOST` | — | `http://localhost:11434` | Scheme+host[:port]; overrides `OLLAMA_LOCAL_HOST`/`PORT` |
-| Meridian proxy | `MERIDIAN_HOST` | `MERIDIAN_PORT` | `127.0.0.1:3456` |
-
----
-
-## Package Management
-
-### Brewfiles (macOS/Linux)
-
-16 composable Brewfiles controlled by `.chezmoidata/categories.yaml`:
-
-| Category | File | Default | Scope |
-|----------|------|---------|-------|
-| dev.cli | `Brewfile` | on | Core CLI tools |
-| dev | `Brewfile.dev` | on | Languages, libraries, dev apps |
-| dev.security | `Brewfile.dev.security` | off | Pentest/security CLI tools |
-| utilities | `Brewfile.utilities` | off | Non-desktop CLI utilities |
-| desktop.browsers | `Brewfile.desktop.browsers` | on | macOS-only |
-| desktop.comms | `Brewfile.desktop.comms` | on | macOS-only |
-| desktop.security | `Brewfile.desktop.security` | on | macOS-only |
-| desktop.media | `Brewfile.desktop.media` | on | macOS-only |
-| desktop.utilities | `Brewfile.desktop.utilities` | on | macOS-only |
-| desktop.fonts | `Brewfile.desktop.fonts` | on | macOS-only |
-| desktop.gaming | `Brewfile.desktop.gaming` | off | Opt-in, macOS-only |
-| desktop.cloud | `Brewfile.desktop.cloud` | on | macOS-only |
-| desktop.productivity | `Brewfile.desktop.productivity` | on | macOS-only |
-| desktop.dev | `Brewfile.desktop.dev` | off | Dev-focused desktop apps, macOS-only |
-| dev.ops | `Brewfile.dev.ops` | on | Infrastructure tools |
-| legacy | `Brewfile.legacy` | off | Opt-in |
-
-Homebrew is installed automatically if missing (via the package-install run_onchange script). On Linux, Homebrew installs to `/home/linuxbrew/.linuxbrew` and `brew shellenv` is sourced automatically. Only `brew` entries run on Linux; `cask` entries are macOS-only and skipped.
-
-#### Per-machine category overrides
-
-`categories.yaml` sets committed defaults for all machines. To enable opt-in categories (gaming, security, dev, etc.) on a specific machine without committing the change, add a `[data.categories]` section to `~/.config/chezmoi/chezmoi.toml`:
-
-```toml
-[data.categories]
-desktop_gaming = true
-desktop_dev = true
-dev_security = true
-utilities = true
-```
-
-Chezmoi merges these overrides on top of `categories.yaml`, and `make brewfile-cleanup` reads them too — so enabled categories protect their packages from cleanup. The committed `categories.yaml` stays untouched.
-
-### Wingetfiles (Windows)
-
-Category-based wingetfiles mirror the Brewfile structure for Windows:
-
-| Category | File | Default |
-|----------|------|---------|
-| winget | `wingetfile` | on |
-| winget.dev | `wingetfile.dev` | on |
-| winget.dev.security | `wingetfile.dev.security` | off (stub) |
-| winget.utilities | `wingetfile.utilities` | off (stub) |
-| winget.dev.ops | `wingetfile.dev.ops` | on |
-| winget.desktop.browsers | `wingetfile.desktop.browsers` | on |
-| winget.desktop.comms | `wingetfile.desktop.comms` | on |
-| winget.desktop.security | `wingetfile.desktop.security` | on |
-| winget.desktop.media | `wingetfile.desktop.media` | on |
-| winget.desktop.utilities | `wingetfile.desktop.utilities` | on |
-| winget.desktop.cloud | `wingetfile.desktop.cloud` | on |
-| winget.desktop.productivity | `wingetfile.desktop.productivity` | on |
-| winget.desktop.dev | `wingetfile.desktop.dev` | off (stub) |
-| winget.desktop.gaming | `wingetfile.desktop.gaming` | off |
-| winget.desktop.fonts | `wingetfile.desktop.fonts` | on (stub) |
-| winget.legacy | `wingetfile.legacy` | off (stub) |
-
-Cross-reference comments (e.g., `# Cross-ref: brew 'git'`) link winget packages to their brew equivalents.
-
-### Cross-Platform Package Matrix
-
-Packages available on both platforms by category:
-
-| Package | brew (macOS/Linux) | winget (Windows) |
-|---------|-------------------|------------------|
-| Git | `git` | `Git.Git` |
-| Starship | `starship` | `Starship.Starship` |
-| ripgrep | `ripgrep` | `BurntSushi.ripgrep.MSVC` |
-| fastfetch | `fastfetch` | `Fastfetch-cli.Fastfetch` |
-| AWS CLI | `awscli` | `Amazon.AWSCLI` |
-| Pulumi | `pulumi/tap/pulumi` (tap: `pulumi/tap`) | `Pulumi.Pulumi` |
-| Session Manager | `session-manager-plugin` | `Amazon.SessionManagerPlugin` |
-| Docker | `docker-desktop` (cask) | `Docker.DockerCLI` |
-| Ollama | `ollama-app` (cask) | `Ollama.Ollama` |
-| oMLX | `jundot/omlx/omlx` (Apple Silicon/macOS only) | — |
-| OpenCode | official install script (latest stable v2; `~/.opencode/bin`) | official install script (PowerShell) / install script |
-| Codex | `codex` (cask) | `OpenAI.Codex` |
-| VS Code | `visual-studio-code` (cask) | `Microsoft.VisualStudioCode` |
-| Slack | `slack` (cask) | `SlackTechnologies.Slack` |
-| Discord | `discord` (cask) | `Discord.Discord` |
-| Firefox | `firefox@developer-edition` (cask) | `Mozilla.Firefox.en-CA` |
-| Edge | `microsoft-edge@canary` (cask) | `Microsoft.Edge` |
-| VLC | `vlc` (cask) | `VideoLAN.VLC` |
-| Mullvad VPN | `mullvad-vpn` (cask) | `MullvadVPN.MullvadVPN` |
-| PIA | `private-internet-access` (cask) | `PrivateInternetAccess.PrivateInternetAccess` |
-| AWS VPN | `aws-vpn-client` (cask) | `Amazon.AWSVPNClient` |
-| 1Password | `1password` (cask) | `AgileBits.1Password` |
-| Adobe Creative Cloud | `adobe-creative-cloud` (cask) | `Adobe.AdobeCreativeCloud` |
-| chezmoi | `chezmoi` | `twpayne.chezmoi` |
-| Cyberduck | `cyberduck` (cask) | `Cyberduck.Cyberduck` |
-| Go | `go` | `GoLang.Go` |
-| Google Drive | `google-drive` (cask) | `Google.GoogleDrive` |
-| GitHub CLI | `gh` | `GitHub.cli` |
-| jq | `jq` | `jqlang.jq` |
-| ngrok | `ngrok` (cask) | `ngrok.ngrok` |
-| nvm | `nvm` | `CoreyButler.NVMforWindows` |
-| OBS Studio | `obs` (cask) | `OBSProject.OBSStudio` |
-| PowerShell | `powershell` | `Microsoft.PowerShell` |
-| Sublime Text | `sublime-text` (cask) | `SublimeHQ.SublimeText.4` |
-| uv | `uv` | `astral-sh.uv` |
-| Webex | `webex` (cask) | `Cisco.Webex` |
-| wget | `wget` | `JernejSimoncic.Wget` |
-| yq | `yq` | `MikeFarah.yq` |
-| Zoom | `zoom` (cask) | `Zoom.Zoom` |
-| Geekbench | `geekbench` (cask) | `PrimateLabs.Geekbench.5` / `PrimateLabs.Geekbench.6` |
-| Steam | `steam` (cask) | `Valve.Steam` |
-
----
-
-## AI
-
-### Model Tiers
-
-Use `scripts/run-local-review.sh --help` for the local pre-push review runner; details are in [docs/AGENTIC-REVIEW.md](docs/AGENTIC-REVIEW.md).
-
-17 presets for AI agents, defined in `configs/opencode/oh-my-opencode-slim.json` and resolved through `scripts/lib/tier_registry.py` (the shared source of truth). See [docs/TIERS.md](docs/TIERS.md) for the full tier reference:
-
-| Tier | Providers | Best For |
-|------|-----------|----------|
-| **pro** | Ollama Cloud | Daily coding, budget mode |
-| **pro-plus** | Ollama Cloud + OpenAI (`gpt-6.1-sol`, `gpt-6-luna`) | General development |
-| **pro-plus-anthropic** | Anthropic + Ollama Cloud + OpenAI | Heavy orchestration |
-| **plus** | OpenAI only (`gpt-6.1-sol`, `gpt-6-luna`) | OpenAI-first workflow |
-| **plus-anthropic** | OpenAI + Anthropic (no Ollama Cloud) | OpenAI + Anthropic hybrid |
-| **anthropic** | Anthropic only (`sonnet-5-5`, `fable-5-1`, `haiku-5-5`, `opus-5-5`) | Anthropic-first workflow |
-| **omo-slim-openai** | OpenAI only | OpenAI-first workflow |
-| **omo-slim-thirty-dollars** | OpenAI + GitHub Copilot | Low-cost OpenAI workflow with Copilot designer |
-| **omo-slim-forty-dollars** | OpenAI + Anthropic | Opt-in upstream-inspired mixed-provider workflow |
-| **omo-slim-opencode-zen-free** | OpenCode Zen | Free OpenCode-hosted workflow |
-| **cohere** | Direct Cohere via LiteLLM | Command-family trial-capped workflow |
-| **poolside** | Direct Poolside via LiteLLM | Laguna-family coding workflow |
-| **free** | OpenCode Zen + Google + OpenRouter (all free tiers) | Free cross-provider workflow with cross-provider fallbacks |
-| **local** | Local Ollama (reasoning + code-gen + lightweight + vision), balanced profile | Balanced local selection for offline/air-gapped use |
-| **local-solo** | Local Ollama (single omnicapable model) | Maximum per-request quality, single-model simplicity |
-| **local-quiet** | Local profile ranking | Quiet local selection; policy does not guarantee hardware fit or latency |
-| **local-loud** | Local profile ranking | Quality-first candidate ranking; no guarantee of hardware fit, latency or concurrency |
-
-Cloud presets (pro, pro-plus, pro-plus-anthropic) use Ollama Cloud models (e.g. `glm-5.3-flash`, `glm-5.3`, `kimi-k3.1-pro`, `deepseek-v4.1-flash`, `gemma4:31b`). The `plus` preset uses OpenAI models exclusively. The `plus-anthropic` preset uses OpenAI + Anthropic models without Ollama Cloud. The `anthropic` preset uses Anthropic models exclusively. The `omo-slim-openai` and `omo-slim-thirty-dollars` presets use OpenAI, with Zen fallbacks; `omo-slim-forty-dollars` uses OpenAI and Anthropic; `omo-slim-opencode-zen-free` uses evidence-gated OpenCode Zen models with empty configured fallback chains; `free` spans OpenCode Zen, Google Gemini, and OpenRouter `:free` models with cross-provider fallback chains (rate limits: OpenRouter 50 req/day under $10 credits, 1000 req/day at or above; Gemini per-project limits via AI Studio). The local presets use `_local:<category>` placeholders resolved at runtime.
-
-**Variant policy:** effort is role- and model-specific; Terra orchestration explicitly uses `high`, while some cloud orchestrators use their model default. Oracle/council selections follow the configured variants (often `high`, `max` or `xhigh`). Lightweight roles (librarian, explorer, observer) use `low`. Designer uses `medium`. Fixer uses `high` (code-specialized). See `AGENTS.md` for the full variant convention table.
-
-Switch tier: `scripts/configure-opencode-tier.py --preset <tier>` (see [docs/TIERS.md](docs/TIERS.md) for the full preset list).
-
-OpenAI service lanes are opt-in via `DOTFILES_USE_OPENAI_SERVICE_LANES=1`; see [docs/LITELLM.md](docs/LITELLM.md).
-
-Default preset: tier auto-detected from available API keys during OpenCode configuration. Auto-detection order: both keys → pro-plus-anthropic, Anthropic only → anthropic, OpenAI only → plus, no keys but Ollama → local, nothing → pro. Local-solo is manual-only (set via `DOTFILES_OPENCODE_TIER`). The deprecated `local-pro`, `local-mini` and `local-nano` names resolve to `local` through `tier_registry.py`.
-
-Local Ollama fallbacks are appended by default (use `--no-local-fallbacks` to omit). Fallbacks append **role-appropriate** local models per agent: reasoning models to oracle, code-gen models to orchestrator/fixer/designer, lightweight models to librarian/explorer, vision-capable models to observer. All indexed models matching a role's category are included (not just the best model). Classification uses name heuristics (r1/think/qwq → reasoning, coder/code/devstral → code-gen, mini/phi/smol → lightweight) with size-aware rules, `ollama show` parameter-based classification, and capability filtering. Override a primary role model: `--role-model observer=ollama/qwen3.5:9b-mlx`. Override fallback preset: `--local-fallback-preset local`. Override a category model: `--category-model reasoning=code-gen`. Environment variables: `DOTFILES_LOCAL_FALLBACK_PRESET`, `DOTFILES_CATEGORY_MODELS` (comma-separated), `DOTFILES_ROLE_MODELS` (comma-separated).
-
-### DCP Context Compaction
-
-`~/.config/opencode/dcp.jsonc` uses percentage-based thresholds:
-- Soft nudges at **33%** context usage
-- Strong compression nudges at **67%**
-
-No per-model config needed — the plugin reads context windows from provider configs.
-
-**TUI panel (v3.1.13+):** `/dcp` opens a context/stats/manual-mode panel. On OpenCode v2 the panel loads from the `opencode.json` plugins manifest (registration owned by the manifest; `scripts/configure-opencode-dcp.py` only removes stale `tui.json` entries, conditionally on the registration being present). Core compression loads from the same `opencode.json`. See `docs/DCP.md`.
-
-### Voice Plugin (opencode-voice)
-
-OpenCode voice support via [`@bojackduy/opencode-voice`](https://github.com/bojackduy/opencode-voice) — a TUI-only plugin for voice input (STT) and output (TTS).
-
-**Configuration:** `~/.config/opencode/cli.json` as a `{package, options}` entry (written by `configure-opencode-voice.py`, tier-aware; unrelated entries preserved)
-
-| Tier | Voice LLM | STT Backend |
-|------|-----------|-------------|
-| **local** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **local-solo** | Best local Ollama model (auto-detected) | whisper-cli (local) |
-| **pro** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **pro-plus** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **pro-plus-anthropic** | `gemma4:31b` via Ollama Cloud | whisper-cli (local), OpenAI STT if key available |
-| **plus** | `gpt-6-luna` via OpenAI | OpenAI STT |
-| **plus-anthropic** | `gpt-6-luna` via OpenAI | OpenAI STT |
-| **anthropic** | Meridian proxy or `claude-haiku-5-5` | whisper-cli (local), OpenAI STT if key available |
-
-**Meridian detection:** If `is_meridian_configured()` returns true (i.e., `MERIDIAN_API_KEY` or `ANTHROPIC_BASE_URL` is set), the Anthropic tier routes through Meridian. When `ANTHROPIC_BASE_URL` is set, its value is used directly as the endpoint.
-
-**Local STT/TTS dependencies** (installed by `run_onchange_07` during `make deploy`, gated on `DOTFILES_RUN_VOICE_SETUP=1`):
-
-| Component | Install | Purpose |
-|-----------|---------|---------|
-| `whisper.cpp` | `brew install whisper.cpp` | Local speech-to-text |
-| `sox` | `brew install sox` | Audio format conversion |
-| `piper-tts` | `uv tool install piper-tts` | Local text-to-speech |
-| Whisper model | Download to `~/.local/share/whisper-cpp/` | STT model (default: `ggml-large-v3-turbo.bin`) |
-| Piper voice | Download to `~/.local/share/piper-voices/` | TTS voice (default: `en_US-lessac-high`) |
-
-Model defaults are configurable: `DOTFILES_WHISPER_MODEL` and `DOTFILES_PIPER_VOICE`.
-
-Configure voice: `scripts/configure-opencode-voice.py --preset <tier>`
-
-### Mozart Router
-
-Local AI gateway router. `scripts/configure-mozart-router.py` is the sole writer of `~/.mozart/mozart.json` (the template was removed to avoid dual-source conflicts).
-
-- **Install:** `npm install -g mozart-router`
-- **Configure:** `scripts/configure-mozart-router.py` writes `~/.mozart/mozart.json`
-- **Gateways:** Ollama Cloud, OpenAI, and Anthropic Meridian — all via GenericOpenAI adapter
-- **Provider URL overrides:** Gateways support `baseUrlEnv` keys — if the named env var is set, it overrides the hardcoded `baseUrl` (resolved and stripped before writing). Supported overrides: `OLLAMA_CLOUD_BASE_URL`, `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`.
-- **Meridian proxy:** Uses `MERIDIAN_HOST` and `MERIDIAN_PORT` env vars (defaults: `127.0.0.1` and `3456`) for the local Meridian endpoint
-- **Usage:** `mozart-router doctor`, `mozart-router route "task description"`, `mozart-router proxy --port=4445`
-- **MCP:** `mozart-router mcp` (stdio integration)
-- Gated by `DOTFILES_RUN_MCP_SETUP`
-
-### Plannotator
-
-Plannotator CLI is installed via the existing install script. The paste backend + static portal are installed by `scripts/install-plannotator.sh` and the `run_onchange_25` LaunchAgent when `DOTFILES_RUN_CADDY_SETUP=1`. OpenCode plugin (`@plannotator/opencode`) is already configured in global `opencode.json` from `configs/opencode/opencode-plugins.json`. Use `/plannotator-review`, `/plannotator-annotate`, `/plannotator-last` in OpenCode.
-
-The canonical plugin set is maintained in `configs/opencode/opencode-plugins.json` (manifest version 2): the ordered `plugins` array for `opencode.json` (`oh-my-opencode-slim@latest` dedicated first entry, `@tarquinen/opencode-dcp@latest`, `@plannotator/opencode`, `github:AxeForce/opencode-vibeguard-v2#934823e5` (pinned dual-runtime secrets redaction), `@cheesecodestudio/opencode-tokenscope-v2@latest`) and a `cli_plugins` array for global TUI-client-only plugins (`@bojackduy/opencode-voice@latest` → `cli.json`). All plugins track `@latest` except the pinned VibeGuard Git source.
-
-### OpenCode Mem
-
-Shared Markdown-backed knowledge via the canonical MCP registry. `basic-memory==1.0.0` runs in local stdio mode with FastEmbed embeddings, enabled `jinaai/jina-reranker-v1-tiny-en` reranking, and telemetry disabled. Old `opencode-mem` data is preserved, not migrated.
-
-- Upstream: https://github.com/basicmachines-co/basic-memory
-- [Deployment, security and owner-run validation](docs/BASIC_MEMORY.md)
-
-### Junie CLI
-
-JetBrains EAP CLI installed via the Junie CLI install script. Cross-platform: `curl|bash` on Mac/Linux, PowerShell on Windows.
-
-#### Junie Model Profiles
-
-Generated dynamically by `scripts/configure-jetbrains-ai.py` from the shared tier registry and `configs/junie/model-groups.json`:
-
-| Profile | Provider | Primary | Faster | Temp |
-|---------|----------|---------|--------|------|
-| `pro` | cloud | `glm-5.3-flash` | `gemma4:31b` | 0.7 |
-| `pro-plus` | cloud | `glm-5.3-flash` | `gpt-6-luna` (openai) | 0.7 |
-| `pro-plus-anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-5-5` | 1 |
-| `anthropic` | meridian | `claude-sonnet-5-5` | `claude-haiku-5-5` | 1 |
-| `plus` | openai | `gpt-6.1-sol` | `gpt-6-luna` | 1 |
-| `plus-anthropic` | openai | `gpt-6.1-sol` | `claude-haiku-5-5` (meridian) | 1 |
-| `local-quiet` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
-| `local` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
-| `local-loud` | local | `_local:code-gen` | `_local:lightweight` | 0.6 |
-| `local-solo` | local | `_local:solo` | `_local:solo` | 0.6 |
- | `anthropic-opus` | meridian | `claude-opus-5-5` | — | 1 |
- | `anthropic-sonnet` | meridian | `claude-sonnet-5-5` | — | 1 |
- | `anthropic-haiku` | meridian | `claude-haiku-5-5` | — | 1 |
- | `anthropic-fable` | meridian | `claude-fable-5-1` | — | 1 |
- | `openai-astra` | openai | `gpt-6-astra` | — | 1 |
- | `openai-luna` | openai | `gpt-6-luna` | — | 1 |
- | `openai-sol` | openai | `gpt-6.1-sol` | — | 1 |
- | `ollama-cloud-deepseek` | ollama-cloud | `deepseek-v4-pro:0813` | `deepseek-v4.1-flash` | 1 |
- | `ollama-cloud-minimax` | ollama-cloud | `minimax-m3` | `minimax-m3.1-flash` | 1 |
- | `ollama-cloud-mistral` | ollama-cloud | `mistral-large-4` | — | 1 |
- | `free` | google | `gemini-3.5-flash-lite` | `gemini-2.5-flash-lite` | 0 |
-
-Local Ollama profiles resolve model IDs dynamically via the shared tier registry. For local tiers, an MoE code-gen model is also reused for lightweight and vision categories when applicable. Cloud profiles use registry-defined IDs. Temperatures follow Junie's recommendations.
-
-Homebrew-aware scripts now prefer `brew --prefix` so they stay Intel/ARM agnostic.
-
-Select via: `junie --model custom:<profile>`
-
-### MCP Configuration
-
-Centralized in `configs/mcp/`. `global-mcps.json` maps 9 AI tools to MCP templates, plus the shared `codegraph` server template. The `mcps` step (`configure-mcps.py`) is the sole owner of MCP generation; JetBrains model configuration does not configure MCPs. Skip MCP generation with `--skip mcps` (not the removed `--no-mcp` flag).
-
-| Tool | Config Path | Format |
-|------|------------|--------|
-| OpenCode | `~/.config/opencode/opencode.json` | JSON internal (global: github, idea, sentry) |
-| JetBrains AI | `~/.ai/mcp/mcp.json` | JSON mcpServers (global: github, idea, sentry) |
-| Junie | `~/.ai/mcp/mcp.json` | JSON mcpServers (global: github, idea, sentry, via `.junie → .ai` symlink) |
-| Air | `~/.ai/mcp/mcp.json` | JSON mcpServers (global: github, idea, sentry, shares `.ai` path) |
-| Cursor | `~/.cursor/mcp.json` | JSON mcpServers (global: github, idea, sentry) |
-| Codex | `~/.codex/config.toml` | TOML (global: github, idea, sentry) |
-| Gemini | `~/.gemini/settings.json` | JSON merge (global: github, sentry) |
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` | JSON merge, stdio only (global: github, sentry, codegraph) |
-| VS Code | `~/Library/Application Support/Code/User/mcp.json` | JSON `servers` with explicit `type` (global: github, idea, sentry, codegraph) |
-
-Global MCP servers: github, idea, sentry, codegraph, and the shared Pi helper template. Project-level MCP servers (betterstack, mongodb, shortcut, notion) are configured per-project via `configure-mcp-tool.py --mode project`. See [docs/CAPABILITY_MATRIX.md](docs/CAPABILITY_MATRIX.md) for the complete per-tool matrix.
-
-`idea.json` uses SSE transport by default. Set `IJ_MCP_TRANSPORT=stdio` and run `detect-ij-mcp.py` for stdio mode. The MCP configure script sources its output before the gate check.
-
----
-
-## Shell & Editor
-
-### Prompt
-
-`dot_dotfiles/shell/prompt.sh` checks for starship first (`eval "$(starship init bash)"`), falling back to a debian_chroot-style prompt. `dot_config/starship.toml.tmpl` mirrors the fallback layout: `user@host path git_info ❯`.
-
-### Emacs
-
-`dot_emacs` configures [agent-shell](https://github.com/xenodium/agent-shell) with ACP support for OpenCode, Claude Agent, Codex, and Gemini CLI. Includes `claude-agent-acp` as a system dependency. Inherits environment from the parent Emacs process so API keys from `~/.env` are available.
-
-### NVM
-
-Default Node.js version: 24 (via `.nvmrc`). Reinstall all LTS versions: `scripts/install-nvm-lts.sh`
-
-### pyenv
-
-`dot_dotfiles/shell/paths.sh` includes a stale lock cleanup before `pyenv init` to prevent "cannot rehash: couldn't acquire lock" errors on startup.
-
----
-
-## Platform Notes
-
-### macOS
-
-- Homebrew: ARM Mac prefix `/opt/homebrew`, Intel Mac `/usr/local`, auto-detected via `brew --prefix`
-- Desktop apps (casks) are macOS-only, skipped on Linux
-- iTerm2 config uses Dynamic Profiles JSON (no secrets, no plist)
-- The dynamic profile has `Rewritable: true` — iTerm2 UI edits override the JSON in the plist, but `make deploy` resets to the template. To persist UI changes back into the repo, extract the profile from `~/Library/Preferences/com.googlecode.iterm2.plist` (entry with `Guid: dotfiles-default-profile-v1`) and update `configs/iterm2/Default.json.tmpl`
-- macOS security defaults gated by `DOTFILES_RUN_MACOS_SECURITY_SETUP=1`
-- Meridian launchd gated by `DOTFILES_RUN_MERIDIAN_SETUP=1`
-
-### Linux
-
-- Homebrew installs to `/home/linuxbrew/.linuxbrew`, sourced via `brew shellenv`
-- Only `brew` formulae install; `cask` entries are skipped
-- Use `$(brew --prefix)` for Homebrew path resolution — no hardcoded platform paths
-
-### Windows
-
-- Package management via `winget` and `wingetfile*` category bundles
-- `the package-install run_onchange script` handles both `brew bundle` and `winget install` (Windows-only section)
-- Windows winget install is gated by the same `DOTFILES_RUN_PACKAGES_SETUP` toggle as Homebrew
-
-## Pi
-
-Pi is the optional terminal coding agent. Enable it with `DOTFILES_RUN_PI_SETUP=1`; see [docs/PI.md](docs/PI.md) for providers, MCP, ACP, plugins, and skills.
-
-### Cortex
-
-Cortex Code is the Snowflake specialist. Enable it with `DOTFILES_RUN_CORTEX_SETUP=1`; see [docs/CORTEX.md](docs/CORTEX.md) for native MCP, ACP delegation, and Snowflake skills.
+Markdown prose should **soft-wrap in the editor** rather than being hard-wrapped at an arbitrary width. Preserve intentional Markdown structure, code blocks and hard breaks; see [documentation conventions](docs/CONVENTIONS.md).
