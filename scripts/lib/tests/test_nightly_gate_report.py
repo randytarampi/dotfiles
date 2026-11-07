@@ -53,6 +53,18 @@ def test_corrupt_or_unknown_receipt_fails_closed(tmp_path):
 def test_report_cli_writes_machine_and_human_repair_artifacts(tmp_path):
     receipt(tmp_path / f"{report.GATES[0]}.txt", report.GATES[0], "cancelled")
     summary, json_file = tmp_path / "summary.md", tmp_path / "result.json"
-    assert report.main(["--results", str(tmp_path), "--summary", str(summary), "--json", str(json_file)]) == 0
+    assert (
+        report.main(
+            [
+                "--results",
+                str(tmp_path),
+                "--summary",
+                str(summary),
+                "--json",
+                str(json_file),
+            ]
+        )
+        == 0
+    )
     assert "DEGRADED" in summary.read_text()
     assert '"overall": "DEGRADED"' in json_file.read_text()
