@@ -50,7 +50,7 @@ Choose one of these best-effort integration paths:
 | What to set | Where | Value shape |
 |-------------|-------|-------------|
 | LiteLLM VS Code extension gateway URL | Extension settings | `<gateway>` |
-| LiteLLM VS Code extension API key | Extension sign-in/settings; stored in VS Code secret storage | Copilot-client virtual key |
+| LiteLLM VS Code extension API key | Extension sign-in/settings; stored in VS Code secret storage | VS Code-specific LiteLLM virtual key (`LITELLM_VSCODE_KEY`) |
 | `github.copilot.advanced.debug.overrideProxyUrl` | VS Code settings JSON | `<gateway>` |
 | `github.copilot.advanced.debug.testOverrideProxyUrl` | VS Code settings JSON | `<gateway>` |
 
