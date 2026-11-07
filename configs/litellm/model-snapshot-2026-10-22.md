@@ -8,7 +8,7 @@ These were performed with non-empty account credentials and 15-second timeouts, 
 
 - **Cohere:** `GET /v1/models` returned HTTP 200 and 20 models (558 ms). `command-a-03-2025` on the compatibility chat endpoint returned HTTP 200 with one choice (13,748 ms). Trial/monthly rate-limit headers were present, but entitlement, ongoing cost and tool-call support remained **UNKNOWN**; observed rate headers do not prove free billing.
 - **Poolside:** `GET /v1/models` returned HTTP 200 with `poolside/laguna-xs-2.1` and `poolside/laguna-s-2.1` (676 ms). A `poolside/laguna-xs-2.1` chat request returned HTTP 200 with one choice (562 ms). A 60-request rate-limit header was observed; pricing, entitlement and tool-call behaviour remained **UNKNOWN**.
-- **Recovery/acceptance:** Re-query exact current provider endpoints and model IDs, inspect account-level entitlement separately, and prove actual tool/inference behaviour before promoting a candidate into a generated client or strict-free preset. See [optional inference guidance](../../docs/OPTIONAL_INFERENCE.md).
+- **Recovery/acceptance:** Re-query exact current provider endpoints and model IDs, inspect account-level entitlement separately, and prove actual tool/inference behaviour before promoting a candidate into a generated client or strict-free preset. See [optional inference guidance](../../docs/optional-inference.md).
 
 ## Oh My OpenCode preset roles
 
