@@ -42,6 +42,27 @@
     honour the CLI profile, record UNSUPPORTED or UNKNOWN, not a fabricated
     desktop launcher or inference override.
 
+## P0 ChatGPT Desktop Codex-panel acceptance ledger (#216)
+
+**Current claim:** Codex CLI is owner-reported working with LiteLLM. That does not establish the **Codex panel inside ChatGPT Desktop** uses a custom profile; ordinary ChatGPT Chat and Work remain separate hosted consumers. [LiteLLM's desktop Codex guide](https://docs.litellm.ai/docs/proxy/client_setup/codex_chatgpt_desktop) documents the shared ~/.codex/config.toml and warns that GUI apps may not inherit shell-exported virtual keys. It illustrates the private ~/.codex/.env path; this repo has not qualified a managed owner-preserving delivery for that file.
+
+### Read-only checks before any owner-approved GUI change
+
+1. Record exact ChatGPT Desktop and Codex versions. Use the app's **Settings → Configuration → Open config.toml** and inspect provider/profile identifiers without copying secrets. Do not change the root model or provider merely because a named profile exists.
+2. Inspect the current managed model_providers.litellm block, wire_api=responses, exact served alias and profiles.litellm. The CLI and GUI may disagree on what a named profile means; compare selected effective settings rather than generated text alone.
+3. Inspect **only presence, ownership and restrictive mode** of the dedicated key in the runtime GUI environment; do not print the value, write a new ~/.codex/.env automatically or assume a shell export reaches the Desktop app.
+4. With explicit owner consent, select the gateway model inside the Codex panel and run a harmless read-only task that actually issues a Responses request. Capture a redacted LiteLLM virtual-key request receipt, streaming result and tool handling. If the GUI can't select the profile, record UNKNOWN/UNSUPPORTED; do not force the root default as a workaround.
+5. Exercise unavailable gateway, denied credential and unsupported model; verify no undocumented direct or paid fallback. Restore hosted mode without modifying Chat, Work, account/subscription settings, local history or Codex CLI defaults.
+
+| Consumer | Evidence needed | Status as of 2026-11-07 |
+|---|---|---|
+| Codex CLI | Owner's working LiteLLM experience; not repeated | OWNER-REPORTED |
+| Codex in ChatGPT Desktop | GUI-selected model, Responses/tool request and scoped gateway receipt | UNKNOWN |
+| Ordinary ChatGPT Chat | No supported custom inference endpoint through Codex config | NOT ROUTABLE BY THIS PROFILE |
+| ChatGPT Work | No supported custom inference endpoint through Codex config | NOT ROUTABLE BY THIS PROFILE |
+
+**Handoff:** keep existing model registry and dedicated credential; no new Desktop-only provider catalogue, TLS interception, public gateway listener or app internals edits. Current claim remains restricted to source/profile readiness until the owner submits a versioned GUI receipt. Separate the successful desktop task from account and privacy boundary testing.
+
 ## Negative matrix
 
 - Missing/unsafe/rotated key; missing gateway, invalid exact model alias; `/v1/responses` unsupported; malformed/unmanaged `config.toml` collision; gate-off mode; hosted/default mode unaffected; no hidden billed fallback; no shell/GitHub credentials accidentally written into Codex config.
