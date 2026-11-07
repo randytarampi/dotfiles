@@ -110,9 +110,7 @@ OBSERVATION_FIELDS = frozenset(
 def review_fingerprint(current: dict) -> str:
     """Fingerprint candidate evidence without its observation timestamps."""
     stable = {
-        key: value
-        for key, value in current.items()
-        if key not in OBSERVATION_FIELDS
+        key: value for key, value in current.items() if key not in OBSERVATION_FIELDS
     }
     canonical = json.dumps(
         stable, sort_keys=True, separators=(",", ":"), allow_nan=False

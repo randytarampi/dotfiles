@@ -124,7 +124,6 @@ def test_generated_body_has_all_pr_template_sections_and_no_fake_ci_pass():
 
 
 
-
 def test_review_digest_recovers_stale_pr_metadata_without_timestamp_churn():
     original = _inventory()
     fingerprint = review_fingerprint(original)
@@ -137,6 +136,7 @@ def test_review_digest_recovers_stale_pr_metadata_without_timestamp_churn():
     assert review_fingerprint(observed_later) == fingerprint
     observed_later["models"][0]["pricing"]["output"] = 0.01
     assert review_fingerprint(observed_later) != fingerprint
+
 
 def test_comparison_reads_legacy_bot_inventory_and_protects_markdown():
     current = _inventory()

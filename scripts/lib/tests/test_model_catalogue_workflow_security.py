@@ -321,13 +321,13 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
     bin_dir.mkdir()
     gh = bin_dir / "gh"
     gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'case "$2" in\n'
         '  list) printf "%s" "${GH_PR_JSON:-[]}" ;;\n'
         '  view) printf "%s" "${GH_PR_DETAILS}" ;;\n'
         '  edit) if [ "${GH_PR_EDIT_FAIL:-0}" = 1 ]; then exit 42; fi ;;\n'
-        '  *) exit 1 ;;\n'
-        'esac\n'
+        "  *) exit 1 ;;\n"
+        "esac\n"
     )
     gh.chmod(0o755)
     env = os.environ.copy()
@@ -356,8 +356,7 @@ def test_publish_noop_runs_only_for_equal_semantics_and_open_pr(tmp_path):
         "title": "chore(agents): review free-model candidates",
         "body": (
             "## Outcome and scope\n## Contributors and roles\n"
-            "## Evidence\n## Review disposition\n## Risk and handoff\n"
-            + marker
+            "## Evidence\n## Review disposition\n## Risk and handoff\n" + marker
         ),
     }
 
