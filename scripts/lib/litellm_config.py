@@ -762,7 +762,7 @@ CLIENT_REGISTRY = [
             "scripts/configure-mozart-router.py:46",
             "scripts/configure-mozart-router.py:62",
             "scripts/lib/litellm_routing.py:25",
-            "docs/MOZART.md:7",
+            "docs/mozart.md:7",
         ],
     ),
 ]
@@ -1265,7 +1265,7 @@ def _registry_model_refs():
             continue
     try:
         refs.update(
-            _markdown_model_refs((root / "docs/TIERS.md").read_text(encoding="utf-8"))
+            _markdown_model_refs((root / "docs/tiers.md").read_text(encoding="utf-8"))
         )
     except OSError:
         pass
@@ -1638,7 +1638,7 @@ def compute_model_list(environ=None, previous_entries=None):
             for model_id in model_ids
         )
 
-    # refs are loop-invariant (two JSON reads + a TIERS.md regex pass per
+    # refs are loop-invariant (two JSON reads + a tiers.md regex pass per
     # call) — compute once instead of per provider iteration.
     refs = _registry_model_refs()
     clouds = {

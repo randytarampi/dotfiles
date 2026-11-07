@@ -1175,7 +1175,7 @@ def _record_stale_model_warning(results):
         results["warnings"].append(
             "Model assignments last synced "
             f"{age_text} days ago — re-run `make deploy` (or scripts/configure-jetbrains-ai.py + "
-            "scripts/configure-opencode.py) after reviewing docs/MODEL_UPDATES.md"
+            "scripts/configure-opencode.py) after reviewing docs/model-updates.md"
         )
         logger.warning(results["warnings"][-1])
 
