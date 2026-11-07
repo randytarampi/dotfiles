@@ -1,8 +1,8 @@
 # Basic Memory — fleet-wide local MCP memory
 
-**Status:** proposal in draft PR stack; host tests not run. **Baseline:** `main@5409ed2669b2` (2 November 2026). **Research and implementation:** ChatGPT (GPT-6). **Owner acceptance:** pending.
+**Status (reconciled 2026-11-07):** repository integration delivered in merged [PR #147](https://github.com/randytarampi/dotfiles/pull/147), with follow-on documentation [#148](https://github.com/randytarampi/dotfiles/pull/148). This is not a claim of installed cross-client retrieval or telemetry acceptance: those require the bounded owner-host checks in [issue #214](https://github.com/randytarampi/dotfiles/issues/214). The 2 November 2026 `main@5409ed2669b2` baseline and any original review/test statements below are historical, not current-head CI evidence. See the [modernization roadmap](MODERNIZATION_ROADMAP.md) for current status and deferrals.
 
-## Intended contract
+## Delivered repository contract and deliberate limitations
 
 - Basic Memory v1.0.0 is the one shared local Markdown knowledge system for tools configured through `configs/mcp/global-mcps.json`. All 15 managed *global* MCP registrations contain `basic-memory`. The per-project MCP registry remains independent to avoid duplicate registration.
 - Each supported client starts `uvx --prerelease=allow --from basic-memory==1.0.0 basic-memory mcp` using stdio. It accesses the same user-account data directory (default `~/basic-memory`) and index/config (default `~/.basic-memory`). This is per-user, **per-host**: there is no automatic synchronization between machines.
@@ -12,7 +12,7 @@
 - The OpenCode v2-specific `opencode-mem` plugin is no longer managed. The global OpenCode v2 configuration emits `-opencode-mem` to disable previously installed package plugins, because merely dropping them from a manifest does not prevent OpenCode from loading its local package cache. Pre-existing `~/.opencode-mem/data` and `~/.config/opencode/opencode-mem.jsonc` remain undisturbed; no automatic data conversion, active dual writer or delete.
 - MCP tools provide explicit read/write/context access; they do **not** establish reliable automatic event capture, per-session provenance or per-project worktree scoping across all agents. Native integrations are a separate follow-up.
 
-## Implementation map
+## Implemented source map
 
 - `configs/mcp/global-mcps.json`: 15 global consumers; the canonical registry continues to own registrations.
 - `configs/mcp/basic-memory.json` and `configs/mcp/templates/basic-memory.json`: parity-matched stdio templates, pinned runtime, local reranking and telemetry settings.
@@ -22,12 +22,12 @@
 
 ## Evidence and required maintainer checks
 
-**Verified through source inspection:** upstream 1.0.0 documentation and CLI source support `basic-memory mcp` and local FastEmbed reranking; `BASIC_MEMORY_NO_PROMOS=1` disables Umami promo telemetry; Logfire is opt-in; the dotfiles central MCP generator supports command templates for all listed clients.
+**Historical source inspection (2 November):** upstream 1.0.0 documentation and CLI source support `basic-memory mcp` and local FastEmbed reranking; `BASIC_MEMORY_NO_PROMOS=1` disables Umami promo telemetry; Logfire is opt-in; the dotfiles central MCP generator supports command templates for all listed clients.
 
-**NOT RUN:** package installation on actual hosts, network egress inspection, true cross-client recall, semantic ranking quality, all-client launches, CI, and `make verify`. Do not treat configuration generation as proof of operational acceptance.
+**Delivery evidence:** the repository integration merged as #147. **This documentation reconciliation did not run** the installed host, network-egress, semantic-ranking, cross-client or full local `make verify` checks. Record exact current-head CI separately from owner-host acceptance; do not infer a real memory consumer from merged templates or mock tests. The following checklist is tracked by [#214](https://github.com/randytarampi/dotfiles/issues/214).
 
 1. Confirm pinned `uvx` runtime/CLI and Python 3.12+ availability on macOS, Linux, and supported Windows targets. Validate GUI IDE PATH, model download and offline re-launch.
-2. Run `make check-mcp-parity`, `make check-plugin-consistency`, focused tests, and `make verify` on each final head; then apply twice and prove idempotence and no user-authored config regression.
+2. For subsequent source changes, run `make check-mcp-parity`, `make check-plugin-consistency`, focused tests and `make verify` at the exact PR head; on a qualified host, deploy twice and prove idempotence and no user-authored config regression.
 3. In an isolated Basic Memory project, save a harmless unique note from Pi, retrieve from a fresh OpenCode v2 and Claude session, and exercise real vector/hybrid search with reranking. Verify per-project isolation, worktree mapping, and the difference between remembered agent notes and current CodeGraph/index state.
 4. Verify telemetry off with a blocked outbound network or capture sink and assert no unexpected Umami/Logfire/OTel requests. Check that first-time package/model downloads do not get confused with *telemetry*.
 5. Prove that OpenCode Mem user data remains available in a private backup and that a disabled/unavailable `uvx` fails visibly without corrupting memory, bypassing MCP permissions, or rewriting unrelated agent state.
@@ -43,7 +43,7 @@ Basic Memory v1.0.0 offers `basic-memory mcp --transport streamable-http --host 
 
 ## Rollback and deliberately deferred scope
 
-Rollback consists of removing the Basic Memory registry entries and regenerating client configurations after making backups. **Never delete** `~/basic-memory`, `~/.basic-memory`, `~/.opencode-mem/data` or user-owned MCP files merely to roll back a configuration. Automatic capture hooks, memory-agent inference, cross-host sync, background service, Caddy exposure, automated migrator, and dynamic LiteLLM reranker selection are separate follow-ups. The next owner can use this plan as an executable checklist without assuming acceptance has occurred.
+Rollback consists of removing the Basic Memory registry entries and regenerating client configurations after making backups. **Never delete** `~/basic-memory`, `~/.basic-memory`, `~/.opencode-mem/data` or user-owned MCP files merely to roll back a configuration. Automatic capture hooks, memory-agent inference, cross-host sync, background service, Caddy exposure, automated migrator and dynamic LiteLLM reranker selection remain deliberately deferred, not unchecked criteria for #214. Live acceptance requires explicit issue evidence, not an assumption that the merged setup was exercised.
 
 ## References
 
