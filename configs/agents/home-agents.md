@@ -2,7 +2,7 @@
 
 Cortex Code is Snowflake's specialist terminal agent configured in `~/.snowflake/cortex/`; use it for Snowflake-specific work, not general provider-agnostic tasks.
 
-Configured agent tools are OpenCode, Codex, Junie, Pi, Cortex, Claude, Copilot, Gemini, Cursor, Cline, and Antigravity. Their integration details are documented in `docs/CAPABILITY_MATRIX.md` in the dotfiles repository.
+Configured agent tools are OpenCode, Codex, Junie, Pi, Cortex, Claude, Copilot, Gemini, Cursor, Cline, and Antigravity. Their integration details are documented in `docs/capability-matrix.md` in the dotfiles repository.
 
 <!-- Managed by configure-agent-guidance.py — do not edit between AGENT_GUIDANCE markers -->
 
@@ -45,7 +45,7 @@ Credit substantive work by humans **and** AI agents at the point of delivery. Do
   7. **Finish:** deliver the agreed state and retire agent worktrees under recorded consent. Agent PRs stay draft; do not push, mark ready or merge without explicit authority.
 - **Terms:** a **lane** is an owned scope of work; the **validation owner** independently re-runs its decisive check; **checkpoint/stop scope** defines when to pause and what ends iteration; a **bounded stop budget** caps attempts before asking the human for direction.
 - Distinguish observed causes from hypotheses. A brief successful run is evidence for that run, not proof that a fix is permanent; use causal analysis appropriate to the evidence rather than requiring a fixed technique such as five whys.
-- Run focused red/green checks during implementation; they do not replace the final integrated verify when one applies. Required CI remains mandatory; normal coverage remains mandatory when integrated verification applies. Failures block delivery. Rerun only when relevant code, inputs or runtime invalidate evidence. For dotfiles mechanics and blocked-tool handling, use the `dotfiles-verify` skill and `docs/ORCHESTRATION.md` in the dotfiles repository.
+- Run focused red/green checks during implementation; they do not replace the final integrated verify when one applies. Required CI remains mandatory; normal coverage remains mandatory when integrated verification applies. Failures block delivery. Rerun only when relevant code, inputs or runtime invalidate evidence. For dotfiles mechanics and blocked-tool handling, use the `dotfiles-verify` skill and `docs/orchestration.md` in the dotfiles repository.
 - For service or model-generator changes, use the real consumer and credential path, capture a baseline, run twice, and check health, generated state/keys and idempotence. Isolate `HOME` and `PATH`, stub real service/process commands in tests, and confirm live services survived verification.
 - Keep progress brief and factual (command, exit, HEAD, evidence and outcome); do not narrate internal reasoning, job-board state or compaction repeatedly, and do not claim Markdown can repair host or adapter liveness.
 - At phase close, use the existing reflect skill for a lightweight, evidence-based reflection and the smallest justified improvement; skip ceremony for trivial tasks.
@@ -84,8 +84,8 @@ For GitHub rulesets API details, see `configs/agents/repo-agents-shared.md` in t
 
 ### Planning scope
 
-When changing AI tooling, map the affected interfaces and their actual consumers using `docs/CAPABILITY_MATRIX.md`. Check every consumer of the changed contract; do not audit unrelated tools unless they share the affected interface.
+When changing AI tooling, map the affected interfaces and their actual consumers using `docs/capability-matrix.md`. Check every consumer of the changed contract; do not audit unrelated tools unless they share the affected interface.
 
-> Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/ORCHESTRATION.md`.
+> Skills distribution is documented in the dotfiles repo's `AGENTS.md` and `docs/orchestration.md`.
 
 <!-- AGENT_GUIDANCE_END -->
