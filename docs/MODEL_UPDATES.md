@@ -220,6 +220,14 @@ unavailable source data and base-registry drift fail closed. An owner must
 investigate those cases rather than overriding the bot branch or changing
 the source allowlist.
 
+If Woofdy publishes a new bot commit but the subsequent PR edit fails,
+the next matching refresh can repair the PR title and template without
+rewriting the branch. Its current tip no longer contains a **distinct**
+previous inventory, so the repaired report explicitly says that historical
+delta cannot be reconstructed; it must not invent a zero-change history.
+The authoritative current comparison with curated preferences remains
+available in the JSON and draft PR.
+
 A timestamp-only refresh preserves the bot branch and draft PR. A genuine
 candidate, cost, curated-registry or provider-coverage change updates the
 draft with the existing force-with-lease and exact-path safeguards. Only

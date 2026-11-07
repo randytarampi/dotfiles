@@ -20,6 +20,7 @@ REGISTRY = REPO_ROOT / "configs/opencode/opencode-models.json"
 CONSOLE = "opencode"
 CONSOLE_SOURCE = "https://opencode.ai/inference/v1/models"
 SCHEMA_VERSION = 2
+INVALID_REVIEW = "inventory review fields are malformed"
 
 
 def provider_coverage(source: str) -> dict:
@@ -128,9 +129,9 @@ def _validated_review_partitions(review: dict, zero: set[str]) -> None:
     for key in required:
         members = review.get(key)
         if not isinstance(members, list):
-            raise ValueError("inventory review fields are malformed")
+            raise ValueError(INVALID_REVIEW)
         if any(not isinstance(item, str) for item in members):
-            raise ValueError("inventory review fields are malformed")
+            raise ValueError(INVALID_REVIEW)
         if len(members) != len(set(members)):
             raise ValueError("review contains repeated model IDs")
 
@@ -178,7 +179,7 @@ def _validated_current(current: dict) -> tuple[dict, dict, list[str], dict]:
     current_models = _as_models(current)
     review = current.get("review")
     if not isinstance(review, dict):
-        raise ValueError("inventory review fields are malformed")
+        raise ValueError(INVALID_REVIEW)
     _validated_review_partitions(review, set(current_models))
     counts = current.get("counts")
     _validated_counts(counts, len(current_models))
@@ -197,6 +198,16 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         for key in set(current_models) & set(prior_models)
         if current_models[key] != prior_models[key]
     )
+    if previous is None:
+        previous_note = "First known bot inventory.\n\n"
+    elif prior_models == current_models:
+        previous_note = (
+            "The current bot tip already contains this model/price set. "
+            "An earlier distinct baseline cannot be recovered from that tip.\n\n"
+        )
+    else:
+        previous_note = "Compared with the preceding bot inventory.\n\n"
+
     return (
         "## Outcome and scope\n\n"
         "Review-only free-model *candidates* from an authenticated Console "
@@ -218,11 +229,7 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         + "\n### Curated and listed, but not zero-priced\n\n"
         + _bullets(review["curated_listed_not_zero"])
         + "\n### Since the preceding bot inventory\n\n"
-        + (
-            "Previous bot inventory found.\n\n"
-            if previous
-            else "First known bot inventory.\n\n"
-        )
+        + previous_note
         + "**Newly zero-priced:**\n"
         + _bullets(added)
         + "\n**No longer zero-priced or no longer listed:**\n"
@@ -231,9 +238,9 @@ def render_pr_body(current: dict, previous: dict | None = None) -> str:
         + _bullets(price_changed)
         + "\n## Contributors and roles\n\n"
         "- **Implementation and other material contributions:** "
-        "Woofdy GitHub App — automatically fetched evidence and committed this "
-        "generated candidate report. The generator implementation is reviewed "
-        "in its separate source-code PR.\n"
+        "Woofdy GitHub App — published and committed the candidate report. "
+        "The separate read-only refresh job fetched model and pricing evidence. "
+        "The generator implementation is reviewed in its source-code PR.\n"
         "- **Review:** None yet; this draft is not an approval.\n\n"
         "## Evidence\n\n"
         "- Integrated `make verify`: NOT RUN by this refresh workflow; "
