@@ -63,6 +63,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/configure-paseo-tailnet.py",  # Owner-only Makefile CLI; never chezmoi-deployed
     "scripts/install-paseo.sh",  # Owner-only Makefile CLI; never chezmoi-deployed
     "scripts/configure-paseo-hermes.py",  # Owner-only Makefile CLI; never chezmoi-deployed
+    "scripts/migrate-env-sections.py",  # Owner-only I2 CLI; never a chezmoi deploy input
 }
 
 # Hash trigger pattern: # <path>: {{ include "<path>" | sha256sum }}
