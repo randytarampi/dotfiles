@@ -1,6 +1,6 @@
 # Claude Desktop third-party LiteLLM gateway pilot
 
-**Status: repo-side scaffold only; owner host and live inference NOT RUN.** The existing `scripts/claude-litellm` is for standalone Claude CLI, not Desktop.
+**Status (reconciled 2026-11-07):** repo-side Desktop helper/profile scaffold delivered; **actual Desktop Chat, Cowork and Code gateway outcomes still UNKNOWN**. Owner reports other Claude tooling working recently, which is not Desktop-specific acceptance. [#209](https://github.com/randytarampi/dotfiles/issues/209) is the dedicated priority Desktop issue. The existing `scripts/claude-litellm` is for standalone Claude CLI and must not be conflated with the GUI.
 
 ## Opt-in contract
 
@@ -10,6 +10,7 @@ Sources:
 - https://claude.com/docs/third-party/claude-desktop/gateway
 - https://claude.com/docs/third-party/claude-desktop/installation#single-machine-setup
 - https://claude.com/docs/third-party/claude-desktop/configuration-format
+- https://docs.litellm.ai/docs/proxy/client_setup/claude_desktop (LiteLLM-specific virtual-key and MCP setup; runtime evidence remains owner-gated)
 
 ## Owner-controlled local procedure
 
