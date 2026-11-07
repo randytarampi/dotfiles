@@ -412,3 +412,9 @@ The canonical `dot_dotfiles/shell/.env.example` declares section ownership. The 
 5. On failure after creating a backup, do **not** automatically restore an old snapshot over a concurrently changed file; stop and reconcile current bytes/owner state. The owner alone chooses recovery from the retained private backup.
 
 This migration intentionally rejects complex shell syntax, attached hand-written comments and non-private files. Such cases remain manual, not an excuse to loosen the parser. No automatic `make deploy`, `make migrate` or user home changes are introduced by this P2 PR.
+
+## Nightly integration stabilization (#212)
+
+The schedule-only [nightly integration workflow](../.github/workflows/nightly-integration.yml) runs configuration-only OpenCode, MCP and agent-guidance gates in fresh homes. Installer, service, CodeGraph unavailable-prerequisite, security-hardening and system-default gates are not scheduled. Every enabled matrix gate must produce its own `gate=...` / `result=...` receipt; the report parser treats missing, malformed, skipped, cancelled and failed receipts as **DEGRADED**, never as PASS. The machine-readable `nightly-aggregate-report` artifact and GitHub job summary show outcomes even while per-gate jobs retain `continue-on-error: true` during stabilization.
+
+This is **not** a PR-required check or operational paging system. An owner should check the scheduled [Actions runs](https://github.com/randytarampi/dotfiles/actions/workflows/nightly-integration.yml), record the latest exact gate statuses and assign failures in [#212](https://github.com/randytarampi/dotfiles/issues/212). Before making the schedule hard-fail, require a current-head stabilization run history (including failures and exclusions), an approved owner-facing notification path, and an explicit acceptance decision. Do not claim those conditions were met merely because the reporter was added.
