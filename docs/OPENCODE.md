@@ -2,9 +2,15 @@
 
 Optional credentialed direct inference providers are described in [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md). They are not automatically classified as free or included in strict-free fallback chains.
 
-## Host Install (v2)
+## Host installation and one-way v2 qualification
 
-OpenCode is installed/updated via the official install script (latest stable v2; binary at `~/.opencode/bin/opencode`, directory first on PATH). Brew and winget do not manage OpenCode. On the documented macOS cutover, the official installer updated `~/.zshrc` only; standalone shells may need an explicit PATH adjustment or an absolute `~/.opencode/bin/opencode` invocation. Managed repo consumers (plugin installer, host probe and launchd service) select the binary by absolute path through the shared managed resolver, not via shell startup files. Do not add a global `~/.zshenv` change solely to fix a service or deploy. For the one-time Meridian CLI qualification stage, install **OpenCode 2.0.31** (not the desktop-bundled 2.2.0 qualification), run `meridian setup --v2`, then upgrade to latest v2 only after checking registration and real provider routing. Follow [the cutover runbook](OPENCODE-V2-CUTOVER-RUNBOOK.md); qualification of the newer host remains an owner-run acceptance gate.
+OpenCode is installed and updated using the repository's official installer path (`scripts/install-opencode-v2.sh`); the managed binary is `~/.opencode/bin/opencode`. Brew and winget do not own this CLI. Validate the executable actually selected by the login shell, non-login process and launchd service; an installation completed on disk is not proof that the running service uses it. The shared managed binary resolver avoids relying on shell startup scripts. Do not add a global `~/.zshenv` edit merely to work around a diagnostic PATH issue.
+
+**Owner-only Meridian bootstrap (historical macOS v2 cutover, 2 November 2026):** The owner's previously qualified sequence installed the CLI release `2.0.31`, ran `meridian setup --v2 --opencode-bin <resolved-managed-binary>`, verified persistent plugin registration and a real request, and then updated to the latest stable v2. Those version numbers and host results are historical evidence, not a declaration that the same releases are currently qualified. Before repeating this process, inspect the installed Meridian's actual support matrix; stop if its CLI host compatibility cannot be established. After a successful one-time registration, keep `DOTFILES_RUN_MERIDIAN_SETUP=0` so ordinary deploys preserve the entry without repeating an unsupported setup. See [Meridian](MERIDIAN.md).
+
+**Preflight and acceptance:** Snapshot and restore-test user-owned OpenCode configuration, memory, Meridian state and applicable service metadata before a one-way migration. Use a single configuration writer. Verify managed CLI version/permissions, native v2 config, plugin loading, MCPs, the configured voice client, authenticated `GET /api/info`, Caddy authentication and WebSocket routing where enabled, and one actual routed request per required consumer. Run a second deployment and compare state for idempotency; `make verify` and green CI alone do not establish live-host acceptance. A failed provider route, redaction at model egress, memory preservation, or wrong service binary is a stop condition; restore from verified private snapshots as required, without silently reinstalling v1 or overwriting user-owned files.
+
+**Historical host gotchas:** An inherited OTLP exporter made one instrumented `opencode --version` probe exceed Meridian's timeout; diagnose against a clean child environment rather than globally disabling telemetry. Plugin-cache `@latest` entries can be stale: inspect the actual printed plugin identities and update the specific cache, never weaken exact-match verification. Check for competing brew-managed and repository-managed Caddy instances before starting another listener. Windows official installer path and live CLI discovery were not qualified by the reported macOS cutover; verify Windows independently.
 
 ## Web Service
 
@@ -61,22 +67,19 @@ ACP (Agent Client Protocol) agents are configured in `~/.config/opencode/acp-age
 
 6. **Test**: In OpenCode, use `/agent <agent-name>` to invoke a specific ACP agent (e.g., `@gemini hello`, `@copilot explain this code`, `@pi help`, `@codex review this`)
 
-## Fleet Plugins
+## Fleet plugins
 
-The generated `plugins` array in `opencode.json` (native OpenCode v2 config, via `scripts/configure-opencode.py`, mirrored in `.chezmoiscripts/run_onchange_07-install-opencode-plugins.sh.tmpl`) is driven by the canonical manifest (all plugins pinned to `@latest`, per migration plan) at `configs/opencode/opencode-plugins.json`:
+The current source of truth is [`configs/opencode/opencode-plugins.json`](../configs/opencode/opencode-plugins.json), consumed by the installer and `scripts/configure-opencode.py`. This list is a manifest of intended packages, not proof of versions installed on a host.
 
-| Plugin | Purpose |
-|--------|---------|
-| `oh-my-opencode-slim@latest` | Orchestrator agent suite (deepwork, skills distribution) |
-| `@tarquinen/opencode-dcp@latest` | Dynamic context pruning (v2: single manifest registration; TUI panel auto-loads) |
-| `@plannotator/opencode` | Interactive plan/code review UI (emitted as a `{package, options}` object) |
-| `github:AxeForce/opencode-vibeguard-v2#934823e5` | Secrets redaction before LLM requests — GitHub-pinned dual-runtime build (v1 `server()` + v2 `setup()`), package.json 0.2.0 |
-| `@cheesecodestudio/opencode-tokenscope-v2@latest` | Token usage/cost reporting (replaces `@ramtinj95/opencode-tokenscope`) |
-| Meridian plugin (local path) | Request headers/telemetry via Meridian proxy |
+| Managed plugin | Purpose |
+| --- | --- |
+| `oh-my-opencode-slim@latest` | Orchestration, presets and agents |
+| `@tarquinen/opencode-dcp@latest` | Dynamic context pruning |
+| `@plannotator/opencode@latest` | Plan and code review |
+| `github:AxeForce/opencode-vibeguard-v2#main` | Secret-redaction plugin; floating Git branch, not a pinned immutable SHA |
+| `@cheesecodestudio/opencode-tokenscope-v2@latest` | Token and cost reporting |
 
-Voice is a global TUI-client-only plugin: it lives in `~/.config/opencode/cli.json` (manifest `cli_plugins` registry; tier options attached by `configure-opencode-voice.py`) — see [VOICE.md](VOICE.md). DCP loads from the `plugins` array above; Basic Memory is configured via MCP instead.
-
-> **Note (2026-10-13, revised 2026-10-31):** `@slkiser/opencode-quota` and its quota surfaces are retired from the fleet as part of the one-way OpenCode v2 migration (user-owned quota files were never deleted). Removed earlier: `opencode-plugin-openspec` (underutilized) and `opencode-planning-with-files` (experiment retired) — see `configs/opencode/opencode-plugins.json` for the live canonical set. The original VibeGuard npm line (0.1.0) and TokenScope (`@ramtinj95`, 1.8.1) are replaced by the v2-capable builds in the table above.
+OpenCode's TUI-only voice plugin is `@renjfk/opencode-voice@latest`, registered via `cli_plugins` and written to `cli.json` by `scripts/configure-opencode-voice.py`; the previous `@bojackduy/opencode-voice` fork is retired. See [Voice](VOICE.md). `@latest` follows the manifest's floating-source policy but may require explicit cache refresh to update a warm installation. Meridian registration is managed independently of this manifest; Basic Memory is an MCP integration, not an OpenCode plugin.
 
 ### Shared local memory
 

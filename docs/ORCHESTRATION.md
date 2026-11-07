@@ -1,13 +1,15 @@
 # Dotfiles Orchestration Architecture
 
 
-Optional inference provider generation preserves the existing three-layer contract: `provider_endpoints.py` defines trusted endpoints and account binding; OpenCode/Pi/Junie consume enabled, credentialed routes; LiteLLM exposes separate opt-in full-scope aliases. Hosted review actions use direct provider selection, not local loopback LiteLLM. See [OPTIONAL_INFERENCE.md](OPTIONAL_INFERENCE.md).
-
 > This document is the canonical reference for the dotfiles orchestration architecture. All changes to scripts, Makefile targets, or configure scripts must be evaluated against the principles documented here.
 
 ## Overview
 
 The dotfiles repo uses a three-layer architecture to manage machine configuration, with project-scoped configuration as the project-facing extension of Layer 3. `make deploy` is the single command that reconciles a machine — it runs `chezmoi apply` (templates + scripts) followed by `configure-all.sh` (AI tool config generators). The OpenCode web LaunchAgent is generated and owned by that flow; its process entry point is `opencode serve --port`, and its start/stop/restart targets are the explicit `make opencode-start`, `make opencode-stop` and `make opencode-restart` commands (not `opencode service` subcommands).
+
+### Provider-generation boundary
+
+Optional inference providers follow this same three-layer contract: `provider_endpoints.py` defines trusted endpoints and account binding; OpenCode, Pi and Junie consume enabled routes through their respective adapters; LiteLLM exposes separately gated aliases. Hosted GitHub reviewer actions select direct providers, not the workstation's loopback LiteLLM. See [Optional inference](OPTIONAL_INFERENCE.md).
 
 ## Three-Layer Architecture
 
