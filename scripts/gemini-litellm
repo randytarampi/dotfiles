@@ -74,6 +74,10 @@ def prepare(environ, *, key=None):
         return model, endpoint, None
     if environ.get("GEMINI_API_KEY") not in (None, "", key):
         raise ValueError("Existing GEMINI_API_KEY conflicts with the scoped gateway key")
+    # Google SDKs can prefer GOOGLE_API_KEY over GEMINI_API_KEY. Deny any
+    # different inherited credential instead of risking unscoped inference.
+    if environ.get("GOOGLE_API_KEY") not in (None, "", key):
+        raise ValueError("Existing GOOGLE_API_KEY conflicts with the scoped gateway key")
     result = dict(environ)
     result["GEMINI_API_KEY"] = key
     result["GOOGLE_GEMINI_BASE_URL"] = endpoint
