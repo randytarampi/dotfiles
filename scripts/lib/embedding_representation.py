@@ -3,6 +3,10 @@
 Not an index migrator. No database, file, gateway, or network access.
 """
 
+import re
+
+_SHA256 = re.compile(r"(?:sha256:)?[0-9a-f]{64}\Z")
+
 REQUIRED_FIELDS = (
     "engine",
     "model",
@@ -20,6 +24,10 @@ REQUIRED_FIELDS = (
 def _valid(value, key):
     if key == "dimensions":
         return type(value) is int and value > 0
+    if key == "fixed_vector_sha256":
+        return isinstance(value, str) and bool(_SHA256.fullmatch(value))
+    if key == "digest" and isinstance(value, str) and value.startswith("sha256:"):
+        return bool(_SHA256.fullmatch(value))
     if key in ("task_prefix", "template"):
         # Explicit empty values differ from missing/unknown settings.
         return isinstance(value, str)
