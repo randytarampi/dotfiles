@@ -89,3 +89,41 @@ def test_dry_run_never_reads_credentials(monkeypatch, capsys):
         monkeypatch.setenv(name, value)
     assert MODULE.main(["--dry-run"]) == 0
     assert "UNKNOWN" in capsys.readouterr().out
+
+
+
+def test_native_login_must_explicitly_select_api_key(tmp_path):
+    import json
+
+    home = tmp_path / "home"
+    project = tmp_path / "repo"
+    project.mkdir()
+    settings = home / ".gemini/settings.json"
+    settings.parent.mkdir(parents=True)
+    with pytest.raises(ValueError, match="select Gemini API-key"):
+        MODULE.require_api_key_auth(home, project)
+    settings.write_text(json.dumps({"security": {"auth": {"selectedType": "oauth-personal"}}}))
+    with pytest.raises(ValueError, match="gemini-api-key"):
+        MODULE.require_api_key_auth(home, project)
+    settings.write_text(json.dumps({"security": {"auth": {"selectedType": "gemini-api-key"}}}))
+    assert MODULE.require_api_key_auth(home, project) is True
+    project_settings = project / ".gemini/settings.json"
+    project_settings.parent.mkdir()
+    project_settings.write_text(json.dumps({"security": {"auth": {"selectedType": "vertex-ai"}}}))
+    with pytest.raises(ValueError, match="workspace"):
+        MODULE.require_api_key_auth(home, project)
+    project_settings.unlink()
+    (project / ".gemini/.env").write_text("GEMINI_API_KEY=another-provider")
+    with pytest.raises(ValueError, match="workspace Gemini .env"):
+        MODULE.require_api_key_auth(home, project)
+
+
+def test_dry_run_refuses_forwarded_unknown_flags(monkeypatch):
+    for name, value in good().items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(SystemExit) as exc:
+        MODULE.main(["--dry-run", "--surprise"])
+    assert exc.value.code == 2
+    with pytest.raises(SystemExit) as exc:
+        MODULE.main(["--dry-run", "--model=direct-google"])
+    assert exc.value.code == 2
