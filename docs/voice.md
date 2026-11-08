@@ -143,3 +143,7 @@ No tool in this repo has dedicated i18n plugin support beyond Pi's `@juicesharp/
 ### Why a shared inference server is not a shared voice plugin
 
 Agent guidance (`AGENTS.md`) is plain Markdown; microphone capture, editable insertion, streaming and TTS playback are implemented in each actual client or plugin. **HTTP STT/TTS endpoints are shareable** when a client supports the correct wire protocol, voice/model IDs and authentication; the local oMLX and scoped LiteLLM routes are examples. They do **not** make an in-process Whisper/sherpa-onnx/Piper plugin automatically configurable to consume that HTTP service. Keep OpenCode Voice's Piper synthesis and Pi Voice's sherpa-onnx dependency unless the installed extension exposes an independently qualified replacement interface. [#222](https://github.com/randytarampi/dotfiles/issues/222) tracks bounded, capability-first local speech convergence across OpenCode Voice, Pi, Open WebUI and Paseo; [#221](https://github.com/randytarampi/dotfiles/issues/221) tracks the underlying service readiness/failure matrix.
+
+## Cross-client local speech qualification
+
+See [local-speech-acceptance.md](local-speech-acceptance.md) for the current producer-to-consumer evidence matrix, protocol-safe routing, negative cases and owner-only acceptance steps under [#222](https://github.com/randytarampi/dotfiles/issues/222). This cross-client work does **not** change the configured OpenCode Piper or Pi sherpa-onnx plugin requirements, nor does it rewrite WebUI or Paseo settings.
