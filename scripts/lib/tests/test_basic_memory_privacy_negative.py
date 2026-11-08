@@ -4,8 +4,10 @@ These are local, network-free contract tests, NOT proof of actual upstream
 Umami/Logfire/OTel egress or of live semantic search in a user session.
 """
 
+import importlib.util
 import json
 from pathlib import Path
+import stat
 
 import pytest
 
@@ -14,6 +16,15 @@ from basic_memory_ownership import ensure_basic_memory_ownership
 ROOT = Path(__file__).resolve().parents[3]
 TEMPLATE = ROOT / "configs/mcp/basic-memory.json"
 RENDER_TEMPLATE = ROOT / "configs/mcp/templates/basic-memory.json"
+
+
+def load_actual_writer():
+    script = ROOT / "scripts/configure-mcp-tool.py"
+    spec = importlib.util.spec_from_file_location("mcp_writer_under_test", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 PRIVACY = {
     "BASIC_MEMORY_NO_PROMOS": "1",
     "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
@@ -77,9 +88,27 @@ def test_private_memory_collision_rejected_without_filesystem_mutation(
     before = [(file.read_bytes(), file.stat().st_mtime_ns) for file in files]
     existing = {"mcpServers": {"basic-memory": custom, "external": {"command": "keep"}}}
     generated = {"mcpServers": {"basic-memory": expected}}
+    # Exercise the real MCP writer, not just its pure ownership validator.
+    config_path = tmp_path / "client-mcps.json"
+    config_path.write_text(json.dumps(existing), encoding="utf-8")
+    config_path.chmod(0o600)
+    config_before = (
+        config_path.read_bytes(),
+        config_path.stat().st_mtime_ns,
+        stat.S_IMODE(config_path.stat().st_mode),
+    )
     with pytest.raises(ValueError, match="refusing to overwrite"):
-        ensure_basic_memory_ownership(existing, generated, "mcpServers")
-    assert existing["mcpServers"]["external"] == {"command": "keep"}
+        load_actual_writer().merge_configs_to_file(
+            "json-mcpServers-merge", config_path, json.dumps(generated)
+        )
+    assert json.loads(config_path.read_text())["mcpServers"]["external"] == {
+        "command": "keep"
+    }
+    assert (
+        config_path.read_bytes(),
+        config_path.stat().st_mtime_ns,
+        stat.S_IMODE(config_path.stat().st_mode),
+    ) == config_before
     assert [(file.read_bytes(), file.stat().st_mtime_ns) for file in files] == before
 
 
@@ -96,8 +125,8 @@ def test_identical_memory_registration_is_idempotent():
     assert ensure_basic_memory_ownership(previous, generated, "mcpServers") is None
 
 
-def test_absent_memory_entry_never_adopts_a_user_vault_implicitly():
-    """No forced memory migration or data deletion when MCP is disabled."""
+def test_absent_memory_entry_does_not_trigger_collision_validator():
+    """A pure guard may inspect an absent name; no gate-off behaviour is inferred."""
     existing = {"mcpServers": {"private-memory": {"command": "keep"}}}
     generated = {"mcpServers": {"codegraph": {"command": "codegraph"}}}
     assert ensure_basic_memory_ownership(existing, generated, "mcpServers") is None
