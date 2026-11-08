@@ -48,6 +48,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/check-model-drift.py",  # Makefile-only verification tool
     "scripts/check-vibeguard-audit.py",  # Opt-in manual audit pilot; never a deployed config input
     "scripts/litellm-costs.py",  # Makefile-only verification tool
+    "scripts/lib/embedding_inventory.py",  # Library of the read-only #85 embedding inventory; not a deployed config input
     "scripts/lib/litellm_cost.py",  # Library of the costs CLI; not deployed config input
     "scripts/lib/strict_free_admission.py",  # Pure E1.0 review policy; not used by deployed generators
     "scripts/lib/strict_free_executor.py",  # Synthetic test adapter only; no deployed request consumer
