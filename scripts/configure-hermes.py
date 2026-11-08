@@ -209,8 +209,14 @@ def select_active_model(source, model):
     current_model = data.get("model")
     if isinstance(current_model, dict):
         dangerous_fields = {
-            "model", "base_url", "api", "api_key", "key_env", "key_cmd",
-            "api_mode", "transport",
+            "model",
+            "base_url",
+            "api",
+            "api_key",
+            "key_env",
+            "key_cmd",
+            "api_mode",
+            "transport",
         }
         if dangerous_fields.intersection(current_model):
             raise ValueError(
