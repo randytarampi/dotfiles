@@ -1440,6 +1440,21 @@
       "notes": "Launches a separately credentialed native Gemini CLI child; dry-run validates nonsecret gates only and does not forward child flags.",
       "positional_operand": "Gemini CLI arguments",
       "child_scripts": []
+    },
+    {
+      "path": "scripts/verify-local-service-readiness.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--probe",
+        "--strict"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
