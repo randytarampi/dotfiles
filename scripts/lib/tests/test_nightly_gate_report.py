@@ -148,7 +148,7 @@ def test_unreadable_utf8_receipt_still_fails_closed(reporter):
 
 
 @pytest.mark.parametrize("status", ["cancelled", "skipped"])
-def test_nonpassing_gate_emits_warning_and_preserves_artifacts(reporter, capsys, status):
+def test_cancelled_and_skipped_gate_fail_with_reports(reporter, capsys, status):
     results, summary, json_path = reporter
     write_receipts(results, ["success", status, "success"])
     assert run_reporter(reporter) == 1
@@ -156,4 +156,5 @@ def test_nonpassing_gate_emits_warning_and_preserves_artifacts(reporter, capsys,
     aggregate = json.loads(json_path.read_text(encoding="utf-8"))
     assert aggregate["overall"] == "DEGRADED"
     assert aggregate["gates"][GATES[1]] == status
-    assert "::warning title=Nightly integration gates degraded::" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "::warning title=Nightly integration gates degraded::" in output
