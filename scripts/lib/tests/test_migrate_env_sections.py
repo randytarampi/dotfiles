@@ -78,7 +78,6 @@ def test_ambiguous_adjacent_comment_refuses_relocation():
         env_migration.migrate(value, EXAMPLE)
 
 
-
 def test_trailing_attached_comment_refuses_move():
     source = (
         "# --- Provider settings ---\n"
@@ -106,7 +105,10 @@ def test_crlf_migration_retains_newline_style_and_values():
     assert changes == [("DOTFILES_RUN_MCP_SETUP", "Toggle settings")]
     assert b"\r\n" in after
     assert after.count(b"\r\n") == after.count(b"\n")
-    assert env_migration.read_sections(after.decode("utf-8"))[0] == env_migration.read_sections(source)[0]
+    assert (
+        env_migration.read_sections(after.decode("utf-8"))[0]
+        == env_migration.read_sections(source)[0]
+    )
 
 
 def test_mixed_line_endings_with_distinct_keys_refuse():
