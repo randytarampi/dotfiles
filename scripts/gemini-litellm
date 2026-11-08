@@ -5,6 +5,7 @@ This does not change ~/.gemini settings, OAuth state or hosted review workflows.
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -80,12 +81,77 @@ def prepare(environ, *, key=None):
     return model, endpoint, result
 
 
+def require_api_key_auth(home, workspace):
+    """Fail closed if the installed user's selected auth route is not API key.
+
+    Gemini CLI only honours GOOGLE_GEMINI_BASE_URL with gemini-api-key auth.
+    Workspace overrides are examined without mutating any settings or secrets.
+    This is a source preflight, not proof of the running CLI's auth precedence.
+    """
+    home = Path(home).resolve()
+    workspace = Path(workspace).resolve()
+    user_config = home / ".gemini/settings.json"
+    seen = set()
+    current = workspace
+    candidates = [user_config]
+    while True:
+        candidate = current / ".gemini/settings.json"
+        if candidate != user_config:
+            candidates.append(candidate)
+        local_env = current / ".gemini/.env"
+        if local_env.is_file() or local_env.is_symlink():
+            raise ValueError("workspace Gemini .env may override the scoped gateway")
+        if current == current.parent:
+            break
+        current = current.parent
+    for config_path in candidates:
+        if config_path in seen:
+            continue
+        seen.add(config_path)
+        if config_path.is_symlink():
+            raise ValueError("Gemini auth settings symlink is unsafe")
+        if not config_path.exists():
+            if config_path == user_config:
+                raise ValueError("select Gemini API-key auth in the native CLI first")
+            continue
+        if not config_path.is_file() or config_path.stat().st_size > 262144:
+            raise ValueError("invalid Gemini auth settings file")
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError) as exc:
+            raise ValueError("Gemini auth settings cannot be verified") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("invalid Gemini auth settings object")
+        security = payload.get("security") or {}
+        if not isinstance(security, dict):
+            raise ValueError("invalid Gemini security settings")
+        auth = security.get("auth") or {}
+        if not isinstance(auth, dict):
+            raise ValueError("invalid Gemini auth settings")
+        selected = auth.get("selectedType")
+        enforced = auth.get("enforcedType")
+        if config_path == user_config and selected != "gemini-api-key":
+            raise ValueError("Gemini CLI must explicitly select gemini-api-key auth")
+        if selected is not None and selected != "gemini-api-key":
+            raise ValueError("workspace settings override Gemini API-key auth")
+        if enforced is not None and enforced != "gemini-api-key":
+            raise ValueError("Gemini enforced auth conflicts with scoped gateway")
+    return True
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--dry-run", action="store_true", help="validate nonsecret routing only")
     args, forwarded = parser.parse_known_args(argv)
-    if any(a in ("--model", "-m") or a.startswith("--model=") for a in forwarded):
-        parser.error("model selection is controlled by DOTFILES_GEMINI_LITELLM_MODEL")
+    if any(
+        a in ("--model", "-m")
+        or a.startswith(("--model=", "-m="))
+        or a.startswith(("-m", "--settings", "--auth", "--provider", "--config"))
+        for a in forwarded
+    ):
+        parser.error("model/auth/provider configuration is controlled by this adapter")
+    if args.dry_run and forwarded:
+        parser.error("--dry-run does not forward unverified child arguments")
     try:
         model, endpoint, _ = prepare(os.environ)
         if args.dry_run:
@@ -97,6 +163,7 @@ def main(argv=None):
             raise ValueError("Gemini CLI is not installed")
         key_path = Path.home() / ".local/share/litellm/clients/gemini.key"
         key = read_private_key(key_path)
+        require_api_key_auth(Path.home(), Path.cwd())
         _, _, child_env = prepare(os.environ, key=key)
         os.execvpe(gemini, [gemini, "--model", model, *forwarded], child_env)
         return 0
