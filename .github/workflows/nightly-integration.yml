@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 60
+    # Keep Poetry's locked environment in the checkout before HOME is replaced
+    # with a disposable test home for each isolated gate.
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +30,15 @@ jobs:
           - gate: DOTFILES_RUN_AGENT_GUIDANCE_SETUP
     steps:
       - uses: actions/checkout@v7
+      # Match the required deploy CI: setup-python's Poetry cache and the
+      # configure-all.sh Codex writer expect the locked Poetry interpreter.
+      - name: Install Poetry (before setup-python)
+        run: |
+          if command -v pipx >/dev/null 2>&1; then
+            pipx install poetry==2.4.3
+          else
+            python -m pip install poetry==2.4.3
+          fi
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -35,6 +48,8 @@ jobs:
           sudo apt-get install -y make
           curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Install locked production Python dependencies
+        run: poetry install --only main --no-root
       - name: Prepare fresh home and single-gate environment
         run: |
           mkdir -p "$RUNNER_TEMP/dotfiles-home"
