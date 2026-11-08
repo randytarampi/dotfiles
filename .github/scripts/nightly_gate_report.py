@@ -108,9 +108,15 @@ def main(argv=None):
     args.json.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    # No hard failure during the accepted stabilization period. The report
-    # clearly labels DEGRADED and survives missing matrix artifacts.
-    return 0
+    # Owner decision 2026-11-08: the failure itself is the notification
+    # mechanism, so the report job exits non-zero on DEGRADED (after the
+    # summary and aggregate artifact are written; both upload under
+    # if: always()). Gate jobs keep continue-on-error so receipts and the
+    # report still publish; removing that allow-failure remains the
+    # separate post-stabilization step agreed for #212.
+    if result["overall"] == "PASS":
+        return 0
+    return 1
 
 
 if __name__ == "__main__":
