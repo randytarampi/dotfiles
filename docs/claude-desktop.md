@@ -80,7 +80,7 @@ Sources:
 
 ## P0 installed-consumer evidence ledger (#209)
 
-**As of 2026-11-07: UNSUPPORTED is not yet established and the actual Chat, Cowork and Code LiteLLM paths remain UNKNOWN.** The exported profile, private helper and passing fixture tests are useful source evidence, not proof the installed application has selected the gateway. The owner has approved targeted integration checks when requested but has not reported separate successful Desktop Chat/Cowork/Code requests.
+**As of 2026-11-07: UNSUPPORTED is not yet established and the actual Chat, Cowork and Code LiteLLM paths remain UNKNOWN.** The exported profile, private helper and passing fixture tests are useful source evidence, not proof the installed application has selected the gateway. Owner consent is required before installing a profile, entering a dedicated credential or performing real Desktop tasks; no separate successful Desktop Chat/Cowork/Code requests have been reported.
 
 For the first acceptance session, prefer the vendor-supported **Developer Mode → Configure Third-Party Inference → Gateway / Static API key** UI over installing a generated managed profile. Keep the base URL at the local root (no trailing /v1), use a separately scoped Desktop virtual key and a currently served model supporting Anthropic Messages tools and streaming. Under the current [LiteLLM Desktop guide](https://docs.litellm.ai/docs/proxy/client_setup/claude_desktop), the discovered picker may filter model IDs without claude/anthropic; explicit inferenceModels can supply the exact served aliases instead. Do not silently rename aliases or claim Chat Completions support proves Messages support.
 
