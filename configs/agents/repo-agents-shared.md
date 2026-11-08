@@ -26,6 +26,8 @@ These policies apply to work in every repository.
 
 ### Commits and pushes
 
+- **Evidence tiers govern closures:** a merged PR, green CI and a `COMMENTED` review record source evidence only; closing issues or claiming operational acceptance requires owner-host receipts, and finishing a multi-PR tranche means reconciling its linked issues and roadmap with evidence in the same cycle. Direct pushes to the default branch are a documented incident exception, never the routine cleanup path.
+
 - Keep one concern per commit.
 - Use Conventional Commits (`type(scope): description`).
 - Never push unless the user explicitly authorizes it.
