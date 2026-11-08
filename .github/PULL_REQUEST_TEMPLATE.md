@@ -1,6 +1,8 @@
 ## Outcome and scope
 
 <!-- What changes, why, and which contracts/consumers are affected? Keep one reviewable outcome per PR. -->
+<!-- Issue/roadmap disposition after merge: state which linked issue(s) reconcile or close on this PR's evidence and when (same-cycle reconciliation per AGENTS.md evidence tiers). -->
+<!-- This is a merged-source record only: a green CI run or a COMMENTED review is not issue closure or operational acceptance without owner-host receipts. -->
 
 ## Contributors and roles
 
