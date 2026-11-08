@@ -85,12 +85,16 @@ def safe_env():
 
 
 def run_probe(path, args):
-    """Run a script with args in a sanitized environment. Returns subprocess result or Exception."""
-    if path.suffix == ".py":
-        command = [sys.executable, str(path)] + args
-    else:
-        command = ["bash", str(path)] + args
+    """Run a script with its declared interpreter in a sanitized environment."""
     try:
+        # Public launchers can be extensionless; dispatch by their shebang
+        # instead of mistakenly running a Python launcher through Bash.
+        with path.open("rb") as script:
+            shebang = script.readline(256)
+        is_python = path.suffix == ".py" or bool(
+            re.match(rb"^#!.*(?:/|\s)python(?:3(?:\.\d+)?)?(?:\s|$)", shebang)
+        )
+        command = [sys.executable if is_python else "bash", str(path), *args]
         return subprocess.run(
             command,
             capture_output=True,

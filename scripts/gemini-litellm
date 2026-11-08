@@ -161,7 +161,14 @@ def require_api_key_auth(home, workspace):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--dry-run", action="store_true", help="validate nonsecret routing only")
-    args, forwarded = parser.parse_known_args(argv)
+    parser.add_argument("gemini_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    raw = sys.argv[1:] if argv is None else argv
+    if args.gemini_args and "--" not in raw:
+        parser.error("Gemini child arguments must follow the -- separator")
+    forwarded = args.gemini_args
+    if forwarded and forwarded[0] == "--":
+        forwarded = forwarded[1:]
     if any(
         a in ("--model", "-m")
         or a.startswith(("--model=", "-m="))
