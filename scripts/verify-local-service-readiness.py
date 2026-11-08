@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from local_engines import LOCAL_ENGINES  # noqa: E402
@@ -46,7 +46,9 @@ class _RefuseRedirect(HTTPRedirectHandler):
 
 
 def _open_without_redirects(request, timeout):
-    return build_opener(_RefuseRedirect()).open(request, timeout=timeout)
+    return build_opener(ProxyHandler({}), _RefuseRedirect()).open(
+        request, timeout=timeout
+    )
 
 
 def probe_http(url, *, opener=None):
