@@ -70,6 +70,29 @@ def test_loopback_redirect_handler_refuses_offhost_and_any_redirect():
     )
 
 
+def test_network_opener_disables_environment_proxies(monkeypatch):
+    captured = []
+
+    class StubOpener:
+        def open(self, request, timeout):
+            captured.append((request.full_url, timeout))
+            return Response()
+
+    def builder(*handlers):
+        assert any(
+            isinstance(handler, MODULE.ProxyHandler) and handler.proxies == {}
+            for handler in handlers
+        )
+        assert any(isinstance(handler, MODULE._RefuseRedirect) for handler in handlers)
+        return StubOpener()
+
+    monkeypatch.setattr(MODULE, "build_opener", builder)
+    request = MODULE.Request("http://localhost:4000/health", method="GET")
+    with MODULE._open_without_redirects(request, timeout=1) as response:
+        assert response.status == 200
+    assert captured == [("http://localhost:4000/health", 1)]
+
+
 def test_auth_errors_are_not_consumer_proof():
     def auth_error(request, timeout):
         raise HTTPError(request.full_url, 401, "unauthorized", {}, None)
