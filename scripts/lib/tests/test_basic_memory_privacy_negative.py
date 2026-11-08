@@ -25,6 +25,7 @@ def load_actual_writer():
     spec.loader.exec_module(module)
     return module
 
+
 PRIVACY = {
     "BASIC_MEMORY_NO_PROMOS": "1",
     "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
