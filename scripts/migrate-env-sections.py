@@ -37,6 +37,8 @@ def literal(value):
 
 
 def newline_for(raw):
+    if b"\r" in raw.replace(b"\r\n", b""):
+        raise ValueError("unsupported standalone carriage return")
     if not raw.endswith(b"\n"):
         raise ValueError("file must end with a newline")
     crlf = raw.count(b"\r\n")
@@ -90,6 +92,10 @@ def template_sections(text):
 
 def migrate(original, example):
     """Return new bytes plus key/section-only preview; preserve effective values."""
+    # Python splitlines() recognizes separators that shell sourcing does not.
+    # Reject those bytes before computing line indexes and moving assignments.
+    if any(control in original for control in ("\x00", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")):
+        raise ValueError("unsupported control or Unicode line separator")
     raw = original.encode("utf-8")
     newline = newline_for(raw)
     values, active = read_sections(original)
