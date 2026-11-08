@@ -45,7 +45,7 @@ def validate(record):
     if any(k not in (*REQUIRED, "provenance") for k in record):
         raise ValueError("unexpected field: redaction required before ingestion")
     if "provenance" in record and record["provenance"] not in (
-        "owner-verified",
+        "owner-reported",
         "synthetic",
         "unverified",
     ):

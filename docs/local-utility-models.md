@@ -11,7 +11,7 @@
 
 ## Benchmarks and input
 
-`python3 scripts/summarize-local-utility-benchmarks.py --results /path/to/redacted-results.json` calculates per-device/model/task median measured latency, peak measured resident GB, success and network-egress flags **separately for owner-verified, synthetic and unverified samples** (they must never distort each other's measurements). It reads at most **1 MiB** from a deliberate local nonsymlink JSON file, rejects multiline/oversized labels, sends **no model requests**, stores **no files**, does not compare cost claims and marks **every** candidate `NOT_AUTO_PROMOTED`. Rejects unexpected fields to avoid accidentally capturing prompts, personal data, API keys or paths.
+`python3 scripts/summarize-local-utility-benchmarks.py --results /path/to/redacted-results.json` calculates per-device/model/task median measured latency, peak measured resident GB, success and network-egress flags **separately for owner-reported, synthetic and unverified samples**; these provenance fields are supplied by the operator and not independently certified by the summarizer (they must never distort each other's measurements). It reads at most **1 MiB** from a deliberate local nonsymlink JSON file, rejects multiline/oversized labels, sends **no model requests**, stores **no files**, does not compare cost claims and marks **every** candidate `NOT_AUTO_PROMOTED`. Rejects unexpected fields to avoid accidentally capturing prompts, personal data, API keys or paths.
 
 Minimum measurement record shape (illustrative *synthetic* data, not a host benchmark):
 
