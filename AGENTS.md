@@ -1,6 +1,8 @@
 # AI Agent Guidance
 
 > **This is the authoritative repository policy.** Prefer the smallest independently verifiable change that satisfies the agreed contract. Address related defects necessary for correctness; defer unrelated improvements. See `configs/review/code-review-prompt.md` for blocking/advisory findings and dispositions. For human-facing quick start, commands, and package management, see `README.md`. For deep reference material, see the `docs/` directory.
+>
+> **Evidence tiers and reconciliation:** a merged PR, green CI and `COMMENTED` reviews record source evidence only; issue closure and operational acceptance need owner-host receipts, and finishing a multi-PR tranche includes reconciling linked issues and `docs/modernization-roadmap.md` with evidence in the same cycle. See [Source merge versus operational acceptance](docs/conventions.md#source-merge-versus-operational-acceptance). Direct-to-`main` pushes are the documented exception, not the routine path: recorded incident rationale, a focused failing/repaired test where feasible, and green post-push CI.
 
 ## Contribution attribution
 
