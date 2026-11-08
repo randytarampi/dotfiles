@@ -52,7 +52,6 @@ def test_corrupt_or_unknown_receipt_fails_closed(tmp_path):
     assert "unexpected gate receipt" in result["errors"]
 
 
-
 @pytest.mark.parametrize(
     "content",
     [
