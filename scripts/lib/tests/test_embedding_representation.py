@@ -8,13 +8,13 @@ def identity(**changed):
         "engine": "ollama",
         "model": "embeddinggemma",
         "revision": "immutable-revision",
-        "digest": "sha256:fixture",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "dimensions": 768,
         "pooling": "mean",
         "normalization": "l2",
         "task_prefix": "search_document:",
         "template": "default",
-        "fixed_vector_sha256": "sha256:fixture-vector",
+        "fixed_vector_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     }
     data.update(changed)
     return data
@@ -32,13 +32,13 @@ def test_all_authoritative_fields_required():
 
 def test_same_width_and_model_can_be_a_different_representation():
     for field, variant in (
-        ("digest", "sha256:other"),
+        ("digest", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
         ("revision", "other-revision"),
         ("pooling", "cls"),
         ("normalization", "none"),
         ("task_prefix", "query:"),
         ("template", "other"),
-        ("fixed_vector_sha256", "sha256:other-vector"),
+        ("fixed_vector_sha256", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
     ):
         result = compare_representations(identity(), identity(**{field: variant}))
         assert result["status"] == "MISMATCH"
@@ -65,3 +65,12 @@ def test_unqualified_identity_never_proves_compatibility():
         ]
         == "MATCH"
     )
+
+
+
+def test_digest_fields_are_never_accepted_as_placeholder_strings():
+    for field in ("digest", "fixed_vector_sha256"):
+        for malformed in ("sha256:fixture", "sha256:" + "g" * 64, "", "short"):
+            result = compare_representations(identity(), identity(**{field: malformed}))
+            assert result["status"] == "UNKNOWN"
+            assert field in result["unknown_fields"]
