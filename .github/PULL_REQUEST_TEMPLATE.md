@@ -6,13 +6,20 @@
 
 ## Contributors and roles
 
-<!-- Describe only evidenced, substantive contributions. For each person/agent,
-state the role (implementation, design, documentation, review, verification or
-coordination) and the work performed. Preserve earlier contributors at handoff.
-A sole human author or an automated dependency update may have no co-authors;
-say so explicitly. Identify agent models only when verified from the session.
-Review participation is not a GitHub approval or automatic code co-authorship.
-Do not include private session transcripts, credentials or fabricated emails. -->
+<!-- Before PR delivery, audit EVERY outgoing commit's Co-authored-by and
+Reviewed-by trailers against the actual implementing agent/session/model and
+the roles below. A ChatGPT handoff does not make ChatGPT the implementation
+agent when OpenCode performed the work. Preserve independently evidenced
+material planning contributions as planning, not presumed implementation.
+Correct unpublished attribution before pushing; for shared/merged commits,
+record the correction in the PR instead of rewriting shared history.
+
+Describe only evidenced substantive contributions: implementation, design,
+documentation, review, verification or coordination. Preserve contributors
+at handoff. A sole human author or automated dependency update may have no
+co-authors; say so explicitly. Identify models only when verified from the
+contributing session. Review is not GitHub approval or automatic co-authorship.
+Do not include private transcripts, credentials or fabricated emails. -->
 
 - **Implementation and other material contributions:** <!-- Names, roles and scope; or "Sole contributor: Name" -->
 - **Review:** <!-- Named, evidenced reviewer contributions; or "None yet / not applicable" -->
