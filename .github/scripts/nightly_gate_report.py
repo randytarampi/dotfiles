@@ -19,38 +19,43 @@ GATES = (
 STATUSES = {"success", "failure", "cancelled", "skipped"}
 
 
+def read_receipt(receipt: Path, expected=GATES):
+    """Validate one receipt completely; never trust an incomplete success."""
+    if receipt.is_symlink() or not receipt.is_file():
+        return None, None, ["unsafe receipt"]
+    try:
+        fields = {}
+        for line in receipt.read_text(encoding="utf-8").splitlines():
+            if "=" not in line:
+                return None, None, ["malformed receipt"]
+            key, value = line.split("=", 1)
+            if key not in ("gate", "result") or key in fields:
+                return None, None, ["invalid receipt field"]
+            fields[key] = value
+    except (OSError, UnicodeError):
+        return None, None, ["unreadable receipt"]
+    gate, status = fields.get("gate"), fields.get("result")
+    if gate not in expected or receipt.name != f"{gate}.txt":
+        return None, None, ["unexpected gate receipt"]
+    if status not in STATUSES:
+        return None, None, ["invalid gate result"]
+    return gate, status, []
+
+
 def summarize(directory: Path, expected=GATES):
-    """Return deterministic gate receipts and overall status without guessing."""
-    receipts = {}
-    errors = []
-    if directory.exists():
-        for receipt in sorted(directory.glob("*.txt")):
-            if not receipt.is_file() or receipt.is_symlink():
-                errors.append("unsafe receipt")
-                continue
-            values = {}
-            for line in receipt.read_text(encoding="utf-8").splitlines():
-                if "=" not in line:
-                    errors.append("malformed receipt")
-                    continue
-                key, value = line.split("=", 1)
-                if key in values or key not in ("gate", "result"):
-                    errors.append("invalid receipt field")
-                values[key] = value
-            gate, result = values.get("gate"), values.get("result")
-            if gate not in expected or receipt.name != f"{gate}.txt":
-                errors.append("unexpected gate receipt")
-            elif gate in receipts:
-                errors.append("duplicate gate receipt")
-            elif result not in STATUSES:
-                errors.append("invalid gate result")
-            else:
-                receipts[gate] = result
-    missing = [gate for gate in expected if gate not in receipts]
+    """Reject missing, malformed and failed gate results without false PASS."""
+    receipts, errors = {}, []
+    if directory.is_dir():
+        for path in sorted(directory.glob("*.txt")):
+            gate, status, problems = read_receipt(path, expected)
+            errors.extend(problems)
+            if gate is not None:
+                if gate in receipts:
+                    errors.append("duplicate gate receipt")
+                else:
+                    receipts[gate] = status
     states = {gate: receipts.get(gate, "MISSING") for gate in expected}
-    healthy = (
-        not errors and not missing and all(v == "success" for v in states.values())
-    )
+    healthy = not errors and all(status == "success" for status in states.values())
     return {
         "overall": "PASS" if healthy else "DEGRADED",
         "gates": states,
@@ -95,6 +100,8 @@ def main(argv=None):
     parser.add_argument("--json", type=Path, required=True)
     args = parser.parse_args(argv)
     result = summarize(args.results)
+    if result["overall"] != "PASS":
+        print("::warning title=Nightly integration gates degraded::See gate report")
     args.summary.parent.mkdir(parents=True, exist_ok=True)
     with args.summary.open("a", encoding="utf-8") as output:
         output.write(markdown(result))
