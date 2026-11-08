@@ -105,6 +105,13 @@ def migrate(original, example):
         previous = source_lines[index - 1].rstrip("\r\n") if index else ""
         if previous.lstrip().startswith("#") and not SECTION.fullmatch(previous):
             raise ValueError("ambiguous adjacent comment; manual relocation required")
+        following = (
+            source_lines[index + 1].rstrip("\r\n")
+            if index + 1 < len(source_lines)
+            else ""
+        )
+        if following.lstrip().startswith("#") and not SECTION.fullmatch(following):
+            raise ValueError("ambiguous following comment; manual relocation required")
         moved[index] = (key, wanted)
     if not moved:
         return raw, []
@@ -123,6 +130,9 @@ def migrate(original, example):
         if destination is None:
             destination = [wanted, [f"# --- {wanted} ---{newline}"]]
             blocks.append(destination)
+        last = destination[1][-1].rstrip("\r\n")
+        if last.lstrip().startswith("#") and not SECTION.fullmatch(last):
+            raise ValueError("destination ends in an ambiguous comment")
         destination[1].append(source_lines[index])
 
     updated = "".join("".join(lines) for _, lines in blocks)
