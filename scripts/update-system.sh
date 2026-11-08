@@ -184,7 +184,11 @@ if [[ "${DOTFILES_RUN_OPENCODE_TOOLS_SETUP:-0}" == "1" ]]; then
       # consumes its own stdin stream and silently loses heredoc sections
       # (the per-spec plugin checks and later loop bodies) — deployed
       # chezmoi scripts run as files, so only this lane had the hazard.
-      rendered_plugins="$(mktemp "${TMPDIR:-/tmp}/opencode-update-plugins.XXXXXX.sh")"
+      # X's must END the mktemp template: BSD mktemp (owner hosts) does not
+      # substitute X's followed by a suffix and instead creates/reuses the
+      # literal-named file, which intermittently fails later runs
+      # ("File exists") and empties the render target.
+      rendered_plugins="$(mktemp "${TMPDIR:-/tmp}/opencode-update-plugins.XXXXXX")"
       pipeline_rc=0
       DOTFILES_RUN_OPENCODE_TOOLS_SETUP=1 DOTFILES_RUN_OPENCODE_PLUGIN_UPDATE=1 \
         chezmoi execute-template --source "$(dirname "$SCRIPT_DIR")" \
