@@ -75,7 +75,9 @@ def test_native_poolside_id_and_gateway_alias_are_distinct_contracts():
     assert MODULE.litellm_alias("laguna-s-2.1", "poolside") == native
 
 
-def test_direct_groups_require_provider_keys_but_twins_only_require_junie_key(monkeypatch):
+def test_direct_groups_require_provider_keys_but_twins_only_require_junie_key(
+    monkeypatch,
+):
     cfg = json.loads((ROOT / "configs/junie/model-groups.json").read_text())
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     monkeypatch.delenv("POOLSIDE_API_KEY", raising=False)
