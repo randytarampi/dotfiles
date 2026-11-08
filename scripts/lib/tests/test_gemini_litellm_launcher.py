@@ -65,6 +65,13 @@ def test_conflicts_and_gate_fail_closed():
     with pytest.raises(ValueError):
         MODULE.prepare(env, key="dedicated-scoped")
     env = good()
+    env["GOOGLE_API_KEY"] = "unrelated-ai-studio-key"
+    with pytest.raises(ValueError, match="GOOGLE_API_KEY"):
+        MODULE.prepare(env, key="dedicated-scoped")
+    env = good()
+    env["GOOGLE_API_KEY"] = "dedicated-scoped"
+    assert MODULE.prepare(env, key="dedicated-scoped")[2]["GEMINI_API_KEY"] == "dedicated-scoped"
+    env = good()
     env["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
     with pytest.raises(ValueError):
         MODULE.prepare(env)
