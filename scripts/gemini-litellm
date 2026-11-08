@@ -80,6 +80,10 @@ def prepare(environ, *, key=None):
         raise ValueError("Existing GOOGLE_API_KEY conflicts with the scoped gateway key")
     result = dict(environ)
     result["GEMINI_API_KEY"] = key
+    # Gemini CLI may load project .env into variables that are absent, while
+    # Google SDKs can prefer GOOGLE_API_KEY. Pre-populate both with the *same*
+    # scoped key to preclude a project .env bypass.
+    result["GOOGLE_API_KEY"] = key
     result["GOOGLE_GEMINI_BASE_URL"] = endpoint
     result["GEMINI_MODEL"] = model
     return model, endpoint, result
