@@ -14,6 +14,20 @@ The pure admit function checks one exact backend. The admit_chain function check
 
 Negative cases: absent/stale/future evidence, public price list only, nonzero/NaN cost, trial, account revoked, account and credential mismatch, wrong endpoint/deployment/model, quota exhausted/unknown, positive billed overage, privacy mismatch, missing fallback and malformed request budget.
 
+## Current candidate eligibility
+
+The repository's existing catalogue and generation-time resolver may list the following candidates, but **none is account-admitted by this new policy without current account/credential-bound evidence and a trusted request-time guard**.
+
+| Candidate family | Account-specific zero-charge status in this PR | Missing acceptance |
+|---|---|---|
+| OpenCode Console / Zen free models | UNKNOWN | Effective account entitlement, credential scope, quota, privacy and no paid fallback |
+| Direct OpenRouter / Poolside / Cohere | UNKNOWN | Authoritative account billing, exact endpoint and model/backend, hard free capacity |
+| Optional Groq / Mistral / Cloudflare / NVIDIA NIM | UNKNOWN | Explicit provider/account quota and zero-overage enforcement; ordinary optional routes remain full-scope |
+| Local Ollama / oMLX | UNKNOWN as a *strict-free runtime route* | Proven local-only target, identity, privacy and no hidden cloud/fallback billing |
+| LiteLLM alias or deployment group | UNKNOWN | Complete active backend inventory; every child deployment individually admitted |
+
+Generation-time `free` labels and provider-local models remain untouched. A local model is not automatically evidence that every subsequent auxiliary, cloud or fallback call is free.
+
 ## Entry points, tests and rollout
 
 - Source: scripts/lib/strict_free_admission.py
