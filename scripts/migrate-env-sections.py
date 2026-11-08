@@ -94,7 +94,18 @@ def migrate(original, example):
     """Return new bytes plus key/section-only preview; preserve effective values."""
     # Python splitlines() recognizes separators that shell sourcing does not.
     # Reject those bytes before computing line indexes and moving assignments.
-    if any(control in original for control in ("\x00", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")):
+    unsupported = (
+        "\x00",
+        "\x0b",
+        "\x0c",
+        "\x1c",
+        "\x1d",
+        "\x1e",
+        "\x85",
+        "\u2028",
+        "\u2029",
+    )
+    if any(control in original for control in unsupported):
         raise ValueError("unsupported control or Unicode line separator")
     raw = original.encode("utf-8")
     newline = newline_for(raw)
