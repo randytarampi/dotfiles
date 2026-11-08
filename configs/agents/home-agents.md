@@ -15,6 +15,7 @@ These apply to every repo, every session.
 
 - **One concern per commit.** When closing out a session, commit each logical change individually — never batch unrelated changes into a single commit. If a session touched three concerns, that's three commits.
 - **Never push unless explicitly asked.** Default to local commits only. "Don't push anything yet" is the standing instruction; the user will say when to push.
+- **Evidence tiers govern closures:** a merged PR, green CI and a `COMMENTED` review record source evidence only; closing issues or claiming operational acceptance requires owner-host receipts, and finishing a multi-PR tranche means reconciling its linked issues and roadmap with evidence in the same cycle. Direct pushes to the default branch are a documented incident exception, never the routine cleanup path.
 - Before any force-with-lease, finish the rebase and verify both a clean Git status and the expected tip. Never push mid-conflict.
 - **Don't commit until the plan is approved.** If the user hasn't approved a plan or explicitly said to proceed, give the plan first. Don't pre-emptively commit work-in-progress.
 - **Don't add repo artifacts for unapproved features.** This covers more than commits — don't add env vars, config entries, docs files, or other repo artifacts for a feature that hasn't been decided on. Prerequisite fixes that exist independently of the feature are fine; anything that only makes sense if the feature is chosen is not.
