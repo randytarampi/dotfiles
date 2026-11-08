@@ -65,7 +65,7 @@ def test_failed_gate_exits_one_after_summary_and_json_are_written(reporter):
 
 
 def test_missing_receipt_degrades_and_exits_one(reporter):
-    results, summary, json_path = reporter
+    results, _, json_path = reporter
     write_receipts(results, ["success", "success", None])
     assert run_reporter(reporter) == 1
     aggregate = json.loads(json_path.read_text(encoding="utf-8"))
@@ -75,7 +75,7 @@ def test_missing_receipt_degrades_and_exits_one(reporter):
 
 
 def test_malformed_receipt_never_fakes_pass(reporter):
-    results, summary, json_path = reporter
+    results, _, json_path = reporter
     write_receipts(results, ["success", "success", "success"])
     (results / f"{GATES[1]}.txt").write_text(
         "gate=nope\nresult=success\n", encoding="utf-8"
@@ -84,3 +84,76 @@ def test_malformed_receipt_never_fakes_pass(reporter):
     aggregate = json.loads(json_path.read_text(encoding="utf-8"))
     assert aggregate["overall"] == "DEGRADED"
     assert aggregate["errors"]
+
+
+def test_absent_results_directory_still_fails_and_writes_reports(reporter):
+    _, summary, json_path = reporter
+    assert run_reporter(reporter) == 1
+    aggregate = json.loads(json_path.read_text(encoding="utf-8"))
+    assert aggregate["overall"] == "DEGRADED"
+    assert set(aggregate["gates"].values()) == {"MISSING"}
+    assert "DEGRADED" in summary.read_text(encoding="utf-8")
+
+
+def test_unknown_gate_and_invalid_status_fail_closed(reporter):
+    results, _, json_path = reporter
+    write_receipts(results, ["success", "success", "success"])
+    (results / "unexpected.txt").write_text(
+        "gate=NOT_A_REGISTERED_GATE\nresult=success\n", encoding="utf-8"
+    )
+    (results / f"{GATES[0]}.txt").write_text(
+        f"gate={GATES[0]}\nresult=unknown\n", encoding="utf-8"
+    )
+    assert run_reporter(reporter) == 1
+    aggregate = json.loads(json_path.read_text(encoding="utf-8"))
+    assert aggregate["overall"] == "DEGRADED"
+    assert aggregate["gates"][GATES[0]] == "MISSING"
+    assert "invalid gate result" in aggregate["errors"]
+    assert "unexpected gate receipt" in aggregate["errors"]
+
+
+@pytest.mark.parametrize(
+    ("receipt_text", "expected_error"),
+    [
+        (
+            "gate=DOTFILES_RUN_MCP_SETUP\nresult=success\nextra=ignored\n",
+            "invalid receipt field",
+        ),
+        (
+            "gate=DOTFILES_RUN_MCP_SETUP\nresult=success\nresult=success\n",
+            "invalid receipt field",
+        ),
+        ("gate=DOTFILES_RUN_MCP_SETUP\nresult\n", "malformed receipt"),
+    ],
+)
+def test_receipt_schema_errors_never_pass(reporter, receipt_text, expected_error):
+    results, _, json_path = reporter
+    write_receipts(results, ["success", "success", "success"])
+    (results / f"{GATES[1]}.txt").write_text(receipt_text, encoding="utf-8")
+    assert run_reporter(reporter) == 1
+    aggregate = json.loads(json_path.read_text(encoding="utf-8"))
+    assert aggregate["overall"] == "DEGRADED"
+    assert aggregate["gates"][GATES[1]] == "MISSING"
+    assert expected_error in aggregate["errors"]
+
+
+def test_unreadable_utf8_receipt_still_fails_closed(reporter):
+    results, _, json_path = reporter
+    write_receipts(results, ["success", "success", "success"])
+    (results / f"{GATES[0]}.txt").write_bytes(b"\xff")
+    assert run_reporter(reporter) == 1
+    aggregate = json.loads(json_path.read_text(encoding="utf-8"))
+    assert aggregate["overall"] == "DEGRADED"
+    assert "unreadable receipt" in aggregate["errors"]
+
+
+@pytest.mark.parametrize("status", ["cancelled", "skipped"])
+def test_nonpassing_gate_emits_warning_and_preserves_artifacts(reporter, capsys, status):
+    results, summary, json_path = reporter
+    write_receipts(results, ["success", status, "success"])
+    assert run_reporter(reporter) == 1
+    assert "DEGRADED" in summary.read_text(encoding="utf-8")
+    aggregate = json.loads(json_path.read_text(encoding="utf-8"))
+    assert aggregate["overall"] == "DEGRADED"
+    assert aggregate["gates"][GATES[1]] == status
+    assert "::warning title=Nightly integration gates degraded::" in capsys.readouterr().out
