@@ -63,6 +63,9 @@ def test_moves_only_literal_assignment_without_leaking_values():
         "KEY=[one,two]\n",
         "KEY='one'",
         "KEY='one'\r\nKEY='two'\n",
+        "KEY='one'\rANOTHER='two'\n",
+        "KEY='nul\x00value'\n",
+        "KEY='unicode\u2028separator'\n",
     ],
 )
 def test_unsafe_or_ambiguous_content_refused(unsafe):
