@@ -229,6 +229,39 @@ def test_changed_source_during_apply_is_never_rolled_back(tmp_path, monkeypatch)
     assert not list(path.parent.glob(".env-i2-*"))
 
 
+def test_final_window_writer_is_overwritten_without_refusal(tmp_path, monkeypatch):
+    """Document the deliberate final-window limitation: no cross-process CAS.
+
+    The guarded preflight check refuses an owner update that lands before
+    replacement starts, but the identity/byte comparison immediately before
+    os.replace is best-effort drift detection, not compare-and-swap. A writer
+    landing inside that final window is overwritten without refusal and never
+    restored automatically; the retained private backup is the only recovery
+    path. This is why the documented contract requires a quiescent,
+    owner-controlled maintenance window for --apply.
+    """
+    path, example = private_env(tmp_path)
+    before = path.read_bytes()
+    foreign = b"API_KEY='window-writer-arrives-late'\n"
+    real_replace = env_migration.os.replace
+
+    def writer_lands_in_final_window(src, dst):
+        if Path(dst) == path:
+            path.write_bytes(foreign)
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(env_migration.os, "replace", writer_lands_in_final_window)
+    assert (
+        env_migration.main(["--env", str(path), "--example", str(example), "--apply"])
+        == 0
+    )
+    final = path.read_bytes()
+    assert final != foreign
+    assert final != before
+    assert path.with_name(".env.i2.bak").read_bytes() == before
+    assert foreign not in final
+
+
 def test_symlinks_wrong_mode_and_existing_backup_refuse_without_writes(tmp_path):
     path, example = private_env(tmp_path)
     before = path.read_bytes()

@@ -195,7 +195,14 @@ def identity(info):
 
 
 def apply(path, info, before, after):
-    """O_EXCL private backup, compare exact source, and atomically replace."""
+    """O_EXCL private backup, compare exact source, and atomically replace.
+
+    The final identity/byte comparison is best-effort drift detection, not a
+    cross-process compare-and-swap: a concurrent writer between the last
+    comparison and os.replace is overwritten without refusal. Only run
+    --apply in a quiescent, owner-controlled maintenance window; recovery
+    goes through the retained private backup.
+    """
     backup_path = path.with_name(path.name + ".i2.bak")
     if backup_path.exists() or backup_path.is_symlink():
         raise ValueError("private backup already exists")
