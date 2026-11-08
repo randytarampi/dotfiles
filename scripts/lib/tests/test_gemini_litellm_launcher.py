@@ -30,6 +30,7 @@ def test_prepare_is_explicit_scoped_and_non_mutating():
     assert model == "gemini-3.8-flash"
     assert endpoint == "http://127.0.0.1:4000"
     assert child["GEMINI_API_KEY"] == "secret-only-for-test"
+    assert child["GOOGLE_API_KEY"] == "secret-only-for-test"
     assert child["GOOGLE_GEMINI_BASE_URL"] == endpoint
     assert "GEMINI_API_KEY" not in env
 
