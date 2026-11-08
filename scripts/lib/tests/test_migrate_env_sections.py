@@ -187,6 +187,31 @@ def test_failed_replace_preserves_original_and_backup(tmp_path, monkeypatch):
     assert not list(path.parent.glob(".env-i2-*"))
 
 
+def test_changed_source_during_apply_is_never_rolled_back(tmp_path, monkeypatch):
+    """After backup, refuse another writer's updated value, even on failure."""
+    path, example = private_env(tmp_path)
+    original = path.read_bytes()
+    newer = b"API_KEY='independent-owner-update'\n"
+    real_guard = env_migration.guarded_file
+    calls = 0
+
+    def writer_arrives(candidate):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            path.write_bytes(newer)
+        return real_guard(candidate)
+
+    monkeypatch.setattr(env_migration, "guarded_file", writer_arrives)
+    assert (
+        env_migration.main(["--env", str(path), "--example", str(example), "--apply"])
+        == 1
+    )
+    assert path.read_bytes() == newer
+    assert path.with_name(".env.i2.bak").read_bytes() == original
+    assert not list(path.parent.glob(".env-i2-*"))
+
+
 def test_symlinks_wrong_mode_and_existing_backup_refuse_without_writes(tmp_path):
     path, example = private_env(tmp_path)
     before = path.read_bytes()
