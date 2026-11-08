@@ -118,7 +118,10 @@ def test_native_login_must_explicitly_select_api_key(tmp_path):
     with pytest.raises(ValueError, match="workspace"):
         MODULE.require_api_key_auth(home, project)
     project_settings.unlink()
-    (project / ".gemini/.env").write_text("GEMINI_API_KEY=another-provider")
+    env_path = project / ".gemini/.env"
+    env_path.write_text("UNRELATED_SETTING=1")
+    assert MODULE.require_api_key_auth(home, project) is True
+    env_path.write_text("GEMINI_API_KEY=another-provider")
     with pytest.raises(ValueError, match="workspace Gemini .env"):
         MODULE.require_api_key_auth(home, project)
 

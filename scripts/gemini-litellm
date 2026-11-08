@@ -99,8 +99,19 @@ def require_api_key_auth(home, workspace):
         if candidate != user_config:
             candidates.append(candidate)
         local_env = current / ".gemini/.env"
-        if local_env.is_file() or local_env.is_symlink():
-            raise ValueError("workspace Gemini .env may override the scoped gateway")
+        if local_env.is_symlink():
+            raise ValueError("Gemini .env symlink cannot be qualified")
+        if local_env.is_file():
+            if local_env.stat().st_size > 262144:
+                raise ValueError("Gemini .env exceeds safe inspection limit")
+            text = local_env.read_text(encoding="utf-8")
+            if re.search(
+                r"(?m)^\\s*(?:export\\s+)?(?:GEMINI_API_KEY|GOOGLE_API_KEY|"
+                r"GOOGLE_GEMINI_BASE_URL|GEMINI_MODEL|GOOGLE_GENAI_USE_VERTEXAI|"
+                r"GOOGLE_VERTEX_BASE_URL)\\s*=",
+                text,
+            ):
+                raise ValueError("workspace Gemini .env conflicts with scoped gateway")
         if current == current.parent:
             break
         current = current.parent
