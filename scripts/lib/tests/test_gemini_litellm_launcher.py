@@ -91,7 +91,6 @@ def test_dry_run_never_reads_credentials(monkeypatch, capsys):
     assert "UNKNOWN" in capsys.readouterr().out
 
 
-
 def test_native_login_must_explicitly_select_api_key(tmp_path):
     import json
 
