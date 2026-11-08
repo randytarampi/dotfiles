@@ -1455,6 +1455,20 @@
       ],
       "positional_operand": null,
       "child_scripts": []
+    },
+    {
+      "path": "scripts/summarize-local-utility-benchmarks.py",
+      "capabilities": [
+        "public",
+        "inspect"
+      ],
+      "enforcement": "strict",
+      "accepted_flags": [
+        "--help",
+        "--results"
+      ],
+      "positional_operand": null,
+      "child_scripts": []
     }
   ]
 }
