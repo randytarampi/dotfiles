@@ -405,3 +405,30 @@ def test_active_selection_requires_explicit_flag(monkeypatch, tmp_path):
     active = yaml.safe_load(path.read_text())["model"]
     assert active == {"provider": "custom:dotfiles-litellm", "default": "served/model"}
     assert hermes.main(["--model", "served/model", "--select-active-model"]) == 0
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "  base_url: https://ollama.com/v1\n",
+        "  api_key: user-owned-key\n",
+        "  key_env: OLD_PROVIDER_KEY\n",
+        "  model: glm-5.1\n",
+        "  api_mode: responses\n",
+        "  key_cmd: old-helper\n",
+    ],
+)
+def test_active_selection_refuses_stale_model_endpoint_and_auth(field):
+    source = "model:\n  provider: ollama-cloud\n  default: glm-5.1\n" + field
+    with pytest.raises(ValueError, match="refusing model endpoint"):
+        hermes.select_active_model(source, "served/model")
+
+
+@pytest.mark.parametrize("name", ["fallback_model", "fallback_models", "fallbacks"])
+def test_active_selection_refuses_unqualified_fallbacks(name):
+    source = (
+        "model:\n  provider: ollama-cloud\n  default: glm-5.1\n"
+        + f"{name}:\n  - provider: openrouter\n    model: paid-model\n"
+    )
+    with pytest.raises(ValueError, match="refusing configured Hermes fallback"):
+        hermes.select_active_model(source, "served/model")
