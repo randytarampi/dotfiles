@@ -32,13 +32,19 @@ def test_all_authoritative_fields_required():
 
 def test_same_width_and_model_can_be_a_different_representation():
     for field, variant in (
-        ("digest", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        (
+            "digest",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ),
         ("revision", "other-revision"),
         ("pooling", "cls"),
         ("normalization", "none"),
         ("task_prefix", "query:"),
         ("template", "other"),
-        ("fixed_vector_sha256", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        (
+            "fixed_vector_sha256",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ),
     ):
         result = compare_representations(identity(), identity(**{field: variant}))
         assert result["status"] == "MISMATCH"
@@ -65,7 +71,6 @@ def test_unqualified_identity_never_proves_compatibility():
         ]
         == "MATCH"
     )
-
 
 
 def test_digest_fields_are_never_accepted_as_placeholder_strings():
