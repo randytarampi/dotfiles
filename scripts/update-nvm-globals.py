@@ -100,7 +100,16 @@ for version in $other_versions; do
 done
 
 system_npm=""
-if command -v brew >/dev/null 2>&1; then
+npm_on_path="$(command -v npm 2>/dev/null || true)"
+if [[ -n "$npm_on_path" ]] && [[ "$npm_on_path" != *"/.nvm/"* ]]; then
+  # Prefer the PATH-resolved npm (stubbed in tests; identical to the Homebrew
+  # prefix npm on owner hosts), but never the nvm-managed npm: nvm use default
+  # above already updated that default lane, and the system lane below must
+  # keep its existing meaning - a node whose binaries live under the system
+  # Homebrew/local prefixes rather than nvm.
+  system_npm="$npm_on_path"
+fi
+if [[ -z "$system_npm" ]] && command -v brew >/dev/null 2>&1; then
   brew_prefix="$(brew --prefix 2>/dev/null)"
   [[ -x "$brew_prefix/bin/npm" ]] && system_npm="$brew_prefix/bin/npm"
 fi
