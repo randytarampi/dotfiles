@@ -39,6 +39,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/cleanup-project.py",  # Makefile-only cleanup tool
     "scripts/show-categories.py",  # Makefile-only category management tool
     "scripts/verify-iterm2.py",  # Makefile-only verification tool
+    "scripts/verify-local-service-readiness.py",  # Read-only anonymous loopback diagnostic; explicit operator gate, never a deployed config input
     "scripts/check-plugin-consistency.py",  # Makefile-only verification tool
     "scripts/verify-worktree-ready.py",  # Makefile-only worktree preflight helper
     "scripts/lib/worktree_readiness.py",  # Makefile-only helper; not deployed config input
