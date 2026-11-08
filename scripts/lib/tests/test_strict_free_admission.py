@@ -111,10 +111,30 @@ def test_unknown_budget_and_boolean_quota_fail_closed():
         (None, PROOF, frozenset({"private"}), "invalid-route-identity"),
         (ROUTE, object(), frozenset({"private"}), "malformed-account-evidence"),
         (ROUTE, PROOF, None, "invalid-privacy-policy"),
-        (ROUTE, replace(PROOF, provenance=[]), frozenset({"private"}), "untrusted-provenance"),
-        (ROUTE, replace(PROOF, reference=[]), frozenset({"private"}), "untrusted-provenance"),
-        (ROUTE, replace(PROOF, max_billable_usd=0), frozenset({"private"}), "unknown-maximum-charge"),
-        (ROUTE, replace(PROOF, allows_paid_overage=None), frozenset({"private"}), "paid-overage-possible"),
+        (
+            ROUTE,
+            replace(PROOF, provenance=[]),
+            frozenset({"private"}),
+            "untrusted-provenance",
+        ),
+        (
+            ROUTE,
+            replace(PROOF, reference=[]),
+            frozenset({"private"}),
+            "untrusted-provenance",
+        ),
+        (
+            ROUTE,
+            replace(PROOF, max_billable_usd=0),
+            frozenset({"private"}),
+            "unknown-maximum-charge",
+        ),
+        (
+            ROUTE,
+            replace(PROOF, allows_paid_overage=None),
+            frozenset({"private"}),
+            "paid-overage-possible",
+        ),
     ],
 )
 def test_malformed_route_and_policy_evidence_denied_without_exceptions(
@@ -125,10 +145,13 @@ def test_malformed_route_and_policy_evidence_denied_without_exceptions(
 
 @pytest.mark.parametrize("routes, evidence", [(None, None), ((), ()), ((ROUTE,), None)])
 def test_incomplete_chain_fails_closed(routes, evidence):
-    assert admit_chain(
-        routes,
-        evidence,
-        now=NOW,
-        tokens=256,
-        privacy_classes=frozenset({"private"}),
-    ).reason == "unknown-fallback-backends"
+    assert (
+        admit_chain(
+            routes,
+            evidence,
+            now=NOW,
+            tokens=256,
+            privacy_classes=frozenset({"private"}),
+        ).reason
+        == "unknown-fallback-backends"
+    )
