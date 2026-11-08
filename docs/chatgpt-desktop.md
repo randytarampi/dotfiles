@@ -48,7 +48,7 @@
 
 ### Read-only checks before any owner-approved GUI change
 
-1. Record exact ChatGPT Desktop and Codex versions. Use the app's **Settings → Configuration → Open config.toml** and inspect provider/profile identifiers without copying secrets. Do not change the root model or provider merely because a named profile exists.
+1. Record exact ChatGPT Desktop and Codex versions. Use the app's available **Settings → Agent configuration** controls (if present), or inspect the user-owned `~/.codex/config.toml` read-only. The **Codex IDE extension** documents a separate **Codex Settings → Open config.toml** menu; do not assume that menu exists in ChatGPT Desktop. Inspect identifiers without copying secrets. Do not change the root model or provider merely because a named profile exists.
 2. Inspect the current managed model_providers.litellm block, wire_api=responses, exact served alias and profiles.litellm. The CLI and GUI may disagree on what a named profile means; compare selected effective settings rather than generated text alone.
 3. Inspect **only presence, ownership and restrictive mode** of the dedicated key in the runtime GUI environment; do not print the value, write a new ~/.codex/.env automatically or assume a shell export reaches the Desktop app.
 4. With explicit owner consent, select the gateway model inside the Codex panel and run a harmless read-only task that actually issues a Responses request. Capture a redacted LiteLLM virtual-key request receipt, streaming result and tool handling. If the GUI can't select the profile, record UNKNOWN/UNSUPPORTED; do not force the root default as a workaround.
