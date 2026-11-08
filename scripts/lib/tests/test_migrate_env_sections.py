@@ -117,12 +117,26 @@ def test_mixed_line_endings_with_distinct_keys_refuse():
         env_migration.migrate(source, EXAMPLE)
 
 
-def test_invalid_preview_leaves_private_file_unchanged(tmp_path, capsys):
+@pytest.mark.parametrize("apply", [False, True])
+def test_invalid_preview_and_apply_leave_private_file_unchanged(
+    tmp_path, capsys, apply
+):
     invalid = "API_KEY='secret'\nDOTFILES_RUN_MCP_SETUP=$REMOTE\n"
     path, example = private_env(tmp_path, invalid)
-    before = (path.read_bytes(), path.stat().st_mtime_ns)
-    assert env_migration.main(["--env", str(path), "--example", str(example)]) == 1
-    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    before = (
+        path.read_bytes(),
+        path.stat().st_mtime_ns,
+        stat.S_IMODE(path.stat().st_mode),
+    )
+    argv = ["--env", str(path), "--example", str(example)]
+    if apply:
+        argv.append("--apply")
+    assert env_migration.main(argv) == 1
+    assert (
+        path.read_bytes(),
+        path.stat().st_mtime_ns,
+        stat.S_IMODE(path.stat().st_mode),
+    ) == before
     captured = capsys.readouterr()
     assert "secret" not in captured.err + captured.out
     assert not path.with_name(".env.i2.bak").exists()
