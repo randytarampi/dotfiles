@@ -55,6 +55,10 @@ def _time_ok(value):
 
 def admit(route, evidence, *, now, tokens, privacy_classes):
     """Check one exact backend before calling it; no network or side effects."""
+    if not isinstance(route, Route):
+        return Decision(False, "invalid-route-identity")
+    if not isinstance(privacy_classes, (frozenset, set, tuple, list)):
+        return Decision(False, "invalid-privacy-policy")
     if not _time_ok(now):
         return Decision(False, "invalid-clock")
     if not isinstance(tokens, int) or isinstance(tokens, bool) or tokens <= 0:
@@ -77,9 +81,16 @@ def admit(route, evidence, *, now, tokens, privacy_classes):
         return Decision(False, "privacy-boundary")
     if evidence is None:
         return Decision(False, "missing-account-evidence")
+    if not isinstance(evidence, Evidence):
+        return Decision(False, "malformed-account-evidence")
     if evidence.route != route:
         return Decision(False, "route-or-credential-drift")
-    if evidence.provenance not in SOURCES or not evidence.reference:
+    if (
+        not isinstance(evidence.provenance, str)
+        or evidence.provenance not in SOURCES
+        or not isinstance(evidence.reference, str)
+        or not evidence.reference.strip()
+    ):
         return Decision(False, "untrusted-provenance")
     if not _time_ok(evidence.issued_at) or not _time_ok(evidence.expires_at):
         return Decision(False, "invalid-evidence-time")
@@ -95,13 +106,15 @@ def admit(route, evidence, *, now, tokens, privacy_classes):
         "account_included_zero_marginal",
     ):
         return Decision(False, "paid-trial-or-unknown-entitlement")
+    if not isinstance(evidence.max_billable_usd, str):
+        return Decision(False, "unknown-maximum-charge")
     try:
         price = Decimal(evidence.max_billable_usd)
     except (InvalidOperation, ValueError, TypeError):
         return Decision(False, "unknown-maximum-charge")
     if not price.is_finite() or price != 0:
         return Decision(False, "unknown-maximum-charge")
-    if evidence.allows_paid_overage:
+    if evidence.allows_paid_overage is not False:
         return Decision(False, "paid-overage-possible")
     quotas = (evidence.remaining_requests, evidence.remaining_tokens)
     if any(not isinstance(v, int) or isinstance(v, bool) for v in quotas):
@@ -113,7 +126,12 @@ def admit(route, evidence, *, now, tokens, privacy_classes):
 
 def admit_chain(routes, evidence, *, now, tokens, privacy_classes):
     """Deny if any possible fallback/child backend is unknown or ineligible."""
-    if not routes or len(routes) != len(evidence):
+    if (
+        not isinstance(routes, (tuple, list))
+        or not isinstance(evidence, (tuple, list))
+        or not routes
+        or len(routes) != len(evidence)
+    ):
         return Decision(False, "unknown-fallback-backends")
     for index, (route, proof) in enumerate(zip(routes, evidence)):
         decision = admit(
