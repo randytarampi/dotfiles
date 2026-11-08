@@ -106,9 +106,9 @@ def require_api_key_auth(home, workspace):
                 raise ValueError("Gemini .env exceeds safe inspection limit")
             text = local_env.read_text(encoding="utf-8")
             if re.search(
-                r"(?m)^\\s*(?:export\\s+)?(?:GEMINI_API_KEY|GOOGLE_API_KEY|"
+                r"(?m)^\s*(?:export\s+)?(?:GEMINI_API_KEY|GOOGLE_API_KEY|"
                 r"GOOGLE_GEMINI_BASE_URL|GEMINI_MODEL|GOOGLE_GENAI_USE_VERTEXAI|"
-                r"GOOGLE_VERTEX_BASE_URL)\\s*=",
+                r"GOOGLE_VERTEX_BASE_URL)\s*=",
                 text,
             ):
                 raise ValueError("workspace Gemini .env conflicts with scoped gateway")
