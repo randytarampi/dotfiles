@@ -204,6 +204,25 @@ def select_active_model(source, model):
     if not model or not MODEL.fullmatch(model):
         raise ValueError("invalid exact model alias")
     data, root = _parse_config(source)
+    # A named-provider switch must never inherit another route's endpoint,
+    # explicit credentials, model alias or automatic fallback.
+    current_model = data.get("model")
+    if isinstance(current_model, dict):
+        dangerous_fields = {
+            "model", "base_url", "api", "api_key", "key_env", "key_cmd",
+            "api_mode", "transport",
+        }
+        if dangerous_fields.intersection(current_model):
+            raise ValueError(
+                "refusing model endpoint, auth or alias overrides; "
+                "reconcile in Hermes before selection"
+            )
+    for fallback in ("fallback_model", "fallback_models", "fallbacks"):
+        if data.get(fallback):
+            raise ValueError(
+                f"refusing configured Hermes fallback {fallback}; "
+                "qualify it explicitly before selection"
+            )
     target = {"provider": f"custom:{PROVIDER}", "default": model}
     if "model" not in data:
         prefix = (
