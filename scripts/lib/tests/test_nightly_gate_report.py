@@ -99,4 +99,7 @@ def test_report_cli_writes_machine_and_human_repair_artifacts(tmp_path, capsys):
     )
     assert "DEGRADED" in summary.read_text()
     assert '"overall": "DEGRADED"' in json_file.read_text()
-    assert "::warning title=Nightly integration gates degraded::" in capsys.readouterr().out
+    assert (
+        "::warning title=Nightly integration gates degraded::"
+        in capsys.readouterr().out
+    )
