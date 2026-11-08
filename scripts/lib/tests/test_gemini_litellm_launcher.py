@@ -102,14 +102,20 @@ def test_native_login_must_explicitly_select_api_key(tmp_path):
     settings.parent.mkdir(parents=True)
     with pytest.raises(ValueError, match="select Gemini API-key"):
         MODULE.require_api_key_auth(home, project)
-    settings.write_text(json.dumps({"security": {"auth": {"selectedType": "oauth-personal"}}}))
+    settings.write_text(
+        json.dumps({"security": {"auth": {"selectedType": "oauth-personal"}}})
+    )
     with pytest.raises(ValueError, match="gemini-api-key"):
         MODULE.require_api_key_auth(home, project)
-    settings.write_text(json.dumps({"security": {"auth": {"selectedType": "gemini-api-key"}}}))
+    settings.write_text(
+        json.dumps({"security": {"auth": {"selectedType": "gemini-api-key"}}})
+    )
     assert MODULE.require_api_key_auth(home, project) is True
     project_settings = project / ".gemini/settings.json"
     project_settings.parent.mkdir()
-    project_settings.write_text(json.dumps({"security": {"auth": {"selectedType": "vertex-ai"}}}))
+    project_settings.write_text(
+        json.dumps({"security": {"auth": {"selectedType": "vertex-ai"}}})
+    )
     with pytest.raises(ValueError, match="workspace"):
         MODULE.require_api_key_auth(home, project)
     project_settings.unlink()
