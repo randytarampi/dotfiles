@@ -49,6 +49,7 @@ NON_TRACKED_SCRIPTS = {
     "scripts/litellm-costs.py",  # Makefile-only verification tool
     "scripts/lib/litellm_cost.py",  # Library of the costs CLI; not deployed config input
     "scripts/lib/strict_free_admission.py",  # Pure E1.0 review policy; not used by deployed generators
+    "scripts/lib/strict_free_executor.py",  # Synthetic test adapter only; no deployed request consumer
     "scripts/litellm-oauth.py",  # Interactive one-time OAuth bootstrap; mutates ~/.config/litellm caches, not deployed config
     "scripts/litellm-db-prune.py",  # Manual maintenance CLI; targets the live gateway DB tables, not deployed config
     "scripts/litellm-spend-backfill.py",  # Manual maintenance CLI; reprices live spend rows, not deployed config
