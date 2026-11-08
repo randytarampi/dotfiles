@@ -146,3 +146,20 @@ def test_dry_run_refuses_forwarded_unknown_flags(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         MODULE.main(["--dry-run", "--model=direct-google"])
     assert exc.value.code == 2
+
+
+def test_forwarding_requires_explicit_separator_and_preserves_model_control(
+    monkeypatch,
+):
+    for name, value in good().items():
+        monkeypatch.setenv(name, value)
+    for args in (["--prompt", "test"], ["test"]):
+        with pytest.raises(SystemExit) as exc:
+            MODULE.main(args)
+        assert exc.value.code == 2
+    with pytest.raises(SystemExit) as exc:
+        MODULE.main(["--", "--model", "unqualified-route"])
+    assert exc.value.code == 2
+    with pytest.raises(SystemExit) as exc:
+        MODULE.main(["--__cli_contract_invalid_flag__"])
+    assert exc.value.code == 2
