@@ -8,6 +8,9 @@ A strictly free request requires *current, account-specific* evidence that **thi
 
 The module at scripts/lib/strict_free_admission.py accepts Evidence only as an internal value **after** some independently authorised collector has authenticated it. The provenance label and reference are *not signatures* and can be forged by an untrusted caller. The runtime must prevent request payloads, model output and arbitrary files from constructing trusted evidence. If no authenticated collector exists, **all routes remain UNKNOWN/DENIED**. An allowed pure result without a fully guarded request boundary does not grant permission to transmit a request.
 
+
+**Deployment isolation:** this reference module is classified as a non-deployed policy/test helper by `scripts/check-hashes.py`. It is deliberately **not** part of a chezmoi `run_onchange_*` source hash: changing the policy must not regenerate live OpenCode config until the real guarded producer becomes a deployed consumer.
+
 ## Contract and negative cases
 
 The pure admit function checks one exact backend. The admit_chain function checks every possible primary/fallback backend; it rejects an unknown or unproven branch before a caller can choose it. The same check must be applied separately at every root, delegated/background child, council, metadata and retry invocation by the future runtime integration. A changed key, alias or backend invalidates the evidence.
