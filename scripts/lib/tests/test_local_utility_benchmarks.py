@@ -19,7 +19,7 @@ def row(**changes):
         peak_gb=3.5,
         passed=True,
         network_egress=False,
-        provenance="owner-verified",
+        provenance="owner-reported",
     )
     result.update(changes)
     return result
@@ -78,7 +78,7 @@ def test_empty_input_produces_no_claim():
 def test_disjoint_evidence_medians_cannot_mix():
     rows = [
         row(provenance="synthetic", latency_ms=1),
-        row(provenance="owner-verified", latency_ms=1000),
+        row(provenance="owner-reported", latency_ms=1000),
     ]
     report = MODULE.summarize(rows)
     assert len(report) == 2
