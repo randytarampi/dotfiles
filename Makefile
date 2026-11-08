@@ -479,7 +479,7 @@ plannotator-restart: ## Restart Plannotator paste service
 	fi
 	@echo "Plannotator restarted."
 
-services-restart: opencode-restart openwebui-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart ## Restart all services
+services-restart: opencode-restart openwebui-restart plannotator-restart meridian-restart ddns-restart caddy-restart ollama-env-restart omlx-restart litellm-restart ## Restart all services
 
 skills-update: ## Update all skills from upstream via `skills` CLI
 	@$(LOAD_ENV); python3 scripts/configure-skills.py --update

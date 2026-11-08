@@ -189,7 +189,7 @@ The companion stamps predate the current shared guidance and still describe stas
 | `make plannotator-restart` | Restart Plannotator paste service (launchd/systemd) | Port conflict or config change |
 | `make ollama-env-restart` | Re-apply Ollama daemon environment variables | After OLLAMA_* env changes |
 | `make omlx-restart` | Restart the oMLX Homebrew service | After oMLX settings changes |
-| `make services-restart` | All managed services: opencode + openwebui + plannotator + meridian + ddns + caddy + ollama-env + omlx | Full service restart |
+| `make services-restart` | All managed services: opencode + openwebui + plannotator + meridian + ddns + caddy + ollama-env + omlx + litellm | Full service restart (the gateway restarts last so it sees final engine inventories; first requests after restart may lag the documented 20–40 s listen window) |
 
 ## Design Decisions
 
