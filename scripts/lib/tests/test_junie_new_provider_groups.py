@@ -65,3 +65,27 @@ def test_twins_are_exact_and_never_auto_direct_fallback():
         assert name not in unavailable
     assert groups["cohere"] == MODULE.select_model_groups(groups, False)["cohere"]
     assert "cohere" not in MODULE.select_model_groups(groups, True)
+
+
+def test_native_poolside_id_and_gateway_alias_are_distinct_contracts():
+    # The native /v1/chat/completions call requires the full Poolside ID.
+    native = "poolside/laguna-s-2.1"
+    assert MODULE.model_id(native, "poolside") == native
+    assert MODULE.litellm_alias(native, "poolside") == native
+    assert MODULE.litellm_alias("laguna-s-2.1", "poolside") == native
+
+
+def test_direct_groups_require_provider_keys_but_twins_only_require_junie_key(monkeypatch):
+    cfg = json.loads((ROOT / "configs/junie/model-groups.json").read_text())
+    monkeypatch.delenv("COHERE_API_KEY", raising=False)
+    monkeypatch.delenv("POOLSIDE_API_KEY", raising=False)
+    providers = MODULE.build_provider_configs(cfg, "")
+    assert "cohere" not in providers
+    assert "poolside" not in providers
+    monkeypatch.setenv("COHERE_API_KEY", "dummy-cohere")
+    monkeypatch.setenv("POOLSIDE_API_KEY", "dummy-poolside")
+    with_keys = MODULE.build_provider_configs(cfg, "")
+    assert with_keys["cohere"]["apiKey"] == "${COHERE_API_KEY}"
+    assert with_keys["poolside"]["apiKey"] == "${POOLSIDE_API_KEY}"
+    twins = MODULE.derive_litellm_groups(cfg["groups"])
+    assert twins["litellm-poolside"]["primaryModel"] == "poolside/laguna-s-2.1"

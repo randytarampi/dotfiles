@@ -359,6 +359,11 @@ def build_provider_configs(cfg: dict, junie_key: str = "") -> dict:
                 f"Provider {name}: {key_env} is unset — Junie refuses to load "
                 "profiles referencing an undefined variable"
             )
+            # These newly added direct profiles must not be emitted with a
+            # blank API key. The separate gateway twins are still generated
+            # from the group definitions when Junie's scoped key is present.
+            if name in {"cohere", "poolside"}:
+                continue
         # LiteLLM is the sole exception: Junie does not inherit service.env,
         # so its narrowly scoped app key is injected into private profiles.
         # Other providers retain Junie's native ${VAR_NAME} expansion.
@@ -434,6 +439,10 @@ def model_id(model_ref: str, provider_hint: str = "") -> str:
     # sends requests to Meridian, whose /v1/models catalogue uses bare IDs.
     if provider_hint == "meridian" and model_ref.startswith("anthropic/"):
         return model_ref[len("anthropic/") :]
+    # Poolside's native OpenAI-compatible endpoint expects a namespaced
+    # model ID; unlike most providers, stripping its prefix breaks routing.
+    if provider_hint == "poolside" and model_ref.startswith("poolside/"):
+        return model_ref
     if provider_hint and not model_ref.startswith(f"{provider_hint}/"):
         return model_ref
     return model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
@@ -442,6 +451,8 @@ def model_id(model_ref: str, provider_hint: str = "") -> str:
 def litellm_alias(model_ref: str, provider: str) -> str:
     """Return the exact LiteLLM wire alias for a direct provider model ref."""
     model = model_id(model_ref, provider)
+    if provider == "poolside" and model.startswith("poolside/"):
+        return model
     if provider == "google":
         return f"google/models/{model.removeprefix('models/')}"
     return f"{provider}/{model}"
