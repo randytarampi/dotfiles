@@ -78,6 +78,54 @@ def test_ambiguous_adjacent_comment_refuses_relocation():
         env_migration.migrate(value, EXAMPLE)
 
 
+
+def test_trailing_attached_comment_refuses_move():
+    source = (
+        "# --- Provider settings ---\n"
+        "DOTFILES_RUN_MCP_SETUP='1'\n"
+        "# operator note follows the old gate\n"
+    )
+    with pytest.raises(ValueError, match="following comment"):
+        env_migration.migrate(source, EXAMPLE)
+
+
+def test_destination_comment_cannot_be_reassociated_with_moved_key():
+    source = (
+        "# --- Provider settings ---\n"
+        "DOTFILES_RUN_MCP_SETUP='1'\n"
+        "# --- Toggle settings ---\n"
+        "# purpose of the existing section\n"
+    )
+    with pytest.raises(ValueError, match="destination ends"):
+        env_migration.migrate(source, EXAMPLE)
+
+
+def test_crlf_migration_retains_newline_style_and_values():
+    source = ORIGINAL.replace("\n", "\r\n")
+    after, changes = env_migration.migrate(source, EXAMPLE)
+    assert changes == [("DOTFILES_RUN_MCP_SETUP", "Toggle settings")]
+    assert b"\r\n" in after
+    assert after.count(b"\r\n") == after.count(b"\n")
+    assert env_migration.read_sections(after.decode("utf-8"))[0] == env_migration.read_sections(source)[0]
+
+
+def test_mixed_line_endings_with_distinct_keys_refuse():
+    source = "API_KEY='secret'\r\nDOTFILES_RUN_MCP_SETUP='1'\n"
+    with pytest.raises(ValueError, match="mixed newline"):
+        env_migration.migrate(source, EXAMPLE)
+
+
+def test_invalid_preview_leaves_private_file_unchanged(tmp_path, capsys):
+    invalid = "API_KEY='secret'\nDOTFILES_RUN_MCP_SETUP=$REMOTE\n"
+    path, example = private_env(tmp_path, invalid)
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    assert env_migration.main(["--env", str(path), "--example", str(example)]) == 1
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+    captured = capsys.readouterr()
+    assert "secret" not in captured.err + captured.out
+    assert not path.with_name(".env.i2.bak").exists()
+
+
 def test_dry_run_is_redacted_and_does_not_touch_bytes_mode_or_mtime(tmp_path, capsys):
     path, example = private_env(tmp_path)
     before = (
