@@ -316,7 +316,7 @@ def test_keys_in_parent_block_relocate_to_documented_subsection_titles():
         ("DOTFILES_RUN_PACKAGES_SETUP", "Deployment phases and service gates"),
         ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates"),
     ]
-    values, positions = env_migration.read_sections(moved.decode())
+    _, positions = env_migration.read_sections(moved.decode())
     sections = {key: section for _, key, section in positions}
     assert (
         sections["DOTFILES_RUN_PACKAGES_SETUP"] == "Deployment phases and service gates"
@@ -354,9 +354,64 @@ def test_existing_subsection_heading_block_accepts_appended_keys():
     text = moved.decode()
     assert "# deployment notes remain in place" in text
     assert "DOTFILES_RUN_PACKAGES_SETUP='1'" in text
-    values, positions = env_migration.read_sections(moved.decode())
+    _, positions = env_migration.read_sections(moved.decode())
     sections = {key: section for _, key, section in positions}
     assert (
         sections["DOTFILES_RUN_PACKAGES_SETUP"] == "Deployment phases and service gates"
     )
     assert sections["DOTFILES_OPENCODE_TIER"] == "Tier settings"
+
+def test_created_subsection_stays_under_template_parent(tmp_path):
+    original = (
+        "# --- Dotfiles toggles (0 = skip, 1 = run) ---\n"
+        "DOTFILES_RUN_PACKAGES_SETUP='1'\n"
+        "# --- Tier settings ---\n"
+        "DOTFILES_OPENCODE_TIER='pro-plus'\n"
+        "DOTFILES_RUN_CODEX_SETUP='1'\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == [
+        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates")
+    ]
+    text = moved.decode()
+    parent = text.index("# --- Dotfiles toggles (0 = skip, 1 = run) ---")
+    child = text.index("# == Per-client gateway integration gates ==")
+    next_parent = text.index("# --- Tier settings ---")
+    assert parent < child < next_parent
+    assert env_migration.migrate(text, TWO_LEVEL_EXAMPLE)[1] == []
+
+
+def test_missing_parent_is_created_before_missing_subsection():
+    original = (
+        "# --- Tier settings ---\n"
+        "DOTFILES_OPENCODE_TIER='pro-plus'\n"
+        "DOTFILES_RUN_CODEX_SETUP='1'\n"
+    )
+    moved, changes = env_migration.migrate(original, TWO_LEVEL_EXAMPLE)
+    assert changes == [
+        ("DOTFILES_RUN_CODEX_SETUP", "Per-client gateway integration gates")
+    ]
+    text = moved.decode()
+    assert text.index("# --- Dotfiles toggles") < text.index(
+        "# == Per-client gateway integration gates =="
+    )
+    assert env_migration.migrate(text, TWO_LEVEL_EXAMPLE)[1] == []
+
+
+def test_real_template_global_deployment_gates_not_project_scoped():
+    example = (
+        Path(__file__).resolve().parents[3]
+        / "dot_dotfiles/shell/.env.example"
+    ).read_text(encoding="utf-8")
+    targets = env_migration.template_sections(example)
+    for key in (
+        "DOTFILES_RUN_OLLAMA_DAEMON_SETUP",
+        "DOTFILES_RUN_OPENCODE_SETUP",
+        "DOTFILES_RUN_PI_SETUP",
+        "DOTFILES_RUN_PASEO_SETUP",
+        "DOTFILES_RUN_OPENCODE_WEB_SETUP",
+    ):
+        assert targets[key] == "Deployment phases and service gates"
+    assert targets["DOTFILES_PROJECT_STEPS"].startswith(
+        "Project-scoped configuration"
+    )

@@ -110,6 +110,22 @@ def template_section_markers(text):
     return markers
 
 
+def template_section_parents(text):
+    """Identify the template's top-level owner for each subsection title."""
+    parents, top = {}, ""
+    for line in text.splitlines():
+        if match := SECTION.fullmatch(line):
+            top = match.group(1)
+        elif match := SUBSECTION.fullmatch(line):
+            title = match.group(1)
+            if title in parents and parents[title] != top:
+                raise ValueError("conflicting subsection ownership")
+            if not top:
+                raise ValueError("subsection without owning section")
+            parents[title] = top
+    return parents
+
+
 def migrate(original, example):
     """Return new bytes plus key/section-only preview; preserve effective values."""
     # Python splitlines() recognizes separators that shell sourcing does not.
@@ -132,6 +148,7 @@ def migrate(original, example):
     values, active = read_sections(original)
     targets = template_sections(example)
     markers = template_section_markers(example)
+    parents = template_section_parents(example)
     source_lines = original.splitlines(keepends=True)
     moved = {}
     for index, key, current in active:
@@ -174,7 +191,31 @@ def migrate(original, example):
         if destination is None:
             heading = markers.get(wanted, f"# --- {wanted} ---")
             destination = [wanted, [f"{heading}{newline}"]]
-            blocks.append(destination)
+            parent = parents.get(wanted)
+            if parent:
+                parent_index = next(
+                    (i for i, block in enumerate(blocks) if block[0] == parent),
+                    None,
+                )
+                if parent_index is None:
+                    parent_heading = markers.get(parent, f"# --- {parent} ---")
+                    blocks.append([parent, [f"{parent_heading}{newline}"]])
+                    parent_index = len(blocks) - 1
+                # Keep a newly created nested block inside its owner. Append
+                # after existing sibling subsections, before the next top level.
+                siblings = {
+                    title for title, owning_parent in parents.items()
+                    if owning_parent == parent
+                }
+                insert_at = parent_index + 1
+                while (
+                    insert_at < len(blocks)
+                    and blocks[insert_at][0] in siblings
+                ):
+                    insert_at += 1
+                blocks.insert(insert_at, destination)
+            else:
+                blocks.append(destination)
         last = destination[1][-1].rstrip("\r\n")
         heading = SECTION.fullmatch(last) or SUBSECTION.fullmatch(last)
         if last.lstrip().startswith("#") and not heading:
