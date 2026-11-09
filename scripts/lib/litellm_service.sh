@@ -256,13 +256,19 @@ litellm_service_env_sync() {
   # Optional SSL_CERT_FILE passthrough (set in ~/.env for corporate TLS
   # interception such as Cloudflare WARP). A broken value would break httpx's
   # TLS context for every upstream, so fail closed before writing service.env.
-  if [[ -n "$SSL_CERT_FILE" ]] && [[ ! -f "$SSL_CERT_FILE" || ! -r "$SSL_CERT_FILE" ]]; then
-    printf 'LiteLLM SSL_CERT_FILE is not a readable file: %s\n' "$SSL_CERT_FILE" >&2
-    return 1
-  fi
-  if [[ -n "$SSL_CERT_FILE" ]] && ! grep -q -m1 -E -- '-----BEGIN (TRUSTED )?CERTIFICATE-----' "$SSL_CERT_FILE"; then
-    printf 'LiteLLM SSL_CERT_FILE does not look like a PEM certificate: %s\n' "$SSL_CERT_FILE" >&2
-    return 1
+  if [[ -n "$SSL_CERT_FILE" ]]; then
+    # httpx resolves this path in the service process, not in the caller's
+    # shell. Refuse relative paths and malformed PEM before publishing the
+    # service environment; a BEGIN marker alone is not a parseable CA.
+    if [[ "$SSL_CERT_FILE" != /* || ! -f "$SSL_CERT_FILE" || ! -r "$SSL_CERT_FILE" ]]; then
+      printf 'LiteLLM SSL_CERT_FILE must be an absolute readable file\n' >&2
+      return 1
+    fi
+    if ! command -v openssl >/dev/null 2>&1 ||
+      ! openssl x509 -in "$SSL_CERT_FILE" -noout >/dev/null 2>&1; then
+      printf 'LiteLLM SSL_CERT_FILE is not a parseable X.509 PEM certificate\n' >&2
+      return 1
+    fi
   fi
   umask 077
   tmp="$(mktemp "${service_env}.tmp.XXXXXXXX")" || return 1
