@@ -3210,6 +3210,55 @@ def test_litellm_env_sync_database_url_precedence(tmp_path):
     assert "DATABASE_URL=new" in env_path.read_text(encoding="utf-8")
 
 
+def test_litellm_env_sync_ssl_cert_file_passthrough(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
+    root = tmp_path / "litellm"
+    root.mkdir()
+    env_path = root / "service.env"
+    env_path.write_text("SSL_CERT_FILE='stale'\n", encoding="utf-8")
+    ca_path = tmp_path / "corporate-ca.pem"
+    ca_path.write_text(
+        "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n",
+        encoding="utf-8",
+    )
+
+    def sync(home_env):
+        (tmp_path / ".env").write_text(home_env, encoding="utf-8")
+        script = (
+            f"HOME={shlex.quote(str(tmp_path))}; export HOME; "
+            f"source {shlex.quote(str(helper))}; "
+            f"litellm_service_env_sync {shlex.quote(str(env_path))}"
+        )
+        return subprocess.run(
+            ["bash", "-c", script],
+            env={"HOME": str(tmp_path), "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+        )
+
+    # The ~/.env value wins over the stale service.env entry.
+    result = sync(f"SSL_CERT_FILE='{ca_path}'\n")
+    assert result.returncode == 0, result.stderr
+    assert f"SSL_CERT_FILE={ca_path}\n" in env_path.read_text(encoding="utf-8")
+    # Removing it from ~/.env drops the service.env entry (~/.env is truth).
+    result = sync("")
+    assert result.returncode == 0, result.stderr
+    assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
+    # A set-but-unreadable value fails closed before writing service.env.
+    result = sync(f"SSL_CERT_FILE='{tmp_path / 'missing.pem'}'\n")
+    assert result.returncode == 1
+    assert "SSL_CERT_FILE" in result.stderr
+    assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
+    # A non-PEM file is a configuration error, not something to serve.
+    junk = tmp_path / "junk.pem"
+    junk.write_text("not a certificate\n", encoding="utf-8")
+    result = sync(f"SSL_CERT_FILE='{junk}'\n")
+    assert result.returncode == 1
+    assert "PEM" in result.stderr
+    assert "SSL_CERT_FILE" not in env_path.read_text(encoding="utf-8")
+    assert list(root.glob("service.env.tmp.*")) == []
+
+
 def test_litellm_env_sync_removes_missing_or_empty_provider_keys(tmp_path):
     helper = Path(__file__).resolve().parents[1] / "litellm_service.sh"
     root = tmp_path / "litellm"

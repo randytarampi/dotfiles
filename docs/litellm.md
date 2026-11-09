@@ -43,7 +43,7 @@ References: [Desktop gateway contract](https://claude.com/docs/third-party/claud
 
 ## Gateway
 
-The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on `127.0.0.1:4000` (`LITELLM_PORT`). Enable setup with `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads `~/.local/share/litellm/service.env`, written with mode `600`. A master key is generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied. The gateway serves discovered chat and modality models. Direct loopback service endpoints remain the always-available route, including when the gateway is off. The `DOTFILES_RUN_LITELLM_SETUP` gate defaults to `0`; enabling it provisions the local gateway.
+The opt-in LiteLLM proxy provides a shared OpenAI-compatible model gateway on `127.0.0.1:4000` (`LITELLM_PORT`). Enable setup with `DOTFILES_RUN_LITELLM_SETUP=1`. Its launch service reads `~/.local/share/litellm/service.env`, written with mode `600`. When `SSL_CERT_FILE` is set in `~/.env`, the synchronizer re-captures and re-emits it into `service.env` after checking it is a readable PEM certificate; hosts behind corporate TLS interception (for example Cloudflare WARP) need it because the proxy's httpx transport otherwise trusts only certifi's bundled roots. A master key is generated with OpenSSL on first setup unless `LITELLM_MASTER_KEY` is supplied. The gateway serves discovered chat and modality models. Direct loopback service endpoints remain the always-available route, including when the gateway is off. The `DOTFILES_RUN_LITELLM_SETUP` gate defaults to `0`; enabling it provisions the local gateway.
 
 ### Two-mode client contract
 

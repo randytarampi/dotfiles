@@ -59,7 +59,7 @@ litellm_ensure_prisma_client() {
 
 litellm_service_env_sync() {
   local service_env="${1:-$HOME/.local/share/litellm/service.env}" tmp
-  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL="" LITELLM_LOCAL_MODEL_COST_MAP=""
+  local LITELLM_MASTER_KEY="" LITELLM_PORT="" DISABLE_ADMIN_UI="" DATABASE_URL="" LITELLM_DATABASE_URL="" LITELLM_LOCAL_MODEL_COST_MAP="" SSL_CERT_FILE=""
   # Projection of litellm_config.APP_KEYS; parity is enforced by a regression test.
   local -a managed_client_keys=(
     LITELLM_OPENCODE_KEY LITELLM_PI_KEY LITELLM_PASEO_KEY LITELLM_OPENWEBUI_KEY LITELLM_JUNIE_KEY
@@ -113,7 +113,7 @@ litellm_service_env_sync() {
     *) continue ;;
     esac
   done
-  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL="" env_LITELLM_LOCAL_MODEL_COST_MAP=""
+  local env_LITELLM_MASTER_KEY="" env_LITELLM_PORT="" env_DISABLE_ADMIN_UI="" env_DATABASE_URL="" env_LITELLM_DATABASE_URL="" env_LITELLM_LOCAL_MODEL_COST_MAP="" env_SSL_CERT_FILE=""
   local env_GITHUB_COPILOT_TOKEN_DIR="" env_GITHUB_COPILOT_ACCESS_TOKEN_FILE="" env_GITHUB_COPILOT_API_KEY_FILE="" env_CHATGPT_TOKEN_DIR="" env_CHATGPT_AUTH_FILE=""
   if [[ -f "$HOME/.env" ]]; then
     # shellcheck disable=SC1091
@@ -130,6 +130,7 @@ litellm_service_env_sync() {
   env_GITHUB_COPILOT_API_KEY_FILE="$GITHUB_COPILOT_API_KEY_FILE"
   env_CHATGPT_TOKEN_DIR="$CHATGPT_TOKEN_DIR"
   env_CHATGPT_AUTH_FILE="$CHATGPT_AUTH_FILE"
+  env_SSL_CERT_FILE="$SSL_CERT_FILE"
   # Capture provider credentials from ~/.env, then clear them so values
   # sourced from service.env below can never win; the captured HOME values
   # are restored afterwards.
@@ -162,6 +163,7 @@ litellm_service_env_sync() {
   GITHUB_COPILOT_API_KEY_FILE="$env_GITHUB_COPILOT_API_KEY_FILE"
   CHATGPT_TOKEN_DIR="$env_CHATGPT_TOKEN_DIR"
   CHATGPT_AUTH_FILE="$env_CHATGPT_AUTH_FILE"
+  SSL_CERT_FILE="$env_SSL_CERT_FILE"
   for key in ${provider_keys[@]+"${provider_keys[@]}"}; do
     case "$key" in
     [A-Z][A-Z0-9_]*) ;;
@@ -251,6 +253,17 @@ litellm_service_env_sync() {
       fi
     fi
   done
+  # Optional SSL_CERT_FILE passthrough (set in ~/.env for corporate TLS
+  # interception such as Cloudflare WARP). A broken value would break httpx's
+  # TLS context for every upstream, so fail closed before writing service.env.
+  if [[ -n "$SSL_CERT_FILE" ]] && [[ ! -f "$SSL_CERT_FILE" || ! -r "$SSL_CERT_FILE" ]]; then
+    printf 'LiteLLM SSL_CERT_FILE is not a readable file: %s\n' "$SSL_CERT_FILE" >&2
+    return 1
+  fi
+  if [[ -n "$SSL_CERT_FILE" ]] && ! grep -q -m1 -E -- '-----BEGIN (TRUSTED )?CERTIFICATE-----' "$SSL_CERT_FILE"; then
+    printf 'LiteLLM SSL_CERT_FILE does not look like a PEM certificate: %s\n' "$SSL_CERT_FILE" >&2
+    return 1
+  fi
   umask 077
   tmp="$(mktemp "${service_env}.tmp.XXXXXXXX")" || return 1
   {
@@ -259,6 +272,7 @@ litellm_service_env_sync() {
     printf 'DISABLE_ADMIN_UI=%q\n' "$DISABLE_ADMIN_UI"
     printf 'LITELLM_LOCAL_MODEL_COST_MAP=%q\n' "$LITELLM_LOCAL_MODEL_COST_MAP"
     printf 'DEFAULT_MAX_LRU_CACHE_SIZE=%q\n' "$DEFAULT_MAX_LRU_CACHE_SIZE"
+    [[ -n "$SSL_CERT_FILE" ]] && printf 'SSL_CERT_FILE=%q\n' "$SSL_CERT_FILE"
     [[ -n "$GITHUB_COPILOT_TOKEN_DIR" ]] && printf 'GITHUB_COPILOT_TOKEN_DIR=%q\n' "$GITHUB_COPILOT_TOKEN_DIR"
     [[ -n "$GITHUB_COPILOT_ACCESS_TOKEN_FILE" ]] && printf 'GITHUB_COPILOT_ACCESS_TOKEN_FILE=%q\n' "$GITHUB_COPILOT_ACCESS_TOKEN_FILE"
     [[ -n "$GITHUB_COPILOT_API_KEY_FILE" ]] && printf 'GITHUB_COPILOT_API_KEY_FILE=%q\n' "$GITHUB_COPILOT_API_KEY_FILE"
