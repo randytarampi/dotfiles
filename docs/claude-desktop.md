@@ -109,3 +109,7 @@ For the first acceptance session, prefer the vendor-supported **Developer Mode �
 **Review/maintenance:** confirm current Anthropic configuration field names, test exact executable path in Desktop's GUI process context, inspect scope/ permissions, run focused tests + `make verify`, check current-head CI, then perform the separately authorised owner-host acceptance. No issue #82 closure is claimed.
 
 **Attribution:** drafted by ChatGPT (GPT-6), 2026-11-03. No external review, owner-machine tests, credential issuance, or GUI configuration were performed.
+
+## 2026-11-09 gateway wiring + panel blocker (issue #209 state)
+
+The official third-party **Gateway provider** keys were written into the local configuration (`claude_desktop_config.json`: `inferenceGatewayBaseUrl=http://127.0.0.1:4000` + the scoped `claude.key` reference; pre-edit backup retained, mcpServers preserved) and the app was relaunched through its normal lifecycle. The gateway side is VERIFIED at the wire: `POST /v1/messages` with this key returned a real completion (`meridian/claude-haiku-5-5`, READY, cache/usage fields present) on the same contract the official gateway docs require. The **observed blocker** on the installed build: the in-app **Configure Third-Party Inference…** panel fails with "Couldn't load configuration" and "Couldn't update saved configurations (×3)" — re-test the panel after the configuration-file write; the Chat/Cowork/Code GUI tasks remain the owner step per the acceptance ledger.
