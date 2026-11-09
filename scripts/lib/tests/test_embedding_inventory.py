@@ -6,9 +6,7 @@ exists; the fixed-text digest stays NOT_RUN on hosts. Absent ledger state is
 distinct and non-error.
 """
 
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 
@@ -74,23 +72,41 @@ def test_fixed_text_digest_stays_not_run_until_contract_exists(tmp_path):
     assert inventory["fixed_text_digest"]["reason"] == NO_AUTHORITATIVE_PROBE
 
 
-def test_inventory_carries_no_vectors_or_credentials(tmp_path):
-    state = read_state(tmp_path / "state.json")
-    inventory = build_inventory(CONFIG, state=state)
-    serialised = json.dumps(inventory)
-    assert "vector" not in serialised.lower().replace("fixed_text_digest", "")
-    assert CONFIG["RAG_EMBEDDING_MODEL"] not in serialised or True
-
-
-def test_present_ledger_state_is_reported_verbatim(tmp_path):
+def test_inventory_never_discloses_private_ledger_data(tmp_path):
     path = tmp_path / "state.json"
-    path.write_text('{"embedding_fingerprint": {"engine": "openai"}}', encoding="utf-8")
+    path.write_text(
+        '{"api_key": "secret-canary", "note": "private-canary", '
+        '"vectors": ["vector-canary"]}',
+        encoding="utf-8",
+    )
     path.chmod(0o600)
     state = read_state(path)
-    assert state["state"] == "present"
-    assert state["data"] == {"embedding_fingerprint": {"engine": "openai"}}
+    assert state == {"state": "present"}
     inventory = build_inventory(CONFIG, state=state)
-    assert inventory["state"] == state
+    payload = json.dumps(inventory)
+    assert "secret-canary" not in payload
+    assert "private-canary" not in payload
+    assert "vector-canary" not in payload
+    assert inventory["webui_config_identity"]["model"] == "some-model"
+    assert inventory["collections"]["count"] == "UNKNOWN"
+
+
+def test_nonregular_ledger_refuses(tmp_path):
+    with pytest.raises(ValueError, match="not a regular file"):
+        read_state(tmp_path)
+
+
+def test_oversize_ledger_refuses(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_bytes(b"{" + b" " * (1024 * 1024) + b"}")
+    path.chmod(0o600)
+    with pytest.raises(ValueError, match="limit"):
+        read_state(path)
+
+
+def test_nonstring_config_identifiers_refuse():
+    with pytest.raises(ValueError, match="identifiers"):
+        build_inventory({"RAG_EMBEDDING_MODEL": {"private": "secret-canary"}})
 
 
 def test_comparator_still_proves_same_width_representation_mismatch():
@@ -108,7 +124,8 @@ def test_comparator_still_proves_same_width_representation_mismatch():
     }
     observed = dict(expected, fixed_vector_sha256="2" * 64, model="other-model")
     report = compare_representations(expected, observed)
-    assert report["status"] in ("MISMATCH", "MATCH")
+    assert report["status"] == "MISMATCH"
+    assert report["different_fields"] == ["fixed_vector_sha256", "model"]
     assert report["unknown_fields"] == []
     same_width = dict(expected, fixed_vector_sha256="2" * 64)
     assert compare_representations(expected, same_width)["different_fields"] == [
